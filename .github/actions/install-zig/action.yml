@@ -1,0 +1,32 @@
+name: Install zig compiler and ziglang
+description: Install Zig compiler and cargo-zigbuild for cross-compilation
+
+inputs:
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-unknown-linux-gnu"
+        required: false
+        default: "x86_64-unknown-linux-gnu"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install zig
+          shell: bash
+          env:
+              TARGET: ${{ inputs.target }}
+          run: |
+              if [[ `cat /etc/os-release | grep "Amazon Linux"` ]]; then
+                  yum install -y python3-pip
+                  pip3 install ziglang
+              elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
+                  apk add py3-pip
+                  pip3 install ziglang --break-system-packages
+              else
+                  sudo apt install -y python3-pip
+                  pip3 install ziglang
+              fi
+              for i in 1 2 3; do cargo install --locked cargo-zigbuild && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
+
+              # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
+              # This will be available for subsequent steps in the workflow
+              echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV

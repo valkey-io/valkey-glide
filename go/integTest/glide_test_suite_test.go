@@ -27,7 +27,7 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -69,8 +69,9 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
 	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
 
-	// Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+	// Delete dirs to ensure clean state before starting new clusters
 	err := os.RemoveAll("../../utils/clusters")
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
@@ -303,6 +304,7 @@ func TestGlideTestSuite(t *testing.T) {
 
 func (suite *GlideTestSuite) TearDownSuite() {
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
 
 func (suite *GlideTestSuite) TearDownTest() {
@@ -491,7 +493,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
-			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout))
+			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout),
+		)
 	return glide.NewClient(clientConfig)
 }
 
@@ -500,7 +503,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 ) (*glide.ClusterClient, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(
-			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout),
+		).
 		WithRequestTimeout(requestTimeout)
 	return glide.NewClusterClient(clientConfig)
 }
@@ -556,6 +560,71 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 	if suite.serverVersion < version {
 		t.Skipf("This feature is added in version %s", version)
 	}
+}
+
+// Expected valid responses for BGSAVE and BGSAVE SCHEDULE.
+var bgsaveResponses = []string{
+	"Background saving started",
+	"Background saving scheduled",
+}
+
+// Expected valid responses for BGREWRITEAOF.
+var bgrewriteaofResponses = []string{
+	"Background append only file rewriting started",
+	"Background append only file rewriting scheduled",
+}
+
+// Expected server error response for BGSAVE CANCEL when no save is in progress.
+const bgsaveNotCancelledResponse = "Background saving is currently not in progress or scheduled"
+
+// Route option for routing to a single primary node by slot key.
+var primarySlotRouteOption = options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
+// waitFor waits until a condition is met.
+func (suite *GlideTestSuite) waitFor(condition func() bool, failure string) {
+	t := suite.T()
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Fatal(failure)
+}
+
+// waitForSaveNotInProgress waits until no save (RDB save or AOF rewrite) is in progress.
+func (suite *GlideTestSuite) waitForSaveNotInProgress(client interfaces.BaseClientCommands) {
+	t := suite.T()
+	t.Helper()
+	suite.waitFor(func() bool {
+		var info string
+		switch c := client.(type) {
+		case *glide.Client:
+			result, err := c.InfoWithOptions(context.Background(), options.InfoOptions{
+				Sections: []constants.Section{constants.Persistence},
+			})
+			require.NoError(t, err)
+			info = result
+		case *glide.ClusterClient:
+			result, err := c.InfoWithOptions(context.Background(), options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
+			})
+			require.NoError(t, err)
+			if result.IsSingleValue() {
+				info = result.SingleValue()
+			} else {
+				for _, v := range result.MultiValue() {
+					info += v
+				}
+			}
+		}
+		return !strings.Contains(info, "rdb_bgsave_in_progress:1") &&
+			!strings.Contains(info, "aof_rewrite_in_progress:1")
+	}, "Timed out waiting for save to complete")
 }
 
 func (suite *GlideTestSuite) GenerateLargeUuid() string {

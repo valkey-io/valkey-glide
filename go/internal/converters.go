@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -728,4 +729,308 @@ func ConvertXInfoStreamFullResponse(data any) (any, error) {
 	ReadResult(infoMap, "recorded-first-entry-id", &streamInfo.RecordedFirstEntryId)
 
 	return streamInfo, nil
+}
+
+// Indices for LATENCY HISTORY response.
+const (
+	latencyEntryTimeIndex    = 0
+	latencyEntryLatencyIndex = 1
+)
+
+// Indices for LATENCY LATEST response.
+const (
+	latencyEventInfoNameIndex           = 0
+	latencyEventInfoTimeIndex           = 1
+	latencyEventInfoLatestDurationIndex = 2
+	latencyEventInfoMaxDurationIndex    = 3
+	latencyEventInfoSumIndex            = 4
+	latencyEventInfoCountIndex          = 5
+)
+
+// ConvertLatencyHistoryEntries converts a LATENCY HISTORY response.
+func ConvertLatencyHistoryEntries(data any) (any, error) {
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY HISTORY response: %T", data)
+	}
+	result := make([]models.LatencyEntry, 0, len(arr))
+	for i, item := range arr {
+		pair, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY entry at index %d: %T", i, item)
+		}
+		if len(pair) < latencyEntryLatencyIndex+1 {
+			return nil, fmt.Errorf("LATENCY HISTORY entry at index %d has %d elements, expected at least 2", i, len(pair))
+		}
+		ts, ok := pair[latencyEntryTimeIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY HISTORY timestamp at index %d: %T",
+				i,
+				pair[latencyEntryTimeIndex],
+			)
+		}
+		latency, ok := pair[latencyEntryLatencyIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY HISTORY latency at index %d: %T",
+				i,
+				pair[latencyEntryLatencyIndex],
+			)
+		}
+		result = append(result, models.LatencyEntry{
+			Time:     time.Unix(ts, 0),
+			Duration: time.Duration(latency) * time.Millisecond,
+		})
+	}
+	return result, nil
+}
+
+// ConvertLatencyLatestEntries converts a LATENCY LATEST response.
+func ConvertLatencyLatestEntries(data any) (any, error) {
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY LATEST response: %T", data)
+	}
+	result := make([]models.LatencyEventInfo, 0, len(arr))
+	for i, item := range arr {
+		entry, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST entry at index %d: %T", i, item)
+		}
+		if len(entry) < latencyEventInfoMaxDurationIndex+1 {
+			return nil, fmt.Errorf("LATENCY LATEST entry at index %d has %d elements, expected at least 4", i, len(entry))
+		}
+		name, ok := entry[latencyEventInfoNameIndex].(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST event name at index %d: %T",
+				i,
+				entry[latencyEventInfoNameIndex],
+			)
+		}
+		ts, ok := entry[latencyEventInfoTimeIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST timestamp at index %d: %T",
+				i,
+				entry[latencyEventInfoTimeIndex],
+			)
+		}
+		latest, ok := entry[latencyEventInfoLatestDurationIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST latest_ms at index %d: %T",
+				i,
+				entry[latencyEventInfoLatestDurationIndex],
+			)
+		}
+		max, ok := entry[latencyEventInfoMaxDurationIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST max_ms at index %d: %T",
+				i,
+				entry[latencyEventInfoMaxDurationIndex],
+			)
+		}
+
+		info := models.LatencyEventInfo{
+			EventName:      name,
+			LatestTime:     time.Unix(ts, 0),
+			LatestDuration: time.Duration(latest) * time.Millisecond,
+			MaxDuration:    time.Duration(max) * time.Millisecond,
+			Sum:            models.CreateNilResultOf[time.Duration](),
+			Count:          models.CreateNilResultOf[int64](),
+		}
+
+		// Valkey 8.1+ includes sum and count as the 5th and 6th elements.
+		if len(entry) > latencyEventInfoCountIndex {
+			sumMs, ok := entry[latencyEventInfoSumIndex].(int64)
+			if !ok {
+				return nil, fmt.Errorf(
+					"unexpected type for LATENCY LATEST sum_ms at index %d: %T",
+					i,
+					entry[latencyEventInfoSumIndex],
+				)
+			}
+			count, ok := entry[latencyEventInfoCountIndex].(int64)
+			if !ok {
+				return nil, fmt.Errorf(
+					"unexpected type for LATENCY LATEST count at index %d: %T",
+					i,
+					entry[latencyEventInfoCountIndex],
+				)
+			}
+			info.Sum = models.CreateResultOf(time.Duration(sumMs) * time.Millisecond)
+			info.Count = models.CreateResultOf(count)
+		}
+
+		result = append(result, info)
+	}
+	return result, nil
+}
+
+const memoryStatsDbPrefix = "db."
+
+// ConvertMemoryStats converts a raw map[string]any response from glide-core into a typed models.MemoryStats.
+func ConvertMemoryStats(data any) (models.MemoryStats, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return models.MemoryStats{}, fmt.Errorf("unexpected type for MEMORY STATS response: %T, expected map[string]any", data)
+	}
+
+	stats := models.MemoryStats{
+		Db: make(map[int64]models.MemoryStatsDb),
+	}
+
+	// Parse db.<N> entries
+	for key, value := range rawMap {
+		if strings.HasPrefix(key, memoryStatsDbPrefix) && key != "db.dict.rehashing.count" {
+			suffix := key[len(memoryStatsDbPrefix):]
+			dbIndex, err := strconv.ParseInt(suffix, 10, 64)
+			if err != nil {
+				return models.MemoryStats{}, fmt.Errorf("unexpected db key format: %s", key)
+			}
+			dbStats, err := convertMemoryStatsDb(value)
+			if err != nil {
+				return models.MemoryStats{}, fmt.Errorf("failed to parse %s: %w", key, err)
+			}
+			stats.Db[dbIndex] = dbStats
+		}
+	}
+
+	var err error
+
+	err = ReadRequiredValue(rawMap, "allocator.active", &stats.AllocatorActive)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-fragmentation.bytes", &stats.AllocatorFragmentationBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator.resident", &stats.AllocatorResident)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-rss.bytes", &stats.AllocatorRssBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "aof.buffer", &stats.AofBuffer)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "clients.normal", &stats.ClientsNormal)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "fragmentation.bytes", &stats.FragmentationBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "keys.count", &stats.KeysCount)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "lua.caches", &stats.LuaCaches)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "overhead.total", &stats.OverheadTotal)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "peak.allocated", &stats.PeakAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "replication.backlog", &stats.ReplicationBacklog)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "rss-overhead.bytes", &stats.RssOverheadBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "startup.allocated", &stats.StartupAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "total.allocated", &stats.TotalAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "fragmentation", &stats.Fragmentation)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+
+	// Optional Redis 7.0+ fields
+	ReadResult(rawMap, "cluster.links", &stats.ClusterLinks)
+	ReadResult(rawMap, "functions.caches", &stats.FunctionsCaches)
+
+	// Optional Valkey 8.0+ fields
+	ReadResult(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
+	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
+	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
+	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
+
+	return stats, nil
+}
+
+// convertMemoryStatsDb parses a nested map into a MemoryStatsDb struct.
+func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return models.MemoryStatsDb{}, fmt.Errorf(
+			"unexpected type for db entry: %T, expected map[string]any", data,
+		)
+	}
+
+	var db models.MemoryStatsDb
+	if err := ReadRequiredValue(rawMap, "overhead.hashtable.expires", &db.OverheadHashtableExpires); err != nil {
+		return models.MemoryStatsDb{}, err
+	}
+	if err := ReadRequiredValue(rawMap, "overhead.hashtable.main", &db.OverheadHashtableMain); err != nil {
+		return models.MemoryStatsDb{}, err
+	}
+
+	return db, nil
 }

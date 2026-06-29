@@ -4,15 +4,24 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
-from glide.glide import ClusterScanCursor, Script
+from glide.async_commands.core import RequestType
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
 )
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history_cluster,
+    _parse_latency_latest_cluster,
+)
+from glide_shared.commands.memory import MemoryStats, _parse_memory_stats_cluster
 from glide_shared.constants import (
     TOK,
     TClusterResponse,
@@ -22,8 +31,8 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
+from glide_shared.script import Script
 
 from .core import CoreCommands
 
@@ -901,6 +910,133 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, [], route),
         )
 
+    async def save(self, route: Optional[Route] = None) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Save, [], route),
+        )
+
+    async def bgsave(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave()
+                "Background saving started"
+            >>> await client.bgsave(AllNodes())
+                {b'addr1': 'Background saving started', b'addr2': 'Background saving started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, [], route),
+        )
+
+    async def bgsave_schedule(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_schedule()
+                "Background saving scheduled"
+            >>> await client.bgsave_schedule(AllNodes())
+                {b'addr1': 'Background saving scheduled', b'addr2': 'Background saving scheduled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"], route),
+        )
+
+    async def bgsave_cancel(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_cancel()
+                "Background saving cancelled"
+            >>> await client.bgsave_cancel(AllNodes())
+                {b'addr1': 'Background saving cancelled', b'addr2': 'Background saving cancelled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["CANCEL"], route),
+        )
+
+    async def bgrewriteaof(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgrewriteaof()
+                "Background append only file rewriting started"
+            >>> await client.bgrewriteaof(AllNodes())
+                {b'addr1': 'Background append only file rewriting started', b'addr2': 'Background append only file rewriting started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgRewriteAof, [], route),
+        )
+
     async def publish(
         self,
         message: TEncodable,
@@ -1606,3 +1742,233 @@ class ClusterCommands(CoreCommands):
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.SUnsubscribeBlocking, list(args))
+
+    async def client_pause(
+        self,
+        timeout: int,
+        mode: Optional[ClientPauseMode] = None,
+        route: Optional[Route] = None,
+    ) -> TOK:
+        """
+        Suspends all clients for the specified timeout.
+
+        See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
+
+        Args:
+            timeout (int): The time in milliseconds to pause clients.
+            mode (Optional[ClientPauseMode]): The pause mode to use.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.client_pause(1000)
+                OK
+            >>> await client.client_pause(5000, ClientPauseMode.WRITE)
+                OK
+        """
+        args: List[TEncodable] = [str(timeout)]
+        if mode is not None:
+            args.append(mode.value)
+        return cast(
+            TOK, await self._execute_command(RequestType.ClientPause, args, route)
+        )
+
+    async def client_unpause(self, route: Optional[Route] = None) -> TOK:
+        """
+        Resumes processing commands on all clients.
+
+        See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.client_unpause()
+                OK
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.ClientUnpause, [], route)
+        )
+
+    async def latency_history(
+        self, event: TEncodable, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEntry]]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEntry]]: A cluster value containing list(s)
+                of LatencyEntry for the event.
+
+        Examples:
+            >>> history = await client.latency_history("command")
+            >>> for node, entries in history.items():
+            ...     print(f"Node [{node}]: {len(entries)} entries")
+        """
+        return _parse_latency_history_cluster(
+            await self._execute_command(RequestType.LatencyHistory, [event], route),
+        )
+
+    async def latency_latest(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEventInfo]]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEventInfo]]: A cluster value containing list(s)
+                of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = await client.latency_latest()
+            >>> for node, entries in latest.items():
+            ...     print(f"Node [{node}]: {len(entries)} events")
+        """
+        return _parse_latency_latest_cluster(
+            await self._execute_command(RequestType.LatencyLatest, [], route),
+        )
+
+    async def latency_reset(
+        self, *events: TEncodable, route: Optional[Route] = None
+    ) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            int: The total number of event time series that were reset across all nodes.
+
+        Examples:
+            >>> await client.latency_reset()
+                4
+            >>> await client.latency_reset("command", route=AllNodes())
+                2
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.LatencyReset, list(events), route),
+        )
+
+    async def memory_doctor(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Returns a report about memory problems detected by the server.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[str]: A cluster response containing the memory diagnostic report(s)
+
+        Examples:
+            >>> reports = await client.memory_doctor()
+            >>> for node, report in reports.items():
+            ...     print(f"Node [{node}]: {report}")
+            >>> report = await client.memory_doctor(RandomNode())
+            >>> print("Memory report:", report)
+        """
+        response = await self._execute_command(RequestType.MemoryDoctor, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
+
+    async def memory_malloc_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Returns the internal statistics of the memory allocator.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[str]: A cluster value containing the memory allocator statistics
+
+        Examples:
+            >>> stats_all = await client.memory_malloc_stats()
+            >>> for node, stats in stats_all.items():
+            ...     print(f"Node [{node}]: {stats}")
+            >>> stats = await client.memory_malloc_stats(RandomNode())
+            >>> print("Allocator stats:", stats)
+        """
+        response = await self._execute_command(RequestType.MemoryMallocStats, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
+
+    async def memory_purge(self, route: Optional[Route] = None) -> TOK:
+        """
+        Asks the server to reclaim memory from the allocator back to the operating system.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.memory_purge()
+                "OK"
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.MemoryPurge, [], route)
+        )
+
+    async def memory_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[MemoryStats]:
+        """
+        Returns detailed memory consumption statistics of the server.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[MemoryStats]: A ``MemoryStats`` object containing detailed
+                memory usage statistics.
+
+        Examples:
+            >>> stats = await client.memory_stats(RandomNode())
+            >>> print(f"Peak allocated: {stats.peak_allocated}")
+            >>> stats_all = await client.memory_stats()
+            >>> for node, node_stats in stats_all.items():
+            ...     print(f"Node [{node}]: peak={node_stats.peak_allocated}")
+        """
+        response = await self._execute_command(RequestType.MemoryStats, [], route)
+        return _parse_memory_stats_cluster(cast(Mapping, response))

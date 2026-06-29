@@ -1,0 +1,34 @@
+# Nightly full-matrix tests for the Rust (glide-core) client.
+# Thin wrapper around rust.yml that isolates scheduling so per-language
+# full-matrix runs can be staggered and failures do not cascade across
+# languages. Flaky-test isolation work: see #4629.
+name: FMT Rust
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 05:00 UTC (10:00 PM PDT).
+    schedule:
+        - cron: "0 5 * * *"
+    workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
+
+concurrency:
+    group: fmt-rust-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-rust:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/rust.yml
+        with:
+            run-with-macos: use-self-hosted
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
+        name: FMT - Rust
+        secrets: inherit

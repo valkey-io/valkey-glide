@@ -748,7 +748,8 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		result, err := client.ScanWithOptions(context.Background(),
+		result, err := client.ScanWithOptions(
+			context.Background(),
 			cursor,
 			*options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
 		)
@@ -1052,8 +1053,11 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster() {
 	assert.NoError(suite.T(), err)
 
 	// Verify client auto-reconnects with new password
-	_, err = testClient.Info(context.Background())
-	assert.NoError(suite.T(), err)
+	// Retry during reconnection - non-blocking reconnect may still be in progress
+	assert.Eventually(suite.T(), func() bool {
+		_, err = testClient.Info(context.Background())
+		return err == nil
+	}, 10*time.Second, 500*time.Millisecond)
 
 	// test reset connection password
 	_, err = testClient.ResetConnectionPassword(context.Background())
@@ -1317,6 +1321,112 @@ func (suite *GlideTestSuite) TestLastSaveWithOptionCluster() {
 	response, err := client.LastSaveWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	assert.True(t, response.IsSingleValue())
+}
+
+func (suite *GlideTestSuite) TestSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.Save(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+}
+
+func (suite *GlideTestSuite) TestSaveWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.SaveWithOptions(context.Background(), primarySlotRouteOption)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+}
+
+func (suite *GlideTestSuite) TestBgSaveCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSave(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, result.IsMultiValue())
+	for _, value := range result.MultiValue() {
+		assert.Contains(t, bgsaveResponses, value)
+	}
+}
+
+func (suite *GlideTestSuite) TestBgSaveWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSaveWithOptions(context.Background(), primarySlotRouteOption)
+	assert.NoError(t, err)
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgsaveResponses, result.SingleValue())
+}
+
+func (suite *GlideTestSuite) TestBgSaveScheduleCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSaveSchedule(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, result.IsMultiValue())
+	for _, value := range result.MultiValue() {
+		assert.Contains(t, bgsaveResponses, value)
+	}
+}
+
+func (suite *GlideTestSuite) TestBgSaveScheduleWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSaveScheduleWithOptions(context.Background(), primarySlotRouteOption)
+	assert.NoError(t, err)
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgsaveResponses, result.SingleValue())
+}
+
+func (suite *GlideTestSuite) TestBgSaveCancelCluster() {
+	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	// When no save is in progress, BGSAVE CANCEL should return an error
+	_, err := client.BgSaveCancel(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
+}
+
+func (suite *GlideTestSuite) TestBgSaveCancelWithOptionsCluster() {
+	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	// When no save is in progress, BGSAVE CANCEL should return an error
+	_, err := client.BgSaveCancelWithOptions(context.Background(), primarySlotRouteOption)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
+}
+
+func (suite *GlideTestSuite) TestBgRewriteAofCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgRewriteAof(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, result.IsMultiValue())
+	for _, value := range result.MultiValue() {
+		assert.Contains(t, bgrewriteaofResponses, value)
+	}
+}
+
+func (suite *GlideTestSuite) TestBgRewriteAofWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgRewriteAofWithOptions(context.Background(), primarySlotRouteOption)
+	assert.NoError(t, err)
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgrewriteaofResponses, result.SingleValue())
 }
 
 func (suite *GlideTestSuite) TestConfigResetStatCluster() {
@@ -2613,9 +2723,12 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
-	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
-	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
+
+	// Use a longer request timeout so InvokeScript blocks until killed
+	invokeConfig := suite.defaultClusterClientConfig().WithRequestTimeout(12 * time.Second)
+	invokeClient, err := suite.clusterClient(invokeConfig)
+	require.NoError(suite.T(), err)
 
 	// key for routing to a primary node
 	randomKey := uuid.NewString()
@@ -2629,41 +2742,33 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
-	code := CreateLongRunningLuaScript(6, true)
+	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
+	// Start InvokeScript in a goroutine so it begins executing immediately
+	var invokeErr error
+	invokeDone := make(chan struct{})
+	go func() {
+		defer close(invokeDone)
+		_, invokeErr = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
+	}()
 
-	timeout := time.After(5 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
+	// Poll ScriptKill on the main goroutine until the script is running and killed
+	var killErr error
 	var result string
-	killed := false
+	require.Eventually(suite.T(), func() bool {
+		result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
+		return killErr == nil
+	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
 
-	for !killed {
-		select {
-		case <-timeout:
-			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 5 seconds")
-		case <-ticker.C:
-			result, err = killClient.ScriptKillWithRoute(context.Background(), route)
-			if err == nil {
-				killed = true
-				continue
-			}
+	// Wait for invoke to complete after kill
+	<-invokeDone
 
-			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
-				assert.NoError(suite.T(), err)
-				killed = true
-			}
-		}
-	}
-
-	assert.NoError(suite.T(), err)
+	require.Error(suite.T(), invokeErr)
+	assert.Contains(suite.T(), strings.ToLower(invokeErr.Error()), "script killed")
+	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
-
-	time.Sleep(1 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKillWithRoute(context.Background(), route)

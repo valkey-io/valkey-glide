@@ -1,0 +1,33 @@
+# Nightly full-matrix tests for the Redis-RS client.
+# Thin wrapper around redis-rs.yml that isolates scheduling so per-language
+# full-matrix runs can be staggered and failures do not cascade across
+# languages. Flaky-test isolation work: see #4629.
+name: FMT Redis-RS
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 05:30 UTC (10:30 PM PDT).
+    schedule:
+        - cron: "30 5 * * *"
+    workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
+
+concurrency:
+    group: fmt-redis-rs-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-redis-rs:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/redis-rs.yml
+        with:
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
+        name: FMT - Redis-RS
+        secrets: inherit

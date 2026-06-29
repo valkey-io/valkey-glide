@@ -1,6 +1,12 @@
 name: Java Prepare Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/java-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
@@ -29,7 +35,7 @@ jobs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -56,7 +62,9 @@ jobs:
               id: release-version
               shell: bash
               run: |
-                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      R_VERSION="255.255.255"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                       R_VERSION=${GITHUB_REF:11}
@@ -95,15 +103,15 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - name: Set up JDK
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
@@ -116,13 +124,13 @@ jobs:
                   rustup target add ${{ matrix.host.TARGET }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -169,7 +177,7 @@ jobs:
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }}
+                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
 
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
@@ -178,7 +186,7 @@ jobs:
                   else
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
 
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
@@ -205,9 +213,14 @@ jobs:
                   cd -
                   cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-${{ matrix.host.TARGET }}.jar
 
+            - name: Smoke test native library
+              shell: bash
+              run: |
+                  find java/client/build/resources/main/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
+
             - name: Upload artifacts to publish
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
@@ -216,7 +229,7 @@ jobs:
 
             - name: Upload native library for uber JAR assembly
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: native-lib-${{ matrix.host.TARGET }}
                   path: java/client/build/resources/main/natives/**/*
@@ -230,16 +243,16 @@ jobs:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Set up JDK
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
 
             - name: Download all native library artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   pattern: native-lib-*
                   path: native-libs-downloaded
@@ -252,27 +265,39 @@ jobs:
             - name: Organize native libraries for uber JAR
               shell: bash
               run: |
-                  # Create the target directory
-                  mkdir -p java/client/build/resources/main
+                  # Create staging directory for native libraries
+                  mkdir -p java/client/build/native-libs-staging/natives
 
                   # Copy all native libraries from downloaded artifacts
-                  # Structure: native-libs-downloaded/native-lib-{TARGET}/natives/{platform}/{arch}/*.{so,dylib,dll}
-                  cp -r native-libs-downloaded/native-lib-*/natives java/client/build/resources/main/ || true
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
+                  # Target structure: java/client/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          # Find all native library files and copy them preserving the platform/arch structure
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              # Extract the relative path from the artifact directory
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/client/build/native-libs-staging/natives/$rel_path"
+                              # Create target directory if it doesn't exist
+                              mkdir -p "$(dirname "$target_path")"
+                              # Copy the file
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
+                  done
 
-                  # Merge all natives directories into one
-                  find native-libs-downloaded -type d -name "natives" -exec cp -r {}/* java/client/build/resources/main/natives/ \;
-
-                  echo "Native libraries organized:"
-                  find java/client/build/resources/main/natives -type f
+                  echo "Native libraries staged:"
+                  find java/client/build/native-libs-staging -type f
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -300,17 +325,10 @@ jobs:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
                   UBER_JAR_BUILD: "true"
               run: |
-                  # Build uber JAR without platform classifier
-                  # We set UBER_JAR_BUILD env var to signal build.gradle to skip classifier
-                  ./gradlew --build-cache :client:shadowJar :client:javadocJar :client:sourcesJar \
-                  -x buildRust -x copyNativeLib \
-                  -Psigning.secretKeyRingFile=secring.gpg \
-                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
-                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-
-                  # Manually publish to Maven local with correct structure
+                  # Build uber JAR and publish to Maven local in one step
+                  # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
                   ./gradlew --build-cache :client:publishToMavenLocal \
-                  -x buildRust -x copyNativeLib -x shadowJar -x javadocJar -x sourcesJar \
+                  -x buildRust -x copyNativeLib \
                   -Psigning.secretKeyRingFile=secring.gpg \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
@@ -326,11 +344,55 @@ jobs:
                   cd -
                   cp $src_folder/bundle.jar bundle-uber-jar.jar
 
+            - name: Build jedis-compatibility (no classifier, no natives)
+              working-directory: java
+              shell: bash
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+                  JEDIS_NO_CLASSIFIER_BUILD: "true"
+              run: |
+                  ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal \
+                  -x buildRust \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Bundle jedis-compatibility no-classifier JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+                  cd $src_folder
+                  jar -cvf jedis-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $src_folder/jedis-bundle.jar jedis-bundle-no-classifier.jar
+
+            - name: Smoke test uber JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  # Extract in a temp dir so the working directory is not polluted; clean up on exit.
+                  bundle="$PWD/bundle-uber-jar.jar"
+                  tmp_dir=$(mktemp -d)
+                  trap 'rm -rf "$tmp_dir"' EXIT
+                  cd "$tmp_dir"
+                  jar xf "$bundle"
+                  INNER_JAR=$(find . -maxdepth 1 -name 'valkey-glide-*.jar' ! -name '*sources*' ! -name '*javadoc*' | head -1)
+                  mkdir inner && (cd inner && jar xf "../$INNER_JAR")
+                  find inner/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
+
             - name: Upload uber JAR artifact
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: java-uber-jar
                   path: java/bundle-uber-jar.jar
+
+            - name: Upload jedis no-classifier artifact
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: jedis-no-classifier
+                  path: java/jedis-bundle-no-classifier.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
@@ -343,7 +405,7 @@ jobs:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
             - name: Download published artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
 
             - name: Move all required files to one directory
               shell: bash
@@ -377,7 +439,7 @@ jobs:
                   zip -r ../build io
 
             - name: Upload bundle to CI artifacts
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: valkey-${{ env.RELEASE_VERSION }}
                   path: |
@@ -387,10 +449,10 @@ jobs:
               id: maven-deployment
               shell: bash
               run: |
-                  export DEPLOYMENT_ID=`curl --request POST \
+                  export DEPLOYMENT_ID=$(curl --fail --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   --form bundle=@build.zip \
-                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
+                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1)
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
                   echo Uploaded to Maven deployment with deployment ID $DEPLOYMENT_ID. Will be released if smoke tests pass and approved for release.
@@ -400,12 +462,12 @@ jobs:
               run: |
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
-                      export DEPLOYMENT_STATUS=`curl --request POST \
+                      export DEPLOYMENT_STATUS=$(curl --request POST \
                       -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                       "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
-                      | jq '.deploymentState'`
+                      | jq -r '.deploymentState')
 
-                      if [[ $DEPLOYMENT_STATUS == ""\"VALIDATED"\"" ]]; then exit 0; fi
+                      if [[ $DEPLOYMENT_STATUS == "VALIDATED" ]]; then exit 0; fi
                   done
 
                   curl --request POST \
@@ -445,10 +507,10 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
 
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Set up JDK
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
@@ -458,7 +520,7 @@ jobs:
               run: |
                   # Set environment variable to indicate container environment for Gradle
                   echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                  apk add openjdk11 git bash
+                  apk add openjdk11 git bash curl
                   export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                   # Create gradle user home and disable auto-download
                   mkdir -p ~/.gradle
@@ -468,7 +530,7 @@ jobs:
                   JAVA_HOME: ${{ env.JAVA_HOME }}
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   engine-version: "7.2"
@@ -476,13 +538,13 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -493,12 +555,32 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
+            - name: Wait for deployment artifacts to be available
+              shell: bash
+              run: |
+                  AUTH_HEADER="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
+                  for ((retries = 0; retries < 6; retries++)); do
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
+                      if [ "$HTTP_STATUS" = "200" ]; then
+                          echo "Artifact available"
+                          exit 0
+                      fi
+                      echo "Attempt $((retries + 1))/6: HTTP $HTTP_STATUS, waiting 5s..."
+                      sleep 5
+                  done
+                  echo "::warning::Artifact not available after 30s, proceeding anyway (deployment already validated)"
+
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
               shell: bash
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
+                  if [ -z "$PORT" ]; then
+                      echo "Failed to extract PORT from cluster_manager.py output"
+                      exit 1
+                  fi
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
 
             - name: Test deployment
@@ -506,9 +588,10 @@ jobs:
               shell: bash
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
+                  GRADLE_OPTS: "-Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000"
               run: |
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
-                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }}"
 
@@ -526,7 +609,7 @@ jobs:
         steps:
             - name: Publish to Maven
               run: |
-                  curl --request POST \
+                  curl --fail --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 

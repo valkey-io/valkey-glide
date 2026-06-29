@@ -1,0 +1,89 @@
+# Central entry point for triggering a full FMT run across all languages.
+# Primarily for on-demand use during releases or time-sensitive validation,
+# where setting parameters once for all languages is a significant convenience.
+name: FMT All Languages
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: true
+            run-with-macos:
+                description: "macOS runner selection"
+                type: choice
+                options:
+                    - use-self-hosted
+                    - use-github
+                    - "false"
+                default: use-self-hosted
+
+concurrency:
+    group: fmt-all-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    fmt-python:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/python.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit
+
+    fmt-node:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/node.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit
+
+    fmt-go:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/go.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit
+
+    fmt-java:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/java.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit
+
+    fmt-java-windows:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/java.yml
+        with:
+            full-matrix: true
+            windows-only: true
+        secrets: inherit
+
+    fmt-rust:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/rust.yml
+        with:
+            full-matrix: true
+            run-with-macos: ${{ inputs.run-with-macos }}
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit
+
+    fmt-redis-rs:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/redis-rs.yml
+        with:
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+        secrets: inherit

@@ -24,6 +24,26 @@ class PubSubMsg:
     pattern: Optional[TEncodable]
 
 
+@dataclass
+class MonitorMsg:
+    """
+    Represents a single line received from the MONITOR command.
+
+    Attributes:
+        timestamp (float): Unix timestamp of the command.
+        db (int): Database index on which the command was executed.
+        client_addr (str): Address of the client that issued the command.
+        command (str): The command name.
+        args (List[str]): The command arguments.
+    """
+
+    timestamp: float
+    db: int
+    client_addr: str
+    command: str
+    args: List[str]
+
+
 class ConditionalChange(Enum):
     """
     A condition to the `SET`, `ZADD` and `GEOADD` commands.
@@ -346,7 +366,7 @@ class FlushMode(Enum):
 
     `FLUSHALL` command and `FUNCTION FLUSH` command.
 
-    See [FLUSHAL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
+    See [FLUSHALL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
     for details
 
     SYNC was introduced in version 6.2.0.
@@ -372,6 +392,20 @@ class FunctionRestorePolicy(Enum):
     Appends the restored libraries to the existing libraries, replacing any existing ones in case
     of name collisions. Note that this policy doesn't prevent function name collisions, only libraries.
     """
+
+
+class ClientPauseMode(Enum):
+    """
+    Mode option for the `CLIENT PAUSE` command.
+
+    See [CLIENT PAUSE](https://valkey.io/commands/client-pause/) for details.
+    """
+
+    ALL = "ALL"
+    """ Pause all client commands. """
+
+    WRITE = "WRITE"
+    """ Pause client write commands. """
 
 
 def _build_sort_args(
@@ -405,3 +439,30 @@ def _build_sort_args(
         args.extend(["STORE", store])
 
     return args
+
+
+@dataclass
+class MigrateOptions:
+    """
+    Optional arguments for the `migrate` command.
+    See [valkey.io](https://valkey.io/commands/migrate/) for details.
+    """
+
+    copy: bool = False
+    replace: bool = False
+    password: Optional[str] = None
+    username: Optional[str] = None
+
+    def to_args(self) -> List[TEncodable]:
+        if self.username is not None and self.password is None:
+            raise ValueError("MigrateOptions: 'username' requires 'password' to be set")
+        args: List[TEncodable] = []
+        if self.copy:
+            args.append("COPY")
+        if self.replace:
+            args.append("REPLACE")
+        if self.username is not None and self.password is not None:
+            args.extend(["AUTH2", self.username, self.password])
+        elif self.password is not None:
+            args.extend(["AUTH", self.password])
+        return args

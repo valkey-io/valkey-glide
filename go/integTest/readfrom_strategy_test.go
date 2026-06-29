@@ -52,7 +52,8 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server, constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -140,7 +141,8 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -186,7 +188,8 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -263,7 +266,8 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -294,4 +298,67 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
 
 	clientForTestingAz.Close()
+}
+
+func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
+
+	const nGetCalls = 100
+
+	client, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second).
+		WithReadFrom(config.ReadFromAllNodes))
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	suite.verifyOK(
+		client.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
+
+	for i := 0; i < nGetCalls; i++ {
+		_, err = client.Get(context.Background(), "foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := client.InfoWithOptions(
+		context.Background(),
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	nodesWithGets := 0
+	primaryReceivedGets := false
+	replicaReceivedGets := false
+	totalGetCalls := 0
+
+	for _, value := range infoResult.MultiValue() {
+		if strings.Contains(value, "cmdstat_get:calls=") {
+			nodesWithGets++
+			if strings.Contains(value, "role:master") {
+				primaryReceivedGets = true
+			}
+			if strings.Contains(value, "role:slave") {
+				replicaReceivedGets = true
+			}
+			startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+			endIndex := strings.Index(value[startIndex:], ",")
+			if endIndex == -1 {
+				endIndex = len(value[startIndex:])
+			}
+			endIndex += startIndex
+			calls, err := strconv.Atoi(value[startIndex:endIndex])
+			assert.NoError(suite.T(), err)
+			totalGetCalls += calls
+		}
+	}
+
+	assert.Greater(suite.T(), nodesWithGets, 1)
+	assert.True(suite.T(), primaryReceivedGets)
+	assert.True(suite.T(), replicaReceivedGets)
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
 }

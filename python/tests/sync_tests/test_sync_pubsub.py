@@ -38,6 +38,7 @@ from tests.utils.pubsub_test_utils import (
     sync_subscribe_by_method,
     sync_wait_for_subscription_state,
     sync_wait_for_subscription_state_if_needed,
+    wait_for_messages,
 )
 from tests.utils.utils import (
     get_random_string,
@@ -811,8 +812,24 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
+            # Wait for messages to propagate. Both the Callback and Sync read
+            # paths are non-blocking, so they must poll until every message has
+            # arrived; a fixed sleep races against slow CI (e.g. aarch64). Only
+            # the Async path (get_pubsub_message) blocks per-message and needs
+            # no pre-wait.
+            if method == MethodTesting.Callback:
+                # Callback messages arrive asynchronously; poll the callback list.
+                wait_for_messages(
+                    len(all_channels_and_messages), callback_messages, timeout=10.0
+                )
+            elif method == MethodTesting.Sync:
+                # try_get_pubsub_message is non-blocking; poll the client's
+                # internal pubsub queue (a List[PubSubMsg]) until all arrive.
+                wait_for_messages(
+                    len(all_channels_and_messages),
+                    listening_client._pubsub_queue,
+                    timeout=10.0,
+                )
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
@@ -1906,11 +1923,18 @@ class TestSyncPubSub:
             context=context,
             timeout=10000,
         ) as (listening_client, publishing_client):
+            # Wait for subscription to be established before publishing
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel},
+            )
+
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # allow the message to propagate
-            time.sleep(15)
+            # Wait for message to propagate
+            wait_for_messages(1, callback_messages, timeout=30.0)
 
             assert len(callback_messages) == 1
 
@@ -1928,25 +1952,28 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    def test_sync_pubsub_sharded_max_size_message_callback(
+    def test_sync_pubsub_sharded_large_size_message_callback(
         self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
-        Tests publishing and receiving maximum size messages in sharded PUBSUB with callback method.
+        Tests publishing and receiving large messages in sharded PUBSUB with callback method.
 
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
+        This test verifies that large messages can be published and received
         correctly. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that the callback message
+        can handle large messages without errors and that the callback message
         retrieval method works as expected.
 
         The test covers the following scenarios:
         - Setting up PUBSUB subscription for a specific sharded channel with a callback.
-        - Publishing a maximum size message to the channel.
+        - Publishing a large message to the channel.
         - Verifying that the message is received correctly using the callback method.
         """
 
         channel = get_random_string(10)
-        message = "0" * 512 * 1024 * 1024
+        # 12MB: large enough to exercise the large-message path, but below the
+        # default client-output-buffer-limit hard cap (32MB) so the server won't
+        # disconnect the subscriber.
+        message = "0" * 12 * 1024 * 1024
 
         callback_messages: List[PubSubMsg] = []
         callback, context = new_message, callback_messages
@@ -1960,6 +1987,14 @@ class TestSyncPubSub:
             context=context,
             timeout=10000,
         ) as (listening_client, publishing_client):
+            # Wait for subscription to be established before publishing
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_sharded={channel},
+                timeout_sec=10.0,
+            )
+
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -1967,8 +2002,8 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            time.sleep(15)
+            # Wait for message with polling
+            wait_for_messages(1, callback_messages, timeout=45.0)
 
             assert len(callback_messages) == 1
 

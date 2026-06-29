@@ -15,6 +15,8 @@ use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
+
+type PyObject = Py<PyAny>;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
@@ -35,7 +37,7 @@ pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 /// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
 ///
 /// At least one of traces or metrics must be provided.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
@@ -85,7 +87,7 @@ impl OpenTelemetryConfig {
 /// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
 ///   Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
 ///   It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryTracesConfig {
     /// The endpoint to which trace data will be exported.
@@ -122,7 +124,7 @@ impl OpenTelemetryTracesConfig {
 ///   - For gRPC: `grpc://host:port`
 ///   - For HTTP: `http://host:port` or `https://host:port`
 ///   - For file exporter: `file:///absolute/path/to/folder/file.json`
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryMetricsConfig {
     /// The endpoint to which metrics data will be exported.
@@ -141,7 +143,7 @@ impl OpenTelemetryMetricsConfig {
     }
 }
 
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
 pub enum Level {
     Error = 0,
@@ -229,7 +231,7 @@ impl Script {
 }
 
 /// A Python module implemented in Rust.
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add_class::<Script>()?;
@@ -257,6 +259,9 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
     m.add_function(wrap_pyfunction!(get_min_compressed_size, m)?)?;
+    m.add_function(wrap_pyfunction!(get_cache_metric_from_registry, m)?)?;
+    m.add_function(wrap_pyfunction!(register_address_resolver, m)?)?;
+    m.add_function(wrap_pyfunction!(remove_address_resolver, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -266,6 +271,76 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyfunction]
     fn get_min_compressed_size() -> usize {
         glide_core::compression::MIN_COMPRESSED_SIZE
+    }
+
+    /// A Python-to-Rust address resolver wrapper that implements the `AddressResolver` trait.
+    /// It holds a reference to the Python callable and invokes it via the GIL when resolution is needed.
+    struct PyAddressResolver {
+        callback: Arc<PyObject>,
+    }
+
+    impl std::fmt::Debug for PyAddressResolver {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "PyAddressResolver {{ callback: <Python callable> }}")
+        }
+    }
+
+    // SAFETY: PyObject is Send+Sync when accessed only through Python::with_gil.
+    unsafe impl Send for PyAddressResolver {}
+    unsafe impl Sync for PyAddressResolver {}
+
+    impl redis::AddressResolver for PyAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            let callback = Arc::clone(&self.callback);
+            let host = host.to_string();
+            Python::attach(|py| {
+                match callback.call(py, (host.as_str(), port), None) {
+                    Ok(result) => {
+                        // Expect a tuple (str, int)
+                        match result.extract::<(String, u16)>(py) {
+                            Ok((resolved_host, resolved_port)) => (resolved_host, resolved_port),
+                            Err(err) => {
+                                logger_core::log_error_lazy!(
+                                    "address_resolver",
+                                    format!(
+                                        "Address resolver returned invalid result: {err}. Using original address."
+                                    )
+                                );
+                                (host, port)
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        logger_core::log_error_lazy!(
+                            "address_resolver",
+                            format!(
+                                "Address resolver callback failed: {err}. Using original address."
+                            )
+                        );
+                        (host, port)
+                    }
+                }
+            })
+        }
+    }
+
+    /// Register a Python address resolver callback in the global registry.
+    /// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+    /// address_resolver_key field so the socket listener can look it up.
+    #[pyfunction]
+    fn register_address_resolver(callback: PyObject) -> String {
+        let key = uuid::Uuid::new_v4().to_string();
+        let resolver = Arc::new(PyAddressResolver {
+            callback: Arc::new(callback),
+        });
+        glide_core::address_resolver_registry::register(key.clone(), resolver);
+        key
+    }
+
+    /// Remove an address resolver from the global registry by key.
+    #[pyfunction]
+    fn remove_address_resolver(key: String) {
+        glide_core::address_resolver_registry::remove(&key);
     }
 
     #[pyfunction]
@@ -313,7 +388,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             Telemetry::subscription_last_sync_timestamp().to_string(),
         );
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let py_dict = PyDict::new(py);
 
             for (key, value) in stats_map {
@@ -340,7 +415,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             let init_callback = Arc::clone(&init_callback);
             move |socket_path| {
                 let init_callback = Arc::clone(&init_callback);
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     match socket_path {
                         Ok(path) => {
                             let _ = init_callback.call(py, (path, py.None()), None);
@@ -352,7 +427,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 });
             }
         });
-        Ok(Python::with_gil(|py| {
+        Ok(Python::attach(|py| {
             "OK".into_pyobject(py)
                 .expect("Expected a proper conversion of 'OK' into a Python string.")
                 .into_any()
@@ -551,6 +626,45 @@ impl From<Level> for logger_core::Level {
             Level::Trace => logger_core::Level::Trace,
             Level::Off => logger_core::Level::Off,
         }
+    }
+}
+
+/// Synchronously query a cache metric by cache ID and metric type.
+///
+/// This bypasses the async protobuf/UDS path by reading directly from
+/// the global cache registry's atomic counters.
+///
+/// # Arguments
+/// * `cache_id` - The unique identifier of the cache
+/// * `metrics_type` - Integer matching protobuf CacheMetricsType enum values
+///
+/// # Returns
+/// * Python float for rate metrics (hit_rate, miss_rate)
+/// * Python int for count metrics (entry_count, evictions, expirations, total_lookups)
+#[pyfunction]
+fn get_cache_metric_from_registry(
+    py: Python,
+    cache_id: String,
+    metrics_type: i32,
+) -> PyResult<PyObject> {
+    let metric = glide_core::cache_metric_type_from_proto(metrics_type)
+        .map_err(|e| PyTypeError::new_err(e.to_string()))?;
+
+    match redis::cache::query_cache_metric(&cache_id, metric) {
+        Ok(Value::Double(f)) => Ok(f
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of f64 into a Python float.")
+            .into_any()
+            .unbind()),
+        Ok(Value::Int(i)) => Ok(i
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of i64 into a Python int.")
+            .into_any()
+            .unbind()),
+        Ok(_) => Err(PyTypeError::new_err(
+            "Unexpected value type from cache metric query",
+        )),
+        Err(e) => Err(PyTypeError::new_err(e.to_string())),
     }
 }
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import array
 import math
 import os
 import threading
@@ -29,6 +30,7 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -40,9 +42,12 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     UpdateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry
+from glide_shared.commands.memory import MemoryStats
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -104,10 +109,18 @@ from glide_sync import (
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_sync.sync_commands.script import Script
 
+from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
 from tests.sync_tests.conftest import create_sync_client
-from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
+    BGREWRITEAOF_RESPONSES,
+    BGSAVE_NOT_CANCELLED_RESPONSE,
+    BGSAVE_RESPONSES,
+    PRIMARY_SLOT_ROUTE,
     assert_connected_sync,
+    assert_memory_stats_db_entry,
+    assert_memory_stats_fields,
+    assert_responses_in,
     check_function_list_response,
     check_function_stats_response,
     compare_maps,
@@ -115,14 +128,18 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_unix_seconds_sync,
     parse_info_response,
     round_values,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
     sync_get_version,
+    sync_wait_for_save_not_in_progress,
+    trigger_latency_spike_sync,
 )
 
 
@@ -138,6 +155,16 @@ class TestGlideClients:
         info_str = info.decode()
         assert "lib-name=GlidePySync" in info_str
         assert "lib-ver=unknown" in info_str
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_context_manager(self, request, cluster_mode, protocol):
+        with create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        ) as client:
+            assert not client._is_closed
+
+        assert client._is_closed
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -477,7 +504,7 @@ class TestGlideClients:
                 pytest.fail(f"Child process failed with status {status}")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
+    @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
     def test_connect_with_ip_address_succeeds(
         self, cluster_mode: bool, ip_address: str
     ):
@@ -541,6 +568,33 @@ class TestCommands:
         n = glide_sync_client.get(key, buffer=memoryview(buf))
         assert n == b"100"
         assert buf[:100] == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_non_byte_format(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Regression: capacity is byte-based, not element-based.
+
+        A memoryview over an ``itemsize > 1`` buffer has ``len()`` (element
+        count) smaller than its ``nbytes`` (byte capacity). The value below is
+        4096 bytes and the buffer is 1024 ``uint32`` elements == 4096 bytes, so
+        it fits exactly. Before the fix, capacity was computed with ``len()``
+        (1024) and the GET was spuriously rejected with "exceeds buffer
+        capacity"; with ``nbytes`` (4096) it succeeds.
+        """
+        key = get_random_string(10)
+        data = os.urandom(4096)
+        assert glide_sync_client.set(key, data) == OK
+
+        arr = array.array("I", [0] * 1024)  # itemsize=4, len()=1024, nbytes=4096
+        buf = memoryview(arr)
+        assert len(buf) < len(data)  # element count under-reports capacity
+        assert buf.nbytes == len(data)
+
+        n = glide_sync_client.get(key, buffer=buf)
+        assert n == b"4096"
+        assert buf.cast("B")[:4096] == data
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1013,6 +1067,15 @@ class TestCommands:
     def test_sync_ping(self, glide_sync_client: TGlideClient):
         assert glide_sync_client.ping() == b"PONG"
         assert glide_sync_client.ping("HELLO") == b"HELLO"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_reset(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.reset()
+        assert result == b"RESET"
+        # Verify client recovers after reset
+        pong = glide_sync_client.ping()
+        assert pong == b"PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1516,9 +1579,9 @@ class TestCommands:
             glide_sync_client.blpop(["foo"], 0.001)
 
         def endless_blpop_call():
-            glide_sync_client.blpop(["non_existent_key"], 0)
+            glide_sync_client.blpop(["non_existent_key"], 10)
 
-        # blpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # blpop is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1598,10 +1661,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
 
-        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in a timeout to
+        # BLMPOP is called against a non-existing key with a long timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmpop_call():
-            glide_sync_client.blmpop([key3], ListDirection.LEFT, 0, 1)
+            glide_sync_client.blmpop([key3], ListDirection.LEFT, 10, 1)
 
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1695,9 +1758,9 @@ class TestCommands:
             glide_sync_client.brpop(["foo"], 0.001)
 
         def endless_brpop_call():
-            glide_sync_client.brpop(["non_existent_key"], 0)
+            glide_sync_client.brpop(["non_existent_key"], 10)
 
-        # brpop is called against a non-existing key with no timeout, but we wrap the call in the `run with timeout` function
+        # brpop is called against a non-existing key with a long timeout, but we wrap the call in the `run with timeout` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1906,7 +1969,7 @@ class TestCommands:
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
-        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in a timeout to
+        # BLMOVE is called against a non-existing key with a long timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmove_call():
             glide_sync_client.blmove(
@@ -1914,7 +1977,7 @@ class TestCommands:
                 key2,
                 ListDirection.LEFT,
                 ListDirection.RIGHT,
-                0,
+                10,
             )
 
         with pytest.raises(TimeoutError):
@@ -4118,9 +4181,9 @@ class TestCommands:
             glide_sync_client.bzpopmin(["foo"], 0.5)
 
         def endless_bzpopmin_call():
-            glide_sync_client.bzpopmin(["non_existent_key"], 0)
+            glide_sync_client.bzpopmin(["non_existent_key"], 10)
 
-        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call the `run_sync_func_with_timeout_in_thread` function
+        # bzpopmin is called against a non-existing key with a long timeout, but we wrap the call the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -4179,9 +4242,9 @@ class TestCommands:
             glide_sync_client.bzpopmax(["foo"], 0.5)
 
         def endless_bzpopmax_call():
-            glide_sync_client.bzpopmax(["non_existent_key"], 0)
+            glide_sync_client.bzpopmax(["non_existent_key"], 10)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # bzpopmax is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -4856,9 +4919,9 @@ class TestCommands:
         assert compare_maps(entries, result_map) is True  # type: ignore
 
         def endless_bzmpop_call():
-            glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
+            glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 10)
 
-        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # bzmpop is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -5377,6 +5440,174 @@ class TestCommands:
             assert isinstance(result, dict)
             for lastsave_time in result.values():
                 assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_latency_history(self, glide_sync_client: TGlideClient):
+        before_spike = get_unix_seconds_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
+
+        history = glide_sync_client.latency_history("command")
+        all_entries = flatten_cluster_response_lists(history)
+
+        assert len(all_entries) > 0
+        for entry in all_entries:
+            assert isinstance(entry, LatencyEntry)
+            assert entry.time >= before_spike
+            assert entry.latency > 0
+
+        # Non-existent event returns empty
+        unknown = glide_sync_client.latency_history("nonexistent")
+        assert len(flatten_cluster_response_lists(unknown)) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_latency_latest(self, glide_sync_client: TGlideClient):
+        before_spike = get_unix_seconds_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
+
+        latest = glide_sync_client.latency_latest()
+        all_entries = flatten_cluster_response_lists(latest)
+
+        assert len(all_entries) >= 1
+
+        command_info = next(
+            (info for info in all_entries if info.event_name == "command"), None
+        )
+        assert command_info is not None
+
+        assert command_info.latest_time >= before_spike
+        assert command_info.latest_duration > 0
+        assert command_info.max_duration >= command_info.latest_duration
+
+        # Valkey 8.1+ populates sum and count
+        if not sync_check_if_server_version_lt(glide_sync_client, "8.1.0"):
+            assert command_info.sum is not None and command_info.sum > 0
+            assert command_info.count is not None and command_info.count > 0
+        else:
+            assert command_info.sum is None
+            assert command_info.count is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_latency_reset(self, glide_sync_client: TGlideClient):
+        # Trigger spike then reset all events.
+        trigger_latency_spike_sync(glide_sync_client)
+        assert glide_sync_client.latency_reset() > 0
+
+        history = glide_sync_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset specific event.
+        trigger_latency_spike_sync(glide_sync_client)
+        assert glide_sync_client.latency_reset("command") > 0
+        history = glide_sync_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset unknown event — "command" data should persist.
+        trigger_latency_spike_sync(glide_sync_client)
+        assert glide_sync_client.latency_reset("unknown-event") == 0
+        history = glide_sync_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_latency_routing(self, glide_sync_client: GlideClusterClient):
+        trigger_latency_spike_sync(glide_sync_client)
+
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = glide_sync_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(flatten_cluster_response_lists(multi_history)) > 0
+
+        multi_latest = glide_sync_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(flatten_cluster_response_lists(multi_latest)) >= 1
+
+        # A single primary node route returns a flat list rather than a mapping.
+        single_history = glide_sync_client.latency_history(
+            "command", route=PRIMARY_SLOT_ROUTE
+        )
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = glide_sync_client.latency_latest(route=PRIMARY_SLOT_ROUTE)
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert glide_sync_client.latency_reset(route=AllNodes()) > 0
+
+        trigger_latency_spike_sync(glide_sync_client)
+        assert glide_sync_client.latency_reset("command", route=AllPrimaries()) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_save(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.save()
+        assert result == OK
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.save(route=PRIMARY_SLOT_ROUTE)
+            assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgsave()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgsave(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave_schedule(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgsave_schedule()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgsave_schedule(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave_cancel(self, glide_sync_client: TGlideClient):
+        min_version = "8.1.0"
+        if sync_check_if_server_version_lt(glide_sync_client, min_version):
+            return pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+
+        # When no save is in progress, BGSAVE CANCEL should return an error
+        with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+            glide_sync_client.bgsave_cancel()
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+
+            # When no save is in progress, BGSAVE CANCEL should return an error
+            with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+                glide_sync_client.bgsave_cancel(route=PRIMARY_SLOT_ROUTE)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgrewriteaof(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgrewriteaof()
+        assert_responses_in(result, BGREWRITEAOF_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgrewriteaof(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGREWRITEAOF_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9367,6 +9598,103 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_migrate(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(5)
+        glide_sync_client.set(key, value)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate("invalid-host", 6379, key, 0, 5000)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True)
+            )
+
+        with pytest.raises(ValueError):
+            MigrateOptions(username="user").to_args()
+
+        # Multi-key: only available on standalone clients
+        if not isinstance(glide_sync_client, GlideClusterClient):
+            hash_tag = get_random_string(5)
+            key2 = f"{hash_tag}a"
+            key3 = f"{hash_tag}b"
+            glide_sync_client.set(key2, "value2")
+            glide_sync_client.set(key3, "value3")
+            with pytest.raises(RequestError):
+                glide_sync_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+
+            # Multi-key: empty keys list raises ValueError
+            with pytest.raises(ValueError):
+                glide_sync_client.migrate("invalid-host", 6379, [], 0, 5000)
+
+            # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+            non_existent1 = get_random_string(5)
+            non_existent2 = get_random_string(5)
+            result = glide_sync_client.migrate(
+                "invalid-host",
+                6379,
+                [non_existent1, non_existent2],
+                0,
+                5000,
+            )
+            assert result == b"NOKEY"
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_migrate_success(
+        self, glide_sync_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = create_sync_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            # Single-key migrate
+            key = get_random_string(10)
+            value = get_random_string(5)
+            glide_sync_client.set(key, value)
+            result = glide_sync_client.migrate(dest_host, dest_port, key, 0, 5000)
+            assert result == OK or result == b"OK"
+            assert glide_sync_client.exists([key]) == 0
+            assert dest_client.get(key) == value.encode()
+
+            # Multi-key migrate
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            glide_sync_client.set(key1, val1)
+            glide_sync_client.set(key2, val2)
+            result = glide_sync_client.migrate(
+                dest_host,
+                dest_port,
+                [key1, key2],
+                0,
+                5000,
+            )
+            assert result == OK or result == b"OK"
+            assert glide_sync_client.exists([key1, key2]) == 0
+            assert dest_client.get(key1) == val1.encode()
+            assert dest_client.get(key2) == val2.encode()
+        finally:
+            dest_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
@@ -9820,6 +10148,240 @@ class TestCommands:
         glide_sync_client.set(non_list_key, "non_list_value")
         with pytest.raises(RequestError):
             glide_sync_client.lpos(non_list_key, "a")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_pause_all_then_unpause(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "sync_client_pause_all_then_unpause_key"
+            assert glide_sync_client.set(key, "before") == OK
+
+            if isinstance(glide_sync_client, GlideClusterClient):
+                assert (
+                    glide_sync_client.client_pause(
+                        2000, ClientPauseMode.ALL, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert glide_sync_client.client_pause(2000, ClientPauseMode.ALL) == OK
+
+            set_result: List[Optional[bytes]] = [None]
+            unpause_result: List[Optional[str]] = [None]
+            set_done = threading.Event()
+            unpause_done = threading.Event()
+
+            def run_set() -> None:
+                set_result[0] = glide_sync_client.set(key, "after")
+                set_done.set()
+
+            def run_unpause() -> None:
+                if isinstance(glide_sync_client, GlideClusterClient):
+                    unpause_result[0] = glide_sync_client.client_unpause(
+                        route=AllPrimaries()
+                    )
+                else:
+                    unpause_result[0] = glide_sync_client.client_unpause()
+                unpause_done.set()
+
+            threads = [
+                threading.Thread(target=run_set, daemon=True),
+                threading.Thread(target=run_unpause, daemon=True),
+            ]
+            for t in threads:
+                t.start()
+            try:
+                time.sleep(0.3)
+
+                # Verify that none of the commands completes.
+                assert not set_done.is_set()
+                assert not unpause_done.is_set()
+
+                # Verify that all commands complete once pause expires.
+                assert set_done.wait(timeout=5.0)
+                assert unpause_done.wait(timeout=5.0)
+
+                assert set_result[0] == OK
+                assert unpause_result[0] == OK
+                assert glide_sync_client.get(key) == b"after"
+            finally:
+                for t in threads:
+                    t.join(timeout=1.0)
+        finally:
+            glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_pause_write_then_unpause(
+        self, request, cluster_mode, protocol
+    ):
+        glide_sync_client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "sync_client_pause_write_then_unpause_key"
+            assert glide_sync_client.set(key, "before") == OK
+
+            if isinstance(glide_sync_client, GlideClusterClient):
+                assert (
+                    glide_sync_client.client_pause(
+                        2000, ClientPauseMode.WRITE, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert glide_sync_client.client_pause(2000, ClientPauseMode.WRITE) == OK
+
+            # Reads are not blocked by PAUSE WRITE.
+            assert glide_sync_client.get(key) == b"before"
+
+            set_result: List[Optional[bytes]] = [None]
+            set_done = threading.Event()
+
+            def run_set() -> None:
+                set_result[0] = glide_sync_client.set(key, "after")
+                set_done.set()
+
+            set_thread = threading.Thread(target=run_set, daemon=True)
+            set_thread.start()
+            try:
+                time.sleep(0.3)
+
+                # Verify that SET has not completed because server is paused.
+                assert not set_done.is_set()
+
+                if isinstance(glide_sync_client, GlideClusterClient):
+                    assert glide_sync_client.client_unpause(route=AllPrimaries()) == OK
+                else:
+                    assert glide_sync_client.client_unpause() == OK
+
+                # Verify that SET completes once pause expires.
+                assert set_done.wait(timeout=5.0)
+                assert set_result[0] == OK
+                assert glide_sync_client.get(key) == b"after"
+            finally:
+                set_thread.join(timeout=1.0)
+        finally:
+            glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_doctor(self, glide_sync_client: TGlideClient):
+        is_cluster = isinstance(glide_sync_client, GlideClusterClient)
+
+        result = glide_sync_client.memory_doctor()
+        reports = list(result.values()) if is_cluster else [result]
+
+        if is_cluster:
+            # Single-node route.
+            reports.append(glide_sync_client.memory_doctor(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = glide_sync_client.memory_doctor(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_malloc_stats(self, glide_sync_client: TGlideClient):
+        is_cluster = isinstance(glide_sync_client, GlideClusterClient)
+
+        result = glide_sync_client.memory_malloc_stats()
+        reports = list(result.values()) if is_cluster else [result]
+
+        if is_cluster:
+            # Single-node route.
+            reports.append(glide_sync_client.memory_malloc_stats(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = glide_sync_client.memory_malloc_stats(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_purge(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.memory_purge()
+        assert result == OK
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            # Single-node route.
+            assert glide_sync_client.memory_purge(route=RandomNode()) == OK
+            # Multi-node route.
+            assert glide_sync_client.memory_purge(route=AllNodes()) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_standalone(self, glide_sync_client: TGlideClient):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        glide_sync_client.set(key, "value")
+
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats()
+
+        assert isinstance(result, MemoryStats)
+        assert_memory_stats_fields(result, version)
+        assert_memory_stats_db_entry(result.db[0])
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster(self, glide_sync_client: TGlideClient):
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats()
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster_multi_node(
+        self, glide_sync_client: TGlideClient
+    ):
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats(route=AllNodes())
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster_single_node(
+        self, glide_sync_client: TGlideClient
+    ):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        glide_sync_client.set(key, "value")
+
+        version = sync_get_version(glide_sync_client)
+        stats = glide_sync_client.memory_stats(
+            route=SlotKeyRoute(SlotType.PRIMARY, key)
+        )
+
+        assert isinstance(stats, MemoryStats)
+        assert_memory_stats_fields(stats, version)
+        assert_memory_stats_db_entry(stats.db[0])
 
 
 class TestMultiKeyCommandCrossSlot:
@@ -12231,3 +12793,56 @@ class TestSyncScripts:
             thread.join(timeout=4)
 
         test_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover(self, glide_sync_client: GlideClient):
+        # Spin up a dedicated standalone with 1 replica so the failover
+        # doesn't destabilize the shared test server.
+        dedicated_cluster = ValkeyCluster(
+            tls=False, cluster_mode=False, shard_count=1, replica_count=1
+        )
+        try:
+            client = GlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[dedicated_cluster.nodes_addr[0]],
+                    request_timeout=5000,
+                )
+            )
+            try:
+                # Verify initial role is master
+                info = client.info([InfoSection.REPLICATION]).decode()
+                assert "role:master" in info
+
+                # Execute failover — returns OK immediately
+                result = client.failover()
+                assert result == OK
+
+                # Wait for role to change to slave (failover completed)
+                role_changed = False
+                for _ in range(60):
+                    info = client.info([InfoSection.REPLICATION]).decode()
+                    if "role:slave" in info:
+                        role_changed = True
+                        break
+                    time.sleep(0.5)
+                assert role_changed, "Timed out waiting for role change to slave"
+            finally:
+                client.close()
+        finally:
+            del dedicated_cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover_abort_no_failover_in_progress(
+        self, glide_sync_client: GlideClient
+    ):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            glide_sync_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_replicaof_no_one(self, glide_sync_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert glide_sync_client.replicaof_no_one() == OK

@@ -6,11 +6,12 @@ import base64
 import json
 import os
 import random
-from typing import List, cast
+from typing import Callable, List, Optional, Union, cast
 
 import pytest
 from glide import GlideClient, GlideClusterClient, TGlideClient
 from glide_shared.commands.batch import Batch, ClusterBatch
+from glide_shared.commands.core_options import ExpiryGetEx, ExpiryTypeGetEx
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
@@ -146,6 +147,156 @@ class TestBasicCompression:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_mget_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify MGET returns decompressed values for compressed data."""
+        # Create test data
+        keys_and_values = []
+        for i in range(5):
+            key = f"mget_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values.append((key, value))
+
+        # Set all values (should be compressed)
+        for key, value in keys_and_values:
+            await compression_client.set(key, value)
+
+        # Use MGET to retrieve all values
+        keys = [k for k, _ in keys_and_values]
+        retrieved_values = await compression_client.mget(
+            cast(List[Union[str, bytes]], keys)
+        )
+
+        # Verify all values are correctly decompressed
+        for i, (key, expected_value) in enumerate(keys_and_values):
+            assert retrieved_values[i] == expected_value.encode(), (
+                f"MGET should return decompressed value for key {key}. "
+                f"Expected: {expected_value[:50]}..., Got: {retrieved_values[i][:50].decode() if retrieved_values[i] and isinstance(retrieved_values[i], bytes) else None}..."  # type: ignore[index]
+            )
+
+        # Cleanup
+        await compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_getex_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify GETEX returns decompressed values for compressed data."""
+        key = f"getex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Set value (should be compressed)
+        await compression_client.set(key, value)
+
+        # Use GETEX to retrieve value with expiration
+        retrieved = await compression_client.getex(
+            key, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10)
+        )
+        assert retrieved == value.encode(), (
+            f"GETEX should return decompressed value for key {key}. "
+            f"Expected: {value[:50]}..., Got: {retrieved[:50].decode() if retrieved and isinstance(retrieved, bytes) and len(retrieved) >= 50 else None}..."
+        )
+
+        # Verify TTL was set
+        ttl = await compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10
+
+        # Cleanup
+        await compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_getdel_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify GETDEL returns decompressed values for compressed data."""
+        key = f"getdel_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Set value (should be compressed)
+        await compression_client.set(key, value)
+
+        # Use GETDEL to retrieve and delete value
+        retrieved = await compression_client.getdel(key)
+        assert retrieved == value.encode(), (
+            f"GETDEL should return decompressed value for key {key}. "
+            f"Expected: {value[:50]}..., Got: {retrieved[:50].decode() if retrieved else None}..."
+        )
+
+        # Verify key was deleted
+        assert await compression_client.get(key) is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_custom_command_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify custom commands return decompressed values for compressed data."""
+        key = f"custom_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Set value using regular SET (should be compressed)
+        await compression_client.set(key, value)
+
+        # Use custom command to retrieve value (should decompress automatically)
+        # This uses the raw GET command as a custom command
+        retrieved = await compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["GET", key])
+        )
+        assert isinstance(retrieved, bytes), "Retrieved value should be bytes"
+        assert retrieved == value.encode(), (
+            f"Custom GET command should return decompressed value for key {key}. "
+            f"Expected: {value[:50]}..., Got: {retrieved[:50].decode() if retrieved else None}..."
+        )
+
+        # Cleanup
+        await compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_custom_mget_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify custom MGET command returns decompressed values for compressed data."""
+        # Create test data
+        keys_and_values = []
+        for i in range(3):
+            key = f"custom_mget_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values.append((key, value))
+
+        # Set all values using regular SET (should be compressed)
+        for key, value in keys_and_values:
+            await compression_client.set(key, value)
+
+        # Use custom MGET command to retrieve all values (should decompress automatically)
+        keys = [k for k, _ in keys_and_values]
+        custom_command_args = ["MGET"] + keys
+        retrieved_values = await compression_client.custom_command(
+            cast(List[Union[str, bytes]], custom_command_args)
+        )
+        assert isinstance(retrieved_values, list), "Retrieved values should be a list"
+
+        # Verify all values are correctly decompressed
+        for i, (key, expected_value) in enumerate(keys_and_values):
+            if i < len(retrieved_values) and isinstance(retrieved_values[i], bytes):
+                assert retrieved_values[i] == expected_value.encode(), (
+                    f"Custom MGET command should return decompressed value for key {key}. "
+                    f"Expected: {expected_value[:50]}..., "
+                    f"Got: {retrieved_values[i][:50].decode() if isinstance(retrieved_values[i], bytes) and len(retrieved_values[i]) >= 50 else None}..."  # type: ignore[union-attr]
+                )
+
+        # Cleanup
+        await compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_compression_min_size_threshold(
         self, compression_client: TGlideClient
     ):
@@ -182,7 +333,7 @@ class TestBasicCompression:
             # Update baseline for next iteration
             initial_skipped = skipped_count
 
-            await compression_client.delete([key])
+            await compression_client.delete(cast(List[Union[str, bytes]], [key]))
 
         # Test values at/above threshold (should be compressed)
         for size in [64, 128, 256]:
@@ -205,7 +356,198 @@ class TestBasicCompression:
             # Update baseline for next iteration
             initial_compressed = compressed_count
 
-            await compression_client.delete([key])
+            await compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_mset_compression(self, compression_client: TGlideClient):
+        """Verify MSET compresses values above threshold (should fail until implemented)."""
+        # Create test data
+        keys_and_values = {}
+        for i in range(3):
+            key = f"mset_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values[key] = value
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use MSET to set all values (should be compressed)
+        await compression_client.mset(cast(dict, keys_and_values))
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"MSET should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify values can be retrieved and decompressed
+        for key, expected_value in keys_and_values.items():
+            retrieved = await compression_client.get(key)
+            assert retrieved == expected_value.encode()
+
+        # Cleanup
+        await compression_client.delete(list(keys_and_values.keys()))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_msetnx_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify MSETNX compresses values above threshold."""
+        # Create test data with unique keys to ensure MSETNX succeeds
+        keys_and_values = {}
+        for i in range(3):
+            key = f"{{msetnx_test}}_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values[key] = value
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use MSETNX to set all values (should be compressed)
+        result = await compression_client.msetnx(cast(dict, keys_and_values))
+        assert result is True, "MSETNX should succeed for new keys"
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"MSETNX should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify values can be retrieved and decompressed
+        for key, expected_value in keys_and_values.items():
+            retrieved = await compression_client.get(key)
+            assert retrieved == expected_value.encode()
+
+        # Cleanup
+        await compression_client.delete(list(keys_and_values.keys()))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_setex_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify SETEX compresses values above threshold (should fail until implemented)."""
+        key = f"setex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use SETEX to set value with expiration (should be compressed)
+        await compression_client.custom_command(["SETEX", key, "10", value])
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"SETEX should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify value can be retrieved and decompressed
+        retrieved = await compression_client.get(key)
+        assert retrieved == value.encode()
+
+        # Verify TTL was set
+        ttl = await compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_psetex_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify PSETEX compresses values above threshold (should fail until implemented)."""
+        key = f"psetex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use PSETEX to set value with expiration in milliseconds (should be compressed)
+        await compression_client.custom_command(["PSETEX", key, "10000", value])
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"PSETEX should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify value can be retrieved and decompressed
+        retrieved = await compression_client.get(key)
+        assert retrieved == value.encode()
+
+        # Verify TTL was set (should be around 10 seconds)
+        ttl = await compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_setnx_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Verify SETNX compresses values above threshold (should fail until implemented)."""
+        key = f"setnx_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB - above compression threshold
+
+        # Ensure key doesn't exist
+        await compression_client.delete([key])
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use SETNX to set value only if it doesn't exist (should be compressed)
+        result = await compression_client.custom_command(["SETNX", key, value])
+        assert result == 1  # Should succeed since key didn't exist
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"SETNX should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify value can be retrieved and decompressed
+        retrieved = await compression_client.get(key)
+        assert retrieved == value.encode()
+
+        # Verify SETNX doesn't overwrite existing key
+        result2 = await compression_client.custom_command(
+            ["SETNX", key, "different_value"]
+        )
+        assert result2 == 0  # Should fail since key exists
+
+        # Cleanup
+        await compression_client.delete([key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -259,7 +601,11 @@ class TestCompressionDataTypes:
     )
     @pytest.mark.parametrize("size", [1024, 10240, 102400])  # 1KB, 10KB, 100KB
     async def test_compression_string_types(
-        self, compression_client: TGlideClient, data_type: str, generator, size: int
+        self,
+        compression_client: TGlideClient,
+        data_type: str,
+        generator: Callable[[int], str],
+        size: int,
     ):
         """Test compression with different string content types."""
         key = f"test_{data_type}_{size}_{get_random_string(8)}"
@@ -521,6 +867,207 @@ class TestCompressionBatch:
 
         # Cleanup
         await compression_client.delete(keys)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_batch_mset_mget(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET/MGET compression in batch operations."""
+        num_keys = 50
+        key_prefix = f"batch_mset_{get_random_string(8)}"
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Create batch with MSET
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+
+        keys_and_values = {}
+        for i in range(num_keys):
+            key = f"{key_prefix}_{i}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values[key] = value
+
+        # Add MSET to batch
+        batch.mset(cast(dict, keys_and_values))
+
+        # Execute batch
+        if isinstance(compression_client, GlideClient):
+            results = await cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = await cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert results[0] == OK
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count == num_keys
+        ), f"All {num_keys} values should be compressed via batch MSET, got {compressed_count}"
+
+        # Use MGET to verify all values
+        keys = list(keys_and_values.keys())
+        retrieved_values = await compression_client.mget(
+            cast(List[Union[str, bytes]], keys)
+        )
+        for i, expected_value in enumerate(keys_and_values.values()):
+            assert retrieved_values[i] == expected_value.encode()
+
+        # Cleanup
+        await compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_batch_mset_mget_in_batch(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET and MGET both inside a batch operation with compression."""
+        key_prefix = f"{{batch_mset_mget}}_{get_random_string(8)}"
+        key1 = f"{key_prefix}_1"
+        key2 = f"{key_prefix}_2"
+        key3 = f"{key_prefix}_3"
+        value1 = generate_compressible_text(1024)
+        value2 = generate_compressible_text(1024)
+        value3 = generate_compressible_text(1024)
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+        initial_decompressed = initial_stats["total_values_decompressed"]
+
+        # Create batch with MSET and MGET
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+
+        keys_and_values = {key1: value1, key2: value2, key3: value3}
+        batch.mset(cast(dict, keys_and_values))
+        batch.mget(cast(List[Union[str, bytes]], [key1, key2, key3]))
+
+        # Execute batch
+        if isinstance(compression_client, GlideClient):
+            results = await cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = await cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert len(results) == 2
+
+        # Verify MSET result
+        assert results[0] == OK
+
+        # Verify MGET results (decompressed)
+        mget_results = cast(List[Optional[bytes]], results[1])
+        assert len(mget_results) == 3
+        assert mget_results[0] == value1.encode()
+        assert mget_results[1] == value2.encode()
+        assert mget_results[2] == value3.encode()
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= 3
+        ), f"Batch MSET should compress all 3 values, got {compressed_count}"
+
+        # Verify decompression was applied
+        decompressed_count = stats["total_values_decompressed"] - initial_decompressed
+        assert (
+            decompressed_count >= 3
+        ), f"Batch MGET should decompress all 3 values, got {decompressed_count}"
+
+        # Cleanup
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_transaction_mset_mget(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET and MGET in an atomic transaction with compression."""
+        key_prefix = f"{{tx_mset_mget}}_{get_random_string(8)}"
+        key1 = f"{key_prefix}_1"
+        key2 = f"{key_prefix}_2"
+        key3 = f"{key_prefix}_3"
+        value1 = generate_compressible_text(1024)
+        value2 = generate_compressible_text(1024)
+        value3 = generate_compressible_text(1024)
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+        initial_decompressed = initial_stats["total_values_decompressed"]
+
+        # Create atomic batch (transaction) with MSET and MGET
+        batch = (
+            Batch(is_atomic=True)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
+
+        keys_and_values = {key1: value1, key2: value2, key3: value3}
+        batch.mset(cast(dict, keys_and_values))
+        batch.mget(cast(List[Union[str, bytes]], [key1, key2, key3]))
+
+        # Execute transaction
+        if isinstance(compression_client, GlideClient):
+            results = await cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = await cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert len(results) == 2
+
+        # Verify MSET result
+        assert results[0] == OK
+
+        # Verify MGET results (decompressed)
+        mget_results = cast(List[Optional[bytes]], results[1])
+        assert len(mget_results) == 3
+        assert mget_results[0] == value1.encode()
+        assert mget_results[1] == value2.encode()
+        assert mget_results[2] == value3.encode()
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= 3
+        ), f"Transaction MSET should compress all 3 values, got {compressed_count}"
+
+        # Verify decompression was applied
+        decompressed_count = stats["total_values_decompressed"] - initial_decompressed
+        assert (
+            decompressed_count >= 3
+        ), f"Transaction MGET should decompress all 3 values, got {decompressed_count}"
+
+        # Cleanup
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
 
 
 @pytest.mark.anyio
@@ -879,6 +1426,730 @@ class TestCompressionCompatibility:
         assert (
             bytes_added_compressed <= bytes_added_original
         ), f"TTL: Compressed size ({bytes_added_compressed}) should be <= original size ({bytes_added_original})"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+
+@pytest.mark.anyio
+class TestCompressionIncompatibleCommands:
+    """Test that incompatible commands error out when compression is enabled.
+
+    These commands are incompatible with compression because they operate on
+    the raw bytes stored in the server, which would be compressed data instead
+    of the original values.
+    """
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_append_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that APPEND command errors out when compression is enabled."""
+        key = f"append_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "initial_value")
+
+        # APPEND should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.append(key, "_appended")
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getrange_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that GETRANGE command errors out when compression is enabled."""
+        key = f"getrange_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # First set a value
+        await compression_client.set(key, value)
+
+        # GETRANGE should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.getrange(key, 0, 10)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setrange_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SETRANGE command errors out when compression is enabled."""
+        key = f"setrange_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # First set a value
+        await compression_client.set(key, value)
+
+        # SETRANGE should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.setrange(key, 5, "replacement")
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_strlen_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that STRLEN command errors out when compression is enabled."""
+        key = f"strlen_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # First set a value
+        await compression_client.set(key, value)
+
+        # STRLEN should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.strlen(key)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incr_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that INCR command errors out when compression is enabled."""
+        key = f"incr_test_{get_random_string(8)}"
+
+        # First set a numeric value
+        await compression_client.set(key, "100")
+
+        # INCR should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.incr(key)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incrby_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that INCRBY command errors out when compression is enabled."""
+        key = f"incrby_test_{get_random_string(8)}"
+
+        # First set a numeric value
+        await compression_client.set(key, "100")
+
+        # INCRBY should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.incrby(key, 10)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incrbyfloat_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that INCRBYFLOAT command errors out when compression is enabled."""
+        key = f"incrbyfloat_test_{get_random_string(8)}"
+
+        # First set a numeric value
+        await compression_client.set(key, "100.5")
+
+        # INCRBYFLOAT should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.incrbyfloat(key, 0.5)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_decr_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that DECR command errors out when compression is enabled."""
+        key = f"decr_test_{get_random_string(8)}"
+
+        # First set a numeric value
+        await compression_client.set(key, "100")
+
+        # DECR should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.decr(key)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_decrby_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that DECRBY command errors out when compression is enabled."""
+        key = f"decrby_test_{get_random_string(8)}"
+
+        # First set a numeric value
+        await compression_client.set(key, "100")
+
+        # DECRBY should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.decrby(key, 10)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getbit_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that GETBIT command errors out when compression is enabled."""
+        key = f"getbit_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "test_value")
+
+        # GETBIT should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.getbit(key, 0)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setbit_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SETBIT command errors out when compression is enabled."""
+        key = f"setbit_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "test_value")
+
+        # SETBIT should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.setbit(key, 0, 1)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitcount_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that BITCOUNT command errors out when compression is enabled."""
+        key = f"bitcount_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "test_value")
+
+        # BITCOUNT should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.bitcount(key)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitpos_incompatible_with_compression(
+        self, compression_client: TGlideClient
+    ):
+        """Test that BITPOS command errors out when compression is enabled."""
+        key = f"bitpos_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "test_value")
+
+        # BITPOS should fail with compression enabled
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.bitpos(key, 1)
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incompatible_commands_work_without_compression(
+        self, no_compression_client: TGlideClient
+    ):
+        """Test that incompatible commands work normally when compression is disabled."""
+        key = f"no_compression_test_{get_random_string(8)}"
+
+        # Set initial value
+        await no_compression_client.set(key, "100")
+
+        # All these commands should work without compression
+        # INCR
+        result = await no_compression_client.incr(key)
+        assert result == 101
+
+        # INCRBY
+        result = await no_compression_client.incrby(key, 10)
+        assert result == 111
+
+        # DECR
+        result = await no_compression_client.decr(key)
+        assert result == 110
+
+        # DECRBY
+        result = await no_compression_client.decrby(key, 10)
+        assert result == 100
+
+        # STRLEN
+        await no_compression_client.set(key, "hello")
+        strlen_result = await no_compression_client.strlen(key)
+        assert strlen_result == 5
+
+        # APPEND
+        append_result = await no_compression_client.append(key, " world")
+        assert append_result == 11  # "hello world" = 11 chars
+
+        # GETRANGE
+        getrange_result = await no_compression_client.getrange(key, 0, 4)
+        assert getrange_result == b"hello"
+
+        # SETRANGE
+        setrange_result = await no_compression_client.setrange(key, 6, "WORLD")
+        assert setrange_result == 11
+
+        # GETBIT
+        await no_compression_client.set(key, "\x00")
+        getbit_result = await no_compression_client.getbit(key, 0)
+        assert getbit_result == 0
+
+        # SETBIT
+        setbit_result = await no_compression_client.setbit(key, 0, 1)
+        assert setbit_result == 0  # Previous value was 0
+
+        # BITCOUNT
+        bitcount_result = await no_compression_client.bitcount(key)
+        assert bitcount_result >= 0
+
+        # Cleanup
+        await no_compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incompatible_commands_via_custom_command(
+        self, compression_client: TGlideClient
+    ):
+        """Test that incompatible commands also error out when called via custom_command."""
+        key = f"custom_cmd_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "100")
+
+        # INCR via custom_command should fail
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.custom_command(
+                cast(List[Union[str, bytes]], ["INCR", key])
+            )
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # APPEND via custom_command should fail
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.custom_command(
+                cast(List[Union[str, bytes]], ["APPEND", key, "_suffix"])
+            )
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # STRLEN via custom_command should fail
+        with pytest.raises(Exception) as exc_info:
+            await compression_client.custom_command(
+                cast(List[Union[str, bytes]], ["STRLEN", key])
+            )
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_incompatible_commands_in_batch(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test that incompatible commands in batch operations also error out."""
+        key = f"batch_incompatible_test_{get_random_string(8)}"
+
+        # First set a value
+        await compression_client.set(key, "100")
+
+        # Create batch with incompatible command
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.incr(key)  # This should cause an error
+
+        # Execute batch - should fail due to incompatible command
+        with pytest.raises(Exception) as exc_info:
+            if isinstance(compression_client, GlideClient):
+                await cast(GlideClient, compression_client).exec(
+                    cast(Batch, batch), raise_on_error=True
+                )
+            else:
+                await cast(GlideClusterClient, compression_client).exec(
+                    cast(ClusterBatch, batch), raise_on_error=True
+                )
+
+        error_msg = str(exc_info.value).lower()
+        assert (
+            "incompatible" in error_msg or "compression" in error_msg
+        ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+        # Cleanup
+        await compression_client.delete([key])
+
+
+@pytest.mark.anyio
+class TestCompressionMaxDecompressedSize:
+    """Test max_decompressed_size configuration for decompression bomb protection."""
+
+    def test_compression_config_default_max_decompressed_size(self):
+        """Test that CompressionConfiguration has default max_decompressed_size of None (uses Rust default)."""
+        config = CompressionConfiguration(enabled=True)
+        # Default is None (Rust will use 512MB)
+        assert config.max_decompressed_size is None
+
+    def test_compression_config_custom_max_decompressed_size(self):
+        """Test that CompressionConfiguration accepts custom max_decompressed_size."""
+        # 100MB limit
+        config = CompressionConfiguration(
+            enabled=True, max_decompressed_size=100 * 1024 * 1024
+        )
+        assert config.max_decompressed_size == 100 * 1024 * 1024
+
+    def test_compression_config_protobuf_includes_max_decompressed_size(self):
+        """Test that max_decompressed_size is included in protobuf conversion."""
+        config = CompressionConfiguration(
+            enabled=True, max_decompressed_size=100 * 1024 * 1024
+        )
+        protobuf = config._to_protobuf()
+        assert protobuf.max_decompressed_size == 100 * 1024 * 1024
+
+    def test_compression_config_protobuf_omits_none_max_decompressed_size(self):
+        """Test that None max_decompressed_size is not set in protobuf (uses Rust default)."""
+        config = CompressionConfiguration(enabled=True, max_decompressed_size=None)
+        protobuf = config._to_protobuf()
+        # When None, the field should not be set (will be 0 in protobuf, Rust uses default)
+        assert protobuf.max_decompressed_size == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_enforced_on_get(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Test that maxDecompressedSize limit is enforced during decompression.
+
+        When a client with a small maxDecompressedSize tries to decompress a value
+        that exceeds the limit, it should raise an error with a clear message
+        about the size limit being exceeded.
+        """
+        # Step 1: Create a client with compression enabled (default max size - 512MB)
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+
+        try:
+            # Step 2: Set a large compressible value (10KB)
+            key = f"max_decomp_test_{get_random_string(8)}"
+            large_value = generate_compressible_text(10000)  # 10KB
+
+            await unlimited_client.set(key, large_value)
+
+            # Step 3: Create a client with a small maxDecompressedSize limit (100 bytes)
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,  # We'll set it manually
+            )
+
+            # Set custom compression configuration with small max size
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,  # Only allow 100 bytes decompressed
+            )
+
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                # Step 4: GET should raise an error with size limit message
+                with pytest.raises(Exception) as exc_info:
+                    await limited_client.get(key)
+
+                error_msg = str(exc_info.value).lower()
+                assert (
+                    "decompressed" in error_msg
+                    or "exceeds" in error_msg
+                    or "size" in error_msg
+                ), f"Error should mention decompression size limit: {exc_info.value}"
+            finally:
+                await limited_client.close()
+
+            # Cleanup
+            await unlimited_client.delete([key])
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_enforced_on_mget(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Test maxDecompressedSize with MGET command."""
+        # Create unlimited client
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+
+        try:
+            # Set multiple large values
+            keys = [f"{{mget_max}}_{i}_{get_random_string(8)}" for i in range(3)]
+            large_value = generate_compressible_text(5000)  # 5KB each
+
+            for key in keys:
+                await unlimited_client.set(key, large_value)
+
+            # Create limited client
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                # MGET should raise an error with size limit message
+                with pytest.raises(Exception) as exc_info:
+                    await limited_client.mget(cast(List[Union[str, bytes]], keys))
+
+                error_msg = str(exc_info.value).lower()
+                assert (
+                    "decompressed" in error_msg
+                    or "exceeds" in error_msg
+                    or "size" in error_msg
+                ), f"Error should mention decompression size limit: {exc_info.value}"
+            finally:
+                await limited_client.close()
+
+            # Cleanup
+            await unlimited_client.delete(cast(List[Union[str, bytes]], keys))
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_allows_values_within_limit(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Verify that values within the limit work correctly."""
+        # Create client with 1KB limit
+        config = create_client_config(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=False,
+        )
+
+        config.compression = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,
+            min_compression_size=64,
+            max_decompressed_size=1024,  # 1KB limit
+        )
+
+        client: GlideClient | GlideClusterClient
+        if cluster_mode:
+            client = await GlideClusterClient.create(config)
+        else:
+            client = await GlideClient.create(config)
+
+        try:
+            key = f"within_limit_test_{get_random_string(8)}"
+            small_value = generate_compressible_text(500)  # 500 bytes, within limit
+
+            await client.set(key, small_value)
+            retrieved = await client.get(key)
+
+            assert retrieved == small_value.encode()
+
+            # Cleanup
+            await client.delete([key])
+        finally:
+            await client.close()
+
+
+@pytest.mark.anyio
+class TestCompressionSetWithGetOption:
+    """Test SET with GET option returns decompressed value (Bug 2 fix)."""
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_with_get_returns_decompressed_value(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns decompressed old value.
+
+        Bug 2: SET with GET option was returning compressed bytes instead of
+        the decompressed original value.
+        """
+        key = f"set_with_get_test_{get_random_string(8)}"
+        original_value = generate_compressible_text(1024)  # 1KB
+        new_value = generate_compressible_text(2048)  # 2KB
+
+        # First, set the original value
+        assert await compression_client.set(key, original_value) == OK
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        assert stats["total_values_compressed"] > 0, "Value should have been compressed"
+
+        # Now use SET with return_old_value option to get the old value
+        old_value = await compression_client.set(key, new_value, return_old_value=True)
+
+        # The old value should be the decompressed original value, not compressed bytes
+        assert old_value == original_value.encode(), (
+            f"SET with GET should return decompressed old value. "
+            f"Expected {len(original_value)} bytes, got {len(old_value) if old_value else 0} bytes"
+        )
+
+        # Verify the new value was set correctly
+        retrieved = await compression_client.get(key)
+        assert retrieved == new_value.encode()
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_with_get_returns_none_for_nonexistent_key(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns None for non-existent key."""
+        key = f"set_with_get_nonexistent_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # SET with return_old_value on non-existent key should return None
+        old_value = await compression_client.set(key, value, return_old_value=True)
+
+        assert old_value is None, "SET with GET on non-existent key should return None"
 
         # Cleanup
         await compression_client.delete([key])
