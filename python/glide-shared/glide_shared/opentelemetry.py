@@ -110,8 +110,8 @@ class OpenTelemetry:
     This class provides a centralized way to initialize OpenTelemetry and control
     sampling behavior at runtime.
 
-    Example usage:
-        ```python
+    Example usage::
+
         from glide import OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig
 
         OpenTelemetry.init(OpenTelemetryConfig(
@@ -124,7 +124,6 @@ class OpenTelemetry:
             ),
             flush_interval_ms=1000
         ))
-        ```
 
     Note:
         OpenTelemetry can only be initialized once per process. Subsequent calls to

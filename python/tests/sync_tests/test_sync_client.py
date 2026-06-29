@@ -965,6 +965,7 @@ class TestCommands:
         # Cluster multi-node
         if isinstance(glide_sync_client, GlideClusterClient):
             multi_info = glide_sync_client.client_tracking_info(AllPrimaries())
+            assert isinstance(multi_info, dict)
             for node_info in multi_info.values():
                 assert_client_tracking_info(node_info, on=False)
 
