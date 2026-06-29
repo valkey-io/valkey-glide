@@ -429,26 +429,51 @@ class BaseClient(CoreCommands):
             ...     database_id = 1,
             ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
             ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {GlideClientConfiguration.PubSubChannelModes.Exact: {'updates'}},
+            ...         callback = lambda message,context : print(message),
+            ...     ),
             ... )
             >>> client = await GlideClient.create(config)
 
             # Connecting to a Cluster
-            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
+            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient,
+            ... PeriodicChecksManualInterval
             >>> config = GlideClusterClientConfiguration(
             ...     [
             ...         NodeAddress('address1.example.com', 6379),
             ...         NodeAddress('address2.example.com', 6379),
             ...     ],
             ...     use_tls = True,
+            ...     periodic_checks = PeriodicChecksManualInterval(duration_in_sec = 30),
             ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
             ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClusterClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Exact: {'updates'},
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {'sharded_channel'},
+            ...         },
+            ...         callback = lambda message,context : print(message),
+            ...     ),
             ... )
             >>> client = await GlideClusterClient.create(config)
 
         Remarks:
             Use this static method to create and connect a client to a Valkey server.
-            The client will automatically handle connection establishment, including cluster topology
-            discovery and handling of authentication and TLS configurations.
+            The client will automatically handle connection establishment, including cluster topology discovery and
+            handling of authentication and TLS configurations.
+
+                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based
+                  on the seed addresses provided.
+                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+                  using the specified username and password.
+                - **TLS**: If `use_tls` is set to `true`, the client will establish secure connections using TLS.
+                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client
+                  checks for cluster topology changes.
+                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to
+                  reconnect in case of disconnections.
+                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be
+                  subscribed to upon connection.
         """
         self = cls(config)
 
@@ -1085,10 +1110,35 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         """
         Retrieves both the desired and current subscription states as tracked by the client.
 
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
+
         Returns:
-            GlideClusterClientConfiguration.PubSubState: An object containing:
+            GlideClusterClientConfiguration.PubSubState: An object containing two attributes:
                 - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
                 - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClusterClientConfiguration
+            >>> PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == actual:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
         """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
@@ -1111,10 +1161,35 @@ class GlideClient(BaseClient, StandaloneCommands):
         """
         Retrieves both the desired and current subscription states as tracked by the client.
 
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
+
         Returns:
-            GlideClientConfiguration.PubSubState: An object containing:
+            GlideClientConfiguration.PubSubState: An object containing two attributes:
                 - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
                 - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClientConfiguration
+            >>> PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == actual:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
         """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(

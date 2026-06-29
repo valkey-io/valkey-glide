@@ -104,11 +104,32 @@ class OpenTelemetryConfig:
 
 
 class OpenTelemetry:
-    """Manages OpenTelemetry configuration and lifecycle for the Glide client.
+    """
+    Singleton class for managing OpenTelemetry configuration and operations.
 
-    This is a singleton class — OpenTelemetry can only be initialized once per process.
-    Subsequent calls to init() will be ignored. To change configuration, restart the
-    process with new settings.
+    This class provides a centralized way to initialize OpenTelemetry and control
+    sampling behavior at runtime.
+
+    Example usage:
+        ```python
+        from glide import OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig
+
+        OpenTelemetry.init(OpenTelemetryConfig(
+            traces=OpenTelemetryTracesConfig(
+                endpoint="http://localhost:4318/v1/traces",
+                sample_percentage=10
+            ),
+            metrics=OpenTelemetryMetricsConfig(
+                endpoint="http://localhost:4318/v1/metrics"
+            ),
+            flush_interval_ms=1000
+        ))
+        ```
+
+    Note:
+        OpenTelemetry can only be initialized once per process. Subsequent calls to
+        init() will be ignored. This is by design, as OpenTelemetry is a global
+        resource that should be configured once at application startup.
     """
 
     _instance: Optional["OpenTelemetry"] = None
