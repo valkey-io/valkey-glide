@@ -16,6 +16,8 @@ import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
     ClientPauseMode,
+    ClientSideCache,
+    ClientTrackingInfo,
     ClusterBatch,
     Decoder,
     FlushMode,
@@ -43,6 +45,7 @@ import {
 import { runBaseTests } from "./SharedTests";
 import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
+    assertClientTrackingInfo,
     assertConnected,
     assertMemoryStatsDbEntry,
     assertMemoryStatsFields,
@@ -3695,6 +3698,60 @@ describe("GlideClusterClient", () => {
 
             await assertConnected(client);
             client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo with cache off and default route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const info =
+                (await client.clientTrackingInfo()) as ClientTrackingInfo;
+            assertClientTrackingInfo(info, false);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo with cache off and multi-node route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const multiInfo = (await client.clientTrackingInfo({
+                route: "allPrimaries",
+            })) as Record<string, ClientTrackingInfo>;
+
+            expect(Object.keys(multiInfo).length).toBeGreaterThan(0);
+
+            for (const nodeInfo of Object.values(multiInfo)) {
+                assertClientTrackingInfo(nodeInfo, false);
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "clientTrackingInfo with cache on and default route",
+        async () => {
+            const cache = new ClientSideCache({
+                maxCacheKb: 1,
+                entryTtlMs: 60000,
+                serverAssisted: true,
+            });
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientSideCache: cache },
+                ),
+            );
+            const info =
+                (await client.clientTrackingInfo()) as ClientTrackingInfo;
+            assertClientTrackingInfo(info, true);
         },
         TIMEOUT,
     );

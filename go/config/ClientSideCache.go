@@ -73,6 +73,13 @@ type ClientSideCache struct {
 
 	// EnableMetrics enables collection of cache metrics such as hit/miss rates.
 	EnableMetrics bool
+
+	// ServerAssisted specifies whether to enable server-assisted client-side caching.
+	//
+	// When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
+	// and the server sends invalidation messages when tracked keys are modified.
+	// Requires RESP3 protocol.
+	ServerAssisted bool
 }
 
 // NewClientSideCache creates a new ClientSideCache configuration with an auto-generated unique ID.
@@ -125,6 +132,7 @@ func NewClientSideCache(maxCacheKb uint64, entryTtlMs uint64) (*ClientSideCache,
 		EntryTtlMs:     entryTtlMs,
 		EvictionPolicy: nil,
 		EnableMetrics:  false,
+		ServerAssisted: false,
 	}, nil
 }
 
@@ -142,15 +150,23 @@ func (c *ClientSideCache) WithMetrics(enable bool) *ClientSideCache {
 	return c
 }
 
+// WithServerAssisted enables or disables server-assisted client-side caching.
+// Returns the same ClientSideCache instance for method chaining.
+func (c *ClientSideCache) WithServerAssisted(enable bool) *ClientSideCache {
+	c.ServerAssisted = enable
+	return c
+}
+
 // toProtobuf converts the ClientSideCache configuration to protobuf format.
 // This method is used internally to serialize the cache configuration for
 // communication with the Rust core.
 func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 	protoCache := &protobuf.ClientSideCache{
-		CacheId:       c.cacheId,
-		MaxCacheKb:    c.MaxCacheKb,
-		EntryTtlMs:    c.EntryTtlMs,
-		EnableMetrics: c.EnableMetrics,
+		CacheId:        c.cacheId,
+		MaxCacheKb:     c.MaxCacheKb,
+		EntryTtlMs:     c.EntryTtlMs,
+		EnableMetrics:  c.EnableMetrics,
+		ServerAssisted: c.ServerAssisted,
 	}
 
 	if c.EvictionPolicy != nil {

@@ -8,6 +8,10 @@ from glide.async_commands.core import RequestType
 from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
+from glide_shared.commands.client_tracking import (
+    ClientTrackingInfo,
+    _parse_client_tracking_info_cluster,
+)
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -412,6 +416,36 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[Optional[bytes]],
             await self._execute_command(RequestType.ClientGetName, [], route),
+        )
+
+    async def client_tracking_info(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[ClientTrackingInfo]:
+        """
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
+
+        See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[ClientTrackingInfo]: The tracking info(s) for the client.
+
+        Examples:
+            >>> info = await client.client_tracking_info()
+            >>> print(info.flags)
+                {'off'}
+            >>> print(info.redirect)
+                -1
+        """
+        return _parse_client_tracking_info_cluster(
+            cast(
+                Mapping,
+                await self._execute_command(RequestType.ClientTrackingInfo, [], route),
+            ),
         )
 
     async def dbsize(self, route: Optional[Route] = None) -> int:

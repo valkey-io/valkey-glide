@@ -870,9 +870,86 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 	return result, nil
 }
 
+// convertSetToStringSlice converts a set (map[string]struct{}) into a []string.
+func convertSetToStringSlice(data map[string]struct{}) []string {
+	result := make([]string, 0, len(data))
+	for key := range data {
+		result = append(result, key)
+	}
+	return result
+}
+
+// convertArrayToStringSlice converts an array ([]any) into a []string.
+func convertArrayToStringSlice(data []any) ([]string, error) {
+	result := make([]string, 0, len(data))
+	for i, item := range data {
+		str, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type at index %d: %T, expected string", i, item)
+		}
+		result = append(result, str)
+	}
+	return result, nil
+}
+
+// ConvertClientTrackingInfoResponse converts a `CLIENT TRACKINGINFO` response.
+func ConvertClientTrackingInfoResponse(data any) (any, error) {
+	dataMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for CLIENT TRACKINGINFO response: %T, expected map[string]any", data)
+	}
+
+	// Parse flags
+	flagsRaw, ok := dataMap["flags"]
+	if !ok {
+		return nil, fmt.Errorf("CLIENT TRACKINGINFO response missing 'flags' field")
+	}
+	flagsSet, ok := flagsRaw.(map[string]struct{})
+	if !ok {
+		return nil, fmt.Errorf("CLIENT TRACKINGINFO flags: unexpected type %T, expected set", flagsRaw)
+	}
+	flags := convertSetToStringSlice(flagsSet)
+
+	// Parse redirect
+	redirectRaw, ok := dataMap["redirect"]
+	if !ok {
+		return nil, fmt.Errorf("CLIENT TRACKINGINFO response missing 'redirect' field")
+	}
+	redirect, ok := redirectRaw.(int64)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for CLIENT TRACKINGINFO redirect: %T", redirectRaw)
+	}
+
+	// Parse prefixes
+	prefixesRaw, ok := dataMap["prefixes"]
+	if !ok {
+		return nil, fmt.Errorf("CLIENT TRACKINGINFO response missing 'prefixes' field")
+	}
+	var prefixes []string
+	if prefixesRaw == nil {
+		prefixes = []string{}
+	} else {
+		arr, ok := prefixesRaw.([]any)
+		if !ok {
+			return nil, fmt.Errorf("CLIENT TRACKINGINFO prefixes: unexpected type %T, expected array", prefixesRaw)
+		}
+		var err error
+		prefixes, err = convertArrayToStringSlice(arr)
+		if err != nil {
+			return nil, fmt.Errorf("CLIENT TRACKINGINFO prefixes: %w", err)
+		}
+	}
+
+	return models.ClientTrackingInfo{
+		Flags:    flags,
+		Redirect: redirect,
+		Prefixes: prefixes,
+	}, nil
+}
+
 const memoryStatsDbPrefix = "db."
 
-// ConvertMemoryStats converts a raw map[string]any response from glide-core into a typed models.MemoryStats.
+// ConvertMemoryStats converts a `MEMORY STATS` response.
 func ConvertMemoryStats(data any) (models.MemoryStats, error) {
 	rawMap, ok := data.(map[string]any)
 	if !ok {

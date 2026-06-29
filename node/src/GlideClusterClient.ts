@@ -25,6 +25,7 @@ import {
 import { ClusterBatch } from "./Batch";
 import {
     ClientPauseMode,
+    ClientTrackingInfo,
     ClusterBatchOptions,
     ClusterScanOptions,
     FlushMode,
@@ -40,6 +41,7 @@ import {
     createClientGetName,
     createClientId,
     createClientPause,
+    createClientTrackingInfo,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -91,6 +93,7 @@ import {
     createSUnsubscribe,
     createTime,
     createUnWatch,
+    parseClientTrackingInfoResponse,
 } from "./Commands";
 
 /**
@@ -1200,6 +1203,56 @@ export class GlideClusterClient extends BaseClient {
             createClientId(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A {@link ClusterResponse} containing tracking info(s) for the client.
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo();
+     * console.log(info.flags); // Set { "off" }
+     * console.log(info.redirect); // -1
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo({ route: "allNodes" });
+     * // info is Record<string, ClientTrackingInfo>
+     * ```
+     */
+    public async clientTrackingInfo(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<ClientTrackingInfo>> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createClientTrackingInfo(),
+            options,
+        ).then((res) => {
+            if (isSingleNodeRoute(true, options?.route)) {
+                return parseClientTrackingInfoResponse(
+                    convertGlideRecordToRecord(res) as Record<string, unknown>,
+                );
+            }
+
+            const record = convertGlideRecordToRecord(
+                res as GlideRecord<unknown>,
+            ) as Record<string, Record<string, unknown>>;
+            const result: Record<string, ClientTrackingInfo> = {};
+
+            for (const [node, entry] of Object.entries(record)) {
+                result[node] = parseClientTrackingInfoResponse(entry);
+            }
+
+            return result;
+        });
     }
 
     /**

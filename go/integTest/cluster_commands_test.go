@@ -1273,6 +1273,44 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOff_Cluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	ctx := context.Background()
+
+	// Single-node (default route)
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(t, err)
+	assertClientTrackingInfo(t, info, false)
+
+	// Multi-node route
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{Route: route}
+	multiResponse, err := client.ClientTrackingInfoWithOptions(ctx, opts)
+	assert.NoError(t, err)
+	assert.True(t, multiResponse.IsMultiValue())
+	for _, nodeInfo := range multiResponse.MultiValue() {
+		assertClientTrackingInfo(t, nodeInfo, false)
+	}
+}
+
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOn_Cluster() {
+	t := suite.T()
+	ctx := context.Background()
+
+	cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
+	require.NoError(t, err)
+	cache.WithServerAssisted(true)
+
+	clientConfig := suite.defaultClusterClientConfig().WithClientSideCache(cache)
+	client, err := suite.clusterClient(clientConfig)
+	require.NoError(t, err)
+
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(t, err)
+	assertClientTrackingInfo(t, info, true)
+}
+
 func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()

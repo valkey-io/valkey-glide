@@ -842,6 +842,30 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOff() {
+	client := suite.defaultClient()
+	ctx := context.Background()
+
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(suite.T(), err)
+	assertClientTrackingInfo(suite.T(), info, false)
+}
+
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOn() {
+	cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
+	require.NoError(suite.T(), err)
+	cache.WithServerAssisted(true)
+
+	clientConfig := suite.defaultClientConfig().WithClientSideCache(cache)
+	client, err := suite.client(clientConfig)
+	require.NoError(suite.T(), err)
+
+	ctx := context.Background()
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(suite.T(), err)
+	assertClientTrackingInfo(suite.T(), info, true)
+}
+
 func (suite *GlideTestSuite) TestClientId() {
 	client := suite.defaultClient()
 	result, err := client.ClientId(context.Background())

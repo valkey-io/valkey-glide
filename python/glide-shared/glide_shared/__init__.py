@@ -30,6 +30,7 @@ from .commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from .commands.client_tracking import ClientTrackingInfo
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
     ClientPauseMode,
@@ -382,5 +383,6 @@ __all__ = [
     "OpenTelemetryTracesConfig",
     # Cache
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]

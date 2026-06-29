@@ -2056,10 +2056,37 @@ async def assert_connected(client: TGlideClient) -> None:
     assert result == b"PONG"
 
 
+def build_client_side_cache(**kwargs) -> ClientSideCache:
+    """
+    Create a ClientSideCache for testing from the given arguments.
+    If required argument(s) are not specified, defaults will be used.
+    """
+
+    kwargs.setdefault("max_cache_kb", 1024)
+    kwargs.setdefault("entry_ttl_ms", 60000)
+    return ClientSideCache.create(**kwargs)
+
+
+# Assert Methods
+# --------------
+
+
+def assert_client_tracking_info(info, on: bool) -> None:
+    """Assert that a ClientTrackingInfo reflects expected tracking state."""
+    if on:
+        assert "on" in info.flags
+        assert "bcast" in info.flags
+        assert info.redirect == 0  # tracking enabled but no redirection
+        assert len(info.prefixes) == 1
+        assert "" in info.prefixes
+    else:
+        assert "off" in info.flags
+        assert info.redirect == -1  # tracking disabled
+        assert len(info.prefixes) == 0
+
+
 def assert_connected_sync(client: TSyncGlideClient) -> None:
-    """
-    Assert that the sync client is connected.
-    """
+    """Assert that the sync client is connected."""
     result = client.ping()
     assert result == b"PONG"
 
