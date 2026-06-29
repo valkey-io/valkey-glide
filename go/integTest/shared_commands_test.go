@@ -9520,13 +9520,13 @@ func (suite *GlideTestSuite) TestMigrate() {
 		nonExistentKey := "{key}" + uuid.New().String()
 
 		// Non-existent key returns "NOKEY" (not an error)
-		result, err := client.Migrate(ctx, "nonexistent.host", 6379, nonExistentKey, 0, 1000)
+		result, err := client.Migrate(ctx, "nonexistent.host", 6379, []string{nonExistentKey}, 0, 1000)
 		suite.NoError(err)
 		suite.Equal("NOKEY", result)
 
 		// Existing key migrated to unreachable host returns an error
 		client.Set(ctx, key, "value")
-		_, err = client.Migrate(ctx, "nonexistent.host", 6379, key, 0, 1000)
+		_, err = client.Migrate(ctx, "nonexistent.host", 6379, []string{key}, 0, 1000)
 		suite.Error(err)
 	})
 }
@@ -9539,13 +9539,17 @@ func (suite *GlideTestSuite) TestMigrateWithOptions() {
 		migrateOpts := options.NewMigrateOptions().SetCopy().SetReplace()
 
 		// Non-existent key returns "NOKEY" (not an error)
-		result, err := client.MigrateWithOptions(ctx, "nonexistent.host", 6379, nonExistentKey, 0, 1000, *migrateOpts)
+		result, err := client.MigrateWithOptions(
+			ctx, "nonexistent.host", 6379, []string{nonExistentKey}, 0, 1000, *migrateOpts,
+		)
 		suite.NoError(err)
 		suite.Equal("NOKEY", result)
 
 		// Existing key migrated to unreachable host returns an error
 		client.Set(ctx, key, "value")
-		_, err = client.MigrateWithOptions(ctx, "nonexistent.host", 6379, key, 0, 1000, *migrateOpts)
+		_, err = client.MigrateWithOptions(
+			ctx, "nonexistent.host", 6379, []string{key}, 0, 1000, *migrateOpts,
+		)
 		suite.Error(err)
 	})
 }

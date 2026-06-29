@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
+from glide._ffi_wrappers import Script
 from glide.async_commands.core import RequestType
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
@@ -33,7 +34,6 @@ from glide_shared.constants import (
     TFunctionStatsFullResponse,
     TResult,
 )
-from glide_shared.script import Script
 
 from .core import CoreCommands
 
