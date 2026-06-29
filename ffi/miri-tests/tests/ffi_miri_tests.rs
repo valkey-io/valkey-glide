@@ -1,12 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::request_type::RequestType;
-use glide_core::{
-    ConnectionRequest,
-    connection_request::{NodeAddress, TlsMode},
-};
+use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use miri_tests::{
-    ClientType, ConnectionResponse, PushKind, close_client, create_client, free_connection_response,
+    ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
+    free_connection_response,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
@@ -40,6 +38,19 @@ unsafe extern "C-unwind" fn pubsub_callback(
 ) {
 }
 
+/// No-op address resolver that returns port 0 to signal "use original address".
+unsafe extern "C-unwind" fn noop_address_resolver(
+    _client_id: usize,
+    _host: *const u8,
+    _host_len: usize,
+    _port: u16,
+    _resolved_host_buf: *mut u8,
+    _resolved_host_buf_len: usize,
+    _resolved_host_len: *mut usize,
+) -> u16 {
+    0
+}
+
 fn get_logger_error_message(log_result: &LogResult) -> Option<String> {
     if log_result.log_error.is_null() {
         None
@@ -67,6 +78,28 @@ fn create_client_test() {
         let connection_response_ptr = create_client(
             connection_request_ptr,
             connection_request_len,
+            client_type_ptr,
+            pubsub_callback,
+            noop_address_resolver,
+            0usize,
+        );
+        let conn_ptr = (*connection_response_ptr).conn_ptr;
+        close_client(conn_ptr);
+        free_connection_response(connection_response_ptr as *mut ConnectionResponse);
+        let _ = Box::from_raw(client_type_ptr);
+    }
+}
+
+#[test]
+fn create_client_from_uri_test() {
+    let uri = CString::new("redis://localhost:6378").unwrap();
+    let client_type = Box::new(ClientType::SyncClient);
+    let client_type_ptr = Box::into_raw(client_type);
+
+    unsafe {
+        let connection_response_ptr = create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
             client_type_ptr,
             pubsub_callback,
         );

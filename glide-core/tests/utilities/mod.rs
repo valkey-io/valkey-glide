@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
-use crate::test_constants::{HOST_IPV4, HOST_IPV6, HOSTNAME_TLS};
+use crate::constants::{HOSTNAME_TLS, IP_ADDRESS_V4, IP_ADDRESS_V6};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
@@ -15,11 +15,19 @@ use redis::{
 };
 use socket2::{Domain, Socket, Type};
 use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
-    sync::Mutex, time::Duration,
+    collections::HashMap,
+    env, fs, io,
+    net::{SocketAddr, TcpListener},
+    ops::Deref,
+    path::PathBuf,
+    process,
+    sync::Mutex,
+    time::Duration,
 };
 use tokio::sync::mpsc;
 use versions::Versioning;
+
+use crate::utilities::{self, cluster::create_cluster_client};
 
 pub mod cluster;
 pub mod mocks;
@@ -93,7 +101,7 @@ pub fn get_available_port() -> u16 {
     for _ in 0..attempts {
         let port = rand::random::<u16>().max(6379);
 
-        let addr4 = format!("{}:{}", HOST_IPV4, port)
+        let addr4 = format!("{}:{}", IP_ADDRESS_V4, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
@@ -103,7 +111,7 @@ pub fn get_available_port() -> u16 {
             continue;
         }
 
-        let addr6 = format!("[{}]:{}", HOST_IPV6, port)
+        let addr6 = format!("[{}]:{}", IP_ADDRESS_V6, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
@@ -122,7 +130,7 @@ pub fn get_available_port() -> u16 {
 
 pub fn get_listener_on_available_port() -> TcpListener {
     let port = get_available_port();
-    let addr = &format!("{}:{}", HOST_IPV4, port)
+    let addr = &format!("{}:{}", IP_ADDRESS_V4, port)
         .parse::<SocketAddr>()
         .unwrap()
         .into();
@@ -146,13 +154,13 @@ impl RedisServer {
                 let redis_port = get_available_port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
-                        host: HOST_IPV4.to_string(),
+                        host: IP_ADDRESS_V4.to_string(),
                         port: redis_port,
                         insecure: true,
                         tls_params: None,
                     }
                 } else {
-                    redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+                    redis::ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), redis_port)
                 }
             }
             ServerType::Unix => {
@@ -168,13 +176,13 @@ impl RedisServer {
         let redis_port = get_available_port();
         let addr = if use_tls {
             redis::ConnectionAddr::TcpTls {
-                host: HOST_IPV4.to_string(),
+                host: IP_ADDRESS_V4.to_string(),
                 port: redis_port,
                 insecure: true,
                 tls_params: None,
             }
         } else {
-            redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+            redis::ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), redis_port)
         };
 
         RedisServer::new_with_addr_tls_modules_and_spawner(addr, tls_paths, &[], false, |cmd| {
@@ -458,7 +466,7 @@ pub fn build_tls_file_paths(tempdir: &tempfile::TempDir) -> TlsFilePaths {
         &ext_file,
         format!(
             "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{},IP:{},DNS:localhost,DNS:{}",
-            HOST_IPV4, HOST_IPV6, HOSTNAME_TLS
+            IP_ADDRESS_V4, IP_ADDRESS_V6, HOSTNAME_TLS
         ),
     )
     .expect("failed to create x509v3 extensions file");
@@ -654,17 +662,29 @@ fn set_connection_info_to_connection_request(
     }
 }
 
-pub async fn repeat_try_create<T, Fut>(f: impl Fn() -> Fut) -> T
+/// Repeatedly calls `f` until it returns `Some`, using a default timeout of 3 seconds.
+/// Panics if the timeout is exceeded.
+pub async fn retry<T, Fut>(f: impl Fn() -> Fut) -> T
 where
     Fut: Future<Output = Option<T>>,
 {
-    for _ in 0..500 {
+    retry_until_timeout(f, std::time::Duration::from_millis(3000)).await
+}
+
+/// Repeatedly calls `f` every 5ms until it returns `Some` or the `timeout` is exceeded.
+/// Panics if the timeout is exceeded.
+pub async fn retry_until_timeout<T, Fut>(f: impl Fn() -> Fut, timeout: std::time::Duration) -> T
+where
+    Fut: Future<Output = Option<T>>,
+{
+    let start = tokio::time::Instant::now();
+    while start.elapsed() < timeout {
         if let Some(value) = f().await {
             return value;
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    panic!("Couldn't create object");
+    panic!("Timed out: retry exceeded {:?}", timeout);
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
@@ -673,7 +693,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         redis: RedisConnectionInfo::default(),
     })
     .unwrap();
-    let mut connection = repeat_try_create(|| async {
+    let mut connection = retry(|| async {
         client
             .get_multiplexed_async_connection(GlideConnectionOptions::default())
             .await
@@ -741,6 +761,10 @@ pub fn create_connection_request(
     }
     connection_request.lazy_connect = configuration.lazy_connect;
     connection_request.protocol = configuration.protocol.into();
+
+    connection_request.client_side_cache =
+        protobuf::MessageField::from_option(configuration.client_side_cache.clone());
+
     connection_request
 }
 
@@ -758,6 +782,9 @@ pub struct TestConfiguration {
     pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
     pub lazy_connect: bool,
+    pub client_side_cache: Option<connection_request::ClientSideCache>,
+    /// Skip ACL setup when creating a cluster client (use when ACL is already configured).
+    pub skip_acl_setup: bool,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -796,12 +823,66 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     }
 }
 
-pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
+pub async fn setup_test_basics_tls(use_tls: bool) -> TestBasics {
     setup_test_basics_internal(&TestConfiguration {
         use_tls,
         ..Default::default()
     })
     .await
+}
+pub(crate) struct TestClientBasics {
+    pub(crate) server: BackingServer,
+    pub(crate) client: Client,
+}
+pub(crate) async fn create_client(
+    server: &BackingServer,
+    configuration: TestConfiguration,
+) -> Client {
+    match server {
+        BackingServer::Standalone(server) => {
+            let connection_addr = server
+                .as_ref()
+                .map(|server| server.get_client_addr())
+                .unwrap_or(get_shared_server_address(configuration.use_tls));
+
+            // TODO - this is a patch, handling the situation where the new server
+            // still isn't available to connection. This should be fixed in [RedisServer].
+            retry(|| async {
+                Client::new(
+                    create_connection_request(
+                        std::slice::from_ref(&connection_addr),
+                        &configuration,
+                    )
+                    .into(),
+                    None,
+                )
+                .await
+                .ok()
+            })
+            .await
+        }
+        BackingServer::Cluster(cluster) => {
+            create_cluster_client(cluster.as_ref(), configuration).await
+        }
+    }
+}
+
+pub(crate) async fn setup_test_basics(
+    use_cluster: bool,
+    configuration: TestConfiguration,
+) -> TestClientBasics {
+    if use_cluster {
+        let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
+        TestClientBasics {
+            server: BackingServer::Cluster(cluster_basics.cluster),
+            client: cluster_basics.client,
+        }
+    } else {
+        let test_basics: TestBasics = utilities::setup_test_basics_internal(&configuration).await;
+        let server = BackingServer::Standalone(test_basics.server);
+        let client = create_client(&server, configuration).await;
+        TestClientBasics { server, client }
+    }
 }
 
 #[cfg(test)]
@@ -842,6 +923,30 @@ pub async fn kill_connection_for_route(
         .send_command(&mut client_kill_cmd, Some(route))
         .await
         .unwrap();
+}
+
+/// Kill all connections on a server using a direct (non-glide) connection.
+/// Useful when the glide client connection is deauthed (e.g. after RESET) and
+/// cannot send commands itself.
+pub async fn kill_connection_via_addr(addr: &ConnectionAddr, password: Option<&str>) {
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: addr.clone(),
+        redis: RedisConnectionInfo {
+            password: password.map(|p| p.to_string()),
+            ..Default::default()
+        },
+    })
+    .unwrap();
+    let mut conn = retry(|| async {
+        client
+            .get_multiplexed_async_connection(GlideConnectionOptions::default())
+            .await
+            .ok()
+    })
+    .await;
+    let mut cmd = redis::cmd("CLIENT");
+    cmd.arg("KILL").arg("SKIPME").arg("NO");
+    let _: redis::RedisResult<redis::Value> = conn.send_packed_command(&cmd).await;
 }
 
 pub enum BackingServer {
@@ -938,4 +1043,81 @@ pub async fn assert_connected(client: &mut impl glide_core::client::GlideClientF
         ping_result.unwrap(),
         Value::SimpleString("PONG".to_string())
     );
+}
+
+/// Helper function to assert that a specific command was called a certain number of times
+pub async fn assert_command_count(
+    client: &mut Client,
+    command: &str,
+    expected_count: usize,
+    use_cluster: bool,
+) {
+    let mut info_cmd = redis::Cmd::new();
+    info_cmd.arg("INFO").arg("commandstats");
+
+    // Execute INFO commandstats
+    let routing = if use_cluster {
+        Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )))
+    } else {
+        None
+    };
+
+    let res = client
+        .send_command(&mut info_cmd, routing)
+        .await
+        .expect("INFO commandstats command failed");
+
+    // Parse the INFO output based on mode
+    let info_strings: Vec<String> = if use_cluster {
+        // Cluster mode: returns HashMap<String, String>
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        info_result.into_values().collect()
+    } else {
+        // Standalone mode: returns a single string
+        let info_str: String =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        vec![info_str]
+    };
+
+    // Search for the specified command across all info outputs
+    let mut command_count: usize = 0;
+    let command_prefix = format!("cmdstat_{}:calls=", command.to_lowercase());
+
+    for info in info_strings {
+        for line in info.lines() {
+            if line.starts_with(&command_prefix)
+                && let Some(count_str) = line.strip_prefix(&command_prefix)
+            {
+                let count_val = count_str
+                    .split(',')
+                    .next()
+                    .unwrap_or("0")
+                    .parse::<usize>()
+                    .unwrap_or(0);
+                command_count += count_val;
+                break;
+            }
+        }
+    }
+
+    // Assert that the found count matches the expected count
+    assert_eq!(
+        command_count, expected_count,
+        "Expected {} count {} but found {}",
+        command, expected_count, command_count
+    );
+}
+
+/// Helper to check if a key is in cache
+pub fn is_key_cached(
+    cache_id: &str,
+    key: &[u8],
+    cache_key_type: redis::cache::glide_cache::CachedKeyType,
+) -> bool {
+    let cache = redis::cache::get_or_create_cache(cache_id, 1000, 0, None, true);
+    cache.get(key, cache_key_type).is_some()
 }

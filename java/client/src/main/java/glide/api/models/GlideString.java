@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import glide.utils.Java8Utils;
+import glide.utils.Utf8Validator;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -117,15 +118,11 @@ public class GlideString implements Comparable<GlideString> {
                     return false;
                 } else {
                     try {
-                        // TODO find a better way to check this
-                        // Detect whether `bytes` could be represented by a `String` without data corruption
-                        String tmpStr = new String(bytes, StandardCharsets.UTF_8);
-                        if (Arrays.equals(bytes, tmpStr.getBytes(StandardCharsets.UTF_8))) {
-                            string = tmpStr;
+                        if (Utf8Validator.isWellFormed(bytes)) {
+                            string = new String(bytes, StandardCharsets.UTF_8);
                             return true;
-                        } else {
-                            return false;
                         }
+                        return false;
                     } finally {
                         conversionChecked.set(true);
                     }

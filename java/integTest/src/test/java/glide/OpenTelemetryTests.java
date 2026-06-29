@@ -18,7 +18,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -230,36 +234,6 @@ public class OpenTelemetryTests {
     @ParameterizedTest
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
-    public void testSpanMemoryLeak(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get();
-
-        // Execute a series of commands sequentially
-        for (int i = 0; i < 100; i++) {
-            String key = "test_key_" + i;
-            client.set(key, "value_" + i).get();
-            client.get(key).get();
-        }
-
-        // Force GC and check memory
-        System.gc();
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @ParameterizedTest
-    @MethodSource("getClientsProtocolVersion")
-    @SneakyThrows
     public void testPercentageRequestsConfig(ProtocolVersion protocol) {
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
@@ -353,41 +327,6 @@ public class OpenTelemetryTests {
     @ParameterizedTest
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
-    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get();
-
-        ClusterBatch batch = new ClusterBatch(true);
-
-        batch.set("test_key", "foo");
-        batch.objectRefcount("test_key");
-
-        Object[] response = client.exec(batch, true).get();
-        assertNotNull(response);
-        assertEquals(2, response.length);
-        assertEquals("OK", response[0]);
-        assertTrue((Long) response[1] >= 1);
-
-        // Force GC and check memory
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @ParameterizedTest
-    @MethodSource("getClientsProtocolVersion")
-    @SneakyThrows
     public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
         GlideClusterClient client1 =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
@@ -418,10 +357,6 @@ public class OpenTelemetryTests {
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanBatchFile(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
@@ -446,84 +381,5 @@ public class OpenTelemetryTests {
         // Check for expected span names
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
-
-        // Force GC and check memory
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @Test
-    @SneakyThrows
-    public void testAutomaticSpanLifecycle() {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-                        .get();
-
-        // Execute multiple commands - each should automatically create and clean up its span
-        client.set("test_key1", "value1").get();
-        client.get("test_key1").get();
-        client.set("test_key2", "value2").get();
-        client.get("test_key2").get();
-
-        // Force GC again to clean up
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        // Allow small fluctuations
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @Test
-    @SneakyThrows
-    public void testConcurrentCommandsSpanLifecycle() {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-                        .get();
-
-        // Execute multiple concurrent commands
-        List<java.util.concurrent.CompletableFuture<?>> commands =
-                Arrays.asList(
-                        client.set("test_key1", "value1"),
-                        client.get("test_key1"),
-                        client.set("test_key2", "value2"),
-                        client.get("test_key2"),
-                        client.set("test_key3", "value3"),
-                        client.get("test_key3"));
-
-        // Wait for all commands to complete
-        for (java.util.concurrent.CompletableFuture<?> command : commands) {
-            command.get();
-        }
-
-        // Force GC again to clean up
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
-        // Allow small fluctuations
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
     }
 }

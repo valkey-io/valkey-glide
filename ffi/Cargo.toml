@@ -5,15 +5,25 @@ edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
 
+[features]
+default = ["pool-support"]
+pool-support = []
+
 [lib]
 crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
+libc = "0.2"
+dashmap = "5"
 protobuf = { version = "3", features = [] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = { path = "../logger_core" }
+tracing = "0.1"
+serde_json = "1.0"
+url = "2"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest = "^0.23"
@@ -24,5 +34,5 @@ lazy_static = "1"
 opt-level = 3         # Optimize for performance
 lto = "fat"           # Enable the most aggressive Link Time Optimization
 codegen-units = 1     # Reduce the number of code generation units, increasing optimization time but improving performance
-strip = "symbols"     # Remove symbol
+strip = "symbols"
 panic = "abort"       # Code size optimization and prevent unwinding across FFI boundaries

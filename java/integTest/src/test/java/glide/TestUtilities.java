@@ -3,15 +3,19 @@ package glide;
 
 import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -25,21 +29,29 @@ import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -53,7 +65,33 @@ public class TestUtilities {
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
+    /** Expected server responses for BGSAVE and BGSAVE SCHEDULE. */
+    public static final Set<String> BGSAVE_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
+    public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
+            "Background saving is currently not in progress or scheduled";
+
+    /** Expected server responses for BGREWRITEAOF. */
+    public static final Set<String> BGREWRITEAOF_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList(
+                            "Background append only file rewriting started",
+                            "Background append only file rewriting scheduled"));
+
+    /** Route for routing to a single primary node by slot key. */
+    public static final SingleNodeRoute PRIMARY_SLOT_ROUTE = new SlotKeyRoute("1", SlotType.PRIMARY);
+
     private static final String REDIS_VERSION_KEY = "redis_version";
+
+    /** IAM authentication test constants */
+    public static final String IAM_USERNAME = "default";
+
+    public static final String IAM_TEST_CLUSTER_NAME = "test-cluster";
+
+    public static final String IAM_TEST_REGION_US_EAST_1 = "us-east-1";
 
     /**
      * Checks if the current operating system is Windows.
@@ -133,7 +171,7 @@ public class TestUtilities {
                 return Long.parseLong(line.split(":")[1]);
             }
         }
-        fail();
+        fail("Key '" + value + "' not found in INFO output");
         return 0;
     }
 
@@ -723,5 +761,165 @@ public class TestUtilities {
                         .findFirst()
                         .orElseThrow(
                                 () -> new RuntimeException("connected_slaves not found in INFO REPLICATION")));
+    }
+
+    /**
+     * Creates a test IAM authentication configuration.
+     *
+     * @param refreshIntervalSeconds The refresh interval in seconds for IAM token refresh
+     * @return IamAuthConfig configured for testing
+     */
+    public static IamAuthConfig createTestIamConfig(int refreshIntervalSeconds) {
+        return IamAuthConfig.builder()
+                .clusterName(IAM_TEST_CLUSTER_NAME)
+                .service(ServiceType.ELASTICACHE)
+                .region(IAM_TEST_REGION_US_EAST_1)
+                .refreshIntervalSeconds(refreshIntervalSeconds)
+                .build();
+    }
+
+    /**
+     * Waits until no save (RDB save or AOF rewrite) is in progress.
+     *
+     * @param client The client to query.
+     */
+    public static void waitForSaveNotInProgress(@NonNull final BaseClient client) {
+        waitFor(() -> !isSaveInProgress(client), "Timed out waiting for save to complete");
+    }
+
+    /**
+     * Waits until a condition is met.
+     *
+     * @param condition A callable that returns {@code true} when the desired state is reached.
+     * @param failure Message to include in the assertion if the timeout is exceeded.
+     */
+    @SneakyThrows
+    public static void waitFor(Callable<Boolean> condition, String failure) {
+        long sleep = 100;
+        long timeout = 10000;
+
+        while (timeout > 0) {
+            if (condition.call()) {
+                return;
+            }
+
+            Thread.sleep(sleep);
+            timeout -= sleep;
+        }
+
+        fail(failure);
+    }
+
+    /**
+     * Returns {@code true} if a save (RDB save or AOF rewrite) is in progress on any node.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    private static boolean isSaveInProgress(@NonNull final BaseClient client) {
+        List<String> infos;
+        if (client instanceof GlideClient) {
+            infos = Collections.singletonList(((GlideClient) client).info().get());
+        } else {
+            ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
+            infos = new ArrayList<>(clusterInfo.getMultiValue().values());
+        }
+
+        return infos.stream()
+                .anyMatch(
+                        info ->
+                                info.contains("rdb_bgsave_in_progress:1")
+                                        || info.contains("aof_rewrite_in_progress:1"));
+    }
+
+    /** Returns the current server time as a Unix timestamp in seconds. */
+    @SneakyThrows
+    public static long getUnixSeconds(BaseClient client) {
+
+        // TODO #6166: Use a base client method to call time() directly.
+        if (client instanceof GlideClusterClient) {
+            return Long.parseLong(((GlideClusterClient) client).time().get()[0]);
+        }
+
+        return Long.parseLong(((GlideClient) client).time().get()[0]);
+    }
+
+    /**
+     * Validates that a MEMORY STATS response map contains expected fields with correct types.
+     *
+     * @param stats The memory stats map to validate.
+     */
+    @SuppressWarnings("unchecked")
+    public static void assertMemoryStatsFields(Map<String, Object> stats) {
+        assertNotNull(stats);
+        assertFalse(stats.isEmpty());
+
+        // db.0 is only populated if the node has at least one key. In cluster mode, it will only
+        // be present if that key is stored on that node. Standalone and single-node cluster tests
+        // validate db.0 directly via assertMemoryStatsDbEntry.
+        if (stats.containsKey("db.0")) {
+            assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
+        }
+
+        assertTrue((Long) stats.get("allocator.active") > 0);
+        assertTrue((Long) stats.get("allocator.allocated") > 0);
+        assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
+        assertTrue((Long) stats.get("allocator.resident") > 0);
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
+        assertTrue((Long) stats.get("aof.buffer") >= 0);
+        assertTrue((Long) stats.get("clients.normal") >= 0);
+        assertTrue((Long) stats.get("clients.slaves") >= 0);
+        assertTrue((Long) stats.get("dataset.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
+        assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
+        assertTrue((Long) stats.get("keys.count") >= 0);
+        assertTrue((Long) stats.get("lua.caches") >= 0);
+        assertTrue((Long) stats.get("overhead.total") > 0);
+        assertTrue((Long) stats.get("peak.allocated") > 0);
+        assertTrue((Long) stats.get("replication.backlog") >= 0);
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
+        assertTrue((Long) stats.get("startup.allocated") > 0);
+        assertTrue((Long) stats.get("total.allocated") > 0);
+
+        assertTrue((Double) stats.get("allocator-fragmentation.ratio") >= 0);
+        assertTrue((Double) stats.get("allocator-rss.ratio") >= 0);
+        assertTrue((Double) stats.get("dataset.percentage") >= 0);
+        assertTrue((Double) stats.get("fragmentation") >= 0);
+        assertTrue((Double) stats.get("peak.percentage") >= 0);
+        assertTrue((Double) stats.get("rss-overhead.ratio") >= 0);
+
+        // Optional Redis 7.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertTrue((Long) stats.get("cluster.links") >= 0);
+            assertTrue((Long) stats.get("functions.caches") >= 0);
+        } else {
+            assertFalse(stats.containsKey("cluster.links"));
+            assertFalse(stats.containsKey("functions.caches"));
+        }
+
+        // Optional Valkey 8.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue((Long) stats.get("allocator.muzzy") >= 0);
+            assertTrue((Long) stats.get("db.dict.rehashing.count") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.lut") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.rehashing") >= 0);
+        } else {
+            assertFalse(stats.containsKey("allocator.muzzy"));
+            assertFalse(stats.containsKey("db.dict.rehashing.count"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.lut"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.rehashing"));
+        }
+    }
+
+    /**
+     * Validates that a MEMORY STATS db entry map has expected fields with correct types and values.
+     *
+     * @param dbMap The db entry map (e.g. from stats.get("db.0")).
+     */
+    public static void assertMemoryStatsDbEntry(Map<String, Object> dbMap) {
+        assertNotNull(dbMap);
+        assertInstanceOf(Map.class, dbMap);
+        assertTrue((Long) dbMap.get("overhead.hashtable.expires") >= 0);
+        assertTrue((Long) dbMap.get("overhead.hashtable.main") >= 0);
     }
 }

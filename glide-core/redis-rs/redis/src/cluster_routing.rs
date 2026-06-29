@@ -595,12 +595,13 @@ impl ResponsePolicy {
 
             b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
-            | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
-            | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
-            | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
-            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
-            | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
+            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT PAUSE"
+            | b"CLIENT REPLY" | b"CLIENT SETNAME" | b"CLIENT SETINFO" | b"CLIENT UNPAUSE"
+            | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE" | b"FLUSHALL"
+            | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH" | b"FUNCTION LOAD"
+            | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET" | b"PING"
+            | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET" | b"UNWATCH"
+            | b"WATCH" | b"RESET" | b"SAVE" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
@@ -666,22 +667,19 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CONFIG REWRITE"
         | b"SCRIPT FLUSH"
         | b"SCRIPT LOAD"
-        | b"LATENCY RESET"
-        | b"LATENCY GRAPH"
-        | b"LATENCY HISTOGRAM"
-        | b"LATENCY HISTORY"
-        | b"LATENCY DOCTOR"
-        | b"LATENCY LATEST"
         | b"PUBSUB NUMPAT"
         | b"PUBSUB CHANNELS"
         | b"PUBSUB NUMSUB"
         | b"PUBSUB SHARDCHANNELS"
         | b"PUBSUB SHARDNUMSUB"
+        | b"RESET"
         | b"SCRIPT KILL"
         | b"FUNCTION KILL"
         | b"FUNCTION STATS" => RouteBy::AllNodes,
 
-        b"DBSIZE"
+        b"BGREWRITEAOF"
+        | b"BGSAVE"
+        | b"DBSIZE"
         | b"DEBUG"
         | b"FLUSHALL"
         | b"FLUSHDB"
@@ -693,11 +691,20 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION RESTORE"
         | b"INFO"
         | b"KEYS"
+        | b"LATENCY DOCTOR"
+        | b"LATENCY GRAPH"
+        | b"LATENCY HISTOGRAM"
+        | b"LATENCY HISTORY"
+        | b"LATENCY LATEST"
+        | b"LATENCY RESET"
         | b"MEMORY DOCTOR"
         | b"MEMORY MALLOC-STATS"
         | b"MEMORY PURGE"
         | b"MEMORY STATS"
         | b"PING"
+        | b"CLIENT PAUSE"
+        | b"CLIENT UNPAUSE"
+        | b"SAVE"
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
@@ -751,18 +758,15 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"ACL LOG"
         | b"ACL USERS"
         | b"ACL WHOAMI"
-        | b"BGSAVE"
         | b"CLIENT GETNAME"
         | b"CLIENT GETREDIR"
         | b"CLIENT ID"
         | b"CLIENT INFO"
         | b"CLIENT KILL"
         | b"CLIENT LIST"
-        | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
         | b"CLIENT UNBLOCK"
-        | b"CLIENT UNPAUSE"
         | b"CLUSTER COUNT-FAILURE-REPORTS"
         | b"CLUSTER INFO"
         | b"CLUSTER KEYSLOT"
@@ -789,7 +793,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"MODULE UNLOAD"
         | b"READONLY"
         | b"READWRITE"
-        | b"SAVE"
         | b"SCRIPT SHOW"
         | b"TFCALL"
         | b"TFCALLASYNC"
@@ -917,6 +920,57 @@ impl RoutingInfo {
             },
 
             RouteBy::Undefined => None,
+        }
+    }
+
+    /// Returns the first key from a routable command, if one exists.
+    pub fn key_for_command<R>(r: &R) -> Option<&[u8]>
+    where
+        R: Routable + ?Sized,
+    {
+        let cmd = &r.command()?[..];
+        match base_routing(cmd) {
+            // These don't have specific keys
+            RouteBy::AllNodes
+            | RouteBy::AllPrimaries
+            | RouteBy::Random
+            | RouteBy::SecondArgSlot
+            | RouteBy::Undefined => None,
+
+            RouteBy::MultiShard(_) => None, //TODO: handle multi-shard commands
+
+            RouteBy::FirstKey => r.arg_idx(1),
+            RouteBy::SecondArg => r.arg_idx(2),
+            RouteBy::ThirdArg => r.arg_idx(3),
+
+            RouteBy::ThirdArgAfterKeyCount => {
+                let key_count = r
+                    .arg_idx(2)
+                    .and_then(|x| std::str::from_utf8(x).ok())
+                    .and_then(|x| x.parse::<u64>().ok())?;
+                if key_count == 0 {
+                    None
+                } else {
+                    r.arg_idx(3)
+                }
+            }
+
+            RouteBy::SecondArgAfterKeyCount => {
+                let key_count = r
+                    .arg_idx(1)
+                    .and_then(|x| std::str::from_utf8(x).ok())
+                    .and_then(|x| x.parse::<u64>().ok())?;
+                if key_count == 0 {
+                    None
+                } else {
+                    r.arg_idx(2)
+                }
+            }
+
+            RouteBy::StreamsIndex => {
+                let streams_position = r.position(b"STREAMS")?;
+                r.arg_idx(streams_position + 1)
+            }
         }
     }
 
@@ -1115,6 +1169,11 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"SCRIPT SHOW"
             | b"SDIFF"
             | b"SELECT"
+            | b"SENTINEL GET-MASTER-ADDR-BY-NAME"
+            | b"SENTINEL MASTER"
+            | b"SENTINEL MASTERS"
+            | b"SENTINEL REPLICAS"
+            | b"SENTINEL CKQUORUM"
             | b"SHUTDOWN"
             | b"SINTER"
             | b"SINTERCARD"
@@ -1180,7 +1239,7 @@ pub trait Routable {
         let mut primary_command = match primary_command.as_slice() {
             b"XGROUP" | b"OBJECT" | b"SLOWLOG" | b"FUNCTION" | b"MODULE" | b"COMMAND"
             | b"PUBSUB" | b"CONFIG" | b"MEMORY" | b"XINFO" | b"CLIENT" | b"ACL" | b"SCRIPT"
-            | b"CLUSTER" | b"LATENCY" => primary_command,
+            | b"CLUSTER" | b"LATENCY" | b"SENTINEL" => primary_command,
             _ => {
                 return Some(primary_command);
             }
@@ -1494,7 +1553,7 @@ mod tests_routing {
         command_for_multi_slot_indices, AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo,
         ResponsePolicy, Route, RoutingInfo, ShardAddrs, SingleNodeRoutingInfo, SlotAddr,
     };
-    use crate::cluster_routing::ShardUpdateResult;
+    use crate::cluster_routing::{is_readonly, is_readonly_cmd, Routable, ShardUpdateResult};
     use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
     use core::panic;
     use std::sync::{Arc, RwLock};
@@ -2099,5 +2158,37 @@ mod tests_routing {
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
             "CLIENT LIST should be routed to a random node"
         );
+    }
+
+    #[test]
+    fn test_is_read_only() {
+        assert!(is_readonly_cmd(b"SENTINEL MASTERS"));
+        assert!(is_readonly_cmd(b"SENTINEL MASTER"));
+        assert!(is_readonly_cmd(b"SENTINEL REPLICAS"));
+        assert!(is_readonly_cmd(b"SENTINEL GET-MASTER-ADDR-BY-NAME"));
+        assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
+
+        assert!(!is_readonly_cmd(b"SENTINEL FAILOVER"));
+
+        let mut test_cmd = cmd("SENTINEL");
+        test_cmd.arg("MASTERS").arg("my_service");
+        assert!(is_readonly(&test_cmd));
+        assert!(is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
+
+        let mut test_cmd = cmd("SENTINEL");
+        test_cmd.arg("GET-MASTER-ADDR-BY-NAME").arg("my_service");
+        assert!(is_readonly(&test_cmd));
+        assert!(is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
+
+        test_cmd = cmd("SENTINEL");
+        test_cmd.arg("FAILOVER").arg("my_service");
+        assert!(!is_readonly(&test_cmd));
+        assert!(!is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
     }
 }

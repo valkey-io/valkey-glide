@@ -246,6 +246,7 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         ClientType::AsyncClient {
             success_callback: string_success_callback,
             failure_callback,
+            allow_stack_response: false,
         }
     } else {
         ClientType::SyncClient
@@ -268,6 +269,19 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
                     pattern_len: i64,
                 ),
             >(std::ptr::null_mut()),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
+                    host: *const u8,
+                    host_len: usize,
+                    port: u16,
+                    resolved_host_buf: *mut u8,
+                    resolved_host_buf_len: usize,
+                    resolved_host_len: *mut usize,
+                ) -> u16,
+            >(std::ptr::null_mut()),
+            0,
         );
 
         assert!(!response_ptr.is_null(), "Failed to create client");
@@ -464,6 +478,19 @@ fn test_inflight_request_limit_sync_client() {
                     pattern_len: i64,
                 ),
             >(std::ptr::null_mut()),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
+                    host: *const u8,
+                    host_len: usize,
+                    port: u16,
+                    resolved_host_buf: *mut u8,
+                    resolved_host_buf_len: usize,
+                    resolved_host_len: *mut usize,
+                ) -> u16,
+            >(std::ptr::null_mut()),
+            0,
         );
 
         assert!(!response_ptr.is_null(), "Failed to create client");

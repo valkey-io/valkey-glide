@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+pub mod circuit_breaker;
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
@@ -9,30 +10,34 @@ use crate::compression::zstd_backend::ZstdBackend;
 use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
+use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
-    RedisResult, RetryStrategy, ScanStateRC, Value,
+    AddressResolver, ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy,
+    PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
+pub use reconnecting_connection::IAMTokenHandle;
+pub mod monitor_client;
+pub use monitor_client::{MonitorClient, MonitorLine, MonitorLineCallback};
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
@@ -69,16 +74,38 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Extract RequestType from a Redis command for decompression processing
-/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
 fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     // Get the command name (first argument)
     let command_name = cmd.command()?;
     let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
 
-    // Map command names to RequestType - only basic GET supported for decompression
+    // Map command names to RequestType for decompression
+    // Only read commands that return values needing decompression are included
     match command_str.as_str() {
         "GET" => Some(RequestType::Get),
-        _ => None, // Unknown command, no compression/decompression needed
+        "MGET" => Some(RequestType::MGet),
+        "GETEX" => Some(RequestType::GetEx),
+        "GETDEL" => Some(RequestType::GetDel),
+        "GETSET" => Some(RequestType::GetSet),
+        "SET" => {
+            // SET with GET option returns the old value, which needs decompression
+            // Check if the command has the GET option by looking for "GET" in the arguments
+            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
+            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
+                if let redis::Arg::Simple(bytes) = arg {
+                    bytes.eq_ignore_ascii_case(b"GET")
+                } else {
+                    false
+                }
+            });
+            if has_get_option {
+                // Treat SET with GET option like GETSET for decompression purposes
+                Some(RequestType::GetSet)
+            } else {
+                None
+            }
+        }
+        _ => None, // Unknown command or write command, no decompression needed
     }
 }
 
@@ -166,6 +193,24 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
+    let cache = connection_request
+        .client_side_cache
+        .clone()
+        .map(|client_side_cache| {
+            get_or_create_cache(
+                &client_side_cache.cache_id,
+                client_side_cache.max_cache_kb,
+                client_side_cache.entry_ttl_ms,
+                client_side_cache.eviction_policy,
+                client_side_cache.enable_metrics,
+            )
+        });
+
+    let server_assisted_cache = connection_request
+        .client_side_cache
+        .as_ref()
+        .map(|c| c.server_assisted)
+        .unwrap_or(false);
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -185,6 +230,8 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    cache,
+                    server_assisted_cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -195,6 +242,8 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    cache,
+                    server_assisted_cache,
                 }
             }
         }
@@ -203,6 +252,8 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
+            cache,
+            server_assisted_cache,
             ..Default::default()
         },
     }
@@ -217,16 +268,23 @@ pub(super) fn get_connection_info(
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
     tls_params: Option<redis::TlsConnParams>,
+    address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    let (resolved_host, resolved_port) = if let Some(resolver) = address_resolver {
+        resolver.resolve(&address.host, get_port(address))
+    } else {
+        (address.host.to_string(), get_port(address))
+    };
+
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
-            host: address.host.to_string(),
-            port: get_port(address),
+            host: resolved_host,
+            port: resolved_port,
             insecure: tls_mode == TlsMode::InsecureTls,
             tls_params,
         }
     } else {
-        redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
+        redis::ConnectionAddr::Tcp(resolved_host, resolved_port)
     };
     redis::ConnectionInfo {
         addr,
@@ -252,14 +310,24 @@ pub struct LazyClient {
 pub struct Client {
     internal_client: Arc<RwLock<ClientWrapper>>,
     request_timeout: Duration,
-    // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    inflight_requests_limit: isize,
+    inflight_log_interval: isize,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
     otel_metadata: types::OTelMetadata,
+    // Optional client-side cache
+    client_side_cache: Option<Arc<dyn GlideCache>>,
+    // Per-client latency tracker for timeout diagnostics
+    latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
+    // Optional Client-wide circuit breaker
+    circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
+    // Tracks the current database selected at runtime (updated on SELECT commands).
+    // Used by scope connections to inherit the parent's current database.
+    current_database: Arc<AtomicU32>,
 }
 
 async fn run_with_timeout<T>(
@@ -366,6 +434,18 @@ fn get_timeout_from_cmd_arg(
     }
 }
 
+/// Returns true for commands with user-specified blocking timeouts that
+/// should be excluded from latency tracking (they distort p99).
+fn is_blocking_command(cmd: &Cmd) -> bool {
+    let command = cmd.command().unwrap_or_default();
+    match command.as_slice() {
+        b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
+        | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        _ => false,
+    }
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {
@@ -377,7 +457,14 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .position(b"BLOCK")
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
-        b"WAIT" => get_timeout_from_cmd_arg(cmd, 2, TimeUnit::Milliseconds),
+        b"WAIT" | b"WAITAOF" => {
+            let idx = if command.as_slice() == b"WAITAOF" {
+                3
+            } else {
+                2
+            };
+            get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
+        }
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
@@ -441,6 +528,9 @@ impl Client {
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
         self.otel_metadata.db_namespace = database_id.to_string();
+        // Keep current_database in sync (used by scope connections to inherit parent state)
+        self.current_database
+            .store(database_id as u32, Ordering::Release);
         Ok(())
     }
 
@@ -721,6 +811,57 @@ impl Client {
         }
     }
 
+    fn is_reset_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"RESET")
+    }
+
+    async fn handle_reset_command(&mut self) -> RedisResult<()> {
+        // RESET resets the connection to its initial state per the Valkey spec.
+        // https://valkey.io/commands/reset/
+        //
+        // TRACKED - glide-core updates these so reconnections restore the post-RESET state:
+        //   SELECTs database 0                       -> update_stored_database_id(0)
+        //   Clears client name                       -> update_stored_client_name(None)
+        //   Sets protocol to RESP2                   -> update_stored_protocol(RESP2)
+        //   Aborts Pub/Sub subscription state        -> remove_desired_subscriptions(all kinds)
+        //     (prevents synchronizer from resubscribing on reconnect)
+        //
+        // NOT TRACKED - no glide-core state to update:
+        //   Deauthenticates the connection           -> auth credentials kept for reconnect;
+        //     (requires AUTH to reauthenticate)         live connection is deauthed until
+        //                                               reconnect or manual AUTH call
+        //   Discards current MULTI transaction       -> glide sends MULTI+cmds+EXEC as a
+        //                                               single pipeline; no persistent state
+        //   Unwatches all WATCHed keys               -> WATCH state is per-connection,
+        //                                               not tracked by glide-core
+        //   Disables CLIENT TRACKING                 -> not tracked; gap exists if
+        //                                               client-side caching is active
+        //   Sets connection to READWRITE mode         -> not tracked; glide does not
+        //                                               persist read/write mode per connection
+        //   Cancels ASKING mode (cluster)             -> one-shot flag sent inline,
+        //                                               not persisted by glide-core
+        //   Sets CLIENT REPLY to ON                  -> not tracked; CLIENT REPLY not
+        //                                               yet supported by glide
+        //   Exits MONITOR mode                       -> not tracked; MONITOR not yet
+        //                                               supported by glide
+        //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
+        //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
+        self.update_stored_database_id(0).await?;
+        self.update_stored_client_name(None).await?;
+        self.update_stored_protocol(redis::ProtocolVersion::RESP2)
+            .await?;
+        self.otel_metadata.db_namespace = "0".to_string();
+        for kind in [
+            redis::PubSubSubscriptionKind::Exact,
+            redis::PubSubSubscriptionKind::Pattern,
+            redis::PubSubSubscriptionKind::Sharded,
+        ] {
+            self.pubsub_synchronizer
+                .remove_desired_subscriptions(None, kind);
+        }
+        Ok(())
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -803,117 +944,577 @@ impl Client {
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
-    /// Send a command to the server.
-    /// This function will route the command to the correct node, and retry if needed.
+    /// Internal command execution logic. Takes owned data so the returned future
+    /// is `Send + 'static`.
+    async fn execute_command_owned(
+        mut self_clone: Client,
+        cmd: Arc<Cmd>,
+        routing: Option<RoutingInfo>,
+        client: ClientWrapper,
+        compression_manager: Option<Arc<CompressionManager>>,
+    ) -> RedisResult<Value> {
+        let raw_value = match client {
+            ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
+            ClientWrapper::Cluster { mut client } => {
+                let final_routing = if let Some(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::Random,
+                )) = routing
+                {
+                    let cmd_name = cmd.command().unwrap_or_default();
+                    let cmd_name = String::from_utf8_lossy(&cmd_name);
+                    if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+                    } else {
+                        log_warn(
+                            "send_command",
+                            format!(
+                                "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
+                            ),
+                        );
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
+                    }
+                } else {
+                    routing
+                        .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                };
+                client.route_command(&cmd, final_routing).await
+            }
+            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+        }?;
+
+        // Post-process: decompress and convert to expected type.
+        // Done after the mutable borrow on cmd is released.
+        let processed_value = if let Some(ref compression_manager) = compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(&cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed_value) => decompressed_value,
+                    Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
+                        log_warn(
+                            "send_command_decompression",
+                            format!("Failed to decompress response: {}", e),
+                        );
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        let expected_type = expected_type_for_cmd(&cmd);
+        let value = convert_to_expected_type(processed_value, expected_type)?;
+
+        if self_clone.is_client_set_name_command(&cmd) {
+            self_clone.handle_client_set_name_command(&cmd).await?;
+        }
+        if self_clone.is_select_command(&cmd) {
+            self_clone.handle_select_command(&cmd).await?;
+        }
+        if self_clone.is_auth_command(&cmd) {
+            self_clone.handle_auth_command(&cmd).await?;
+        }
+        if self_clone.is_hello_command(&cmd) {
+            self_clone.handle_hello_command(&cmd).await?;
+        }
+        if self_clone.is_reset_command(&cmd) {
+            self_clone.handle_reset_command().await?;
+        }
+        Ok(value)
+    }
+
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // Check for IAM token changes and update the password without authentication if needed (pull model)
+            if let Some(iam_manager) = &self.iam_token_manager
+                && iam_manager.token_changed()
+            {
+                let current_token = iam_manager.get_token().await;
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
+                }
+                iam_manager.clear_token_changed();
+                log_debug(
+                    "update_connection_password",
+                    "Updating connection password with IAM token",
+                );
+                self.update_connection_password(Some(current_token), false)
+                    .await?;
+            }
+
             let client = self.get_or_initialize_client().await?;
+
+            // Reject immediately if circuit breaker is open.
+            if !self.is_circuit_breaker_healthy() {
+                return Err(RedisError::from((
+                    ErrorKind::CircuitBreakerOpen,
+                    "Client circuit breaker is open - core unhealthy",
+                )));
+            }
 
             if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
                 return result;
             }
 
-            // let expected_type = expected_type_for_cmd(cmd);
-            let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
-                Ok(request_timeout) => request_timeout,
-                Err(err) => return Err(err),
+            let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+
+            // Reserve an inflight slot. The tracker holds the slot until the
+            // last clone of the Cmd is dropped (i.e. all sub-commands in the
+            // cluster event loop finish). This decouples user-facing timeout
+            // from internal pipeline cleanup.
+            let tracker = match self.reserve_inflight_request() {
+                Some(t) => t,
+                None => {
+                    let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                    log_warn_rate_limited!(
+                        "inflight",
+                        10,
+                        format!(
+                            "Inflight request limit exhausted. limit={}, available={}",
+                            self.inflight_requests_limit, available
+                        )
+                    );
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Reached maximum inflight requests",
+                    )));
+                }
             };
 
-            // Clone compression_manager reference before moving into async block
-            let compression_manager = self.compression_manager.clone();
-
-            let result = run_with_timeout(request_timeout, async move {
-                let expected_type = expected_type_for_cmd(cmd);
-                let value  = match client {
-                    ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
-                    ClientWrapper::Cluster {mut client } => {
-                        let final_routing =
-                            if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
-                                routing
-                            {
-                                let cmd_name = cmd.command().unwrap_or_default();
-                                let cmd_name = String::from_utf8_lossy(&cmd_name);
-                                if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
-                                // A read-only command, go ahead and send it to a random node
-                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
-                                } else {
-                                // A "Random" node was selected, but the command is a "@write" command
-                                // change the routing to "RandomPrimary"
-                                    log_warn(
-                                        "send_command",
-                                        format!(
-                                            "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
-                                        ),
-                                    );
-                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
-                                }
-                            } else {
-                                routing
-                                    .or_else(|| RoutingInfo::for_routable(cmd))
-                                    .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                            };
-                        client.route_command(cmd, final_routing).await
-                    },
-                    ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+            // Log at debug level when inflight usage crosses a 10% threshold.
+            // Only one log per threshold crossing — zero noise when stable.
+            {
+                static LAST_BUCKET: AtomicIsize = AtomicIsize::new(0);
+                let remaining = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                let used = self.inflight_requests_limit - remaining;
+                let bucket = used / self.inflight_log_interval;
+                let prev = LAST_BUCKET.load(Ordering::Relaxed);
+                if bucket != prev {
+                    LAST_BUCKET.store(bucket, Ordering::Relaxed);
+                    log_debug(
+                        "inflight",
+                        format!(
+                            "Inflight: {used}/{} slots used",
+                            self.inflight_requests_limit
+                        ),
+                    );
                 }
-                .and_then(|value| {
-                    // Apply decompression if compression manager is available
-                    let processed_value = if let Some(ref compression_manager) = compression_manager {
-                        // Extract request type from command for decompression
-                        if let Some(request_type) = extract_request_type_from_cmd(cmd) {
-                            match crate::compression::process_response_for_decompression(
-                                value.clone(),
-                                request_type,
-                                Some(compression_manager.as_ref())
-                            ) {
-                                Ok(decompressed_value) => decompressed_value,
-                                Err(e) => {
-                                    log_warn(
-                                        "send_command_decompression",
-                                        format!("Failed to decompress response: {}", e),
+            }
+
+            cmd.set_inflight_tracker(tracker);
+            cmd.set_response_timeout(request_timeout);
+
+            // Clone compression_manager reference only if compression is enabled
+            let compression_manager = if self.is_compression_enabled() {
+                self.compression_manager.clone()
+            } else {
+                None
+            };
+            let self_clone = self.clone();
+
+            // Blocking commands have artificially long latencies; exclude from tracker.
+            let is_blocking_cmd = is_blocking_command(cmd);
+            // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
+            // the copy that actually travels to the multiplexed connection carries
+            // it, letting that connection suppress false-positive response-wait
+            // warnings (#6283).
+            cmd.set_is_blocking(is_blocking_cmd);
+            let owned_cmd = cmd.clone();
+
+            // Captured by the timeout path for watchdog-informed CB decisions.
+            let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
+
+            let result = match request_timeout {
+                Some(duration) => {
+                    // Compute inflight count (cheap atomic load)
+                    let inflight = Some(
+                        (self.inflight_requests_limit
+                            - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                            as usize,
+                    );
+
+                    // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
+                    let owned_cmd = Arc::new(owned_cmd);
+
+                    // Single Instant::now() shared between watchdog and latency tracking
+                    let cmd_start = Instant::now();
+
+                    let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
+                        .register(duration, cmd_start);
+                    let routing_desc = routing
+                        .as_ref()
+                        .map(|r| format!("{:?}", r))
+                        .unwrap_or_else(|| "unknown".to_owned());
+                    let execute = Self::execute_command_owned(
+                        self_clone,
+                        owned_cmd.clone(),
+                        routing,
+                        client,
+                        compression_manager,
+                    );
+
+                    tokio::pin!(execute);
+                    tokio::select! {
+                        result = &mut execute => {
+                            // Record latency into per-client tracker
+                            if !is_blocking_cmd {
+                                let elapsed = cmd_start.elapsed();
+                                self.latency_tracker.record(elapsed);
+                            }
+                            result
+                        }
+                        recv_result = timeout_rx => {
+                            match recv_result {
+                                Err(_) => {
+                                    // Watchdog thread died — fall through to let the
+                                    // command complete via Tokio's timer as fallback.
+                                    execute.await
+                                }
+                                Ok(()) => {
+                                    // Build diagnostic event on the consumer side (rare timeout path)
+                                    let actual_elapsed = cmd_start.elapsed();
+                                    let (phase, node, retry_count, command) = {
+                                        let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
+                                        let n: String = routing_desc.clone();
+                                        let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
+                                        let c = owned_cmd.arg_idx(0)
+                                            .map(crate::timeout_watchdog::cmd_name_from_bytes)
+                                            .unwrap_or("UNKNOWN");
+                                        (
+                                            if p == redis::PHASE_SENT {
+                                                crate::timeout_watchdog::CommandPhase::Sent
+                                            } else {
+                                                crate::timeout_watchdog::CommandPhase::Queued
+                                            },
+                                            n,
+                                            r,
+                                            c,
+                                        )
+                                    };
+                                    let pending = crate::timeout_watchdog::pending_count();
+                                    let inflight_now = (self.inflight_requests_limit
+                                        - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                                        as usize;
+                                    let p99 = self.latency_tracker.p99();
+                                    let cause = if phase == crate::timeout_watchdog::CommandPhase::Queued {
+                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                            queue_depth: pending,
+                                            scheduling_delay: actual_elapsed,
+                                        }
+                                    } else if pending > 100 {
+                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                            pending_total: pending,
+                                        }
+                                    } else {
+                                        crate::timeout_watchdog::TimeoutCause::ServerUnresponsive {
+                                            node: node.clone(),
+                                        }
+                                    };
+                                    timeout_cause = Some(cause.clone());
+                                    let event = crate::timeout_watchdog::TimeoutEvent {
+                                        cause,
+                                        command,
+                                        node,
+                                        phase,
+                                        configured_timeout: duration,
+                                        actual_elapsed,
+                                        pending_commands: pending,
+                                        recent_p99_latency: p99,
+                                        rss_bytes: crate::timeout_watchdog::get_rss(),
+                                        suggested_timeout: p99.map(|p| (p * 3).max(duration)),
+                                        inflight_at_register: inflight,
+                                        inflight_at_timeout: Some(inflight_now),
+                                        retry_count,
+                                    };
+
+                                    log_warn_rate_limited!(
+                                        "timeout_watchdog",
+                                        2,
+                                        event.to_string()
                                     );
-                                    value // Return original value on decompression failure
+                                    if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                        log_error(
+                                            "OpenTelemetry:timeout_error",
+                                            format!("Failed to record timeout error: {e}"),
+                                        );
+                                    }
+                                    Err(io::Error::from(io::ErrorKind::TimedOut).into())
                                 }
                             }
-                        } else {
-                            value // No request type found, return original value
                         }
-                    } else {
-                        value // No compression manager, return original value
-                    };
-                    convert_to_expected_type(processed_value, expected_type)
-                })?;
+                    }
+                }
+                None => {
+                    let owned_cmd = Arc::new(owned_cmd);
+                    let execute = Self::execute_command_owned(
+                        self_clone,
+                        owned_cmd,
+                        routing,
+                        client,
+                        compression_manager,
+                    );
+                    execute.await
+                }
+            };
 
-                // Intercept CLIENT SETNAME commands after regular processing
-                // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-                if self.is_client_set_name_command(cmd) {
-                    self.handle_client_set_name_command(cmd).await?;
-                }
-                // Intercept SELECT commands after regular processing
-                // Only handle SELECT commands if they executed successfully (no error)
-                if self.is_select_command(cmd) {
-                    self.handle_select_command(cmd).await?;
-                }
-                // Intercept AUTH commands after regular processing
-                // Only handle AUTH commands if they executed successfully (no error)
-                if self.is_auth_command(cmd) {
-                    self.handle_auth_command(cmd).await?;
-                }
-                // Intercept HELLO commands after regular processing
-                // Only handle HELLO commands if they executed successfully (no error)
-                if self.is_hello_command(cmd) {
-                    self.handle_hello_command(cmd).await?;
-                }
-                Ok(value)
-            })
-            .await?;
+            // Report result to client-wide circuit breaker
+            if let Some(cb) = &self.circuit_breaker {
+                let (is_error, error_kind) = match result.as_ref() {
+                    Ok(_) => (false, None),
+                    Err(e) => {
+                        let counts = if e.is_timeout() {
+                            cb.counts_timeouts()
+                        } else {
+                            matches!(
+                                e.kind(),
+                                ErrorKind::IoError
+                                    | ErrorKind::FatalSendError
+                                    | ErrorKind::FatalReceiveError
+                            ) || e.is_connection_dropped()
+                        };
+                        if counts {
+                            let kind_str = if e.is_timeout() {
+                                match &timeout_cause {
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                            ..
+                                        },
+                                    ) => "TimeoutSystemOverload",
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                            ..
+                                        },
+                                    ) => "TimeoutClientBackpressure",
+                                    _ => "TimeoutServerUnresponsive",
+                                }
+                            } else {
+                                match e.kind() {
+                                    ErrorKind::FatalSendError => "FatalSendError",
+                                    ErrorKind::FatalReceiveError => "FatalReceiveError",
+                                    _ => "IoError",
+                                }
+                            };
+                            (true, Some(kind_str))
+                        } else {
+                            (false, None)
+                        }
+                    }
+                };
+                let current_inflight = (self.inflight_requests_limit
+                    - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                    as u32;
+                cb.on_result(is_error, error_kind, current_inflight);
+            }
 
-            Ok(result)
+            result
         })
+    }
+
+    /// Execute a command on a provided dedicated connection (for isolated execution).
+    ///
+    /// Applies timeout, decompression, and IAM token refresh to the given
+    /// `MultiplexedConnection` instead of the client's internal managed connection.
+    ///
+    /// **Caller responsibilities (handled before invoking this function):**
+    /// - Compression on write: callers (e.g., `send_scope_command()`) must compress
+    ///   command arguments before building the `Cmd`.
+    /// - OpenTelemetry span creation/completion.
+    /// - Inflight request reservation (reject if exhausted).
+    ///
+    /// This separation keeps the function focused on execution concerns (timeout,
+    /// decompression, IAM) while callers own cross-cutting concerns that require
+    /// knowledge of the broader request lifecycle.
+    pub async fn send_command_on_connection(
+        &self,
+        cmd: &Cmd,
+        connection: &mut redis::aio::MultiplexedConnection,
+    ) -> RedisResult<Value> {
+        // IAM token refresh: if token rotated, re-authenticate this connection
+        if let Some(iam_manager) = &self.iam_token_manager
+            && iam_manager.token_changed()
+        {
+            let current_token = iam_manager.get_token().await;
+            if !current_token.is_empty() {
+                iam_manager.clear_token_changed();
+                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
+                connection.send_packed_command(&auth_cmd).await?;
+            }
+        }
+
+        // Compression on write: compress command args if compression is enabled
+
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+
+        // Send with timeout
+        let raw_value = match request_timeout {
+            Some(duration) => {
+                match tokio::time::timeout(duration, connection.send_packed_command(cmd)).await {
+                    Ok(result) => result?,
+                    Err(_) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                }
+            }
+            None => connection.send_packed_command(cmd).await?,
+        };
+
+        // Apply decompression if compression is enabled
+        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed) => decompressed,
+                    Err(e) => {
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        // Type conversion
+        let expected_type = expected_type_for_cmd(cmd);
+        convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Get the primary node address for a given hash slot (cluster mode).
+    /// Returns the host:port string for the primary that owns the slot.
+    /// Returns None in standalone mode or if the slot is unmapped.
+    ///
+    /// Used by isolated execution (Feature 2) to open scoped connections
+    /// directly to the correct node, avoiding MOVED redirects.
+    pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
+        let client = self.internal_client.read().await;
+        match &*client {
+            ClientWrapper::Cluster { client } => client.address_for_slot(slot),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this client is connected in cluster mode.
+    /// Used by scope connections to determine whether slot validation is needed.
+    pub async fn is_cluster_mode(&self) -> bool {
+        let client = self.internal_client.read().await;
+        matches!(&*client, ClientWrapper::Cluster { .. })
+    }
+
+    /// Returns the cache hit rate (hits / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.hit_rate()))
+    }
+
+    /// Returns the cache miss rate (misses / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.miss_rate()))
+    }
+
+    /// Returns the total number of cache entries.
+    /// Returns an error if caching is not enabled.
+    pub fn cache_entry_count(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+        Ok(Value::Int(cache.entry_count() as i64))
+    }
+
+    /// returns the total number of evictions that occurred in the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_evictions(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.evictions() as i64))
+    }
+
+    /// Returns the total number of cache lookups (hits + misses).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_total_lookups(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.total_lookups() as i64))
+    }
+
+    /// Returns the total number of expired entries that were removed from the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_expirations(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.expirations() as i64))
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -1154,10 +1755,11 @@ impl Client {
                             }
                             _ => {
                                 client
-                                    .req_packed_commands(
+                                    .route_pipeline(
                                         pipeline,
                                         0,
                                         command_count,
+                                        None,
                                         Some(pipeline_retry_strategy),
                                     )
                                     .await
@@ -1206,33 +1808,30 @@ impl Client {
         }
     }
 
-    pub fn reserve_inflight_request(&self) -> bool {
-        // We use this approach of checking the `inflight_requests_allowed` value
-        // twice, before and after decrementing, to prevent it from reaching negative
-        // values. Allowing the `inflight_requests_allowed` value to go below zero
-        // could lead to a race condition where tasks might not be able to run even
-        // when there are available slots.
-        if self.inflight_requests_allowed.load(Ordering::SeqCst) <= 0 {
-            false
-        } else {
-            // The value is being checked again because it might have changed
-            // during the intervening period since the load by other tasks.
-            if self
-                .inflight_requests_allowed
-                .fetch_sub(1, Ordering::SeqCst)
-                <= 0
-            {
-                self.inflight_requests_allowed
-                    .fetch_add(1, Ordering::SeqCst);
-                return false;
-            }
-            true
-        }
+    /// Reserve an inflight slot, returning a tracker whose Drop releases it.
+    /// Returns `None` if no slots available.
+    pub fn reserve_inflight_request(&self) -> Option<redis::cluster_async::InflightRequestTracker> {
+        redis::cluster_async::InflightRequestTracker::try_new(
+            self.inflight_requests_allowed.clone(),
+        )
     }
 
-    pub fn release_inflight_request(&self) -> isize {
-        self.inflight_requests_allowed
-            .fetch_add(1, Ordering::SeqCst)
+    /// Returns the current number of available inflight slots.
+    /// For testing/observability — the inflight limit minus this value equals
+    /// the number of commands currently held by the internal pipeline.
+    pub fn available_inflight_count(&self) -> isize {
+        self.inflight_requests_allowed.load(Ordering::Relaxed)
+    }
+
+    /// Returns true if the client-wide circuit breaker allows requests.
+    /// If CB is not configured, always returns true.
+    /// Fast path (Closed state) is a single atomic load. Open state may acquire a lock
+    /// to check if transition to HalfOpen is needed.
+    #[inline]
+    pub fn is_circuit_breaker_healthy(&self) -> bool {
+        self.circuit_breaker
+            .as_ref()
+            .is_none_or(|cb| cb.is_healthy())
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1281,10 +1880,7 @@ impl Client {
     /// Send AUTH command using IAM token (preferred) or the provided password
     async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
         // Determine the password to use for authentication
-        let pass = if let Some(iam_manager) = &self.iam_token_manager {
-            log_debug("send_immediate_auth", "Using IAM token for authentication");
-            iam_manager.get_token().await
-        } else if let Some(ref password) = password {
+        let pass = if let Some(ref password) = password {
             if password.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::UserOperationError,
@@ -1339,53 +1935,20 @@ impl Client {
         }
     }
 
-    /// IAM token refresh callback function
-    ///
-    /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
-    fn iam_callback(
-        client_arc: Arc<tokio::sync::RwLock<Client>>,
-    ) -> impl Fn(String) + Send + 'static {
-        move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
-            tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
-
-                if let Err(e) = result {
-                    log_error(
-                        "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
-                    );
-                }
-            });
-        }
-    }
-
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-        client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
-                // Set up callback to update connection password when token refreshes
-                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
-
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
-                    Some(std::sync::Arc::new(iam_callback)),
                 )
                 .await
                 {
@@ -1498,7 +2061,7 @@ fn eval_cmd(hash: &str, keys: &Vec<&[u8]>, args: &Vec<&[u8]>) -> Cmd {
     cmd
 }
 
-fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
+pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
     time_in_millis
         .map(|val| Duration::from_millis(val as u64))
         .unwrap_or(default)
@@ -1573,6 +2136,7 @@ async fn create_cluster_client(
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
     let connection_timeout = request.get_connection_timeout();
+    let address_resolver = &request.address_resolver;
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1582,6 +2146,7 @@ async fn create_cluster_client(
                 tls_mode,
                 valkey_connection_info.clone(),
                 tls_params.clone(),
+                address_resolver.as_ref(),
             )
         })
         .collect();
@@ -1596,6 +2161,7 @@ async fn create_cluster_client(
             ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az)
         }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
+        ReadFrom::AllNodes => ReadFromReplicaStrategy::AllNodes,
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
     if let Some(interval_duration) = periodic_topology_checks {
@@ -1603,6 +2169,8 @@ async fn create_cluster_client(
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
+    builder = builder.cache(valkey_connection_info.cache);
+    builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -1637,12 +2205,20 @@ async fn create_cluster_client(
 
     builder = builder.tcp_nodelay(request.tcp_nodelay);
 
+    // Pass the address resolver to the builder for use during topology refresh
+    if let Some(resolver) = address_resolver.clone() {
+        builder = builder.address_resolver(resolver);
+    }
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
+    let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
+        .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
+
     let mut con = client
-        .get_async_connection(push_sender, Some(pubsub_synchronizer))
+        .get_async_connection(push_sender, Some(pubsub_synchronizer), iam_token_provider)
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
@@ -1785,6 +2361,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
                     ReadFrom::AZAffinityReplicasAndPrimary(_) =>
                         "Prefer replica and primary in user's availability zone",
+                    ReadFrom::AllNodes => "All nodes (primary and replicas)",
                 }
             )
         })
@@ -1828,8 +2405,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let node_discovery_mode = match request.node_discovery_mode {
+        NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
+        NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
+        NodeDiscoveryMode::DiscoverAll => "\nNode discovery mode: DiscoverAll",
+    };
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}",
     )
 }
 
@@ -1886,6 +2469,16 @@ impl Client {
             _ => None,
         };
 
+        let client_side_cache = request.client_side_cache.as_ref().map(|config| {
+            get_or_create_cache(
+                &config.cache_id,
+                config.max_cache_kb,
+                config.entry_ttl_ms,
+                config.eviction_policy,
+                config.enable_metrics,
+            )
+        });
+
         tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1925,21 +2518,61 @@ impl Client {
             };
 
             // Create the Client first without IAM token manager
+            let inflight_limit: isize = inflight_requests_limit.try_into().unwrap();
+            let inflight_log_interval = (inflight_limit / 10).max(1);
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                inflight_requests_limit: inflight_limit,
+                inflight_log_interval,
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
                 otel_metadata,
+                client_side_cache,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
+                current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
+                    let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
+                    Arc::new(circuit_breaker::ClientCircuitBreaker::new(
+                        circuit_breaker::ClientCircuitBreakerConfig {
+                            window_size: Duration::from_millis(if config.window_size_ms > 0 {
+                                config.window_size_ms as u64
+                            } else {
+                                defaults.window_size.as_millis() as u64
+                            }),
+                            failure_rate_threshold: if config.failure_rate_threshold > 0.0 {
+                                config.failure_rate_threshold
+                            } else {
+                                defaults.failure_rate_threshold
+                            },
+                            min_errors: if config.min_errors > 0 {
+                                config.min_errors
+                            } else {
+                                defaults.min_errors
+                            },
+                            open_timeout: Duration::from_millis(if config.open_timeout_ms > 0 {
+                                config.open_timeout_ms as u64
+                            } else {
+                                defaults.open_timeout.as_millis() as u64
+                            }),
+                            count_timeouts: config.count_timeouts,
+                            consecutive_successes: if config.consecutive_successes > 0 {
+                                config.consecutive_successes
+                            } else {
+                                defaults.consecutive_successes
+                            },
+                        },
+                    ))
+                }),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager if needed, passing a strong Arc to the callback
+            // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
+                Self::create_iam_token_manager(auth_info).await
             } else {
                 None
             };
@@ -2019,6 +2652,45 @@ impl Client {
         self.compression_manager.clone()
     }
 
+    /// Returns the configured request timeout for this client.
+    pub fn get_request_timeout(&self) -> Duration {
+        self.request_timeout
+    }
+
+    /// Returns the current database the client is operating on.
+    /// Updated whenever SELECT is called. Scope connections use this to inherit
+    /// the parent's current database at acquire time.
+    pub fn current_database(&self) -> u32 {
+        self.current_database.load(Ordering::Acquire)
+    }
+
+    /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
+    pub fn latency_tracker(&self) -> &Arc<crate::timeout_watchdog::LatencyTracker> {
+        &self.latency_tracker
+    }
+
+    /// Reset connection state to a clean baseline after a pool borrow is returned.
+    ///
+    /// Sends a batched pipeline (single round-trip) that selectively issues:
+    /// - DISCARD — cancels any pending MULTI and implicitly UNWATCHes
+    /// - SELECT <configured_db> — resets to the pool's configured database
+    ///
+    /// DISCARD is always safe to send (returns ERR if no MULTI active — we ignore it).
+    /// SELECT is always sent to guarantee the connection is on the correct database.
+    ///
+    /// This ensures the next borrower gets a connection in a known-good state.
+    pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
+        // Send DISCARD — ignore ERR if no MULTI is active
+        let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
+
+        // Send SELECT — this must succeed
+        let mut select_cmd = redis::cmd("SELECT");
+        select_cmd.arg(configured_db.to_string());
+        self.send_command(&mut select_cmd, None).await?;
+
+        Ok(())
+    }
+
     /// Check if compression is enabled for this client
     ///
     /// # Returns
@@ -2090,6 +2762,39 @@ impl GlideClientForTests for ClusterConnection {
     }
 }
 
+impl Client {
+    /// Create a Client wrapping an existing internal_client Arc and synchronizer.
+    /// Used in tests to build a Client that shares state with an existing connection.
+    #[cfg(feature = "test-util")]
+    pub fn new_for_test(
+        internal_client: Arc<RwLock<ClientWrapper>>,
+        pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    ) -> Self {
+        use crate::client::types::{NodeAddress, OTelMetadata};
+        Client {
+            internal_client,
+            request_timeout: Duration::from_millis(1000),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
+            iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
+            client_side_cache: None,
+            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+            circuit_breaker: None,
+            current_database: Arc::new(AtomicU32::new(0)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -2099,6 +2804,7 @@ mod tests {
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
+        is_blocking_command,
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
@@ -2194,10 +2900,9 @@ mod tests {
     fn test_get_request_timeout_with_blocking_command_returns_cmd_arg_timeout() {
         let mut cmd = Cmd::new();
         cmd.arg("BLPOP").arg("key1").arg("key2").arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 500.0 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2205,10 +2910,9 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("BLOCK").arg("500").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2216,10 +2920,9 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("BLMPOP").arg("0.857").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.857 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2227,29 +2930,43 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("WAIT").arg(1).arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(500));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(500)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
         );
+
+        // WAITAOF
+        let mut cmd = Cmd::new();
+        cmd.arg("WAITAOF").arg(1).arg(1).arg("500");
+        let result = get_request_timeout(&cmd, Duration::from_millis(500)).unwrap();
+        assert_eq!(
+            result,
+            Some(Duration::from_secs_f64(
+                0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
+            ))
+        );
+
+        // Infinite block (0) — returns None (no client timeout)
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("0");
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, None);
     }
 
     #[test]
     fn test_get_request_timeout_non_blocking_command_returns_default_timeout() {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value").arg("PX").arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, Some(Duration::from_millis(100)));
 
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, Some(Duration::from_millis(100)));
     }
 
     #[test]
@@ -2325,6 +3042,7 @@ mod tests {
         use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
+        use std::sync::atomic::AtomicU32;
         use tokio::sync::RwLock;
 
         let config = ConnectionRequest {
@@ -2359,6 +3077,8 @@ mod tests {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
@@ -2369,6 +3089,10 @@ mod tests {
                 },
                 db_namespace: "0".to_string(),
             },
+            client_side_cache: None,
+            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+            circuit_breaker: None,
+            current_database: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -2559,5 +3283,215 @@ mod tests {
         assert_eq!(username, None);
         assert_eq!(password, None);
         assert_eq!(client_name, None);
+    }
+
+    // ===== Edge case tests for blocking command timeout detection =====
+
+    #[test]
+    fn test_blocking_command_infinite_block_returns_none() {
+        // BLPOP key 0 — infinite block → no client timeout
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("0");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            None
+        );
+
+        // XREAD BLOCK 0 — infinite block
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("BLOCK")
+            .arg("0")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_blocking_timeout_extends_beyond_block_duration() {
+        // BLPOP key 5 — blocks 5s, timeout should be 5s + extension
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("5");
+        let result = get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap();
+        let expected = Duration::from_secs_f64(5.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(result, Some(expected));
+        assert!(expected > Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_non_blocking_command_uses_default_timeout() {
+        for cmd_name in &["SET", "GET", "DEL", "HGET", "LPUSH", "SADD", "PING"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(*cmd_name).arg("key");
+            let result = get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap();
+            assert_eq!(
+                result,
+                Some(Duration::from_millis(1000)),
+                "{cmd_name} should use default timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn test_waitaof_detected_as_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("WAITAOF").arg(1).arg(1).arg("3000");
+        let expected = Duration::from_secs_f64(3.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_wait_detected_as_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg(1).arg("5000");
+        let expected = Duration::from_secs_f64(5.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_xread_without_block_is_not_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("COUNT")
+            .arg("10")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(Duration::from_millis(1000))
+        );
+    }
+
+    #[test]
+    fn test_blocking_fractional_seconds() {
+        let mut cmd = Cmd::new();
+        cmd.arg("BLMPOP").arg("0.857").arg("key");
+        let expected = Duration::from_secs_f64(0.857 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(100)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_all_blocking_commands_detected() {
+        let blocking_cmds: Vec<(&str, Vec<&str>)> = vec![
+            ("BLPOP", vec!["key", "5"]),
+            ("BRPOP", vec!["key", "5"]),
+            ("BLMOVE", vec!["src", "dst", "LEFT", "RIGHT", "5"]),
+            ("BZPOPMAX", vec!["key", "5"]),
+            ("BZPOPMIN", vec!["key", "5"]),
+            ("BRPOPLPUSH", vec!["src", "dst", "5"]),
+            ("BLMPOP", vec!["5", "1", "key"]),
+            ("BZMPOP", vec!["5", "1", "key", "MIN"]),
+            ("WAIT", vec!["1", "5000"]),
+            ("WAITAOF", vec!["1", "1", "5000"]),
+        ];
+
+        for (cmd_name, args) in blocking_cmds {
+            let mut cmd = Cmd::new();
+            cmd.arg(cmd_name);
+            for a in &args {
+                cmd.arg(*a);
+            }
+            let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+            assert!(
+                result.is_some(),
+                "{cmd_name} should be detected as blocking"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_reset_command() {
+        let client = create_test_client();
+
+        let mut cmd = Cmd::new();
+        cmd.arg("RESET");
+        assert!(client.is_reset_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_reset_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command() {
+        // Always-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("BRPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg("1").arg("5000");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("BLOCK")
+            .arg("5000")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("COUNT")
+            .arg("10")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(!is_blocking_command(&cmd));
+
+        // XREADGROUP with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("BLOCK")
+            .arg("0")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(is_blocking_command(&cmd));
+
+        // XREADGROUP without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(!is_blocking_command(&cmd));
+
+        // Non-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+        assert!(!is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!is_blocking_command(&cmd));
     }
 }

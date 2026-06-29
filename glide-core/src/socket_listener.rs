@@ -253,6 +253,9 @@ async fn write_result(
                     RequestErrorType::ExecAbort => response::RequestErrorType::ExecAbort,
                     RequestErrorType::Timeout => response::RequestErrorType::Timeout,
                     RequestErrorType::Disconnect => response::RequestErrorType::Disconnect,
+                    RequestErrorType::CircuitBreakerOpen => {
+                        response::RequestErrorType::CircuitBreakerOpen
+                    }
                 }
                 .into(),
                 message: error_message.into(),
@@ -337,14 +340,27 @@ async fn send_command(
     }
 
     // Process command arguments for compression if compression is enabled
-    if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
-        log_warn(
-            "send_command",
-            format!(
-                "Compression processing failed: {}, continuing with original command",
-                compression_error
-            ),
-        );
+    // This also validates that the command is compatible with compression
+    // Note: We intentionally keep these as separate if statements for clarity:
+    // - First check: is compression enabled?
+    // - Second check: did compression processing fail?
+    // - Third check: is it an incompatible command error?
+    #[allow(clippy::collapsible_if)]
+    if client.is_compression_enabled() {
+        if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
+            // Incompatible command errors should be returned to the user
+            if compression_error.is_incompatible_command() {
+                return Err(ClientUsageError::User(compression_error.to_string()));
+            }
+            // For other compression errors (e.g., compression failed), log and continue
+            log_warn(
+                "send_command",
+                format!(
+                    "Compression processing failed: {}, continuing with original command",
+                    compression_error
+                ),
+            );
+        }
     }
 
     client
@@ -370,8 +386,6 @@ fn process_batch_response_for_decompression(
     response: redis::Value,
     client: &Client,
 ) -> Result<redis::Value, crate::compression::CompressionError> {
-    use redis::Value;
-
     // Get compression manager from client
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
@@ -381,32 +395,7 @@ fn process_batch_response_for_decompression(
         return Ok(response);
     };
 
-    if !manager.is_enabled() {
-        return Ok(response);
-    }
-
-    // Process based on response type
-    match response {
-        Value::Array(responses) => {
-            // Process each response using the existing decompression function
-            let mut processed_responses = Vec::with_capacity(responses.len());
-            for response in responses {
-                let processed_response = match crate::compression::decompress_single_value_response(
-                    response.clone(),
-                    manager,
-                ) {
-                    Ok(decompressed) => decompressed,
-                    Err(_) => response, // Return original on error
-                };
-                processed_responses.push(processed_response);
-            }
-
-            Ok(Value::Array(processed_responses))
-        }
-
-        // For non-array responses, try to decompress directly
-        other => crate::compression::decompress_single_value_response(other, manager),
-    }
+    crate::compression::decompress_batch_response(response, manager)
 }
 
 fn process_command_for_compression(
@@ -416,6 +405,14 @@ fn process_command_for_compression(
     // Get the compression manager from the client
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
+
+    // If compression is not enabled, skip all processing
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
 
     // Collect all arguments first to avoid borrowing issues
     let all_args: Vec<Vec<u8>> = cmd
@@ -437,8 +434,40 @@ fn process_command_for_compression(
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
         "SET" => crate::request_type::RequestType::Set,
-        _ => return Ok(()), // Unknown command, no compression needed
+        "MSET" => crate::request_type::RequestType::MSet,
+        "MSETNX" => crate::request_type::RequestType::MSetNX,
+        "SETEX" => crate::request_type::RequestType::SetEx,
+        "PSETEX" => crate::request_type::RequestType::PSetEx,
+        "SETNX" => crate::request_type::RequestType::SetNX,
+        // Incompatible commands - string manipulation
+        "APPEND" => crate::request_type::RequestType::Append,
+        "GETRANGE" => crate::request_type::RequestType::GetRange,
+        "SETRANGE" => crate::request_type::RequestType::SetRange,
+        "STRLEN" => crate::request_type::RequestType::Strlen,
+        "LCS" => crate::request_type::RequestType::LCS,
+        "SUBSTR" => crate::request_type::RequestType::Substr,
+        // Incompatible commands - numeric operations
+        "INCR" => crate::request_type::RequestType::Incr,
+        "INCRBY" => crate::request_type::RequestType::IncrBy,
+        "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
+        "DECR" => crate::request_type::RequestType::Decr,
+        "DECRBY" => crate::request_type::RequestType::DecrBy,
+        // Incompatible commands - bit operations
+        "GETBIT" => crate::request_type::RequestType::GetBit,
+        "SETBIT" => crate::request_type::RequestType::SetBit,
+        "BITCOUNT" => crate::request_type::RequestType::BitCount,
+        "BITPOS" => crate::request_type::RequestType::BitPos,
+        "BITFIELD" => crate::request_type::RequestType::BitField,
+        "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
+        "BITOP" => crate::request_type::RequestType::BitOp,
+        _ => return Ok(()), // Unknown command, no compression processing needed
     };
+
+    // Check if the command is incompatible with compression - this should error out
+    crate::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
@@ -536,8 +565,13 @@ async fn send_batch(
         let mut redis_cmd = get_redis_command(&command)?;
 
         // Apply compression to command arguments if needed
+        // This also validates that the command is compatible with compression
         if let Err(e) = process_command_for_compression(&mut redis_cmd, client) {
-            // Log compression error but continue with uncompressed command
+            // Incompatible command errors should be returned to the user
+            if e.is_incompatible_command() {
+                return Err(ClientUsageError::User(e.to_string()));
+            }
+            // Log other compression errors but continue with uncompressed command
             log_warn(
                 "batch_command_compression",
                 format!("Failed to compress batch command arguments: {}", e),
@@ -672,114 +706,150 @@ fn get_route(
 
 fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        let mut updated_inflight_counter = true;
-        let client_clone = client.clone();
-
-        let result = match client.reserve_inflight_request() {
-            false => {
-                updated_inflight_counter = false;
-                Err(ClientUsageError::User(
-                    "Reached maximum inflight requests".to_string(),
-                ))
-            }
-            true => match request.command {
-                Some(action) => match action {
-                    command_request::Command::ClusterScan(cluster_scan_command) => {
-                        //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
-                        cluster_scan(cluster_scan_command, client).await
-                    }
-                    command_request::Command::SingleCommand(command) => {
-                        match get_redis_command(&command) {
-                            Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
-                                Ok(routes) => {
-                                    cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
-                                    send_command(cmd, client, routes).await
-                                }
-                                Err(e) => Err(e),
-                            },
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::Batch(batch) => {
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_command_span =
-                                    get_unsafe_span_from_ptr(request.root_span_ptr);
-                                send_batch(batch, &mut client, routes, otel_command_span).await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::ScriptInvocation(script) => {
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
-                                invoke_script(
-                                    script.hash,
-                                    Some(script.keys),
-                                    Some(script.args),
-                                    client,
-                                    routes,
-                                    otel_span,
-                                )
-                                .await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::ScriptInvocationPointers(script) => {
-                        let keys = script
-                            .keys_pointer
-                            .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                        let args = script
-                            .args_pointer
-                            .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
-                                invoke_script(script.hash, keys, args, client, routes, otel_span)
-                                    .await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::UpdateConnectionPassword(
-                        update_connection_password_command,
-                    ) => client
-                        .update_connection_password(
-                            update_connection_password_command
-                                .password
-                                .map(|chars| chars.to_string()),
-                            update_connection_password_command.immediate_auth,
-                        )
-                        .await
-                        .map_err(|err| err.into()),
-
-                    command_request::Command::RefreshIamToken(_refresh) => client
-                        .refresh_iam_token()
-                        .await
-                        .map(|_| Value::SimpleString("OK".into()))
-                        .map_err(|err| err.into()),
-                },
+        // send_command() manages its own inflight tracking via InflightRequestTracker
+        // on the Cmd. All other paths (batch, pipeline, cluster_scan, script,
+        // update_password, refresh_iam) need inflight reservation at this level.
+        // The tracker's Drop releases the slot automatically.
+        let _inflight_guard = if !matches!(
+            &request.command,
+            Some(command_request::Command::SingleCommand(_))
+        ) {
+            match client.reserve_inflight_request() {
+                Some(tracker) => Some(tracker),
                 None => {
-                    log_debug(
-                        "received error",
-                        format!(
-                            "Received empty request for callback {}",
-                            request.callback_idx
-                        ),
-                    );
-                    Err(ClientUsageError::Internal(
-                        "Received empty request".to_string(),
-                    ))
+                    let _res = write_result(
+                        Err(ClientUsageError::User(
+                            "Reached maximum inflight requests".to_string(),
+                        )),
+                        request.callback_idx,
+                        &writer,
+                        request.root_span_ptr,
+                    )
+                    .await;
+                    return;
                 }
-            },
+            }
+        } else {
+            None
         };
 
-        if updated_inflight_counter {
-            client_clone.release_inflight_request();
-        }
+        let result = match request.command {
+            Some(action) => match action {
+                command_request::Command::ClusterScan(cluster_scan_command) => {
+                    //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
+                    cluster_scan(cluster_scan_command, client).await
+                }
+                command_request::Command::SingleCommand(command) => {
+                    match get_redis_command(&command) {
+                        Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
+                            Ok(routes) => {
+                                cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
+                                send_command(cmd, client, routes).await
+                            }
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::Batch(batch) => match get_route(request.route.0, None) {
+                    Ok(routes) => {
+                        let otel_command_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                        send_batch(batch, &mut client, routes, otel_command_span).await
+                    }
+                    Err(e) => Err(e),
+                },
+                command_request::Command::ScriptInvocation(script) => {
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => {
+                            let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                            invoke_script(
+                                script.hash,
+                                Some(script.keys),
+                                Some(script.args),
+                                client,
+                                routes,
+                                otel_span,
+                            )
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::ScriptInvocationPointers(script) => {
+                    let keys = script
+                        .keys_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    let args = script
+                        .args_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => {
+                            let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                            invoke_script(script.hash, keys, args, client, routes, otel_span).await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::UpdateConnectionPassword(
+                    update_connection_password_command,
+                ) => client
+                    .update_connection_password(
+                        update_connection_password_command
+                            .password
+                            .map(|chars| chars.to_string()),
+                        update_connection_password_command.immediate_auth,
+                    )
+                    .await
+                    .map_err(|err| err.into()),
 
+                command_request::Command::RefreshIamToken(_refresh) => client
+                    .refresh_iam_token()
+                    .await
+                    .map(|_| Value::SimpleString("OK".into()))
+                    .map_err(|err| err.into()),
+
+                command_request::Command::GetCacheMetrics(get_cache_metrics) => {
+                    let metrics_type = get_cache_metrics.metrics_types.enum_value().map_err(|_| {
+                        ClientUsageError::Internal("Invalid cache metrics type".to_string())
+                    });
+                    match metrics_type {
+                        Ok(crate::command_request::CacheMetricsType::HitRate) => {
+                            client.cache_hit_rate().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::MissRate) => {
+                            client.cache_miss_rate().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::EntryCount) => {
+                            client.cache_entry_count().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::Evictions) => {
+                            client.cache_evictions().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::Expirations) => {
+                            client.cache_expirations().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::TotalLookups) => {
+                            client.cache_total_lookups().map_err(|err| err.into())
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+            },
+            None => {
+                log_debug(
+                    "received error",
+                    format!(
+                        "Received empty request for callback {}",
+                        request.callback_idx
+                    ),
+                );
+                Err(ClientUsageError::Internal(
+                    "Received empty request".to_string(),
+                ))
+            }
+        };
+
+        // _inflight_guard is dropped here, releasing the slot automatically.
         let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
     });
 }
@@ -834,7 +904,24 @@ async fn create_client(
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into(), push_tx).await {
+    // Extract the address resolver key before converting (protobuf field won't survive into())
+    let resolver_key = request
+        .address_resolver_key
+        .as_ref()
+        .filter(|k| !k.is_empty())
+        .map(|k| k.to_string());
+
+    let mut conn_request: crate::client::ConnectionRequest = request.into();
+
+    // Look up the address resolver from the global registry using the key
+    // provided in the connection request.
+    if let Some(key) = resolver_key
+        && let Some(resolver) = crate::address_resolver_registry::remove(&key)
+    {
+        conn_request.address_resolver = Some(resolver);
+    }
+
+    let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };

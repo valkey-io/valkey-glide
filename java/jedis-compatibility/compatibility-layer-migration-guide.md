@@ -75,6 +75,7 @@ blockingSocketTimeoutMillis
 - ✅ Wait operations (WAIT, WAITAOF)
 - ✅ Object introspection (OBJECT ENCODING, OBJECT FREQ, OBJECT IDLETIME, OBJECT REFCOUNT)
 - ✅ Geospatial operations (GEOADD, GEOPOS, GEODIST, GEOHASH, GEOSEARCH, GEOSEARCHSTORE)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscriptions and message delivery, use the GLIDE Java client directly (`GlideClient` / `GlideClusterClient`): `subscribe`, `psubscribe`, `ssubscribe`, and the matching `unsubscribe` / `punsubscribe` / `sunsubscribe` methods declared on `glide.api.commands.PubSubBaseCommands` and `glide.api.commands.PubSubClusterCommands`.
 - ✅ Connection commands (PING, ECHO, SELECT, CLIENT ID, CLIENT GETNAME)
 - ✅ Server management commands (INFO, CONFIG GET/SET/REWRITE/RESETSTAT, DBSIZE, FLUSHDB, FLUSHALL, TIME, LASTSAVE, LOLWUT)
 - ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
@@ -87,8 +88,8 @@ blockingSocketTimeoutMillis
 ### Client Types
 - ✅ Basic Jedis client
 - ✅ Simple connection configurations
-- ⚠️ JedisPool (limited support)
-- ⚠️ JedisPooled (limited support)
+- ✅ **JedisPool** (standalone): Core Jedis-style pooling — `getResource()`, try-with-resources / `close()`, `Pool#returnBrokenResource`, broken vs healthy return, `GenericObjectPoolConfig` honored via Commons Pool 2. Each pooled `Jedis` uses its own GLIDE `GlideClient` (not a shared TCP connection like classic Jedis).
+- ⚠️ **JedisPooled** (limited support): API compatibility; internal GLIDE connection management differs from upstream Jedis.
 
 ### Configuration
 - ✅ Host and port configuration
@@ -100,12 +101,13 @@ blockingSocketTimeoutMillis
 ## Drawbacks and Unsupported Features
 
 ### Connection Management
-- **JedisPool advanced configurations**: Complex pool settings not fully supported
-- **JedisPooled**: Advanced pooled connection features unavailable
-- **Connection pooling**: Native Jedis pooling mechanisms not implemented
+- **JedisSentinelPool / Sentinel**: Not provided by this compatibility layer (use GLIDE topology configuration outside Jedis APIs if needed).
+- **JedisPooled**: Advanced pooled-connection features from upstream Jedis may differ or be no-ops where GLIDE owns connection lifecycle.
+- **Architecture note**: Standalone `JedisPool` maps each pool slot to one `GlideClient`; this matches Jedis call patterns but not necessarily the same resource usage as socket-per-connection Jedis.
 - **Failover configurations**: Jedis-specific failover logic not supported
 
 ### Advanced Features
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported (see [issue #5469](https://github.com/valkey-io/valkey-glide/issues/5469) for planned support). For message handling, use `GlideClient` / `GlideClusterClient` with the Pub/Sub command APIs in `PubSubBaseCommands` / `PubSubClusterCommands` and the client's documented subscription and message-delivery options (callbacks or queued messages). The compatibility layer provides `publish()` and `pubsub*()` introspection commands only.
 - ⚠️ **Transactions**: Basic MULTI/EXEC/DISCARD/WATCH/UNWATCH supported, but with limitations:
   - After `multi()`, you must use the returned **Transaction** object to queue commands (e.g. `t.set()`, `t.get()`). Calling `jedis.set()` or other Jedis methods directly does **not** queue to the transaction.
   - For commands not yet exposed on `Transaction`, or for pipeline (non-atomic) batching, use the native GLIDE Batch API with the same connection.
@@ -141,7 +143,7 @@ blockingSocketTimeoutMillis
 - **Client certificates**: SSL client certificate authentication not supported in compatibility layer
 - **SSL protocols and cipher suites**: Advanced SSL protocol settings cannot be automatically converted
 - **Custom serializers**: Jedis serialization options not supported
-- **Connection validation**: Jedis connection health checks unavailable
+- **Connection validation**: When Commons Pool validation is enabled (e.g. `testOnBorrow`), `GlideJedisFactory#validateObject` uses `PING`; tune pool config as needed.
 - **Retry mechanisms**: Jedis-specific retry logic not implemented
 
 ### Cluster Support

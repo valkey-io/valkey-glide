@@ -13,6 +13,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTInfoOptions;
 import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
@@ -71,6 +72,30 @@ public class FT {
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
      *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
+     * ).get();
+     *
+     * // Create a text search index with all 1.2 options:
+     * // TextField: noStem=true, weight=2.0, withSuffixTrie=true, noSuffixTrie=false, sortable=true
+     * // NumericField and TagField: sortable=true
+     * // Note: noStopWords and stopWords are mutually exclusive; withOffsets and noOffsets are
+     * // mutually exclusive; withSuffixTrie and noSuffixTrie are mutually exclusive.
+     * FT.create(client, "text_idx",
+     *     new FieldInfo[] {
+     *         new FieldInfo("title", new TextField(true, 2.0, true, false, true)),
+     *         new FieldInfo("price", new NumericField(true)),
+     *         new FieldInfo("category", new TagField(',', false, true)),
+     *     },
+     *     FTCreateOptions.builder()
+     *         .dataType(DataType.HASH)
+     *         .prefixes(new String[] {"product:"})
+     *         .score(1.0)
+     *         .language("english")
+     *         .skipInitialScan(true)
+     *         .minStemSize(4)
+     *         .withOffsets(true)
+     *         .stopWords(new String[] {"the", "a", "is"})
+     *         .punctuation(".,;!?")
+     *         .build()
      * ).get();
      * }</pre>
      */
@@ -162,21 +187,35 @@ public class FT {
      * @return A two element array, where first element is count of documents in result set, and the
      *     second element, which has format <code>
      *     {@literal Map<GlideString, Map<GlideString, GlideString>>}</code> - a mapping between
-     *     document names and map of their attributes.<br>
+     *     document names and map of their attributes. When {@link
+     *     FTSearchOptions.FTSearchOptionsBuilder#nocontent()} is set, the attribute maps will be
+     *     empty.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.
      * @example
      *     <pre>{@code
+     * // Vector search example:
      * byte[] vector = new byte[24];
      * Arrays.fill(vector, (byte) 0);
      * var result = FT.search(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]",
      *         FTSearchOptions.builder().params(Map.of(gs("query_vec"), gs(vector))).build())
      *     .get();
-     * assertArrayEquals(result, new Object[] { 2L, Map.of(
-     *     gs("json:2"), Map.of(gs("__VEC_score"), gs("11.1100006104"), gs("$"), gs("{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}")),
-     *     gs("json:0"), Map.of(gs("__VEC_score"), gs("91"), gs("$"), gs("{\"vec\":[1,2,3,4,5,6]}")))
-     * });
+     *
+     * // Text search with all options:
+     * // Note: withSortKeys requires SORTBY; shardScope/consistency are cluster-mode options.
+     * var result = FT.search(client, "myIndex", "hello world",
+     *         FTSearchOptions.builder()
+     *             .verbatim()
+     *             .inorder()
+     *             .slop(1)
+     *             .sortBy("price", FTSearchOptions.SortOrder.ASC)
+     *             .withSortKeys()
+     *             .shardScope(FTSearchOptions.ShardScope.ALLSHARDS)
+     *             .consistency(FTSearchOptions.ConsistencyMode.CONSISTENT)
+     *             .dialect(2)
+     *             .build())
+     *     .get();
      * }</pre>
      */
     public static CompletableFuture<Object[]> search(
@@ -385,6 +424,16 @@ public class FT {
      *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
      *     )
      * };
+     *
+     * // Aggregate with all query flags:
+     * FTAggregateOptions opts12 = FTAggregateOptions.builder()
+     *     .loadAll()
+     *     .verbatim()
+     *     .inorder()
+     *     .slop(1)
+     *     .dialect(2)
+     *     .build();
+     * FT.aggregate(client, "myIndex", "@score:[20 +inf]", opts12).get();
      * }</pre>
      */
     public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
@@ -649,6 +698,51 @@ public class FT {
             return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
         return FT.<Map<GlideString, Object>>executeCommand(
                         client, new GlideString[] {gs("FT.INFO"), indexName}, true)
+                .thenApply(
+                        map ->
+                                map.entrySet().stream()
+                                        .collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)));
+    }
+
+    /**
+     * Returns information about a given index with additional options.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Additional parameters for the command - see {@link FTInfoOptions}.
+     * @return Nested maps with info about the index.
+     * @example
+     *     <pre>{@code
+     * // Get local index info:
+     * Map<String, Object> info = FT.info(client, "myIndex",
+     *     new FTInfoOptions(FTInfoOptions.InfoScope.LOCAL)).get();
+     *
+     * // Get cluster-wide info (requires coordinator):
+     * Map<String, Object> clusterInfo = FT.info(client, "myIndex",
+     *     new FTInfoOptions(FTInfoOptions.InfoScope.PRIMARY,
+     *         FTInfoOptions.ShardScope.ALLSHARDS,
+     *         FTInfoOptions.ConsistencyMode.CONSISTENT)).get();
+     * }</pre>
+     */
+    public static CompletableFuture<Map<String, Object>> info(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FTInfoOptions options) {
+        return info(client, gs(indexName), options);
+    }
+
+    /**
+     * Returns information about a given index with additional options.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Additional parameters for the command - see {@link FTInfoOptions}.
+     * @return Nested maps with info about the index.
+     */
+    public static CompletableFuture<Map<String, Object>> info(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull FTInfoOptions options) {
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {gs("FT.INFO"), indexName}, options.toArgs());
+        if (client instanceof GlideClusterClient) return executeCommand(client, args, true);
+        return FT.<Map<GlideString, Object>>executeCommand(client, args, true)
                 .thenApply(
                         map ->
                                 map.entrySet().stream()

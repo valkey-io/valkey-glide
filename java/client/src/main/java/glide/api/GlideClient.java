@@ -1,14 +1,20 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.BgRewriteAof;
+import static command_request.CommandRequestOuterClass.RequestType.BgSave;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -23,9 +29,20 @@ import static command_request.CommandRequestOuterClass.RequestType.GetSubscripti
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
+import static command_request.CommandRequestOuterClass.RequestType.Reset;
+import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
@@ -46,8 +63,11 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
@@ -58,6 +78,7 @@ import glide.api.models.configuration.PubSubState;
 import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
+import glide.api.models.scope.IsolatedScope;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
@@ -85,6 +106,48 @@ public class GlideClient extends BaseClient
     /** Constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientBuilder builder) {
         super(builder);
+    }
+
+    /**
+     * Creates a GlideClient that wraps an existing native handle from the pool.
+     *
+     * <p>The pool's Rust side creates the actual connection and registers it in the JNI handle table.
+     * This factory wires up the Java command dispatch chain so that commands flow through the
+     * existing native bridge.
+     *
+     * @param nativeHandle the native client handle (same as client_id from pool)
+     * @param maxInflight max inflight requests (0 = use core defaults)
+     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
+     * @return a fully-functional GlideClient backed by the pool connection
+     */
+    public static GlideClient fromPoolHandle(
+            long nativeHandle, int maxInflight, long requestTimeoutMs) {
+        glide.internal.GlideCoreClient coreClient =
+                new glide.internal.GlideCoreClient(nativeHandle, maxInflight, requestTimeoutMs);
+        glide.managers.CommandManager commandManager = new glide.managers.CommandManager(coreClient);
+        glide.managers.ConnectionManager connectionManager = new glide.managers.ConnectionManager();
+        glide.connectors.handlers.MessageHandler messageHandler =
+                new glide.connectors.handlers.MessageHandler(
+                        java.util.Optional.empty(),
+                        java.util.Optional.empty(),
+                        new glide.managers.BaseResponseResolver(
+                                pointer -> {
+                                    if (pointer == null || pointer == 0) return null;
+                                    return glide.ffi.resolvers.GlideValueResolver.valueFromPointer(pointer);
+                                }));
+
+        GlideClient client =
+                new GlideClient(
+                        new ClientBuilder(
+                                connectionManager, commandManager, messageHandler, java.util.Optional.empty()));
+
+        try {
+            glide.internal.GlideCoreClient.registerClient(nativeHandle, client);
+        } catch (Throwable t) {
+            // Non-fatal: push delivery won't work but commands will
+        }
+
+        return client;
     }
 
     /**
@@ -136,6 +199,54 @@ public class GlideClient extends BaseClient
         return BaseClient.createClient(config, GlideClient::new);
     }
 
+    /**
+     * Acquire an isolated scope (dedicated connection) for operations requiring per-connection server
+     * state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands).
+     *
+     * <p>The returned {@link IsolatedScope} borrows a connection from the client's internal scope
+     * pool. Commands on the scope bypass the multiplexer. Use try-with-resources to ensure the scope
+     * is returned to the pool.
+     *
+     * @param timeout maximum time to wait for a scope to become available
+     * @return a Future resolving to an {@link IsolatedScope}
+     */
+    public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
+        long clientId = connectionManager.getNativeClientHandle();
+        byte[] connBytes = connectionManager.getConnectionRequestBytes();
+        if (connBytes == null) {
+            CompletableFuture<IsolatedScope> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("Client not connected"));
+            return f;
+        }
+
+        long timeoutMs = timeout.toMillis();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    while (true) {
+                        long scopeId =
+                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(clientId, connBytes);
+                        if (scopeId >= 0) {
+                            return new IsolatedScope(scopeId, clientId);
+                        }
+                        // Pool exhausted — retry with backoff until deadline
+                        long remaining = deadline - System.currentTimeMillis();
+                        if (remaining <= 0) {
+                            throw new java.util.concurrent.CompletionException(
+                                    new java.util.concurrent.TimeoutException(
+                                            "Timed out waiting for isolated scope (pool exhausted)"));
+                        }
+                        try {
+                            Thread.sleep(Math.min(10, remaining));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new java.util.concurrent.CompletionException(e);
+                        }
+                    }
+                });
+    }
+
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
         return commandManager.submitCustomCommand(args, this::handleObjectOrNullResponse);
@@ -183,7 +294,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Ping, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -200,7 +311,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> info() {
-        return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Info, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -218,26 +329,57 @@ public class GlideClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> clientPause(long timeout) {
+        return commandManager.submitNewCommand(
+                ClientPause, new String[] {Long.toString(timeout)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout, @NonNull ClientPauseMode mode) {
+        return commandManager.submitNewCommand(
+                ClientPause,
+                new String[] {Long.toString(timeout), mode.getValkeyApi()},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientUnpause() {
+        return commandManager.submitNewCommand(
+                ClientUnpause, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> reset() {
+        return commandManager.submitNewCommand(Reset, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> clientId() {
-        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(ClientId, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<String> clientGetName() {
         return commandManager.submitNewCommand(
-                ClientGetName, new String[0], this::handleStringOrNullResponse);
+                ClientGetName, EMPTY_STRING_ARRAY, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 
     @Override
     public CompletableFuture<String> configRewrite() {
         return commandManager.submitNewCommand(
-                ConfigRewrite, new String[0], this::handleStringResponse);
+                ConfigRewrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> configResetStat() {
         return commandManager.submitNewCommand(
-                ConfigResetStat, new String[0], this::handleStringResponse);
+                ConfigResetStat, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -266,17 +408,48 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
-                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+                Time,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<Long> lastsave() {
-        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(LastSave, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> save() {
+        return commandManager.submitNewCommand(Save, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> bgsave() {
+        return commandManager.submitNewCommand(BgSave, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> bgsaveSchedule() {
+        return commandManager.submitNewCommand(
+                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> bgsaveCancel() {
+        return commandManager.submitNewCommand(
+                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> bgrewriteaof() {
+        return commandManager.submitNewCommand(
+                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -287,7 +460,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushdb() {
-        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(FlushDB, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -298,7 +471,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -327,7 +500,57 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> dbsize() {
-        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(DBSize, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover() {
+        return commandManager.submitNewCommand(
+                FailOver, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover(@NonNull FailoverOptions options) {
+        return commandManager.submitNewCommand(FailOver, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaof(@NonNull String host, int port) {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {host, Integer.toString(port)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaofNoOne() {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {"NO", "ONE"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> latencyHistory(@NonNull String event) {
+        return commandManager.submitNewCommand(
+                LatencyHistory,
+                new String[] {event},
+                response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> latencyLatest() {
+        return commandManager.submitNewCommand(
+                LatencyLatest,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset() {
+        return commandManager.submitNewCommand(
+                LatencyReset, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull String[] events) {
+        return commandManager.submitNewCommand(LatencyReset, events, this::handleLongResponse);
     }
 
     @Override
@@ -352,7 +575,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : EMPTY_STRING_ARRAY,
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -391,7 +614,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> functionFlush() {
         return commandManager.submitNewCommand(
-                FunctionFlush, new String[0], this::handleStringResponse);
+                FunctionFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -435,7 +658,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcall(@NonNull String function) {
-        return fcall(function, new String[0], new String[0]);
+        return fcall(function, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
     }
 
     @Override
@@ -446,7 +669,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
-        return fcallReadOnly(function, new String[0], new String[0]);
+        return fcallReadOnly(function, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
     }
 
     @Override
@@ -457,14 +680,15 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
                 FunctionStats,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> handleFunctionStatsResponse(response, false).getMultiValue());
     }
 
@@ -479,13 +703,13 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> unwatch() {
-        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(UnWatch, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> randomKey() {
         return commandManager.submitNewCommand(
-                RandomKey, new String[0], this::handleStringOrNullResponse);
+                RandomKey, EMPTY_STRING_ARRAY, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -645,5 +869,129 @@ public class GlideClient extends BaseClient
 
                     return new PubSubStateImpl<>(desired, actual);
                 });
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add("")
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(GlideString.of(""))
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout,
+            @NonNull MigrateOptions migrateOptions) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add("")
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(migrateOptions.toArgs())
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout,
+            @NonNull MigrateOptions migrateOptions) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(GlideString.of(""))
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(migrateOptions.toArgs())
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryDoctor() {
+        return commandManager.submitNewCommand(
+                MemoryDoctor, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryMallocStats() {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge() {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> memoryStats() {
+        return commandManager.submitNewCommand(
+                MemoryStats, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 }

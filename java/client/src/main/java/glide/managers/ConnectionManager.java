@@ -4,23 +4,27 @@ package glide.managers;
 import static connection_request.ConnectionRequestOuterClass.*;
 
 import glide.api.models.GlideString;
+import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
+import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
+import glide.api.models.configuration.CompressionBackend;
+import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeDiscoveryMode;
 import glide.api.models.configuration.PeriodicChecksConfig;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
@@ -47,6 +51,9 @@ public class ConnectionManager {
     private int requestTimeoutMs = 5000;
     private ServerCredentials credentials;
     private volatile boolean isClosed = false;
+
+    /** Serialized protobuf ConnectionRequest bytes (stored for scope pool creation). */
+    private volatile byte[] connectionRequestBytes;
 
     /**
      * Connect to Valkey using the native bridge.
@@ -271,6 +278,39 @@ public class ConnectionManager {
                         requestBuilder.setConnectionTimeout(connectionTimeoutMs);
                         requestBuilder.setInflightRequestsLimit(maxInflightRequests);
 
+                        // Set client circuit breaker configuration
+                        if (configuration.getClientCircuitBreakerConfiguration() != null) {
+                            ClientCircuitBreakerConfiguration cbConfig =
+                                    configuration.getClientCircuitBreakerConfiguration();
+                            if (cbConfig.getWindowSizeMs() <= 0) {
+                                throw new IllegalArgumentException("windowSizeMs must be positive");
+                            }
+                            if (cbConfig.getFailureRateThreshold() <= 0.0f
+                                    || cbConfig.getFailureRateThreshold() > 1.0f) {
+                                throw new IllegalArgumentException(
+                                        "failureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)");
+                            }
+                            if (cbConfig.getMinErrors() <= 0) {
+                                throw new IllegalArgumentException("minErrors must be positive");
+                            }
+                            if (cbConfig.getOpenTimeoutMs() <= 0) {
+                                throw new IllegalArgumentException("openTimeoutMs must be positive");
+                            }
+                            if (cbConfig.getConsecutiveSuccesses() <= 0) {
+                                throw new IllegalArgumentException("consecutiveSuccesses must be positive");
+                            }
+                            requestBuilder.setClientCircuitBreaker(
+                                    connection_request.ConnectionRequestOuterClass.ClientCircuitBreakerConfig
+                                            .newBuilder()
+                                            .setWindowSizeMs(cbConfig.getWindowSizeMs())
+                                            .setFailureRateThreshold(cbConfig.getFailureRateThreshold())
+                                            .setMinErrors(cbConfig.getMinErrors())
+                                            .setOpenTimeoutMs(cbConfig.getOpenTimeoutMs())
+                                            .setCountTimeouts(cbConfig.isCountTimeouts())
+                                            .setConsecutiveSuccesses(cbConfig.getConsecutiveSuccesses())
+                                            .build());
+                        }
+
                         // Set read from strategy
                         String readFromName = configuration.getReadFrom().name();
                         if ("PRIMARY".equals(readFromName)) {
@@ -281,6 +321,8 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
                         } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
+                        } else if ("ALL_NODES".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.AllNodes);
                         }
 
                         // Set client metadata
@@ -387,14 +429,82 @@ public class ConnectionManager {
                             if (standaloneConfig.isReadOnly()) {
                                 requestBuilder.setReadOnly(true);
                             }
+                            NodeDiscoveryMode mode = standaloneConfig.getNodeDiscoveryMode();
+                            if (mode == NodeDiscoveryMode.STATIC) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.Static);
+                            } else if (mode == NodeDiscoveryMode.DISCOVER_ALL) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.DiscoverAll);
+                            }
+                        }
+
+                        // Set compression configuration
+                        if (configuration.getCompressionConfiguration() != null) {
+                            CompressionConfiguration cc = configuration.getCompressionConfiguration();
+                            connection_request.ConnectionRequestOuterClass.CompressionConfig.Builder
+                                    compressionBuilder =
+                                            connection_request.ConnectionRequestOuterClass.CompressionConfig.newBuilder();
+                            compressionBuilder.setEnabled(cc.isEnabled());
+                            compressionBuilder.setBackend(
+                                    cc.getBackend() == CompressionBackend.LZ4
+                                            ? connection_request.ConnectionRequestOuterClass.CompressionBackend.LZ4
+                                            : connection_request.ConnectionRequestOuterClass.CompressionBackend.ZSTD);
+                            compressionBuilder.setMinCompressionSize(cc.getMinCompressionSize());
+                            if (cc.getCompressionLevel() != null) {
+                                compressionBuilder.setCompressionLevel(cc.getCompressionLevel());
+                            }
+                            if (cc.getMaxDecompressedSize() != null) {
+                                compressionBuilder.setMaxDecompressedSize(cc.getMaxDecompressedSize());
+                            }
+                            requestBuilder.setCompressionConfig(compressionBuilder.build());
+                        }
+
+                        // Set client-side cache configuration if provided
+                        ClientSideCache clientSideCache = configuration.getClientSideCache();
+                        if (clientSideCache != null) {
+                            connection_request.ConnectionRequestOuterClass.ClientSideCache.Builder cacheBuilder =
+                                    connection_request.ConnectionRequestOuterClass.ClientSideCache.newBuilder();
+
+                            // Set required fields
+                            cacheBuilder.setCacheId(clientSideCache.getCacheId());
+                            cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
+                            cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+                            cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
+
+                            // Set TTL (0 = no expiration)
+                            cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
+
+                            // Set optional eviction policy
+                            if (clientSideCache.getEvictionPolicy() != null) {
+                                switch (clientSideCache.getEvictionPolicy()) {
+                                    case LRU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LRU);
+                                        break;
+                                    case LFU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LFU);
+                                        break;
+                                }
+                            }
+
+                            requestBuilder.setClientSideCache(cacheBuilder.build());
                         }
 
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
+                        this.connectionRequestBytes = requestBytes;
+
+                        // Get the address resolver (may be null if not configured)
+                        // The resolver is passed directly to native code which stores it as a global reference
+                        // to prevent garbage collection while the client is alive
+                        AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
 
                         // Create native client with protobuf bytes
-                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes);
+                        // Native code will store the resolver as a global reference if provided
+                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");
@@ -473,6 +583,11 @@ public class ConnectionManager {
         return requestTimeoutMs;
     }
 
+    /** Get the serialized ConnectionRequest bytes for scope pool creation. */
+    public byte[] getConnectionRequestBytes() {
+        return connectionRequestBytes;
+    }
+
     /** Check if the connection is closed. */
     public boolean isClosed() {
         return isClosed;
@@ -524,30 +639,10 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return false;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-            if (!configuration.isUseTLS()) {
-                throw new ConfigurationError(
-                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-            }
-            return true;
-        }
-        return false;
+        return TlsConfigHelper.resolveInsecureTls(configuration);
     }
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return null;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig == null) {
-            return null;
-        }
-        return tlsConfig.getRootCertificates();
+        return TlsConfigHelper.extractRootCertificates(configuration);
     }
 }

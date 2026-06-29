@@ -609,6 +609,10 @@ static MOVED_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock:
 static SUBSCRIPTION_OUT_OF_SYNC_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> =
     OnceLock::new();
 static SUBSCRIPTION_LAST_SYNC_GAUGE: OnceLock<opentelemetry::metrics::Gauge<u64>> = OnceLock::new();
+static POOL_HIT_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static POOL_MISS_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static SCOPE_ACQUIRE_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static SCOPE_RELEASE_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -636,10 +640,10 @@ impl GlideOpenTelemetry {
 
         // Check for obviously invalid pointer values
         // Pointers should be aligned to at least 8 bytes on 64-bit systems
-        if span_ptr % 8 != 0 {
+        if !span_ptr.is_multiple_of(8) {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!(
+                format!(
                     "Invalid span pointer - misaligned pointer: 0x{:x}",
                     span_ptr
                 ),
@@ -653,7 +657,7 @@ impl GlideOpenTelemetry {
         if span_ptr < MIN_VALID_ADDRESS {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!("Invalid span pointer - address too low: 0x{:x}", span_ptr),
+                format!("Invalid span pointer - address too low: 0x{:x}", span_ptr),
             );
             return false;
         }
@@ -665,7 +669,7 @@ impl GlideOpenTelemetry {
         if span_ptr > MAX_VALID_ADDRESS {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!("Invalid span pointer - address too high: 0x{:x}", span_ptr),
+                format!("Invalid span pointer - address too high: 0x{:x}", span_ptr),
             );
             return false;
         }
@@ -751,12 +755,12 @@ impl GlideOpenTelemetry {
         }
 
         // Validate trace_sample_percentage
-        if let Some(traces_config) = config.traces.as_ref() {
-            if traces_config.trace_sample_percentage > 100 {
-                return Err(GlideOTELError::Other(
-                    "Trace sample percentage must be between 0 and 100".into(),
-                ));
-            }
+        if let Some(traces_config) = config.traces.as_ref()
+            && traces_config.trace_sample_percentage > 100
+        {
+            return Err(GlideOTELError::Other(
+                "Trace sample percentage must be between 0 and 100".into(),
+            ));
         }
         Ok(())
     }
@@ -986,6 +990,42 @@ impl GlideOpenTelemetry {
                 )
             })?;
 
+        // Pool hit counter
+        let _ = POOL_HIT_COUNTER.set(
+            meter
+                .u64_counter("glide.pool.hits")
+                .with_description("Number of pool acquire hits (client found in idle)")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Pool miss counter
+        let _ = POOL_MISS_COUNTER.set(
+            meter
+                .u64_counter("glide.pool.misses")
+                .with_description("Number of pool acquire misses (no idle client)")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Scope acquire counter
+        let _ = SCOPE_ACQUIRE_COUNTER.set(
+            meter
+                .u64_counter("glide.scope.acquires")
+                .with_description("Number of scope connections acquired")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Scope release counter
+        let _ = SCOPE_RELEASE_COUNTER.set(
+            meter
+                .u64_counter("glide.scope.releases")
+                .with_description("Number of scope connections released")
+                .with_unit("1")
+                .build(),
+        );
+
         Ok(())
     }
 
@@ -1055,6 +1095,46 @@ impl GlideOpenTelemetry {
                     )
                 })?
                 .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a pool acquire hit (client found in idle list).
+    pub fn record_pool_hit() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            if let Some(counter) = POOL_HIT_COUNTER.get() {
+                counter.add(1, &[]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a pool acquire miss (no idle client available).
+    pub fn record_pool_miss() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            if let Some(counter) = POOL_MISS_COUNTER.get() {
+                counter.add(1, &[]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a scope connection acquire.
+    pub fn record_scope_acquire() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            if let Some(counter) = SCOPE_ACQUIRE_COUNTER.get() {
+                counter.add(1, &[]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a scope connection release.
+    pub fn record_scope_release() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized() {
+            if let Some(counter) = SCOPE_RELEASE_COUNTER.get() {
+                counter.add(1, &[]);
+            }
         }
         Ok(())
     }

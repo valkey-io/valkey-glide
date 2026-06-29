@@ -3,8 +3,18 @@ name = "miri-tests"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Declared but NOT enabled — allows cfg(feature = "pool-support") to compile
+# without warnings while excluding pool/scope code from MIRI tests.
+pool-support = []
+
 [dependencies]
+dashmap = "5"
+libc = "0.2"
 protobuf = { version = "3", features = [] }
+serde_json = "1.0"
+url = "2"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 # Mock crates that can be used as drop-in replacements for the real crates
 redis = { path = "./mock-redis", package = "mock-redis" }
 glide-core = { path = "./mock-glide-core",  package = "mock-glide-core" }

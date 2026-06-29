@@ -338,7 +338,10 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 // public api
 pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
-pub use crate::cmd::{cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter};
+pub use crate::client::IAMTokenProvider;
+pub use crate::cmd::{
+    cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter, PHASE_QUEUED, PHASE_SENT,
+};
 pub use crate::commands::{
     Commands, ControlFlow, Direction, LposOptions, PubSubCommands, SetOptions,
 };
@@ -383,7 +386,8 @@ pub use crate::types::{
     Value,
     PushKind,
     VerbatimFormat,
-    ProtocolVersion
+    ProtocolVersion,
+    AddressResolver,
 };
 
 #[cfg(feature = "aio")]
@@ -450,6 +454,8 @@ mod tls;
 
 pub use crate::tls::{retrieve_tls_certificates, ClientTlsConfig, TlsCertificates, TlsConnParams};
 
+/// Cache module
+pub mod cache;
 mod client;
 mod cmd;
 mod commands;

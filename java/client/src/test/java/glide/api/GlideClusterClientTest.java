@@ -1,8 +1,25 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFailover;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFlushSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterForget;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMeet;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicas;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicate;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -23,11 +40,20 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionResto
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.SSubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.SUnsubscribeBlocking;
@@ -70,6 +96,7 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
@@ -81,6 +108,9 @@ import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.batch.ClusterBatchRetryStrategy;
+import glide.api.models.commands.cluster.ClusterFailoverOptions;
+import glide.api.models.commands.cluster.ClusterResetOptions;
+import glide.api.models.commands.cluster.ClusterSetSlotOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -92,6 +122,7 @@ import glide.managers.GlideExceptionCheckedFunction;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -112,6 +143,15 @@ public class GlideClusterClientTest {
     CommandManager commandManager;
 
     private final String[] TEST_ARGS = new String[0];
+
+    private static final Map<String, Object> TRACKING_INFO;
+
+    static {
+        TRACKING_INFO = new HashMap<>();
+        TRACKING_INFO.put("flags", new HashSet<>(Collections.singletonList("off")));
+        TRACKING_INFO.put("redirect", -1L);
+        TRACKING_INFO.put("prefixes", new Object[0]);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -808,6 +848,48 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void clientTrackingInfo_returns_success() {
+        // setup
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(TRACKING_INFO);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(ClientTrackingInfo), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_single_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        try (TestClient client = new TestClient(commandManager, TRACKING_INFO)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
+            assertEquals(TRACKING_INFO, value.getSingleValue());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_multi_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        Map<String, Map<String, Object>> data = createMap("n1", TRACKING_INFO);
+        try (TestClient client = new TestClient(commandManager, data)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
+    }
+
+    @SneakyThrows
+    @Test
     public void configRewrite_without_route_returns_success() {
         // setup
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -1145,6 +1227,174 @@ public class GlideClusterClientTest {
 
         // exercise
         CompletableFuture<String> response = service.flushall(SYNC, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request — no-route variant defaults to ALL_PRIMARIES
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000"}), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_write_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "WRITE"}), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.WRITE);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_all_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "ALL"}), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.ALL);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000"}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_all_mode_and_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "ALL"}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.ALL, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_write_mode_and_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "WRITE"}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.WRITE, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientUnpause_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientUnpause), eq(new String[0]), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientUnpause();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientUnpause_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientUnpause), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientUnpause(RANDOM);
         String payload = response.get();
 
         // verify
@@ -2580,6 +2830,193 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void latencyHistory_returns_success() {
+        // setup
+        String event = "command";
+        String[] args = new String[] {event};
+        Object[][] entries =
+                new Object[][] {new Object[] {1709062230L, 50L}, new Object[] {1709062231L, 42L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", entries));
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
+                        eq(LatencyHistory), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event);
+        ClusterValue<Object[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyHistory_with_route_returns_success() {
+        // setup
+        String event = "command";
+        String[] args = new String[] {event};
+        Object[][] entries = new Object[][] {new Object[] {1709062230L, 50L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(entries);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
+                        eq(LatencyHistory), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event, RANDOM);
+        ClusterValue<Object[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyLatest_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", infos));
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
+                        eq(LatencyLatest), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest();
+        ClusterValue<Object[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyLatest_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(infos);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
+                        eq(LatencyLatest), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest(RANDOM);
+        ClusterValue<Object[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Long value = 4L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset();
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_events_returns_success() {
+        // setup
+        String[] events = new String[] {"command"};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(events), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(events);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Long value = 4L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(RANDOM);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_events_and_route_returns_success() {
+        // setup
+        String[] events = new String[] {"command"};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(events), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(events, RANDOM);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void functionDump_returns_success() {
         // setup
         byte[] value = new byte[] {42};
@@ -3833,7 +4270,7 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void sunsubscribe_returns_success() {
+    public void sunsubscribe_blocking_returns_success() {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -3848,5 +4285,616 @@ public class GlideClusterClientTest {
 
         // verify
         assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterMeet_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterMeet), eq(new String[] {"192.168.1.100", "6379"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterMeet(host, port) and block for result
+        CompletableFuture<String> response = service.clusterMeet("192.168.1.100", 6379);
+        String payload = response.get();
+
+        // verify: returned future is the mocked one and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterMeet_with_route_returns_success() {
+        // setup
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        ClusterValue<String> mockValue = ClusterValue.ofSingleValue(OK);
+        testResponse.complete(mockValue);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(ClusterMeet), eq(new String[] {"192.168.1.100", "6379"}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterMeet(host, port, route) with RANDOM route
+        CompletableFuture<ClusterValue<String>> response =
+                service.clusterMeet("192.168.1.100", 6379, RANDOM);
+
+        // verify: returned future matches mock and single value is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get().getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterForget_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        String nodeId = "1234567890abcdef1234567890abcdef12345678";
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterForget), eq(new String[] {nodeId}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterForget(nodeId) and block for result
+        CompletableFuture<String> response = service.clusterForget(nodeId);
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterReplicate_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        String nodeId = "1234567890abcdef1234567890abcdef12345678";
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterReplicate), eq(new String[] {nodeId}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterReplicate(nodeId) and block for result
+        CompletableFuture<String> response = service.clusterReplicate(nodeId);
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterReplicas_returns_success() {
+        // setup
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        String[] replicas = new String[] {"replica1", "replica2"};
+        testResponse.complete(replicas);
+        String nodeId = "1234567890abcdef1234567890abcdef12345678";
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(
+                        eq(ClusterReplicas), eq(new String[] {nodeId}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterReplicas(nodeId) and block for result
+        CompletableFuture<String[]> response = service.clusterReplicas(nodeId);
+
+        // verify: returned replica list matches mock
+        assertArrayEquals(replicas, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterCountFailureReports_returns_success() {
+        // setup
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(5L);
+        String nodeId = "1234567890abcdef1234567890abcdef12345678";
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(ClusterCountFailureReports), eq(new String[] {nodeId}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterCountFailureReports(nodeId) and block for result
+        CompletableFuture<Long> response = service.clusterCountFailureReports(nodeId);
+
+        // verify: returned failure report count is 5
+        assertEquals(5L, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterFailover_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClusterFailover), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterFailover() with no options and block for result
+        CompletableFuture<String> response = service.clusterFailover();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterFailover_with_options_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterFailover), eq(new String[] {"FORCE"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterFailover(FORCE) and block for result
+        CompletableFuture<String> response = service.clusterFailover(ClusterFailoverOptions.FORCE);
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterSetSlot_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        String nodeId = "1234567890abcdef1234567890abcdef12345678";
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterSetslot), eq(new String[] {"1234", "MIGRATING", nodeId}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterSetSlot(slot, migrating(nodeId)) and block for result
+        CompletableFuture<String> response =
+                service.clusterSetSlot(1234, ClusterSetSlotOptions.migrating(nodeId));
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterBumpEpoch_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete("BUMPED");
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClusterBumpEpoch), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterBumpEpoch() and block for result
+        CompletableFuture<String> response = service.clusterBumpEpoch();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is BUMPED
+        assertEquals(testResponse, response);
+        assertEquals("BUMPED", payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterSetConfigEpoch_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterSetConfigEpoch), eq(new String[] {"123"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterSetConfigEpoch(123) and block for result
+        CompletableFuture<String> response = service.clusterSetConfigEpoch(123);
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterFlushSlots_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClusterFlushSlots), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterFlushSlots() and block for result
+        CompletableFuture<String> response = service.clusterFlushSlots();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterReset_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClusterReset), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterReset() with no options and block for result
+        CompletableFuture<String> response = service.clusterReset();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterReset_with_options_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClusterReset), eq(new String[] {"SOFT"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterReset(SOFT) and block for result
+        CompletableFuture<String> response = service.clusterReset(ClusterResetOptions.SOFT);
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void readonly_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ReadOnly), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call readonly() and block for result
+        CompletableFuture<String> response = service.readonly();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void readwrite_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ReadWrite), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call readwrite() and block for result
+        CompletableFuture<String> response = service.readwrite();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void asking_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Asking), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call asking() and block for result
+        CompletableFuture<String> response = service.asking();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterSaveConfig_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClusterSaveConfig), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterSaveConfig() and block for result
+        CompletableFuture<String> response = service.clusterSaveConfig();
+        String payload = response.get();
+
+        // verify: returned future matches mock and payload is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterSaveConfig_with_route_returns_success() {
+        // setup
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        ClusterValue<String> mockValue = ClusterValue.ofSingleValue(OK);
+        testResponse.complete(mockValue);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(ClusterSaveConfig), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterSaveConfig(RANDOM) and block for result
+        CompletableFuture<ClusterValue<String>> response = service.clusterSaveConfig(RANDOM);
+
+        // verify: returned future matches mock and single value is OK
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get().getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clusterGetKeysInSlot_returns_success() {
+        // setup
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        String[] keys = new String[] {"key1", "key2", "key3"};
+        testResponse.complete(keys);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(
+                        eq(ClusterGetKeysInSlot), eq(new String[] {"1234", "10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise: call clusterGetKeysInSlot(slot, count) and block for result
+        CompletableFuture<String[]> response = service.clusterGetKeysInSlot(1234, 10);
+
+        // verify: returned key array matches mock
+        assertArrayEquals(keys, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunsubscribe_lazy_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(command_request.CommandRequestOuterClass.RequestType.SUnsubscribe),
+                        any(String[].class),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.sunsubscribeLazy(createSet("channel1"));
+
+        // verify
+        assertNull(response.get());
+    }
+
+    // TODO #6166: Move to shared tests.
+    @SneakyThrows
+    @Test
+    public void memoryDoctor_returns_success() {
+        // setup
+        ClusterValue<String> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", "No memory issues detected"));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryDoctor), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryDoctor();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryDoctor_with_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("No memory issues detected");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryDoctor), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryDoctor(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryMallocStats_returns_success() {
+        // setup
+        ClusterValue<String> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", "jemalloc stats"));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryMallocStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryMallocStats();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryMallocStats_with_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("jemalloc stats");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryMallocStats), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryMallocStats(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryPurge_returns_success() {
+        // setup
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MemoryPurge), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryPurge();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryPurge_with_route_returns_success() {
+        // setup
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(MemoryPurge), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryPurge(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @SneakyThrows
+    @Test
+    public void memoryStats_returns_success() {
+        // setup
+        Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
+        ClusterValue<Map<String, Object>> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", statsMap));
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>>>submitNewCommand(
+                        eq(MemoryStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>>> response = service.memoryStats();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @SneakyThrows
+    @Test
+    public void memoryStats_with_route_returns_success() {
+        // setup
+        Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
+        ClusterValue<Map<String, Object>> value = ClusterValue.ofSingleValue(statsMap);
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>>>submitNewCommand(
+                        eq(MemoryStats), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>>> response = service.memoryStats(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 }

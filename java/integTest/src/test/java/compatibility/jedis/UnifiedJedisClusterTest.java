@@ -11,7 +11,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.args.BitCountOption;
@@ -106,7 +107,7 @@ public class UnifiedJedisClusterTest {
 
         String info = unifiedJedis.clientInfo();
         assertTrue(info.contains("lib-name=GlideJedisAdapter"));
-        assertTrue(info.contains("lib-ver=unknown"));
+        assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
     }
 
     @Test

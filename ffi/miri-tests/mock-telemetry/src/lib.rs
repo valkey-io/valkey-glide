@@ -24,6 +24,16 @@ impl fmt::Display for TraceError {
 }
 
 impl GlideSpan {
+    pub fn new_with_remote_context(
+        _name: &str,
+        _trace_id_hex: &str,
+        _span_id_hex: &str,
+        _trace_flags: u8,
+        _trace_state: Option<&str>,
+    ) -> Result<GlideSpan, TraceError> {
+        Ok(GlideSpan)
+    }
+
     pub fn add_span(&self, _name: &str) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
     }
@@ -91,6 +101,26 @@ impl GlideOpenTelemetry {
 
     pub unsafe fn span_from_pointer(_ptr: u64) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
+    }
+
+    pub fn record_pool_hit() -> Result<(), GlideOTELError> {
+        Ok(())
+    }
+
+    pub fn record_pool_miss() -> Result<(), GlideOTELError> {
+        Ok(())
+    }
+
+    pub fn record_scope_acquire() -> Result<(), GlideOTELError> {
+        Ok(())
+    }
+
+    pub fn record_scope_release() -> Result<(), GlideOTELError> {
+        Ok(())
+    }
+
+    pub fn record_timeout_error() -> Result<(), GlideOTELError> {
+        Ok(())
     }
 }
 

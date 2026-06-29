@@ -70,6 +70,8 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConnectionException;
 import java.io.Closeable;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -179,6 +181,7 @@ public final class Jedis implements Closeable {
     private static final String FIELDS_KEYWORD = "FIELDS";
 
     private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
+    private volatile boolean broken;
     private final boolean isPooled;
     private volatile String resourceId; // Changed from final to volatile for lazy init
     private final JedisClientConfig config;
@@ -1192,9 +1195,11 @@ public final class Jedis implements Closeable {
         if (dataSource != null) {
             Pool<Jedis> pool = this.dataSource;
             this.dataSource = null;
-            // Note: Original Jedis checks isBroken() here, but we don't have that concept
-            // so we always return to pool as a good resource
-            pool.returnResource(this);
+            if (broken) {
+                pool.returnBrokenResource(this);
+            } else {
+                pool.returnResource(this);
+            }
         } else if (glideClient != null) { // Only close if initialized
             try {
                 glideClient.close();
@@ -1232,10 +1237,53 @@ public final class Jedis implements Closeable {
         return isPooled;
     }
 
+    /**
+     * Whether this connection is considered broken (must not be returned to the pool as healthy).
+     * Matches core Jedis {@code Jedis#isBroken()} semantics for pooled usage.
+     */
+    public boolean isBroken() {
+        return broken;
+    }
+
+    /**
+     * Marks this connection as broken so the next {@link #close()} returns it to the pool via {@link
+     * Pool#returnBrokenResource} instead of {@link Pool#returnResource}.
+     */
+    public void setBroken(boolean broken) {
+        this.broken = broken;
+    }
+
+    /**
+     * Clears pool association before {@link GlideJedisFactory} destroys the object, so {@link
+     * #close()} does not attempt to return this instance to the pool again.
+     */
+    void detachFromPoolForDestroy() {
+        this.dataSource = null;
+    }
+
+    /**
+     * If this Jedis is pooled and the failure indicates the underlying client is unusable, mark
+     * {@link #isBroken()} for correct pool invalidation on {@link #close()}.
+     */
+    void markBrokenIfPooledConnectionFailure(Throwable throwable) {
+        if (!isPooled || throwable == null) {
+            return;
+        }
+        Throwable t = throwable;
+        if (t instanceof ExecutionException && t.getCause() != null) {
+            t = t.getCause();
+        }
+        if (t instanceof ConnectionException || t instanceof ClosingException) {
+            broken = true;
+        }
+    }
+
     /** Reset the closed state for pooled connections. */
     protected void resetForReuse() {
         if (isPooled) {
+            broken = false;
             closed = false;
+            resetState();
         }
     }
 
@@ -1278,8 +1326,13 @@ public final class Jedis implements Closeable {
         ensureInitialized();
         try {
             return operation.execute();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException(operationName + " operation failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new JedisException(operationName + " operation interrupted", e);
+        } catch (ExecutionException e) {
+            markBrokenIfPooledConnectionFailure(e);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            throw new JedisException(operationName + " operation failed", cause);
         }
     }
 
@@ -8598,6 +8651,96 @@ public final class Jedis implements Closeable {
     @Deprecated
     public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    // ========================================
+    // Pub/Sub Commands
+    // ========================================
+
+    /**
+     * Publishes a message to a channel.
+     *
+     * <p><b>Note:</b> This method currently returns {@code 0} instead of the actual subscriber count
+     * because the underlying GLIDE API does not expose this information. See <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/5354">issue #5354</a> for tracking.
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message (currently always {@code 0})
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public Long publish(String channel, String message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    // TODO(#5354): Return actual subscriber count when GLIDE API supports it
+                    glideClient.publish(message, channel).get();
+                    return 0L;
+                });
+    }
+
+    /**
+     * Publishes a message to a channel (binary version).
+     *
+     * <p><b>Note:</b> This method currently returns {@code 0} instead of the actual subscriber count
+     * because the underlying GLIDE API does not expose this information. See <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/5354">issue #5354</a> for tracking.
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message (currently always {@code 0})
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public Long publish(final byte[] channel, final byte[] message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    // TODO(#5354): Return actual subscriber count when GLIDE API supports it
+                    glideClient.publish(GlideString.of(message), GlideString.of(channel)).get();
+                    return 0L;
+                });
+    }
+
+    /**
+     * Returns the list of currently active channels.
+     *
+     * @return list of channel names
+     */
+    public List<String> pubsubChannels() {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS", () -> Arrays.asList(glideClient.pubsubChannels().get()));
+    }
+
+    /**
+     * Returns the list of currently active channels matching the given pattern.
+     *
+     * @param pattern glob-style pattern
+     * @return list of channel names
+     */
+    public List<String> pubsubChannels(String pattern) {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS", () -> Arrays.asList(glideClient.pubsubChannels(pattern).get()));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * @return the number of unique patterns
+     */
+    public Long pubsubNumPat() {
+        return executeCommandWithGlide("PUBSUB NUMPAT", () -> glideClient.pubsubNumPat().get());
+    }
+
+    /**
+     * Returns the number of subscribers for the specified channels.
+     *
+     * @param channels channel names
+     * @return map of channel name to subscriber count
+     */
+    public Map<String, Long> pubsubNumSub(String... channels) {
+        return executeCommandWithGlide("PUBSUB NUMSUB", () -> glideClient.pubsubNumSub(channels).get());
     }
 
     // ========== Server Management Commands ==========

@@ -2,10 +2,30 @@
 
 pub use glide_core::client::{GlideRt, get_or_init_runtime};
 
-use crate::connection_request::ConnectionRequest;
-use redis::{Pipeline, PipelineRetryStrategy, ScanStateRC, Cmd, PushInfo, Value, ClusterScanArgs, RoutingInfo, RedisResult};
+/// Mirrors glide_core::client::NodeAddress (internal type, not protobuf).
+pub struct NodeAddress {
+    pub host: String,
+    pub port: u16,
+}
+
+/// Mirrors glide_core::client::TlsMode (internal type).
+#[derive(Clone, Copy, PartialEq)]
+pub enum TlsMode {
+    NoTls,
+    SecureTls,
+    InsecureTls,
+}
+
+use crate::ConnectionRequest;
+use redis::{
+    ClusterScanArgs, Cmd, Pipeline, PipelineRetryStrategy, PushInfo, RedisResult, RoutingInfo,
+    ScanStateRC, Value,
+};
 
 pub struct ConnectionError;
+
+/// Mock inflight tracker for Miri tests — no-op Drop.
+pub struct MockInflightTracker;
 
 use std::fmt;
 impl fmt::Display for ConnectionError {
@@ -16,7 +36,7 @@ impl fmt::Display for ConnectionError {
 
 #[derive(Clone)]
 pub struct Client {
-    _push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>
+    _push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
 }
 
 impl Client {
@@ -25,7 +45,7 @@ impl Client {
         push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
         Ok(Client {
-            _push_sender: push_sender
+            _push_sender: push_sender,
         })
     }
 
@@ -89,17 +109,73 @@ impl Client {
     }
 
     /// Mock compression_manager method for Miri tests
-    pub fn compression_manager(&self) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
+    pub fn compression_manager(
+        &self,
+    ) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
         None
     }
 
     /// Mock reserve_inflight_request method for Miri tests
-    pub fn reserve_inflight_request(&self) -> bool {
-        true // Always allow in mock
+    pub fn reserve_inflight_request(&self) -> Option<MockInflightTracker> {
+        Some(MockInflightTracker) // Always allow in mock
     }
 
-    /// Mock release_inflight_request method for Miri tests
-    pub fn release_inflight_request(&self) -> isize {
-        0 // No-op in mock
+    /// Mock cache_hit_rate method for Miri tests
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        todo!()
     }
+
+    /// Mock cache_miss_rate method for Miri tests
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_entry_count method for Miri tests
+    pub fn cache_entry_count(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_evictions method for Miri tests
+    pub fn cache_evictions(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_expirations method for Miri tests
+    pub fn cache_expirations(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_total_lookups method for Miri tests
+    pub fn cache_total_lookups(&self) -> RedisResult<Value> {
+        todo!()
+    }
+}
+
+// ─── MonitorClient stubs for miri-tests ──────────────────────────────────────
+
+pub struct MonitorLine {
+    pub timestamp: f64,
+    pub db: i64,
+    pub client_addr: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+pub type MonitorLineCallback = std::sync::Arc<dyn Fn(MonitorLine) + Send + Sync>;
+
+pub struct MonitorClient;
+
+impl MonitorClient {
+    pub async fn new(
+        _address: &NodeAddress,
+        _redis_connection_info: redis::RedisConnectionInfo,
+        _tls_mode: TlsMode,
+        _on_line: MonitorLineCallback,
+    ) -> redis::RedisResult<Self> {
+        Ok(MonitorClient)
+    }
+
+    pub async fn stop_async(self) {}
+
+    pub fn stop(&mut self) {}
 }

@@ -974,26 +974,18 @@ public class BatchTestUtilities {
                     .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
 
+        @SuppressWarnings("unchecked")
         Object[] expectedResults =
                 new Object[] {
                     OK, // configSet(createMap("timeout", "1000"))
                     createMap("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    new Object() {
-                        @Override
-                        public boolean equals(Object obj) {
-                            if (obj instanceof String) {
-                                String response = (String) obj;
-                                return response.contains("ver") && response.contains(SERVER_VERSION.toString());
-                            }
-                            return false;
-                        }
-
-                        @Override
-                        public String toString() {
-                            return "LOLWUT version matcher for " + SERVER_VERSION;
-                        }
-                    }, // lolwut(1) - accepts both Redis and Valkey formats
+                    new ResponseMatcher(
+                            obj ->
+                                    obj instanceof String
+                                            && ((String) obj).contains("ver")
+                                            && ((String) obj).contains(SERVER_VERSION.toString()),
+                            "LOLWUT version matcher for " + SERVER_VERSION), // lolwut(1)
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()
@@ -1024,11 +1016,20 @@ public class BatchTestUtilities {
         // clientId
         // clientGetName
 
-        return new Object[] {
-            "PONG", // ping()
-            value1, // ping(value1)
-            value2, // echo(value2)
-        };
+        Object[] results =
+                new Object[] {
+                    "PONG", // ping()
+                    value1, // ping(value1)
+                    value2, // echo(value2)
+                };
+
+        if (!isAtomic) {
+            // RESET cannot be used inside MULTI/EXEC (atomic batch)
+            batch.reset();
+            results = concatenateArrays(results, new Object[] {"RESET"});
+        }
+
+        return results;
     }
 
     private static Object[] hyperLogLogCommands(BaseBatch<?> batch, boolean isAtomic) {
@@ -1542,5 +1543,29 @@ public class BatchTestUtilities {
         return new Object[] {
             0L, // publish("message", "Tchannel")
         };
+    }
+
+    /**
+     * A reusable comparison object for batch test assertions. Overrides {@code equals} to perform
+     * type-checked validation against actual command responses.
+     */
+    static class ResponseMatcher {
+        private final java.util.function.Predicate<Object> predicate;
+        private final String description;
+
+        ResponseMatcher(java.util.function.Predicate<Object> predicate, String description) {
+            this.predicate = predicate;
+            this.description = description;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return predicate.test(obj);
+        }
+
+        @Override
+        public String toString() {
+            return description;
+        }
     }
 }

@@ -23,6 +23,7 @@ import lombok.experimental.SuperBuilder;
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .reconnectStrategy(reconnectionConfiguration)
  *         .inflightRequestsLimit(1000)
+ *         .clientSideCache(ClientSideCache.create(1024, 60000))
  *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
  *         .build();
  * }</pre>
@@ -30,6 +31,9 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @Getter
 public class GlideClusterClientConfiguration extends BaseClientConfiguration {
+
+    /** Client-side cache configuration. If provided, enables caching for this client. */
+    private final ClientSideCache clientSideCache;
 
     /** Subscription configuration for the current client. */
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;

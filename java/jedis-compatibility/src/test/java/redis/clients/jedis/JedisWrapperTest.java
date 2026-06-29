@@ -83,6 +83,12 @@ public class JedisWrapperTest {
         assertNotNull(jedisClass.getMethod("del", String.class));
         assertNotNull(jedisClass.getMethod("del", String[].class));
         assertNotNull(jedisClass.getMethod("keys", String.class));
+        assertNotNull(jedisClass.getMethod("publish", String.class, String.class));
+        assertNotNull(jedisClass.getMethod("publish", byte[].class, byte[].class));
+        assertNotNull(jedisClass.getMethod("pubsubChannels"));
+        assertNotNull(jedisClass.getMethod("pubsubChannels", String.class));
+        assertNotNull(jedisClass.getMethod("pubsubNumPat"));
+        assertNotNull(jedisClass.getMethod("pubsubNumSub", String[].class));
 
         // Set command methods
         assertNotNull(jedisClass.getMethod("sadd", String.class, String[].class));
@@ -144,6 +150,15 @@ public class JedisWrapperTest {
         assertNotNull(poolClass.getMethod("getMaxBorrowWaitTimeMillis"));
         assertNotNull(poolClass.getMethod("getNumActive"));
         assertNotNull(poolClass.getMethod("getNumIdle"));
+        assertNotNull(
+                redis.clients.jedis.util.Pool.class.getMethod("returnBrokenResource", Object.class));
+    }
+
+    @Test
+    public void testJedisBrokenApiExists() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+        assertNotNull(jedisClass.getMethod("isBroken"));
+        assertNotNull(jedisClass.getMethod("setBroken", boolean.class));
     }
 
     @Test

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 glide-core = { path = "../../../glide-core", features = ["proto"] }
+protobuf = { version = "3", features = [] }
 redis = { path = "../mock-redis", package = "mock-redis" }
 telemetrylib = { path = "../mock-telemetry", package = "mock-telemetry" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }

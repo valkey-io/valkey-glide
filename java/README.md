@@ -371,7 +371,7 @@ GlideClientConfiguration config = GlideClientConfiguration.builder()
 
 try (GlideClient client = GlideClient.createClient(config).get()) {
     // Subscribe to channels dynamically
-    client.subscribe(Set.of("news", "updates")).get();
+    client.subscribeLazy(Set.of("news", "updates")).get();
 
     // Get subscription state
     var state = client.getSubscriptions().get();
@@ -379,7 +379,7 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
     System.out.println("Actual subscriptions: " + state.actualSubscriptions);
 
     // Unsubscribe
-    client.unsubscribe(Set.of("news")).get();
+    client.unsubscribeLazy(Set.of("news")).get();
 }
 ```
 

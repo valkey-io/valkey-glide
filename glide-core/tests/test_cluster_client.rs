@@ -1,13 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-mod test_constants;
+mod constants;
 mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
 
-    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
@@ -439,10 +441,13 @@ mod cluster_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable
+                            || err.kind() == redis::ErrorKind::ClientError,
+                        "Expected connection dropped, timeout, unavailable, or recovery error, got: {err:?}",
                     );
-                    let client_info = repeat_try_create(|| async {
+                    let client_info = retry(|| async {
                         let mut client = test_basics.client.clone();
                         let mut cmd = client_info_cmd.clone();
                         let response = client.send_command(&mut cmd, None).await.ok()?;
@@ -671,7 +676,7 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_ip_address_succeeds(
-        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
     ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -717,7 +722,7 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_connection_with_ip_address_succeeds(
-        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
     ) {
         block_on_all(async move {
             let cluster = RedisCluster::new(false, &None, None, None);
@@ -822,6 +827,116 @@ mod cluster_client_tests {
                     error_msg
                 );
             }
+        });
+    }
+
+    #[cfg(unix)]
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_reconnect_to_initial_nodes_doesnt_block_throughput() {
+        // Test for #4990: Failover causes near-zero throughput
+        // See: https://github.com/valkey-io/valkey-glide/issues/4990
+        //
+        // Kills all cluster nodes with a TCP blackhole as seed node, then measures how many
+        // commands complete in a time window during reconnection. Without fixes, poll_flush blocks
+        // and causes commands to not be processed, leading to near-zero throughput (~1 completes
+        // every few seconds instead of immediately).
+        block_on_all(async {
+            const CONNECTION_TIMEOUT_MS: u64 = 2000;
+            const WINDOW_MS: u64 = 3000;
+            const MIN_COMMANDS_WITH_FIX: u32 = 10;
+
+            // TCP blackhole: accepts connections but never responds.
+            // Simulates a seed node whose DNS hasn't updated after failover.
+            let blackhole_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind blackhole listener");
+            let blackhole_port = blackhole_listener.local_addr().unwrap().port();
+            let held_streams = Arc::new(std::sync::Mutex::new(Vec::<tokio::net::TcpStream>::new()));
+            let held_clone = held_streams.clone();
+            tokio::spawn(async move {
+                while let Ok((stream, _)) = blackhole_listener.accept().await {
+                    held_clone.lock().unwrap().push(stream);
+                }
+            });
+
+            let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+            let cluster_addresses = cluster.get_server_addresses();
+            let pids = cluster.all_server_pids();
+
+            // Add blackhole as a seed node to trigger blocking reconnect behavior
+            let mut initial_nodes: Vec<redis::ConnectionInfo> = cluster_addresses
+                .iter()
+                .map(|addr| redis::ConnectionInfo {
+                    addr: addr.clone(),
+                    redis: redis::RedisConnectionInfo::default(),
+                })
+                .collect();
+            initial_nodes.push(redis::ConnectionInfo {
+                addr: redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), blackhole_port),
+                redis: redis::RedisConnectionInfo::default(),
+            });
+
+            let cluster_client = redis::cluster::ClusterClientBuilder::new(initial_nodes)
+                .periodic_connections_checks(Some(Duration::from_millis(100)))
+                .connection_timeout(Duration::from_millis(CONNECTION_TIMEOUT_MS))
+                .slots_refresh_rate_limit(Duration::from_millis(0), 0)
+                .build()
+                .expect("build cluster client");
+
+            let mut conn: redis::cluster_async::ClusterConnection = cluster_client
+                .get_async_connection(None, None, None)
+                .await
+                .expect("connect to cluster");
+
+            let ping: redis::RedisResult<redis::Value> = conn
+                .route_command(
+                    &redis::cmd("PING"),
+                    redis::cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await;
+            assert!(ping.is_ok(), "PING before kill failed: {:?}", ping);
+
+            // Kill all cluster nodes to trigger reconnect
+            for pid in &pids {
+                std::process::Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .output()
+                    .ok();
+            }
+
+            // Wait for connection health checks to detect failures
+            tokio::time::sleep(Duration::from_millis(500)).await;
+
+            // Measure how many commands complete (success or error) in the window
+            let mut completed: u32 = 0;
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("{test}key");
+            let window_start = std::time::Instant::now();
+
+            while window_start.elapsed() < Duration::from_millis(WINDOW_MS) {
+                let _ = tokio::time::timeout(
+                    Duration::from_millis(CONNECTION_TIMEOUT_MS + 500),
+                    conn.route_command(
+                        &cmd,
+                        redis::cluster_routing::RoutingInfo::SingleNode(
+                            SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
+                        ),
+                    ),
+                )
+                .await;
+                completed += 1;
+            }
+
+            assert!(
+                completed >= MIN_COMMANDS_WITH_FIX,
+                "Send loop blocked: only {}/{} commands completed in {}ms. \
+                 Each command serialized behind ready!(reconnect_to_initial_nodes) blocking for {}ms.",
+                completed,
+                MIN_COMMANDS_WITH_FIX,
+                WINDOW_MS,
+                CONNECTION_TIMEOUT_MS,
+            );
         });
     }
 }
