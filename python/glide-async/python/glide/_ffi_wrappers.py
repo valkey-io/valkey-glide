@@ -1,7 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """FFI wrappers that inject the package's shared FFI instance into glide_shared
-base classes. Uses the single _ASYNC_FFI from _ffi_instance (same one glide_client uses)."""
+base classes. Uses the single _ASYNC_FFI from _ffi_instance (same one glide_client uses).
+"""
 
 from glide._ffi_instance import _ASYNC_FFI
 from glide_shared.cluster_scan_cursor import ClusterScanCursor as _ClusterScanCursorBase

@@ -4,6 +4,8 @@
 
 from enum import IntEnum
 
+from glide_shared._glide_ffi import GlideFFI as _GlideFFI_singleton
+
 ENCODING = "utf-8"
 
 
@@ -51,13 +53,16 @@ def to_c_route_ptr_and_len(ffi, route):
     return route_ptr, route_len, route_bytes
 
 
+_route_type_map = _GlideFFI_singleton.ffi.typeof("RouteType").relements
+
+
 class _RouteType(IntEnum):
-    ALL_NODES = 0
-    ALL_PRIMARIES = 1
-    RANDOM = 2
-    SLOT_ID = 3
-    SLOT_KEY = 4
-    BY_ADDRESS = 5
+    ALL_NODES = _route_type_map["AllNodes"]
+    ALL_PRIMARIES = _route_type_map["AllPrimaries"]
+    RANDOM = _route_type_map["Random"]
+    SLOT_ID = _route_type_map["SlotId"]
+    SLOT_KEY = _route_type_map["SlotKey"]
+    BY_ADDRESS = _route_type_map["ByAddress"]
 
 
 def to_c_route_info(ffi, route):
