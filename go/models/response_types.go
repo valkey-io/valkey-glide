@@ -507,13 +507,31 @@ type LatencyEventInfo struct {
 	Count Result[int64]
 }
 
-// MemoryStatsDb represents database memory overhead statistics from MEMORY STATS.
+// ClientTrackingInfo represents a [CLIENT TRACKINGINFO] response.
+//
+// [CLIENT TRACKINGINFO]: https://valkey.io/commands/client-trackinginfo/
+type ClientTrackingInfo struct {
+	// Flags is the slice of tracking flags.
+	Flags []string
+
+	// Redirect is the client ID receiving invalidation messages, or -1 if not redirecting.
+	Redirect int64
+
+	// Prefixes is the slice of key prefixes monitored for invalidation.
+	Prefixes []string
+}
+
+// MemoryStatsDb represents database memory overhead statistics from a [MEMORY STATS] response.
+//
+// [MEMORY STATS]]: https://valkey.io/commands/memory-stats/
 type MemoryStatsDb struct {
 	OverheadHashtableExpires int64
 	OverheadHashtableMain    int64
 }
 
-// MemoryStats represents memory statistics from MEMORY STATS.
+// MemoryStats represents a [MEMORY STATS] response.
+//
+// [MEMORY STATS]]: https://valkey.io/commands/memory-stats/
 type MemoryStats struct {
 	Db map[int64]MemoryStatsDb
 

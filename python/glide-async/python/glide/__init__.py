@@ -38,6 +38,7 @@ from glide_shared import (
     ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
+    ClientTrackingInfo,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
@@ -440,5 +441,6 @@ __all__ = [
     "QueryType",
     # Cache,
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]

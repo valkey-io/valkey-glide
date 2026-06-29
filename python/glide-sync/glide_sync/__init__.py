@@ -33,6 +33,7 @@ from glide_shared import (
     ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
+    ClientTrackingInfo,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
@@ -387,5 +388,6 @@ __all__ = [
     "ClusterScanCursor",
     # Cache
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]

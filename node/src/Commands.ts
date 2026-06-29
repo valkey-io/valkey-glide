@@ -4463,6 +4463,47 @@ export function createLatencyReset(
     return createCommand(RequestType.LatencyReset, events ?? []);
 }
 
+/**
+ * Represents a `CLIENT TRACKINGINFO` response.
+ *
+ * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+ */
+export class ClientTrackingInfo {
+    /** Set of tracking flags. */
+    readonly flags: Set<string>;
+
+    /** Client ID receiving invalidation messages, or -1 if not redirecting. */
+    readonly redirect: number;
+
+    /** Set of key prefixes monitored for invalidation. */
+    readonly prefixes: Set<string>;
+
+    constructor(flags: Set<string>, redirect: number, prefixes: Set<string>) {
+        this.flags = flags;
+        this.redirect = redirect;
+        this.prefixes = prefixes;
+    }
+}
+
+/** @internal */
+export function createClientTrackingInfo(): command_request.Command {
+    return createCommand(RequestType.ClientTrackingInfo, []);
+}
+
+/**
+ * @internal
+ * Parses a `CLIENT TRACKINGINFO` response.
+ */
+export function parseClientTrackingInfoResponse(
+    response: Record<string, unknown>,
+): ClientTrackingInfo {
+    return new ClientTrackingInfo(
+        new Set(response["flags"] as string[]),
+        response["redirect"] as number,
+        new Set(response["prefixes"] as string[]),
+    );
+}
+
 /** @internal */
 export function createMemoryDoctor(): command_request.Command {
     return createCommand(RequestType.MemoryDoctor, []);

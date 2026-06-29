@@ -18,6 +18,7 @@ import {
     BitOffsetMultiplier,
     BitmapIndexType,
     BitwiseOperation,
+    ClientTrackingInfo,
     ClusterBatch,
     Decoder,
     FlushMode,
@@ -2624,6 +2625,26 @@ export async function assertConnected(
 ): Promise<void> {
     const result = await client.ping();
     expect(result).toBe("PONG");
+}
+
+/**
+ * Asserts that a ClientTrackingInfo reflects the expected tracking state.
+ */
+export function assertClientTrackingInfo(
+    info: ClientTrackingInfo,
+    on: boolean,
+): void {
+    if (on) {
+        expect(info.flags).toContain("on");
+        expect(info.flags).toContain("bcast");
+        expect(info.redirect).toBe(0);
+        expect(info.prefixes.size).toBe(1);
+        expect(info.prefixes).toContain("");
+    } else {
+        expect(info.flags).toContain("off");
+        expect(info.redirect).toBe(-1);
+        expect(info.prefixes.size).toBe(0);
+    }
 }
 
 /**
