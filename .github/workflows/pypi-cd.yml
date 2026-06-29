@@ -274,18 +274,14 @@ jobs:
                   if [[ "$ARCH" == "arm64" ]]; then
                     # Download PyPy for Apple Silicon
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
-                    
-                    
-                    
+
                     echo "Downloading PyPy 3.11 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
-                    
-                    
-                    
+
                     echo "Downloading PyPy 3.11 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
@@ -369,7 +365,7 @@ jobs:
                       # maturin-action will later build a separate async wheel per interpreter,
                       # and each wheel bundles all .so files from the include glob.
                       # Python will load the one matching its ABI at runtime.
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11 2>/dev/null || \
+                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11 2>/dev/null || \
                       maturin build --release --out /tmp/glide_shared_wheels -i python3.14
                       for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                         unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
@@ -392,7 +388,7 @@ jobs:
                   cd python/glide-shared
                   pip install maturin
                   maturin build --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
-                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
                   for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                     unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
                   done
@@ -638,7 +634,7 @@ jobs:
                       echo "Downloading PyPy 3.11 for x86_64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
                       echo "Downloading PyPy 3.11 for aarch64"
@@ -654,7 +650,7 @@ jobs:
                       echo "Downloading PyPy 3.11 for arm64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     else
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.11 for x86_64"
