@@ -58,6 +58,7 @@ describe("ClientSideCache", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+        // Use TIMEOUT to allow for cluster spin-up; not a behavioral change.
     }, TIMEOUT);
 
     afterAll(async () => {
