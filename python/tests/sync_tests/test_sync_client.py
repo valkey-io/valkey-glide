@@ -727,7 +727,6 @@ class TestCommands:
     @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_set_return_types(self, glide_sync_client: TGlideClient):
         # Regression test for https://github.com/valkey-io/valkey-glide/issues/6347:
         # set() can return a str ("OK"), bytes (old value), or None, so its
