@@ -127,6 +127,7 @@ def glide_sync_client(
     needs_new = not _client_is_usable(client)
 
     if not needs_new:
+        assert client is not None  # narrowing: _client_is_usable returned True
         try:
             # TODO #6144: replace with client.ping() once moved to base class
             client.custom_command(["PING"])
@@ -147,6 +148,7 @@ def glide_sync_client(
         with _sync_client_pool_lock:
             _sync_client_pool[cache_key] = client
 
+    assert client is not None
     yield client
 
     _pool_teardown(client, cluster_mode, cache_key)

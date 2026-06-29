@@ -1039,6 +1039,7 @@ class TestCommands:
         # Cluster multi-node
         if isinstance(glide_client, GlideClusterClient):
             multi_info = await glide_client.client_tracking_info(AllPrimaries())
+            assert isinstance(multi_info, dict)
             for node_info in multi_info.values():
                 assert_client_tracking_info(node_info, on=False)
 
@@ -10413,9 +10414,10 @@ class TestCommands:
         is_cluster = isinstance(glide_client, GlideClusterClient)
 
         result = await glide_client.memory_doctor()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
             # Single-node route.
             reports.append(await glide_client.memory_doctor(route=RandomNode()))
 
@@ -10434,9 +10436,10 @@ class TestCommands:
         is_cluster = isinstance(glide_client, GlideClusterClient)
 
         result = await glide_client.memory_malloc_stats()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
             # Single-node route.
             reports.append(await glide_client.memory_malloc_stats(route=RandomNode()))
 
@@ -10489,6 +10492,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_memory_stats_cluster_multi_node(self, glide_client: TGlideClient):
+        assert isinstance(glide_client, GlideClusterClient)
         result = await glide_client.memory_stats(route=AllNodes())
         assert isinstance(result, dict)
 
@@ -10504,6 +10508,7 @@ class TestCommands:
         await glide_client.set(key, "value")
 
         version = await get_version(glide_client)
+        assert isinstance(glide_client, GlideClusterClient)
         stats = await glide_client.memory_stats(
             route=SlotKeyRoute(SlotType.PRIMARY, key)
         )
@@ -13008,3 +13013,249 @@ class TestClientLifecycle:
 
         await async_client.close()
         sync_client.close()
+
+    @pytest.mark.anyio
+    async def test_concurrent_commands_from_multiple_clients(self, request):
+        """Test concurrent commands from multiple clients sharing the pipe."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        clients = [await GlideClient.create(config) for _ in range(5)]
+        try:
+
+            async def client_workload(client, idx):
+                for i in range(50):
+                    key = f"multi_client_{idx}_{i}"
+                    await client.set(key, f"val_{idx}_{i}")
+                    result = await client.get(key)
+                    assert result == f"val_{idx}_{i}".encode()
+
+            async with anyio.create_task_group() as tg:
+                for i, c in enumerate(clients):
+                    tg.start_soon(client_workload, c, i)
+        finally:
+            for c in clients:
+                await c.close()
+
+    @pytest.mark.anyio
+    async def test_response_after_client_close_is_managed(self, request):
+        """Test that responses/errors arriving after close are handled properly."""
+        from glide_shared.exceptions import ClosingError, RequestError
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+        client = await GlideClient.create(config)
+
+        # Use a non-existent key with short timeout so blpop returns quickly
+        # Fire it in a task group and close the client concurrently
+        result_or_error = None
+
+        async def blocking_cmd():
+            nonlocal result_or_error
+            try:
+                result_or_error = await client.blpop(["nonexistent_close_test"], 1)
+            except (ClosingError, RequestError) as e:
+                result_or_error = e
+
+        async def close_after_delay():
+            await anyio.sleep(0.1)
+            await client.close()
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(blocking_cmd)
+            tg.start_soon(close_after_delay)
+
+        # Should have resolved with None (timeout) or a closing error
+        assert result_or_error is None or isinstance(
+            result_or_error, (ClosingError, RequestError)
+        )
+
+    @pytest.mark.anyio
+    async def test_large_response_does_not_block_other_clients(self, request):
+        """Test that a client receiving a large response doesn't block others."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        client_large = await GlideClient.create(config)
+        client_small = await GlideClient.create(config)
+        try:
+            # Store a large value (256KB)
+            large_val = "X" * (256 * 1024)
+            await client_large.set("large_key", large_val)
+
+            # Request the large value and a small value concurrently
+            results = {}
+
+            async def get_large():
+                results["large"] = await client_large.get("large_key")
+
+            async def get_small():
+                results["small"] = await client_small.get("large_key")
+
+            with anyio.fail_after(5):
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(get_large)
+                    tg.start_soon(get_small)
+
+            assert results["large"] == large_val.encode()
+            assert results["small"] == large_val.encode()
+        finally:
+            await client_large.close()
+            await client_small.close()
+
+    @pytest.mark.anyio
+    async def test_rapid_create_close_cycles(self, request):
+        """Test many rapid close/create cycles: pipe remains functional."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        for i in range(20):
+            client = await GlideClient.create(config)
+            await client.set(f"cycle_{i}", f"val_{i}")
+            assert await client.get(f"cycle_{i}") == f"val_{i}".encode()
+            await client.close()
+
+    @pytest.mark.anyio
+    async def test_inflight_commands_get_closing_error_on_close(self, request):
+        """Test that many in-flight commands all receive ClosingError on close."""
+        from glide_shared.exceptions import ClosingError, RequestError
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        client = await GlideClient.create(config)
+
+        # Fire many blocking commands concurrently, then close
+        results = []
+
+        async def blocking_cmd(i):
+            try:
+                r = await client.blpop([f"inflight_{i}"], 10)
+                results.append(r)
+            except (ClosingError, RequestError) as e:
+                results.append(e)
+
+        async def close_after_dispatch():
+            await anyio.sleep(0.2)  # Let commands get dispatched
+            await client.close()
+
+        async with anyio.create_task_group() as tg:
+            for i in range(20):
+                tg.start_soon(blocking_cmd, i)
+            tg.start_soon(close_after_dispatch)
+
+        # All should have resolved (with None or error)
+        assert len(results) == 20
+        for r in results:
+            assert r is None or isinstance(r, (ClosingError, RequestError))
+
+    @pytest.mark.anyio
+    async def test_pubsub_callback_with_closed_client_no_crash(self, request):
+        """Test that pubsub callback doesn't crash if client closes during delivery."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        received = []
+
+        def cb(msg, ctx):
+            received.append(msg)
+
+        config = create_client_config(
+            cluster_mode=False,
+            addresses=cluster.nodes_addr,
+            standalone_mode_pubsub=GlideClientConfiguration.PubSubSubscriptions(
+                channels_and_patterns={
+                    GlideClientConfiguration.PubSubChannelModes.Exact: {"cb_close_test"}
+                },
+                callback=cb,
+                context=None,
+            ),
+        )
+        sub_client = await GlideClient.create(config)
+        pub_client = await GlideClient.create(
+            create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+        )
+        try:
+            from tests.utils.utils import wait_for
+
+            # Wait for subscription to be established
+            async def _sub_ready():
+                try:
+                    await sub_client.get_subscriptions()
+                    return True
+                except Exception:
+                    return False
+
+            await wait_for(_sub_ready, "Subscription not established")
+            await pub_client.publish("msg1", "cb_close_test")
+            # Wait for callback to fire
+
+            async def _msg_received():
+                return len(received) > 0
+
+            await wait_for(_msg_received, "Callback was not invoked for msg1")
+            # Close subscriber while messages might still be in flight
+            await sub_client.close()
+            # Publish more — should not crash
+            await pub_client.publish("msg2", "cb_close_test")
+            # We just verify no crash occurred
+        finally:
+            if not sub_client._is_closed:
+                await sub_client.close()
+            await pub_client.close()
+
+    @pytest.mark.anyio
+    async def test_client_death_mid_command(self, request):
+        """Test that killing connections mid-command results in proper error handling."""
+        from glide_shared.exceptions import ClosingError, ConnectionError, RequestError
+
+        from tests.utils.utils import create_client_config, kill_connections
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(
+            cluster_mode=False,
+            addresses=cluster.nodes_addr,
+        )
+
+        client = await GlideClient.create(config)
+        admin_client = await GlideClient.create(config)
+        try:
+            result_or_error = None
+
+            async def blocking_cmd():
+                nonlocal result_or_error
+                try:
+                    # Short timeout so test doesn't hang if reconnect happens
+                    result_or_error = await client.blpop(["death_test_key"], 3)
+                except (ConnectionError, ClosingError, RequestError) as e:
+                    result_or_error = e
+
+            async def kill_after_delay():
+                await anyio.sleep(0.2)
+                await kill_connections(admin_client, kill_type="normal", skip_me="yes")
+
+            with anyio.fail_after(15):
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(blocking_cmd)
+                    tg.start_soon(kill_after_delay)
+
+            # After kill: either got error (disconnect), or None (reconnect + timeout)
+            assert result_or_error is None or isinstance(
+                result_or_error, (ConnectionError, ClosingError, RequestError)
+            )
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+            await admin_client.close()
