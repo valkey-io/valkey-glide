@@ -28,6 +28,12 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 **Design Constraints:** Async-first APIs, cluster-aware routing, batching support, cross-AZ affinity
 **Key Features:** Multi-slot command handling, PubSub auto-reconnection, cluster scan, OpenTelemetry integration
 
+### RESP2/RESP3 Response Normalization
+
+Valkey supports two wire protocols (RESP2 and RESP3) that may return structurally different responses for the same commands. For example, RESP2 returns flat arrays where RESP3 returns maps, and RESP2 returns bulk strings where RESP3 returns typed doubles.
+
+The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
+
 **Supported Engine Versions:**
 
 | Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 |
@@ -83,30 +89,64 @@ cargo fmt
 
 ```bash
 cd java
+
+./gradlew :client:cleanRust
+./gradlew :client:clean
+./gradlew :client:buildRust
 ./gradlew :client:buildAll
-./gradlew :integTest:test
 ./gradlew :spotlessApply
+
+# Unit tests
+./gradlew :client:test                             # Run all unit tests
+./gradlew :client:test --tests 'BatchTests'        # Run unit tests from a class
+./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a pattern
+
+# Integration tests
+./gradlew :integTest:test                               # Run all integration tests
+./gradlew :integTest:test --tests 'SharedCommandTests'  # Run integration tests from a class
+./gradlew :integTest:test --tests '*.latencyHistory'    # Run integration tests with a pattern
 ```
 
 **Python:**
 
 ```bash
 cd python
-python3 dev.py build --mode release
-python3 dev.py test
-python3 dev.py lint
-python3 dev.py clean
-python3 dev.py clean --client async
+
+# Build
+python3 dev.py build --mode release               # Build both clients in release mode
+python3 dev.py build --client async --mode debug  # Build async client only in debug node (faster)
+
+# Lint (isort, black, flake8, mypy)
+python3 dev.py lint          # Fix formatting
+python3 dev.py lint --check  # Check only
+
+# Integration tests
+python3 dev.py test                          # Run all tests
+python3 dev.py test --args -k "test_memory"  # Run all tests matching a pattern
+
+# Clean (Rust and Python artifacts)
+python3 dev.py clean                 # Clean both client artifacts
+python3 dev.py clean --client async  # Clean shared and async client artifacts
+
 ```
 
 **Node.js/TypeScript:**
 
 ```bash
 cd node
+
+# Install and build
 npm ci
-npm run build:release
-npm test
+npm run build:release  # Build Rust and TypeScript (slow)
+npm run build:ts       # Build TypeScript only (fast)
+
+# Lint
 npm run lint:fix
+
+# Integration tests
+npm test                                     # Run all tests
+npm test -- --testNamePattern='memoryStats'  # Run tests matching a pattern
+npm test -- --testPathPattern='GlideClient'  # Run tests from a specific file
 ```
 
 **Go:**

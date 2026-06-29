@@ -1943,3 +1943,49 @@ func handleStringToStringAnyMapMapResponse(
 
 	return resultMap, nil
 }
+
+// handleClientTrackingInfoResponse parses a `CLIENT TRACKINGINFO` response.
+func handleClientTrackingInfoResponse(response *C.struct_CommandResponse) (models.ClientTrackingInfo, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Map, false); err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	data, err := parseMap(response)
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	res, err := internal.ConvertClientTrackingInfoResponse(data)
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	return res.(models.ClientTrackingInfo), nil
+}
+
+// handleClientTrackingInfoClusterResponse parses a `CLIENT TRACKINGINFO` response from multiple nodes.
+func handleClientTrackingInfoClusterResponse(
+	response *C.struct_CommandResponse,
+) (map[string]models.ClientTrackingInfo, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Map, false); err != nil {
+		return nil, err
+	}
+	raw, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected map type for cluster CLIENT TRACKINGINFO: %T", raw)
+	}
+	result := make(map[string]models.ClientTrackingInfo, len(rawMap))
+	for node, value := range rawMap {
+		res, err := internal.ConvertClientTrackingInfoResponse(value)
+		if err != nil {
+			return nil, fmt.Errorf("node %q: %w", node, err)
+		}
+		result[node] = res.(models.ClientTrackingInfo)
+	}
+	return result, nil
+}

@@ -7,6 +7,10 @@ from typing import Dict, List, Mapping, Optional, Union, cast
 from glide.async_commands.core import RequestType
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
+from glide_shared.commands.client_tracking import (
+    ClientTrackingInfo,
+    _parse_client_tracking_info,
+)
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -21,6 +25,7 @@ from glide_shared.commands.latency import (
     _parse_latency_history,
     _parse_latency_latest,
 )
+from glide_shared.commands.memory import MemoryStats, _parse_memory_stats
 from glide_shared.constants import (
     TOK,
     TEncodable,
@@ -297,6 +302,30 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             Optional[bytes], await self._execute_command(RequestType.ClientGetName, [])
+        )
+
+    async def client_tracking_info(self) -> ClientTrackingInfo:
+        """
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
+
+        See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
+
+        Returns:
+            ClientTrackingInfo: The tracking info for the client.
+
+        Examples:
+            >>> info = await client.client_tracking_info()
+            >>> print(info.flags)
+                {'off'}
+            >>> print(info.redirect)
+                -1
+        """
+        return _parse_client_tracking_info(
+            cast(
+                Mapping,
+                await self._execute_command(RequestType.ClientTrackingInfo, []),
+            ),
         )
 
     async def dbsize(self) -> int:
@@ -1350,4 +1379,75 @@ class StandaloneCommands(CoreCommands):
         return cast(
             str,
             await self._execute_command(RequestType.Migrate, args),
+        )
+
+    # TODO #6166: move to shared base class
+
+    async def memory_doctor(self) -> str:
+        """
+        Returns a report about memory problems detected by the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
+
+        Returns:
+            str: The memory diagnostic report.
+
+        Examples:
+            >>> report = await client.memory_doctor()
+            >>> print("Memory report:", report)
+        """
+        response = await self._execute_command(RequestType.MemoryDoctor, [])
+        return cast(bytes, response).decode()
+
+    async def memory_malloc_stats(self) -> str:
+        """
+        Returns the internal statistics of the memory allocator.
+
+        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
+
+        Returns:
+            str: The memory allocator statistics.
+
+        Examples:
+            >>> report = await client.memory_malloc_stats()
+            >>> print("Allocator stats:", report)
+        """
+        response = await self._execute_command(RequestType.MemoryMallocStats, [])
+        return cast(bytes, response).decode()
+
+    async def memory_purge(self) -> TOK:
+        """
+        Asks the server to reclaim memory from the allocator back to the operating system.
+
+        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.memory_purge()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.MemoryPurge, []))
+
+    async def memory_stats(self) -> MemoryStats:
+        """
+        Returns detailed memory consumption statistics of the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
+
+        Returns:
+            MemoryStats: A ``MemoryStats`` object containing detailed memory usage
+                statistics.
+
+        Examples:
+            >>> stats = await client.memory_stats()
+            >>> print(f"Peak allocated: {stats.peak_allocated}")
+            >>> print(f"Total allocated: {stats.total_allocated}")
+        """
+        return _parse_memory_stats(
+            cast(
+                Mapping,
+                await self._execute_command(RequestType.MemoryStats, []),
+            ),
         )

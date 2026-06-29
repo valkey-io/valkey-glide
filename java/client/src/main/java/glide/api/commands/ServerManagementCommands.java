@@ -4,8 +4,6 @@ package glide.api.commands;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -622,32 +620,32 @@ public interface ServerManagementCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't
-     *     exist.
+     * @return An array of arrays representing latency spike entries, or an empty array if the event
+     *     doesn't exist.
      * @example
      *     <pre>{@code
-     * LatencyEntry[] history = client.latencyHistory("command").get();
-     * for (LatencyEntry entry : history) {
-     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * Object[][] history = client.latencyHistory("command").get();
+     * for (Object[] entry : history) {
+     *     System.out.println("Time: " + entry[0] + ", Latency: " + entry[1]);
      * }
      * }</pre>
      */
-    CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event);
+    CompletableFuture<Object[][]> latencyHistory(@NonNull String event);
 
     /**
      * Reports the latest latency events logged by the server.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return An array of {@link LatencyEventInfo} for the latest latency events.
+     * @return An array of arrays representing latency event info.
      * @example
      *     <pre>{@code
-     * LatencyEventInfo[] latest = client.latencyLatest().get();
-     * for (LatencyEventInfo info : latest) {
-     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * Object[][] latest = client.latencyLatest().get();
+     * for (Object[] info : latest) {
+     *     System.out.println("Event: " + info[0] + ", Latest duration: " + info[2]);
      * }
      * }</pre>
      */
-    CompletableFuture<LatencyEventInfo[]> latencyLatest();
+    CompletableFuture<Object[][]> latencyLatest();
 
     /**
      * Resets the latency spike time series for all events.
@@ -676,4 +674,64 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<Long> latencyReset(@NonNull String[] events);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return The memory diagnostic report.
+     * @example
+     *     <pre>{@code
+     * String report = client.memoryDoctor().get();
+     * System.out.println("Memory report: " + report);
+     * }</pre>
+     */
+    CompletableFuture<String> memoryDoctor();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return The memory allocator statistics.
+     * @example
+     *     <pre>{@code
+     * String stats = client.memoryMallocStats().get();
+     * System.out.println("Allocator stats: " + stats);
+     * }</pre>
+     */
+    CompletableFuture<String> memoryMallocStats();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = client.memoryPurge().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return A <code>Map</code> of memory statistics.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object> stats = client.memoryStats().get();
+     * System.out.println("Total allocated: " + stats.get("total.allocated"));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> memoryStats();
 }
