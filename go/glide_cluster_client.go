@@ -4136,3 +4136,71 @@ func (client *ClusterClient) ClusterLinksWithRoute(
 	}
 	return models.CreateClusterSingleValue[[]map[string]any](data), nil
 }
+
+// Migrate atomically transfers a key from the source Valkey instance to a destination Valkey instance.
+// Only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx           - The context for controlling the command execution.
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must contain exactly one key.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *ClusterClient) Migrate(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) (string, error) {
+	if len(keys) > 1 {
+		return models.DefaultStringResponse, errors.New("MIGRATE in cluster mode only supports a single key")
+	}
+	return client.baseClient.Migrate(ctx, host, port, keys, destinationDB, timeout)
+}
+
+// MigrateWithOptions atomically transfers a key from the source Valkey instance to a destination
+// Valkey instance with additional options. Only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx            - The context for controlling the command execution.
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must contain exactly one key.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *ClusterClient) MigrateWithOptions(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	if len(keys) > 1 {
+		return models.DefaultStringResponse, errors.New("MIGRATE in cluster mode only supports a single key")
+	}
+	return client.baseClient.MigrateWithOptions(ctx, host, port, keys, destinationDB, timeout, migrateOptions)
+}
