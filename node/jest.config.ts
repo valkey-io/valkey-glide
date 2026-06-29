@@ -38,9 +38,6 @@ const config: Config = {
     // Setup file to configure the testing environment after Jest is installed
     setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
 
-    // Retry failing tests up to 2 times in CI to absorb transient failures
-    testRetries: process.env.CI ? 2 : 0,
-
     // Shared cluster setup/teardown - start servers once for all compatible test files
     globalSetup: "<rootDir>/tests/globalSetup.ts",
     globalTeardown: "<rootDir>/tests/globalTeardown.ts",
