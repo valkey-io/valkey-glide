@@ -294,25 +294,27 @@ _WAIT_FOR_INTERVAL_SEC = 0.1
 async def wait_for(
     condition: Callable[[], Awaitable[bool]],
     failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
 ) -> None:
     """Waits until a condition is met.
 
     Args:
         condition: Async callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
-
+        timeout: Maximum time to wait for the condition to be met, in seconds.
     Raises:
         TimeoutError: If the condition is not met within the timeout.
     """
-    import asyncio
     import time as _time
 
-    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
+    import anyio
+
+    deadline = _time.monotonic() + timeout
 
     while _time.monotonic() < deadline:
         if await condition():
             return
-        await asyncio.sleep(_WAIT_FOR_INTERVAL_SEC)
+        await anyio.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
 

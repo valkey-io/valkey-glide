@@ -451,7 +451,7 @@ class BaseClient(CoreCommands):
     def _setup_pipe(self) -> None:
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder
+        global _pipe_remainder, _trio_pipe_active
         with _async_pipe_lock:
             if _async_pipe_read_fd < 0:
                 try:
@@ -492,6 +492,7 @@ class BaseClient(CoreCommands):
                         # For trio: spawn a background task that polls the pipe
                         import trio
 
+                        _trio_pipe_active = True
                         trio.lowlevel.spawn_system_task(
                             _trio_pipe_reader, _async_pipe_read_fd
                         )
