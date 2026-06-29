@@ -25,9 +25,9 @@ try:
 except ImportError:
     HAS_ANYIO = False
 
+from glide._ffi_instance import _ASYNC_FFI
 from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared._fast_response import parse_response as _c_parse_response
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -63,9 +63,6 @@ from .async_commands.standalone_commands import StandaloneCommands
 from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
-
-_ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
-
 
 if sys.version_info >= (3, 11):
     from typing import Self

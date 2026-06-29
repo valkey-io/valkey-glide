@@ -7,7 +7,6 @@ from types import TracebackType
 from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared._fast_response import parse_response as _fast_parse_response
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -34,15 +33,13 @@ from glide_shared.routes import (
     SlotType,
     build_protobuf_route,
 )
+from glide_sync._ffi_instance import _SYNC_FFI
 
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
-
-_SYNC_FFI = _GlideFFI()  # Sync client's own FFI instance
-
 
 if sys.version_info >= (3, 11):
     from typing import Self

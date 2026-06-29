@@ -1,13 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.cluster_scan_cursor import ClusterScanCursor as _ClusterScanCursorBase
-
-_module_ffi = _GlideFFI()
+from glide_sync._ffi_instance import _SYNC_FFI
 
 
 class ClusterScanCursor(_ClusterScanCursorBase):
-    """ClusterScanCursor wrapper using the sync module's FFI instance."""
+    """ClusterScanCursor using the sync package's FFI instance."""
 
     def __init__(self, new_cursor=None):
-        super().__init__(new_cursor, _ffi=_module_ffi.ffi, _lib=_module_ffi.lib)
+        super().__init__(new_cursor, _ffi=_SYNC_FFI.ffi, _lib=_SYNC_FFI.lib)
