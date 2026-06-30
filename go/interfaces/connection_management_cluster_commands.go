@@ -54,4 +54,12 @@ type ConnectionManagementClusterCommands interface {
 	ClientUnpause(ctx context.Context) (string, error)
 
 	ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error)
+
+	// TODO #6144: Move to base class
+	ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error)
+
+	ClientTrackingInfoWithOptions(
+		ctx context.Context,
+		routeOptions options.RouteOption,
+	) (models.ClusterValue[models.ClientTrackingInfo], error)
 }

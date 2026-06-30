@@ -502,6 +502,11 @@ public class ConnectionManager {
                         // to prevent garbage collection while the client is alive
                         AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
 
+                        // Get the address resolver (may be null if not configured)
+                        // The resolver is passed directly to native code which stores it as a global reference
+                        // to prevent garbage collection while the client is alive
+                        AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
+
                         // Create native client with protobuf bytes
                         // Native code will store the resolver as a global reference if provided
                         this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);

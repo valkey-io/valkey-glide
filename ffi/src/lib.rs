@@ -551,6 +551,10 @@ pub enum ClientType {
 }
 
 const FRAME_SIZE: usize = 32;
+/// Maximum total pubsub payload size sent inline through the pipe.
+/// Messages larger than this use a heap pointer in a standard 32-byte frame
+/// to avoid blocking other clients' responses during multi-read accumulation.
+const MAX_INLINE_PUBSUB: usize = 1 << 16; // 64 KiB
 struct SharedPipeWriter {
     buffer: std::sync::Mutex<Vec<u8>>,
     condvar: Condvar,
@@ -612,6 +616,40 @@ impl SharedPipeWriter {
         drop(b);
         self.condvar.notify_one();
     }
+
+    /// Push a large pubsub message as a heap-allocated flat buffer.
+    /// Same wire format as inline payload but delivered via pointer to avoid
+    /// blocking the pipe for other clients during multi-read accumulation.
+    /// Python frees via free_pubsub_pointer_payload(ptr, len).
+    fn push_pubsub_pointer(
+        &self,
+        cid: u64,
+        kind: i32,
+        message: &[u8],
+        channel: &[u8],
+        pattern: &[u8],
+    ) {
+        let payload_len = 4 + 4 + message.len() + 4 + channel.len() + 4 + pattern.len();
+        let mut buf = Vec::with_capacity(payload_len);
+        buf.extend_from_slice(&kind.to_ne_bytes());
+        buf.extend_from_slice(&(message.len() as u32).to_ne_bytes());
+        buf.extend_from_slice(message);
+        buf.extend_from_slice(&(channel.len() as u32).to_ne_bytes());
+        buf.extend_from_slice(channel);
+        buf.extend_from_slice(&(pattern.len() as u32).to_ne_bytes());
+        buf.extend_from_slice(pattern);
+        let boxed = buf.into_boxed_slice();
+        let ptr = Box::into_raw(boxed) as *mut u8 as u64;
+        // Pack length with pointer-mode flag in bit 63
+        let len_with_flag = (payload_len as u64) | (1u64 << 63);
+        let mut b = self.buffer.lock().unwrap();
+        b.extend_from_slice(&cid.to_ne_bytes());
+        b.extend_from_slice(&u64::MAX.to_ne_bytes()); // sentinel
+        b.extend_from_slice(&ptr.to_ne_bytes());
+        b.extend_from_slice(&len_with_flag.to_ne_bytes());
+        drop(b);
+        self.condvar.notify_one();
+    }
 }
 
 /// No-op success callback — safe to call from any thread (no GIL needed).
@@ -625,6 +663,18 @@ pub extern "C" fn noop_failure_callback(
     _msg: *const c_char,
     _err_type: RequestErrorType,
 ) {
+}
+
+/// Free a heap-allocated pubsub payload buffer (pointer-mode frame).
+///
+/// # Safety
+/// `ptr` must be a valid pointer from a pointer-mode pubsub frame, or null.
+/// `len` must be the original payload length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_pubsub_pointer_payload(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() {
+        let _ = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)) };
+    }
 }
 
 /// Free an error string delivered via the shared pipe error frame.
@@ -655,14 +705,22 @@ pub unsafe extern "C" fn init_async_pipe(pipe_write_fd: i32) {
         std::thread::Builder::new()
             .name("glide-async-pipe-flush".into())
             .spawn(move || {
+                let flush_threshold: usize = std::env::var("GLIDE_PIPE_FLUSH_THRESHOLD")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(1);
                 while let Some(sw) = ASYNC_PIPE.get() {
                     let data = {
                         let mut buf = sw.buffer.lock().unwrap();
                         while buf.is_empty() {
                             buf = sw.condvar.wait(buf).unwrap();
                         }
+                        // Flush threshold: if frames buffered <= threshold, flush immediately
+                        // to minimize latency. If more are queued, yield briefly to let more
+                        // accumulate for batch efficiency (amortizes syscall cost).
+                        // Configurable via GLIDE_PIPE_FLUSH_THRESHOLD (default: 1).
                         let fc = buf.len() / FRAME_SIZE;
-                        if fc <= 1 {
+                        if fc <= flush_threshold {
                             let mut d = Vec::with_capacity(FRAME_SIZE * 4);
                             std::mem::swap(&mut *buf, &mut d);
                             d
@@ -1150,6 +1208,14 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> (Vec<u8>, Vec<u8>, Option<
     }
 }
 
+/// Process a push notification by invoking the pubsub callback with extracted message data.
+///
+/// # Safety
+/// This function is unsafe because it:
+/// - Dereferences raw pointers (the callback and client_adapter_ptr)
+/// - Calls an extern C function pointer (pubsub_callback)
+/// - Passes raw pointers that must remain valid for the callback duration
+/// - The caller must ensure client_adapter_ptr points to a valid ClientAdapter
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
     pubsub_callback: PubSubCallback,
@@ -1350,13 +1416,13 @@ fn create_client_internal(
                     {
                         let (message, channel, pattern) = extract_pubsub_data(&push_msg);
                         let kind: i32 = PushKind::from(push_msg.kind) as i32;
-                        w.push_pubsub_inline(
-                            pipe_cid,
-                            kind,
-                            &message,
-                            &channel,
-                            pattern.as_deref().unwrap_or(&[]),
-                        );
+                        let pat_slice = pattern.as_deref().unwrap_or(&[]);
+                        let total_len = message.len() + channel.len() + pat_slice.len();
+                        if total_len > MAX_INLINE_PUBSUB {
+                            w.push_pubsub_pointer(pipe_cid, kind, &message, &channel, pat_slice);
+                        } else {
+                            w.push_pubsub_inline(pipe_cid, kind, &message, &channel, pat_slice);
+                        }
                     }
                     continue;
                 }

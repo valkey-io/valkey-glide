@@ -2,7 +2,6 @@
 
 from typing import Optional
 
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.logger import Level, Logger
 
 ENCODING = "utf-8"
@@ -18,17 +17,18 @@ class ClusterScanCursor:
     cleans up resources when the cursor is no longer needed.
     """
 
-    def __init__(self, new_cursor: Optional[str] = None):
+    def __init__(self, new_cursor: Optional[str] = None, *, _ffi, _lib):
         """
         Create a new ClusterScanCursor instance.
 
         Args:
             new_cursor: Optional cursor string to initialize with. If None,
                        creates a cursor in the initial state.
+            _ffi: CFFI ffi instance (supplied by the package-level wrapper)
+            _lib: CFFI lib instance (supplied by the package-level wrapper)
         """
-        _glide_ffi = _GlideFFI()
-        self._ffi = _glide_ffi.ffi
-        self._lib = _glide_ffi.lib
+        self._ffi = _ffi
+        self._lib = _lib
 
         self._cursor = new_cursor or "0"
 

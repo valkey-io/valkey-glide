@@ -6,6 +6,10 @@ from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
+from glide_shared.commands.client_tracking import (
+    ClientTrackingInfo,
+    _parse_client_tracking_info,
+)
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -298,6 +302,30 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             Optional[bytes], self._execute_command(RequestType.ClientGetName, [])
+        )
+
+    def client_tracking_info(self) -> ClientTrackingInfo:
+        """
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
+
+        See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
+
+        Returns:
+            ClientTrackingInfo: The tracking info for the client.
+
+        Examples:
+            >>> info = client.client_tracking_info()
+            >>> print(info.flags)
+                {'off'}
+            >>> print(info.redirect)
+                -1
+        """
+        return _parse_client_tracking_info(
+            cast(
+                Mapping,
+                self._execute_command(RequestType.ClientTrackingInfo, []),
+            ),
         )
 
     def dbsize(self) -> int:

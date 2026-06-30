@@ -210,7 +210,7 @@ async function main(
     totalCommands: number,
     numOfConcurrentTasks: number,
     dataSize: number,
-    clientsToRun: "all" | "glide",
+    clientsToRun: "all" | "glide" | "glide-compressed",
     host: string,
     clientCount: number,
     useTLS: boolean,
@@ -232,6 +232,32 @@ async function main(
         await runClients(
             clients,
             "glide",
+            totalCommands,
+            numOfConcurrentTasks,
+            dataSize,
+            data,
+            (client) => {
+                (client as GlideClient).close();
+            },
+            clusterModeEnabled,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (clientsToRun == "all" || clientsToRun == "glide-compressed") {
+        const clientClass = clusterModeEnabled
+            ? GlideClusterClient
+            : GlideClient;
+        const clients = await createClients(clientCount, () =>
+            clientClass.createClient({
+                addresses: [{ host, port }],
+                useTLS,
+                compression: { enabled: true },
+            }),
+        );
+        await runClients(
+            clients,
+            "glide-compressed",
             totalCommands,
             numOfConcurrentTasks,
             dataSize,

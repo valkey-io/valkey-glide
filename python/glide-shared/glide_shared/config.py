@@ -921,15 +921,17 @@ class BaseClientConfiguration:
         if not self.client_side_cache:
             return
 
-        request.client_side_cache.cache_id = self.client_side_cache.cache_id
-        request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
+        cache_config = self.client_side_cache
+        cache_request = request.client_side_cache
 
-        request.client_side_cache.entry_ttl_ms = self.client_side_cache.entry_ttl_ms
-        request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
-        if self.client_side_cache.eviction_policy:
-            request.client_side_cache.eviction_policy = (
-                self.client_side_cache.eviction_policy.value
-            )
+        cache_request.cache_id = cache_config.cache_id
+        cache_request.max_cache_kb = cache_config.max_cache_kb
+        cache_request.entry_ttl_ms = cache_config.entry_ttl_ms
+        cache_request.enable_metrics = cache_config.enable_metrics
+        cache_request.server_assisted = cache_config.server_assisted
+
+        if cache_config.eviction_policy:
+            cache_request.eviction_policy = cache_config.eviction_policy.value
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False

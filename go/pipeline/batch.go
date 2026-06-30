@@ -6,6 +6,7 @@ package pipeline
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -188,6 +189,70 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 		false,
 		internal.ConvertScanResult,
 	)
+}
+
+// Migrate atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+// Only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must contain exactly one key.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *ClusterBatch) Migrate(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) *ClusterBatch {
+	if len(keys) > 1 {
+		return b.addError("Migrate", errors.New("MIGRATE in cluster mode only supports a single key"))
+	}
+	return b.MigrateWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
+}
+
+// MigrateWithOptions atomically transfers a key from a source Valkey instance to a destination Valkey
+// instance with additional options. Only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must contain exactly one key.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *ClusterBatch) MigrateWithOptions(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) *ClusterBatch {
+	if len(keys) > 1 {
+		return b.addError("MigrateWithOptions", errors.New("MIGRATE in cluster mode only supports a single key"))
+	}
+	return b.BaseBatch.MigrateWithOptions(host, port, keys, destinationDB, timeout, migrateOptions)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.

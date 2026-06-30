@@ -31,7 +31,6 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 // [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#standalone
 type Client struct {
 	baseClient
-	clientConfig *config.ClientConfiguration // stored for scoped_connection
 }
 
 // Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
@@ -69,7 +68,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
-	return &Client{baseClient: *client, clientConfig: config}, nil
+	return &Client{*client}, nil
 }
 
 // Executes a batch by processing the queued commands.
@@ -951,6 +950,30 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// TODO #6144: Move to base class
+
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The tracking info for the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {
+	response, err := client.executeCommand(ctx, C.ClientTrackingInfo, []string{})
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	return handleClientTrackingInfoResponse(response)
 }
 
 // Iterates incrementally over a database for matching keys.
