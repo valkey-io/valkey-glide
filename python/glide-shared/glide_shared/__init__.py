@@ -1,6 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
+from .cache import ClientSideCache, EvictionPolicy
+from .commands.batch import (
+    Batch,
+    ClusterBatch,
+    ClusterTransaction,
+    TBatch,
+    Transaction,
+)
 from .commands.batch_options import (
     BatchOptions,
     BatchRetryStrategy,
@@ -23,8 +30,10 @@ from .commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from .commands.client_tracking import ClientTrackingInfo
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -36,10 +45,14 @@ from .commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
+    MonitorMsg,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
 )
+from .commands.latency import LatencyEntry, LatencyEventInfo
+from .commands.memory import MemoryStats, MemoryStatsDb
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
@@ -73,9 +86,12 @@ from .commands.server_modules.ft_options.ft_profile_options import (
     QueryType,
 )
 from .commands.server_modules.ft_options.ft_search_options import (
+    ConsistencyMode,
     FtSearchLimit,
     FtSearchOptions,
+    InfoScope,
     ReturnField,
+    ShardScope,
 )
 from .commands.server_modules.json_options import (
     JsonArrIndexOptions,
@@ -114,15 +130,18 @@ from .commands.stream import (
     TrimByMinId,
 )
 from .config import (
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    ClientCircuitBreakerConfiguration,
     CompressionBackend,
     CompressionConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     IamAuthConfig,
     NodeAddress,
+    NodeDiscoveryMode,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
@@ -154,6 +173,7 @@ from .constants import (
     TXInfoStreamResponse,
 )
 from .exceptions import (
+    CircuitBreakerError,
     ClosingError,
     ConfigurationError,
     ConnectionError,
@@ -191,14 +211,17 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
+    "NodeDiscoveryMode",
     "ServerCredentials",
     "ServiceType",
     "IamAuthConfig",
@@ -241,6 +264,7 @@ __all__ = [
     "SignedEncoding",
     "UnsignedEncoding",
     "ScoreBoundary",
+    "ClientPauseMode",
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
@@ -260,6 +284,11 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "LatencyEntry",
+    "LatencyEventInfo",
+    "MemoryStats",
+    "MemoryStatsDb",
+    "MigrateOptions",
     "LexBoundary",
     "Limit",
     "ListDirection",
@@ -289,6 +318,8 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorMsg",
     # Json
     "json_batch",
     "JsonGetOptions",
@@ -305,6 +336,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",
@@ -331,6 +363,9 @@ __all__ = [
     "FtSearchLimit",
     "ReturnField",
     "FtSearchOptions",
+    "InfoScope",
+    "ShardScope",
+    "ConsistencyMode",
     "FtAggregateApply",
     "FtAggregateFilter",
     "FtAggregateClause",
@@ -346,4 +381,8 @@ __all__ = [
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",
+    # Cache
+    "ClientSideCache",
+    "ClientTrackingInfo",
+    "EvictionPolicy",
 ]

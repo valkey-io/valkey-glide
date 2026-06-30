@@ -20,8 +20,12 @@ const (
 	WeightsKeyword    string = "WEIGHTS"    // Valkey API keyword for the weights option for multiple commands.
 	RankKeyword       string = "RANK"       // Valkey API keyword use to determine the rank of the match to return.
 	MaxLenKeyword     string = "MAXLEN"     // Valkey API keyword used to determine the maximum number of list items to compare.
+	CopyKeyword       string = "COPY"       // Valkey API keyword used to indicate the copy flag.
 	ReplaceKeyword    string = "REPLACE"    // Subcommand string to replace existing key.
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
+	AuthKeyword       string = "AUTH"       // Valkey API keyword for authentication.
+	Auth2Keyword      string = "AUTH2"      // Valkey API keyword for authentication with username and password.
+	KeysKeyword       string = "KEYS"       // Valkey API keyword for specifying multiple keys in commands like MIGRATE.
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
 	TypeKeyword       string = "TYPE"
@@ -309,6 +313,76 @@ type SearchShape string
 const (
 	BYRADIUS SearchShape = "BYRADIUS"
 	BYBOX    SearchShape = "BYBOX"
+)
+
+// DistanceMetric is the distance metric used to measure similarity between vectors.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.create/
+type DistanceMetric string
+
+const (
+	// DistanceMetricL2 is the Euclidean distance.
+	DistanceMetricL2 DistanceMetric = "L2"
+	// DistanceMetricIP is the inner product.
+	DistanceMetricIP DistanceMetric = "IP"
+	// DistanceMetricCosine is the cosine distance.
+	DistanceMetricCosine DistanceMetric = "COSINE"
+)
+
+// VectorDataType is the data type for vector fields.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.create/
+type VectorDataType string
+
+const (
+	// VectorDataTypeFloat32 is the FLOAT32 vector type (default).
+	VectorDataTypeFloat32 VectorDataType = "FLOAT32"
+)
+
+// IndexDataType is the type of the index dataset.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.create/
+type IndexDataType string
+
+const (
+	// IndexDataTypeHash indicates data stored in hashes; field identifiers are field names within the hashes.
+	IndexDataTypeHash IndexDataType = "HASH"
+	// IndexDataTypeJSON indicates data stored as JSON documents; field identifiers are JSON Path expressions.
+	IndexDataTypeJSON IndexDataType = "JSON"
+)
+
+// FtSearchSortOrder is the sort order for FT.SEARCH SORTBY clause.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.search/
+type FtSearchSortOrder string
+
+const (
+	// FtSearchSortOrderAsc sorts results in ascending order.
+	FtSearchSortOrderAsc FtSearchSortOrder = "ASC"
+	// FtSearchSortOrderDesc sorts results in descending order.
+	FtSearchSortOrderDesc FtSearchSortOrder = "DESC"
+)
+
+// FtAggregateOrderBy is the sort order for FT.AGGREGATE SORTBY clause.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.aggregate/
+type FtAggregateOrderBy string
+
+const (
+	// FtAggregateOrderByAsc sorts results in ascending order.
+	FtAggregateOrderByAsc FtAggregateOrderBy = "ASC"
+	// FtAggregateOrderByDesc sorts results in descending order.
+	FtAggregateOrderByDesc FtAggregateOrderBy = "DESC"
 )
 
 // FunctionRestorePolicy represents the policy to use when restoring functions.

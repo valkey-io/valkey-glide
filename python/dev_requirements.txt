@@ -1,16 +1,16 @@
-maturin==1.9.1
+maturin==1.13.3
 anyio[trio]>=4.9.0
 uvloop
-pytest
+pytest<9.1
 pytest-html
 pytest-timeout
 black >= 24.3.0
-mypy == 1.17.0
+mypy == 1.19.1
 mypy-protobuf == 3.6.0
 flake8 == 7.3.0
-isort == 6.0.1
-types-protobuf ~= 6.30.2
-packaging >= 22.0
+isort == 6.1.0
+types-protobuf ~= 6.32.1
+packaging >= 26.2
 sphinx >= 7.4.7
 sphinx-rtd-theme
 psutil
@@ -19,5 +19,5 @@ pytest_asyncio
 # Sync Client
 types-cffi
 setuptools
-wheel >= 0.45
+wheel >= 0.47.0
 build

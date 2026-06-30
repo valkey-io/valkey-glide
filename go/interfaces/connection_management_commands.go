@@ -1,0 +1,41 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+package interfaces
+
+import (
+	"context"
+	"time"
+
+	"github.com/valkey-io/valkey-glide/go/v2/models"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
+)
+
+// Supports commands and transactions for the "Connection Management" group of commands for standalone client.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/#connection
+type ConnectionManagementCommands interface {
+	Ping(ctx context.Context) (string, error)
+
+	PingWithOptions(ctx context.Context, pingOptions options.PingOptions) (string, error)
+
+	Echo(ctx context.Context, message string) (models.Result[string], error)
+
+	ClientId(ctx context.Context) (int64, error)
+
+	ClientGetName(ctx context.Context) (models.Result[string], error)
+
+	ClientSetName(ctx context.Context, connectionName string) (string, error)
+
+	ClientPause(ctx context.Context, timeout time.Duration) (string, error)
+
+	ClientPauseWithMode(ctx context.Context, timeout time.Duration, mode options.ClientPauseMode) (string, error)
+
+	ClientUnpause(ctx context.Context) (string, error)
+
+	Reset(ctx context.Context) (string, error)
+
+	// TODO #6144: Move to base class
+	ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error)
+}

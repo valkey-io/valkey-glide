@@ -34,9 +34,10 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     HashFieldConditionalChange,
     InfoSection,
+    MigrateOptions,
 )
 from glide_shared.commands.stream import StreamAddOptions
-from glide_shared.config import ProtocolVersion
+from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
 from glide_shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 
@@ -1635,3 +1636,79 @@ class TestBatch:
         assert result[2] == [1, 1]  # both fields made persistent
         assert result[3] == [-1, -1, -1]  # all fields now persistent
         assert result[4] == [-1, -1]  # both fields now persistent
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline_migrate(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        key = get_random_string(10)
+        await glide_client.set(key, "value")
+        batch.migrate("invalid-host", 6379, key, 0, 5000)
+        batch.migrate("invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True))
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+        assert isinstance(result[0], RequestError)
+        assert isinstance(result[1], RequestError)
+
+        # Multi-key: empty keys list raises ValueError (standalone Batch only)
+        if not cluster_mode:
+            batch2 = Batch(is_atomic=False)
+            with pytest.raises(ValueError):
+                batch2.migrate("invalid-host", 6379, [], 0, 5000)
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline_migrate_success(
+        self, glide_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = await create_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            await glide_client.set(key1, val1)
+            await glide_client.set(key2, val2)
+
+            batch = Batch(is_atomic=False)
+            batch.migrate(dest_host, dest_port, key1, 0, 5000)
+            batch.migrate(dest_host, dest_port, [key2], 0, 5000)
+            result = await exec_batch(glide_client, batch, raise_on_error=True)
+            assert result is not None
+            assert result[0] == OK or result[0] == b"OK"
+            assert result[1] == OK or result[1] == b"OK"
+            assert await glide_client.exists([key1, key2]) == 0
+            assert await dest_client.get(key1) == val1.encode()
+            assert await dest_client.get(key2) == val2.encode()
+        finally:
+            await dest_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_reset_batch(self, glide_client: GlideClient):
+        batch = Batch(is_atomic=False)
+        batch.reset()
+        result = await exec_batch(glide_client, batch, raise_on_error=True)
+        assert result is not None
+        assert result[0] == b"RESET"

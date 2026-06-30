@@ -47,7 +47,8 @@ APPROVED_LICENSES = [
     "Apache-2.0 AND (Apache-2.0 OR MIT) AND MIT",
     "(Apache-2.0 OR ISC) AND ISC",
     "(Apache-2.0 OR ISC) AND ISC AND OpenSSL",
-    "CDLA-Permissive-2.0"
+    "CDLA-Permissive-2.0",
+    "Apache-2.0 AND (Apache-2.0 OR ISC) AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) AND BSD-3-Clause AND ISC AND MIT"
 ]
 
 # Packages with non-pre-approved licenses that received manual approval.
@@ -57,6 +58,12 @@ APPROVED_PACKAGES = [
     "Crate::ring:0.17.8",
     "Maven:org.json:json:20231013",
     "Maven:org.json:json:20250517",
+    # Checkstyle and its transitive dependencies (build-time only, not distributed)
+    "Maven:com.puppycrawl.tools:checkstyle:9.3",
+    "Maven:com.puppycrawl.tools:checkstyle:10.21.4",
+    "Maven:org.antlr:antlr4-runtime:4.9.3",
+    "Maven:org.javassist:javassist:3.28.0-GA",
+    "Maven:org.reflections:reflections:0.10.2",
 ]
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 

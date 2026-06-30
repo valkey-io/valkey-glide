@@ -2,7 +2,7 @@
 
 This document describes how to set up your development environment to build and test the Valkey GLIDE Python wrapper.
 
-The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [CFFI](https://cffi.readthedocs.io/) for command dispatch and [PyO3](https://github.com/PyO3/pyo3) for response parsing, and the Python packages are built using [maturin](https://github.com/PyO3/maturin) and setuptools. The async client communicates with Rust via an anonymous pipe for response delivery; the sync client uses direct FFI return values.
 
 ## 📁 Python Project Structure
 
@@ -13,8 +13,9 @@ The `python/` directory contains three separate components:
 #### 🔹 glide-async/
 
 - Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
-- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
-- Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+- Rust bindings: via CFFI (command dispatch) and a compiled Rust response parser (`_fast_response`).
+- Communication Layer: Commands sent via direct FFI calls to Rust. Responses delivered through an anonymous pipe from Rust worker threads to the Python event loop, parsed by the Rust `_fast_response` module.
+- Async frameworks: asyncio, uvloop, trio (via anyio)
 - Import path: `import glide`
 - PyPI package name: `valkey-glide`
 - Build backend: Maturin (Rust-based)
@@ -30,9 +31,11 @@ The `python/` directory contains three separate components:
 
 #### 🔹 glide-shared/
 
-- Purpose: Shared Python logic used by both clients — includes command builders, exceptions, constants, protobuf message handling, and more.
+- Purpose: Shared Python logic and native extensions used by both clients — includes command builders, exceptions, constants, protobuf message handling, and the fast response parser (PyO3).
+- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-shared/src/lib.rs`.
 - Import path: `import glide_shared`
-- Installation: Installed locally via `pip install valkey-glide/python/glide-shared` during each client’s build process. Not published separately to PyPI.
+- Installation: Built locally via `maturin develop` during each client’s build process. Not published separately to PyPI.
+- Build backend: Maturin (Rust-based, hybrid Python + native extension)
 
 ### 🧱 High-Level Folder Structure
 
@@ -46,9 +49,11 @@ python/
 ├── glide-sync/             # Sync client (CFFI + setuptools)
 │   ├── pyproject.toml
 │   └── glide_sync/         # Python code for sync client
-├── glide-shared/           # Shared logic used by both clients
+├── glide-shared/           # Shared logic + native extensions (Maturin hybrid)
+│   ├── Cargo.toml          # Rust crate config (fast response parser)
 │   ├── pyproject.toml
-│   └── glide_shared/       # Shared source code
+│   ├── src/                # Rust source (PyO3 fast response parser)
+│   └── glide_shared/       # Shared Python source code
 └── tests/                  # Shared test suite
 ffi/
 ├── src/                    # Rust code provides a C-compatible FFI (used in glide-sync)
@@ -255,9 +260,26 @@ source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
+### IAM Authentication Tests
+
+To run [IAM authentication tests](tests/async_tests/test_auth.py) locally with mock credentials:
+
+```bash
+# Run from the `python/` directory
+source .env/bin/activate
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+pytest -v -k test_iam_authentication
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
 ### DNS Tests
 
-To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:
+To run [async](tests/async_tests/test_dns.py) and [sync](tests/sync_tests/test_sync_dns.py) DNS tests locally:
 
 1. Add the following entries to your hosts file:
    - Linux/macOS: `/etc/hosts`

@@ -167,6 +167,8 @@ const (
 	// robin manner, prioritizing local replicas, then the local primary, and falling back to any
 	// replica or the primary if needed.
 	AzAffinityReplicaAndPrimary
+	// ReadFromAllNodes - Spread the read requests between all nodes (primary and replicas) in a round-robin manner.
+	ReadFromAllNodes
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
@@ -182,21 +184,58 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 		return protobuf.ReadFrom_AZAffinityReplicasAndPrimary
 	}
 
+	if readFrom == ReadFromAllNodes {
+		return protobuf.ReadFrom_AllNodes
+	}
+
 	return protobuf.ReadFrom_Primary
 }
 
+// NodeDiscoveryMode controls how the client discovers node roles and topology in standalone mode.
+type NodeDiscoveryMode int32
+
+const (
+	// NodeDiscoveryModeStandard verifies node roles via INFO REPLICATION, uses only provided addresses.
+	NodeDiscoveryModeStandard NodeDiscoveryMode = 0
+	// NodeDiscoveryModeStatic skips role detection. Trusts provided addresses as-is; first is primary.
+	// Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+	// Note: Do not set clientName when using this mode with a proxy.
+	NodeDiscoveryModeStatic NodeDiscoveryMode = 1
+	// NodeDiscoveryModeDiscoverAll discovers full topology (primary + all replicas) from any starting node.
+	// Provide any single node address and the client will find and connect to all other nodes.
+	NodeDiscoveryModeDiscoverAll NodeDiscoveryMode = 2
+)
+
+// AddressResolver is a callback interface for resolving server addresses before connection.
+//
+// When provided to a client configuration, this callback is invoked for each configured address
+// during connection establishment and during cluster topology refreshes. The callback receives
+// the configured host and port, and should return the actual host and port to use for the connection.
+//
+// Use cases:
+//   - Custom DNS resolution for service discovery
+//   - Address translation for proxy setups
+//   - Dynamic endpoint resolution for cloud environments
+//
+// The resolver must be safe for concurrent use, as it may be called from multiple goroutines
+// during connection and topology refresh.
+type AddressResolver func(host string, port int) (string, int)
+
 type baseClientConfiguration struct {
-	addresses         []NodeAddress
-	useTLS            bool
-	credentials       *ServerCredentials
-	readFrom          ReadFrom
-	requestTimeout    time.Duration
-	clientName        string
-	clientAZ          string
-	reconnectStrategy *BackoffStrategy
-	lazyConnect       bool
-	DatabaseId        *int `json:"database_id,omitempty"`
-	compressionConfig *CompressionConfiguration
+	addresses            []NodeAddress
+	useTLS               bool
+	credentials          *ServerCredentials
+	readFrom             ReadFrom
+	requestTimeout       time.Duration
+	clientName           string
+	clientAZ             string
+	reconnectStrategy    *BackoffStrategy
+	lazyConnect          bool
+	DatabaseId           *int `json:"database_id,omitempty"`
+	compressionConfig    *CompressionConfiguration
+	clientSideCache      *ClientSideCache
+	addressResolver      AddressResolver
+	clientCircuitBreaker *ClientCircuitBreakerConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -257,6 +296,18 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 			return nil, fmt.Errorf("invalid compression configuration: %w", err)
 		}
 		request.CompressionConfig = compressionPb
+	}
+
+	if config.clientSideCache != nil {
+		request.ClientSideCache = config.clientSideCache.toProtobuf()
+	}
+
+	if config.clientCircuitBreaker != nil {
+		cbPb, err := config.clientCircuitBreaker.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid circuit breaker configuration: %w", err)
+		}
+		request.ClientCircuitBreaker = cbPb
 	}
 
 	return &request, nil
@@ -326,7 +377,8 @@ type ClientConfiguration struct {
 	// readOnly enables read-only mode for the standalone client.
 	// When enabled, the client will skip primary node detection during connection initialization
 	// and will reject write commands. This is useful for connecting to replica-only deployments.
-	readOnly bool
+	readOnly          bool
+	nodeDiscoveryMode NodeDiscoveryMode
 }
 
 // NewClientConfiguration returns a [ClientConfiguration] with default configuration settings. For further
@@ -350,6 +402,10 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
 		}
 		request.ReadOnly = &config.readOnly
+	}
+
+	if config.nodeDiscoveryMode != NodeDiscoveryModeStandard {
+		request.NodeDiscoveryMode = protobuf.NodeDiscoveryMode(config.nodeDiscoveryMode)
 	}
 
 	if config.subscriptionConfig != nil {
@@ -522,6 +578,43 @@ func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfigurat
 	return config
 }
 
+// WithClientSideCache sets the client-side cache configuration for the client.
+// When provided, the client will use local caching to reduce network round-trips
+// and server load for cacheable read commands.
+func (config *ClientConfiguration) WithClientSideCache(
+	clientSideCache *ClientSideCache,
+) *ClientConfiguration {
+	config.clientSideCache = clientSideCache
+	return config
+}
+
+// WithNodeDiscoveryMode sets the node discovery mode for the standalone client.
+// See [NodeDiscoveryMode] for available modes.
+func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode) *ClientConfiguration {
+	config.nodeDiscoveryMode = mode
+	return config
+}
+
+// WithAddressResolver sets a custom address resolver for the standalone client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
+func (config *ClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClientConfiguration {
+	config.addressResolver = resolver
+	return config
+}
+
+// WithClientCircuitBreaker sets the client-wide circuit breaker configuration.
+func (config *ClientConfiguration) WithClientCircuitBreaker(
+	cb *ClientCircuitBreakerConfiguration,
+) *ClientConfiguration {
+	config.clientCircuitBreaker = cb
+	return config
+}
+
+func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
+}
+
 func (config *ClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -558,7 +651,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	}
 
 	request.ClusterModeEnabled = true
-	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
+	if config.AdvancedClusterClientConfiguration.connectionTimeout != 0 {
 		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("setting connection timeout returned an error: %w", err)
@@ -569,6 +662,24 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
+
+	// Handle periodic topology checks configuration
+	if config.AdvancedClusterClientConfiguration.periodicChecks != nil {
+		switch v := config.AdvancedClusterClientConfiguration.periodicChecks.(type) {
+		case PeriodicChecksDisabled:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksDisabled{
+				PeriodicChecksDisabled: &protobuf.PeriodicChecksDisabled{},
+			}
+		case PeriodicChecksManualInterval:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksManualInterval{
+				PeriodicChecksManualInterval: &protobuf.PeriodicChecksManualInterval{
+					DurationInSec: v.DurationInSec,
+				},
+			}
+		case PeriodicChecksEnabled:
+			// Default behavior - no need to set anything in protobuf
+		}
+	}
 
 	// Handle TCP_NODELAY configuration
 	if config.AdvancedClusterClientConfiguration.tcpNoDelay != nil {
@@ -720,8 +831,38 @@ func (config *ClusterClientConfiguration) WithSubscriptionConfig(
 	return config
 }
 
+// WithClientSideCache sets the client-side cache configuration for the cluster client.
+// When provided, the client will use local caching to reduce network round-trips
+// and server load for cacheable read commands.
+func (config *ClusterClientConfiguration) WithClientSideCache(
+	clientSideCache *ClientSideCache,
+) *ClusterClientConfiguration {
+	config.clientSideCache = clientSideCache
+	return config
+}
+
+// WithAddressResolver sets a custom address resolver for the cluster client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
+func (config *ClusterClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClusterClientConfiguration {
+	config.addressResolver = resolver
+	return config
+}
+
+// WithClientCircuitBreaker sets the client-wide circuit breaker configuration.
+func (config *ClusterClientConfiguration) WithClientCircuitBreaker(
+	cb *ClientCircuitBreakerConfiguration,
+) *ClusterClientConfiguration {
+	config.clientCircuitBreaker = cb
+	return config
+}
+
 func (config *ClusterClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
+}
+
+func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
 }
 
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
@@ -729,6 +870,37 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 		return config.subscriptionConfig
 	}
 	return nil
+}
+
+// ClientCircuitBreakerConfiguration configures the client-wide circuit breaker.
+// The circuit breaker detects sustained error rates and rejects requests before they enter the core.
+type ClientCircuitBreakerConfiguration struct {
+	// Sliding window duration in milliseconds for error rate calculation. Default: 10000.
+	WindowSizeMs uint32
+	// Error rate (0.0-1.0) within the window to trip the breaker. Default: 0.5.
+	FailureRateThreshold float32
+	// Minimum errors within window before rate is evaluated. Default: 50.
+	MinErrors uint32
+	// Time in milliseconds in Open state before allowing a probe. Default: 5000.
+	OpenTimeoutMs uint32
+	// Whether timeouts count toward tripping. Default: false.
+	CountTimeouts bool
+	// Consecutive successful probes needed before closing. Default: 3.
+	ConsecutiveSuccesses uint32
+}
+
+func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientCircuitBreakerConfig, error) {
+	if config.FailureRateThreshold != 0 && (config.FailureRateThreshold <= 0.0 || config.FailureRateThreshold > 1.0) {
+		return nil, errors.New("FailureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)")
+	}
+	return &protobuf.ClientCircuitBreakerConfig{
+		WindowSizeMs:         config.WindowSizeMs,
+		FailureRateThreshold: config.FailureRateThreshold,
+		MinErrors:            config.MinErrors,
+		OpenTimeoutMs:        config.OpenTimeoutMs,
+		CountTimeouts:        config.CountTimeouts,
+		ConsecutiveSuccesses: config.ConsecutiveSuccesses,
+	}, nil
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.
@@ -877,11 +1049,38 @@ func (config *AdvancedClientConfiguration) WithPubSubReconciliationIntervalMs(
 	return config
 }
 
+// PeriodicChecksConfig is an interface implemented by [PeriodicChecksEnabled],
+// [PeriodicChecksDisabled], and [PeriodicChecksManualInterval] to configure
+// periodic topology checks for cluster clients.
+type PeriodicChecksConfig interface {
+	isPeriodicChecksConfig()
+}
+
+// PeriodicChecksEnabled enables periodic topology checks with the default interval.
+// This is the default behavior when no periodic checks configuration is set.
+type PeriodicChecksEnabled struct{}
+
+func (PeriodicChecksEnabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksDisabled disables periodic topology checks.
+type PeriodicChecksDisabled struct{}
+
+func (PeriodicChecksDisabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksManualInterval configures periodic topology checks with a custom interval.
+type PeriodicChecksManualInterval struct {
+	// DurationInSec is the interval in seconds between periodic topology checks.
+	DurationInSec uint32
+}
+
+func (PeriodicChecksManualInterval) isPeriodicChecksConfig() {}
+
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout               time.Duration
 	refreshTopologyFromInitialNodes bool
+	periodicChecks                  PeriodicChecksConfig
 	tlsConfig                       *TlsConfiguration
 	tcpNoDelay                      *bool
 	pubsubReconciliationIntervalMs  *int
@@ -914,6 +1113,23 @@ func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitial
 	refreshTopologyFromInitialNodes bool,
 ) *AdvancedClusterClientConfiguration {
 	config.refreshTopologyFromInitialNodes = refreshTopologyFromInitialNodes
+	return config
+}
+
+// WithPeriodicChecks configures the periodic topology checks for the cluster client.
+// These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
+// Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
+//
+// Accepted values:
+//   - [PeriodicChecksEnabled]: Enables periodic checks with the default interval (this is the default).
+//   - [PeriodicChecksDisabled]: Disables periodic topology checks.
+//   - [PeriodicChecksManualInterval]: Enables periodic checks with a custom interval in seconds.
+//
+// If not set, defaults to enabled with the default interval.
+func (config *AdvancedClusterClientConfiguration) WithPeriodicChecks(
+	periodicChecks PeriodicChecksConfig,
+) *AdvancedClusterClientConfiguration {
+	config.periodicChecks = periodicChecks
 	return config
 }
 

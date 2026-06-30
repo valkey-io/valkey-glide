@@ -5,13 +5,6 @@ inputs:
     os:
         description: The current operating system
         required: true
-        # See 'build-matrix.json'
-        type: choice
-        options:
-            - ubuntu
-            - amazon-linux
-            - macos
-            - windows
 
 runs:
     using: composite
@@ -26,6 +19,8 @@ runs:
               ::1 valkey.glide.test.no_tls.com"
               if [[ "$OS" == "windows" ]]; then
                   echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
-              else
+              elif command -v sudo &> /dev/null; then
                   echo "$ENTRIES" | sudo tee -a /etc/hosts
+              else
+                  echo "$ENTRIES" | tee -a /etc/hosts
               fi

@@ -1,13 +1,10 @@
 # Changelog
 
-## Pending 2.6
-
-### Changes
-
-* Core, Java, Python, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
-* Core, Java, Python, Go: Add Python 3.13t/3.14t free-threaded support to test matrix and PyPI wheels. ([#5445](https://github.com/valkey-io/valkey-glide/issues/5445))
-
 ## Pending 2.5
+
+### Features
+
+* Core/FFI/Java: Add client-instance pool (`glide-core::pool`) with bounded LIFO reuse, background warmup, condvar-based blocking acquire, and isolated execution scopes (`glide-core::scope`) for WATCH/MULTI/EXEC with cluster slot pinning and zero-cost clean release. Java bindings via JNI. ([#6368](https://github.com/valkey-io/valkey-glide/pull/6368))
 
 ### Fixes
 
@@ -18,6 +15,9 @@
 
 ### Changes
 
+
+* Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
+* Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))
 * Core, Java, Python, Node, Go: Add `MEMORY DOCTOR`, `MEMORY MALLOC-STATS`, `MEMORY PURGE`, and `MEMORY STATS` commands ([#6286](https://github.com/valkey-io/valkey-glide/issues/6286))
 * Java: implement MONITOR command ([#6187](https://github.com/valkey-io/valkey-glide/pull/6187))
 * Node: Add GlideMonitorClient for MONITOR command ([#6212](https://github.com/valkey-io/valkey-glide/pull/6212))
@@ -42,7 +42,6 @@
 * Python: Add `MIGRATE KEYS` (multi-key) variant ([#6066](https://github.com/valkey-io/valkey-glide/pull/6066))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
 * Core: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
-* Java: Add `clientTrackingInfo` command and `serverAssisted` flag for Phase 2 client-side caching ([#5965](https://github.com/valkey-io/valkey-glide/pull/5965))
 * Core: Add RESET command support ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
 * Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))

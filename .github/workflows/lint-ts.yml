@@ -36,11 +36,11 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Install dependencies
               run: |
-                  npm install
+                  npm ci
 
             - name: Run linting and prettier
               run: |

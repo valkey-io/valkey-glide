@@ -41,7 +41,7 @@ from tests.utils.pubsub_test_utils import (
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
-from tests.utils.utils import kill_connections
+from tests.utils.utils import kill_connections, wait_for
 
 
 @pytest.mark.anyio
@@ -2271,10 +2271,6 @@ class TestPubSub:
             await pubsub_client_cleanup(publishing_client)
 
     @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "subscription_method",
@@ -2284,26 +2280,29 @@ class TestPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    async def test_pubsub_sharded_max_size_message_callback(
+    async def test_pubsub_sharded_large_size_message_callback(
         self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
-        Tests publishing and receiving maximum size messages in sharded PUBSUB with callback method.
+        Tests publishing and receiving large messages in sharded PUBSUB with callback method.
 
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
+        This test verifies that large messages can be published and received
         correctly. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that the callback message
+        can handle large messages without errors and that the callback message
         retrieval method works as expected.
 
         The test covers the following scenarios:
         - Setting up PUBSUB subscription for a specific sharded channel with a callback.
-        - Publishing a maximum size message to the channel.
+        - Publishing a large message to the channel.
         - Verifying that the message is received correctly using the callback method.
         """
         publishing_client, listening_client = None, None
         try:
-            channel = "sharded_max_size_callback_channel"
-            message = "0" * 512 * 1024 * 1024
+            channel = "sharded_large_size_callback_channel"
+            # 12MB: large enough to exercise the large-message path, but below the
+            # default client-output-buffer-limit hard cap (32MB) so the server won't
+            # disconnect the subscriber.
+            message = "0" * 12 * 1024 * 1024
 
             callback_messages: List[PubSubMsg] = []
             callback, context = new_message, callback_messages
@@ -2337,6 +2336,7 @@ class TestPubSub:
                 listening_client,
                 subscription_method,
                 expected_sharded={channel},
+                timeout_ms=10000,
             )
 
             assert (
@@ -2346,8 +2346,8 @@ class TestPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            await anyio.sleep(15)
+            # Wait for message to propagate with longer timeout
+            await anyio.sleep(30)
 
             assert len(callback_messages) == 1
 
@@ -4675,3 +4675,60 @@ class TestPubSub:
 
         finally:
             await pubsub_client_cleanup(client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_large_message_does_not_block_other_clients(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Verifies that a large pubsub message (>64KB, exceeding MAX_INLINE_PUBSUB)
+        delivered via pointer-mode does not block response delivery to other clients.
+
+        Two clients subscribe to the same channel. A third client issues a regular
+        GET command concurrently with publishing a large message. The GET must
+        resolve without being starved by the large pubsub frame.
+        """
+        sub_client, pub_client = None, None
+        try:
+            channel = "large_msg_channel"
+            # 128KB message — exceeds the 64KB MAX_INLINE_PUBSUB threshold
+            large_message = "X" * (128 * 1024)
+
+            sub_client = await create_pubsub_client(
+                request, cluster_mode, channels={channel}, timeout=10000
+            )
+            pub_client = await create_client(request, cluster_mode)
+
+            await wait_for_subscription_state_if_needed(
+                sub_client,
+                SubscriptionMethod.Config,
+                expected_channels={channel},
+            )
+
+            # Set a key we'll read concurrently
+            await pub_client.set("pointer_test_key", "pointer_test_value")
+
+            # Publish the large message
+            await pub_client.publish(large_message, channel)
+
+            # Immediately issue a GET — should not be blocked by large pubsub frame
+            with anyio.fail_after(5):
+                get_result = await pub_client.get("pointer_test_key")
+            assert get_result == b"pointer_test_value"
+
+            # Poll for the large pubsub message
+            msg = None
+
+            async def _check_msg():
+                nonlocal msg
+                msg = sub_client.try_get_pubsub_message()
+                return msg is not None
+
+            await wait_for(_check_msg, "Large pubsub message was not received")
+            assert msg is not None
+            assert msg.message == large_message.encode()
+            assert msg.channel == channel.encode()
+
+        finally:
+            await pubsub_client_cleanup(sub_client)
+            await pubsub_client_cleanup(pub_client)

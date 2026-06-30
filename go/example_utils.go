@@ -18,6 +18,11 @@ import (
 var (
 	clusterNodes   = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
 	standaloneNode = flag.String("standalonenode", "", "AddressNode for running Valkey/Redis standalone node")
+	vssTest        = flag.Bool(
+		"vss-test",
+		false,
+		"Set to true to run Valkey Search module example tests (requires server with search module loaded)",
+	)
 )
 
 var (
@@ -59,11 +64,13 @@ func getExampleClient() *Client {
 		initFlags()
 	})
 	config := config.NewClientConfiguration().
-		WithAddress(&standaloneAddresses[0])
+		WithAddress(&standaloneAddresses[0]).
+		WithRequestTimeout(5 * time.Second)
 
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -88,13 +95,15 @@ func getExampleClusterClient() *ClusterClient {
 	client, err := NewClusterClient(cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	clusterClients = append(clusterClients, client)
 
 	// Flush the database before each test to ensure a clean state.
 	mode := options.SYNC
-	_, err = client.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(
+		context.Background(),
 		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
@@ -118,6 +127,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -148,13 +158,15 @@ func getExampleClusterClientWithSubscription(
 	client, err := NewClusterClient(ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	clusterClients = append(clusterClients, client)
 
 	// Flush the database before each test to ensure a clean state.
 	syncmode := options.SYNC
-	_, err = client.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(
+		context.Background(),
 		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {

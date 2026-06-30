@@ -220,6 +220,22 @@ By default, those test suites start standalone and cluster servers without TLS a
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
+
+```bash
+# Run from the `go/` directory
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+make integ-test test-filter=TestIamAuthentication
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
 #### DNS Tests
 
 To run [DNS tests](integTest/dns_test.go) locally:
@@ -242,6 +258,37 @@ To run [DNS tests](integTest/dns_test.go) locally:
    ```
 
 If the environment variable is not set, DNS tests will be skipped.
+
+#### Valkey Search Module Tests
+
+Some integration tests and example tests require a Valkey server with the [search module](https://github.com/valkey-io/valkey-search/) loaded (e.g. `FT.CREATE`, `FT.SEARCH`, `FT.AGGREGATE`).
+
+To run the Valkey Search integration tests, first start up the Valkey Servers with the [search](https://github.com/valkey-io/valkey-search/) and [JSON](https://github.com/valkey-io/valkey-json/) module loaded.
+
+```bash
+# Cluster
+python3 utils/cluster_manager.py start --cluster-mode \  -p 7000 7001 7002 7003 7004 7005 \                                                               
+  --prefix modules \
+  --load-module /path/to/libsearch.dylib \
+  --load-module /path/to/libjson.dylib
+
+# Standalone
+valkey-server --loadmodule /path/to/libsearch.dylib --loadmodule /path/to/libjson.dylib
+```
+
+In this example, we loaded it on port 6379 for the standalone node, and on port 7000 for cluster nodes. Then, run:
+
+```bash
+make modules-test standalone-endpoints=127.0.0.1:6379 cluster-endpoints=127.0.0.1:7000 test-filter=TestGlideTestSuite/TestFt
+```
+
+To run the Valkey Search example tests, pass the `-vss-test` flag when invoking `go test` directly, pointing at a server with the search module loaded:
+
+```bash
+go test . -vss-test -clusternodes <host:port> -standalonenode <host:port>
+```
+
+If `-vss-test` is not passed, the FT example functions return immediately without executing and are treated as compile-only examples.
 
 #### Test Reports and Results
 
@@ -490,3 +537,26 @@ func ExampleClient_Get_keyIsNil { ... }
 ## Community and Feedback
 
 We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).
+
+## Command Implementation Guidelines
+
+### Commands with key parameters
+
+When implementing commands that accept both single and multiple keys as parameters in Valkey, always use a **slice parameter** (`keys []string`) rather than a single `key string`. Callers pass a single-element slice for single-key usage.
+
+**Rationale:** Go does not support method overloading. Using `[]string` from the start provides a unified API for both single-key and multi-key usage without needing separate methods.
+
+**Pattern:**
+```go
+func (client *baseClient) CommandName(ctx context.Context, keys []string, ...) (ReturnType, error) {
+    if len(keys) == 0 {
+        return defaultVal, errors.New("keys must not be empty")
+    }
+    // build args using keys...
+}
+```
+
+**Commands following this pattern:**
+
+`Del`, `Exists`, `Unlink`, `Touch`, `MGet`, `PfCount`, `Migrate`, `SDiff`, `SInter`, `SUnion`, `ZDiff`, `Watch`
+

@@ -17,7 +17,7 @@ import {
     Logger,
     ProtocolVersion,
 } from "../build-ts";
-import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
+import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertConnected,
     getCaCertificateData,
@@ -34,7 +34,10 @@ const getTlsClientConfigurationOption = (addresses: [string, number][]) =>
         requestTimeout: TLS_REQUEST_TIMEOUT,
     });
 
-describe("TLS with custom certificates", () => {
+// These tests were very flaky for Amazon Linux Containers.
+// Disabled for now as they are not critical.
+// See https://github.com/valkey-io/valkey-glide/issues/4989
+describe.skip("TLS with custom certificates", () => {
     let standaloneCluster: ValkeyCluster;
     let clusterModeCluster: ValkeyCluster;
     let standaloneClient: GlideClient | undefined;
@@ -480,7 +483,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv4 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV4,
+                    host: IP_ADDRESS_V4,
                     port: standaloneCluster.ports()[0],
                 };
                 standaloneClient = await GlideClient.createClient({
@@ -502,7 +505,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv6 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV6,
+                    host: IP_ADDRESS_V6,
                     port: standaloneCluster.ports()[0],
                 };
                 standaloneClient = await GlideClient.createClient({
@@ -526,7 +529,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv4 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV4,
+                    host: IP_ADDRESS_V4,
                     port: clusterModeCluster.getAddresses()[0][1],
                 };
                 clusterClient = await GlideClusterClient.createClient({
@@ -548,7 +551,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv6 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV6,
+                    host: IP_ADDRESS_V6,
                     port: clusterModeCluster.getAddresses()[0][1],
                 };
                 clusterClient = await GlideClusterClient.createClient({

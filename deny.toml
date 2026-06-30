@@ -22,10 +22,6 @@ yanked = "deny"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    # bincode is unmaintained but only used as a transitive dev dependency
-    # via iai-callgrind for benchmarking. No security impact.
-    # https://rustsec.org/advisories/RUSTSEC-2025-0141
-    "RUSTSEC-2025-0141",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -56,12 +52,10 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
     "ISC",
-    "OpenSSL",
     "MPL-2.0",
-    "Unicode-3.0",
+    "Zlib",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the

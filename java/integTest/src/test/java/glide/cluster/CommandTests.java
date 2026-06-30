@@ -6,6 +6,7 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.assertMemoryStatsDbEntry;
 import static glide.TestUtilities.assertMemoryStatsFields;
@@ -4592,6 +4593,17 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientTrackingInfo_cache_off_with_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> multiInfo =
+                clusterClient.clientTrackingInfo(ALL_PRIMARIES).get();
+        for (Map<String, Object> nodeInfo : multiInfo.getMultiValue().values()) {
+            assertClientTrackingInfo(nodeInfo, false);
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void memoryDoctor_default_route(GlideClusterClient clusterClient) {
         ClusterValue<String> result = clusterClient.memoryDoctor().get();
         assertTrue(result.hasMultiData());
@@ -4685,7 +4697,6 @@ public class CommandTests {
         assertEquals(OK, result);
     }
 
-    @SuppressWarnings("unchecked")
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
@@ -4697,7 +4708,6 @@ public class CommandTests {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows

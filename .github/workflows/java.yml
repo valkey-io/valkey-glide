@@ -15,10 +15,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -29,10 +29,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -50,20 +50,31 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
-            run-modules-tests:
-                description: "Run modules tests"
-                type: boolean
-                default: false
-
     workflow_call:
         inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
+            windows-only:
+                description: "Run Windows tests only."
+                type: boolean
                 default: false
 
 concurrency:
@@ -79,21 +90,45 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
-            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+            # Filter hosts based on `windows-only` input
+            - id: filter-hosts
+              shell: bash
+              env:
+                  WINDOWS_ONLY: ${{ inputs.windows-only }}
+                  HOST_MATRIX: ${{ steps.get-matrices.outputs.host-matrix-output }}
+              run: |
+                  if [[ "$WINDOWS_ONLY" == "true" ]]; then
+                      FILTER='[.[] | select(.OS == "windows")]'
+                  else
+                      FILTER='[.[] | select(.OS != "windows")]'
+                  fi
+                  echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> $GITHUB_OUTPUT
+
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
@@ -106,17 +141,17 @@ jobs:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Output Matrix Parameters for this job
               run: |
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            - uses: gradle/actions/wrapper-validation@v4
+            - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
             - name: Set up JDK ${{ matrix.java }}
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   # Temurin doesn't have Java 8; use corretto (or zulu for ARM64 macOS)
                   distribution: ${{ matrix.java == '8' && (runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'corretto') || 'temurin' }}
@@ -124,13 +159,13 @@ jobs:
 
             - name: Set up JDK 11 (for Java 8 compilation)
               if: matrix.java == '8'
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: ${{ runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'temurin' }}
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -139,12 +174,12 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       java/target
@@ -155,7 +190,7 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -172,6 +207,9 @@ jobs:
               working-directory: java
               shell: bash
               run: |
+                  export AWS_ACCESS_KEY_ID=test_access_key 
+                  export AWS_SECRET_ACCESS_KEY=test_secret_key 
+                  export AWS_SESSION_TOKEN=test_session_token
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then
                           ./gradlew.bat --build-cache --continue build test -x javadoc -PtestJava8=true
@@ -205,7 +243,7 @@ jobs:
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
@@ -217,7 +255,8 @@ jobs:
 
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -228,7 +267,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -236,7 +275,7 @@ jobs:
                   echo "${{ toJson(matrix) }}"
 
             - name: Set up JDK ${{ matrix.java }}
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   # Temurin doesn't have Java 8; use corretto (or zulu for ARM64 macOS)
                   distribution: ${{ matrix.java == '8' && (runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'corretto') || 'temurin' }}
@@ -244,13 +283,13 @@ jobs:
 
             - name: Set up JDK 11 (for Java 8 compilation)
               if: matrix.java == '8'
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: ${{ runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'temurin' }}
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -259,12 +298,12 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       java/target
@@ -275,7 +314,7 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -305,7 +344,7 @@ jobs:
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-pubsub-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
@@ -317,16 +356,16 @@ jobs:
         timeout-minutes: 30
         runs-on: ubuntu-24.04-arm
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Set up JDK 11
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
@@ -334,7 +373,7 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -378,16 +417,16 @@ jobs:
         timeout-minutes: 30
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Set up JDK 21
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: 21
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: x86_64-unknown-linux-gnu
@@ -395,7 +434,7 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -411,24 +450,26 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: java
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 60
         strategy:
             fail-fast: false
@@ -474,12 +515,12 @@ jobs:
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   submodules: recursive
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -488,7 +529,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -504,7 +545,7 @@ jobs:
                   pip3 install ziglang --break-system-packages
                   cargo install --locked cargo-zigbuild
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       java/target
@@ -513,7 +554,7 @@ jobs:
                   restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.gradle/caches
@@ -549,7 +590,7 @@ jobs:
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
@@ -561,60 +602,10 @@ jobs:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: java
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint java rust
-
-    test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
-        environment: AWS_ACTIONS
-        name: Modules Tests
-        runs-on: [self-hosted, linux, ARM64, persistent]
-        timeout-minutes: 15
-        steps:
-            - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - uses: actions/checkout@v4
-
-            - name: Set up JDK
-              uses: actions/setup-java@v4
-              with:
-                  distribution: "temurin"
-                  java-version: 17
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      java/target
-                      glide-core/src/generated
-                  key: aarch64-unknown-linux-gnu-java
-                  restore-keys: |
-                      aarch64-unknown-linux-gnu-glide-core
-                      aarch64-unknown-linux-gnu
-
-            - name: Install zig
-              uses: ./.github/workflows/install-zig
-
-            - name: Test java wrapper
-              working-directory: java
-              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-modules
-                  path: |
-                      java/integTest/build/reports/**

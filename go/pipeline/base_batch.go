@@ -5122,6 +5122,80 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 	}, optionArgs...), reflect.Bool, false)
 }
 
+// Migrate atomically transfers keys from a source Valkey instance to a destination Valkey instance.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must not be empty.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *BaseBatch[T]) Migrate(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) *T {
+	return b.MigrateWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
+}
+
+// MigrateWithOptions atomically transfers keys from a source Valkey instance to a destination Valkey instance
+// with additional options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must not be empty.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *BaseBatch[T]) MigrateWithOptions(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) *T {
+	if len(keys) == 0 {
+		return b.addError("MigrateWithOptions", errors.New("keys must not be empty"))
+	}
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return b.addError("MigrateWithOptions", err)
+	}
+	var args []string
+	if len(keys) == 1 {
+		args = []string{host, utils.IntToString(port), keys[0], utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+	} else {
+		args = []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+		args = append(args, constants.KeysKeyword)
+		args = append(args, keys...)
+	}
+	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
+}
+
 // Returns stream entries matching a given range of IDs.
 //
 // See [valkey.io] for details.
@@ -5637,7 +5711,8 @@ func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (b *BaseBatch[T]) ZDiffStore(destination string, keys []string) *T {
-	return b.addCmdAndTypeChecker(C.ZDiffStore,
+	return b.addCmdAndTypeChecker(
+		C.ZDiffStore,
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 		reflect.Int64,
 		false,
@@ -5973,7 +6048,8 @@ func (b *BaseBatch[T]) BZPopMax(keys []string, timeout time.Duration) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geoadd/
 func (b *BaseBatch[T]) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) *T {
-	return b.addCmdAndTypeChecker(C.GeoAdd,
+	return b.addCmdAndTypeChecker(
+		C.GeoAdd,
 		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
 		reflect.Int64,
 		false,
@@ -6030,7 +6106,8 @@ func (b *BaseBatch[T]) GeoAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (b *BaseBatch[T]) GeoHash(key string, members []string) *T {
-	return b.addCmdAndConverter(C.GeoHash,
+	return b.addCmdAndConverter(
+		C.GeoHash,
 		append([]string{key}, members...),
 		reflect.Slice,
 		false,
@@ -6078,7 +6155,8 @@ func (b *BaseBatch[T]) GeoPos(key string, members []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (b *BaseBatch[T]) GeoDist(key string, member1 string, member2 string) *T {
-	return b.addCmdAndTypeChecker(C.GeoDist,
+	return b.addCmdAndTypeChecker(
+		C.GeoDist,
 		[]string{key, member1, member2},
 		reflect.Float64,
 		true,
@@ -6104,7 +6182,8 @@ func (b *BaseBatch[T]) GeoDist(key string, member1 string, member2 string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 string, unit constants.GeoUnit) *T {
-	return b.addCmdAndTypeChecker(C.GeoDist,
+	return b.addCmdAndTypeChecker(
+		C.GeoDist,
 		[]string{key, member1, member2, string(unit)},
 		reflect.Float64,
 		true,
@@ -7258,6 +7337,19 @@ func (b *BaseBatch[T]) ConfigResetStat() *T {
 // [valkey.io]: https://valkey.io/commands/client-getname/
 func (b *BaseBatch[T]) ClientGetName() *T {
 	return b.addCmdAndTypeChecker(C.ClientGetName, []string{}, reflect.String, true)
+}
+
+// Resets the connection state.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	Returns "RESET" on success.
+//
+// [valkey.io]: https://valkey.io/commands/reset/
+func (b *BaseBatch[T]) Reset() *T {
+	return b.addCmdAndTypeChecker(C.Reset, []string{}, reflect.String, false)
 }
 
 // Sets the name of the current connection.

@@ -1434,7 +1434,6 @@ fn safe_create_jstring<'local>(mut env: JNIEnv<'local>, input: &str) -> JString<
     .unwrap_or(JString::<'_>::default())
 }
 
-// ==================== JNI CLIENT MANAGEMENT FUNCTIONS ====================
 
 /// Create Valkey client and store handle.
 /// If address_resolver is not null, it will be stored as a global reference and used
@@ -2708,7 +2707,6 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
     Ok(JString::from(local))
 }
 
-// ==================== MONITOR CLIENT SUPPORT ====================
 
 static MONITOR_CLIENTS: std::sync::OnceLock<
     dashmap::DashMap<u64, glide_core::client::MonitorClient>,

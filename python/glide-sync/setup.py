@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -67,6 +68,10 @@ VENDORED_DEPENDENCIES = {
     ),
 }
 
+# Rust source for the _fast_response PyO3 extension (only Cargo.toml + src/)
+GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
+GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
+
 
 # Helper to safely remove files, directories, or symlinks
 def remove_existing(path: Path):
@@ -94,12 +99,22 @@ def vendor_dependencies():
         print(f"[INFO] Copying {folder.source} → {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
+    # Vendor only the Rust build files for glide-shared (Cargo.toml + src/)
+    if GLIDE_SHARED_RS_DIST.exists():
+        remove_existing(GLIDE_SHARED_RS_DIST)
+    GLIDE_SHARED_RS_DIST.mkdir()
+    shutil.copy2(
+        GLIDE_SHARED_RS_SOURCE / "Cargo.toml", GLIDE_SHARED_RS_DIST / "Cargo.toml"
+    )
+    shutil.copytree(GLIDE_SHARED_RS_SOURCE / "src", GLIDE_SHARED_RS_DIST / "src")
+
 
 def cleanup_vendored():
     """Remove all vendored dependency folders."""
     print("[INFO] Cleaning up vendored dependencies")
     for folder in VENDORED_DEPENDENCIES.values():
         remove_existing(folder.dist)
+    remove_existing(GLIDE_SHARED_RS_DIST)
 
 
 # ------------------------------------------------------------------------------
@@ -126,6 +141,7 @@ class CleanCommand(Command):
             "dist",
             "*.egg-info",
             "glide_shared",
+            "glide-shared-rs",
             "ffi",
             "glide-core",
             "logger_core",
@@ -152,7 +168,7 @@ class bdist_wheel(bdist_wheel_orig):
 
 
 class build_ext(build_ext_orig):
-    """Builds the Rust FFI library using Cargo"""
+    """Builds the Rust FFI library and _fast_response native extension using Cargo"""
 
     def run(self):
         # Detect release mode
@@ -186,6 +202,40 @@ class build_ext(build_ext_orig):
         dest_dir.mkdir(parents=True, exist_ok=True)
         print(f"[INFO] Copying {built_lib} → {dest_dir / lib_name}")
         shutil.copy2(built_lib, dest_dir / lib_name)
+
+        # Build _fast_response native extension from glide-shared Rust crate
+        glide_shared_rs = GLIDE_SHARED_RS_DIST
+        if not glide_shared_rs.exists():
+            glide_shared_rs = GLIDE_SHARED_RS_SOURCE
+
+        print(f"[INFO] Building _fast_response extension in {glide_shared_rs}")
+        pyo3_env = env.copy()
+        pyo3_env["PYO3_PYTHON"] = sys.executable
+        # On macOS, PyO3 extension modules need undefined dynamic_lookup linker flag
+        if sys.platform == "darwin":
+            pyo3_env["RUSTFLAGS"] = (
+                pyo3_env.get("RUSTFLAGS", "")
+                + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+            )
+        subprocess.run(
+            ["cargo", "build"] + (["--release"] if release else []),
+            cwd=glide_shared_rs,
+            env=pyo3_env,
+            check=True,
+        )
+
+        # Copy the built extension with the correct Python extension suffix
+        ext_suffix = sysconfig.get_config_var(
+            "EXT_SUFFIX"
+        )  # e.g. .cpython-311-darwin.so
+        src_lib = (
+            glide_shared_rs / "target" / target_dir / ("lib_fast_response" + suffix)
+        )
+        dest_shared = Path(self.build_lib) / "glide_shared"
+        dest_shared.mkdir(parents=True, exist_ok=True)
+        dest_ext = dest_shared / ("_fast_response" + ext_suffix)
+        print(f"[INFO] Copying {src_lib} → {dest_ext}")
+        shutil.copy2(src_lib, dest_ext)
 
         super().run()
         cleanup_vendored()
@@ -237,7 +287,10 @@ class build_py(build_py_orig):
 
 setup(
     name="valkey-glide-sync",
-    package_data={"glide_sync": ["*.so", "*.dll", "*.dylib", "*.pyi", "py.typed"]},
+    package_data={
+        "glide_sync": ["*.so", "*.dll", "*.dylib", "*.pyi", "py.typed"],
+        "glide_shared": ["*.so", "*.pyd", "*.dylib"],
+    },
     distclass=BinaryDistribution,
     cmdclass={
         "build_py": build_py,

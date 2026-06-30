@@ -1,6 +1,12 @@
 name: Go - Continuous Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/go-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
@@ -34,7 +40,7 @@ jobs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -53,7 +59,6 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     validate-release-version:
-        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
@@ -63,7 +68,7 @@ jobs:
         steps:
             - name: Checkout for tag check
               if: ${{ github.event_name == 'workflow_dispatch' }}
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Validate version agaisnt tags
               if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -77,21 +82,25 @@ jobs:
             - name: Validate Version Against RegEx and output
               id: release-tag
               run: |
-                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    R_VERSION="v0.0.0"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                     R_VERSION="${{ env.TAG_VERSION }}"
                   fi
-                  echo "Releassing version is: ${R_VERSION}"
-                  if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
-                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
-                      exit 1
+                  echo "Release version is: ${R_VERSION}"
+                  if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+                    if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                        echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
+                        exit 1
+                    fi
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix, validate-release-version]
-        if: success()
+        if: github.repository_owner == 'valkey-io'
         strategy:
             fail-fast: false
             matrix:
@@ -108,12 +117,12 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
-            - uses: actions/setup-go@v5
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
@@ -130,9 +139,12 @@ jobs:
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
+            - name: Smoke test binary
+              run: |
+                  file ffi/target/release/libglide_ffi.a | grep -q "archive"
             - name: Upload artifacts
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: ${{ matrix.host.TARGET }}
                   path: |
@@ -144,11 +156,12 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
         needs: [validate-release-version, create-binaries]
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         permissions:
             contents: write
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/download-artifact@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   path: artifacts
             - name: Copy generated files to repo
@@ -161,14 +174,14 @@ jobs:
                   for dir in */; do
                     target_name=${dir%/}
                     PLATFORMS+=("$target_name")
-                    
+
                     mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
                     cp ${target_name}/ffi/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
-                    
+
                     # Create doc.go marker file for vendoring support
                     # Convert platform name to valid Go package name (hyphens to underscores)
                     package_name="rustbin_${target_name//-/_}"
-                    
+
                     cat > "$GITHUB_WORKSPACE/go/rustbin/${target_name}/doc.go" << EOF
                   // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
@@ -255,14 +268,14 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
-            - uses: actions/setup-go@v5
+            - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}

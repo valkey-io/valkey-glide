@@ -46,17 +46,15 @@ def _get_export_rename_map(package: str):
 
 excluded_async_symbols = [
     # python/glide-async/python/glide/glide_client.py
-    "_CompatFuture",  # ClassDef
-    "_get_new_future_instance",  # FunctionDef
     "BaseClient",  # ClassDef
+    "FFIClientTypeEnum",  # ClassDef
+    "TFuture",  # Assignment
     # python/glide-async/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
     # python/glide-async/python/glide/async_commands/cluster_commands.py
     "ClusterCommands",  # ClassDef
     # python/glide-async/python/glide/async_commands/core.py
     "CoreCommands",  # ClassDef
-    # python/glide-async/python/glide/opentelemetry.py
-    "OpenTelemetry",  # ClassDef
 ]
 
 excluded_sync_symbols = [
@@ -111,6 +109,36 @@ excluded_shared_symbols = [
     "FtSearchKeywords",  # ClassDef
     "FtAggregateKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
+    # python/glide-shared/glide_shared/_glide_ffi.py
+    "find_libglide_ffi",  # FunctionDef
+    "CURR_DIR",  # Assignment
+    "LIB_FILE",  # Assignment
+    "GlideFFI",  # Assignment
+    # python/glide-shared/glide_shared/cluster_scan_cursor.py
+    "ENCODING",  # Assignment (also in ffi_helpers.py, script.py)
+    "FINISHED_SCAN_CURSOR",  # Assignment
+    # Base classes re-exported via per-package _ffi_wrappers (not directly from glide_shared)
+    "ClusterScanCursor",  # ClassDef - re-exported via glide._ffi_wrappers / glide_sync.sync_commands
+    "Script",  # ClassDef - re-exported via glide._ffi_wrappers / glide_sync.sync_commands
+    "Logger",  # ClassDef - re-exported via glide.logger / glide_sync.logger
+    "OpenTelemetry",  # ClassDef - re-exported via glide.opentelemetry / glide_sync.opentelemetry
+    # python/glide-shared/glide_shared/ffi_helpers.py
+    "encode_arg",  # FunctionDef
+    "to_c_strings",  # FunctionDef
+    "to_c_route_ptr_and_len",  # FunctionDef
+    "to_c_route_info",  # FunctionDef
+    "FFIClientTypeEnum",  # ClassDef
+    "PUSH_KIND_MAP",  # Assignment
+    "parse_push_notification",  # FunctionDef
+    "convert_commands_to_c_batch_info",  # FunctionDef
+    "create_c_batch_options",  # FunctionDef
+    "create_address_resolver_callback",  # FunctionDef
+    "handle_command_result",  # FunctionDef
+    "parse_inline_pubsub",  # FunctionDef
+    # python/glide-shared/glide_shared/request_type.py
+    "RequestType",  # Assignment
+    # python/glide-shared/glide_shared/logger.py
+    "Level",  # ClassDef
 ]
 
 allowed_missing_re_exports_in_async = [

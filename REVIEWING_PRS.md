@@ -47,6 +47,31 @@ The repository uses two merge strategies depending on the branch context:
 
 Most contributor PRs target `main` from a feature branch, so squash and merge is the typical path. The maintainer merging the PR will select the appropriate strategy.
 
+## Resolving Review Comments
+
+The original commenter is responsible for resolving their own review comments. This ensures the person who raised the feedback can verify that it has been adequately addressed or responded to before the conversation is marked as resolved.
+
+- **Do not resolve someone else's comment.** Only the person who left the feedback should mark it as resolved.
+- **If the feedback has been addressed,** the original commenter should verify the change and resolve the thread.
+- **If the contributor disagrees,** the original commenter should resolve the thread once the discussion has reached a conclusion — whether that means the suggestion was adopted, an alternative was agreed upon, or the commenter is satisfied with the explanation provided.
+
+This practice keeps the review process accountable and prevents feedback from being dismissed without acknowledgment.
+
+**Exception — stale threads:** If the original commenter has not responded after a reasonable period of time, a maintainer or the PR author may resolve the thread to keep the review moving forward.
+
+**Linking fixes to feedback:** When addressing review feedback, the PR author should reply with a link to the commit or code change that resolves the comment. This helps the reviewer quickly verify the fix without searching through the diff. This is especially important for larger or more complex PRs that may require multiple iterations of feedback.
+
+> **Note:** A reply like "Addressed it" or "Fixed" without context is not sufficient. Include a direct link or reference so the reviewer can locate the change without effort.
+>
+> Good examples:
+> - "Fixed in [abc1234](link-to-commit) — renamed the variable as suggested."
+> - "Addressed here: [link to updated line]. I went with option B since it avoids the extra allocation."
+>
+> Poor examples:
+> - "Done."
+> - "Addressed it."
+> - "Fixed, PTAL."
+
 ## Stale PR Policy
 
 The repository uses an automated [stale bot](.github/workflows/stale.yml) to manage inactive pull requests:
