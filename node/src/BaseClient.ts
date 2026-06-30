@@ -8,8 +8,7 @@
  */
 
 import Long from "long";
-import * as net from "net";
-import { Buffer, BufferWriter, Reader, Writer } from "protobufjs/minimal";
+import { Buffer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -32,8 +31,6 @@ import {
     ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     CircuitBreakerError,
     ExecAbortError,
     ExpireOptions,
@@ -71,7 +68,10 @@ import {
     SearchOrigin,
     SetOptions,
     SortOptions,
-    StartSocketConnection,
+    CommandResponse,
+    CreateDirectClient,
+    GlideClientHandle,
+    createLeakedStringVec,
     registerAddressResolver,
     removeAddressResolver,
     StreamAddOptions,
@@ -288,6 +288,7 @@ import {
     compressionConfigToProtobuf,
     validateCompressionConfiguration,
     valueFromPointer,
+    valueFromSplitPointer,
 } from ".";
 import {
     command_request,
@@ -1172,22 +1173,19 @@ type WritePromiseOptions =
  * Base client interface for GLIDE
  */
 export class BaseClient {
-    private socket: net.Socket;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
-    private readonly availableCallbackSlots: number[] = [];
-    private requestWriter = new BufferWriter();
-    private writeInProgress = false;
-    private remainingReadData: Uint8Array | undefined;
-    private readonly requestTimeout: number; // Timeout in milliseconds
+    protected readonly availableCallbackSlots: number[] = [];
     protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
-    private readonly inflightRequestsLimit: number;
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
+    protected clientHandle: GlideClientHandle | null = null;
+    /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
+    private readonly otelSpanPointers = new Map<number, bigint>();
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1232,42 +1230,6 @@ export class BaseClient {
                 }
             }
         }
-    }
-    private handleReadData(data: Buffer) {
-        const buf = this.remainingReadData
-            ? Buffer.concat([this.remainingReadData, data])
-            : data;
-        let lastPos = 0;
-        const reader = Reader.create(buf);
-
-        while (reader.pos < reader.len) {
-            lastPos = reader.pos;
-            let message = undefined;
-
-            try {
-                message = response.Response.decodeDelimited(reader);
-            } catch (err) {
-                if (err instanceof RangeError) {
-                    // Partial response received, more data is required
-                    this.remainingReadData = buf.slice(lastPos);
-                    return;
-                } else {
-                    // Unhandled error
-                    const err_message = `Failed to decode the response: ${err}`;
-                    Logger.log("error", "connection", err_message);
-                    this.close(err_message);
-                    return;
-                }
-            }
-
-            if (message.isPush) {
-                this.processPush(message);
-            } else {
-                this.processResponse(message);
-            }
-        }
-
-        this.remainingReadData = undefined;
     }
 
     protected toProtobufRoute(
@@ -1341,54 +1303,53 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
-        if (spanPtr === null || spanPtr === undefined) return;
-
-        if (typeof spanPtr === "number") {
-            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
-        } else if (spanPtr instanceof Long) {
-            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
-        }
+    private encodeRouteBytes(
+        route: Routes | undefined,
+    ): Uint8Array | undefined {
+        const protoRoute = this.toProtobufRoute(route);
+        return protoRoute
+            ? command_request.Routes.encode(protoRoute).finish()
+            : undefined;
     }
 
-    processResponse(message: response.Response) {
-        if (message.closingError != null) {
-            this.close(message.closingError);
-            return;
+    /**
+     * Creates an OTel span for a command and stores the span pointer keyed by
+     * callbackIndex so it can be dropped when the response arrives.
+     *
+     * Callers MUST gate this behind `OpenTelemetry.shouldSample()` to avoid
+     * unnecessary work on the hot path when OTel is not sampling.
+     */
+    private createOtelSpanForCallback(
+        callbackIndex: number,
+        commandName: string,
+    ): bigint {
+        const parentCtx = OpenTelemetry.getParentSpanContext();
+        const [low, high] = parentCtx
+            ? createOtelSpanWithTraceContext(
+                  commandName,
+                  parentCtx.traceId,
+                  parentCtx.spanId,
+                  parentCtx.traceFlags,
+                  parentCtx.traceState,
+              )
+            : createLeakedOtelSpan(commandName);
+        // Combine split pointer into a single bigint for dropOtelSpan,
+        // using Long to match the pointer representation used elsewhere.
+        const spanPtr = BigInt(new Long(low, high, true).toString());
+        this.otelSpanPointers.set(callbackIndex, spanPtr);
+        return spanPtr;
+    }
+
+    /**
+     * Drops the OTel span associated with the given callbackIndex, if one exists.
+     */
+    private dropOtelSpanForCallback(callbackIndex: number): void {
+        const spanPtr = this.otelSpanPointers.get(callbackIndex);
+
+        if (spanPtr !== undefined) {
+            this.otelSpanPointers.delete(callbackIndex);
+            dropOtelSpan(spanPtr);
         }
-
-        const [resolve, reject, decoder = this.defaultDecoder] =
-            this.promiseCallbackFunctions[message.callbackIdx];
-        this.availableCallbackSlots.push(message.callbackIdx);
-
-        if (message.requestError != null) {
-            const errorType = getRequestErrorClass(message.requestError.type);
-            reject(new errorType(message.requestError.message ?? undefined));
-        } else if (message.respPointer != null) {
-            const ptrNum =
-                typeof message.respPointer === "number"
-                    ? message.respPointer
-                    : message.respPointer.toNumber();
-
-            try {
-                resolve(valueFromPointer(ptrNum, decoder === Decoder.String));
-            } catch (err: unknown) {
-                Logger.log("error", "Decoder", `Decoding error: '${err}'`);
-                reject(
-                    err instanceof ValkeyError
-                        ? err
-                        : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
-                );
-            }
-        } else if (message.constantResponse === response.ConstantResponse.OK) {
-            resolve("OK");
-        } else {
-            resolve(null);
-        }
-
-        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1418,26 +1379,81 @@ export class BaseClient {
         }
     }
 
-    protected constructor(
-        socket: net.Socket,
-        options?: BaseClientConfiguration,
-    ) {
+    /**
+     * Handles command responses from the native layer.
+     * @internal
+     */
+    private handleResponse = (response: CommandResponse): void => {
+        if (response.closingError) {
+            this.close(response.closingError);
+            return;
+        }
+
+        // Handle push notifications (pub/sub)
+        if (response.isPush) {
+            if (
+                response.respPointerHigh !== undefined &&
+                response.respPointerLow !== undefined
+            ) {
+                // Create a response.Response-compatible object for processPush
+                const pushResponse = {
+                    respPointer: {
+                        high: response.respPointerHigh,
+                        low: response.respPointerLow,
+                    },
+                } as response.Response;
+                this.processPush(pushResponse);
+            }
+
+            return;
+        }
+
+        const [resolve, reject, decoder = this.defaultDecoder] =
+            this.promiseCallbackFunctions[response.callbackIdx];
+        this.availableCallbackSlots.push(response.callbackIdx);
+
+        if (response.requestError) {
+            const errorType = getRequestErrorClass(
+                response.requestError.errorType as response.RequestErrorType,
+            );
+            reject(new errorType(response.requestError.message ?? undefined));
+        } else if (
+            response.respPointerHigh !== undefined &&
+            response.respPointerLow !== undefined
+        ) {
+            try {
+                resolve(
+                    valueFromSplitPointer(
+                        response.respPointerHigh,
+                        response.respPointerLow,
+                        decoder === Decoder.String,
+                    ),
+                );
+            } catch (err: unknown) {
+                Logger.log("error", "Decoder", `Decoding error: '${err}'`);
+                reject(
+                    err instanceof ValkeyError
+                        ? err
+                        : new Error(
+                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                          ),
+                );
+            }
+        } else if (response.constantResponse === "OK") {
+            resolve("OK");
+        } else {
+            resolve(null);
+        }
+
+        this.dropOtelSpanForCallback(response.callbackIdx);
+    };
+
+    protected constructor(options?: BaseClientConfiguration) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
 
         this.config = options;
-        this.requestTimeout =
-            options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
-        this.socket = socket;
-        this.socket
-            .on("data", (data) => this.handleReadData(data))
-            .on("error", (err) => {
-                console.error(`Server closed: ${err}`);
-                this.close();
-            });
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
-        this.inflightRequestsLimit =
-            options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
     }
 
     protected getCallbackIndex(): number {
@@ -1445,20 +1461,6 @@ export class BaseClient {
             this.availableCallbackSlots.pop() ??
             this.promiseCallbackFunctions.length
         );
-    }
-
-    private writeBufferedRequestsToSocket() {
-        this.writeInProgress = true;
-        const requests = this.requestWriter.finish();
-        this.requestWriter.reset();
-
-        this.socket.write(requests, undefined, () => {
-            if (this.requestWriter.len > 0) {
-                this.writeBufferedRequestsToSocket();
-            } else {
-                this.writeInProgress = false;
-            }
-        });
     }
 
     protected ensureClientIsOpen() {
@@ -1484,124 +1486,316 @@ export class BaseClient {
     protected createWritePromise<T>(
         command: command_request.Command | command_request.Command[],
         options: WritePromiseOptions = {},
+
         isAtomic = false,
+
         raiseOnError = false,
     ): Promise<T> {
         this.ensureClientIsOpen();
 
-        const route = this.toProtobufRoute(options?.route);
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+
+        if (!Array.isArray(command)) {
+            return this.sendCommand<T>(command, options);
+        }
+
+        // Batch commands
+        return this.sendBatch<T>(command, options, isAtomic, raiseOnError).then(
+            (result: T) => {
+                // Patch error prototypes in batch results.
+                // The Rust NAPI layer returns errors as plain JS Error objects with
+                // name="RequestError". We need to re-class them as RequestError instances
+                // so that `instanceof RequestError` checks work correctly.
+                if (Array.isArray(result)) {
+                    for (const item of result) {
+                        if (
+                            item?.constructor?.name === "Error" &&
+                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                            (item as any).name === "RequestError"
+                        ) {
+                            Object.setPrototypeOf(item, RequestError.prototype);
+                        }
+                    }
+                }
+
+                return result;
+            },
+        );
+    }
+
+    /**
+     * Sends a batch of commands to the server.
+     * @internal
+     */
+    private sendBatch<T>(
+        commands: command_request.Command[],
+        options: WritePromiseOptions = {},
+        isAtomic: boolean,
+        raiseOnError: boolean,
+    ): Promise<T> {
+        // Validate: retry strategy is not supported for atomic batches (transactions)
+        if (isAtomic && "retryStrategy" in options && options.retryStrategy) {
+            return Promise.reject(
+                new RequestError(
+                    "Retry strategy is not supported for atomic batches.",
+                ),
+            ) as Promise<T>;
+        }
+
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
         const callbackIndex = this.getCallbackIndex();
-        const basePromise = new Promise<T>((resolve, reject) => {
-            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
-            let spanPtr: Long | null = null;
+        let spanPtr: bigint | undefined;
 
-            if (OpenTelemetry.shouldSample()) {
-                const commandName =
-                    command instanceof command_request.Command
-                        ? command_request.RequestType[command.requestType]
-                        : "Batch";
-                const parentCtx = OpenTelemetry.getParentSpanContext();
-                const pair = parentCtx
-                    ? createOtelSpanWithTraceContext(
-                          commandName,
-                          parentCtx.traceId,
-                          parentCtx.spanId,
-                          parentCtx.traceFlags,
-                          parentCtx.traceState,
-                      )
-                    : createLeakedOtelSpan(commandName);
-                spanPtr = new Long(pair[0], pair[1]);
-            }
+        // Create an OTel span for this batch if tracing is enabled
+        if (OpenTelemetry.shouldSample()) {
+            spanPtr = this.createOtelSpanForCallback(callbackIndex, "Batch");
+        }
 
+        return new Promise<T>((resolve, reject) => {
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
 
-            this.writeOrBufferCommandRequest(
+            // Convert commands to BatchCommand format
+            const pointerBackedCommands: command_request.Command[] = [];
+            const batchCommands = commands.map((cmd) => {
+                let argsPointerHigh = 0;
+                let argsPointerLow = 0;
+
+                if (cmd.argsVecPointer) {
+                    // Already have a heap pointer
+                    pointerBackedCommands.push(cmd);
+
+                    if (typeof cmd.argsVecPointer === "number") {
+                        const long = Long.fromNumber(cmd.argsVecPointer);
+                        argsPointerHigh = long.high;
+                        argsPointerLow = long.low;
+                    } else {
+                        argsPointerHigh = cmd.argsVecPointer.high;
+                        argsPointerLow = cmd.argsVecPointer.low;
+                    }
+                } else if (cmd.argsArray?.args) {
+                    // Create a leaked string vec from the args array
+                    const argsAsUint8Arrays = cmd.argsArray.args.map((arg) =>
+                        arg instanceof Uint8Array
+                            ? arg
+                            : new TextEncoder().encode(arg as string),
+                    );
+                    const [low, high] =
+                        createLeakedStringVec(argsAsUint8Arrays);
+                    argsPointerHigh = high;
+                    argsPointerLow = low;
+                }
+
+                return {
+                    requestType: cmd.requestType,
+                    argsPointerHigh,
+                    argsPointerLow,
+                };
+            });
+
+            // Extract timeout from options if present
+            const timeout =
+                "timeout" in options ? (options.timeout as number) : undefined;
+
+            // Extract retry strategy from options if present (cluster batch only)
+            const retryServerError =
+                "retryStrategy" in options
+                    ? options.retryStrategy?.retryServerError
+                    : undefined;
+            const retryConnectionError =
+                "retryStrategy" in options
+                    ? options.retryStrategy?.retryConnectionError
+                    : undefined;
+
+            // Call the Rust sendBatch via NAPI
+            const success = this.clientHandle!.sendBatch(
                 callbackIndex,
-                command,
-                route,
-                spanPtr,
+                batchCommands,
                 isAtomic,
                 raiseOnError,
-                options as ClusterBatchOptions,
+                timeout,
+                retryServerError,
+                retryConnectionError,
+                spanPtr,
+                routeBytes,
             );
-        });
 
-        if (!Array.isArray(command)) {
-            return basePromise;
-        }
-
-        return basePromise.then((result: T) => {
-            if (Array.isArray(result)) {
-                const loopLen = result.length;
-
-                for (let i = 0; i < loopLen; i++) {
-                    const item = result[i];
-
-                    // Check if the item is an instance of napi Error
-                    // Can be checked by checking if the constructor name is "Error"
-                    // and if there is a name property with the value "RequestError" (that we added in the Rust code)
-                    if (
-                        item?.constructor?.name === "Error" &&
-                        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-                        (item as any).name === "RequestError"
-                    ) {
-                        Object.setPrototypeOf(item, RequestError.prototype);
-                    }
-                }
+            for (const cmd of pointerBackedCommands) {
+                cmd.argsVecPointer = undefined;
             }
 
-            return result;
+            if (!success) {
+                // Inflight limit exceeded - drop span and clean up
+                this.dropOtelSpanForCallback(callbackIndex);
+                this.availableCallbackSlots.push(callbackIndex);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
+        });
+    }
+
+    /**
+     * Sends a single command to the server and returns a promise for the result.
+     * @internal
+     */
+    private sendCommand<T>(
+        command: command_request.Command,
+        options: WritePromiseOptions = {},
+    ): Promise<T> {
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
+        const callbackIndex = this.getCallbackIndex();
+        let spanPtr: bigint | undefined;
+
+        // Create an OTel span for this command if tracing is enabled.
+        // Defer the command name lookup to avoid the string table access
+        // on every request when OTel is not sampling.
+        if (OpenTelemetry.shouldSample()) {
+            const commandName =
+                command_request.RequestType[command.requestType] ?? "Unknown";
+            spanPtr = this.createOtelSpanForCallback(
+                callbackIndex,
+                commandName,
+            );
+        }
+
+        return new Promise<T>((resolve, reject) => {
+            this.promiseCallbackFunctions[callbackIndex] = [
+                resolve,
+                reject,
+                options?.decoder,
+            ];
+
+            // Get arguments from the command
+            // The command.argsArray contains the arguments, or argsVecPointer contains a heap pointer
+            let argsPointerHigh = 0;
+            let argsPointerLow = 0;
+
+            if (command.argsVecPointer) {
+                // Already have a heap pointer from createLeakedStringVec
+                if (typeof command.argsVecPointer === "number") {
+                    const long = Long.fromNumber(command.argsVecPointer);
+                    argsPointerHigh = long.high;
+                    argsPointerLow = long.low;
+                } else {
+                    argsPointerHigh = command.argsVecPointer.high;
+                    argsPointerLow = command.argsVecPointer.low;
+                }
+            } else if (command.argsArray?.args) {
+                // Create a leaked string vec from the args array
+                const argsAsUint8Arrays = command.argsArray.args.map((arg) =>
+                    arg instanceof Uint8Array
+                        ? arg
+                        : new TextEncoder().encode(arg as string),
+                );
+                const [low, high] = createLeakedStringVec(argsAsUint8Arrays);
+                argsPointerHigh = high;
+                argsPointerLow = low;
+            }
+
+            // Call the Rust sendCommand via NAPI
+            const success = this.clientHandle!.sendCommand(
+                callbackIndex,
+                command.requestType,
+                argsPointerHigh,
+                argsPointerLow,
+                spanPtr,
+                routeBytes,
+            );
+
+            if (command.argsVecPointer) {
+                command.argsVecPointer = undefined;
+            }
+
+            if (!success) {
+                // Inflight limit exceeded - drop span and clean up
+                this.dropOtelSpanForCallback(callbackIndex);
+                this.availableCallbackSlots.push(callbackIndex);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
         });
     }
 
     protected createUpdateConnectionPasswordPromise(
         command: command_request.UpdateConnectionPassword,
-    ) {
+    ): Promise<GlideString> {
         this.ensureClientIsOpen();
+        const callbackIndex = this.getCallbackIndex();
 
         return new Promise<GlideString>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    updateConnectionPassword: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
+            this.promiseCallbackFunctions[callbackIndex] = [
+                resolve,
+                reject,
+                undefined,
+            ];
+
+            const success = this.clientHandle!.updateConnectionPassword(
+                callbackIndex,
+                command.password ?? null,
+                command.immediateAuth ?? false,
             );
+
+            if (!success) {
+                this.availableCallbackSlots.push(callbackIndex);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
         });
     }
 
     protected createRefreshIamTokenPromise(
-        command: command_request.RefreshIamToken,
-    ) {
+        _command: command_request.RefreshIamToken, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ): Promise<GlideString> {
         this.ensureClientIsOpen();
+        const callbackIndex = this.getCallbackIndex();
 
         return new Promise<GlideString>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
+            this.promiseCallbackFunctions[callbackIndex] = [
+                resolve,
+                reject,
+                undefined,
+            ];
 
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    refreshIamToken: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
-            );
+            const success = this.clientHandle!.refreshIamToken(callbackIndex);
+
+            if (!success) {
+                this.availableCallbackSlots.push(callbackIndex);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
         });
     }
 
@@ -1609,23 +1803,24 @@ export class BaseClient {
         command: command_request.GetCacheMetrics,
     ) {
         this.ensureClientIsOpen();
+        const callbackIdx = this.getCallbackIndex();
 
         return new Promise<number>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
 
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    getCacheMetrics: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
+            const success = this.clientHandle!.getCacheMetrics(
+                callbackIdx,
+                command.metricsTypes,
             );
+
+            if (!success) {
+                this.availableCallbackSlots.push(callbackIdx);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
         });
     }
 
@@ -1648,110 +1843,80 @@ export class BaseClient {
 
     protected createScriptInvocationPromise<T = GlideString>(
         command: command_request.ScriptInvocation,
-        options: {
-            keys?: GlideString[];
-            args?: GlideString[];
-        } & DecoderOption = {},
-    ) {
+        options: DecoderOption & RouteOption = {},
+    ): Promise<T> {
         this.ensureClientIsOpen();
 
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
+        const callbackIndex = this.getCallbackIndex();
+
         return new Promise<T>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [
+            this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
                 options?.decoder,
             ];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    scriptInvocation: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
-            );
-        });
-    }
 
-    /**
-     * @internal
-     *
-     * @param callbackIdx - The requests callback index.
-     * @param command - A single command or an array of commands to be executed, array of commands represents a batch and not a single command.
-     * @param route - Optional routing information for the command.
-     * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
-     * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
-     * @param options - Optional settings for batch requests.
-     */
-    protected writeOrBufferCommandRequest(
-        callbackIdx: number,
-        command: command_request.Command | command_request.Command[],
-        route?: command_request.Routes,
-        commandSpanPtr?: number | Long | null,
-        isAtomic = false,
-        raiseOnError = false,
-        options: ClusterBatchOptions | BatchOptions = {},
-    ) {
-        if (isAtomic && "retryStrategy" in options) {
-            throw new RequestError(
-                "Retry strategy is not supported for atomic batches.",
-            );
-        }
+            // Convert keys to pointer
+            let keysPointerHigh = 0;
+            let keysPointerLow = 0;
 
-        const isBatch = Array.isArray(command);
-        let batch: command_request.Batch | undefined;
-
-        if (isBatch) {
-            let retryServerError: boolean | undefined;
-            let retryConnectionError: boolean | undefined;
-
-            if ("retryStrategy" in options) {
-                retryServerError = options.retryStrategy?.retryServerError;
-                retryConnectionError =
-                    options.retryStrategy?.retryConnectionError;
+            if (command.keys && command.keys.length > 0) {
+                const keysAsUint8Arrays = command.keys.map(
+                    (key: Uint8Array | string) =>
+                        key instanceof Uint8Array
+                            ? key
+                            : new TextEncoder().encode(key as string),
+                );
+                const [low, high] = createLeakedStringVec(keysAsUint8Arrays);
+                keysPointerHigh = high;
+                keysPointerLow = low;
             }
+            // else: keep default (0, 0) — Rust treats null pointer as empty vec
 
-            batch = command_request.Batch.create({
-                isAtomic,
-                commands: command,
-                raiseOnError,
-                timeout: options.timeout,
-                retryServerError,
-                retryConnectionError,
-            });
-        }
+            // Convert args to pointer
+            let argsPointerHigh = 0;
+            let argsPointerLow = 0;
 
-        const message = command_request.CommandRequest.create({
-            callbackIdx,
-            singleCommand: isBatch ? undefined : command,
-            batch,
-            route,
-            rootSpanPtr: commandSpanPtr,
+            if (command.args && command.args.length > 0) {
+                const argsAsUint8Arrays = command.args.map(
+                    (arg: Uint8Array | string) =>
+                        arg instanceof Uint8Array
+                            ? arg
+                            : new TextEncoder().encode(arg as string),
+                );
+                const [low, high] = createLeakedStringVec(argsAsUint8Arrays);
+                argsPointerHigh = high;
+                argsPointerLow = low;
+            }
+            // else: keep default (0, 0) — Rust treats null pointer as empty vec
+
+            const success = this.clientHandle!.invokeScript(
+                callbackIndex,
+                command.hash,
+                keysPointerHigh,
+                keysPointerLow,
+                argsPointerHigh,
+                argsPointerLow,
+                routeBytes,
+            );
+
+            if (!success) {
+                this.availableCallbackSlots.push(callbackIndex);
+                reject(
+                    new RequestError(
+                        "Inflight request limit exceeded. Please try again later.",
+                    ),
+                );
+            }
         });
-
-        this.writeOrBufferRequest(
-            message,
-            (msg: command_request.CommandRequest, writer: Writer) => {
-                command_request.CommandRequest.encodeDelimited(msg, writer);
-            },
-        );
-    }
-
-    protected writeOrBufferRequest<TRequest>(
-        message: TRequest,
-        encodeDelimited: (message: TRequest, writer: Writer) => void,
-    ) {
-        encodeDelimited(message, this.requestWriter);
-
-        if (this.writeInProgress) {
-            return;
-        }
-
-        this.writeBufferedRequestsToSocket();
     }
 
     // Define a common function to process the result of a batch with set commands
@@ -1872,14 +2037,17 @@ export class BaseClient {
             (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
-            const ptrNum =
+            nextPushNotificationValue =
                 typeof responsePointer === "number"
-                    ? responsePointer
-                    : responsePointer.toNumber();
-            nextPushNotificationValue = valueFromPointer(
-                ptrNum,
-                isStringDecoder,
-            ) as Record<string, unknown>;
+                    ? (valueFromPointer(
+                          responsePointer,
+                          isStringDecoder,
+                      ) as Record<string, unknown>)
+                    : (valueFromSplitPointer(
+                          responsePointer.high,
+                          responsePointer.low,
+                          isStringDecoder,
+                      ) as Record<string, unknown>);
 
             const messageKind = nextPushNotificationValue["kind"];
 
@@ -9587,58 +9755,73 @@ export class BaseClient {
 
     /**
      * @internal
+     * Establishes the connection to the server.
      */
-    protected connectToServer(options: BaseClientConfiguration): Promise<void> {
-        return new Promise((resolve, reject) => {
-            // Register address resolver in the global registry before sending
-            // the connection request, so the socket listener can pick it up.
-            if (options.addressResolver) {
-                this.addressResolverKey = registerAddressResolver(
-                    options.addressResolver,
-                );
-            }
+    protected async connectToServer(
+        options: BaseClientConfiguration,
+    ): Promise<void> {
+        const request = this.createClientRequest(options);
 
-            this.promiseCallbackFunctions[0] = [
-                resolve,
-                (err: unknown) => {
-                    // Clean up the resolver from the registry if connection fails
-                    if (this.addressResolverKey) {
-                        removeAddressResolver(this.addressResolverKey);
-                        this.addressResolverKey = undefined;
-                    }
-
-                    reject(err);
-                },
-                options?.defaultDecoder,
-            ];
-
-            const request = this.createClientRequest(options);
-
-            // Set the address resolver key in the protobuf request
-            if (this.addressResolverKey) {
-                request.addressResolverKey = this.addressResolverKey;
-            }
-
-            const message =
-                connection_request.ConnectionRequest.create(request);
-
-            this.writeOrBufferRequest(
-                message,
-                (
-                    message: connection_request.ConnectionRequest,
-                    writer: Writer,
-                ) => {
-                    connection_request.ConnectionRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
+        if (options.addressResolver) {
+            this.addressResolverKey = registerAddressResolver(
+                options.addressResolver,
             );
-        });
+            request.addressResolverKey = this.addressResolverKey;
+        }
+
+        try {
+            const connectionRequestBytes = Buffer.from(
+                connection_request.ConnectionRequest.encode(
+                    connection_request.ConnectionRequest.create(request),
+                ).finish(),
+            );
+
+            this.clientHandle = await CreateDirectClient(
+                connectionRequestBytes,
+                this.handleResponsesAvailable,
+            );
+            Logger.log(
+                "info",
+                "Client lifetime",
+                "Client connection established",
+            );
+        } catch (err) {
+            if (this.addressResolverKey) {
+                removeAddressResolver(this.addressResolverKey);
+                this.addressResolverKey = undefined;
+            }
+
+            throw err;
+        }
     }
 
     /**
-     *  Terminate the client by closing all associated resources, including the socket and any active promises.
+     * Callback invoked when responses are available.
+     *
+     * Response handling failures must not escape this callback because one
+     * exception would stop the rest of the drained responses from processing.
+     * @internal
+     */
+    private handleResponsesAvailable = (): void => {
+        if (!this.clientHandle) return;
+
+        const responses = this.clientHandle.drainResponses();
+
+        for (const response of responses) {
+            try {
+                this.handleResponse(response);
+            } catch (err) {
+                Logger.log(
+                    "error",
+                    "Response handling",
+                    `Unhandled exception while handling response: '${err}'`,
+                );
+            }
+        }
+    };
+
+    /**
+     *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
      */
@@ -9659,24 +9842,41 @@ export class BaseClient {
             this.addressResolverKey = undefined;
         }
 
+        // Clean up OTel spans for in-flight requests to prevent memory leaks
+        for (const spanPtr of this.otelSpanPointers.values()) {
+            dropOtelSpan(spanPtr);
+        }
+
+        this.otelSpanPointers.clear();
+
+        if (this.clientHandle) {
+            try {
+                this.clientHandle.close();
+            } catch (err) {
+                Logger.log(
+                    "warn",
+                    "Client lifetime",
+                    `Error closing client handle: ${err}`,
+                );
+            }
+
+            this.clientHandle = null;
+        }
+
         Logger.log("info", "Client lifetime", "disposing of client");
-        this.socket.end();
     }
 
     /**
      * @internal
+     * Creates and connects a client instance.
      */
-    protected static async __createClientInternal<
-        TConnection extends BaseClient,
-    >(
+    protected static async createClientInternal<TConnection extends BaseClient>(
         options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-        constructor: (
-            socket: net.Socket,
-            options?: BaseClientConfiguration,
-        ) => TConnection,
+        constructor: (options?: BaseClientConfiguration) => TConnection,
     ): Promise<TConnection> {
-        const connection = constructor(connectedSocket, options);
+        const overallStart = Date.now();
+
+        const connection = constructor(options);
         const connectStart = Date.now();
         await connection.connectToServer(options);
         const connectTime = Date.now() - connectStart;
@@ -9685,61 +9885,14 @@ export class BaseClient {
             "Client lifetime",
             `connected to server in ${connectTime}ms`,
         );
-        return connection;
-    }
 
-    /**
-     * @internal
-     */
-    protected static GetSocket(path: string): Promise<net.Socket> {
-        return new Promise((resolve, reject) => {
-            const socket = new net.Socket();
-            socket
-                .connect(path)
-                .once("connect", () => resolve(socket))
-                .once("error", reject);
-        });
-    }
-
-    /**
-     * @internal
-     */
-    protected static async createClientInternal<TConnection extends BaseClient>(
-        options: BaseClientConfiguration,
-        constructor: (
-            socket: net.Socket,
-            options?: BaseClientConfiguration,
-        ) => TConnection,
-    ): Promise<TConnection> {
-        const overallStart = Date.now();
-        const path = await StartSocketConnection();
-        const socketStart = Date.now();
-        const socket = await this.GetSocket(path);
-        const socketTime = Date.now() - socketStart;
+        const totalTime = Date.now() - overallStart;
         Logger.log(
             "info",
             "Client lifetime",
-            `socket connection established in ${socketTime}ms`,
+            `total client creation time: ${totalTime}ms`,
         );
-
-        try {
-            const client = await this.__createClientInternal<TConnection>(
-                options,
-                socket,
-                constructor,
-            );
-            const totalTime = Date.now() - overallStart;
-            Logger.log(
-                "info",
-                "Client lifetime",
-                `total client creation time: ${totalTime}ms`,
-            );
-            return client;
-        } catch (err) {
-            // Ensure socket is closed
-            socket.end();
-            throw err;
-        }
+        return connection;
     }
 
     /**

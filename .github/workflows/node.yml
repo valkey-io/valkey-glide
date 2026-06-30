@@ -199,7 +199,7 @@ jobs:
               run: |
                   echo "Running one-time Node.js extra tests"
                   echo "Target: x86_64-unknown-linux-gnu"
-                  echo "Node: 23.x"
+                  echo "Node: 26.x"
                   echo "Engine: 8.0"
 
             # Install software dependencies
@@ -215,7 +215,7 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
-                  node-version: 23.x
+                  node-version: 26.x
 
             - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
