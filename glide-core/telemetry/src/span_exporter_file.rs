@@ -1,15 +1,14 @@
 use chrono::{DateTime, Utc};
 use core::fmt;
-use futures_util::future::BoxFuture;
-use opentelemetry::trace::TraceError;
-use opentelemetry_sdk::export::{self, trace::ExportResult};
+use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
+use opentelemetry_sdk::trace::SpanData;
 use serde_json::{Map, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic;
 
-use opentelemetry_sdk::resource::Resource;
+use opentelemetry_sdk::Resource;
 
 /// An OpenTelemetry exporter that writes Spans to a file on export.
 pub struct SpanExporterFile {
@@ -40,37 +39,25 @@ impl SpanExporterFile {
     ///   - The parent directory must exist
     ///
     /// # Errors
-    /// Returns a TraceError if:
+    /// Returns an error if:
     /// - The parent directory doesn't exist
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
-    pub fn new(path: PathBuf) -> Result<Self, TraceError> {
+    pub fn new(path: PathBuf) -> Result<Self, OTelSdkError> {
         // TODO: Check if the file exists and has write permissions - https://github.com/valkey-io/valkey-glide/issues/3720
         Ok(Self {
-            resource: Resource::default(),
+            resource: Resource::builder_empty().build(),
             is_shutdown: atomic::AtomicBool::new(false),
             path,
         })
     }
 }
 
-macro_rules! file_writeln {
-    ($file:expr, $content:expr) => {{
-        if let Err(e) = writeln!($file, "{}", $content) {
-            return Box::pin(std::future::ready(Err(TraceError::from(format!(
-                "File write error. {e}",
-            )))));
-        }
-    }};
-}
-
-impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
+impl opentelemetry_sdk::trace::SpanExporter for SpanExporterFile {
     /// Write Spans to JSON file
-    fn export(&mut self, batch: Vec<export::trace::SpanData>) -> BoxFuture<'static, ExportResult> {
+    async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
         if self.is_shutdown.load(atomic::Ordering::SeqCst) {
-            return Box::pin(std::future::ready(Err(TraceError::from(
-                "Exporter is shutdown",
-            ))));
+            return Err(OTelSdkError::AlreadyShutdown);
         }
 
         // TODO: Move the writes to Tokio task - https://github.com/valkey-io/valkey-glide/issues/3720
@@ -79,32 +66,37 @@ impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
             .append(true)
             .open(&self.path)
         else {
-            return Box::pin(std::future::ready(Err(TraceError::from(format!(
+            return Err(OTelSdkError::InternalFailure(format!(
                 "Unable to open exporter file: {} for append.",
                 self.path.display()
-            )))));
+            )));
         };
 
         let spans = to_jsons(batch);
 
         for span in &spans {
-            if let Ok(s) = serde_json::to_string(&span) {
-                file_writeln!(file, s);
+            if let Ok(s) = serde_json::to_string(&span)
+                && let Err(e) = writeln!(file, "{}", s)
+            {
+                return Err(OTelSdkError::InternalFailure(format!(
+                    "File write error. {e}",
+                )));
             }
         }
-        Box::pin(std::future::ready(Ok(())))
+        Ok(())
     }
 
-    fn shutdown(&mut self) {
+    fn shutdown(&self) -> OTelSdkResult {
         self.is_shutdown.store(true, atomic::Ordering::SeqCst);
+        Ok(())
     }
 
-    fn set_resource(&mut self, res: &opentelemetry_sdk::Resource) {
+    fn set_resource(&mut self, res: &Resource) {
         self.resource = res.clone();
     }
 }
 
-fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
+fn to_jsons(batch: Vec<SpanData>) -> Vec<Value> {
     let mut spans = Vec::<Value>::new();
     for span in &batch {
         let mut map = Map::new();
