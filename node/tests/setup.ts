@@ -28,11 +28,6 @@ declare global {
 const args = minimist(process.argv.slice(2));
 // Make the arguments available globally
 global.CLI_ARGS = args;
-// Prefer CLI args, fall back to env vars set by globalSetup
-global.CLUSTER_ENDPOINTS =
-    (args["cluster-endpoints"] as string) ??
-    process.env.GLIDE_CLUSTER_ENDPOINTS;
-global.STAND_ALONE_ENDPOINT =
-    (args["standalone-endpoints"] as string) ??
-    process.env.GLIDE_STANDALONE_ENDPOINT;
+global.CLUSTER_ENDPOINTS = args["cluster-endpoints"] as string;
+global.STAND_ALONE_ENDPOINT = args["standalone-endpoints"] as string;
 global.TLS = !!args.tls;

@@ -38,10 +38,6 @@ const config: Config = {
     // Setup file to configure the testing environment after Jest is installed
     setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
 
-    // Shared cluster setup/teardown - start servers once for all compatible test files
-    globalSetup: "<rootDir>/tests/globalSetup.ts",
-    globalTeardown: "<rootDir>/tests/globalTeardown.ts",
-
     // Coverage settings
     coverageProvider: "v8",
     collectCoverage: true,
