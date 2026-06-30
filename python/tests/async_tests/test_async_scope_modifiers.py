@@ -80,22 +80,22 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
     return f"scope-test-{prefix}-{uid}"
 
 
-async def _create_client(cluster_mode: bool, **extra_config):
+async def _create_client(cluster_mode: bool, **extra_config):  # type: ignore[return]
     """Create a GlideClient or GlideClusterClient based on mode."""
     if cluster_mode:
         _skip_cluster_if_unavailable()
-        config = GlideClusterClientConfiguration(
+        cluster_cfg = GlideClusterClientConfiguration(
             addresses=_get_cluster_addresses(),
             **extra_config,
         )
-        return await GlideClusterClient.create(config)
+        return await GlideClusterClient.create(cluster_cfg)
     else:
         _skip_standalone_if_unavailable()
-        config = GlideClientConfiguration(
+        standalone_cfg = GlideClientConfiguration(
             addresses=[_get_standalone_address()],
             **extra_config,
         )
-        return await GlideClient.create(config)
+        return await GlideClient.create(standalone_cfg)
 
 
 async def _close_client(client):

@@ -85,7 +85,7 @@ def _get_or_create_client(key: str, config: GlideClientConfiguration):
     """Get or create a pooled client by key. Thread-safe, xdist-safe."""
     with _modifier_pool_lock:
         client = _modifier_client_pool.get(key)
-    if _client_is_usable(client):
+    if client is not None and _client_is_usable(client):
         try:
             client.custom_command(["PING"])
             return client
@@ -128,22 +128,22 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
     return f"scope-test-{prefix}-{uid}"
 
 
-def _create_client(cluster_mode: bool, **extra_config):
+def _create_client(cluster_mode: bool, **extra_config):  # type: ignore[return]
     """Create a GlideClient or GlideClusterClient based on mode."""
     if cluster_mode:
         _skip_cluster_if_unavailable()
-        config = GlideClusterClientConfiguration(
+        cluster_cfg = GlideClusterClientConfiguration(
             addresses=_get_cluster_addresses(),
             **extra_config,
         )
-        return GlideClusterClient.create(config)
+        return GlideClusterClient.create(cluster_cfg)
     else:
         _skip_standalone_if_unavailable()
-        config = GlideClientConfiguration(
+        standalone_cfg = GlideClientConfiguration(
             addresses=[_get_standalone_address()],
             **extra_config,
         )
-        return GlideClient.create(config)
+        return GlideClient.create(standalone_cfg)
 
 
 def _close_client(client):

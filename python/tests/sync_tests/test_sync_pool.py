@@ -206,9 +206,11 @@ class TestPoolPubsubRejection:
             addresses=[_get_standalone_address()],
             request_timeout=5000,
             pubsub_subscriptions=GlideClientConfiguration.PubSubSubscriptions(
+                callback=None,
+                context=None,
                 channels_and_patterns={
                     GlideClientConfiguration.PubSubChannelModes.Exact: {"test-channel"}
-                }
+                },
             ),
         )
         with pytest.raises(ValueError, match="pubsub"):
@@ -221,9 +223,13 @@ class TestPoolPubsubRejection:
             addresses=_get_cluster_addresses(),
             request_timeout=5000,
             pubsub_subscriptions=GlideClusterClientConfiguration.PubSubSubscriptions(
+                callback=None,
+                context=None,
                 channels_and_patterns={
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {"test-channel"}
-                }
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        "test-channel"
+                    }
+                },
             ),
         )
         with pytest.raises(ValueError, match="pubsub"):

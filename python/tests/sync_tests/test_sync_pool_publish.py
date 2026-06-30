@@ -24,7 +24,7 @@ def get_config() -> GlideClientConfiguration:
     )
 
 
-class TestPoolPubSub:
+class TestPoolPublish:
     """PubSub tests with pooled clients under concurrent access."""
 
     @staticmethod

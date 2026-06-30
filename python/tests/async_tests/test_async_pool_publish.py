@@ -29,7 +29,7 @@ def get_config() -> GlideClientConfiguration:
     )
 
 
-class TestPoolPubSub:
+class TestPoolPublish:
     """PubSub tests with pooled clients under concurrent access."""
 
     async def test_publish_from_pool(self):
