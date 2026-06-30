@@ -613,3 +613,59 @@ export function getPubsubModes(client: TGlideClient): any {
     }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
+
+/**
+ * Wait for a PubSub message to arrive using polling instead of a fixed sleep.
+ * - Async method: calls getPubSubMessage() which naturally awaits the message
+ * - Sync method: polls tryGetPubSubMessage() every 20ms
+ * - Callback method: polls messages[index] every 20ms
+ *
+ * Replaces patterns like:
+ *   await new Promise(resolve => setTimeout(resolve, 1000));
+ *   const msg = await getMessageByMethod(method, client, messages, index);
+ *
+ * @param method - MethodTesting value (Async=0, Sync=1, Callback=2)
+ * @param client - The Glide client
+ * @param messages - Callback messages array (for Callback method)
+ * @param index - Message index to retrieve
+ * @param timeoutMs - Max wait time in milliseconds (default: 3000)
+ * @returns The PubSubMsg or null/undefined
+ */
+export async function waitForMessage(
+    method: number,
+    client: TGlideClient,
+    messages: PubSubMsg[] | null,
+    index: number,
+    timeoutMs = 3000,
+): Promise<PubSubMsg | null | undefined> {
+    const MethodTesting = { Async: 0, Sync: 1, Callback: 2 };
+
+    if (method === MethodTesting.Async) {
+        // getPubSubMessage() already waits for a message - no polling needed
+        return await Promise.race([
+            client.getPubSubMessage(),
+            new Promise<null>((resolve) =>
+                setTimeout(() => resolve(null), timeoutMs),
+            ),
+        ]);
+    }
+
+    // For Sync and Callback: poll until message is available
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+        if (method === MethodTesting.Sync) {
+            const msg = client.tryGetPubSubMessage();
+            if (msg !== null && msg !== undefined) return msg;
+        } else {
+            // Callback method
+            if (messages && messages[index] !== undefined) {
+                return messages[index];
+            }
+        }
+
+        await new Promise((r) => setTimeout(r, 20));
+    }
+
+    return null;
+}

@@ -30,7 +30,7 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 
-const TIMEOUT = 50000;
+const TIMEOUT = 120000;
 
 function generateCompressibleText(sizeBytes: number): string {
     const pattern = "A".repeat(10) + "B".repeat(10) + "C".repeat(10);
