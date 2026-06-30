@@ -87,6 +87,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29",
+        "@napi-rs/cli": "^2.18.4",
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/node": "24",
