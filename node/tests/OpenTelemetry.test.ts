@@ -14,6 +14,8 @@ import {
     ProtocolVersion,
     GlideSpanContext,
     GlideOpenTelemetryConfig,
+    InfoOptions,
+    RequestError,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -251,6 +253,43 @@ describe("OpenTelemetry GlideClusterClient", () => {
         // Verify getParentSpanContext() returns the context from init config.
         expect(OpenTelemetry.getParentSpanContext()).toEqual(INIT_PARENT_CTX);
     });
+
+    it(
+        "records error status for native-side route validation failures",
+        async () => {
+            OpenTelemetry.setSamplePercentage(100);
+            await teardown_otel_test();
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            });
+
+            await expect(
+                client.info({
+                    sections: [InfoOptions.Server],
+                    route: {
+                        type: "routeByAddress",
+                        host: "127.0.0.1",
+                        port: 99999,
+                    },
+                }),
+            ).rejects.toThrow(RequestError);
+
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            const { spans } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+            const infoSpan = spans
+                .map((line) => JSON.parse(line) as Record<string, unknown>)
+                .find((span) => span.name === "Info");
+
+            expect(infoSpan).toBeDefined();
+            expect(String(infoSpan?.status)).toContain("Error");
+        },
+        TIMEOUT,
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span memory leak_%p`,
