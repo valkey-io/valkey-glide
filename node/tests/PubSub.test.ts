@@ -715,7 +715,14 @@ describe("PubSub", () => {
                 }
 
                 const asyncMsg = await listeningClient.getPubSubMessage();
-                const syncMsg = listeningClient.tryGetPubSubMessage()!;
+                // Poll for second message since it may not be buffered yet
+                const syncMsg = await waitForMessage(
+                    MethodTesting.Sync,
+                    listeningClient,
+                    null,
+                    0,
+                    3000,
+                );
                 expect(syncMsg).toBeTruthy();
 
                 expect([message, message2]).toContain(asyncMsg.message);
