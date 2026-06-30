@@ -53,6 +53,41 @@ public class TlsAdvancedConfiguration {
     @Builder.Default private final byte[] rootCertificates = null;
 
     /**
+     * Client certificate data for mutual TLS (mTLS) authentication.
+     *
+     * <p>When provided along with {@link #clientKey}, enables mutual TLS authentication so that the
+     * client presents its certificate to the server. Use this when the server requires client
+     * certificate authentication.
+     *
+     * <p>If set to an empty (non-null, length 0) byte array, a `ConfigurationError` will be raised.
+     *
+     * <p>If null (default), no client certificate will be presented.
+     *
+     * <p>Must be used together with {@link #clientKey}: providing one without the other results in a
+     * `ConfigurationError`.
+     *
+     * <p>The certificate data should be in PEM format as a byte array.
+     */
+    @Builder.Default private final byte[] clientCertificate = null;
+
+    /**
+     * Client private key data for mutual TLS (mTLS) authentication.
+     *
+     * <p>When provided along with {@link #clientCertificate}, enables mutual TLS authentication. This
+     * private key corresponds to the certificate provided in {@link #clientCertificate}.
+     *
+     * <p>If set to an empty (non-null, length 0) byte array, a `ConfigurationError` will be raised.
+     *
+     * <p>If null (default), no client key will be used.
+     *
+     * <p>Must be used together with {@link #clientCertificate}: providing one without the other
+     * results in a `ConfigurationError`.
+     *
+     * <p>The key data should be in PEM format as a byte array.
+     */
+    @Builder.Default private final byte[] clientKey = null;
+
+    /**
      * Create TlsAdvancedConfiguration from a Java KeyStore file.
      *
      * @param keyStorePath Path to the KeyStore file

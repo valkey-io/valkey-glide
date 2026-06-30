@@ -35,6 +35,28 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
+    void testBuilderWithClientCertificateAndKey() {
+        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
+
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder().clientCertificate(certBytes).clientKey(keyBytes).build();
+
+        assertNotNull(config);
+        assertArrayEquals(certBytes, config.getClientCertificate());
+        assertArrayEquals(keyBytes, config.getClientKey());
+    }
+
+    @Test
+    void testBuilderWithNullClientCertificateAndKey() {
+        TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
+
+        assertNotNull(config);
+        assertNull(config.getClientCertificate());
+        assertNull(config.getClientKey());
+    }
+
+    @Test
     void testFromKeyStoreWithInvalidPath() throws Exception {
         assertThrows(
                 FileNotFoundException.class,
