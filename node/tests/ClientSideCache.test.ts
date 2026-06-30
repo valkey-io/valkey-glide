@@ -23,6 +23,7 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
+    waitFor,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -680,6 +681,48 @@ describe("ClientSideCache", () => {
                 );
             },
         );
+
+        it(
+            "server-assisted invalidation evicts cached key",
+            async () => {
+                const cache = new ClientSideCache({
+                    maxCacheKb: 1,
+                    entryTtlMs: 60000,
+                    serverAssisted: true,
+                });
+                client = await createStandaloneClientWithCache(
+                    ProtocolVersion.RESP3,
+                    cache,
+                );
+                const clientB = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        standaloneCluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                    ),
+                );
+
+                try {
+                    const key = `invalidation_test_${Date.now()}`;
+
+                    // Client A caches the key
+                    expect(await client.set(key, "v1")).toBe("OK");
+                    expect(await client.get(key)).toBe("v1"); // miss, populates cache
+                    expect(await client.get(key)).toBe("v1"); // hit
+
+                    // Client B modifies the key — triggers server invalidation
+                    expect(await clientB.set(key, "v2")).toBe("OK");
+
+                    // Poll until invalidation is processed
+                    await waitFor(
+                        async () => (await client.get(key)) === "v2",
+                        "Cache was not invalidated after key was modified by another client",
+                    );
+                } finally {
+                    clientB.close();
+                }
+            },
+            TIMEOUT,
+        );
     });
 
     describe("Cluster Client-side Cache Tests", () => {
@@ -1322,6 +1365,48 @@ describe("ClientSideCache", () => {
                     TIMEOUT,
                 );
             },
+        );
+
+        it(
+            "server-assisted invalidation evicts cached key",
+            async () => {
+                const cache = new ClientSideCache({
+                    maxCacheKb: 1,
+                    entryTtlMs: 60000,
+                    serverAssisted: true,
+                });
+                client = await createClusterClientWithCache(
+                    ProtocolVersion.RESP3,
+                    cache,
+                );
+                const clientB = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        clusterCluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                    ),
+                );
+
+                try {
+                    const key = `{invalidation_test}_${Date.now()}`;
+
+                    // Client A caches the key
+                    expect(await client.set(key, "v1")).toBe("OK");
+                    expect(await client.get(key)).toBe("v1"); // miss, populates cache
+                    expect(await client.get(key)).toBe("v1"); // hit
+
+                    // Client B modifies the key — triggers server invalidation
+                    expect(await clientB.set(key, "v2")).toBe("OK");
+
+                    // Poll until invalidation is processed
+                    await waitFor(
+                        async () => (await client.get(key)) === "v2",
+                        "Cache was not invalidated after key was modified by another client",
+                    );
+                } finally {
+                    clientB.close();
+                }
+            },
+            TIMEOUT,
         );
     });
 });

@@ -4,6 +4,7 @@ import sys
 import types
 import warnings
 
+from glide._ffi_wrappers import ClusterScanCursor, Script
 from glide_shared import (
     ALL_CHANNELS,
     ALL_PATTERNS,
@@ -37,6 +38,7 @@ from glide_shared import (
     ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
+    ClientTrackingInfo,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
@@ -102,6 +104,8 @@ from glide_shared import (
     Limit,
     ListDirection,
     MaxId,
+    MemoryStats,
+    MemoryStatsDb,
     MigrateOptions,
     MinId,
     MonitorMsg,
@@ -175,8 +179,6 @@ from glide_shared import (
     json_batch,
 )
 from glide_shared._glide_ffi import _GlideFFI as _FFI
-from glide_shared.cluster_scan_cursor import ClusterScanCursor
-from glide_shared.script import Script
 
 from .async_commands import (
     ft,
@@ -340,6 +342,8 @@ __all__ = [
     "InsertPosition",
     "LatencyEntry",
     "LatencyEventInfo",
+    "MemoryStats",
+    "MemoryStatsDb",
     "MigrateOptions",
     "LexBoundary",
     "Limit",
@@ -437,5 +441,6 @@ __all__ = [
     "QueryType",
     # Cache,
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]

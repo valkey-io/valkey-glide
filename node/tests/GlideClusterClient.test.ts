@@ -16,6 +16,8 @@ import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
     ClientPauseMode,
+    ClientSideCache,
+    ClientTrackingInfo,
     ClusterBatch,
     Decoder,
     FlushMode,
@@ -29,6 +31,7 @@ import {
     GlideString,
     InfoOptions,
     ListDirection,
+    MemoryStats,
     ProtocolVersion,
     RequestError,
     Routes,
@@ -42,7 +45,10 @@ import {
 import { runBaseTests } from "./SharedTests";
 import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
+    assertClientTrackingInfo,
     assertConnected,
+    assertMemoryStatsDbEntry,
+    assertMemoryStatsFields,
     batchTest,
     checkClusterResponse,
     checkFunctionListResponse,
@@ -3505,6 +3511,163 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryDoctor with allNodes route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.memoryDoctor({ route: "allNodes" });
+            const reports = Object.values(result as Record<string, string>);
+            expect(reports.length).toBeGreaterThan(0);
+
+            for (const report of reports) {
+                expect(typeof report).toBe("string");
+                expect(report.length).toBeGreaterThan(0);
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryMallocStats with allNodes route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.memoryMallocStats({
+                route: "allNodes",
+            });
+            const reports = Object.values(result as Record<string, string>);
+            expect(reports.length).toBeGreaterThan(0);
+
+            for (const report of reports) {
+                expect(typeof report).toBe("string");
+                expect(report.length).toBeGreaterThan(0);
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryPurge with allNodes route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            expect(await client.memoryPurge({ route: "allNodes" })).toBe("OK");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryStats with allNodes route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = getRandomKey();
+            await client.set(key, "allNodesMemTest");
+
+            const result = await client.memoryStats({ route: "allNodes" });
+            const statsList = Object.values(
+                result as Record<string, MemoryStats>,
+            );
+            expect(statsList.length).toBeGreaterThan(0);
+
+            for (const stats of statsList) {
+                assertMemoryStatsFields(stats, cluster.getVersion());
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryDoctor with randomNode route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.memoryDoctor({ route: "randomNode" });
+            expect(typeof result).toBe("string");
+            expect((result as string).length).toBeGreaterThan(0);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryMallocStats with randomNode route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.memoryMallocStats({
+                route: "randomNode",
+            });
+            expect(typeof result).toBe("string");
+            expect((result as string).length).toBeGreaterThan(0);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryPurge with randomNode route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            expect(await client.memoryPurge({ route: "randomNode" })).toBe(
+                "OK",
+            );
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryStats with single node route %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            // Write a key and route to its node to ensure db entry exists
+            const key = `memoryStats_single_node_${protocol}`;
+            await client.set(key, "value");
+
+            const result = await client.memoryStats({
+                route: { type: "primarySlotKey", key },
+            });
+            const stats = result as MemoryStats;
+            assertMemoryStatsFields(stats, cluster.getVersion());
+            expect(stats.db[0]).toBeDefined();
+            assertMemoryStatsDbEntry(stats.db[0]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     it(
         "should connect with IPv4 address",
         async () => {
@@ -3535,6 +3698,60 @@ describe("GlideClusterClient", () => {
 
             await assertConnected(client);
             client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo with cache off and default route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const info =
+                (await client.clientTrackingInfo()) as ClientTrackingInfo;
+            assertClientTrackingInfo(info, false);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo with cache off and multi-node route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const multiInfo = (await client.clientTrackingInfo({
+                route: "allPrimaries",
+            })) as Record<string, ClientTrackingInfo>;
+
+            expect(Object.keys(multiInfo).length).toBeGreaterThan(0);
+
+            for (const nodeInfo of Object.values(multiInfo)) {
+                assertClientTrackingInfo(nodeInfo, false);
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "clientTrackingInfo with cache on and default route",
+        async () => {
+            const cache = new ClientSideCache({
+                maxCacheKb: 1,
+                entryTtlMs: 60000,
+                serverAssisted: true,
+            });
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientSideCache: cache },
+                ),
+            );
+            const info =
+                (await client.clientTrackingInfo()) as ClientTrackingInfo;
+            assertClientTrackingInfo(info, true);
         },
         TIMEOUT,
     );

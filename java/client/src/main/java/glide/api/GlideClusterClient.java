@@ -60,6 +60,10 @@ import static command_request.CommandRequestOuterClass.RequestType.LatencyHistor
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -112,8 +116,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.batch.ClusterBatchOptions;
@@ -643,28 +645,28 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(@NonNull String event) {
+    public CompletableFuture<ClusterValue<Object[][]>> latencyHistory(@NonNull String event) {
         return commandManager.submitNewCommand(
-                LatencyHistory, new String[] {event}, this::handleLatencyHistoryClusterResponse);
+                LatencyHistory, new String[] {event}, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
-    public CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(
+    public CompletableFuture<ClusterValue<Object[][]>> latencyHistory(
             @NonNull String event, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                LatencyHistory, new String[] {event}, route, this::handleLatencyHistoryClusterResponse);
+                LatencyHistory, new String[] {event}, route, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
-    public CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest() {
+    public CompletableFuture<ClusterValue<Object[][]>> latencyLatest() {
         return commandManager.submitNewCommand(
-                LatencyLatest, EMPTY_STRING_ARRAY, this::handleLatencyLatestClusterResponse);
+                LatencyLatest, EMPTY_STRING_ARRAY, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
-    public CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<Object[][]>> latencyLatest(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                LatencyLatest, EMPTY_STRING_ARRAY, route, this::handleLatencyLatestClusterResponse);
+                LatencyLatest, EMPTY_STRING_ARRAY, route, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
@@ -690,47 +692,93 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Process a <code>LATENCY HISTORY</code> cluster response.
+     * Process a cluster response that contains an array of arrays.
      *
      * @param response The raw response from the server.
-     * @return A cluster value containing array(s) of latency history entries for an event.
+     * @return A cluster value containing array(s) of arrays.
      */
     @SuppressWarnings("unchecked")
-    private ClusterValue<LatencyEntry[]> handleLatencyHistoryClusterResponse(Response response) {
+    private ClusterValue<Object[][]> handleArrayofArraysClusterResponse(Response response) {
         Object data = handleObjectOrNullResponse(response);
 
         if (data instanceof Map) {
-            Map<String, LatencyEntry[]> parsed = new LinkedHashMap<>();
+            Map<String, Object[][]> parsed = new LinkedHashMap<>();
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
-                parsed.put(entry.getKey(), handleLatencyHistoryResponse((Object[]) entry.getValue()));
+                parsed.put(entry.getKey(), castArray((Object[]) entry.getValue(), Object[].class));
             }
 
             return ClusterValue.ofMultiValue(parsed);
         }
 
-        return ClusterValue.ofSingleValue(handleLatencyHistoryResponse((Object[]) data));
+        return ClusterValue.ofSingleValue(castArray((Object[]) data, Object[].class));
     }
 
-    /**
-     * Process a <code>LATENCY LATEST</code> response.
-     *
-     * @param response The raw response from the server.
-     * @return A cluster value containing array(s) of the latest latency info.
-     */
-    @SuppressWarnings("unchecked")
-    private ClusterValue<LatencyEventInfo[]> handleLatencyLatestClusterResponse(Response response) {
-        Object data = handleObjectOrNullResponse(response);
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryDoctor() {
+        return commandManager.submitNewCommand(
+                MemoryDoctor, EMPTY_STRING_ARRAY, response -> ClusterValue.of(handleMapResponse(response)));
+    }
 
-        if (data instanceof Map) {
-            Map<String, LatencyEventInfo[]> parsed = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
-                parsed.put(entry.getKey(), handleLatencyLatestResponse((Object[]) entry.getValue()));
-            }
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryDoctor(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryDoctor,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
 
-            return ClusterValue.ofMultiValue(parsed);
-        }
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryMallocStats() {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats,
+                EMPTY_STRING_ARRAY,
+                response -> ClusterValue.of(handleMapResponse(response)));
+    }
 
-        return ClusterValue.ofSingleValue(handleLatencyLatestResponse((Object[]) data));
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryMallocStats(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge() {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats() {
+        return commandManager.submitNewCommand(
+                MemoryStats, EMPTY_STRING_ARRAY, response -> ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryStats,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override

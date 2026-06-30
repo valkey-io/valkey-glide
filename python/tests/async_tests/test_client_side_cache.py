@@ -6,6 +6,7 @@ from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
 
 from tests.async_tests.conftest import create_client
+from tests.utils.utils import build_client_side_cache, get_random_string, wait_for
 
 
 @pytest.mark.anyio
@@ -14,11 +15,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_basic_cache_hit_with_metrics(self, request, protocol, cluster_mode):
         """Test basic cache hit/miss behavior with metrics tracking."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=True)
 
         client = await create_client(
             request,
@@ -58,11 +55,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_without_metrics(self, request, protocol, cluster_mode):
         """Test that cache works but metrics are disabled."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=False,  # Disabled
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=False)
 
         client = await create_client(
             request,
@@ -105,11 +98,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_nil_values_not_cached(self, request, protocol, cluster_mode):
         """Test that NIL values are not cached."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=True)
 
         client = await create_client(
             request,
@@ -181,11 +170,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_multiple_keys(self, request, protocol, cluster_mode):
         """Test caching of multiple keys."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=True)
 
         client = await create_client(
             request,
@@ -264,9 +249,8 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_eviction_policy_lru(self, request, protocol, cluster_mode):
         """Test LRU eviction policy."""
-        cache = ClientSideCache.create(
+        cache = build_client_side_cache(
             max_cache_kb=1,  # 1 KB to force eviction
-            entry_ttl_ms=600_000,
             eviction_policy=EvictionPolicy.LRU,
             enable_metrics=True,
         )
@@ -325,9 +309,8 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_eviction_policy_lfu(self, request, protocol, cluster_mode):
         """Test LFU (Least Frequently Used) eviction policy."""
-        cache = ClientSideCache.create(
+        cache = build_client_side_cache(
             max_cache_kb=1,  # 1 KB - small cache to trigger evictions
-            entry_ttl_ms=600_000,
             eviction_policy=EvictionPolicy.LFU,
             enable_metrics=True,
         )
@@ -404,12 +387,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_shared_cache(self, request, protocol, cluster_mode):
-        cache = ClientSideCache.create(
-            max_cache_kb=1024,
-            entry_ttl_ms=60_000,
-            eviction_policy=None,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(enable_metrics=True)
         # Create client
         client = await create_client(
             request,
@@ -489,11 +467,7 @@ class TestClientSideCache:
         self, request, protocol, cluster_mode
     ):
         """Test that attempting to cache unsupported key types raises an error."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=True)
 
         client = await create_client(
             request,
@@ -516,11 +490,7 @@ class TestClientSideCache:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cacheable_commands(self, request, protocol, cluster_mode):
         """Test that only cacheable commands are cached."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,
-            entry_ttl_ms=60_000,
-            enable_metrics=True,
-        )
+        cache = build_client_side_cache(max_cache_kb=1, enable_metrics=True)
 
         client = await create_client(
             request,
@@ -569,3 +539,55 @@ class TestClientSideCache:
         # Negative should raise
         with pytest.raises(ValueError, match="entry_ttl_ms must be non-negative"):
             ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=-1)
+
+    def test_server_assisted_defaults_to_false(self):
+        """Test that server_assisted defaults to False."""
+        cache = build_client_side_cache()
+        assert cache.server_assisted is False
+
+    def test_server_assisted_can_be_set_to_true(self):
+        """Test that server_assisted can be set to True."""
+        cache = build_client_side_cache(server_assisted=True)
+        assert cache.server_assisted is True
+
+    def test_server_assisted_can_be_explicitly_set_to_false(self):
+        """Test that server_assisted can be explicitly set to False."""
+        cache = build_client_side_cache(server_assisted=False)
+        assert cache.server_assisted is False
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_server_assisted_invalidation(self, request, cluster_mode):
+        """Test that server-assisted caching invalidates entries when modified by another client."""
+        cache = build_client_side_cache(max_cache_kb=1, server_assisted=True)
+        client_a = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        client_b = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+        )
+
+        key = "test_invalidation_" + get_random_string(10)
+
+        # Client A caches the key
+        assert await client_a.set(key, "v1") == "OK"
+        assert await client_a.get(key) == b"v1"  # miss, populates cache
+        assert await client_a.get(key) == b"v1"  # hit
+
+        # Client B modifies the key — triggers server invalidation
+        assert await client_b.set(key, "v2") == "OK"
+
+        # Poll until invalidation is processed and Client A sees the new value
+        async def check_invalidated():
+            return await client_a.get(key) == b"v2"
+
+        await wait_for(
+            check_invalidated,
+            "Cache was not invalidated after key was modified by another client",
+        )
+
+        await client_a.close()
+        await client_b.close()

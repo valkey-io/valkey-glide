@@ -1127,13 +1127,18 @@ impl Client {
                 None
             };
             let self_clone = self.clone();
+
+            // Blocking commands have artificially long latencies; exclude from tracker.
+            let is_blocking_cmd = is_blocking_command(cmd);
+            // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
+            // the copy that actually travels to the multiplexed connection carries
+            // it, letting that connection suppress false-positive response-wait
+            // warnings (#6283).
+            cmd.set_is_blocking(is_blocking_cmd);
             let owned_cmd = cmd.clone();
 
             // Captured by the timeout path for watchdog-informed CB decisions.
             let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
-
-            // Blocking commands have artificially long latencies; exclude from tracker.
-            let is_blocking_cmd = is_blocking_command(cmd);
 
             let result = match request_timeout {
                 Some(duration) => {

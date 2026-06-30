@@ -11,7 +11,7 @@ from typing import (
     cast,
 )
 
-from glide_shared.cluster_scan_cursor import ClusterScanCursor
+from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
