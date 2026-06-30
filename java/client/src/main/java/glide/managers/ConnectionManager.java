@@ -368,6 +368,16 @@ public class ConnectionManager {
                             requestBuilder.addRootCerts(com.google.protobuf.ByteString.copyFrom(rootCerts));
                         }
 
+                        // Set client certificate and key for mutual TLS (mTLS) if provided
+                        byte[] clientCert = extractClientCertificate(configuration);
+                        if (clientCert != null) {
+                            requestBuilder.setClientCert(com.google.protobuf.ByteString.copyFrom(clientCert));
+                        }
+                        byte[] clientKey = extractClientKey(configuration);
+                        if (clientKey != null) {
+                            requestBuilder.setClientKey(com.google.protobuf.ByteString.copyFrom(clientKey));
+                        }
+
                         // Set pubsub subscriptions
                         if (subExact.length > 0 || subPattern.length > 0 || subSharded.length > 0) {
                             PubSubSubscriptions.Builder subBuilder = PubSubSubscriptions.newBuilder();
@@ -635,5 +645,13 @@ public class ConnectionManager {
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
         return TlsConfigHelper.extractRootCertificates(configuration);
+    }
+
+    private static byte[] extractClientCertificate(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientCertificate(configuration);
+    }
+
+    private static byte[] extractClientKey(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientKey(configuration);
     }
 }
