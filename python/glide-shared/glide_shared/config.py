@@ -730,6 +730,10 @@ class BaseClientConfiguration:
             command during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default (e.g. ``GlidePy`` for the
             async client, ``GlidePySync`` for the sync client) is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -816,6 +820,7 @@ class BaseClientConfiguration:
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
@@ -835,6 +840,7 @@ class BaseClientConfiguration:
         self.database_id = database_id
         self.client_name = client_name
         self.lib_name = lib_name
+        self.client_info_tag = client_info_tag
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
@@ -844,6 +850,9 @@ class BaseClientConfiguration:
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
+
+        if client_info_tag is not None and any(c.isspace() for c in client_info_tag):
+            raise ValueError("client_info_tag must not contain whitespace characters")
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -1055,6 +1064,10 @@ class GlideClientConfiguration(BaseClientConfiguration):
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1150,6 +1163,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
@@ -1173,6 +1187,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             database_id=database_id,
             client_name=client_name,
             lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
@@ -1307,6 +1322,10 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -1399,6 +1418,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
@@ -1423,6 +1443,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             database_id=database_id,
             client_name=client_name,
             lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
