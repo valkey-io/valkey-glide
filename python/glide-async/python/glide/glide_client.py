@@ -485,7 +485,9 @@ class BaseClient(CoreCommands):
         conn_req = config._create_a_protobuf_conn_request(
             cluster_mode=isinstance(config, GlideClusterClientConfiguration)
         )
-        conn_req.lib_name = "GlidePy"
+        # Preserve a user-configured lib_name; otherwise fall back to the async default.
+        if not conn_req.lib_name:
+            conn_req.lib_name = "GlidePy"
         conn_req_bytes = conn_req.SerializeToString()
 
         # Create AsyncClient type

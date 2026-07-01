@@ -12,6 +12,7 @@
 ### Changes
 
 
+* Python: Add configurable `lib_name` to client configuration (async and sync). When set, it is sent via `CLIENT SETINFO LIB-NAME` at connection establishment for library/framework attribution in `CLIENT INFO`/`CLIENT LIST`; when unset, the existing defaults (`GlidePy`/`GlidePySync`) are preserved. Brings parity with the Java `libName` option. ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))
 * Core, Java, Python, Node, Go: Add `MEMORY DOCTOR`, `MEMORY MALLOC-STATS`, `MEMORY PURGE`, and `MEMORY STATS` commands ([#6286](https://github.com/valkey-io/valkey-glide/issues/6286))

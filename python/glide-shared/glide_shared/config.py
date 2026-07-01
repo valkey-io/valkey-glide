@@ -726,6 +726,10 @@ class BaseClientConfiguration:
             Must be a non-negative integer.If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
+            command during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default (e.g. ``GlidePy`` for the
+            async client, ``GlidePySync`` for the sync client) is used.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -811,6 +815,7 @@ class BaseClientConfiguration:
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
@@ -829,6 +834,7 @@ class BaseClientConfiguration:
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
         self.client_name = client_name
+        self.lib_name = lib_name
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
@@ -964,6 +970,8 @@ class BaseClientConfiguration:
 
         if self.client_name:
             request.client_name = self.client_name
+        if self.lib_name:
+            request.lib_name = self.lib_name
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_circuit_breaker:
@@ -1044,6 +1052,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1138,6 +1149,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
@@ -1160,6 +1172,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
@@ -1291,6 +1304,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -1382,6 +1398,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
@@ -1405,6 +1422,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,

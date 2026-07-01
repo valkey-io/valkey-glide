@@ -383,6 +383,19 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_lib_name(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="glide-py(my-framework:1.2.3)",
+        )
+        client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_closed_client_raises_error(self, glide_sync_client: TGlideClient):
         glide_sync_client.close()
         with pytest.raises(ClosingError) as e:

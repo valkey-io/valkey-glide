@@ -287,6 +287,7 @@ async def create_client(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     config = create_client_config(
         request,
@@ -315,6 +316,7 @@ async def create_client(
         client_key_pem=client_key_pem,
         read_only=read_only,
         cache=cache,
+        lib_name=lib_name,
     )
     if cluster_mode:
         return await GlideClusterClient.create(config)
