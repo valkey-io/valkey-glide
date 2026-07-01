@@ -381,6 +381,7 @@ class TestGlideClients:
         assert b"name=TEST_CLIENT_NAME" in client_info
         glide_sync_client.close()
 
+    @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_lib_name(self, request, cluster_mode, protocol):
@@ -394,6 +395,7 @@ class TestGlideClients:
         assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
         glide_sync_client.close()
 
+    @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_client_info_tag(self, request, cluster_mode, protocol):
