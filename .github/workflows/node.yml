@@ -188,6 +188,109 @@ jobs:
                   path: |
                       node/test-report*.html
 
+    test-node-windows:
+        name: Node Tests - Windows - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}
+        runs-on: windows-latest
+        needs: [get-matrices]
+        if: always() && needs.get-matrices.result == 'success'
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo '${{ toJson(matrix) }}'
+
+            # Setup WSL with Ubuntu for running Valkey server
+            - name: Setup WSL
+              uses: Vampire/setup-wsl@v3
+              with:
+                  distribution: Ubuntu-22.04
+
+            # Install Valkey in WSL
+            - name: Install Valkey in WSL
+              shell: wsl-bash {0}
+              run: |
+                  sudo apt-get update -y
+                  sudo apt-get install -y build-essential tcl python3 python3-pip
+                  cd /tmp
+                  wget -q https://github.com/valkey-io/valkey/archive/refs/tags/${{ matrix.engine.version }}.tar.gz
+                  tar xzf ${{ matrix.engine.version }}.tar.gz
+                  cd valkey-${{ matrix.engine.version }}
+                  make -j$(nproc)
+                  sudo make install
+                  valkey-server --version
+
+            # Configure Windows TCP settings to reduce port exhaustion
+            - name: Configure TCP settings
+              shell: powershell
+              run: |
+                  Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpTimedWaitDelay" -Value 15 -Type DWord
+                  netsh int ipv4 set dynamicport tcp start=10000 num=55535
+
+            # Setup Node.js
+            - name: Setup Node
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              with:
+                  node-version: ${{ matrix.node }}
+
+            # Setup Rust (rustup-managed, avoids Chocolatey conflicts)
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            # Install protoc
+            - name: Install protoc
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: x86_64-pc-windows-msvc-node
+                  restore-keys: |
+                      x86_64-pc-windows-msvc-glide-core
+                      x86_64-pc-windows-msvc
+
+            # Install npm dependencies and build
+            - name: Install and Build
+              working-directory: ./node
+              shell: powershell
+              run: |
+                  npm ci
+                  npm run build:release
+
+            - name: Test
+              shell: powershell
+              working-directory: ./node
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
+                  JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node-windows.html
+                  VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
+              run: |
+                  npm run build-test-utils
+                  npm test
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: node-test-reports-windows-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}
+                  path: |
+                      node/test-report*.html
+
     test-node-extras:
         name: Node Extra Tests (ES/CJS, Yarn, Types, Benchmarks)
         runs-on: ubuntu-latest
