@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -53,29 +54,37 @@ public class ClusterBatchTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
+    // Client setup here runs once before the whole parameterized suite. Under heavy CI load the
+    // initial connect can intermittently fail (e.g. "Connection refused" while the server is still
+    // accepting connections, or "Request timed out"), which would fail every parameter set before a
+    // single batch command runs. Retry the connect a bounded number of times so a transient slow or
+    // refused connect does not sink the entire suite. See issue #5343.
+    private static final int MAX_CONNECT_ATTEMPTS = 3;
+    private static final long CONNECT_RETRY_BACKOFF_MILLIS = 1000;
+
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clients.add(
-                Arguments.of(
-                        Named.of(
-                                "RESP2",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP2)
-                                                        .build())
-                                        .get())));
-        clients.add(
-                Arguments.of(
-                        Named.of(
-                                "RESP3",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP3)
-                                                        .build())
-                                        .get())));
+        clients.add(Arguments.of(Named.of("RESP2", connectWithRetry(ProtocolVersion.RESP2))));
+        clients.add(Arguments.of(Named.of("RESP3", connectWithRetry(ProtocolVersion.RESP3))));
+    }
+
+    @SneakyThrows
+    private static GlideClusterClient connectWithRetry(ProtocolVersion protocol) {
+        ExecutionException lastException = null;
+        for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+            try {
+                return GlideClusterClient.createClient(
+                                commonClusterClientConfig().requestTimeout(7000).protocol(protocol).build())
+                        .get();
+            } catch (ExecutionException e) {
+                lastException = e;
+                if (attempt < MAX_CONNECT_ATTEMPTS) {
+                    Thread.sleep(CONNECT_RETRY_BACKOFF_MILLIS);
+                }
+            }
+        }
+        throw lastException;
     }
 
     @AfterAll
