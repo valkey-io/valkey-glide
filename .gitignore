@@ -30,11 +30,6 @@ benchmarks/results
 # MacOS metadata
 .DS_Store
 
-# lock files
-
-yarn.lock
-package-lock.json
-
 node_modules/
 
 install_and_test_cp.sh
