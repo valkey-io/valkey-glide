@@ -10,7 +10,7 @@
 
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
 
-## Pending 2.5
+## 2.5
 
 ### Fixes
 
