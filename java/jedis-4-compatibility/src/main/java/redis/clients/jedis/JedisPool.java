@@ -932,7 +932,8 @@ public class JedisPool extends Pool<Jedis> {
         }
 
         if (uri.getUserInfo() != null) {
-            String[] userInfo = uri.getUserInfo().split(":", 2);
+            String decodedUserInfo = JedisURIHelper.decodeUserInfo(uri.getUserInfo());
+            String[] userInfo = decodedUserInfo.split(":", 2);
             if (userInfo.length == 2) {
                 builder.user(userInfo[0]).password(userInfo[1]);
             } else {

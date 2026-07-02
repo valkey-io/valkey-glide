@@ -119,19 +119,6 @@ public class JedisPooled extends UnifiedJedis {
         super(hostAndPort, clientConfig);
     }
 
-    // Experimental constructors (cache support - simplified for compatibility)
-    //    public JedisPooled(
-    //            final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object
-    // cacheConfig) {
-    //        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
-    //    }
-    //
-    //    public JedisPooled(
-    //            final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object
-    // clientSideCache) {
-    //        super(hostAndPort, clientConfig, clientSideCache);
-    //    }
-
     /**
      * Not supported on Valkey GLIDE: a {@link PooledObjectFactory} does not describe server
      * endpoints, and GLIDE owns pooling. Use {@link #JedisPooled(String, int)} or {@link
