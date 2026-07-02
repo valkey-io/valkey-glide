@@ -25,7 +25,7 @@ runs:
                   sudo apt install -y python3-pip
                   pip3 install ziglang
               fi
-              cargo install --locked cargo-zigbuild
+              for i in 1 2 3; do cargo install --locked cargo-zigbuild && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
 
               # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
               # This will be available for subsequent steps in the workflow

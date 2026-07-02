@@ -45,8 +45,10 @@ LIB_FILE = find_libglide_ffi(CURR_DIR)
 
 class _GlideFFI:
     """
-    FFI manager. Creates separate instances per package to avoid
-    cross-thread CFFI state corruption.
+    FFI manager. Each package (glide-async, glide-sync) creates its own instance
+    to avoid corrupting CFFI's internal Python-side state (type cache, callback
+    registry, GC tracking) when accessed from different threads. The underlying
+    Rust library is the same shared object with process-global state regardless.
     """
 
     def __init__(self):
@@ -235,6 +237,7 @@ class _GlideFFI:
             void init_async_pipe(int pipe_write_fd);
 
             void free_pipe_error_string(char* ptr);
+            void free_pubsub_pointer_payload(uint8_t* ptr, size_t len);
 
             void free_connection_response(ConnectionResponse* connection_response_ptr);
 

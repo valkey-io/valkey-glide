@@ -664,8 +664,6 @@ async def pubsub_client_cleanup(
     finally:
         await client.close()
         del client
-        # The closure is not completed in the glide-core instantly
-        await anyio.sleep(1)
 
         if cleanup_error:
             raise cleanup_error
@@ -687,10 +685,20 @@ async def async_pubsub_test_clients(
     """
     Async context manager for pubsub test clients.
     Handles client creation, subscription, and cleanup.
-    """
-    from tests.async_tests.conftest import create_client
 
-    listening_client, publishing_client = None, None
+    The publishing client is pooled (it only calls publish() and has no state).
+    The listening client is created fresh per test (unique subscription config).
+    """
+    from tests.async_tests.conftest import (
+        _client_is_usable,
+        _client_pool,
+        _client_pool_lock,
+        _get_worker_id,
+        _rebind_client_to_current_loop,
+        create_client,
+    )
+
+    listening_client = None
 
     try:
         if subscription_method.value == 0:  # Config
@@ -726,13 +734,27 @@ async def async_pubsub_test_clients(
             if sharded and cluster_mode:
                 await ssubscribe_by_method(listening_client, sharded, subscription_method)  # type: ignore[arg-type]
 
-        publishing_client = await create_client(request, cluster_mode)
+        # Pool the publishing client — it only calls publish(), no state to reset.
+        pub_key = (_get_worker_id(), cluster_mode, "pubsub_publisher")
+        with _client_pool_lock:
+            publishing_client = _client_pool.get(pub_key)
+
+        if _client_is_usable(publishing_client):
+            try:
+                _rebind_client_to_current_loop(publishing_client)
+                await publishing_client.custom_command(["PING"])
+            except Exception:
+                publishing_client = None
+
+        if not _client_is_usable(publishing_client):
+            publishing_client = await create_client(request, cluster_mode)
+            with _client_pool_lock:
+                _client_pool[pub_key] = publishing_client
 
         yield listening_client, publishing_client
 
     finally:
         await pubsub_client_cleanup(listening_client)
-        await pubsub_client_cleanup(publishing_client)
 
 
 # Shared test constants
@@ -930,7 +952,6 @@ def sync_client_cleanup(
     In addition, it tries to clean up cluster mode subscriptions since it was found
     closing the client via close() is not enough.
     """
-    import time
 
     from tests.utils.utils import sync_check_if_server_version_lt
 
@@ -960,8 +981,6 @@ def sync_client_cleanup(
 
     client.close()
     del client
-    # The closure is not completed in the glide-core instantly
-    time.sleep(1)
 
 
 @contextmanager
@@ -980,10 +999,19 @@ def sync_pubsub_test_clients(
     """
     Context manager for sync pubsub test clients.
     Handles client creation, subscription, and cleanup.
-    """
-    from tests.sync_tests.conftest import create_sync_client
 
-    listening_client, publishing_client = None, None
+    The publishing client is pooled (it only calls publish() and has no state).
+    The listening client is created fresh per test (unique subscription config).
+    """
+    from tests.sync_tests.conftest import (
+        _client_is_usable,
+        _get_worker_id,
+        _sync_client_pool,
+        _sync_client_pool_lock,
+        create_sync_client,
+    )
+
+    listening_client = None
     pub_sub = None
 
     try:
@@ -996,16 +1024,25 @@ def sync_pubsub_test_clients(
                 callback=callback,
                 context=context,
             )
-            listening_client, publishing_client = create_two_sync_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub,
-                timeout=timeout,
-                lazy_connect=lazy_connect,
-            )
+            if cluster_mode:
+                listening_client = create_sync_client(
+                    request,
+                    cluster_mode,
+                    cluster_mode_pubsub=pub_sub,
+                    request_timeout=timeout,
+                    connection_timeout=timeout,
+                    lazy_connect=lazy_connect,
+                )
+            else:
+                listening_client = create_sync_client(
+                    request,
+                    cluster_mode,
+                    standalone_mode_pubsub=pub_sub,
+                    request_timeout=timeout,
+                    connection_timeout=timeout,
+                    lazy_connect=lazy_connect,
+                )
         else:  # Lazy or Blocking
-            # For Lazy/Blocking with callback, create client with empty subscriptions
-            # For Lazy/Blocking without callback, create client with no pubsub config
             if callback:
                 if cluster_mode:
                     cluster_pubsub_config = (
@@ -1040,7 +1077,6 @@ def sync_pubsub_test_clients(
                         lazy_connect=lazy_connect,
                     )
             else:
-                # No callback - create client with no pubsub config
                 listening_client = create_sync_client(
                     request,
                     cluster_mode,
@@ -1049,12 +1085,6 @@ def sync_pubsub_test_clients(
                     lazy_connect=lazy_connect,
                 )
 
-            publishing_client = create_sync_client(
-                request,
-                cluster_mode,
-                request_timeout=timeout,
-                connection_timeout=timeout,
-            )
             sync_subscribe_by_method(
                 listening_client,
                 subscription_method,
@@ -1065,6 +1095,31 @@ def sync_pubsub_test_clients(
                 timeout_ms=timeout if timeout else 5000,
             )
 
+        # Pool the publishing client — it only calls publish(), no state to reset.
+        pub_key = (_get_worker_id(), cluster_mode, "pubsub_publisher")
+        with _sync_client_pool_lock:
+            publishing_client = _sync_client_pool.get(pub_key)
+
+        if _client_is_usable(publishing_client):
+            try:
+                publishing_client.custom_command(["PING"])
+            except Exception:
+                try:
+                    publishing_client.close()
+                except Exception:
+                    pass
+                publishing_client = None
+
+        if not _client_is_usable(publishing_client):
+            publishing_client = create_sync_client(
+                request,
+                cluster_mode,
+                request_timeout=timeout,
+                connection_timeout=timeout,
+            )
+            with _sync_client_pool_lock:
+                _sync_client_pool[pub_key] = publishing_client
+
         yield listening_client, publishing_client
 
     finally:
@@ -1072,7 +1127,6 @@ def sync_pubsub_test_clients(
             sync_client_cleanup(listening_client, pub_sub if cluster_mode else None)
         else:
             sync_client_cleanup(listening_client, None)
-        sync_client_cleanup(publishing_client, None)
 
 
 def sync_get_message_by_method(

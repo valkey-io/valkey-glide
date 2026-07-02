@@ -5122,51 +5122,78 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 	}, optionArgs...), reflect.Bool, false)
 }
 
-// Migrate atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+// Migrate atomically transfers keys from a source Valkey instance to a destination Valkey instance.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must not be empty.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
 //
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *BaseBatch[T]) Migrate(
 	host string,
 	port int64,
-	key string,
+	keys []string,
 	destinationDB int64,
 	timeout int64,
 ) *T {
-	return b.addCmdAndTypeChecker(
-		C.Migrate,
-		[]string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)},
-		reflect.String,
-		false,
-	)
+	return b.MigrateWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
 }
 
-// MigrateWithOptions atomically transfers a key from a source Valkey instance to a destination Valkey instance
+// MigrateWithOptions atomically transfers keys from a source Valkey instance to a destination Valkey instance
 // with additional options.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must not be empty.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
 //
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *BaseBatch[T]) MigrateWithOptions(
 	host string,
 	port int64,
-	key string,
+	keys []string,
 	destinationDB int64,
 	timeout int64,
 	migrateOptions options.MigrateOptions,
 ) *T {
+	if len(keys) == 0 {
+		return b.addError("MigrateWithOptions", errors.New("keys must not be empty"))
+	}
 	optionArgs, err := migrateOptions.ToArgs()
 	if err != nil {
 		return b.addError("MigrateWithOptions", err)
 	}
-	args := []string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)}
-	return b.addCmdAndTypeChecker(
-		C.Migrate,
-		append(args, optionArgs...),
-		reflect.String,
-		false,
-	)
+	var args []string
+	if len(keys) == 1 {
+		args = []string{host, utils.IntToString(port), keys[0], utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+	} else {
+		args = []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+		args = append(args, constants.KeysKeyword)
+		args = append(args, keys...)
+	}
+	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
 }
 
 // Returns stream entries matching a given range of IDs.
@@ -7386,52 +7413,4 @@ func (b *BaseBatch[T]) RandomKey() *T {
 // [valkey.io]: https://valkey.io/commands/function-stats/
 func (b *BaseBatch[T]) FunctionStats() *T {
 	return b.addCmdAndConverter(C.FunctionStats, []string{}, reflect.Map, false, internal.ConvertFunctionStatsResponse)
-}
-
-// Returns the latency spike time series for the specified event.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	event - The name of the latency event (e.g., "command").
-//
-// Command Response:
-//
-//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
-//
-// [valkey.io]: https://valkey.io/commands/latency-history/
-func (b *BaseBatch[T]) LatencyHistory(event string) *T {
-	return b.addCmdAndConverter(C.LatencyHistory, []string{event}, reflect.Slice, false, internal.ConvertLatencyHistoryEntries)
-}
-
-// Reports the latest latency events logged by the server.
-//
-// See [valkey.io] for details.
-//
-// Command Response:
-//
-//	A slice of [models.LatencyEventInfo] for the latest latency events.
-//
-// [valkey.io]: https://valkey.io/commands/latency-latest/
-func (b *BaseBatch[T]) LatencyLatest() *T {
-	return b.addCmdAndConverter(C.LatencyLatest, []string{}, reflect.Slice, false, internal.ConvertLatencyLatestEntries)
-}
-
-// Resets the latency spike time series for the specified events.
-// If no events are specified, all events are reset.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	events - The latency events to reset. If empty, resets all events.
-//
-// Command Response:
-//
-//	The number of event time series that were reset.
-//
-// [valkey.io]: https://valkey.io/commands/latency-reset/
-func (b *BaseBatch[T]) LatencyReset(events ...string) *T {
-	return b.addCmdAndTypeChecker(C.LatencyReset, events, reflect.Int64, false)
 }

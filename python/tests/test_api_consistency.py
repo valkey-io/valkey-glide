@@ -48,6 +48,25 @@ EXCLUDED_TESTS = {
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
+        # Async-only lifecycle tests (pipe/event-loop specific)
+        "test_concurrent_commands_from_multiple_clients",
+        "test_response_after_client_close_is_managed",
+        "test_large_response_does_not_block_other_clients",
+        "test_rapid_create_close_cycles",
+        "test_inflight_commands_get_closing_error_on_close",
+        "test_pubsub_callback_with_closed_client_no_crash",
+        "test_client_death_mid_command",
+        # Nested helper functions in lifecycle tests
+        "client_workload",
+        "blocking_cmd",
+        "close_after_delay",
+        "get_large",
+        "get_small",
+        "close_after_dispatch",
+        "kill_after_delay",
+        "cb",
+        # Async-only pubsub pointer-mode test
+        "test_pubsub_large_message_does_not_block_other_clients",
     ],
     "sync_only": [
         "test_sync_fork",

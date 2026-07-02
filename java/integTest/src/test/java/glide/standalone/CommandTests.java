@@ -6,6 +6,8 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.assertMemoryStatsDbEntry;
+import static glide.TestUtilities.assertMemoryStatsFields;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
@@ -61,8 +63,6 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
@@ -545,15 +545,15 @@ public class CommandTests {
         long beforeSpike = getUnixSeconds(client);
         triggerLatencySpike(client);
 
-        LatencyEntry[] history = client.latencyHistory("command").get();
+        Object[][] history = client.latencyHistory("command").get();
         assertTrue(history.length > 0);
 
-        for (LatencyEntry entry : history) {
-            assertTrue(entry.getTime() >= beforeSpike);
-            assertTrue(entry.getLatency() > 0);
+        for (Object[] entry : history) {
+            assertTrue((Long) entry[0] >= beforeSpike);
+            assertTrue((Long) entry[1] > 0);
         }
 
-        LatencyEntry[] unknown = client.latencyHistory("nonexistent").get();
+        Object[][] unknown = client.latencyHistory("nonexistent").get();
         assertEquals(0, unknown.length);
     }
 
@@ -564,29 +564,29 @@ public class CommandTests {
         long beforeSpike = getUnixSeconds(client);
         triggerLatencySpike(client);
 
-        LatencyEventInfo[] latest = client.latencyLatest().get();
+        Object[][] latest = client.latencyLatest().get();
         assertTrue(latest.length >= 1);
 
         // Find the "command" event
-        LatencyEventInfo commandInfo = null;
-        for (LatencyEventInfo info : latest) {
-            if ("command".equals(info.getEventName())) {
+        Object[] commandInfo = null;
+        for (Object[] info : latest) {
+            if ("command".equals(info[0])) {
                 commandInfo = info;
                 break;
             }
         }
         assertNotNull(commandInfo);
 
-        assertTrue(commandInfo.getLatestTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatestDuration() > 0);
-        assertTrue(commandInfo.getMaxDuration() >= commandInfo.getLatestDuration());
+        assertTrue((Long) commandInfo[1] >= beforeSpike);
+        assertTrue((Long) commandInfo[2] > 0);
+        assertTrue((Long) commandInfo[3] >= (Long) commandInfo[2]);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
-            assertTrue(commandInfo.getSum().get() > 0);
-            assertTrue(commandInfo.getCount().get() > 0);
+            assertTrue(commandInfo.length > 4);
+            assertTrue((Long) commandInfo[4] > 0);
+            assertTrue((Long) commandInfo[5] > 0);
         } else {
-            assertFalse(commandInfo.getSum().isPresent());
-            assertFalse(commandInfo.getCount().isPresent());
+            assertEquals(4, commandInfo.length);
         }
     }
 
@@ -2369,5 +2369,44 @@ public class CommandTests {
                 () -> client.info(new Section[] {Section.REPLICATION}).get().contains("role:" + role),
                 "Timed out waiting for role change to " + role + " to complete.");
         return true;
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor(GlideClient client) {
+        String result = client.memoryDoctor().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats(GlideClient client) {
+        String result = client.memoryMallocStats().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge(GlideClient client) {
+        String result = client.memoryPurge().get();
+        assertEquals(OK, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats(GlideClient client) {
+        // Write a key to ensure at least one db entry exists
+        client.set("memoryStats_test_key", "value").get();
+
+        Map<String, Object> stats = client.memoryStats().get();
+        assertMemoryStatsFields(stats);
+        assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
     }
 }

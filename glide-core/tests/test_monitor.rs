@@ -72,7 +72,8 @@ mod test_monitor {
             .await
             .unwrap();
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        // Generous deadline to tolerate slow/loaded CI; not a behavioral change.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         loop {
             if lines.lock().unwrap().iter().any(|l| {
                 l.command == "SET" && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key")

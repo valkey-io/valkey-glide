@@ -1,12 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import array
-import asyncio
 import json
 import time
 import uuid
 from typing import List, Mapping, Union, cast
 
+import anyio
 import pytest
 from glide import ft
 from glide import glide_json as GlideJson
@@ -1250,7 +1250,7 @@ class TestFt:
             == OK
         )
         assert await glide_client.hset(key, {"title": "hello world"}) == 1
-        await asyncio.sleep(self.sleep_wait_time)
+        await anyio.sleep(self.sleep_wait_time)
 
         result = await ft.search(
             glide_client,
@@ -1299,7 +1299,7 @@ class TestFt:
             == OK
         )
         assert await glide_client.hset(key1, {vec_field: vector1}) == 1
-        await asyncio.sleep(self.sleep_wait_time)
+        await anyio.sleep(self.sleep_wait_time)
 
         # DIALECT 2 is the only supported dialect in valkey-search 1.1
         knn_query = f"*=>[KNN 1 @{vec_field} $query_vec]"

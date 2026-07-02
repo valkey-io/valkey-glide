@@ -2,8 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import * as net from "net";
-import { Writer } from "protobufjs/minimal";
 import { ClusterScanCursor, Script } from "../build-ts/native";
 import {
     command_request,
@@ -20,10 +18,13 @@ import {
     GlideString,
     PubSubMsg,
     convertGlideRecordToRecord,
+    isGlideRecord,
 } from "./BaseClient";
+import { RequestError } from "./Errors";
 import { ClusterBatch } from "./Batch";
 import {
     ClientPauseMode,
+    ClientTrackingInfo,
     ClusterBatchOptions,
     ClusterScanOptions,
     FlushMode,
@@ -35,9 +36,11 @@ import {
     LatencyEntry,
     LatencyEventInfo,
     LolwutOptions,
+    MemoryStats,
     createClientGetName,
     createClientId,
     createClientPause,
+    createClientTrackingInfo,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -65,6 +68,13 @@ import {
     createLatencyLatest,
     createLatencyReset,
     createLolwut,
+    createMemoryDoctor,
+    createMemoryMallocStats,
+    createMemoryPurge,
+    createMemoryStats,
+    parseLatencyHistoryResponse,
+    parseLatencyLatestResponse,
+    parseMemoryStatsResponse,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -82,6 +92,7 @@ import {
     createSUnsubscribe,
     createTime,
     createUnWatch,
+    parseClientTrackingInfoResponse,
 } from "./Commands";
 
 /**
@@ -360,6 +371,37 @@ function convertClusterGlideRecord<T>(
         ? (res as T)
         : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
+
+/**
+ * Converts a cluster response by applying a transform function to each node's raw value.
+ * Handles both single-node and multi-node routing automatically.
+ *
+ * @param res - Raw response from Glide core.
+ * @param isSingleNode - Whether the response is from a single node.
+ * @param transform - A function that transforms the raw value into the desired type.
+ * @returns Transformed single value or a record mapping node addresses to transformed values.
+ */
+function convertAndParseClusterResponse<TRaw, TParsed>(
+    res: ClusterGlideRecord<TRaw>,
+    isSingleNode: boolean,
+    transform: (raw: TRaw) => TParsed,
+): ClusterResponse<TParsed> {
+    if (isSingleNode) {
+        return transform(res as TRaw);
+    }
+
+    const record = convertGlideRecordToRecord(
+        res as GlideRecord<TRaw>,
+    ) as Record<string, TRaw>;
+    const result: Record<string, TParsed> = {};
+
+    for (const [node, raw] of Object.entries(record)) {
+        result[node] = transform(raw);
+    }
+
+    return result;
+}
+
 /**
  * Routing configuration for commands based on a specific slot ID in a Valkey cluster.
  *
@@ -718,51 +760,9 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
-                new GlideClusterClient(socket, options),
+            (options?: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(options),
         );
-    }
-    /**
-     * @internal
-     */
-    static async __createClient(
-        options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-    ): Promise<GlideClusterClient> {
-        return super.__createClientInternal(
-            options,
-            connectedSocket,
-            (socket, options) => new GlideClusterClient(socket, options),
-        );
-    }
-
-    /**
-     * @internal
-     */
-    protected scanOptionsToProto(
-        cursor: string,
-        options?: ClusterScanOptions,
-    ): command_request.ClusterScan {
-        const command = command_request.ClusterScan.create();
-        command.cursor = cursor;
-
-        if (options?.match) {
-            command.matchPattern =
-                typeof options.match === "string"
-                    ? Buffer.from(options.match)
-                    : options.match;
-        }
-
-        if (options?.count) {
-            command.count = options.count;
-        }
-
-        if (options?.type) {
-            command.objectType = options.type;
-        }
-
-        command.allowNonCoveredSlots = options?.allowNonCoveredSlots ?? false;
-        return command;
     }
 
     /**
@@ -773,40 +773,64 @@ export class GlideClusterClient extends BaseClient {
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         this.ensureClientIsOpen();
-        // separate decoder option from scan options
-        const { decoder = this.defaultDecoder, ...scanOptions } = options || {};
-        const cursorId = cursor.getCursor();
-        const command = this.scanOptionsToProto(cursorId, scanOptions);
+        const callbackIndex = this.getCallbackIndex();
 
-        return new Promise((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [typeof cursor, GlideString[]]) => {
-                    try {
-                        resolve([
-                            new ClusterScanCursor(resolveAns[0].toString()),
-                            resolveAns[1],
-                        ]);
-                    } catch (error) {
-                        reject(error);
+        return new Promise<[ClusterScanCursor, GlideString[]]>(
+            (resolve, reject) => {
+                // Store a custom handler that wraps the result
+                this.promiseCallbackFunctions[callbackIndex] = [
+                    (result: [GlideString, GlideString[]]) => {
+                        // Result is [cursor_string, keys_array]
+                        // Cursor may come back as Buffer or string
+                        let cursorStr: string;
+
+                        if (typeof result[0] === "string") {
+                            cursorStr = result[0];
+                        } else if (result[0] instanceof Buffer) {
+                            cursorStr = result[0].toString();
+                        } else if (result[0] instanceof Uint8Array) {
+                            cursorStr = new TextDecoder().decode(result[0]);
+                        } else {
+                            cursorStr = String(result[0]);
+                        }
+
+                        const newCursor = new ClusterScanCursor(cursorStr);
+                        resolve([newCursor, result[1]]);
+                    },
+                    reject,
+                    options?.decoder,
+                ];
+
+                // Convert match pattern to Uint8Array to preserve binary patterns
+                let matchPattern: Uint8Array | undefined;
+
+                if (options?.match) {
+                    if (typeof options.match === "string") {
+                        matchPattern = new TextEncoder().encode(options.match);
+                    } else if (options.match instanceof Uint8Array) {
+                        matchPattern = options.match;
                     }
-                },
-                reject,
-                decoder,
-            ];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    clusterScan: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
+                }
+
+                const success = this.clientHandle!.clusterScan(
+                    callbackIndex,
+                    cursor.getCursor(),
+                    matchPattern,
+                    options?.count ?? undefined,
+                    options?.type,
+                    options?.allowNonCoveredSlots,
+                );
+
+                if (!success) {
+                    this.availableCallbackSlots.push(callbackIndex);
+                    reject(
+                        new RequestError(
+                            "Inflight request limit exceeded. Please try again later.",
+                        ),
                     );
-                },
-            );
-        });
+                }
+            },
+        );
     }
 
     /**
@@ -1160,6 +1184,56 @@ export class GlideClusterClient extends BaseClient {
             createClientId(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A {@link ClusterResponse} containing tracking info(s) for the client.
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo();
+     * console.log(info.flags); // Set { "off" }
+     * console.log(info.redirect); // -1
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo({ route: "allNodes" });
+     * // info is Record<string, ClientTrackingInfo>
+     * ```
+     */
+    public async clientTrackingInfo(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<ClientTrackingInfo>> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createClientTrackingInfo(),
+            options,
+        ).then((res) => {
+            if (isSingleNodeRoute(true, options?.route)) {
+                return parseClientTrackingInfoResponse(
+                    convertGlideRecordToRecord(res) as Record<string, unknown>,
+                );
+            }
+
+            const record = convertGlideRecordToRecord(
+                res as GlideRecord<unknown>,
+            ) as Record<string, Record<string, unknown>>;
+            const result: Record<string, ClientTrackingInfo> = {};
+
+            for (const [node, entry] of Object.entries(record)) {
+                result[node] = parseClientTrackingInfoResponse(entry);
+            }
+
+            return result;
+        });
     }
 
     /**
@@ -1897,22 +1971,13 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
             createLatencyHistory(event),
             options,
-        ).then((res) => {
-            if (isSingleNodeRoute(false, options?.route)) {
-                return this.parseLatencyHistoryResponse(res as unknown[]);
-            }
-
-            const record = convertGlideRecordToRecord(
-                res as GlideRecord<unknown[]>,
-            ) as Record<string, unknown[]>;
-            const result: Record<string, LatencyEntry[]> = {};
-
-            for (const [node, entries] of Object.entries(record)) {
-                result[node] = this.parseLatencyHistoryResponse(entries);
-            }
-
-            return result;
-        });
+        ).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) => parseLatencyHistoryResponse(raw as unknown[]),
+            ),
+        );
     }
 
     /**
@@ -1937,22 +2002,13 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
             createLatencyLatest(),
             options,
-        ).then((res) => {
-            if (isSingleNodeRoute(false, options?.route)) {
-                return this.parseLatencyLatestResponse(res as unknown[]);
-            }
-
-            const record = convertGlideRecordToRecord(
-                res as GlideRecord<unknown[]>,
-            ) as Record<string, unknown[]>;
-            const result: Record<string, LatencyEventInfo[]> = {};
-
-            for (const [node, entries] of Object.entries(record)) {
-                result[node] = this.parseLatencyLatestResponse(entries);
-            }
-
-            return result;
-        });
+        ).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) => parseLatencyLatestResponse(raw as unknown[]),
+            ),
+        );
     }
 
     /**
@@ -2269,30 +2325,8 @@ export class GlideClusterClient extends BaseClient {
     private async createScriptInvocationWithRoutePromise<T = GlideString>(
         command: command_request.ScriptInvocation,
         options?: { args?: GlideString[] } & DecoderOption & RouteOption,
-    ) {
-        this.ensureClientIsOpen();
-
-        return new Promise<T>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [
-                resolve,
-                reject,
-                options?.decoder,
-            ];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    scriptInvocation: command,
-                    route: this.toProtobufRoute(options?.route),
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
-            );
-        });
+    ): Promise<T> {
+        return this.createScriptInvocationPromise<T>(command, options);
     }
 
     /**
@@ -2506,6 +2540,118 @@ export class GlideClusterClient extends BaseClient {
         );
         return this.parseGetSubscriptionsResponse<GlideClusterClientConfiguration.PubSubChannelModes>(
             response,
+        );
+    }
+
+    // TODO #6166: move to shared base once server management refactor lands
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing the memory diagnostic report string(s).
+     *
+     * @example
+     * ```typescript
+     * const report = await client.memoryDoctor();
+     * // report is Record<string, string> (multi-node) or string (single-node)
+     * ```
+     */
+    public async memoryDoctor(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createMemoryDoctor(),
+            { decoder: Decoder.String, ...options },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing the memory allocator statistics string(s).
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryMallocStats();
+     * // stats is Record<string, string> (multi-node) or string (single-node)
+     * ```
+     */
+    public async memoryMallocStats(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createMemoryMallocStats(),
+            { decoder: Decoder.String, ...options },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.memoryPurge();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async memoryPurge(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createMemoryPurge(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing {@link MemoryStats} object(s).
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryStats();
+     * // stats is Record<string, MemoryStats> (multi-node) or MemoryStats (single-node)
+     * ```
+     */
+    public async memoryStats(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<MemoryStats>> {
+        return this.createWritePromise<
+            ClusterGlideRecord<Record<string, unknown>>
+        >(createMemoryStats(), options).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) =>
+                    parseMemoryStatsResponse(
+                        isGlideRecord(raw)
+                            ? (convertGlideRecordToRecord(
+                                  raw as unknown as GlideRecord<unknown>,
+                              ) as Record<string, unknown>)
+                            : (raw as Record<string, unknown>),
+                    ),
+            ),
         );
     }
 }

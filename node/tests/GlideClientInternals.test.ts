@@ -3,1062 +3,75 @@
  */
 
 import { describe, expect, it } from "@jest/globals";
-import fs from "fs";
-import Long from "long";
-import net from "net";
-import os from "os";
-import path from "path";
-import { Reader } from "protobufjs/minimal";
 import {
-    BaseClientConfiguration,
-    ClientPauseMode,
-    ClosingError,
-    ClusterBatch,
-    ClusterTransaction,
-    convertGlideRecordToRecord,
-    Decoder,
-    GlideClient,
-    GlideClientConfiguration,
-    GlideClusterClient,
+    BaseClient,
     GlideClusterClientConfiguration,
-    GlideRecord,
-    GlideReturnType,
-    InfoOptions,
-    isGlideRecord,
+    Logger,
     MAX_REQUEST_ARGS_LEN,
-    RequestError,
-    SlotKeyTypes,
-    TimeUnit,
 } from "../build-ts";
 import {
-    createLeakedArray,
-    createLeakedAttribute,
-    createLeakedBigint,
-    createLeakedDouble,
-    createLeakedMap,
-    createLeakedString,
+    createLeakedStringVec,
+    freeLeakedStringVec,
+    valueFromSplitPointer,
 } from "../build-ts/native";
-import {
-    command_request,
-    connection_request,
-    response,
-} from "../build-ts/ProtobufMessage";
+import { command_request } from "../build-ts/ProtobufMessage";
 import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
-const { RequestType, CommandRequest } = command_request;
+const { RequestType } = command_request;
 
-enum ResponseType {
-    /** Type of a response that returns a null. */
-    Null,
-    /** Type of a response that returns a value which isn't an error. */
-    Value,
-    /** Type of response containing an error that impacts a single request. */
-    RequestError,
-    /** Type of response containing an error causes the connection to close. */
-    ClosingError,
-    /** Type of response containing the string "OK". */
-    OK,
-}
+describe("NAPI createLeakedStringVec", () => {
+    it("should create and return pointer pair", () => {
+        const args = [
+            new TextEncoder().encode("arg1"),
+            new TextEncoder().encode("arg2"),
+        ];
+        const [low, high] = createLeakedStringVec(args);
+        // Pointer should be non-zero (at least one of the halves)
+        expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
+    });
 
-function createLeakedValue(value: GlideReturnType): Long {
-    if (value == null) {
-        return new Long(0, 0);
-    }
+    it("should handle empty vector", () => {
+        const [low, high] = createLeakedStringVec([]);
+        expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
+    });
 
-    let pair = [0, 0];
+    it("should handle large arguments", () => {
+        const largeArg = new Uint8Array(MAX_REQUEST_ARGS_LEN + 100).fill(65);
+        const [low, high] = createLeakedStringVec([largeArg]);
+        expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
+    });
 
-    if (typeof value === "string") {
-        pair = createLeakedString(value);
-    } else if (value instanceof Array) {
-        pair = createLeakedArray(value as string[]);
-    } else if (typeof value === "object") {
-        if ("attributes" in value) {
-            pair = createLeakedAttribute(
-                value.value as string,
-                value.attributes as Record<string, string>,
-            );
-        } else {
-            pair = createLeakedMap(value as Record<string, string>);
+    it("should handle binary data with null bytes", () => {
+        const binaryData = new Uint8Array([0x00, 0x01, 0xff, 0x00, 0xfe]);
+        const [low, high] = createLeakedStringVec([binaryData]);
+        expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
+    });
+
+    it("should handle multiple large arguments", () => {
+        const args = [];
+
+        for (let i = 0; i < 10; i++) {
+            args.push(new Uint8Array(10000).fill(i));
         }
-    } else if (typeof value == "bigint") {
-        pair = createLeakedBigint(value);
-    } else if (typeof value == "number") {
-        pair = createLeakedDouble(value);
-    }
 
-    return new Long(pair[0], pair[1]);
-}
-
-function sendResponse(
-    socket: net.Socket,
-    responseType: ResponseType,
-    callbackIndex: number,
-    response_data?: {
-        message?: string;
-        value?: GlideReturnType;
-        requestErrorType?: response.RequestErrorType;
-    },
-) {
-    const new_response = response.Response.create();
-    new_response.callbackIdx = callbackIndex;
-
-    if (responseType == ResponseType.Value) {
-        const pointer = createLeakedValue(response_data?.value ?? "fake data");
-        new_response.respPointer = pointer;
-    } else if (responseType == ResponseType.ClosingError) {
-        new_response.closingError = response_data?.message;
-    } else if (responseType == ResponseType.RequestError) {
-        new_response.requestError = new response.RequestError({
-            type: response_data?.requestErrorType,
-            message: response_data?.message,
-        });
-    } else if (responseType == ResponseType.Null) {
-        // do nothing
-    } else if (responseType == ResponseType.OK) {
-        new_response.constantResponse = response.ConstantResponse.OK;
-    } else {
-        throw new Error("Got unknown response type: " + responseType);
-    }
-
-    const response_bytes =
-        response.Response.encodeDelimited(new_response).finish();
-    socket.write(response_bytes);
-}
-
-function getConnectionAndSocket(
-    checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?:
-        | GlideClusterClientConfiguration
-        | GlideClientConfiguration,
-    isCluster?: boolean,
-): Promise<{
-    socket: net.Socket;
-    connection: GlideClient | GlideClusterClient;
-    server: net.Server;
-}> {
-    return new Promise((resolve, reject) => {
-        const temporaryFolder = fs.mkdtempSync(
-            path.join(os.tmpdir(), `socket_listener`),
-        );
-        const socketName = path.join(temporaryFolder, "read");
-        let connectionPromise: Promise<GlideClient | GlideClusterClient>; // eslint-disable-line prefer-const
-        const server = net
-            .createServer(async (socket) => {
-                socket.once("data", (data) => {
-                    const reader = Reader.create(data);
-                    const request =
-                        connection_request.ConnectionRequest.decodeDelimited(
-                            reader,
-                        );
-
-                    if (checkRequest && !checkRequest(request)) {
-                        reject(
-                            `${JSON.stringify(request)}  did not pass condition`,
-                        );
-                    }
-
-                    sendResponse(socket, ResponseType.Null, 0);
-                });
-
-                if (!connectionPromise) {
-                    throw new Error("connectionPromise wasn't set");
-                }
-
-                const connection = await connectionPromise;
-                resolve({
-                    connection,
-                    socket,
-                    server,
-                });
-            })
-            .listen(socketName);
-        connectionPromise = new Promise((resolve) => {
-            const socket = new net.Socket();
-            socket.connect(socketName).once("connect", async () => {
-                const options = connectionOptions ?? {
-                    addresses: [{ host: "foo" }],
-                };
-                const connection = isCluster
-                    ? await GlideClusterClient.__createClient(options, socket)
-                    : await GlideClient.__createClient(options, socket);
-
-                resolve(connection);
-            });
-        });
+        const [low, high] = createLeakedStringVec(args);
+        expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
-}
-
-function closeTestResources(
-    connection: GlideClient | GlideClusterClient,
-    server: net.Server,
-    socket: net.Socket,
-) {
-    connection.close();
-    server.close();
-    socket.end();
-}
-
-async function testWithResources<T>(
-    fn: (
-        connection: GlideClient | GlideClusterClient,
-        socket: net.Socket,
-    ) => Promise<T>,
-): Promise<T> {
-    const { connection, socket, server } = await getConnectionAndSocket();
-
-    try {
-        return await fn(connection, socket);
-    } finally {
-        socket.destroy();
-        connection.close();
-        server.close();
-    }
-}
-
-async function testWithClusterResources(
-    testFunction: (
-        connection: GlideClusterClient,
-        socket: net.Socket,
-    ) => Promise<void>,
-    connectionOptions?: BaseClientConfiguration,
-) {
-    const { connection, server, socket } = await getConnectionAndSocket(
-        undefined,
-        connectionOptions,
-        true,
-    );
-
-    try {
-        if (connection instanceof GlideClusterClient) {
-            await testFunction(connection, socket);
-        } else {
-            throw new Error("Not cluster connection");
-        }
-    } finally {
-        closeTestResources(connection, server, socket);
-    }
-}
-
-async function testSentValueMatches(config: {
-    sendRequest: (client: GlideClient | GlideClusterClient) => Promise<unknown>;
-    expectedRequestType: command_request.RequestType | null | undefined;
-    expectedValue: unknown;
-}) {
-    let counter = 0;
-    await testWithResources(async (connection, socket) => {
-        socket.on("data", (data) => {
-            const reader = Reader.create(data);
-            const request =
-                command_request.CommandRequest.decodeDelimited(reader);
-            expect(request.singleCommand?.requestType).toEqual(
-                config.expectedRequestType,
-            );
-
-            expect(request.singleCommand?.argsArray?.args).toEqual(
-                config.expectedValue,
-            );
-
-            counter = counter + 1;
-
-            sendResponse(socket, ResponseType.Null, request.callbackIdx);
-        });
-
-        await config.sendRequest(connection);
-
-        expect(counter).toEqual(1);
-    });
-}
-
-describe("SocketConnectionInternals", () => {
-    it("Test setup returns values", async () => {
-        await testWithResources((connection, socket) => {
-            expect(connection).toEqual(expect.anything());
-            expect(socket).toEqual(expect.anything());
-            return Promise.resolve();
-        });
-    });
-
-    it("should close socket on close", async () => {
-        await testWithResources(async (connection, socket) => {
-            const endReceived = new Promise((resolve) => {
-                socket.once("end", () => resolve(true));
-            });
-            connection.close();
-
-            expect(await endReceived).toBeTruthy();
-        });
-    });
-
-    describe("handling types", () => {
-        const test_receiving_value = async (
-            received: GlideReturnType, // value 'received' from the server
-            expected: GlideReturnType, // value received from rust
-        ) => {
-            await testWithResources(async (connection, socket) => {
-                socket.once("data", (data) => {
-                    const reader = Reader.create(data);
-                    const request = CommandRequest.decodeDelimited(reader);
-                    expect(request.singleCommand?.requestType).toEqual(
-                        RequestType.Get,
-                    );
-                    expect(
-                        request.singleCommand?.argsArray?.args?.length,
-                    ).toEqual(1);
-
-                    sendResponse(
-                        socket,
-                        ResponseType.Value,
-                        request.callbackIdx,
-                        {
-                            value: received,
-                        },
-                    );
-                });
-                const result = await connection.get("foo", {
-                    decoder: Decoder.String,
-                });
-                // RESP3 map are converted to `GlideRecord` in rust lib, but elements may get reordered in this test.
-                // To avoid flakyness, we downcast `GlideRecord` to `Record` which can be safely compared.
-                expect(
-                    isGlideRecord(result)
-                        ? convertGlideRecordToRecord(
-                              result as unknown as GlideRecord<unknown>,
-                          )
-                        : result,
-                ).toEqual(expected);
-            });
-        };
-
-        it("should pass strings received from socket", async () => {
-            await test_receiving_value("bar", "bar");
-        });
-
-        it("should pass maps received from socket", async () => {
-            await test_receiving_value(
-                { foo: "bar", bar: "baz" },
-                { foo: "bar", bar: "baz" },
-            );
-        });
-
-        it("should pass arrays received from socket", async () => {
-            await test_receiving_value(
-                ["foo", "bar", "baz"],
-                ["foo", "bar", "baz"],
-            );
-        });
-
-        it("should pass attributes received from socket", async () => {
-            await test_receiving_value(
-                {
-                    value: "bar",
-                    attributes: { foo: "baz" },
-                },
-                {
-                    value: "bar",
-                    attributes: [{ key: "foo", value: "baz" }],
-                },
-            );
-        });
-
-        it("should pass bigints received from socket", async () => {
-            await test_receiving_value(
-                BigInt("9007199254740991"),
-                BigInt("9007199254740991"),
-            );
-        });
-
-        it("should pass floats received from socket", async () => {
-            await test_receiving_value(0.75, 0.75);
-        });
-    });
-
-    it("should pass null returned from socket", async () => {
-        await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1,
-                );
-
-                sendResponse(socket, ResponseType.Null, request.callbackIdx);
-            });
-            const result = await connection.get("foo");
-            expect(result).toBeNull();
-        });
-    });
-
-    it("should pass transaction (deprecated) with SlotKeyType", async () => {
-        await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-
-                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
-                    RequestType.Set,
-                );
-                expect(
-                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
-                ).toEqual(2);
-                expect(request.batch?.isAtomic).toBe(true);
-                expect(request.batch?.raiseOnError).toBe(false);
-                expect(request.route?.slotKeyRoute?.slotKey).toEqual("key");
-                expect(request.route?.slotKeyRoute?.slotType).toEqual(0); // Primary = 0
-
-                sendResponse(socket, ResponseType.OK, request.callbackIdx);
-            });
-            const transaction = new ClusterTransaction();
-            transaction.set("key", "value");
-            const slotKey: SlotKeyTypes = {
-                type: "primarySlotKey",
-                key: "key",
-            };
-            const result = await connection.exec(transaction, false, {
-                route: slotKey,
-            });
-            expect(result).toBe("OK");
-        });
-    });
-
-    it("should pass transaction (deprecated) with random node", async () => {
-        await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-
-                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
-                    RequestType.Info,
-                );
-                expect(
-                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
-                ).toEqual(1);
-                expect(request.batch?.isAtomic).toBe(true);
-                expect(request.route?.simpleRoutes).toEqual(
-                    command_request.SimpleRoutes.Random,
-                );
-
-                sendResponse(socket, ResponseType.Value, request.callbackIdx, {
-                    value: "# Server",
-                });
-            });
-            const transaction = new ClusterTransaction();
-            transaction.info([InfoOptions.Server]);
-            const result = await connection.exec(transaction, true, {
-                route: "randomNode",
-            });
-            expect(result).toEqual(expect.stringContaining("# Server"));
-        });
-    });
-
-    it("should pass batch with all params", async () => {
-        await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-
-                expect(request.batch?.commands?.at(0)?.requestType).toEqual(
-                    RequestType.Set,
-                );
-                expect(
-                    request.batch?.commands?.at(0)?.argsArray?.args?.length,
-                ).toEqual(2);
-                expect(request.batch?.isAtomic).toBe(false);
-                expect(request.batch?.raiseOnError).toBe(true);
-                expect(request.batch?.retryServerError).toBe(true);
-                expect(request.batch?.retryConnectionError).toBe(false);
-                expect(request.batch?.timeout).toBe(3333);
-                expect(request.route?.simpleRoutes).toEqual(
-                    command_request.SimpleRoutes.Random,
-                );
-
-                sendResponse(socket, ResponseType.OK, request.callbackIdx);
-            });
-            const batch = new ClusterBatch(false);
-            batch.set("key", "value");
-            const result = await connection.exec(batch, true, {
-                timeout: 3333,
-                route: "randomNode",
-                retryStrategy: {
-                    retryConnectionError: false,
-                    retryServerError: true,
-                },
-            });
-            expect(result).toBe("OK");
-        });
-    });
-
-    it("should pass OK returned from socket", async () => {
-        await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Set,
-                );
-                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    2,
-                );
-
-                sendResponse(socket, ResponseType.OK, request.callbackIdx);
-            });
-            const result = await connection.set("foo", "bar");
-            expect(result).toEqual("OK");
-        });
-    });
-
-    it("should reject requests that received a response error", async () => {
-        await testWithResources(async (connection, socket) => {
-            const error = "check";
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1,
-                );
-                sendResponse(
-                    socket,
-                    ResponseType.RequestError,
-                    request.callbackIdx,
-                    { message: error },
-                );
-            });
-            const request = connection.get("foo");
-
-            await expect(request).rejects.toEqual(new RequestError(error));
-        });
-    });
-
-    it("should close all requests when receiving a closing error", async () => {
-        await testWithResources(async (connection, socket) => {
-            const error = "check";
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1,
-                );
-                sendResponse(
-                    socket,
-                    ResponseType.ClosingError,
-                    request.callbackIdx,
-                    { message: error },
-                );
-            });
-            const request1 = connection.get("foo");
-            const request2 = connection.get("bar");
-
-            await expect(request1).rejects.toEqual(new ClosingError(error));
-            await expect(request2).rejects.toEqual(new ClosingError(error));
-        });
-    });
-
-    it("should fail all requests when receiving a closing error with an unknown callback index", async () => {
-        await testWithResources(async (connection, socket) => {
-            const error = "check";
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request =
-                    command_request.CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                sendResponse(
-                    socket,
-                    ResponseType.ClosingError,
-                    Number.MAX_SAFE_INTEGER,
-                    { message: error },
-                );
-            });
-            const request1 = connection.get("foo");
-            const request2 = connection.get("bar");
-
-            await expect(request1).rejects.toEqual(new ClosingError(error));
-            await expect(request2).rejects.toEqual(new ClosingError(error));
-        });
-    });
-
-    it("should pass SET arguments", async () => {
-        await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Set,
-                );
-                const args = request.singleCommand?.argsArray?.args;
-
-                if (!args) {
-                    throw new Error("no args");
-                }
-
-                expect(args.length).toEqual(6);
-                expect(args[0]).toEqual(Buffer.from("foo"));
-                expect(args[1]).toEqual(Buffer.from("bar"));
-                expect(args[2]).toEqual(Buffer.from("XX"));
-                expect(args[3]).toEqual(Buffer.from("GET"));
-                expect(args[4]).toEqual(Buffer.from("EX"));
-                expect(args[5]).toEqual(Buffer.from("10"));
-                sendResponse(socket, ResponseType.OK, request.callbackIdx);
-            });
-            const request1 = connection.set("foo", "bar", {
-                conditionalSet: "onlyIfExists",
-                returnOldValue: true,
-                expiry: { type: TimeUnit.Seconds, count: 10 },
-            });
-
-            expect(await request1).toMatch("OK");
-        });
-    });
-
-    it("should send pointer for request with large size arguments", async () => {
-        await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request =
-                    command_request.CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                expect(request.singleCommand?.argsVecPointer).not.toBeNull();
-                expect(request.singleCommand?.argsArray).toBeNull();
-
-                sendResponse(socket, ResponseType.Null, request.callbackIdx);
-            });
-            const key = "0".repeat(MAX_REQUEST_ARGS_LEN);
-            const result = await connection.get(key);
-
-            expect(result).toBeNull();
-        });
-    });
-
-    it("should send vector of strings for request with small size arguments", async () => {
-        await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request =
-                    command_request.CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.Get,
-                );
-                expect(request.singleCommand?.argsArray).not.toBeNull();
-                expect(request.singleCommand?.argsVecPointer).toBeNull();
-
-                sendResponse(socket, ResponseType.Null, request.callbackIdx);
-            });
-            const key = "0".repeat(MAX_REQUEST_ARGS_LEN - 1);
-            const result = await connection.get(key);
-
-            expect(result).toBeNull();
-        });
-    });
-
-    it("should pass credentials on connection", async () => {
-        const username = "this is a username";
-        const password = "more like losername, amiright?";
-        const { connection, server, socket } = await getConnectionAndSocket(
-            (request: connection_request.ConnectionRequest) =>
-                request.authenticationInfo?.password === password &&
-                request.authenticationInfo?.username === username,
-            {
-                addresses: [{ host: "foo" }],
-                credentials: { username, password },
-            },
-        );
-        closeTestResources(connection, server, socket);
-    });
-
-    it("should pass database id", async () => {
-        const { connection, server, socket } = await getConnectionAndSocket(
-            (request: connection_request.ConnectionRequest) =>
-                request.databaseId === 42,
-            {
-                addresses: [{ host: "foo" }],
-                databaseId: 42,
-            },
-        );
-        closeTestResources(connection, server, socket);
-    });
-
-    it("should pass periodic checks disabled", async () => {
-        const { connection, server, socket } = await getConnectionAndSocket(
-            (request: connection_request.ConnectionRequest) =>
-                request.periodicChecksDisabled != null,
-            {
-                addresses: [{ host: "foo" }],
-                periodicChecks: "disabled",
-            },
-            true,
-        );
-        closeTestResources(connection, server, socket);
-    });
-
-    it("should pass periodic checks with manual interval", async () => {
-        const { connection, server, socket } = await getConnectionAndSocket(
-            (request: connection_request.ConnectionRequest) =>
-                request.periodicChecksManualInterval?.durationInSec === 20,
-            {
-                addresses: [{ host: "foo" }],
-                periodicChecks: { duration_in_sec: 20 },
-            },
-            true,
-        );
-        closeTestResources(connection, server, socket);
-    });
-
-    it("shouldn't pass periodic checks parameter when set to default", async () => {
-        const { connection, server, socket } = await getConnectionAndSocket(
-            (request: connection_request.ConnectionRequest) =>
-                request.periodicChecksManualInterval === null &&
-                request.periodicChecksDisabled === null,
-            {
-                addresses: [{ host: "foo" }],
-                periodicChecks: "enabledDefaultConfigs",
-            },
-            true,
-        );
-        closeTestResources(connection, server, socket);
-    });
-
-    it("should pass routing information from user", async () => {
-        const route1 = "allPrimaries";
-        const route2 = {
-            type: "replicaSlotKey" as const,
-            key: "foo",
-        };
-        await testWithClusterResources(async (connection, socket) => {
-            socket.on("data", (data) => {
-                const reader = Reader.create(data);
-                const request =
-                    command_request.CommandRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.CustomCommand,
-                );
-
-                if (
-                    request
-                        .singleCommand!.argsArray!.args!.at(0)!
-                        .toString() === "SET"
-                ) {
-                    expect(request.route?.simpleRoutes).toEqual(
-                        command_request.SimpleRoutes.AllPrimaries,
-                    );
-                } else if (
-                    request
-                        .singleCommand!.argsArray!.args!.at(0)!
-                        .toString() === "GET"
-                ) {
-                    expect(request.route?.slotKeyRoute).toEqual({
-                        slotType: command_request.SlotTypes.Replica,
-                        slotKey: "foo",
-                    });
-                } else {
-                    throw new Error(
-                        "unexpected command: [" +
-                            request.singleCommand!.argsArray!.args!.at(0) +
-                            "]",
-                    );
-                }
-
-                sendResponse(socket, ResponseType.Null, request.callbackIdx);
-            });
-            const result1 = await connection.customCommand(
-                ["SET", "foo", "bar"],
-                { route: route1 },
-            );
-            expect(result1).toBeNull();
-
-            const result2 = await connection.customCommand(["GET", "foo"], {
-                route: route2,
-            });
-            expect(result2).toBeNull();
-        });
-    });
-
-    it("should set arguments according to xadd request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xadd("foo", [
-                    ["a", "1"],
-                    ["b", "2"],
-                ]),
-            expectedRequestType: RequestType.XAdd,
-            expectedValue: convertStringArrayToBuffer([
-                "foo",
-                "*",
-                "a",
-                "1",
-                "b",
-                "2",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xadd options with makeStream: true", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xadd("bar", [["a", "1"]], {
-                    id: "YOLO",
-                    makeStream: true,
-                }),
-            expectedRequestType: RequestType.XAdd,
-            expectedValue: convertStringArrayToBuffer([
-                "bar",
-                "YOLO",
-                "a",
-                "1",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xadd options with trim", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xadd("baz", [["c", "3"]], {
-                    trim: {
-                        method: "maxlen",
-                        threshold: 1000,
-                        exact: true,
-                    },
-                }),
-            expectedRequestType: RequestType.XAdd,
-            expectedValue: convertStringArrayToBuffer([
-                "baz",
-                "MAXLEN",
-                "=",
-                "1000",
-                "*",
-                "c",
-                "3",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xadd options with makeStream: false and inexact trim", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xadd("foobar", [["d", "4"]], {
-                    makeStream: false,
-                    trim: {
-                        method: "minid",
-                        threshold: "foo",
-                        exact: false,
-                        limit: 1000,
-                    },
-                }),
-            expectedRequestType: RequestType.XAdd,
-            expectedValue: convertStringArrayToBuffer([
-                "foobar",
-                "NOMKSTREAM",
-                "MINID",
-                "~",
-                "foo",
-                "LIMIT",
-                "1000",
-                "*",
-                "d",
-                "4",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xtrim request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xtrim("foo", {
-                    method: "maxlen",
-                    threshold: 1000,
-                    exact: true,
-                }),
-            expectedRequestType: RequestType.XTrim,
-            expectedValue: convertStringArrayToBuffer([
-                "foo",
-                "MAXLEN",
-                "=",
-                "1000",
-            ]),
-        });
-    });
-
-    it("should set arguments according to inexact xtrim request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xtrim("bar", {
-                    method: "minid",
-                    threshold: "foo",
-                    exact: false,
-                    limit: 1000,
-                }),
-            expectedRequestType: RequestType.XTrim,
-            expectedValue: convertStringArrayToBuffer([
-                "bar",
-                "MINID",
-                "~",
-                "foo",
-                "LIMIT",
-                "1000",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xread request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xread({
-                    foo: "bar",
-                    foobar: "baz",
-                }),
-            expectedRequestType: RequestType.XRead,
-            expectedValue: convertStringArrayToBuffer([
-                "STREAMS",
-                "foo",
-                "foobar",
-                "bar",
-                "baz",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xread request with block clause", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xread(
-                    { foo: "bar" },
-                    {
-                        block: 100,
-                    },
-                ),
-            expectedRequestType: RequestType.XRead,
-            expectedValue: convertStringArrayToBuffer([
-                "BLOCK",
-                "100",
-                "STREAMS",
-                "foo",
-                "bar",
-            ]),
-        });
-    });
-
-    it("should set arguments according to xread request with count clause", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.xread(
-                    { bar: "baz" },
-                    {
-                        count: 2,
-                    },
-                ),
-            expectedRequestType: RequestType.XRead,
-            expectedValue: convertStringArrayToBuffer([
-                "COUNT",
-                "2",
-                "STREAMS",
-                "bar",
-                "baz",
-            ]),
-        });
-    });
-
-    it("should set arguments according to clientPause request without mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientPause(1000),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with ALL mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.ALL),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "ALL"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with WRITE mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.WRITE),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "WRITE"]),
-        });
-    });
-
-    it("should set arguments according to clientUnpause request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientUnpause(),
-            expectedRequestType: RequestType.ClientUnpause,
-            expectedValue: convertStringArrayToBuffer([]),
-        });
-    });
-
-    it("should set arguments according to failover request without options", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => (client as GlideClient).failover(),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer([]),
-        });
-    });
-
-    it("should set arguments according to failover request with abort", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).failover({ abort: true }),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer(["ABORT"]),
-        });
-    });
-
-    it("should set arguments according to failover request with to and timeout", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).failover({
-                    to: { host: "localhost", port: 6380, force: true },
-                    timeoutMs: 1000,
-                }),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer([
-                "TO",
-                "localhost",
-                "6380",
-                "FORCE",
-                "TIMEOUT",
-                "1000",
-            ]),
-        });
-    });
-
-    it("should set arguments according to replicaof request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).replicaof("localhost", 6379),
-            expectedRequestType: RequestType.ReplicaOf,
-            expectedValue: convertStringArrayToBuffer(["localhost", "6379"]),
-        });
-    });
-
-    it("should set arguments according to replicaofNoOne request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => (client as GlideClient).replicaofNoOne(),
-            expectedRequestType: RequestType.ReplicaOf,
-            expectedValue: convertStringArrayToBuffer(["NO", "ONE"]),
-        });
+});
+
+describe("NAPI valueFromSplitPointer", () => {
+    it("valueFromSplitPointer function is exported", () => {
+        expect(typeof valueFromSplitPointer).toBe("function");
     });
 });
 
 describe("GlideClusterClientConfiguration", () => {
     it("should set refreshTopologyFromInitialNodes to true", () => {
-        // Test configuration structure without type checking
-        // The actual type validation will happen when the protobuf types are regenerated
         const config: GlideClusterClientConfiguration = {
             addresses: [{ host: "localhost", port: 6379 }],
             advancedConfiguration: {
@@ -1066,7 +79,6 @@ describe("GlideClusterClientConfiguration", () => {
             },
         };
 
-        // We're testing that the configuration is accepted and properly structured
         expect(
             config.advancedConfiguration?.refreshTopologyFromInitialNodes,
         ).toBe(true);
@@ -1094,6 +106,47 @@ describe("GlideClusterClientConfiguration", () => {
         expect(
             config.advancedConfiguration?.refreshTopologyFromInitialNodes,
         ).toBeUndefined();
+    });
+});
+
+describe("BaseClient response handling", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+    }
+
+    it("continues draining responses after a handler exception", () => {
+        const responses = [{ callbackIdx: 1 }, { callbackIdx: 2 }];
+        const client = new TestBaseClient() as unknown as {
+            clientHandle: { drainResponses: () => unknown[] };
+            handleResponse: ReturnType<typeof jest.fn>;
+            handleResponsesAvailable: () => void;
+        };
+        const logSpy = jest
+            .spyOn(Logger, "log")
+            .mockImplementation(() => undefined);
+
+        client.clientHandle = {
+            drainResponses: () => responses,
+        };
+        client.handleResponse = jest
+            .fn()
+            .mockImplementationOnce(() => {
+                throw new Error("handler failed");
+            })
+            .mockImplementationOnce(() => undefined);
+
+        expect(() => client.handleResponsesAvailable()).not.toThrow();
+        expect(client.handleResponse).toHaveBeenCalledTimes(2);
+        expect(client.handleResponse).toHaveBeenNthCalledWith(2, responses[1]);
+        expect(logSpy).toHaveBeenCalledWith(
+            "error",
+            "Response handling",
+            expect.stringContaining("handler failed"),
+        );
+
+        logSpy.mockRestore();
     });
 });
 

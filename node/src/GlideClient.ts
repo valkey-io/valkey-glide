@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import * as net from "net";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
@@ -21,9 +20,11 @@ import { Batch } from "./Batch";
 import {
     BatchOptions,
     ClientPauseMode,
+    ClientTrackingInfo,
     createClientGetName,
     createClientId,
     createClientPause,
+    createClientTrackingInfo,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -50,6 +51,10 @@ import {
     createLatencyReset,
     createLolwut,
     createMigrate,
+    createMemoryDoctor,
+    createMemoryMallocStats,
+    createMemoryPurge,
+    createMemoryStats,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -76,7 +81,12 @@ import {
     LatencyEventInfo,
     LolwutOptions,
     MigrateOptions,
+    MemoryStats,
+    parseClientTrackingInfoResponse,
     ScanOptions,
+    parseLatencyHistoryResponse,
+    parseLatencyLatestResponse,
+    parseMemoryStatsResponse,
 } from "./Commands";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
@@ -329,21 +339,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration) =>
-                new GlideClient(socket, options),
-        );
-    }
-    /**
-     * @internal
-     */
-    static async __createClient(
-        options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-    ): Promise<GlideClient> {
-        return this.__createClientInternal(
-            options,
-            connectedSocket,
-            (socket, options) => new GlideClient(socket, options),
+            (options?: GlideClientConfiguration) => new GlideClient(options),
         );
     }
 
@@ -568,6 +564,32 @@ export class GlideClient extends BaseClient {
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
+    }
+
+    /**
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @returns The tracking info for the client.
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo();
+     * console.log(info.flags); // Set { "off" }
+     * console.log(info.redirect); // -1
+     * console.log(info.prefixes); // Set {}
+     * ```
+     */
+    public async clientTrackingInfo(): Promise<ClientTrackingInfo> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createClientTrackingInfo(),
+        ).then((res) =>
+            parseClientTrackingInfoResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 
     /**
@@ -1035,7 +1057,7 @@ export class GlideClient extends BaseClient {
     public async latencyHistory(event: GlideString): Promise<LatencyEntry[]> {
         return this.createWritePromise<unknown[]>(
             createLatencyHistory(event),
-        ).then((res) => this.parseLatencyHistoryResponse(res));
+        ).then((res) => parseLatencyHistoryResponse(res));
     }
 
     /**
@@ -1055,7 +1077,7 @@ export class GlideClient extends BaseClient {
      */
     public async latencyLatest(): Promise<LatencyEventInfo[]> {
         return this.createWritePromise<unknown[]>(createLatencyLatest()).then(
-            (res) => this.parseLatencyLatestResponse(res),
+            (res) => parseLatencyLatestResponse(res),
         );
     }
 
@@ -1498,5 +1520,88 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createReplicaOfNoOne(), {
             decoder: Decoder.String,
         });
+    }
+
+    // TODO #6166: move to shared base
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
+     *
+     * @returns The memory diagnostic report.
+     *
+     * @example
+     * ```typescript
+     * const report = await client.memoryDoctor();
+     * console.log(report); // Output: "Sam, I have no memory problems"
+     * ```
+     */
+    public async memoryDoctor(): Promise<string> {
+        return this.createWritePromise(createMemoryDoctor(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
+     *
+     * @returns The memory allocator statistics.
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryMallocStats();
+     * console.log(stats);
+     * ```
+     */
+    public async memoryMallocStats(): Promise<string> {
+        return this.createWritePromise(createMemoryMallocStats(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
+     *
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.memoryPurge();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async memoryPurge(): Promise<"OK"> {
+        return this.createWritePromise(createMemoryPurge(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
+     *
+     * @returns A {@link MemoryStats} object containing detailed memory usage statistics.
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryStats();
+     * console.log(stats.peakAllocated); // Peak memory in bytes
+     * console.log(stats.totalAllocated); // Total allocated memory in bytes
+     * ```
+     */
+    public async memoryStats(): Promise<MemoryStats> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createMemoryStats(),
+        ).then((res) =>
+            parseMemoryStatsResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 }

@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.constants import TEncodable
 from glide_shared.exceptions import RequestError
 from glide_shared.logger import Level, Logger
@@ -15,20 +14,21 @@ class Script:
     this object is alive, the script's code is saved in memory, and can be resent to the server.
     """
 
-    def __init__(self, code: TEncodable):
+    def __init__(self, code: TEncodable, _ffi, _lib):
         """
         Create a new Script instance and store it in the script cache.
 
         Args:
             code: The Lua script code as a string or bytes
+            _ffi: CFFI ffi instance (supplied by the package-level wrapper)
+            _lib: CFFI lib instance (supplied by the package-level wrapper)
 
         Raises:
             TypeError: If code is not a string or bytes
             RequestError: If script storage fails
         """
-        _glide_ffi = _GlideFFI()
-        self._ffi = _glide_ffi.ffi
-        self._lib = _glide_ffi.lib
+        self._ffi = _ffi
+        self._lib = _lib
         self._hash = None
 
         # Convert code to bytes if it's a string
@@ -76,7 +76,7 @@ class Script:
                 try:
                     error_msg = self._ffi.string(error_ptr).decode(ENCODING)
                     Logger.log(
-                        Level.WARN, "script, " f"Error dropping script: {error_msg}"
+                        Level.WARN, "script", f"Error dropping script: {error_msg}"
                     )
                 finally:
                     self._lib.free_drop_script_error(error_ptr)

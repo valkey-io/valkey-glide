@@ -966,10 +966,7 @@ public class BatchTestUtilities {
                 .flushall(ASYNC)
                 .flushdb()
                 .flushdb(ASYNC)
-                .dbsize()
-                .latencyReset()
-                .latencyHistory("command")
-                .latencyLatest();
+                .dbsize();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
@@ -977,44 +974,23 @@ public class BatchTestUtilities {
                     .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
 
+        @SuppressWarnings("unchecked")
         Object[] expectedResults =
                 new Object[] {
                     OK, // configSet(createMap("timeout", "1000"))
                     createMap("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    new Object() {
-                        @Override
-                        public boolean equals(Object obj) {
-                            if (obj instanceof String) {
-                                String response = (String) obj;
-                                return response.contains("ver") && response.contains(SERVER_VERSION.toString());
-                            }
-                            return false;
-                        }
-
-                        @Override
-                        public String toString() {
-                            return "LOLWUT version matcher for " + SERVER_VERSION;
-                        }
-                    }, // lolwut(1) - accepts both Redis and Valkey formats
+                    new ResponseMatcher(
+                            obj ->
+                                    obj instanceof String
+                                            && ((String) obj).contains("ver")
+                                            && ((String) obj).contains(SERVER_VERSION.toString()),
+                            "LOLWUT version matcher for " + SERVER_VERSION), // lolwut(1)
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()
                     OK, // flushdb(ASYNC)
                     0L, // dbsize()
-                    new Object() {
-                        @Override
-                        public boolean equals(Object obj) {
-                            return obj instanceof Long && (Long) obj >= 0;
-                        }
-
-                        @Override
-                        public String toString() {
-                            return "latencyReset() >= 0";
-                        }
-                    }, // latencyReset()
-                    new Object[0], // latencyHistory("command") - empty after reset
-                    new Object[0], // latencyLatest() - empty after reset
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1567,5 +1543,29 @@ public class BatchTestUtilities {
         return new Object[] {
             0L, // publish("message", "Tchannel")
         };
+    }
+
+    /**
+     * A reusable comparison object for batch test assertions. Overrides {@code equals} to perform
+     * type-checked validation against actual command responses.
+     */
+    static class ResponseMatcher {
+        private final java.util.function.Predicate<Object> predicate;
+        private final String description;
+
+        ResponseMatcher(java.util.function.Predicate<Object> predicate, String description) {
+            this.predicate = predicate;
+            this.description = description;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return predicate.test(obj);
+        }
+
+        @Override
+        public String toString() {
+            return description;
+        }
     }
 }

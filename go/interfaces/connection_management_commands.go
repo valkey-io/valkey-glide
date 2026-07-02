@@ -35,4 +35,7 @@ type ConnectionManagementCommands interface {
 	ClientUnpause(ctx context.Context) (string, error)
 
 	Reset(ctx context.Context) (string, error)
+
+	// TODO #6144: Move to base class
+	ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error)
 }
