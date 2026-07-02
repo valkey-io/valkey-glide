@@ -1,6 +1,16 @@
 # Changelog
 
-## Pending 2.5
+## Pending 2.6
+
+### Fixes
+
+* Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
+
+### Changes
+
+* Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
+
+## 2.5
 
 ### Fixes
 
