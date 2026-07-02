@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.concatenateArrays;
+import static glide.TestUtilities.createClientWithRetry;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -37,7 +38,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -54,14 +54,9 @@ public class ClusterBatchTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
-    // Client setup here runs once before the whole parameterized suite. Under heavy CI load the
-    // initial connect can intermittently fail (e.g. "Connection refused" while the server is still
-    // accepting connections, or "Request timed out"), which would fail every parameter set before a
-    // single batch command runs. Retry the connect a bounded number of times so a transient slow or
-    // refused connect does not sink the entire suite. See issue #5343.
-    private static final int MAX_CONNECT_ATTEMPTS = 3;
-    private static final long CONNECT_RETRY_BACKOFF_MILLIS = 1000;
-
+    // Client setup runs once before the whole parameterized suite. Under heavy CI load the initial
+    // connect can fail transiently, so use the shared bounded-retry helper (see its javadoc for why
+    // Glide's native reconnect strategy is not sufficient here). See issue #5343.
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -69,22 +64,11 @@ public class ClusterBatchTests {
         clients.add(Arguments.of(Named.of("RESP3", connectWithRetry(ProtocolVersion.RESP3))));
     }
 
-    @SneakyThrows
     private static GlideClusterClient connectWithRetry(ProtocolVersion protocol) {
-        ExecutionException lastException = null;
-        for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
-            try {
-                return GlideClusterClient.createClient(
-                                commonClusterClientConfig().requestTimeout(7000).protocol(protocol).build())
-                        .get();
-            } catch (ExecutionException e) {
-                lastException = e;
-                if (attempt < MAX_CONNECT_ATTEMPTS) {
-                    Thread.sleep(CONNECT_RETRY_BACKOFF_MILLIS);
-                }
-            }
-        }
-        throw lastException;
+        return createClientWithRetry(
+                () ->
+                        GlideClusterClient.createClient(
+                                commonClusterClientConfig().requestTimeout(7000).protocol(protocol).build()));
     }
 
     @AfterAll

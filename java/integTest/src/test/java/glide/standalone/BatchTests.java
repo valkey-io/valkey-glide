@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.createClientWithRetry;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -64,14 +65,9 @@ public class BatchTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
-    // Client setup here runs once before the whole parameterized suite. Under heavy CI load the
-    // initial connect can intermittently fail (e.g. "Connection refused" while the server is still
-    // accepting connections, or "Request timed out"), which would fail every parameter set before a
-    // single batch command runs. Retry the connect a bounded number of times so a transient slow or
-    // refused connect does not sink the entire suite. See issue #5343.
-    private static final int MAX_CONNECT_ATTEMPTS = 3;
-    private static final long CONNECT_RETRY_BACKOFF_MILLIS = 1000;
-
+    // Client setup runs once before the whole parameterized suite. Under heavy CI load the initial
+    // connect can fail transiently, so use the shared bounded-retry helper (see its javadoc for why
+    // Glide's native reconnect strategy is not sufficient here). See issue #5343.
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -79,22 +75,11 @@ public class BatchTests {
         clients.add(Arguments.of(Named.of("RESP3", connectWithRetry(ProtocolVersion.RESP3))));
     }
 
-    @SneakyThrows
     private static GlideClient connectWithRetry(ProtocolVersion protocol) {
-        ExecutionException lastException = null;
-        for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
-            try {
-                return GlideClient.createClient(
-                                commonClientConfig().requestTimeout(7000).protocol(protocol).build())
-                        .get();
-            } catch (ExecutionException e) {
-                lastException = e;
-                if (attempt < MAX_CONNECT_ATTEMPTS) {
-                    Thread.sleep(CONNECT_RETRY_BACKOFF_MILLIS);
-                }
-            }
-        }
-        throw lastException;
+        return createClientWithRetry(
+                () ->
+                        GlideClient.createClient(
+                                commonClientConfig().requestTimeout(7000).protocol(protocol).build()));
     }
 
     @AfterAll
