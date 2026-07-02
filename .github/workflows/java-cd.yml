@@ -462,6 +462,7 @@ jobs:
                   ls -ltr
                   cd -
                   cp $jedis4_src_folder/jedis4-bundle.jar jedis4-bundle-no-classifier.jar
+
             - name: Smoke test uber JAR
               working-directory: java
               shell: bash
