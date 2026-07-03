@@ -2373,7 +2373,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.17.0
+Package: aws-lc-rs:1.17.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2595,7 +2595,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.41.0
+Package: aws-lc-sys:0.42.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24582,7 +24582,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libredox:0.1.17
+Package: libredox:0.1.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26093,7 +26093,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: num-bigint:0.4.6
+Package: num-bigint:0.4.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34365,7 +34365,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.10.1
+Package: rand:0.10.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37413,7 +37413,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.14.1
+Package: rustls-pki-types:1.15.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44114,7 +44114,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.51
+Package: time:0.3.53
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -45030,7 +45030,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.30
+Package: time-macros:0.2.31
 
 The following copyrights and licenses were found in the source code of this package:
 
