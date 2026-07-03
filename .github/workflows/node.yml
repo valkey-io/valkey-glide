@@ -167,7 +167,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
 
             - name: Test
-              shell: ${{ contains(matrix.host.TARGET, 'windows') && 'wsl-bash {0}' || 'bash' }}
+              shell: bash
               run: |
                   export AWS_ACCESS_KEY_ID=test_access_key
                   export AWS_SECRET_ACCESS_KEY=test_secret_key
