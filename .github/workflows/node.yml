@@ -114,7 +114,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
         if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 40
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 40 }}
         strategy:
             fail-fast: false
             matrix:
@@ -167,7 +167,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
 
             - name: Test
-              shell: bash
+              shell: ${{ contains(matrix.host.TARGET, 'windows') && 'wsl-bash {0}' || 'bash' }}
               run: |
                   export AWS_ACCESS_KEY_ID=test_access_key
                   export AWS_SECRET_ACCESS_KEY=test_secret_key
