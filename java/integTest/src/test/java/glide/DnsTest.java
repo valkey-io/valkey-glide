@@ -95,7 +95,8 @@ public class DnsTest {
                                 .tlsAdvancedConfiguration(tlsConfig)
                                 .build());
             }
-            return GlideClusterClient.createClient(builder.build()).get();
+            GlideClusterClientConfiguration config = builder.build();
+            return createClientWithRetry(() -> GlideClusterClient.createClient(config));
         } else {
             GlideClientConfigurationBuilder<?, ?> builder =
                     GlideClientConfiguration.builder().address(address).useTLS(useTls);
@@ -105,7 +106,8 @@ public class DnsTest {
                 builder.advancedConfiguration(
                         AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
             }
-            return GlideClient.createClient(builder.build()).get();
+            GlideClientConfiguration config = builder.build();
+            return createClientWithRetry(() -> GlideClient.createClient(config));
         }
     }
 }

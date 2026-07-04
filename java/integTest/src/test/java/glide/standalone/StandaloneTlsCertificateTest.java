@@ -62,7 +62,8 @@ public class StandaloneTlsCertificateTest {
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, nodeAddr);
 
-        try (GlideClient client = GlideClient.createClient(config).get()) {
+        try (GlideClient client =
+                TestUtilities.createClientWithRetry(() -> GlideClient.createClient(config))) {
             TestUtilities.assertConnected(client);
         }
     }
@@ -76,7 +77,8 @@ public class StandaloneTlsCertificateTest {
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(certBundle, nodeAddr);
 
-        try (GlideClient client = GlideClient.createClient(config).get()) {
+        try (GlideClient client =
+                TestUtilities.createClientWithRetry(() -> GlideClient.createClient(config))) {
             TestUtilities.assertConnected(client);
         }
     }
