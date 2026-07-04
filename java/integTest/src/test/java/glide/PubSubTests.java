@@ -2938,11 +2938,12 @@ public class PubSubTests {
 
             // Subscribe (will fail due to ACL)
             listeningClient.subscribeLazy(createSet(channel)).get();
-            Thread.sleep(500);
+            Thread.sleep(isWindows() ? 2000 : 500);
 
             // Poll for metric increment
             long outOfSyncCount = initialOutOfSync;
-            for (int i = 0; i < 15; i++) {
+            int maxAttempts = isWindows() ? 25 : 15;
+            for (int i = 0; i < maxAttempts; i++) {
                 Thread.sleep(1000);
                 Map<String, String> stats = listeningClient.getStatistics();
                 outOfSyncCount = Long.parseLong(stats.getOrDefault("subscription_out_of_sync_count", "0"));
