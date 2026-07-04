@@ -305,7 +305,7 @@ public class PubSubTests {
     /** Other clients used in a test. */
     private final List<BaseClient> senders = new ArrayList<>();
 
-    private static final int MESSAGE_DELIVERY_DELAY = 500; // ms
+    private static final int MESSAGE_DELIVERY_DELAY = isWindows() ? 1500 : 500; // ms
 
     @AfterEach
     @SneakyThrows
