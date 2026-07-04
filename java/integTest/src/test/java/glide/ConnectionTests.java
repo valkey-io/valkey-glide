@@ -82,13 +82,13 @@ public class ConnectionTests {
 
     @SneakyThrows
     public GlideClusterClient createAzTestClient(String az) {
-        return GlideClusterClient.createClient(
-                        azClusterClientConfig()
-                                .readFrom(ReadFrom.AZ_AFFINITY)
-                                .clientAZ(az)
-                                .requestTimeout(2000)
-                                .build())
-                .get();
+        GlideClusterClientConfiguration config =
+                azClusterClientConfig()
+                        .readFrom(ReadFrom.AZ_AFFINITY)
+                        .clientAZ(az)
+                        .requestTimeout(2000)
+                        .build();
+        return createClientWithRetry(() -> GlideClusterClient.createClient(config));
     }
 
     @SneakyThrows
@@ -221,8 +221,10 @@ public class ConnectionTests {
         int nGetCalls = 3;
         String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
 
+        GlideClusterClientConfiguration configSetConfig =
+                azClusterClientConfig().requestTimeout(2000).build();
         GlideClusterClient configSetClient =
-                GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
+                createClientWithRetry(() -> GlideClusterClient.createClient(configSetConfig));
 
         // reset availability zone for all nodes
         configSetClient.configSet(Collections.singletonMap("availability-zone", ""), ALL_NODES).get();
