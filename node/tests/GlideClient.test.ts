@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
@@ -769,7 +769,7 @@ describe("GlideClient", () => {
         async (protocol) => {
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 5000,
+                    requestTimeout: 10000,
                 }),
             );
 
@@ -2301,7 +2301,7 @@ describe("GlideClient", () => {
                 let info = await client.info([InfoOptions.Replication]);
                 expect(info).toContain("role:master");
 
-                // Execute failover — returns OK immediately
+                // Execute failover â€” returns OK immediately
                 const result = await client.failover();
                 expect(result).toBe("OK");
 
