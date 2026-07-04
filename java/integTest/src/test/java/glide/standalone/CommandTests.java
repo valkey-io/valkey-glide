@@ -14,6 +14,7 @@ import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.concatenateArrays;
+import static glide.TestUtilities.createClientWithRetry;
 import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -2259,7 +2260,8 @@ public class CommandTests {
             NodeAddress primaryAddr = standalone.getNodesAddr().get(0);
             GlideClientConfiguration config =
                     GlideClientConfiguration.builder().address(primaryAddr).protocol(protocol).build();
-            try (GlideClient client = GlideClient.createClient(config).get()) {
+            try (GlideClient client =
+                    createClientWithRetry(() -> GlideClient.createClient(config))) {
                 // Verify initial role is master
                 waitForRole(client, "master");
 
