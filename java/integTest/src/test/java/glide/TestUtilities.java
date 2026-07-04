@@ -138,30 +138,33 @@ public class TestUtilities {
                                 .collect(Collectors.toList());
             }
 
-            return GlideClusterClient.createClient(
-                            GlideClusterClientConfiguration.builder()
-                                    .addresses(seedNodes)
-                                    .requestTimeout(2000)
-                                    .lazyConnect(lazyConnect)
-                                    // Explicitly set no credentials for dedicated clusters to avoid
-                                    // authentication issues from environment or global state
-                                    .credentials(null)
-                                    .build())
-                    .get();
+            final List<NodeAddress> finalSeedNodes = seedNodes;
+            return createClientWithRetry(
+                    () ->
+                            GlideClusterClient.createClient(
+                                    GlideClusterClientConfiguration.builder()
+                                            .addresses(finalSeedNodes)
+                                            .requestTimeout(2000)
+                                            .lazyConnect(lazyConnect)
+                                            // Explicitly set no credentials for dedicated clusters to avoid
+                                            // authentication issues from environment or global state
+                                            .credentials(null)
+                                            .build()));
         } else {
             List<NodeAddress> nodeAddresses =
                     addresses != null ? addresses : valkeyCluster.getNodesAddr();
 
-            return GlideClient.createClient(
-                            GlideClientConfiguration.builder()
-                                    .addresses(nodeAddresses)
-                                    .requestTimeout(2000)
-                                    .lazyConnect(lazyConnect)
-                                    // Explicitly set no credentials for dedicated clusters to avoid
-                                    // authentication issues from environment or global state
-                                    .credentials(null)
-                                    .build())
-                    .get();
+            return createClientWithRetry(
+                    () ->
+                            GlideClient.createClient(
+                                    GlideClientConfiguration.builder()
+                                            .addresses(nodeAddresses)
+                                            .requestTimeout(2000)
+                                            .lazyConnect(lazyConnect)
+                                            // Explicitly set no credentials for dedicated clusters to avoid
+                                            // authentication issues from environment or global state
+                                            .credentials(null)
+                                            .build()));
         }
     }
 
