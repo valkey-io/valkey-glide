@@ -285,7 +285,7 @@ class CoreCommands(Protocol):
         conditional_set: Optional[Union[ConditionalChange, OnlyIfEqual]] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
-    ) -> Optional[bytes]:
+    ) -> Optional[Union[TOK, bytes]]:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
 
@@ -303,7 +303,7 @@ class CoreCommands(Protocol):
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
-            Optional[bytes]: If the value is successfully set, return OK.
+            Optional[Union[TOK, bytes]]: If the value is successfully set, return OK (a `str`).
 
             If value isn't set because of `only_if_exists` or `only_if_does_not_exist` conditions, return `None`.
 
@@ -354,7 +354,10 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return cast(Optional[bytes], await self._execute_command(RequestType.Set, args))
+        return cast(
+            Optional[Union[TOK, bytes]],
+            await self._execute_command(RequestType.Set, args),
+        )
 
     async def get(self, key: TEncodable) -> Optional[bytes]:
         """

@@ -194,8 +194,8 @@ class BaseBatch:
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Command response:
-            Optional[bytes]:
-                If the value is successfully set, return OK.
+            Optional[Union[TOK, bytes]]:
+                If the value is successfully set, return OK (a `str`).
 
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
 
