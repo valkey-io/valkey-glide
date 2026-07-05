@@ -53,6 +53,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -284,6 +285,57 @@ public class TestUtilities {
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
         return builder.useTLS(TLS);
+    }
+
+    /** Number of times {@link #createClientWithRetry} attempts the initial connect. */
+    public static final int MAX_CONNECT_ATTEMPTS = 3;
+
+    /** Backoff between {@link #createClientWithRetry} attempts, in milliseconds. */
+    public static final long CONNECT_RETRY_BACKOFF_MILLIS = 1000;
+
+    /**
+     * Creates a client by issuing fresh {@code createClient} attempts, retrying a bounded number of
+     * times when the initial connect fails transiently.
+     *
+     * <p>Under heavy CI load the server may not be accepting connections yet, so the first {@code
+     * createClient} can fail with e.g. "Connection refused" or "Request timed out" and sink an entire
+     * {@code @BeforeAll} setup before a single command runs. This helper retries the whole {@code
+     * createClient} call ({@value #MAX_CONNECT_ATTEMPTS} attempts, {@value
+     * #CONNECT_RETRY_BACKOFF_MILLIS}ms backoff) to survive that window. See issue #5343.
+     *
+     * <p>Glide's native reconnect strategy ({@code reconnectStrategy} / core {@code
+     * connection_retry_strategy}) is intentionally not used for this: it does retry the initial
+     * connect, but the whole retry loop is bounded by {@code connectionTimeout} (default ~2000ms, see
+     * {@code reconnecting_connection.rs} which wraps the loop in {@code timeout(connection_timeout,
+     * ...)}). Once that elapses {@code createClient} rejects, and the "retry forever" background
+     * reconnect only runs on a connection the awaited future has already abandoned. A server that is
+     * slow to accept for several seconds therefore needs fresh {@code createClient} attempts, each
+     * with a new connection-timeout budget, which is exactly what this helper provides. Matching that
+     * with native config would require globally raising {@code connectionTimeout}, slowing every
+     * other path that uses {@link #commonClientConfig()} / {@link #commonClusterClientConfig()}.
+     *
+     * <p>Only {@link ExecutionException} (a failed connect surfaced from {@code
+     * CompletableFuture.get()}) is retried; an {@link InterruptedException} is intentionally not
+     * retried and propagates.
+     *
+     * @param clientFactory supplies a fresh {@code createClient} future on each attempt
+     * @param <T> the client type produced (e.g. {@code GlideClient} or {@code GlideClusterClient})
+     * @return the connected client
+     */
+    @SneakyThrows
+    public static <T> T createClientWithRetry(Supplier<CompletableFuture<T>> clientFactory) {
+        ExecutionException lastException = null;
+        for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+            try {
+                return clientFactory.get().get();
+            } catch (ExecutionException e) {
+                lastException = e;
+                if (attempt < MAX_CONNECT_ATTEMPTS) {
+                    Thread.sleep(CONNECT_RETRY_BACKOFF_MILLIS);
+                }
+            }
+        }
+        throw lastException;
     }
 
     /**
