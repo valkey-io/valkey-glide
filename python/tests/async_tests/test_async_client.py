@@ -388,9 +388,7 @@ class TestGlideClients:
     @pytest.mark.skip_if_version_below("7.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lib_name_with_client_info_tag(
-        self, request, cluster_mode, protocol
-    ):
+    async def test_lib_name_with_client_info_tag(self, request, cluster_mode, protocol):
         glide_client = await create_client(
             request,
             cluster_mode=cluster_mode,
