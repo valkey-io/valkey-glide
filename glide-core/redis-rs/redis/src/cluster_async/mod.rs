@@ -625,7 +625,11 @@ pub(crate) struct ClusterConnInner<C> {
     pub(crate) inner: Core<C>,
     state: ConnectionState,
     #[allow(clippy::complexity)]
-    in_flight_requests: stream::FuturesUnordered<Pin<Box<Request<C>>>>,
+    // `FuturesUnordered` pins and heap-allocates each future in its own internal
+    // node, so storing `Request` directly (instead of `Pin<Box<Request>>`) removes a
+    // redundant per-request `Box` allocation on the hot path. `Request` is `!Unpin`
+    // (pin-projected) but that is fine — `FuturesUnordered` pins it internally.
+    in_flight_requests: stream::FuturesUnordered<Request<C>>,
     refresh_error: Option<RedisError>,
     // Handler of the periodic check task.
     periodic_checks_handler: Option<JoinHandle<()>>,
@@ -3732,12 +3736,12 @@ where
             }
 
             let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
-            self.in_flight_requests.push(Box::pin(Request {
+            self.in_flight_requests.push(Request {
                 retry_params: retry_params.clone(),
                 request: Some(request),
                 core: self.inner.clone(),
                 future: RequestState::Future { future },
-            }));
+            });
         }
 
         loop {
@@ -3750,14 +3754,14 @@ where
                 Next::Done => {}
                 Next::Retry { request } => {
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
-                    self.in_flight_requests.push(Box::pin(Request {
+                    self.in_flight_requests.push(Request {
                         retry_params: retry_params.clone(),
                         request: Some(request),
                         core: self.inner.clone(),
                         future: RequestState::Future {
                             future: Box::pin(future),
                         },
-                    }));
+                    });
                 }
                 Next::RetryBusyLoadingError { request, address } => {
                     // TODO - do we also want to try and reconnect to replica if it is loading?
@@ -3768,14 +3772,14 @@ where
                         request.retry,
                         retry_params.clone(),
                     );
-                    self.in_flight_requests.push(Box::pin(Request {
+                    self.in_flight_requests.push(Request {
                         retry_params: retry_params.clone(),
                         request: Some(request),
                         core: self.inner.clone(),
                         future: RequestState::Future {
                             future: Box::pin(future),
                         },
-                    }));
+                    });
                 }
                 Next::RefreshSlots {
                     request,
@@ -3814,12 +3818,12 @@ where
                         None
                     };
                     if let Some(future) = future {
-                        self.in_flight_requests.push(Box::pin(Request {
+                        self.in_flight_requests.push(Request {
                             retry_params,
                             request,
                             core: self.inner.clone(),
                             future,
-                        }));
+                        });
                     }
                 }
                 Next::Reconnect { request, target } => {
@@ -3856,7 +3860,7 @@ where
                 .iter_pin_mut()
                 .find(|request| request.request.is_some())
             {
-                (*request)
+                request
                     .as_mut()
                     .respond(Err(self.refresh_error.take().unwrap()));
             } else {
