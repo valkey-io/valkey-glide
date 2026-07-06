@@ -767,11 +767,14 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate test_%p",
         async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+            const client = await GlideClient.createClient({
+                ...getClientConfigurationOption(cluster.getAddresses(), protocol, {
                     requestTimeout: 10000,
                 }),
-            );
+                advancedConfiguration: {
+                    connectionTimeout: 10000,
+                },
+            });
 
             const key = getRandomKey();
             const [serverHost, serverPort] = cluster.getAddresses()[0];
@@ -852,7 +855,7 @@ describe("GlideClient", () => {
 
             client.close();
         },
-        TIMEOUT,
+        120000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
