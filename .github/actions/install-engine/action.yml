@@ -30,19 +30,27 @@ runs:
           env:
               WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
           run: |
-              echo "Cloning and checking out Valkey $ENGINE_VERSION"
-              if [[ -d valkey ]]; then
-                  echo "Removing existing valkey directory..."
-                  rm -fR valkey
+              # On Windows, use WSL native /tmp to avoid slow WSL1 I/O on Windows filesystem
+              if [[ "$(uname -r)" == *microsoft* ]]; then
+                  BUILD_DIR="/tmp/valkey-src"
+              else
+                  BUILD_DIR="valkey"
               fi
-              git clone https://github.com/valkey-io/valkey.git
-              cd valkey/src
+              echo "Cloning and checking out Valkey $ENGINE_VERSION into $BUILD_DIR"
+              if [[ -d "$BUILD_DIR" ]]; then
+                  echo "Removing existing directory..."
+                  rm -fR "$BUILD_DIR"
+              fi
+              git clone https://github.com/valkey-io/valkey.git "$BUILD_DIR"
+              cd "$BUILD_DIR/src"
               git checkout $ENGINE_VERSION
               SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
               if [[ -z $SOURCES_VERSION ]]; then
                   SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
               fi
               echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
+              # Store build dir for subsequent steps
+              echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
 
         - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
           id: cache-valkey
@@ -59,7 +67,7 @@ runs:
           if: ${{ steps.cache-valkey.outputs.cache-hit == 'true'}}
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           run: |
-              cd valkey/src
+              cd "${BUILD_DIR:-valkey}/src"
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
@@ -82,7 +90,7 @@ runs:
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true'}}
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           run: |
-              cd valkey
+              cd "${BUILD_DIR:-valkey}"
               make BUILD_TLS=yes -j4
               if command -v sudo &> /dev/null
               then
