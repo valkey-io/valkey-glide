@@ -11536,12 +11536,33 @@ class TestScripts:
         instance with the same hash still exists, even after the original reference is released
         and the server-side script cache is flushed.
         """
-        script_1 = Script("return 'Script Exists'")
-        script_2 = Script("return 'Script Exists'")
+        # Use a unique script per test invocation to avoid cross-worker hash
+        # collisions when parallel pytest-xdist workers call script_flush().
+        unique_id = get_random_string(10)
+        script_code = f"return 'Script Exists' -- {unique_id}"
+
+        script_1 = Script(script_code)
+        script_2 = Script(script_code)
         assert script_1.get_hash() == script_2.get_hash()
 
-        # Run first script and drop reference
-        assert await glide_client.invoke_script(script_1) == b"Script Exists"
+        # Run first script and drop reference.
+        # Retry on transient NoScriptError caused by a parallel worker's
+        # script_flush() racing with the Rust core's SCRIPT LOAD -> EVALSHA.
+        # script_flush() is global so even unique scripts can be flushed by
+        # another worker between SCRIPT LOAD and EVALSHA in the Rust core.
+        max_retries = 5
+        result = None
+        for attempt in range(max_retries):
+            try:
+                result = await glide_client.invoke_script(script_1)
+                break
+            except RequestError as e:
+                if "NOSCRIPT" in str(e).upper() and attempt < max_retries - 1:
+                    await anyio.sleep(0.1)
+                    continue
+                raise
+        assert result == b"Script Exists"
+
         script_1.__del__()
 
         # Flush the script from the server
@@ -11550,8 +11571,19 @@ class TestScripts:
         # Script should not exist on the server anymore
         assert await glide_client.script_exists([script_1.get_hash()]) == [False]
 
-        # Run second script; it should not exist on the server but must be found in the local script cache
-        assert await glide_client.invoke_script(script_2) == b"Script Exists"
+        # Run second script; it should not exist on the server but must be
+        # found in the local script cache. Retry for the same reason as above.
+        result = None
+        for attempt in range(max_retries):
+            try:
+                result = await glide_client.invoke_script(script_2)
+                break
+            except RequestError as e:
+                if "NOSCRIPT" in str(e).upper() and attempt < max_retries - 1:
+                    await anyio.sleep(0.1)
+                    continue
+                raise
+        assert result == b"Script Exists"
 
         # Release script_2 and flush again
         script_2.__del__()
