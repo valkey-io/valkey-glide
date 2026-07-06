@@ -239,6 +239,8 @@ def create_sync_client(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -268,6 +270,8 @@ def create_sync_client(
         client_key_pem=client_key_pem,
         read_only=read_only,
         cache=cache,
+        lib_name=lib_name,
+        client_info_tag=client_info_tag,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)
