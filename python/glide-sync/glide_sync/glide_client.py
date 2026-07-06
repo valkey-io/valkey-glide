@@ -99,7 +99,13 @@ class BaseClient(CoreCommands):
         conn_req = self._config._create_a_protobuf_conn_request(
             cluster_mode=type(self._config) is GlideClusterClientConfiguration
         )
-        conn_req.lib_name = "GlidePySync"
+        # Preserve a user-configured lib_name; otherwise fall back to the sync default.
+        if not conn_req.lib_name:
+            conn_req.lib_name = "GlidePySync"
+        # Optionally append a client info tag, preserving the library identity
+        # (e.g. "GlidePySync(my-framework:1.2.3)").
+        if self._config.client_info_tag:
+            conn_req.lib_name = f"{conn_req.lib_name}({self._config.client_info_tag})"
         conn_req_bytes = conn_req.SerializeToString()
         client_type = self._ffi.new(
             "ClientType*",
