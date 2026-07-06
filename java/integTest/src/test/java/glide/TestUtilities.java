@@ -165,9 +165,7 @@ public class TestUtilities {
                                     // authentication issues from environment or global state
                                     .credentials(null)
                                     .advancedConfiguration(
-                                            AdvancedGlideClientConfiguration.builder()
-                                                    .connectionTimeout(10000)
-                                                    .build())
+                                            AdvancedGlideClientConfiguration.builder().connectionTimeout(10000).build())
                                     .build())
                     .get();
         }
