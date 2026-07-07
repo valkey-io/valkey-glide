@@ -202,7 +202,7 @@ async function createClusterClient(
         clusterServer = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
             true,
             tlsConfig,
