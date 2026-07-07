@@ -1,9 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import glide.api.models.exceptions.ConfigurationError;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -128,5 +132,74 @@ public class TlsAdvancedConfiguration {
                 .useInsecureTLS(false)
                 .rootCertificates(pemBuilder.toString().getBytes(StandardCharsets.UTF_8))
                 .build();
+    }
+
+    /**
+     * Load PEM-encoded root certificates from a file for TLS server verification.
+     *
+     * <p>This is a convenience loader for reading custom root certificates from disk to be used as
+     * {@link #rootCertificates} in a {@code TlsAdvancedConfiguration}.
+     *
+     * @param path The file path to the PEM-encoded certificate file.
+     * @return The certificate data in PEM format as a byte array.
+     * @throws ConfigurationError If the file is missing, unreadable, or empty.
+     */
+    public static byte[] loadRootCertificatesFromFile(String path) {
+        return loadPemFile(path, "Root certificate");
+    }
+
+    /**
+     * Load a PEM-encoded client certificate from a file for mutual TLS (mTLS) authentication.
+     *
+     * <p>This is a convenience loader for reading a client certificate from disk to be used as {@link
+     * #clientCertificate} in a {@code TlsAdvancedConfiguration}.
+     *
+     * @param path The file path to the PEM-encoded client certificate file.
+     * @return The client certificate data in PEM format as a byte array.
+     * @throws ConfigurationError If the file is missing, unreadable, or empty.
+     */
+    public static byte[] loadClientCertificateFromFile(String path) {
+        return loadPemFile(path, "Client certificate");
+    }
+
+    /**
+     * Load a PEM-encoded client private key from a file for mutual TLS (mTLS) authentication.
+     *
+     * <p>This is a convenience loader for reading a client private key from disk to be used as {@link
+     * #clientKey} in a {@code TlsAdvancedConfiguration}.
+     *
+     * @param path The file path to the PEM-encoded client private key file.
+     * @return The client private key data in PEM format as a byte array.
+     * @throws ConfigurationError If the file is missing, unreadable, or empty.
+     */
+    public static byte[] loadClientKeyFromFile(String path) {
+        return loadPemFile(path, "Client key");
+    }
+
+    /**
+     * Read a PEM file from disk, surfacing missing, unreadable, and empty files as {@link
+     * ConfigurationError} with a descriptive, type-specific message.
+     *
+     * @param path The file path to read.
+     * @param description Human-readable description of the PEM contents (e.g. "Client certificate").
+     * @return The file contents as a byte array.
+     * @throws ConfigurationError If the file is missing, unreadable, or empty.
+     */
+    private static byte[] loadPemFile(String path, String description) {
+        byte[] data;
+        try {
+            data = Files.readAllBytes(Paths.get(path));
+        } catch (NoSuchFileException e) {
+            throw new ConfigurationError(description + " file not found: " + path);
+        } catch (IOException e) {
+            throw new ConfigurationError(
+                    "Failed to read " + description.toLowerCase() + " file: " + e.getMessage());
+        }
+
+        if (data.length == 0) {
+            throw new ConfigurationError(description + " file is empty: " + path);
+        }
+
+        return data;
     }
 }
