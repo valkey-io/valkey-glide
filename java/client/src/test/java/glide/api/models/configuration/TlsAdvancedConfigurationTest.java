@@ -169,8 +169,9 @@ public class TlsAdvancedConfigurationTest {
 
         try {
             Files.write(certPath, certBytes);
+            String path = certPath.toString();
 
-            byte[] loaded = TlsAdvancedConfiguration.loadRootCertificatesFromFile(certPath.toString());
+            byte[] loaded = TlsAdvancedConfiguration.loadRootCertificatesFromFile(path);
 
             assertArrayEquals(certBytes, loaded);
         } finally {
@@ -180,12 +181,11 @@ public class TlsAdvancedConfigurationTest {
 
     @Test
     void testLoadRootCertificatesFromFileNotFound() {
+        String path = "/nonexistent/path/ca-cert.pem";
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
-                        () ->
-                                TlsAdvancedConfiguration.loadRootCertificatesFromFile(
-                                        "/nonexistent/path/ca-cert.pem"));
+                        () -> TlsAdvancedConfiguration.loadRootCertificatesFromFile(path));
         assertTrue(error.getMessage().contains("Root certificate file not found"));
     }
 
@@ -194,10 +194,11 @@ public class TlsAdvancedConfigurationTest {
         Path certPath = Files.createTempFile("empty-root-cert", ".pem");
 
         try {
+            String path = certPath.toString();
             ConfigurationError error =
                     assertThrows(
                             ConfigurationError.class,
-                            () -> TlsAdvancedConfiguration.loadRootCertificatesFromFile(certPath.toString()));
+                            () -> TlsAdvancedConfiguration.loadRootCertificatesFromFile(path));
             assertTrue(error.getMessage().contains("Root certificate file is empty"));
         } finally {
             Files.deleteIfExists(certPath);
@@ -211,8 +212,9 @@ public class TlsAdvancedConfigurationTest {
 
         try {
             Files.write(certPath, certBytes);
+            String path = certPath.toString();
 
-            byte[] loaded = TlsAdvancedConfiguration.loadClientCertificateFromFile(certPath.toString());
+            byte[] loaded = TlsAdvancedConfiguration.loadClientCertificateFromFile(path);
 
             assertArrayEquals(certBytes, loaded);
         } finally {
@@ -222,12 +224,11 @@ public class TlsAdvancedConfigurationTest {
 
     @Test
     void testLoadClientCertificateFromFileNotFound() {
+        String path = "/nonexistent/path/client-cert.pem";
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
-                        () ->
-                                TlsAdvancedConfiguration.loadClientCertificateFromFile(
-                                        "/nonexistent/path/client-cert.pem"));
+                        () -> TlsAdvancedConfiguration.loadClientCertificateFromFile(path));
         assertTrue(error.getMessage().contains("Client certificate file not found"));
     }
 
@@ -236,10 +237,11 @@ public class TlsAdvancedConfigurationTest {
         Path certPath = Files.createTempFile("empty-client-cert", ".pem");
 
         try {
+            String path = certPath.toString();
             ConfigurationError error =
                     assertThrows(
                             ConfigurationError.class,
-                            () -> TlsAdvancedConfiguration.loadClientCertificateFromFile(certPath.toString()));
+                            () -> TlsAdvancedConfiguration.loadClientCertificateFromFile(path));
             assertTrue(error.getMessage().contains("Client certificate file is empty"));
         } finally {
             Files.deleteIfExists(certPath);
@@ -253,8 +255,9 @@ public class TlsAdvancedConfigurationTest {
 
         try {
             Files.write(keyPath, keyBytes);
+            String path = keyPath.toString();
 
-            byte[] loaded = TlsAdvancedConfiguration.loadClientKeyFromFile(keyPath.toString());
+            byte[] loaded = TlsAdvancedConfiguration.loadClientKeyFromFile(path);
 
             assertArrayEquals(keyBytes, loaded);
         } finally {
@@ -264,11 +267,10 @@ public class TlsAdvancedConfigurationTest {
 
     @Test
     void testLoadClientKeyFromFileNotFound() {
+        String path = "/nonexistent/path/client-key.pem";
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class,
-                        () ->
-                                TlsAdvancedConfiguration.loadClientKeyFromFile("/nonexistent/path/client-key.pem"));
+                        ConfigurationError.class, () -> TlsAdvancedConfiguration.loadClientKeyFromFile(path));
         assertTrue(error.getMessage().contains("Client key file not found"));
     }
 
@@ -277,10 +279,10 @@ public class TlsAdvancedConfigurationTest {
         Path keyPath = Files.createTempFile("empty-client-key", ".pem");
 
         try {
+            String path = keyPath.toString();
             ConfigurationError error =
                     assertThrows(
-                            ConfigurationError.class,
-                            () -> TlsAdvancedConfiguration.loadClientKeyFromFile(keyPath.toString()));
+                            ConfigurationError.class, () -> TlsAdvancedConfiguration.loadClientKeyFromFile(path));
             assertTrue(error.getMessage().contains("Client key file is empty"));
         } finally {
             Files.deleteIfExists(keyPath);
