@@ -34,7 +34,7 @@ describe("tls GlideClusterClient", () => {
         cluster = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            0,
             getServerVersion,
             true,
             TLS_OPTIONS,
@@ -79,8 +79,13 @@ describe("tls GlideClusterClient", () => {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
+                    { requestTimeout: 10000 },
                 ),
                 ...TLS_OPTIONS,
+                advancedConfiguration: {
+                    connectionTimeout: 10000,
+                    ...TLS_OPTIONS.advancedConfiguration,
+                },
             };
 
             client = await retryWithBackoff(() =>
