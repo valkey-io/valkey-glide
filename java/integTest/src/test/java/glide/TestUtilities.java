@@ -146,6 +146,10 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClusterClientConfiguration.builder()
+                                                    .connectionTimeout(10000)
+                                                    .build())
                                     .build())
                     .get();
         } else {
@@ -160,6 +164,8 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClientConfiguration.builder().connectionTimeout(10000).build())
                                     .build())
                     .get();
         }
