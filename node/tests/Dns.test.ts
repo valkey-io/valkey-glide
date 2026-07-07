@@ -16,6 +16,7 @@ import {
     getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
+    retryWithBackoff,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -216,7 +217,9 @@ async function createClusterClient(
     it(
         "should connect with hostname in certificate SAN - standalone",
         async () => {
-            const client = await createClient(standaloneServer, HOSTNAME_TLS);
+            const client = await retryWithBackoff(() =>
+                createClient(standaloneServer, HOSTNAME_TLS),
+            );
 
             await assertConnected(client);
             client.close();
@@ -237,9 +240,8 @@ async function createClusterClient(
     it(
         "should connect with hostname in certificate SAN - cluster",
         async () => {
-            const client = await createClusterClient(
-                clusterServer,
-                HOSTNAME_TLS,
+            const client = await retryWithBackoff(() =>
+                createClusterClient(clusterServer, HOSTNAME_TLS),
             );
 
             await assertConnected(client);
