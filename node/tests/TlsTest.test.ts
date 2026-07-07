@@ -34,7 +34,7 @@ describe("tls GlideClusterClient", () => {
         cluster = await ValkeyCluster.createCluster(
             true,
             3,
-            0,
+            1,
             getServerVersion,
             true,
             TLS_OPTIONS,
