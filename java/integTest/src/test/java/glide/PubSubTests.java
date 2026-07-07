@@ -3037,32 +3037,11 @@ public class PubSubTests {
 
         // Subscribe to exact, pattern, and sharded
         client.subscribeLazy(createSet(channel)).get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> ch = s.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
-                    return ch != null && !ch.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for exact subscription");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
         client.psubscribeLazy(createSet(pattern)).get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> p = s.getActualSubscriptions().get(PubSubClusterChannelMode.PATTERN);
-                    return p != null && !p.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for pattern subscription");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
         client.ssubscribeLazy(createSet(sharded)).get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> sh = s.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
-                    return sh != null && !sh.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for sharded subscription");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Verify all subscriptions
         PubSubState<?> state = client.getSubscriptions().get();
@@ -3072,36 +3051,15 @@ public class PubSubTests {
 
         // Unsubscribe from all exact channels
         client.unsubscribeLazy().get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> ch = s.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
-                    return ch == null || ch.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for exact unsubscribe");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Unsubscribe from all patterns
         client.punsubscribeLazy().get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> p = s.getActualSubscriptions().get(PubSubClusterChannelMode.PATTERN);
-                    return p == null || p.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for pattern unsubscribe");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Unsubscribe from all sharded
         client.sunsubscribeLazy().get();
-        waitForCondition(
-                () -> {
-                    PubSubState<?> s = client.getSubscriptions().get();
-                    Set<String> sh = s.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
-                    return sh == null || sh.isEmpty();
-                },
-                MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for sharded unsubscribe");
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Verify all unsubscribed
         state = client.getSubscriptions().get();
