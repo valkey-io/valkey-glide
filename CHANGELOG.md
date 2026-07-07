@@ -8,6 +8,7 @@
 
 ### Changes
 
+* CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6437](https://github.com/valkey-io/valkey-glide/pull/6437))
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
 
 ## 2.5
