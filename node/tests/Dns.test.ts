@@ -59,10 +59,10 @@ async function createClient(
     if (server.isTls()) {
         return await GlideClient.createClient({
             ...baseConfig,
-            requestTimeout: 10000,
+            requestTimeout: 20000,
             useTLS: true,
             advancedConfiguration: {
-                connectionTimeout: 10000,
+                connectionTimeout: 20000,
                 tlsAdvancedConfiguration: {
                     rootCertificates: getCaCertificateData(),
                 },
@@ -89,10 +89,10 @@ async function createClusterClient(
     if (server.isTls()) {
         return await GlideClusterClient.createClient({
             ...baseConfig,
-            requestTimeout: 10000,
+            requestTimeout: 20000,
             useTLS: true,
             advancedConfiguration: {
-                connectionTimeout: 10000,
+                connectionTimeout: 20000,
                 tlsAdvancedConfiguration: {
                     rootCertificates: getCaCertificateData(),
                 },
