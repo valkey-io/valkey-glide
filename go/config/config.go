@@ -392,6 +392,37 @@ func NewClientConfiguration() *ClientConfiguration {
 	return &ClientConfiguration{}
 }
 
+// applyClientCertAndKey validates the client certificate and key for mutual TLS and, when valid, sets them on request.
+// It enforces that each value is either nil or non-empty and that both are provided together (mTLS requires both).
+func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) error {
+	// Handle client certificate for mutual TLS
+	if tlsConfig.ClientCertificate != nil {
+		if len(tlsConfig.ClientCertificate) == 0 {
+			return errors.New(
+				"client certificate cannot be an empty byte array; use nil if not providing a client certificate")
+		}
+		request.ClientCert = tlsConfig.ClientCertificate
+	}
+
+	// Handle client key for mutual TLS
+	if tlsConfig.ClientKey != nil {
+		if len(tlsConfig.ClientKey) == 0 {
+			return errors.New("client key cannot be an empty byte array; use nil if not providing a client key")
+		}
+		request.ClientKey = tlsConfig.ClientKey
+	}
+
+	// Ensure client certificate and client key are both provided or neither: mTLS requires both.
+	if len(tlsConfig.ClientCertificate) > 0 && len(tlsConfig.ClientKey) == 0 {
+		return errors.New("client certificate is provided but client key is not provided; mTLS requires both")
+	}
+	if len(tlsConfig.ClientKey) > 0 && len(tlsConfig.ClientCertificate) == 0 {
+		return errors.New("client key is provided but client certificate is not provided; mTLS requires both")
+	}
+
+	return nil
+}
+
 func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
@@ -455,6 +486,11 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
 			}
 			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		}
+
+		// Handle client certificate and key for mutual TLS
+		if err := applyClientCertAndKey(tlsConfig, request); err != nil {
+			return nil, err
 		}
 	}
 
@@ -725,6 +761,11 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 			}
 			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
 		}
+
+		// Handle client certificate and key for mutual TLS
+		if err := applyClientCertAndKey(tlsConfig, request); err != nil {
+			return nil, err
+		}
 	}
 
 	return request, nil
@@ -949,6 +990,30 @@ type TlsConfiguration struct {
 	//
 	// Default: false (verification is enforced).
 	UseInsecureTLS bool
+
+	// ClientCertificate contains the client certificate data for mutual TLS (mTLS) authentication in PEM format.
+	//
+	// When provided along with ClientKey, enables mutual TLS authentication so that the client presents its
+	// certificate to the server. This is used when the server requires client certificate authentication.
+	// If set to an empty byte array (non-nil but length 0), an error will be returned.
+	// If nil, no client certificate will be presented.
+	//
+	// Must be used together with ClientKey: providing one without the other is a configuration error.
+	//
+	// The certificate data should be in PEM format as a byte array.
+	ClientCertificate []byte
+
+	// ClientKey contains the client private key data for mutual TLS (mTLS) authentication in PEM format.
+	//
+	// When provided along with ClientCertificate, enables mutual TLS authentication. This private key
+	// corresponds to the certificate provided in ClientCertificate.
+	// If set to an empty byte array (non-nil but length 0), an error will be returned.
+	// If nil, no client key will be used.
+	//
+	// Must be used together with ClientCertificate: providing one without the other is a configuration error.
+	//
+	// The key data should be in PEM format as a byte array.
+	ClientKey []byte
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -979,6 +1044,26 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 	return config
 }
 
+// WithClientCertificate sets the client certificate used for mutual TLS (mTLS) authentication.
+// The certificate should be in PEM format.
+// Must be used together with WithClientKey; providing one without the other will result in an error during connection.
+// Pass nil to not present a client certificate (default behavior).
+// Passing an empty byte array will result in an error during connection.
+func (config *TlsConfiguration) WithClientCertificate(clientCert []byte) *TlsConfiguration {
+	config.ClientCertificate = clientCert
+	return config
+}
+
+// WithClientKey sets the client private key used for mutual TLS (mTLS) authentication.
+// The key should be in PEM format and correspond to the certificate set with WithClientCertificate.
+// Must be used together with WithClientCertificate; providing one without the other will result in an error during connection.
+// Pass nil to not use a client key (default behavior).
+// Passing an empty byte array will result in an error during connection.
+func (config *TlsConfiguration) WithClientKey(clientKey []byte) *TlsConfiguration {
+	config.ClientKey = clientKey
+	return config
+}
+
 // LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.
 // This is a convenience function for loading custom root certificates from disk.
 //
@@ -998,16 +1083,71 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 //	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certs)
 //	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 func LoadRootCertificatesFromFile(path string) ([]byte, error) {
+	return loadPEMFile(path, "certificate")
+}
+
+// loadPEMFile reads a PEM-encoded file and returns its contents, using label to
+// produce error messages identical to each dedicated loader (e.g. "certificate",
+// "client certificate", "client key").
+func loadPEMFile(path, label string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		return nil, fmt.Errorf("failed to read %s file: %w", label, err)
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("certificate file is empty: %s", path)
+		return nil, fmt.Errorf("%s file is empty: %s", label, path)
 	}
 
 	return data, nil
+}
+
+// LoadClientCertificateFromFile reads a PEM-encoded client certificate file and returns its contents as a byte array.
+// This is a convenience function for loading a client certificate from disk for mutual TLS (mTLS) authentication.
+//
+// Parameters:
+//   - path: The file path to the PEM-encoded client certificate file
+//
+// Returns:
+//   - []byte: The client certificate data in PEM format
+//   - error: An error if the file cannot be read or is empty
+//
+// Example usage:
+//
+//	clientCert, err := config.LoadClientCertificateFromFile("/path/to/client-cert.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	clientKey, err := config.LoadClientKeyFromFile("/path/to/client-key.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	tlsConfig := config.NewTlsConfiguration().
+//	    WithClientCertificate(clientCert).
+//	    WithClientKey(clientKey)
+//	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+func LoadClientCertificateFromFile(path string) ([]byte, error) {
+	return loadPEMFile(path, "client certificate")
+}
+
+// LoadClientKeyFromFile reads a PEM-encoded client private key file and returns its contents as a byte array.
+// This is a convenience function for loading a client private key from disk for mutual TLS (mTLS) authentication.
+//
+// Parameters:
+//   - path: The file path to the PEM-encoded client private key file
+//
+// Returns:
+//   - []byte: The client private key data in PEM format
+//   - error: An error if the file cannot be read or is empty
+//
+// Example usage:
+//
+//	clientKey, err := config.LoadClientKeyFromFile("/path/to/client-key.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func LoadClientKeyFromFile(path string) ([]byte, error) {
+	return loadPEMFile(path, "client key")
 }
 
 // Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].

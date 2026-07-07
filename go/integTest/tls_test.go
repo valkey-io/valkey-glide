@@ -229,6 +229,20 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 	assert.Contains(suite.T(), err.Error(), "failed to read certificate file")
 }
 
+// TestTlsLoadClientCertificateAndKeyFromFile tests the LoadClientCertificateFromFile and
+// LoadClientKeyFromFile helper functions for mutual TLS (mTLS).
+func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
+	// Test loading non-existent client certificate file
+	_, err := config.LoadClientCertificateFromFile("/nonexistent/path/client-cert.pem")
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "failed to read client certificate file")
+
+	// Test loading non-existent client key file
+	_, err = config.LoadClientKeyFromFile("/nonexistent/path/client-key.pem")
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "failed to read client key file")
+}
+
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.

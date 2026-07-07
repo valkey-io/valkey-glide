@@ -22,6 +22,7 @@
 * feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
 * Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 * Core, Java: add mTLS client certificates with automatic reloading ([#6386](https://github.com/valkey-io/valkey-glide/pull/6386))
+* Go: Add client certificate and private key support for mTLS ([#6149](https://github.com/valkey-io/valkey-glide/issues/6149))
 
 ## 2.5
 

@@ -4,10 +4,13 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
@@ -825,6 +828,276 @@ func TestTlsConfiguration_InsecureTLSDefaultValue(t *testing.T) {
 	request, err := config.ToProtobuf()
 	assert.NoError(t, err)
 	assert.Equal(t, protobuf.TlsMode_SecureTls, request.TlsMode)
+}
+
+// ============================================================================
+// Mutual TLS (mTLS) Client Certificate / Key Tests
+// ============================================================================
+
+const (
+	testClientCertData = "-----BEGIN CERTIFICATE-----\nMIICclient...\n-----END CERTIFICATE-----"
+	testClientKeyData  = "-----BEGIN PRIVATE KEY-----\nMIIEvkey...\n-----END PRIVATE KEY-----"
+)
+
+func TestTlsConfiguration_WithClientCertificateAndKey(t *testing.T) {
+	// Test that the builder methods set the client certificate and key fields
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate(clientCert).
+		WithClientKey(clientKey)
+
+	assert.NotNil(t, tlsConfig)
+	assert.Equal(t, clientCert, tlsConfig.ClientCertificate)
+	assert.Equal(t, clientKey, tlsConfig.ClientKey)
+}
+
+func TestTlsConfiguration_ClientCertKeyDefaultNil(t *testing.T) {
+	// Test that client certificate and key default to nil
+	tlsConfig := NewTlsConfiguration()
+
+	assert.Nil(t, tlsConfig.ClientCertificate)
+	assert.Nil(t, tlsConfig.ClientKey)
+}
+
+func TestStandaloneConfig_WithClientCertAndKey(t *testing.T) {
+	// Test that both client cert and key are populated into the protobuf request
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate(clientCert).
+		WithClientKey(clientKey)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, protobuf.TlsMode_SecureTls, result.TlsMode)
+	assert.Equal(t, clientCert, result.ClientCert)
+	assert.Equal(t, clientKey, result.ClientKey)
+}
+
+func TestClusterConfig_WithClientCertAndKey(t *testing.T) {
+	// Test that both client cert and key are populated into the protobuf request for cluster
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate(clientCert).
+		WithClientKey(clientKey)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, protobuf.TlsMode_SecureTls, result.TlsMode)
+	assert.Equal(t, clientCert, result.ClientCert)
+	assert.Equal(t, clientKey, result.ClientKey)
+}
+
+func TestStandaloneConfig_ClientCertWithoutKey(t *testing.T) {
+	// Test that providing a client certificate without a client key returns an error
+	tlsConfig := NewTlsConfiguration().WithClientCertificate([]byte(testClientCertData))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate is provided but client key is not provided")
+}
+
+func TestClusterConfig_ClientCertWithoutKey(t *testing.T) {
+	// Test that providing a client certificate without a client key returns an error for cluster
+	tlsConfig := NewTlsConfiguration().WithClientCertificate([]byte(testClientCertData))
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate is provided but client key is not provided")
+}
+
+func TestStandaloneConfig_ClientKeyWithoutCert(t *testing.T) {
+	// Test that providing a client key without a client certificate returns an error
+	tlsConfig := NewTlsConfiguration().WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key is provided but client certificate is not provided")
+}
+
+func TestClusterConfig_ClientKeyWithoutCert(t *testing.T) {
+	// Test that providing a client key without a client certificate returns an error for cluster
+	tlsConfig := NewTlsConfiguration().WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key is provided but client certificate is not provided")
+}
+
+func TestStandaloneConfig_EmptyClientCert(t *testing.T) {
+	// Test that an empty (non-nil, length 0) client certificate returns an error
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate([]byte{}).
+		WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate cannot be an empty byte array")
+}
+
+func TestStandaloneConfig_EmptyClientKey(t *testing.T) {
+	// Test that an empty (non-nil, length 0) client key returns an error
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate([]byte(testClientCertData)).
+		WithClientKey([]byte{})
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key cannot be an empty byte array")
+}
+
+func TestStandaloneConfig_NoClientCertOrKey(t *testing.T) {
+	// Test that omitting both client cert and key leaves the request fields unset (no mTLS)
+	tlsConfig := NewTlsConfiguration().WithRootCertificates([]byte(testCertData1))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.ClientCert)
+	assert.Nil(t, result.ClientKey)
+}
+
+func TestClusterConfig_EmptyClientCert(t *testing.T) {
+	// Test that an empty (non-nil, length 0) client certificate returns an error for cluster
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate([]byte{}).
+		WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate cannot be an empty byte array")
+}
+
+func TestClusterConfig_EmptyClientKey(t *testing.T) {
+	// Test that an empty (non-nil, length 0) client key returns an error for cluster
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate([]byte(testClientCertData)).
+		WithClientKey([]byte{})
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key cannot be an empty byte array")
+}
+
+func TestClusterConfig_NoClientCertOrKey(t *testing.T) {
+	// Test that omitting both client cert and key leaves the request fields unset for cluster (no mTLS)
+	tlsConfig := NewTlsConfiguration().WithRootCertificates([]byte(testCertData1))
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.ClientCert)
+	assert.Nil(t, result.ClientKey)
+}
+
+func TestLoadClientCertificateFromFile(t *testing.T) {
+	// Test loading a populated client certificate file
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "client-cert.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte(testClientCertData), 0o600))
+
+	data, err := LoadClientCertificateFromFile(certPath)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(testClientCertData), data)
+
+	// Test loading an empty client certificate file
+	emptyPath := filepath.Join(dir, "empty-cert.pem")
+	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
+
+	_, err = LoadClientCertificateFromFile(emptyPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate file is empty")
+
+	// Test loading a non-existent client certificate file
+	_, err = LoadClientCertificateFromFile(filepath.Join(dir, "nonexistent.pem"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read client certificate file")
+}
+
+func TestLoadClientKeyFromFile(t *testing.T) {
+	// Test loading a populated client key file
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "client-key.pem")
+	require.NoError(t, os.WriteFile(keyPath, []byte(testClientKeyData), 0o600))
+
+	data, err := LoadClientKeyFromFile(keyPath)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(testClientKeyData), data)
+
+	// Test loading an empty client key file
+	emptyPath := filepath.Join(dir, "empty-key.pem")
+	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
+
+	_, err = LoadClientKeyFromFile(emptyPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key file is empty")
+
+	// Test loading a non-existent client key file
+	_, err = LoadClientKeyFromFile(filepath.Join(dir, "nonexistent.pem"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read client key file")
 }
 
 func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
