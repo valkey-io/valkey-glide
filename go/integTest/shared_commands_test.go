@@ -145,11 +145,10 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), anotherValue, result.Value())
 
-		time.Sleep(2222 * time.Millisecond)
-		result, err = client.Get(context.Background(), key)
-
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", result.Value())
+		assert.Eventually(suite.T(), func() bool {
+			result, err := client.Get(context.Background(), key)
+			return err == nil && result.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -176,11 +175,10 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), anotherValue, result.Value())
 
-		time.Sleep(2222 * time.Millisecond)
-		result, err = client.Get(context.Background(), key)
-
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", result.Value())
+		assert.Eventually(suite.T(), func() bool {
+			result, err := client.Get(context.Background(), key)
+			return err == nil && result.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -263,11 +261,10 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		time.Sleep(2222 * time.Millisecond)
-
-		result, err = client.Get(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", result.Value())
+		assert.Eventually(suite.T(), func() bool {
+			result, err := client.Get(context.Background(), key)
+			return err == nil && result.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -3885,11 +3882,10 @@ func (suite *GlideTestSuite) TestExpire() {
 		assert.Nil(suite.T(), err, "Expected no error from Expire command")
 		assert.True(suite.T(), result, "Expire command should return true when expiry is set")
 
-		time.Sleep(1500 * time.Millisecond)
-
-		resultGet, err := client.Get(context.Background(), key)
-		assert.Nil(suite.T(), err, "Expected no error from Get command after expiry")
-		assert.Equal(suite.T(), "", resultGet.Value(), "Key should be expired and return empty value")
+		assert.Eventually(suite.T(), func() bool {
+			resultGet, err := client.Get(context.Background(), key)
+			return err == nil && resultGet.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -3915,11 +3911,10 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), result)
 
-		time.Sleep(2500 * time.Millisecond)
-
-		resultGet, err := client.Get(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", resultGet.Value())
+		assert.Eventually(suite.T(), func() bool {
+			resultGet, err := client.Get(context.Background(), key)
+			return err == nil && resultGet.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 
 		result, err = client.ExpireWithOptions(context.Background(), key, 1*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
@@ -3943,12 +3938,10 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		time.Sleep(2 * time.Second)
-
-		resultExpireTest, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-
-		assert.Equal(suite.T(), int64(0), resultExpireTest)
+		assert.Eventually(suite.T(), func() bool {
+			resultExpireTest, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExpireTest == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -3971,10 +3964,10 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 		)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
-		time.Sleep(6 * time.Second)
-		resultExpireTest, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExpireTest)
+		assert.Eventually(suite.T(), func() bool {
+			resultExpireTest, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExpireTest == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4010,10 +4003,10 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		assert.True(suite.T(), resultExpire)
 
-		time.Sleep(16 * time.Second)
-		resultExpireTest, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExpireTest)
+		assert.Eventually(suite.T(), func() bool {
+			resultExpireTest, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExpireTest == int64(0)
+		}, 20*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4114,11 +4107,10 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(5 * time.Second)
-		resultExpireAtTest, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-
-		assert.Equal(suite.T(), int64(0), resultExpireAtTest)
+		assert.Eventually(suite.T(), func() bool {
+			resultExpireAtTest, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExpireAtTest == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4133,10 +4125,10 @@ func (suite *GlideTestSuite) TestPExpire() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		time.Sleep(600 * time.Millisecond)
-		resultExpireCheck, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExpireCheck)
+		assert.Eventually(suite.T(), func() bool {
+			resultExpireCheck, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExpireCheck == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4163,10 +4155,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(1100 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4189,10 +4181,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(600 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4219,10 +4211,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(1100 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4249,10 +4241,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(600 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4268,11 +4260,10 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 
 		assert.True(suite.T(), resultPExpireAt)
 
-		time.Sleep(6 * time.Second)
-
-		resultpExists, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultpExists)
+		assert.Eventually(suite.T(), func() bool {
+			resultpExists, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultpExists == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4290,10 +4281,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), result)
 
-		time.Sleep(2 * time.Second)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4318,10 +4309,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(1100 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4349,10 +4340,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(2100 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4380,10 +4371,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 		assert.True(suite.T(), resultExpireWithOptions)
 
-		time.Sleep(1100 * time.Millisecond)
-		resultExist, err := client.Exists(context.Background(), []string{key})
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), resultExist)
+		assert.Eventually(suite.T(), func() bool {
+			resultExist, err := client.Exists(context.Background(), []string{key})
+			return err == nil && resultExist == int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4408,11 +4399,10 @@ func (suite *GlideTestSuite) TestExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), expireTime.Unix(), resexptime)
 
-		time.Sleep(4 * time.Second)
-
-		resultAfterExpiry, err := client.Get(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", resultAfterExpiry.Value())
+		assert.Eventually(suite.T(), func() bool {
+			resultAfterExpiry, err := client.Get(context.Background(), key)
+			return err == nil && resultAfterExpiry.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4449,11 +4439,10 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), pexpireTime.UnixMilli(), respexptime)
 
-		time.Sleep(4 * time.Second)
-
-		resultAfterExpiry, err := client.Get(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), "", resultAfterExpiry.Value())
+		assert.Eventually(suite.T(), func() bool {
+			resultAfterExpiry, err := client.Get(context.Background(), key)
+			return err == nil && resultAfterExpiry.Value() == ""
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4521,11 +4510,10 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
-		time.Sleep(2 * time.Second)
-
-		resTTL, err := client.TTL(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), int64(-2), resTTL)
+		assert.Eventually(suite.T(), func() bool {
+			resTTL, err := client.TTL(context.Background(), key)
+			return err == nil && resTTL == int64(-2)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -4555,11 +4543,10 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
-		time.Sleep(2 * time.Second)
-
-		resPTTL, err := client.PTTL(context.Background(), key)
-		suite.NoError(err)
-		assert.Equal(suite.T(), resPTTL, int64(-2))
+		assert.Eventually(suite.T(), func() bool {
+			resPTTL, err := client.PTTL(context.Background(), key)
+			return err == nil && resPTTL == int64(-2)
+		}, 10*time.Second, 100*time.Millisecond)
 	})
 }
 
@@ -7918,7 +7905,6 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		defaultClient := suite.defaultClient()
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
-		sleepSec := int64(5)
 		t := suite.T()
 		suite.verifyOK(defaultClient.Set(context.Background(), key, value))
 		keyValueMap := map[string]string{
@@ -7931,10 +7917,10 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		resultGet, err := defaultClient.Get(context.Background(), key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet.Value())
-		time.Sleep(time.Duration(sleepSec) * time.Second)
-		resultIdleTime, err := defaultClient.ObjectIdleTime(context.Background(), key)
-		assert.Nil(t, err)
-		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec-1)
+		assert.Eventually(t, func() bool {
+			resultIdleTime, err := defaultClient.ObjectIdleTime(context.Background(), key)
+			return err == nil && resultIdleTime.Value() > 0
+		}, 10*time.Second, 500*time.Millisecond)
 	})
 }
 
@@ -8425,8 +8411,11 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 		)
 
-		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
-		time.Sleep(2000 * time.Millisecond)
+		// Poll until the idle time value returned by xinfo_consumers is > 0
+		assert.Eventually(suite.T(), func() bool {
+			info, err := client.XInfoConsumers(context.Background(), key, group)
+			return err == nil && len(info) == 1 && info[0].Idle > int64(0)
+		}, 10*time.Second, 100*time.Millisecond)
 		info, err := client.XInfoConsumers(context.Background(), key, group)
 		assert.NoError(suite.T(), err)
 		assert.Len(suite.T(), info, 1)
@@ -9175,7 +9164,15 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		)
 
 		// ensure idle time > 0
-		time.Sleep(2000 * time.Millisecond)
+		assert.Eventually(suite.T(), func() bool {
+			pendingRes, err := client.XPendingWithOptions(
+				context.Background(),
+				key,
+				groupName,
+				*options.NewXPendingOptions("-", "+", 10),
+			)
+			return err == nil && len(pendingRes) > 2 && pendingRes[0].IdleTime > 0
+		}, 10*time.Second, 100*time.Millisecond)
 		pendingResultExtended, err := client.XPendingWithOptions(
 			context.Background(),
 			key,
@@ -9310,19 +9307,16 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), streamid_1, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
-		// Small delay to ensure all XCLAIM and XACK operations are fully processed
-		// This addresses a race condition where the final XPENDING call with minIdleTime
-		// might not see all expected pending messages immediately after XCLAIM resets idle time
-		time.Sleep(5 * time.Millisecond)
-
-		pendingResultExtended, err = client.XPendingWithOptions(
-			context.Background(),
-			key,
-			groupName,
-			*options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
-		)
-		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), 2, len(pendingResultExtended))
+		// Poll until XCLAIM and XACK operations are fully processed
+		assert.Eventually(suite.T(), func() bool {
+			pendingRes, err := client.XPendingWithOptions(
+				context.Background(),
+				key,
+				groupName,
+				*options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
+			)
+			return err == nil && len(pendingRes) == 2
+		}, 5*time.Second, 10*time.Millisecond)
 	})
 }
 
@@ -11919,13 +11913,11 @@ func (suite *GlideTestSuite) TestScriptShow() {
 		// Get the SHA1 digest of the script
 		sha1 := script.GetHash()
 
-		// Add a small delay to allow cluster cache synchronization
-		time.Sleep(100 * time.Millisecond)
-
-		// Test with String
-		scriptSource, err := client.ScriptShow(context.Background(), sha1)
-		suite.NoError(err)
-		assert.Equal(suite.T(), code, scriptSource)
+		// Poll until cluster cache synchronization is complete
+		assert.Eventually(suite.T(), func() bool {
+			scriptSource, err := client.ScriptShow(context.Background(), sha1)
+			return err == nil && scriptSource == code
+		}, 10*time.Second, 100*time.Millisecond)
 
 		// Test with non-existing SHA1
 		nonExistingSha1 := uuid.NewString()

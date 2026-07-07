@@ -43,7 +43,7 @@ import {
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     encodableBatchTest,
-    flushAndCloseClient,
+    flushClient,
     generateLuaLibCode,
     getClientConfigurationOption,
     getRandomKey,
@@ -67,6 +67,9 @@ describe("GlideClient", () => {
     let azCluster: ValkeyCluster;
     let client: GlideClient;
     let azClient: GlideClient;
+    let lastProtocol: ProtocolVersion | undefined;
+    let pooledClient: GlideClient | undefined;
+    let pooledAzClient: GlideClient | undefined;
     beforeAll(async () => {
         const standaloneAddresses: string =
             global.STAND_ALONE_ENDPOINT as string;
@@ -91,13 +94,26 @@ describe("GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster?.getAddresses(), client);
-        // Add small delay between cluster cleanups to prevent socket exhaustion
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        await flushAndCloseClient(false, azCluster?.getAddresses(), azClient);
+        await flushClient(client);
+        await flushClient(azClient);
+
+        // Close clients that were created by standalone tests (not pooled).
+        // Pooled clients are kept alive for reuse in runBaseTests.init().
+        if (client && client !== pooledClient) {
+            client.close();
+            client = undefined!;
+        }
+
+        if (azClient && azClient !== pooledAzClient) {
+            azClient.close();
+            azClient = undefined!;
+        }
     });
 
     afterAll(async () => {
+        client?.close();
+        azClient?.close();
+
         if (testsFailed === 0) {
             await cluster.close();
             // Add small delay between cluster closures to prevent socket contention
@@ -2184,7 +2200,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
-            client = await GlideClient.createClient(config);
+
+            // Recreate client if config changed or client is dead
+            if (configOverrides || !client || protocol !== lastProtocol) {
+                client?.close();
+                client = await GlideClient.createClient(config);
+            } else {
+                try {
+                    await client.ping();
+                } catch {
+                    client = await GlideClient.createClient(config);
+                }
+            }
 
             const configNew = getClientConfigurationOption(
                 azCluster.getAddresses(),
@@ -2192,9 +2219,22 @@ describe("GlideClient", () => {
                 configOverrides,
             );
 
+            // Recreate azClient if config changed or client is dead
+            if (configOverrides || !azClient || protocol !== lastProtocol) {
+                azClient?.close();
+                azClient = await GlideClient.createClient(configNew);
+            } else {
+                try {
+                    await azClient.ping();
+                } catch {
+                    azClient = await GlideClient.createClient(configNew);
+                }
+            }
+
+            lastProtocol = protocol;
+            pooledClient = client;
+            pooledAzClient = azClient;
             testsFailed += 1;
-            azClient = await GlideClient.createClient(configNew);
-            client = await GlideClient.createClient(config);
             return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {

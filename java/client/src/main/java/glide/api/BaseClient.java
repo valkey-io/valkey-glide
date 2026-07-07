@@ -606,6 +606,15 @@ public abstract class BaseClient
     }
 
     /**
+     * Returns the number of pubsub messages currently buffered and ready for consumption.
+     *
+     * @return The number of buffered messages.
+     */
+    public int getPubSubMessageCount() {
+        return messageHandler.getQueue().size();
+    }
+
+    /**
      * Closes this resource, relinquishing any underlying resources. This method is invoked
      * automatically on objects managed by the try-with-resources statement.
      *
