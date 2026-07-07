@@ -24,6 +24,7 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
+    retryWithBackoff,
 } from "./TestUtilities";
 
 /**
@@ -1002,12 +1003,14 @@ describe("OpenTelemetry parent span context propagation", () => {
                 fs.unlinkSync(VALID_ENDPOINT_TRACES);
             }
 
-            client = await GlideClusterClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            });
+            client = await retryWithBackoff(() =>
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                    ),
+                }),
+            );
 
             await client.set(
                 "ctx_propagation_test_key",
@@ -1072,12 +1075,14 @@ describe("OpenTelemetry parent span context propagation", () => {
                 fs.unlinkSync(VALID_ENDPOINT_TRACES);
             }
 
-            client = await GlideClusterClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            });
+            client = await retryWithBackoff(() =>
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                    ),
+                }),
+            );
 
             // Commands must succeed despite the invalid parent context
             await client.set("fallback_test_key", "fallback_test_value");
