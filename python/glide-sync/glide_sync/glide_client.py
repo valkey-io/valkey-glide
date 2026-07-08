@@ -424,12 +424,22 @@ class BaseClient(CoreCommands):
         finally:
             self._lib.free_command_result(command_result)
 
+    @staticmethod
+    def _validate_response_buffers(response_buffers: List[memoryview]) -> None:
+        """Each buffer for a multi-value read must be writable and contiguous."""
+        for mv in response_buffers:
+            if mv.readonly:
+                raise TypeError("response_buffers entries must be writable")
+            if not mv.c_contiguous:
+                raise TypeError("response_buffers entries must be C-contiguous")
+
     def _execute_command(
         self,
         request_type: RequestType.ValueType,  # type: ignore[override]
         args: List[TEncodable],
         route: Optional[Route] = None,
         response_buffer: Optional[memoryview] = None,
+        response_buffers: Optional[List[memoryview]] = None,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
@@ -443,6 +453,8 @@ class BaseClient(CoreCommands):
                 raise TypeError("response_buffer must be writable")
             if not response_buffer.c_contiguous:
                 raise TypeError("response_buffer must be C-contiguous")
+        if response_buffers is not None:
+            self._validate_response_buffers(response_buffers)
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         from .opentelemetry import OpenTelemetry
@@ -463,30 +475,53 @@ class BaseClient(CoreCommands):
             # Route bytes should be kept alive in the scope of the FFI call
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-            buf_ptr = (
-                self._ffi.from_buffer(response_buffer)
-                if response_buffer
-                else self._ffi.NULL
-            )
-            # Capacity must be expressed in bytes, not elements. ``len()`` on a
-            # memoryview returns the element count (``shape[0]``), which equals
-            # the byte count only for itemsize-1 formats (e.g. "B"). For any
-            # itemsize > 1 view (e.g. "I"/"Q"/float) it under-reports capacity,
-            # causing the FFI to spuriously reject values that actually fit.
-            buf_len = response_buffer.nbytes if response_buffer else 0
-            result = self._lib.command_with_buffer(
-                client_adapter_ptr,
-                0,
-                request_type,
-                len(args),
-                c_args,
-                c_lengths,
-                route_ptr,
-                route_len,
-                buf_ptr,
-                buf_len,
-                span,
-            )
+            if response_buffers is not None:
+                # One writable buffer per top-level array element (e.g. mget):
+                # each value is copied straight into its caller-owned buffer.
+                # The from_buffer cdata must stay alive for the call, so keep
+                # the list referenced until command_with_buffers returns.
+                target_ptrs = [self._ffi.from_buffer(mv) for mv in response_buffers]
+                target_bufs = self._ffi.new("uint8_t*[]", target_ptrs)
+                target_lens = self._ffi.new(
+                    "size_t[]", [mv.nbytes for mv in response_buffers]
+                )
+                result = self._lib.command_with_buffers(
+                    client_adapter_ptr,
+                    0,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    target_bufs,
+                    target_lens,
+                    len(response_buffers),
+                    span,
+                )
+            else:
+                buf_ptr = (
+                    self._ffi.from_buffer(response_buffer)
+                    if response_buffer
+                    else self._ffi.NULL
+                )
+                # Capacity must be expressed in bytes, not elements. ``len()`` on
+                # a memoryview returns the element count (``shape[0]``), which
+                # equals the byte count only for itemsize-1 formats (e.g. "B").
+                buf_len = response_buffer.nbytes if response_buffer else 0
+                result = self._lib.command_with_buffer(
+                    client_adapter_ptr,
+                    0,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    buf_ptr,
+                    buf_len,
+                    span,
+                )
         finally:
             # Drop span if it was created
             if span != 0:
