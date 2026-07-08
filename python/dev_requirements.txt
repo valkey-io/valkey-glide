@@ -1,4 +1,4 @@
-maturin==1.13.3
+maturin==1.14.1
 anyio[trio]>=4.9.0
 uvloop
 pytest<9.1
