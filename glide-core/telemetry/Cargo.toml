@@ -17,7 +17,7 @@ thiserror = "2"
 url = "2"
 async-trait = "0.1"
 opentelemetry = { version = "0.27", features = ["metrics"] }
-opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics"] }
+opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio", "metrics"] }
 opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
 once_cell = "1"
 logger_core = { path = "../../logger_core" }
