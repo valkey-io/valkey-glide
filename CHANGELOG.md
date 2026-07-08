@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Fix MONITOR dropping all lines when the server packs the first monitor line into the same TCP segment as the `MONITOR` `+OK` reply. `Monitor::into_on_message` discarded the connection decoder's buffered bytes and rebuilt a codec over the bare socket, so it resumed parsing mid-frame, hit a parse error, and terminated the stream before delivering a single line. The framed read buffer is now seeded with the leftover bytes. This also deflakes `test_monitor_start_and_receive_line`. ([#6161](https://github.com/valkey-io/valkey-glide/issues/6161))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 
 ### Changes

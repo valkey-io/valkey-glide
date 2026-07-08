@@ -24,7 +24,7 @@ use futures_util::{
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 #[cfg(feature = "tokio-comp")]
-use tokio_util::codec::Decoder;
+use tokio_util::codec::{Decoder, Framed, FramedParts};
 
 /// Represents a stateful redis TCP connection.
 #[deprecated(note = "aio::Connection is deprecated. Use aio::MultiplexedConnection instead.")]
@@ -380,11 +380,20 @@ where
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
     pub fn into_on_message<T: FromRedisValue>(self) -> impl Stream<Item = T> {
-        ValueCodec::default()
-            .framed(self.0.con)
-            .filter_map(|value| {
-                Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
-            })
+        // The `MONITOR` handshake is parsed through `self.0.decoder`, which reads
+        // from the socket in chunks. Under load the server can pack the first
+        // monitor line(s) into the same TCP segment as the `+OK` handshake reply,
+        // leaving those bytes buffered inside the decoder. If we built the stream's
+        // codec over the bare socket we would discard that buffer, resume parsing
+        // mid-frame, hit a parse error, and terminate the stream before delivering
+        // a single line. Seed the framed read buffer with the leftover bytes so no
+        // already-received monitor line is lost.
+        let leftover = self.0.decoder.buffer();
+        let mut parts = FramedParts::new::<Vec<u8>>(self.0.con, ValueCodec::default());
+        parts.read_buf = bytes::BytesMut::from(leftover);
+        Framed::from_parts(parts).filter_map(|value| {
+            Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
+        })
     }
 }
 

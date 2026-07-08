@@ -72,8 +72,10 @@ mod test_monitor {
             .await
             .unwrap();
 
-        // Generous deadline to tolerate slow/loaded CI; not a behavioral change.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        // The monitor stream is deterministically ready before `new()` returns and no
+        // longer drops the first lines under load (see MonitorClient / redis-rs
+        // `Monitor::into_on_message`), so a modest deadline is sufficient.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if lines.lock().unwrap().iter().any(|l| {
                 l.command == "SET" && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key")
