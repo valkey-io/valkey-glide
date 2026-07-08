@@ -2039,7 +2039,25 @@ describe("GlideClient", () => {
                         .length;
                 };
 
-                const clientsBeforeLazyInit = await getClientCount();
+                // Wait for CLIENT LIST to stabilize before taking baseline.
+                // Previous tests may have closed connections that the server
+                // hasn't fully removed yet; polling until the count is stable
+                // ensures stale entries are gone before we measure.
+                let clientsBeforeLazyInit = await getClientCount();
+                const stabilizeStart = Date.now();
+
+                while (Date.now() - stabilizeStart < 5000) {
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, 100),
+                    );
+                    const current = await getClientCount();
+
+                    if (current === clientsBeforeLazyInit) {
+                        break;
+                    }
+
+                    clientsBeforeLazyInit = current;
+                }
 
                 // Create lazy client
                 const lazyClient = await GlideClient.createClient(
