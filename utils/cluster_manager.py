@@ -552,10 +552,28 @@ def create_servers(
             )
             continue
         if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
-            raise Exception(
-                f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
-                f"See {node_folder}/server.log for more information"
+            # Server didn't start in time - retry on a new port if ports were not fixed
+            if ports is not None:
+                raise Exception(
+                    f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
+                    f"See {node_folder}/server.log for more information"
+                )
+            logging.warning(
+                f"Server {server.host}:{server.port} didn't start in time, retrying on a new port"
             )
+            remove_folder(node_folder)
+            servers_to_check.add(
+                start_server(
+                    server.host,
+                    None,
+                    cluster_folder,
+                    tls,
+                    tls_args,
+                    cluster_mode,
+                    load_module,
+                )
+            )
+            continue
         ready_servers.append(server)
     logging.debug("All servers are up!")
     toc = time.perf_counter()
