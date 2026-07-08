@@ -104,12 +104,12 @@ describe("NAPI Client Integration Tests", () => {
 
                 const getResult = await client.get("test-key");
                 expect(getResult).toBe("test-value");
-            });
+            }, TIMEOUT);
 
             it("should handle null responses", async () => {
                 const result = await client.get("nonexistent-key");
                 expect(result).toBeNull();
-            });
+            }, TIMEOUT);
 
             it("should handle numeric responses", async () => {
                 await client.set("counter", "0");
@@ -118,7 +118,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const result2 = await client.incrBy("counter", 5);
                 expect(result2).toBe(6);
-            });
+            }, TIMEOUT);
 
             it("should handle array responses", async () => {
                 await client.set("key1", "val1");
@@ -130,7 +130,7 @@ describe("NAPI Client Integration Tests", () => {
                     "nonexistent",
                 ]);
                 expect(result).toEqual(["val1", "val2", null]);
-            });
+            }, TIMEOUT);
 
             it("should handle hash responses", async () => {
                 await client.hset("myhash", { field1: "val1", field2: "val2" });
@@ -138,13 +138,13 @@ describe("NAPI Client Integration Tests", () => {
                 const result = await client.hgetall("myhash");
                 // Result is a GlideRecord or object
                 expect(result).toBeDefined();
-            });
+            }, TIMEOUT);
 
             it("should handle float responses", async () => {
                 await client.set("floatkey", "3.14");
                 const result = await client.incrByFloat("floatkey", 0.01);
                 expect(result).toBeCloseTo(3.15, 2);
-            });
+            }, TIMEOUT);
 
             it("should handle binary data", async () => {
                 const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xff]);
@@ -155,7 +155,7 @@ describe("NAPI Client Integration Tests", () => {
                 });
                 expect(Buffer.isBuffer(result)).toBe(true);
                 expect(result).toEqual(binaryData);
-            });
+            }, TIMEOUT);
 
             it("should handle large values", async () => {
                 const largeValue = "x".repeat(1024 * 1024); // 1MB
@@ -163,7 +163,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const result = await client.get("large-key");
                 expect(result).toBe(largeValue);
-            });
+            }, TIMEOUT);
         });
 
         describe("Batch Operations (Pipeline)", () => {
@@ -176,7 +176,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const results = await client.exec(batch, true);
                 expect(results).toEqual(["OK", "OK", "val1", "val2"]);
-            });
+            }, TIMEOUT);
 
             it("should handle errors in pipeline batch", async () => {
                 const batch = new Batch(false);
@@ -190,7 +190,7 @@ describe("NAPI Client Integration Tests", () => {
                 expect(results?.[1]).not.toBeNull();
                 expect((results?.[1] as Error).message).toContain("integer");
                 expect(results?.[2]).toBe("not-a-number");
-            });
+            }, TIMEOUT);
 
             it("should return RequestError instances for batch errors", async () => {
                 // Run a batch with an intentional error (e.g., LPOP on a string key)
@@ -211,7 +211,7 @@ describe("NAPI Client Integration Tests", () => {
                     "WRONGTYPE",
                 );
                 expect(result![2]).toBe("value");
-            });
+            }, TIMEOUT);
 
             it("should run large batch", async () => {
                 const batch = new Batch(false);
@@ -237,7 +237,7 @@ describe("NAPI Client Integration Tests", () => {
                 for (let i = 0; i < count; i++) {
                     expect(results?.[count + i]).toBe(`value-${i}`);
                 }
-            });
+            }, TIMEOUT);
         });
 
         describe("Transaction Operations", () => {
@@ -249,7 +249,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const results = await client.exec(tx, true);
                 expect(results).toEqual(["OK", "OK", "val1"]);
-            });
+            }, TIMEOUT);
 
             it("should handle transaction with watch", async () => {
                 await client.set("watched-key", "initial");
@@ -263,7 +263,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const results = await client.exec(tx, true);
                 expect(results).toEqual(["OK", "modified"]);
-            });
+            }, TIMEOUT);
         });
 
         describe("Script Operations", () => {
@@ -278,7 +278,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     script.release();
                 }
-            });
+            }, TIMEOUT);
 
             it("should run script with keys", async () => {
                 await client.set("script-key", "script-value");
@@ -293,7 +293,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     script.release();
                 }
-            });
+            }, TIMEOUT);
 
             it("should cache script and reuse", async () => {
                 const script = new Script("return ARGV[1] .. ARGV[2]");
@@ -313,7 +313,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     script.release();
                 }
-            });
+            }, TIMEOUT);
         });
 
         describe("Error Handling", () => {
@@ -323,7 +323,7 @@ describe("NAPI Client Integration Tests", () => {
                 await expect(
                     client.lpush("string-key", ["item"]),
                 ).rejects.toThrow(RequestError);
-            });
+            }, TIMEOUT);
 
             it("should throw error after close", async () => {
                 const tempClient = await GlideClient.createClient({
@@ -334,7 +334,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 // Commands after close should fail
                 await expect(tempClient.get("key")).rejects.toThrow();
-            });
+            }, TIMEOUT);
         });
 
         describe("Error Propagation", () => {
@@ -348,7 +348,7 @@ describe("NAPI Client Integration Tests", () => {
                     /closed/i,
                 );
                 script.release();
-            });
+            }, TIMEOUT);
 
             it("should throw ClosingError for updateConnectionPassword on closed client", async () => {
                 const tempClient = await GlideClient.createClient({
@@ -358,7 +358,7 @@ describe("NAPI Client Integration Tests", () => {
                 await expect(
                     tempClient.updateConnectionPassword("newpass"),
                 ).rejects.toThrow(/closed/i);
-            });
+            }, TIMEOUT);
         });
 
         describe("Connection Management", () => {
@@ -426,7 +426,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     limitedClient.close();
                 }
-            });
+            }, TIMEOUT);
 
             it("should enforce inflight limit for script invocations", async () => {
                 const limitedClient = await GlideClient.createClient({
@@ -458,7 +458,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     limitedClient.close();
                 }
-            });
+            }, TIMEOUT);
 
             it("should enforce inflight limit for batch operations", async () => {
                 const limitedClient = await GlideClient.createClient({
@@ -489,7 +489,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     limitedClient.close();
                 }
-            });
+            }, TIMEOUT);
         });
 
         describe("Protocol Versions", () => {
@@ -511,7 +511,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     resp2Client.close();
                 }
-            });
+            }, TIMEOUT);
 
             it("should work with RESP3", async () => {
                 const resp3Client = await GlideClient.createClient({
@@ -531,7 +531,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     resp3Client.close();
                 }
-            });
+            }, TIMEOUT);
         });
 
         describe("Client Lifecycle", () => {
@@ -563,7 +563,7 @@ describe("NAPI Client Integration Tests", () => {
                 expect(
                     (tempClient as unknown as { isClosed: boolean }).isClosed,
                 ).toBe(true);
-            });
+            }, TIMEOUT);
 
             it("should handle double close gracefully", async () => {
                 const tempClient = await GlideClient.createClient({
@@ -575,7 +575,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 // Second close should not throw
                 expect(() => tempClient.close()).not.toThrow();
-            });
+            }, TIMEOUT);
 
             it("should throw ClosingError for operations after close", async () => {
                 const tempClient = await GlideClient.createClient({
@@ -587,7 +587,7 @@ describe("NAPI Client Integration Tests", () => {
                 await expect(tempClient.get("key")).rejects.toThrow(
                     ClosingError,
                 );
-            });
+            }, TIMEOUT);
         });
     });
 
@@ -621,7 +621,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 expect(result1).toBe("alice");
                 expect(result2).toBe("bob");
-            });
+            }, TIMEOUT);
 
             it("should handle cluster info command", async () => {
                 const info = await clusterClient.info({
@@ -631,7 +631,7 @@ describe("NAPI Client Integration Tests", () => {
                 // With randomNode route, response is a string from a single node
                 expect(typeof info).toBe("string");
                 expect(info).toContain("cluster_enabled");
-            });
+            }, TIMEOUT);
         });
 
         describe("Cluster Scan", () => {
@@ -652,7 +652,7 @@ describe("NAPI Client Integration Tests", () => {
                 } while (!cursor.isFinished());
 
                 expect(allKeys.length).toBeGreaterThanOrEqual(10);
-            });
+            }, TIMEOUT);
 
             it("should scan with pattern match", async () => {
                 for (let i = 0; i < 5; i++) {
@@ -675,7 +675,7 @@ describe("NAPI Client Integration Tests", () => {
                 matchedKeys.forEach((key) => {
                     expect(key.toString()).toMatch(/^pattern-a-/);
                 });
-            });
+            }, TIMEOUT);
         });
 
         describe("Cluster Batch Operations", () => {
@@ -687,7 +687,7 @@ describe("NAPI Client Integration Tests", () => {
 
                 const results = await clusterClient.exec(batch, true);
                 expect(results).toEqual(["OK", "OK", "val1"]);
-            });
+            }, TIMEOUT);
 
             it("should run cluster transaction", async () => {
                 const tx = new ClusterTransaction();
@@ -699,7 +699,7 @@ describe("NAPI Client Integration Tests", () => {
                 expect(results?.[0]).toBe("OK");
                 expect(results?.[1]).toBe("OK");
                 expect(results?.[2]).toEqual(["val1", "val2"]);
-            });
+            }, TIMEOUT);
         });
 
         describe("Cluster Routing", () => {
@@ -709,7 +709,7 @@ describe("NAPI Client Integration Tests", () => {
                 });
                 // Result is a map of node -> count or a number
                 expect(result).toBeDefined();
-            });
+            }, TIMEOUT);
 
             it("should route to random node", async () => {
                 const result = await clusterClient.info({
@@ -718,7 +718,7 @@ describe("NAPI Client Integration Tests", () => {
                 });
                 // Info with routing returns object mapping
                 expect(result).toBeDefined();
-            });
+            }, TIMEOUT);
 
             it("should reject invalid route by address port", async () => {
                 await expect(
@@ -731,7 +731,7 @@ describe("NAPI Client Integration Tests", () => {
                         },
                     }),
                 ).rejects.toThrow(RequestError);
-            });
+            }, TIMEOUT);
 
             it("should reject invalid route before reserving callback state", async () => {
                 const internals = clusterClient as unknown as {
@@ -787,7 +787,7 @@ describe("NAPI Client Integration Tests", () => {
                 } finally {
                     script.release();
                 }
-            });
+            }, TIMEOUT);
         });
     });
 
@@ -822,7 +822,7 @@ describe("NAPI Client Integration Tests", () => {
             // Final value should be count
             const finalValue = await client.get("rapid-counter");
             expect(parseInt(finalValue as string, 10)).toBe(count);
-        });
+        }, TIMEOUT);
 
         it("should handle mixed command types rapidly", async () => {
             const promises = [];
@@ -835,6 +835,6 @@ describe("NAPI Client Integration Tests", () => {
 
             const results = await Promise.all(promises);
             expect(results.length).toBe(300);
-        });
+        }, TIMEOUT);
     });
 });
