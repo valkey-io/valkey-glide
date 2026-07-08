@@ -45,8 +45,10 @@ LIB_FILE = find_libglide_ffi(CURR_DIR)
 
 class _GlideFFI:
     """
-    FFI manager. Creates separate instances per package to avoid
-    cross-thread CFFI state corruption.
+    FFI manager. Each package (glide-async, glide-sync) creates its own instance
+    to avoid corrupting CFFI's internal Python-side state (type cache, callback
+    registry, GC tracking) when accessed from different threads. The underlying
+    Rust library is the same shared object with process-global state regardless.
     """
 
     def __init__(self):
@@ -137,6 +139,21 @@ class _GlideFFI:
                 size_t route_bytes_len,
                 uint8_t* target_buf,
                 size_t target_len,
+                uint64_t span_ptr
+            );
+
+            CommandResult* command_with_buffers(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int command_type,
+                unsigned long arg_count,
+                const size_t *args,
+                const unsigned long* args_len,
+                const unsigned char* route_bytes,
+                size_t route_bytes_len,
+                uint8_t** response_bufs,
+                size_t* response_buf_lens,
+                size_t response_buf_count,
                 uint64_t span_ptr
             );
 
@@ -235,6 +252,7 @@ class _GlideFFI:
             void init_async_pipe(int pipe_write_fd);
 
             void free_pipe_error_string(char* ptr);
+            void free_pubsub_pointer_payload(uint8_t* ptr, size_t len);
 
             void free_connection_response(ConnectionResponse* connection_response_ptr);
 
@@ -363,6 +381,27 @@ class _GlideFFI:
             } Statistics;
 
             Statistics get_statistics();
+
+            // ============== MONITOR ==============
+            typedef void (*MonitorCallback)(
+                uintptr_t client_ptr,
+                double timestamp,
+                int64_t db,
+                const uint8_t* client_addr,
+                int64_t client_addr_len,
+                const uint8_t* command,
+                int64_t command_len,
+                const uint8_t* args_json,
+                int64_t args_json_len
+            );
+
+            const ConnectionResponse* create_monitor_client(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                MonitorCallback monitor_callback
+            );
+
+            void close_monitor_client(const void* client_ptr);
 
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);

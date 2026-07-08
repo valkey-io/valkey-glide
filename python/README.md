@@ -14,7 +14,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 
 ## Documentation
 
-See GLIDE's Python [documentation site](https://glide.valkey.io/languages/python).
+See GLIDE's Python [documentation site](https://glide.valkey.io/getting-started/quickstart/?lang=python).
 
 ## Supported Engine Versions
 

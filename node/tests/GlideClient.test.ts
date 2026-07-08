@@ -16,12 +16,14 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
     ClientPauseMode,
+    ClientSideCache,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
     GlideClient,
     GlideRecord,
     GlideString,
+    InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
@@ -32,6 +34,7 @@ import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
+    assertClientTrackingInfo,
     assertConnected,
     batchTest,
     checkFunctionListResponse,
@@ -40,7 +43,7 @@ import {
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     encodableBatchTest,
-    flushAndCloseClient,
+    flushClient,
     generateLuaLibCode,
     getClientConfigurationOption,
     getRandomKey,
@@ -64,6 +67,9 @@ describe("GlideClient", () => {
     let azCluster: ValkeyCluster;
     let client: GlideClient;
     let azClient: GlideClient;
+    let lastProtocol: ProtocolVersion | undefined;
+    let pooledClient: GlideClient | undefined;
+    let pooledAzClient: GlideClient | undefined;
     beforeAll(async () => {
         const standaloneAddresses: string =
             global.STAND_ALONE_ENDPOINT as string;
@@ -88,13 +94,26 @@ describe("GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster?.getAddresses(), client);
-        // Add small delay between cluster cleanups to prevent socket exhaustion
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        await flushAndCloseClient(false, azCluster?.getAddresses(), azClient);
+        await flushClient(client);
+        await flushClient(azClient);
+
+        // Close clients that were created by standalone tests (not pooled).
+        // Pooled clients are kept alive for reuse in runBaseTests.init().
+        if (client && client !== pooledClient) {
+            client.close();
+            client = undefined!;
+        }
+
+        if (azClient && azClient !== pooledAzClient) {
+            azClient.close();
+            azClient = undefined!;
+        }
     });
 
     afterAll(async () => {
+        client?.close();
+        azClient?.close();
+
         if (testsFailed === 0) {
             await cluster.close();
             // Add small delay between cluster closures to prevent socket contention
@@ -765,7 +784,9 @@ describe("GlideClient", () => {
         "migrate test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key = getRandomKey();
@@ -799,16 +820,117 @@ describe("GlideClient", () => {
                 }),
             ).rejects.toThrow();
 
+            // Multi-key: NOKEY when keys do not exist
+            const key2 = getRandomKey();
+            const key3 = getRandomKey();
+            expect(
+                await client.migrate(
+                    serverHost,
+                    serverPort,
+                    [key2, key3],
+                    0,
+                    1000,
+                ),
+            ).toEqual("NOKEY");
+
+            // Multi-key: error on invalid host
+            await client.set(key2, "value2");
+            await client.set(key3, "value3");
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000),
+            ).rejects.toThrow();
+
+            // Multi-key: error with options
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    copy: true,
+                    replace: true,
+                }),
+            ).rejects.toThrow();
+
+            // Multi-key: empty keys array throws
+            await expect(
+                client.migrate(serverHost, serverPort, [], 0, 1000),
+            ).rejects.toThrow("key must not be an empty array");
+
+            // Multi-key with single key: NOKEY when key does not exist
+            const key4 = getRandomKey();
+            expect(
+                await client.migrate(serverHost, serverPort, [key4], 0, 1000),
+            ).toEqual("NOKEY");
+
+            // Multi-key with AUTH: error on invalid host
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
             client.close();
         },
         TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate multi-key success test_%p",
+        async (protocol) => {
+            const destCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+            );
+            const sourceClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const destClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    destCluster.getAddresses(),
+                    protocol,
+                ),
+            );
+
+            try {
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                await sourceClient.set(key1, "value1");
+                await sourceClient.set(key2, "value2");
+
+                const [destHost, destPort] = destCluster.getAddresses()[0];
+                expect(
+                    await sourceClient.migrate(
+                        destHost,
+                        destPort,
+                        [key1, key2],
+                        0,
+                        5000,
+                    ),
+                ).toEqual("OK");
+
+                expect(await destClient.mget([key1, key2])).toEqual([
+                    "value1",
+                    "value2",
+                ]);
+                expect(await sourceClient.mget([key1, key2])).toEqual([
+                    null,
+                    null,
+                ]);
+            } finally {
+                sourceClient.close();
+                destClient.close();
+                await destCluster.close();
+            }
+        },
+        60000,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "move test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key1 = "{key}-1" + getRandomKey();
@@ -2078,7 +2200,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
-            client = await GlideClient.createClient(config);
+
+            // Recreate client if config changed or client is dead
+            if (configOverrides || !client || protocol !== lastProtocol) {
+                client?.close();
+                client = await GlideClient.createClient(config);
+            } else {
+                try {
+                    await client.ping();
+                } catch {
+                    client = await GlideClient.createClient(config);
+                }
+            }
 
             const configNew = getClientConfigurationOption(
                 azCluster.getAddresses(),
@@ -2086,9 +2219,22 @@ describe("GlideClient", () => {
                 configOverrides,
             );
 
+            // Recreate azClient if config changed or client is dead
+            if (configOverrides || !azClient || protocol !== lastProtocol) {
+                azClient?.close();
+                azClient = await GlideClient.createClient(configNew);
+            } else {
+                try {
+                    await azClient.ping();
+                } catch {
+                    azClient = await GlideClient.createClient(configNew);
+                }
+            }
+
+            lastProtocol = protocol;
+            pooledClient = client;
+            pooledAzClient = azClient;
             testsFailed += 1;
-            azClient = await GlideClient.createClient(configNew);
-            client = await GlideClient.createClient(config);
             return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {
@@ -2167,6 +2313,119 @@ describe("GlideClient", () => {
 
             await assertConnected(client);
             client.close();
+        },
+        TIMEOUT,
+    );
+
+    // Spin up a dedicated standalone with 1 replica so the failover
+    // doesn't destabilize the shared test server.
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_to_replica_%p",
+        async (protocol) => {
+            const testCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+            );
+
+            try {
+                client = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        testCluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                // Verify initial role is master
+                let info = await client.info([InfoOptions.Replication]);
+                expect(info).toContain("role:master");
+
+                // Execute failover — returns OK immediately
+                const result = await client.failover();
+                expect(result).toBe("OK");
+
+                // Wait for role to change to slave (failover completed)
+                let roleChanged = false;
+
+                for (let i = 0; i < 60; i++) {
+                    info = await client.info([InfoOptions.Replication]);
+
+                    if (info.includes("role:slave")) {
+                        roleChanged = true;
+                        break;
+                    }
+
+                    await sleep(500);
+                }
+
+                expect(roleChanged).toBe(true);
+                client.close();
+            } finally {
+                await testCluster.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_abort_no_failover_in_progress_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // FAILOVER ABORT when no failover is in progress should error
+            await expect(client.failover({ abort: true })).rejects.toThrow(
+                RequestError,
+            );
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "replicaofNoOne_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // REPLICAOF NO ONE on a primary should succeed
+            const result = await client.replicaofNoOne();
+            expect(result).toBe("OK");
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo_cacheOff_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const info = await client.clientTrackingInfo();
+            assertClientTrackingInfo(info, false);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "clientTrackingInfo_cacheOn",
+        async () => {
+            const cache = new ClientSideCache({
+                maxCacheKb: 1,
+                entryTtlMs: 60000,
+                serverAssisted: true,
+            });
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientSideCache: cache },
+                ),
+            );
+            const info = await client.clientTrackingInfo();
+            assertClientTrackingInfo(info, true);
         },
         TIMEOUT,
     );

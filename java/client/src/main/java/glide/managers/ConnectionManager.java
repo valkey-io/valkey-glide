@@ -24,9 +24,7 @@ import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
@@ -469,6 +467,7 @@ public class ConnectionManager {
                             cacheBuilder.setCacheId(clientSideCache.getCacheId());
                             cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+                            cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
 
                             // Set TTL (0 = no expiration)
                             cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
@@ -631,30 +630,10 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return false;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-            if (!configuration.isUseTLS()) {
-                throw new ConfigurationError(
-                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-            }
-            return true;
-        }
-        return false;
+        return TlsConfigHelper.resolveInsecureTls(configuration);
     }
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return null;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig == null) {
-            return null;
-        }
-        return tlsConfig.getRootCertificates();
+        return TlsConfigHelper.extractRootCertificates(configuration);
     }
 }

@@ -1,17 +1,19 @@
 use crate::Telemetry;
 use logger_core::log_warn;
 use once_cell::sync::OnceCell;
-use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{
-    SpanContext, SpanId, SpanKind, TraceContextExt, TraceError, TraceFlags, TraceId, TraceState,
+    Span, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId, TraceState,
 };
 use opentelemetry::{global, trace::Tracer};
 use opentelemetry_otlp::{MetricExporter, Protocol, WithExportConfig};
-use opentelemetry_sdk::export::trace::SpanExporter;
-use opentelemetry_sdk::metrics::{MetricError, SdkMeterProvider};
+use opentelemetry_sdk::error::OTelSdkError;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::runtime::Tokio;
-use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
+use opentelemetry_sdk::trace::{
+    BatchConfig, BatchSpanProcessor, SdkTracerProvider, SpanExporter,
+    span_processor_with_async_runtime::BatchSpanProcessor as AsyncBatchSpanProcessor,
+};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -36,11 +38,14 @@ const SUBSCRIPTION_LAST_SYNC_TIMESTAMP_METRIC: &str = "glide.subscription_last_s
 /// Custom error type for OpenTelemetry errors in Glide
 #[derive(Debug, Error)]
 pub enum GlideOTELError {
-    #[error("Glide OpenTelemetry trace error: {0}")]
-    TraceError(#[from] TraceError),
+    #[error("Glide OpenTelemetry exporter build error: {0}")]
+    ExporterBuildError(#[from] opentelemetry_otlp::ExporterBuildError),
 
-    #[error("Glide OpenTelemetry metric error: {0}")]
-    MetricError(#[from] MetricError),
+    #[error("Glide OpenTelemetry SDK error: {0}")]
+    SdkError(#[from] OTelSdkError),
+
+    #[error("Glide OpenTelemetry trace error: {0}")]
+    TraceError(String),
 
     #[error("Glide OpenTelemetry error: Failed to acquire read lock")]
     ReadLockError,
@@ -218,11 +223,11 @@ impl GlideSpanInner {
     }
 
     /// Create new span as a child of `parent`, returning an error if the parent span lock is poisoned.
-    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Result<Self, TraceError> {
+    pub fn new_with_parent(name: &str, parent: &GlideSpanInner) -> Result<Self, GlideOTELError> {
         let parent_span_ctx = parent
             .span
             .read()
-            .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?
+            .map_err(|_| GlideOTELError::TraceError(SPAN_READ_LOCK_ERR.to_string()))?
             .span_context()
             .clone();
 
@@ -253,15 +258,17 @@ impl GlideSpanInner {
         span_id_hex: &str,
         trace_flags: u8,
         trace_state: Option<&str>,
-    ) -> Result<Self, TraceError> {
-        let trace_id = TraceId::from_hex(trace_id_hex)
-            .map_err(|_| TraceError::from(format!("Invalid trace_id hex: {trace_id_hex}")))?;
-        let span_id = SpanId::from_hex(span_id_hex)
-            .map_err(|_| TraceError::from(format!("Invalid span_id hex: {span_id_hex}")))?;
+    ) -> Result<Self, GlideOTELError> {
+        let trace_id = TraceId::from_hex(trace_id_hex).map_err(|_| {
+            GlideOTELError::TraceError(format!("Invalid trace_id hex: {trace_id_hex}"))
+        })?;
+        let span_id = SpanId::from_hex(span_id_hex).map_err(|_| {
+            GlideOTELError::TraceError(format!("Invalid span_id hex: {span_id_hex}"))
+        })?;
 
         let trace_state = match trace_state {
             Some(s) => TraceState::from_str(s)
-                .map_err(|_| TraceError::from(format!("Invalid trace_state: {s}")))?,
+                .map_err(|_| GlideOTELError::TraceError(format!("Invalid trace_state: {s}")))?,
             None => TraceState::default(),
         };
 
@@ -303,11 +310,7 @@ impl GlideSpanInner {
         self.span
             .write()
             .expect(SPAN_WRITE_LOCK_ERR)
-            .add_event_with_timestamp(
-                name.to_string().into(),
-                std::time::SystemTime::now(),
-                attributes,
-            );
+            .add_event_with_timestamp(name.to_string(), std::time::SystemTime::now(), attributes);
     }
 
     pub fn set_status(&self, status: GlideSpanStatus) {
@@ -345,13 +348,13 @@ impl GlideSpanInner {
 
     /// Create new span, add it as a child to this span and return it.
     /// Returns an error if the child span creation fails.
-    pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
+    pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, GlideOTELError> {
         let child = GlideSpanInner::new_with_parent(name, self)?;
         {
             let child_span = child
                 .span
                 .read()
-                .map_err(|_| TraceError::from(SPAN_READ_LOCK_ERR))?;
+                .map_err(|_| GlideOTELError::TraceError(SPAN_READ_LOCK_ERR.to_string()))?;
             self.span
                 .write()
                 .expect(SPAN_WRITE_LOCK_ERR)
@@ -423,7 +426,7 @@ impl GlideSpan {
         span_id_hex: &str,
         trace_flags: u8,
         trace_state: Option<&str>,
-    ) -> Result<Self, TraceError> {
+    ) -> Result<Self, GlideOTELError> {
         Ok(GlideSpan {
             inner: GlideSpanInner::new_with_remote_context(
                 name,
@@ -460,9 +463,9 @@ impl GlideSpan {
     }
 
     /// Add child span to this span and return it
-    pub fn add_span(&self, name: &str) -> Result<GlideSpan, opentelemetry::trace::TraceError> {
+    pub fn add_span(&self, name: &str) -> Result<GlideSpan, GlideOTELError> {
         let inner_span = self.inner.add_span(name).map_err(|err| {
-            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+            GlideOTELError::TraceError(format!("Failed to create child span '{}': {}", name, err))
         })?;
 
         Ok(GlideSpan { inner: inner_span })
@@ -591,11 +594,27 @@ impl GlideOpenTelemetryConfigBuilder {
     }
 }
 
-fn build_span_exporter(
+/// Build a dedicated-thread batch span processor. Used for the file exporter,
+/// whose `export` performs only synchronous IO and is therefore safe under the
+/// processor's internal `block_on`.
+fn build_file_span_processor(
     batch_config: BatchConfig,
     exporter: impl SpanExporter + 'static,
-) -> BatchSpanProcessor<Tokio> {
-    BatchSpanProcessor::builder(exporter, Tokio)
+) -> BatchSpanProcessor {
+    BatchSpanProcessor::builder(exporter)
+        .with_batch_config(batch_config)
+        .build()
+}
+
+/// Build a Tokio async-runtime batch span processor. Required for the OTLP
+/// exporters, which use an async HTTP client (`reqwest-client`) / tonic and need
+/// a running Tokio reactor to export. The dedicated-thread processor cannot
+/// drive these async transports.
+fn build_otlp_span_processor(
+    batch_config: BatchConfig,
+    exporter: impl SpanExporter + 'static,
+) -> AsyncBatchSpanProcessor<Tokio> {
+    AsyncBatchSpanProcessor::builder(exporter, Tokio)
         .with_batch_config(batch_config)
         .build()
 }
@@ -609,6 +628,11 @@ static MOVED_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock:
 static SUBSCRIPTION_OUT_OF_SYNC_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> =
     OnceLock::new();
 static SUBSCRIPTION_LAST_SYNC_GAUGE: OnceLock<opentelemetry::metrics::Gauge<u64>> = OnceLock::new();
+
+/// Holds the tracer provider so it can be flushed/shut down explicitly.
+/// `opentelemetry::global::shutdown_tracer_provider` was removed in 0.32, so
+/// shutdown now goes through the owned [`SdkTracerProvider`].
+static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -684,10 +708,10 @@ impl GlideOpenTelemetry {
     ///
     /// # Safety
     /// This function validates the pointer before attempting conversion, but still uses unsafe code
-    pub unsafe fn span_from_pointer(span_ptr: u64) -> Result<GlideSpan, TraceError> {
+    pub unsafe fn span_from_pointer(span_ptr: u64) -> Result<GlideSpan, GlideOTELError> {
         // First validate the pointer
         if !unsafe { Self::is_span_pointer_valid(span_ptr) } {
-            return Err(TraceError::from(format!(
+            return Err(GlideOTELError::TraceError(format!(
                 "Invalid span pointer: 0x{:x} failed validation checks",
                 span_ptr
             )));
@@ -771,22 +795,28 @@ impl GlideOpenTelemetry {
             .build();
 
         let env_protocol = protocol_from_env(OtelSignal::Traces);
-        let trace_exporter = match trace_exporter {
+        // The file exporter uses the dedicated-thread span processor while the
+        // OTLP exporters use the Tokio async-runtime processor (their async
+        // transports require a reactor). Those processors are different concrete
+        // types, so the `SdkTracerProvider` is built inside each arm.
+        let provider = match trace_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::SpanExporterFile::new(p.clone()).map_err(|e| {
                     GlideOTELError::Other(format!("Failed to create traces exporter: {}", e))
                 })?;
-                build_span_exporter(batch_config, exporter)
+                SdkTracerProvider::builder()
+                    .with_span_processor(build_file_span_processor(batch_config, exporter))
+                    .build()
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {
-                match env_protocol.unwrap_or(Protocol::HttpBinary) {
+                let processor = match env_protocol.unwrap_or(Protocol::HttpBinary) {
                     Protocol::Grpc => {
                         let exporter = opentelemetry_otlp::SpanExporter::builder()
                             .with_tonic()
                             .with_endpoint(url)
                             .with_protocol(Protocol::Grpc)
                             .build()?;
-                        build_span_exporter(batch_config, exporter)
+                        build_otlp_span_processor(batch_config, exporter)
                     }
                     protocol => {
                         let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -794,9 +824,12 @@ impl GlideOpenTelemetry {
                             .with_endpoint(url)
                             .with_protocol(protocol)
                             .build()?;
-                        build_span_exporter(batch_config, exporter)
+                        build_otlp_span_processor(batch_config, exporter)
                     }
-                }
+                };
+                SdkTracerProvider::builder()
+                    .with_span_processor(processor)
+                    .build()
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
                 let protocol = env_protocol.unwrap_or(Protocol::Grpc);
@@ -808,14 +841,14 @@ impl GlideOpenTelemetry {
                         ),
                     );
                 }
-                match protocol {
+                let processor = match protocol {
                     Protocol::Grpc => {
                         let exporter = opentelemetry_otlp::SpanExporter::builder()
                             .with_tonic()
                             .with_endpoint(url)
                             .with_protocol(Protocol::Grpc)
                             .build()?;
-                        build_span_exporter(batch_config, exporter)
+                        build_otlp_span_processor(batch_config, exporter)
                     }
                     protocol => {
                         let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -823,16 +856,19 @@ impl GlideOpenTelemetry {
                             .with_endpoint(url)
                             .with_protocol(protocol)
                             .build()?;
-                        build_span_exporter(batch_config, exporter)
+                        build_otlp_span_processor(batch_config, exporter)
                     }
-                }
+                };
+                SdkTracerProvider::builder()
+                    .with_span_processor(processor)
+                    .build()
             }
         };
 
         global::set_text_map_propagator(TraceContextPropagator::new());
-        let provider = TracerProvider::builder()
-            .with_span_processor(trace_exporter)
-            .build();
+        // Keep a clone so the provider can be flushed/shut down explicitly later;
+        // `global::shutdown_tracer_provider` was removed in opentelemetry 0.32.
+        let _ = TRACER_PROVIDER.set(provider.clone());
         global::set_tracer_provider(provider);
 
         Ok(())
@@ -844,14 +880,22 @@ impl GlideOpenTelemetry {
         metrics_exporter: &GlideOpenTelemetrySignalsExporter,
     ) -> Result<(), GlideOTELError> {
         let env_protocol = protocol_from_env(OtelSignal::Metrics);
-        let metrics_exporter = match metrics_exporter {
+        // The async-runtime `PeriodicReader<E>` is generic over the exporter
+        // type, so the file and OTLP readers are distinct concrete types. Build
+        // the `SdkMeterProvider` inside each arm to keep the reader type local.
+        let meter_provider = match metrics_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
                 let exporter = crate::FileMetricExporter::new(p.clone()).map_err(|e| {
                     GlideOTELError::Other(format!("Failed to create metrics exporter: {}", e))
                 })?;
-                opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
+                // The file exporter performs synchronous IO, so the
+                // dedicated-thread `PeriodicReader` (the 0.32 default) drives it
+                // reliably on the configured interval without needing the async
+                // runtime.
+                let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
                     .with_interval(flush_interval_ms)
-                    .build()
+                    .build();
+                SdkMeterProvider::builder().with_reader(reader).build()
             }
             GlideOpenTelemetrySignalsExporter::Http(url) => {
                 let protocol = env_protocol.unwrap_or(Protocol::HttpBinary);
@@ -867,9 +911,10 @@ impl GlideOpenTelemetry {
                         .with_protocol(p)
                         .build()?,
                 };
-                opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
+                let reader = opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
-                    .build()
+                    .build();
+                SdkMeterProvider::builder().with_reader(reader).build()
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
                 let protocol = env_protocol.unwrap_or(Protocol::Grpc);
@@ -893,15 +938,13 @@ impl GlideOpenTelemetry {
                         .with_protocol(p)
                         .build()?,
                 };
-                opentelemetry_sdk::metrics::PeriodicReader::builder(exporter, Tokio)
+                let reader = opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
-                    .build()
+                    .build();
+                SdkMeterProvider::builder().with_reader(reader).build()
             }
         };
 
-        let meter_provider = SdkMeterProvider::builder()
-            .with_reader(metrics_exporter)
-            .build();
         global::set_meter_provider(meter_provider);
 
         Ok(())
@@ -1098,7 +1141,14 @@ impl GlideOpenTelemetry {
 
     /// Trigger a shutdown procedure flushing all remaining traces
     pub fn shutdown() {
-        global::shutdown_tracer_provider();
+        if let Some(provider) = TRACER_PROVIDER.get()
+            && let Err(e) = provider.shutdown()
+        {
+            log_warn(
+                "opentelemetry",
+                format!("Failed to shut down tracer provider: {e}"),
+            );
+        }
     }
 
     /// Check if OpenTelemetry is initialized

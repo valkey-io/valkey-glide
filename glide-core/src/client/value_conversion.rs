@@ -44,7 +44,9 @@ pub(crate) enum ExpectedReturnType<'a> {
     GeoSearchReturnType,
     SimpleString,
     XAutoClaimReturnType,
+    ClientTrackingInfoReturnType,
     XInfoStreamFullReturnType,
+    MemoryStatsReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -1131,6 +1133,37 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into())
         },
+        ExpectedReturnType::ClientTrackingInfoReturnType => match value {
+            Value::Array(_) => {
+                // RESP2: flat [k,v,...] -> Map, then convert "flags" Array -> Set
+                let Value::Map(mut map) = convert_to_expected_type(
+                    value,
+                    Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }),
+                )? else {
+                    unreachable!()
+                };
+                if let Some(pair) = map.iter_mut().find(|(k, _)| {
+                    matches!(k, Value::BulkString(b) if b == b"flags")
+                }) {
+                    let val = std::mem::replace(&mut pair.1, Value::Nil);
+                    pair.1 = convert_to_expected_type(val, Some(ExpectedReturnType::Set))?;
+                }
+                Ok(Value::Map(map))
+            }
+            Value::Map(_) => {
+                // RESP3: already a map, "flags" is already Value::Set — pass through
+                Ok(value)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for CLIENT TRACKINGINFO",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
         ExpectedReturnType::FTInfoReturnType => match value {
             /*
             Example of the response
@@ -1282,6 +1315,35 @@ pub(crate) fn convert_to_expected_type(
                     None => convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type })),
                 }
             _ => convert_to_expected_type(value, *value_type),
+        }
+        ExpectedReturnType::MemoryStatsReturnType => {
+            // Convert the top-level response to a map, then recursively convert nested db.<N> entries into maps as well.
+            let map_value = convert_to_expected_type(value, Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            }))?;
+            match map_value {
+                Value::Map(map) => {
+                    let converted = map.into_iter().map(|(k, v)| {
+                        let converted_v = match &v {
+                            // Convert RESP2 two-dimensional arrays to maps.
+                            Value::Array(arr) => {
+                                convert_array_to_map_by_type(arr.clone(), None, None)
+                                    .unwrap_or(v)
+                            }
+                            // Convert RESP2 bulk strings to doubles.
+                            Value::BulkString(_) => {
+                                convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Double))
+                                    .unwrap_or(v)
+                            }
+                            _ => v,
+                        };
+                        (k, converted_v)
+                    }).collect();
+                    Ok(Value::Map(converted))
+                }
+                other => Ok(other),
+            }
         }
     }
 }
@@ -1535,6 +1597,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
+        b"CLIENT TRACKINGINFO" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+            Some(&is_array),
+        )),
         b"HGETALL" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
             Some(ExpectedReturnType::Map {
                 key_type: &None,
@@ -1667,6 +1733,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &None,
             value_type: &None,
         }),
+        b"MEMORY STATS" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::MemoryStatsReturnType),
+            Some(&is_array),
+        )),
         b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
         b"FT.SEARCH" => {
             if cmd.position(b"WITHSORTKEYS").is_some() {
@@ -3749,5 +3819,117 @@ mod tests {
         .unwrap();
 
         assert_eq!(converted_count, Value::Array(vec![Value::Int(5)]));
+    }
+
+    // CLIENT TRACKING INFO tests
+    // --------------------------
+
+    /// CLIENT TRACKINGINFO response in RESP2 format (flat array, flags as Array).
+    fn tracking_info_resp2() -> Value {
+        Value::Array(vec![
+            Value::BulkString(b"flags".to_vec()),
+            Value::Array(vec![Value::BulkString(b"off".to_vec())]),
+            Value::BulkString(b"redirect".to_vec()),
+            Value::Int(-1),
+            Value::BulkString(b"prefixes".to_vec()),
+            Value::Array(vec![]),
+        ])
+    }
+
+    /// CLIENT TRACKINGINFO response in RESP3 format (native map, flags as Set).
+    fn tracking_info_resp3() -> Value {
+        Value::Map(vec![
+            (
+                Value::BulkString(b"flags".to_vec()),
+                Value::Set(vec![Value::BulkString(b"off".to_vec())]),
+            ),
+            (Value::BulkString(b"redirect".to_vec()), Value::Int(-1)),
+            (
+                Value::BulkString(b"prefixes".to_vec()),
+                Value::Array(vec![]),
+            ),
+        ])
+    }
+
+    #[test]
+    fn test_client_tracking_info_resp2() {
+        let result = convert_to_expected_type(
+            tracking_info_resp2(),
+            Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+        )
+        .unwrap();
+        assert_eq!(result, tracking_info_resp3());
+    }
+
+    #[test]
+    fn test_client_tracking_info_resp3() {
+        let result = convert_to_expected_type(
+            tracking_info_resp3(),
+            Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+        )
+        .unwrap();
+        assert_eq!(result, tracking_info_resp3());
+    }
+
+    #[test]
+    fn test_client_tracking_info_multi_node_resp2() {
+        let cmd = redis::cmd("CLIENT TRACKINGINFO");
+        let conversion_type = expected_type_for_cmd(&cmd);
+
+        let multi_node_input = Value::Map(vec![
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp2(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp2(),
+            ),
+        ]);
+
+        let expected = Value::Map(vec![
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
+        ]);
+
+        let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_client_tracking_info_multi_node_resp3() {
+        let cmd = redis::cmd("CLIENT TRACKINGINFO");
+        let conversion_type = expected_type_for_cmd(&cmd);
+
+        let multi_node_input = Value::Map(vec![
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
+        ]);
+
+        let expected = Value::Map(vec![
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
+        ]);
+
+        let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
+        assert_eq!(result, expected);
     }
 }

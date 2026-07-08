@@ -735,6 +735,7 @@ public class ConnectionTests {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @Timeout(30)
     public void test_lazy_connection_establishes_on_first_command(boolean clusterMode)
             throws Exception {
         BaseClient monitoringClient = null;

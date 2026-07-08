@@ -51,6 +51,9 @@ type GlideTestSuite struct {
 	serverVersion   string
 	clients         []interfaces.GlideClientCommands
 	clusterClients  []interfaces.GlideClusterClientCommands
+	// Cached default clients reused across tests (pooled)
+	cachedStandaloneClient *glide.Client
+	cachedClusterClient    *glide.ClusterClient
 }
 
 var (
@@ -303,6 +306,12 @@ func TestGlideTestSuite(t *testing.T) {
 }
 
 func (suite *GlideTestSuite) TearDownSuite() {
+	if suite.cachedStandaloneClient != nil {
+		suite.cachedStandaloneClient.Close()
+	}
+	if suite.cachedClusterClient != nil {
+		suite.cachedClusterClient.Close()
+	}
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
 	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
@@ -318,17 +327,34 @@ func (suite *GlideTestSuite) TearDownTest() {
 		}
 	}
 
+	// Flush cached clients without closing (they're reused across tests)
+	if suite.cachedStandaloneClient != nil {
+		suite.cachedStandaloneClient.FlushDB(context.Background())
+		suite.cachedStandaloneClient.ClientSetName(context.Background(), "")
+	}
+	if suite.cachedClusterClient != nil {
+		suite.cachedClusterClient.FlushDB(context.Background())
+		suite.cachedClusterClient.ClientSetName(context.Background(), "")
+	}
+
+	// Close and flush any ad-hoc clients created during this test
 	for _, client := range suite.clients {
+		if client == interfaces.GlideClientCommands(suite.cachedStandaloneClient) {
+			continue
+		}
 		client.FlushDB(context.Background())
 		client.Close()
 	}
-	suite.clients = nil // Clear the slice
+	suite.clients = nil
 
 	for _, client := range suite.clusterClients {
+		if client == interfaces.GlideClusterClientCommands(suite.cachedClusterClient) {
+			continue
+		}
 		client.FlushDB(context.Background())
 		client.Close()
 	}
-	suite.clusterClients = nil // Clear the slice
+	suite.clusterClients = nil
 
 	// Clear the callback context for the next test
 	callbackCtx.Range(func(key, value any) bool {
@@ -423,9 +449,19 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 }
 
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
+	// Reuse cached client if still alive
+	if suite.cachedStandaloneClient != nil {
+		_, err := suite.cachedStandaloneClient.Ping(context.Background())
+		if err == nil {
+			return suite.cachedStandaloneClient
+		}
+		// Client is dead, recreate
+		suite.cachedStandaloneClient = nil
+	}
 	config := suite.defaultClientConfig()
 	client, err := suite.client(config)
 	require.NoError(suite.T(), err)
+	suite.cachedStandaloneClient = client
 	return client
 }
 
@@ -466,9 +502,19 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientC
 }
 
 func (suite *GlideTestSuite) defaultClusterClient() *glide.ClusterClient {
+	// Reuse cached client if still alive
+	if suite.cachedClusterClient != nil {
+		_, err := suite.cachedClusterClient.Ping(context.Background())
+		if err == nil {
+			return suite.cachedClusterClient
+		}
+		// Client is dead, recreate
+		suite.cachedClusterClient = nil
+	}
 	config := suite.defaultClusterClientConfig()
 	client, err := suite.clusterClient(config)
 	require.NoError(suite.T(), err)
+	suite.cachedClusterClient = client
 	return client
 }
 

@@ -32,7 +32,7 @@ ryu = "1"
 itoa = "1"
 
 # Strum is a set of macros and traits for working with enums and strings easier in Rust.
-strum = "0.27"
+strum = "0.28"
 strum_macros = "0.27"
 
 # This is a dependency that already exists in url
@@ -71,7 +71,7 @@ tokio-retry2 = { version = "0.5", features = ["jitter"], optional = true }
 
 # Only needed for rustls (default TLS implementation)
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
-rustls-platform-verifier = { version = "0.6", default-features = false }
+rustls-platform-verifier = { version = "0.7", default-features = false }
 tokio-rustls = { version = "0.26", default-features = false }
 rustls-pki-types = { version = "1.9" }
 
@@ -85,7 +85,7 @@ telemetrylib = { path = "../../telemetry" }
 logger_core = { path = "../../../logger_core" }
 
 lazy_static = "1"
-lru = "0.16.2"
+lru = "0.18.0"
 
 [features]
 default = [
@@ -126,7 +126,7 @@ socket2 = "0.6"
 fnv = "1"
 futures = "0.3"
 futures-time = "3"
-criterion = "0.6"
+criterion = "0.8"
 partial-io = { version = "0.5", features = ["tokio", "quickcheck1"] }
 quickcheck = "1"
 tokio = { version = "1", features = [

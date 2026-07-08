@@ -230,6 +230,39 @@ func (suite *GlideTestSuite) verifySpanHierarchy(spans []string, expectedParentN
 	}
 }
 
+func (suite *GlideTestSuite) verifyExternalParent(
+	spans []string,
+	expectedChildName string,
+	expectedTraceID string,
+	expectedParentSpanID string,
+) {
+	for _, spanJSON := range spans {
+		var span map[string]any
+		err := json.Unmarshal([]byte(spanJSON), &span)
+		require.NoError(suite.T(), err, "span JSON should parse")
+
+		name, _ := span["name"].(string)
+		if name != expectedChildName {
+			continue
+		}
+
+		traceID := getSpanField(span, []string{"traceId", "trace_id"})
+		parentSpanID := getSpanField(span, []string{"parentSpanId", "parent_span_id", "parentId", "parent_id"})
+		if traceID == expectedTraceID && parentSpanID == expectedParentSpanID {
+			return
+		}
+	}
+
+	require.Failf(
+		suite.T(),
+		"external parent span not found",
+		"expected %s span with trace ID %s and parent span ID %s",
+		expectedChildName,
+		expectedTraceID,
+		expectedParentSpanID,
+	)
+}
+
 func (suite *GlideTestSuite) TestOpenTelemetry_AutomaticSpanLifecycle() {
 	if !*otelTest {
 		suite.T().Skip("OpenTelemetry tests are disabled")
@@ -733,6 +766,68 @@ func (suite *GlideTestSuite) TestOpenTelemetry_PublicSpanManagementAPIs_NotIniti
 
 	// Test EndSpan with arbitrary pointer (should be safe no-op regardless of initialization)
 	otelInstance.EndSpan(123) // Should not panic
+}
+
+// TestOpenTelemetry_ExternalSpanContextExtractor verifies that GLIDE command spans can use
+// an application-provided remote span context extracted from context.Context.
+func (suite *GlideTestSuite) TestOpenTelemetry_ExternalSpanContextExtractor() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
+		otelInstance := glide.GetOtelInstance()
+		type externalSpanContextKey struct{}
+		externalSpanContext := glide.SpanContext{
+			TraceID:    "0af7651916cd43dd8448eb211c80319c",
+			SpanID:     "b7ad6b7169203331",
+			TraceFlags: 1,
+		}
+		ctx := context.WithValue(context.Background(), externalSpanContextKey{}, externalSpanContext)
+
+		otelInstance.SetSpanContextExtractor(func(ctx context.Context) (glide.SpanContext, bool) {
+			spanContext, ok := ctx.Value(externalSpanContextKey{}).(glide.SpanContext)
+			return spanContext, ok
+		})
+		suite.T().Cleanup(func() {
+			otelInstance.SetSpanContextExtractor(nil)
+		})
+
+		time.Sleep(500 * time.Millisecond)
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			err = os.Remove(validEndpointTraces)
+			require.NoError(suite.T(), err)
+		}
+
+		key := "{external-context}:key"
+		result, err := client.Set(ctx, key, "value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		getResult, err := client.Get(ctx, key)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value", getResult.Value())
+
+		batch := pipeline.NewStandaloneBatch(false)
+		batch.Set("{external-context}:batch-key", "batch-value")
+		batch.Get("{external-context}:batch-key")
+		batchResults, err := client.(*glide.Client).Exec(ctx, *batch, false)
+		require.NoError(suite.T(), err)
+		assert.Len(suite.T(), batchResults, 2)
+
+		time.Sleep(5 * time.Second)
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		for _, spanName := range []string{"SET", "GET", "Batch"} {
+			suite.verifyExternalParent(
+				spans.Spans,
+				spanName,
+				externalSpanContext.TraceID,
+				externalSpanContext.SpanID,
+			)
+		}
+	})
 }
 
 // TestOpenTelemetry_SpanContextAttachment tests comprehensive span context attachment functionality

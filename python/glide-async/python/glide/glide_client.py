@@ -25,9 +25,9 @@ try:
 except ImportError:
     HAS_ANYIO = False
 
+from glide._ffi_instance import _ASYNC_FFI
+from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared._fast_response import parse_response as _c_parse_response
-from glide_shared._glide_ffi import _GlideFFI
-from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -63,9 +63,6 @@ from .async_commands.standalone_commands import StandaloneCommands
 from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
-
-_ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
-
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -145,8 +142,15 @@ _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
     """Free resources from a pipe frame whose client has been closed."""
-    # Pubsub frames are inline (no pointers to free)
     if request_id == _PUBSUB_SENTINEL:
+        if arena_or_err & (1 << 63):
+            # Pointer-mode pubsub: free the heap-allocated payload
+            payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+            any_c = next(iter(_client_registry.values()), None)
+            if any_c:
+                any_c._lib.free_pubsub_pointer_payload(
+                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
+                )
         return
     any_c = next(iter(_client_registry.values()), None)
     if any_c is None:
@@ -265,6 +269,48 @@ def _handle_inline_pubsub(client, payload: bytes):
         )
 
 
+def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
+    """Handle pointer-mode pubsub data (large messages delivered via heap pointer)."""
+    try:
+        ffi = client._ffi
+        buf_ptr = ffi.cast("uint8_t*", ptr_val)
+        payload = bytes(ffi.buffer(buf_ptr, payload_len))
+        _handle_inline_pubsub(client, payload)
+    except Exception as e:
+        ClientLogger.log(
+            LogLevel.ERROR, "pubsub_pipe", f"Error handling pointer pubsub: {e}"
+        )
+    finally:
+        client._lib.free_pubsub_pointer_payload(
+            client._ffi.cast("uint8_t*", ptr_val), payload_len
+        )
+
+
+def _handle_pubsub_frame(client, response_ptr, arena_or_err, data, offset):
+    """Handle a pubsub sentinel frame. Returns new offset, or negative value if incomplete."""
+    if arena_or_err & (1 << 63):
+        # Pointer-mode: large message delivered via heap pointer
+        payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+        if client is not None:
+            _handle_pointer_pubsub(client, response_ptr, payload_len)
+        else:
+            any_c = next(iter(_client_registry.values()), None)
+            if any_c:
+                any_c._lib.free_pubsub_pointer_payload(
+                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
+                )
+    else:
+        # Inline: response_ptr = payload_len, data follows header
+        payload_len = response_ptr
+        if offset + payload_len > len(data):
+            # Incomplete payload — signal caller to rewind (encode as -(offset-32+1))
+            return -(offset - 32 + 1)
+        if client is not None:
+            _handle_inline_pubsub(client, data[offset : offset + payload_len])
+        offset += payload_len
+    return offset
+
+
 def _drain_stale_pipe_frames():
     """Drain stale frames from the pipe to prevent reading freed pointers."""
     while True:
@@ -298,15 +344,13 @@ def _on_async_pipe_readable() -> None:
         offset += 32
         client = _client_registry.get(client_id)
         if request_id == _PUBSUB_SENTINEL:
-            # Inline pubsub: response_ptr = payload_len, data follows header
-            payload_len = response_ptr
-            if offset + payload_len > len(data):
-                # Incomplete payload — put header + remaining back
-                offset -= 32
+            offset = _handle_pubsub_frame(
+                client, response_ptr, arena_or_err, data, offset
+            )
+            if offset < 0:
+                # Incomplete inline payload — rewind and break
+                offset = -(offset + 1)
                 break
-            if client is not None:
-                _handle_inline_pubsub(client, data[offset : offset + payload_len])
-            offset += payload_len
             continue
         if client is None:
             _free_orphaned_frame(request_id, response_ptr, arena_or_err)
@@ -364,10 +408,69 @@ class BaseClient(CoreCommands):
         """Creates a Glide client.
 
         Args:
-            config (ClientConfiguration): The configuration options for the client.
+            config (ClientConfiguration): The configuration options for the client, including cluster addresses,
+            authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
 
         Returns:
             Self: A promise that resolves to a connected client instance.
+
+        Examples:
+            # Connecting to a Standalone Server
+            >>> from glide import GlideClientConfiguration, NodeAddress, GlideClient, ServerCredentials, BackoffStrategy
+            >>> config = GlideClientConfiguration(
+            ...     [
+            ...         NodeAddress('primary.example.com', 6379),
+            ...         NodeAddress('replica1.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     database_id = 1,
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {GlideClientConfiguration.PubSubChannelModes.Exact: {'updates'}},
+            ...         callback = lambda message,context : print(message),
+            ...     ),
+            ... )
+            >>> client = await GlideClient.create(config)
+
+            # Connecting to a Cluster
+            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient,
+            ... PeriodicChecksManualInterval
+            >>> config = GlideClusterClientConfiguration(
+            ...     [
+            ...         NodeAddress('address1.example.com', 6379),
+            ...         NodeAddress('address2.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     periodic_checks = PeriodicChecksManualInterval(duration_in_sec = 30),
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ...     pubsub_subscriptions = GlideClusterClientConfiguration.PubSubSubscriptions(
+            ...         channels_and_patterns = {
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Exact: {'updates'},
+            ...             GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {'sharded_channel'},
+            ...         },
+            ...         callback = lambda message,context : print(message),
+            ...     ),
+            ... )
+            >>> client = await GlideClusterClient.create(config)
+
+        Remarks:
+            Use this static method to create and connect a client to a Valkey server.
+            The client will automatically handle connection establishment, including cluster topology discovery and
+            handling of authentication and TLS configurations.
+
+                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based
+                  on the seed addresses provided.
+                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
+                  using the specified username and password.
+                - **TLS**: If `use_tls` is set to `true`, the client will establish secure connections using TLS.
+                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client
+                  checks for cluster topology changes.
+                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to
+                  reconnect in case of disconnections.
+                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be
+                  subscribed to upon connection.
         """
         self = cls(config)
 
@@ -382,7 +485,13 @@ class BaseClient(CoreCommands):
         conn_req = config._create_a_protobuf_conn_request(
             cluster_mode=isinstance(config, GlideClusterClientConfiguration)
         )
-        conn_req.lib_name = "GlidePy"
+        # Preserve a user-configured lib_name; otherwise fall back to the async default.
+        if not conn_req.lib_name:
+            conn_req.lib_name = "GlidePy"
+        # Optionally append a client info tag, preserving the library identity
+        # (e.g. "GlidePy(my-framework:1.2.3)").
+        if config.client_info_tag:
+            conn_req.lib_name = f"{conn_req.lib_name}({config.client_info_tag})"
         conn_req_bytes = conn_req.SerializeToString()
 
         # Create AsyncClient type
@@ -451,7 +560,7 @@ class BaseClient(CoreCommands):
     def _setup_pipe(self) -> None:
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder
+        global _pipe_remainder, _trio_pipe_active
         with _async_pipe_lock:
             if _async_pipe_read_fd < 0:
                 try:
@@ -492,6 +601,7 @@ class BaseClient(CoreCommands):
                         # For trio: spawn a background task that polls the pipe
                         import trio
 
+                        _trio_pipe_active = True
                         trio.lowlevel.spawn_system_task(
                             _trio_pipe_reader, _async_pipe_read_fd
                         )
@@ -803,6 +913,22 @@ class BaseClient(CoreCommands):
         return await fut
 
     async def get_statistics(self) -> dict:
+        """
+        Get compression and connection statistics for this client.
+
+        Returns:
+            dict: A dictionary containing statistics with integer values:
+                - total_connections: Total number of connections
+                - total_clients: Total number of clients
+                - total_values_compressed: Number of values successfully compressed
+                - total_values_decompressed: Number of values successfully decompressed
+                - total_original_bytes: Total bytes of original data before compression
+                - total_bytes_compressed: Total bytes after compression
+                - total_bytes_decompressed: Total bytes after decompression
+                - compression_skipped_count: Number of times compression was skipped
+                - subscription_out_of_sync_count: Number of times subscriptions were out of sync
+                - subscription_last_sync_timestamp: Timestamp of last successful subscription sync
+        """
         stats = self._lib.get_statistics()
         return {
             "total_connections": stats.total_connections,
@@ -861,6 +987,14 @@ class BaseClient(CoreCommands):
         )
 
     async def close(self, err_message: Optional[str] = None) -> None:
+        """
+        Terminate the client by closing all associated resources and any active futures.
+        All open futures will be closed with an exception.
+
+        Args:
+            err_message (Optional[str]): If not None, this error message will be passed along with
+            the exceptions when closing all open futures. Defaults to None.
+        """
         if not self._is_closed:
             self._is_closed = True
             err_message = "" if err_message is None else err_message
@@ -884,7 +1018,16 @@ class BaseClient(CoreCommands):
                 self._core_client = None
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
-        """Alias for close() for compatibility with async context managers."""
+        """
+        Terminate the client by closing all associated resources and any active futures.
+        All open futures will be closed with an exception.
+
+        This is an alias for close() for compatibility with async context managers.
+
+        Args:
+            err_message (Optional[str]): If not None, this error message will be passed along with
+            the exceptions when closing all open futures. Defaults to None.
+        """
         await self.close(err_message)
 
     async def __aenter__(self) -> "BaseClient":
@@ -968,6 +1111,39 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     async def get_subscriptions(
         self,
     ) -> GlideClusterClientConfiguration.PubSubState:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
+
+        Returns:
+            GlideClusterClientConfiguration.PubSubState: An object containing two attributes:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClusterClientConfiguration
+            >>> PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == actual:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
+        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClusterClientConfiguration.PubSubState,
@@ -986,6 +1162,39 @@ class GlideClient(BaseClient, StandaloneCommands):
     async def get_subscriptions(
         self,
     ) -> GlideClientConfiguration.PubSubState:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
+
+        Returns:
+            GlideClientConfiguration.PubSubState: An object containing two attributes:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClientConfiguration
+            >>> PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == actual:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
+        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClientConfiguration.PubSubState,

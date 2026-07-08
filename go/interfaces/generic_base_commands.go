@@ -115,13 +115,13 @@ type GenericBaseCommands interface {
 
 	CopyWithOptions(ctx context.Context, source string, destination string, option options.CopyOptions) (bool, error)
 
-	Migrate(ctx context.Context, host string, port int64, key string, destinationDB int64, timeout int64) (string, error)
+	Migrate(ctx context.Context, host string, port int64, keys []string, destinationDB int64, timeout int64) (string, error)
 
 	MigrateWithOptions(
 		ctx context.Context,
 		host string,
 		port int64,
-		key string,
+		keys []string,
 		destinationDB int64,
 		timeout int64,
 		migrateOptions options.MigrateOptions,

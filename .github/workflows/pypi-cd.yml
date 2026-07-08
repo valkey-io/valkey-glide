@@ -8,8 +8,8 @@ on:
             - .github/workflows/pypi-cd.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
     push:
@@ -274,16 +274,6 @@ jobs:
                   if [[ "$ARCH" == "arm64" ]]; then
                     # Download PyPy for Apple Silicon
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
-                    PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
-                    PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
-
-                    echo "Downloading PyPy 3.9 for arm64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-
-                    echo "Downloading PyPy 3.10 for arm64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     echo "Downloading PyPy 3.11 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
@@ -291,23 +281,13 @@ jobs:
 
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
-                    PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
-                    PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
-
-                    echo "Downloading PyPy 3.9 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-
-                    echo "Downloading PyPy 3.10 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     echo "Downloading PyPy 3.11 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
-                  echo "/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
+                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
 
                   sudo chmod -R a+rx /opt/pypy*/bin
                   sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
@@ -324,7 +304,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   docker-options: --pull always --rm
@@ -355,45 +335,63 @@ jobs:
                       # Install PyPy
                       if [[ "$ARCH" == "x86_64" ]]; then
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
-                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
-                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-linux64
-
-                        echo "Downloading PyPy 3.9 for x86_64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2"  --exclude="*/bin/python*" -C /opt
-
-                        echo "Downloading PyPy 3.10 for x86_64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         echo "Downloading PyPy 3.11 for x86_64"
                         curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                         tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
 
                       elif [[ "$ARCH" == "aarch64" ]]; then
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
-                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
-                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-aarch64
-
-                        echo "Downloading PyPy 3.9 for aarch64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-
-                        echo "Downloading PyPy 3.10 for aarch64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         echo "Downloading PyPy 3.11 for aarch64"
                         curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                         tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
                       else
                         echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
                         exit 1
                       fi
+
+                      # Build FFI library and glide-shared native extension for async wheel
+                      # Note: working directory inside container is python/glide-async
+                      cd ../../ffi && cargo build --release && cd ..
+                      cp ffi/target/release/libglide_ffi.so python/glide-async/python/glide_shared/
+                      cd python/glide-shared
+                      pip install maturin
+                      # Build _fast_response for each Python interpreter available
+                      # maturin-action will later build a separate async wheel per interpreter,
+                      # and each wheel bundles all .so files from the include glob.
+                      # Python will load the one matching its ABI at runtime.
+                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11 2>/dev/null || \
+                      maturin build --release --out /tmp/glide_shared_wheels -i python3.14
+                      for WHEEL in /tmp/glide_shared_wheels/*.whl; do
+                        unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
+                      done
+                      cd ../glide-async
+
+            # The macOS maturin-action does not support a before-script hook (unlike
+            # the Linux action's before-script-linux). We must build the FFI library and
+            # glide-shared native extension in a separate step. For Linux these are built
+            # inside the manylinux container via before-script-linux for glibc ABI compat.
+            - name: Build native dependencies for async client (macOS)
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
+              shell: bash
+              run: |
+                  # Build FFI library
+                  cd ffi && cargo build --release --target ${{ matrix.build.TARGET }}
+                  cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
+                  cd ..
+                  # Build glide-shared native extension (_fast_response) for all target interpreters
+                  cd python/glide-shared
+                  pip install maturin
+                  maturin build --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
+                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                  for WHEEL in /tmp/glide_shared_wheels/*.whl; do
+                    unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
+                  done
 
             - name: Build Python Async client wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
@@ -402,7 +400,7 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
 
             ### SYNC CLIENT ###
 
@@ -447,7 +445,7 @@ jobs:
                   # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
                   ${{ steps.python_cmd.outputs.cmd }} -m cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
-                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp39-* pp310-* pp311-*' || 'cp314-*' }}
+                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp311-*' || 'cp314-*' }}
                   CIBW_SKIP: "*-musl* *i686* *i386*"
                   CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
                   CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
@@ -632,39 +630,39 @@ jobs:
 
                   if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
                     if [[ "$ARCH" == "x86_64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
+                      echo "Downloading PyPy 3.11 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     elif [[ "$ARCH" == "aarch64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
-                      echo "Downloading PyPy 3.10 for aarch64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
+                      echo "Downloading PyPy 3.11 for aarch64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
 
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
                     if [[ "$ARCH" == "arm64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
-                      echo "Downloading PyPy 3.10 for arm64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
+                      echo "Downloading PyPy 3.11 for arm64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     else
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
+                      echo "Downloading PyPy 3.11 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/lib/*.dylib
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/lib/*.dylib
                   fi
 
-                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
+                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
 
             - name: Install engine build dependencies (ephemeral runners)
               if: ${{ contains(matrix.build.RUNNER, 'ephemeral') }}
@@ -673,7 +671,7 @@ jobs:
                   sudo apt install -y pkg-config libssl-dev
 
             - name: Install engine
-              uses: ./.github/workflows/install-engine
+              uses: ./.github/actions/install-engine
               with:
                   engine-version: "8.0"
                   target: ${{ matrix.build.target }}

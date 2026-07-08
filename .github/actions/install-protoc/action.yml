@@ -1,0 +1,16 @@
+name: Install protoc
+description: Install protobuf compiler (protoc)
+
+inputs:
+    github-token:
+        description: "GitHub token for downloading protoc release"
+        required: true
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install protoc (protobuf)
+          uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
+          with:
+              version: "25.1"
+              repo-token: ${{ inputs.github-token }}

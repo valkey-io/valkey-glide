@@ -45,25 +45,79 @@ suppress_warnings = ["autodoc"]
 
 
 def avoid_duplicate(app, what, name, obj, skip, options):
-    # We skip some special refs and PubSub duplicate warning messages that
-    # weren't captured in ignore-module-all. These PubSub attributes
-    # will still appear in the documentation.
+    # Skip special attributes and dataclass fields from re-exported classes
+    # that cause duplicate object description warnings. These attributes
+    # will still appear in the documentation at their canonical location.
     exclusions = (
         "__weakref__",
         "__doc__",
         "__module__",
         "__dict__",
-        "callback",
+        # PubSubSubscriptions
         "channels_and_patterns",
+        "callback",
         "context",
-        "channel",
+        # PubSubMsg
         "message",
+        "channel",
         "pattern",
+        # CompressionConfiguration
         "enabled",
         "backend",
         "compression_level",
         "min_compression_size",
         "max_decompressed_size",
+        # LatencyEntry
+        "time",
+        "latency",
+        # LatencyEventInfo
+        "event_name",
+        "latest_time",
+        "latest_duration",
+        "max_duration",
+        "sum",
+        "count",
+        # MemoryStatsDb
+        "overhead_hashtable_main",
+        "overhead_hashtable_expires",
+        # MemoryStats
+        "peak_allocated",
+        "total_allocated",
+        "startup_allocated",
+        "replication_backlog",
+        "clients_slaves",
+        "clients_normal",
+        "aof_buffer",
+        "lua_caches",
+        "overhead_total",
+        "keys_count",
+        "keys_bytes_per_key",
+        "dataset_bytes",
+        "dataset_percentage",
+        "peak_percentage",
+        "allocator_allocated",
+        "allocator_active",
+        "allocator_resident",
+        "allocator_fragmentation_ratio",
+        "allocator_fragmentation_bytes",
+        "allocator_rss_ratio",
+        "allocator_rss_bytes",
+        "rss_overhead_ratio",
+        "rss_overhead_bytes",
+        "fragmentation",
+        "fragmentation_bytes",
+        "cluster_links",
+        "functions_caches",
+        "allocator_muzzy",
+        "overhead_db_hashtable_lut",
+        "overhead_db_hashtable_rehashing",
+        "db_dict_rehashing_count",
+        # MonitorMsg
+        "timestamp",
+        "db",
+        "client_addr",
+        "command",
+        "args",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:

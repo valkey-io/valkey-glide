@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -99,6 +100,14 @@ type OpenTelemetryConfig struct {
 	SpanFromContext func(ctx context.Context) (spanPtr uint64)
 }
 
+// SpanContext represents a remote OpenTelemetry span context.
+type SpanContext struct {
+	TraceID    string
+	SpanID     string
+	TraceFlags byte
+	TraceState string
+}
+
 // OpenTelemetryTracesConfig represents the configuration for exporting OpenTelemetry traces.
 //
 // Endpoint: The endpoint to which trace data will be exported. Expected format:
@@ -135,9 +144,10 @@ type spanContextKeyType struct{}
 var SpanContextKey = spanContextKeyType{}
 
 var (
-	otelInstance    *OpenTelemetry
-	otelConfig      *OpenTelemetryConfig
-	otelInitialized bool = false
+	otelInstance         *OpenTelemetry
+	otelConfig           *OpenTelemetryConfig
+	otelInitialized      bool = false
+	spanContextExtractor func(context.Context) (SpanContext, bool)
 )
 
 // OpenTelemetry provides functionality for OpenTelemetry integration.
@@ -328,6 +338,101 @@ func (o *OpenTelemetry) createBatchSpanWithParent(parentSpanPtr uint64) uint64 {
 	return uint64(C.create_batch_otel_span_with_parent(C.uint64_t(parentSpanPtr)))
 }
 
+type spanParentSource int
+
+const (
+	spanParentNone spanParentSource = iota
+	spanParentRemoteContext
+	spanParentPointer
+)
+
+func (o *OpenTelemetry) selectSpanParent(ctx context.Context) (spanParentSource, SpanContext, uint64) {
+	if spanContext, ok := o.extractRemoteSpanContext(ctx); ok {
+		return spanParentRemoteContext, spanContext, 0
+	}
+	if parentSpanPtr := o.extractSpanPointer(ctx); parentSpanPtr != 0 {
+		return spanParentPointer, SpanContext{}, parentSpanPtr
+	}
+	return spanParentNone, SpanContext{}, 0
+}
+
+func (o *OpenTelemetry) createSpanWithRemoteContext(requestType C.RequestType, spanContext SpanContext) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+
+	traceID, spanID, traceState, cleanup := spanContext.toCStrings()
+	defer cleanup()
+
+	return uint64(C.create_otel_span_with_trace_context(
+		C.enum_RequestType(requestType),
+		traceID,
+		spanID,
+		C.uint8_t(spanContext.TraceFlags),
+		traceState,
+	))
+}
+
+func (o *OpenTelemetry) createBatchSpanWithRemoteContext(spanContext SpanContext) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+
+	traceID, spanID, traceState, cleanup := spanContext.toCStrings()
+	defer cleanup()
+
+	return uint64(C.create_batch_otel_span_with_trace_context(
+		traceID,
+		spanID,
+		C.uint8_t(spanContext.TraceFlags),
+		traceState,
+	))
+}
+
+func (spanContext SpanContext) toCStrings() (*C.char, *C.char, *C.char, func()) {
+	traceID := C.CString(spanContext.TraceID)
+	spanID := C.CString(spanContext.SpanID)
+
+	var traceState *C.char
+	if spanContext.TraceState != "" {
+		traceState = C.CString(spanContext.TraceState)
+	}
+
+	cleanup := func() {
+		C.free(unsafe.Pointer(traceID))
+		C.free(unsafe.Pointer(spanID))
+		if traceState != nil {
+			C.free(unsafe.Pointer(traceState))
+		}
+	}
+
+	return traceID, spanID, traceState, cleanup
+}
+
+func (o *OpenTelemetry) createCommandSpanForContext(ctx context.Context, requestType C.RequestType) uint64 {
+	source, spanContext, parentSpanPtr := o.selectSpanParent(ctx)
+	switch source {
+	case spanParentRemoteContext:
+		return o.createSpanWithRemoteContext(requestType, spanContext)
+	case spanParentPointer:
+		return o.createSpanWithParent(requestType, parentSpanPtr)
+	default:
+		return o.createSpan(requestType)
+	}
+}
+
+func (o *OpenTelemetry) createBatchSpanForContext(ctx context.Context) uint64 {
+	source, spanContext, parentSpanPtr := o.selectSpanParent(ctx)
+	switch source {
+	case spanParentRemoteContext:
+		return o.createBatchSpanWithRemoteContext(spanContext)
+	case spanParentPointer:
+		return o.createBatchSpanWithParent(parentSpanPtr)
+	default:
+		return o.createBatchSpan()
+	}
+}
+
 // DropSpan drops an OpenTelemetry span given its pointer.
 func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	if spanPtr == 0 {
@@ -468,12 +573,213 @@ func DefaultSpanFromContext(ctx context.Context) uint64 {
 	return 0
 }
 
+// SetSpanContextExtractor registers or clears the callback used to extract an external parent span context.
+// The callback is invoked synchronously before each sampled GLIDE command or batch span.
+// Pass nil to clear the extractor.
+//
+// Example with go.opentelemetry.io/otel:
+//
+//	glide.GetOtelInstance().SetSpanContextExtractor(func(ctx context.Context) (glide.SpanContext, bool) {
+//		spanContext := trace.SpanContextFromContext(ctx)
+//		if !spanContext.IsValid() {
+//			return glide.SpanContext{}, false
+//		}
+//
+//		return glide.SpanContext{
+//			TraceID:    spanContext.TraceID().String(),
+//			SpanID:     spanContext.SpanID().String(),
+//			TraceFlags: byte(spanContext.TraceFlags()),
+//			TraceState: spanContext.TraceState().String(),
+//		}, true
+//	})
+func (o *OpenTelemetry) SetSpanContextExtractor(fn func(context.Context) (SpanContext, bool)) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+	spanContextExtractor = fn
+}
+
+func (o *OpenTelemetry) extractRemoteSpanContext(ctx context.Context) (spanContext SpanContext, ok bool) {
+	configMutex.RLock()
+	extractor := spanContextExtractor
+	configMutex.RUnlock()
+
+	if extractor == nil {
+		return SpanContext{}, false
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("SpanContextExtractor function panicked: %v, falling back to existing span creation", r)
+			spanContext = SpanContext{}
+			ok = false
+		}
+	}()
+
+	spanContext, ok = extractor(ctx)
+	if !ok {
+		return SpanContext{}, false
+	}
+
+	normalized, valid := normalizeSpanContext(spanContext)
+	if !valid {
+		return SpanContext{}, false
+	}
+
+	return normalized, true
+}
+
+func normalizeSpanContext(spanContext SpanContext) (SpanContext, bool) {
+	traceID := strings.ToLower(spanContext.TraceID)
+	spanID := strings.ToLower(spanContext.SpanID)
+
+	if !isValidHexID(traceID, 32) || traceID == "00000000000000000000000000000000" {
+		return SpanContext{}, false
+	}
+	if !isValidHexID(spanID, 16) || spanID == "0000000000000000" {
+		return SpanContext{}, false
+	}
+	if spanContext.TraceState != "" && !isValidTraceState(spanContext.TraceState) {
+		return SpanContext{}, false
+	}
+
+	spanContext.TraceID = traceID
+	spanContext.SpanID = spanID
+	return spanContext, true
+}
+
+func isValidHexID(value string, expectedLength int) bool {
+	if len(value) != expectedLength {
+		return false
+	}
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+const (
+	maxTraceStateListMembers     = 32
+	maxTraceStateSimpleKeyLength = 256
+	maxTraceStateTenantIDLength  = 241
+	maxTraceStateSystemIDLength  = 14
+	maxTraceStateValueLength     = 256
+)
+
+// isValidTraceState validates remote tracestate before passing it through FFI so
+// invalid remote contexts can still fall back to span-pointer parents.
+func isValidTraceState(traceState string) bool {
+	if traceState == "" {
+		return true
+	}
+
+	listMembers := strings.Split(traceState, ",")
+	if len(listMembers) > maxTraceStateListMembers {
+		return false
+	}
+
+	keys := make(map[string]struct{}, len(listMembers))
+	for _, listMember := range listMembers {
+		listMember = strings.Trim(listMember, " \t")
+		if listMember == "" {
+			continue
+		}
+
+		key, value, ok := strings.Cut(listMember, "=")
+		if !ok {
+			return false
+		}
+
+		if !isValidTraceStateKey(key) || !isValidTraceStateValue(value) {
+			return false
+		}
+		if _, exists := keys[key]; exists {
+			return false
+		}
+		keys[key] = struct{}{}
+	}
+	return true
+}
+
+func isValidTraceStateKey(key string) bool {
+	tenantID, systemID, hasTenantID := strings.Cut(key, "@")
+	if hasTenantID {
+		return isValidTraceStateTenantID(tenantID) && isValidTraceStateSystemID(systemID)
+	}
+	return isValidTraceStateSimpleKey(key)
+}
+
+func isValidTraceStateSimpleKey(key string) bool {
+	return isValidTraceStateKeyPart(key, maxTraceStateSimpleKeyLength, false)
+}
+
+func isValidTraceStateTenantID(tenantID string) bool {
+	return isValidTraceStateKeyPart(tenantID, maxTraceStateTenantIDLength, true)
+}
+
+func isValidTraceStateSystemID(systemID string) bool {
+	return isValidTraceStateKeyPart(systemID, maxTraceStateSystemIDLength, false)
+}
+
+func isValidTraceStateKeyPart(part string, maxLength int, firstCanBeDigit bool) bool {
+	if len(part) == 0 || len(part) > maxLength {
+		return false
+	}
+	if !isTraceStateLowercaseAlpha(part[0]) && (!firstCanBeDigit || !isTraceStateDigit(part[0])) {
+		return false
+	}
+	for i := 1; i < len(part); i++ {
+		if !isTraceStateKeyChar(part[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTraceStateKeyChar(char byte) bool {
+	return isTraceStateLowercaseAlpha(char) || isTraceStateDigit(char) || char == '_' || char == '-' || char == '*' ||
+		char == '/'
+}
+
+func isTraceStateLowercaseAlpha(char byte) bool {
+	return char >= 'a' && char <= 'z'
+}
+
+func isTraceStateDigit(char byte) bool {
+	return char >= '0' && char <= '9'
+}
+
+func isValidTraceStateValue(value string) bool {
+	if len(value) == 0 || len(value) > maxTraceStateValueLength {
+		return false
+	}
+
+	for i := 0; i < len(value)-1; i++ {
+		if !isValidTraceStateValueChar(value[i]) {
+			return false
+		}
+	}
+	return isValidTraceStateValueLast(value[len(value)-1])
+}
+
+func isValidTraceStateValueChar(char byte) bool {
+	return char >= 0x20 && char <= 0x7e && char != ',' && char != '='
+}
+
+func isValidTraceStateValueLast(char byte) bool {
+	return char >= 0x21 && char <= 0x7e && char != ',' && char != '='
+}
+
 // extractSpanPointer is an internal method that safely extracts parent span pointer from context
 // using the configured SpanFromContext function. It includes error handling and fallback logic.
 func (o *OpenTelemetry) extractSpanPointer(ctx context.Context) uint64 {
 	// Thread-safe access to configuration
 	configMutex.RLock()
-	spanFromContextFunc := otelConfig.SpanFromContext
+	var spanFromContextFunc func(context.Context) uint64
+	if otelConfig != nil {
+		spanFromContextFunc = otelConfig.SpanFromContext
+	}
 	configMutex.RUnlock()
 
 	// If no SpanFromContext function is configured, return no parent span

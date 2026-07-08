@@ -2,6 +2,8 @@
 
 package models
 
+import "time"
+
 // A value to return alongside with error in case if command failed
 var (
 	DefaultFloatResponse  float64
@@ -477,4 +479,96 @@ type LCSPosition struct {
 	Start int64
 	// End is the ending index of the match.
 	End int64
+}
+
+// LatencyEntry represents the time and latency for a latency spike.
+type LatencyEntry struct {
+	// Time is the time of latency spike.
+	Time time.Time
+	// Duration is the duration of the latency spike.
+	Duration time.Duration
+}
+
+// LatencyEventInfo represents information about an event's latency spike time series.
+type LatencyEventInfo struct {
+	// EventName is the name of the event.
+	EventName string
+	// LatestTime is the time of the latest latency spike.
+	LatestTime time.Time
+	// LatestDuration is the duration of the latest latency spike.
+	LatestDuration time.Duration
+	// MaxDuration is the all-time maximum duration of a latency spike.
+	MaxDuration time.Duration
+	// Sum is the duration of all latency spikes in the event's time series.
+	// Only populated for Valkey 8.1+.
+	Sum Result[time.Duration]
+	// Count is the number of latency spikes recorded in the event's time series.
+	// Only populated for Valkey 8.1+.
+	Count Result[int64]
+}
+
+// ClientTrackingInfo represents a [CLIENT TRACKINGINFO] response.
+//
+// [CLIENT TRACKINGINFO]: https://valkey.io/commands/client-trackinginfo/
+type ClientTrackingInfo struct {
+	// Flags is the slice of tracking flags.
+	Flags []string
+
+	// Redirect is the client ID receiving invalidation messages, or -1 if not redirecting.
+	Redirect int64
+
+	// Prefixes is the slice of key prefixes monitored for invalidation.
+	Prefixes []string
+}
+
+// MemoryStatsDb represents database memory overhead statistics from a [MEMORY STATS] response.
+//
+// [MEMORY STATS]]: https://valkey.io/commands/memory-stats/
+type MemoryStatsDb struct {
+	OverheadHashtableExpires int64
+	OverheadHashtableMain    int64
+}
+
+// MemoryStats represents a [MEMORY STATS] response.
+//
+// [MEMORY STATS]]: https://valkey.io/commands/memory-stats/
+type MemoryStats struct {
+	Db map[int64]MemoryStatsDb
+
+	AllocatorActive             int64
+	AllocatorAllocated          int64
+	AllocatorFragmentationBytes int64
+	AllocatorResident           int64
+	AllocatorRssBytes           int64
+	AofBuffer                   int64
+	ClientsNormal               int64
+	ClientsSlaves               int64
+	DatasetBytes                int64
+	FragmentationBytes          int64
+	KeysBytesPerKey             int64
+	KeysCount                   int64
+	LuaCaches                   int64
+	OverheadTotal               int64
+	PeakAllocated               int64
+	ReplicationBacklog          int64
+	RssOverheadBytes            int64
+	StartupAllocated            int64
+	TotalAllocated              int64
+
+	AllocatorFragmentationRatio float64
+	AllocatorRssRatio           float64
+	DatasetPercentage           float64
+	Fragmentation               float64
+	PeakPercentage              float64
+	RssOverheadRatio            float64
+
+	// Optional Redis 7.0+ fields
+	ClusterLinks    Result[int64]
+	FunctionsCaches Result[int64]
+
+	// Optional Valkey 8.0+ fields
+	AllocatorMuzzy               Result[int64]
+	DbDictRehashingCount         Result[int64]
+	OverheadDbHashtableLut       Result[int64]
+	OverheadDbHashtableRehashing Result[int64]
 }

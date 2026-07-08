@@ -562,18 +562,33 @@ pub struct ClusterNodeInfo {
 impl ClusterTopology {
     /// Get cluster topology from a connection.
     pub async fn from_connection(connection: &mut ClusterConnection) -> Self {
+        Self::try_from_connection(connection)
+            .await
+            .expect("Failed to get CLUSTER NODES")
+    }
+
+    /// Try to get cluster topology, returning an error instead of panicking.
+    /// Useful in retry loops where transient errors (e.g. connection recovery) are expected.
+    pub async fn try_from_connection(
+        connection: &mut ClusterConnection,
+    ) -> Result<Self, redis::RedisError> {
         let nodes_output = connection
             .route_command(
                 redis::cmd("CLUSTER").arg("NODES"),
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
             )
-            .await
-            .expect("Failed to get CLUSTER NODES");
+            .await?;
 
         let nodes_str = match nodes_output {
             Value::BulkString(b) => String::from_utf8_lossy(&b).to_string(),
             Value::VerbatimString { text, .. } => text,
-            _ => panic!("Unexpected CLUSTER NODES response type"),
+            other => {
+                return Err(redis::RedisError::from((
+                    redis::ErrorKind::TypeError,
+                    "Unexpected CLUSTER NODES response type",
+                    format!("{other:?}"),
+                )));
+            }
         };
 
         let nodes = Self::parse_cluster_nodes(&nodes_str);
@@ -581,11 +596,11 @@ impl ClusterTopology {
         let all_node_addresses: Vec<(String, u16)> =
             nodes.iter().map(|n| (n.host.clone(), n.port)).collect();
 
-        Self {
+        Ok(Self {
             nodes,
             primary_nodes,
             all_node_addresses,
-        }
+        })
     }
 
     /// Parse CLUSTER NODES output to extract node information.
@@ -840,12 +855,20 @@ pub async fn wait_for_node_to_become_primary(
     let start = std::time::Instant::now();
 
     while start.elapsed() < timeout {
-        let topology = ClusterTopology::from_connection(connection).await;
-
-        if let Some(node) = topology.nodes.iter().find(|n| n.node_id == node_id)
-            && node.is_primary
-        {
-            return true;
+        match ClusterTopology::try_from_connection(connection).await {
+            Ok(topology) => {
+                if let Some(node) = topology.nodes.iter().find(|n| n.node_id == node_id)
+                    && node.is_primary
+                {
+                    return true;
+                }
+            }
+            Err(e) => {
+                logger_core::log_debug(
+                    "wait_for_node_to_become_primary",
+                    format!("CLUSTER NODES failed (retrying): {:?}", e),
+                );
+            }
         }
 
         tokio::time::sleep(Duration::from_millis(200)).await;

@@ -636,8 +636,10 @@ where
         item: SinkItem,
         timeout: Duration,
         is_fenced: bool,
+        is_blocking: bool,
     ) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true, is_fenced).await
+        self.send_recv(item, None, timeout, true, is_fenced, is_blocking)
+            .await
     }
 
     async fn send_recv(
@@ -648,6 +650,7 @@ where
         timeout: Duration,
         is_atomic: bool,
         is_fenced: bool,
+        is_blocking: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -670,45 +673,61 @@ where
         const DEAD_TICKS: u32 = 2;
         let send_start = std::time::Instant::now();
         let mut no_progress_ticks = 0u32;
-        let permit = loop {
-            let progress_before = self.progress.load(Ordering::Relaxed);
-            match tokio::time::timeout(liveness_tick, self.sender.reserve()).await {
-                Ok(Ok(permit)) => break permit,
-                Ok(Err(_closed)) => {
-                    return Err(RedisError::from((
-                        crate::ErrorKind::FatalSendError,
-                        "Failed to send the request to the server",
-                        "the pipeline writer task has terminated".to_string(),
-                    )));
-                }
-                Err(_elapsed) => {
-                    if send_start.elapsed() >= timeout {
-                        // Backpressure outlasted the request's own timeout budget.
-                        // Report a genuine timeout (NoRetry, is_timeout()), matching
-                        // the receive-side timeout — not a fatal/reconnect send error.
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            "Timed out waiting for pipeline send capacity",
-                        )
-                        .into());
-                    }
-                    if self.progress.load(Ordering::Relaxed) == progress_before {
-                        no_progress_ticks += 1;
-                        if no_progress_ticks >= DEAD_TICKS {
-                            // No progress across consecutive ticks while the channel
-                            // stays full: the writer is stuck, not merely slow.
-                            return Err(RedisError::from((
-                                crate::ErrorKind::FatalSendError,
-                                "Pipeline channel full — connection likely dead",
-                            )));
-                        }
-                    } else {
-                        // A slot freed or a response arrived: backpressure, not
-                        // death. Reset the dead-tick counter and keep waiting.
-                        no_progress_ticks = 0;
-                    }
-                }
+        // Fast path: if a channel slot is immediately available (the common,
+        // non-contended case) take it without arming the liveness-timeout
+        // machinery — no per-send timeout future, no atomic progress load. The
+        // dead-connection/backpressure detection below is only required when the
+        // channel is actually full, so keep the hot path bare.
+        let permit = match self.sender.try_reserve() {
+            Ok(permit) => permit,
+            Err(mpsc::error::TrySendError::Closed(())) => {
+                return Err(RedisError::from((
+                    crate::ErrorKind::FatalSendError,
+                    "Failed to send the request to the server",
+                    "the pipeline writer task has terminated".to_string(),
+                )));
             }
+            // Channel full: fall back to the liveness-aware slow path (unchanged).
+            Err(mpsc::error::TrySendError::Full(())) => loop {
+                let progress_before = self.progress.load(Ordering::Relaxed);
+                match tokio::time::timeout(liveness_tick, self.sender.reserve()).await {
+                    Ok(Ok(permit)) => break permit,
+                    Ok(Err(_closed)) => {
+                        return Err(RedisError::from((
+                            crate::ErrorKind::FatalSendError,
+                            "Failed to send the request to the server",
+                            "the pipeline writer task has terminated".to_string(),
+                        )));
+                    }
+                    Err(_elapsed) => {
+                        if send_start.elapsed() >= timeout {
+                            // Backpressure outlasted the request's own timeout budget.
+                            // Report a genuine timeout (NoRetry, is_timeout()), matching
+                            // the receive-side timeout — not a fatal/reconnect send error.
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "Timed out waiting for pipeline send capacity",
+                            )
+                            .into());
+                        }
+                        if self.progress.load(Ordering::Relaxed) == progress_before {
+                            no_progress_ticks += 1;
+                            if no_progress_ticks >= DEAD_TICKS {
+                                // No progress across consecutive ticks while the channel
+                                // stays full: the writer is stuck, not merely slow.
+                                return Err(RedisError::from((
+                                    crate::ErrorKind::FatalSendError,
+                                    "Pipeline channel full — connection likely dead",
+                                )));
+                            }
+                        } else {
+                            // A slot freed or a response arrived: backpressure, not
+                            // death. Reset the dead-tick counter and keep waiting.
+                            no_progress_ticks = 0;
+                        }
+                    }
+                }
+            },
         };
         permit.send(PipelineMessage {
             input,
@@ -732,8 +751,14 @@ where
         let recv_start = std::time::Instant::now();
         let recv_result = Runtime::locate().timeout(timeout, receiver).await;
         let recv_elapsed = recv_start.elapsed();
+        // For blocking commands (e.g. XREAD BLOCK, BLPOP) the client intentionally
+        // waits for a server-side event, so a long receive time is expected and not
+        // indicative of a slow connection.  Since recv_elapsed cannot exceed the
+        // request timeout, simply skip the warning for blocking commands rather than
+        // padding the threshold.  For non-blocking commands, keep the original
+        // heuristic (min(timeout/2, 5s)).
         let recv_warn_threshold = std::cmp::min(timeout / 2, std::time::Duration::from_secs(5));
-        if recv_elapsed > recv_warn_threshold {
+        if !is_blocking && recv_elapsed > recv_warn_threshold {
             logger_core::log_warn_rate_limited!(
                 "pipeline",
                 5,
@@ -895,7 +920,12 @@ impl MultiplexedConnection {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(cmd.get_packed_command(), timeout, cmd.is_fenced())
+            .send_single(
+                cmd.get_packed_command(),
+                timeout,
+                cmd.is_fenced(),
+                cmd.is_blocking(),
+            )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -936,6 +966,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
+                false,
                 false,
             )
             .await;
@@ -1415,6 +1446,7 @@ mod tests {
                         crate::cmd("PING").get_packed_command(),
                         Duration::from_secs(60),
                         false,
+                        false,
                     )
                     .await;
             });
@@ -1428,7 +1460,12 @@ mod tests {
         let timeout = Duration::from_secs(2);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .send_single(
+                crate::cmd("PING").get_packed_command(),
+                timeout,
+                false,
+                false,
+            )
             .await;
         let elapsed = start.elapsed();
 
@@ -1556,6 +1593,7 @@ mod tests {
                     crate::cmd("GET").arg("key1").get_packed_command(),
                     Duration::from_secs(5),
                     false,
+                    false,
                 )
                 .await
         });
@@ -1576,6 +1614,7 @@ mod tests {
                         .arg("value")
                         .get_packed_command(),
                     Duration::from_secs(5),
+                    false,
                     false,
                 )
                 .await
@@ -1657,6 +1696,7 @@ mod tests {
                         crate::cmd("PING").get_packed_command(),
                         Duration::from_secs(60),
                         false,
+                        false,
                     )
                     .await;
             });
@@ -1667,7 +1707,12 @@ mod tests {
         let timeout = Duration::from_millis(200);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .send_single(
+                crate::cmd("PING").get_packed_command(),
+                timeout,
+                false,
+                false,
+            )
             .await;
         let elapsed = start.elapsed();
 
@@ -1703,6 +1748,7 @@ mod tests {
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(5),
                     false,
+                    false,
                 )
                 .await
             }));
@@ -1736,6 +1782,7 @@ mod tests {
                 p.send_single(
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(30),
+                    false,
                     false,
                 )
                 .await
@@ -1783,8 +1830,13 @@ mod tests {
         for _ in 0..300 {
             let mut p = pipeline.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(crate::cmd("PING").get_packed_command(), timeout, false)
-                    .await
+                p.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    timeout,
+                    false,
+                    false,
+                )
+                .await
             }));
         }
 
@@ -1840,6 +1892,7 @@ mod tests {
                 crate::cmd("PING").get_packed_command(),
                 Duration::from_secs(5),
                 false,
+                false,
             )
             .await;
         let elapsed = start.elapsed();
@@ -1891,7 +1944,8 @@ mod tests {
             let mut p = pipeline.clone();
             let packed = packed.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(packed, Duration::from_secs(60), false).await
+                p.send_single(packed, Duration::from_secs(60), false, false)
+                    .await
             }));
         }
         let mut ok = 0usize;
@@ -2079,6 +2133,7 @@ mod tests {
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(3600),
                     false,
+                    false,
                 )
                 .await
             }));
@@ -2091,6 +2146,7 @@ mod tests {
                 .send_single(
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(3600),
+                    false,
                     false,
                 )
                 .await

@@ -48,6 +48,25 @@ EXCLUDED_TESTS = {
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
+        # Async-only lifecycle tests (pipe/event-loop specific)
+        "test_concurrent_commands_from_multiple_clients",
+        "test_response_after_client_close_is_managed",
+        "test_large_response_does_not_block_other_clients",
+        "test_rapid_create_close_cycles",
+        "test_inflight_commands_get_closing_error_on_close",
+        "test_pubsub_callback_with_closed_client_no_crash",
+        "test_client_death_mid_command",
+        # Nested helper functions in lifecycle tests
+        "client_workload",
+        "blocking_cmd",
+        "close_after_delay",
+        "get_large",
+        "get_small",
+        "close_after_dispatch",
+        "kill_after_delay",
+        "cb",
+        # Async-only pubsub pointer-mode test
+        "test_pubsub_large_message_does_not_block_other_clients",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -59,6 +78,16 @@ EXCLUDED_TESTS = {
         "test_sync_get_into_buffer_larger_buffer",
         "test_sync_get_into_buffer_readonly_raises",
         "test_sync_get_into_buffer_too_small_raises",
+        "test_sync_get_into_buffer_non_byte_format",
+        # mget() with buffers - sync-only FFI path, no async equivalent
+        "test_sync_mget_into_buffers",
+        "test_sync_mget_into_buffers_missing_key",
+        "test_sync_mget_into_buffers_larger_buffer",
+        "test_sync_mget_into_buffers_readonly_raises",
+        "test_sync_mget_into_buffers_too_small_raises",
+        "test_sync_mget_buffers_length_mismatch_raises",
+        "test_sync_mget_into_buffers_non_byte_format",
+        "test_sync_mget_into_buffers_cross_slot",
         # Script invocation span — async tracked in #5601
         "test_sync_span_script_invocation",
     ],

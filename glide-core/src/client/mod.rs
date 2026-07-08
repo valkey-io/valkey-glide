@@ -306,25 +306,51 @@ pub struct LazyClient {
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
-#[derive(Clone)]
-pub struct Client {
+/// Immutable shared state of a [`Client`], held behind a single `Arc` so that
+/// cloning a `Client` (which happens on **every command** via `self.clone()`) is
+/// one atomic refcount bump instead of ~8 individual `Arc` bumps plus an
+/// `OTelMetadata` `String` clone. All of these fields are immutable after
+/// construction — the only mutable per-client state lives inside
+/// `internal_client`'s `RwLock` — so sharing them via `Arc` + `Deref` keeps every
+/// existing `self.<field>` access working unchanged.
+pub struct ClientShared {
     internal_client: Arc<RwLock<ClientWrapper>>,
     request_timeout: Duration,
     inflight_requests_allowed: Arc<AtomicIsize>,
     inflight_requests_limit: isize,
     inflight_log_interval: isize,
-    // IAM token manager for automatic credential refresh
-    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
-    otel_metadata: types::OTelMetadata,
     // Optional client-side cache
     client_side_cache: Option<Arc<dyn GlideCache>>,
     // Per-client latency tracker for timeout diagnostics
     latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
     // Optional Client-wide circuit breaker
     circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
+}
+
+#[derive(Clone)]
+pub struct Client {
+    shared: Arc<ClientShared>,
+    // IAM token manager for automatic credential refresh. Assigned once during
+    // construction (the manager is created after the client), so it is kept as a
+    // direct field rather than inside `shared`. It is an `Option<Arc<_>>`, so the
+    // per-command clone is at most a single refcount bump.
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Per-clone diagnostic metadata. `db_namespace` is updated on `&mut self`
+    // (after SELECT) via copy-on-write, so this is an `Arc` — the per-command
+    // `Client::clone` is then a single refcount bump instead of cloning two
+    // `String`s (host + db_namespace) on every command.
+    otel_metadata: Arc<types::OTelMetadata>,
+}
+
+impl std::ops::Deref for Client {
+    type Target = ClientShared;
+    #[inline]
+    fn deref(&self) -> &ClientShared {
+        &self.shared
+    }
 }
 
 async fn run_with_timeout<T>(
@@ -431,6 +457,18 @@ fn get_timeout_from_cmd_arg(
     }
 }
 
+/// Returns true for commands with user-specified blocking timeouts that
+/// should be excluded from latency tracking (they distort p99).
+fn is_blocking_command(cmd: &Cmd) -> bool {
+    let command = cmd.command().unwrap_or_default();
+    match command.as_slice() {
+        b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
+        | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        _ => false,
+    }
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {
@@ -512,7 +550,7 @@ impl Client {
 
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
-        self.otel_metadata.db_namespace = database_id.to_string();
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = database_id.to_string();
         Ok(())
     }
 
@@ -832,7 +870,7 @@ impl Client {
         self.update_stored_client_name(None).await?;
         self.update_stored_protocol(redis::ProtocolVersion::RESP2)
             .await?;
-        self.otel_metadata.db_namespace = "0".to_string();
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = "0".to_string();
         for kind in [
             redis::PubSubSubscriptionKind::Exact,
             redis::PubSubSubscriptionKind::Pattern,
@@ -1115,7 +1153,18 @@ impl Client {
                 None
             };
             let self_clone = self.clone();
+
+            // Blocking commands have artificially long latencies; exclude from tracker.
+            let is_blocking_cmd = is_blocking_command(cmd);
+            // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
+            // the copy that actually travels to the multiplexed connection carries
+            // it, letting that connection suppress false-positive response-wait
+            // warnings (#6283).
+            cmd.set_is_blocking(is_blocking_cmd);
             let owned_cmd = cmd.clone();
+
+            // Captured by the timeout path for watchdog-informed CB decisions.
+            let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
 
             let result = match request_timeout {
                 Some(duration) => {
@@ -1134,10 +1183,12 @@ impl Client {
 
                     let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
                         .register(duration, cmd_start);
-                    let routing_desc = routing
-                        .as_ref()
-                        .map(|r| format!("{:?}", r))
-                        .unwrap_or_else(|| "unknown".to_owned());
+                    // Defer the expensive Debug-format of the route to the (rare)
+                    // timeout path. Cloning the routing is cheap for the common
+                    // single-node case (no heap allocation); previously a String was
+                    // allocated and Debug-formatted on EVERY command just for a
+                    // diagnostic field that is only read when a timeout fires.
+                    let routing_for_diag = routing.clone();
                     let execute = Self::execute_command_owned(
                         self_clone,
                         owned_cmd.clone(),
@@ -1150,8 +1201,10 @@ impl Client {
                     tokio::select! {
                         result = &mut execute => {
                             // Record latency into per-client tracker
-                            let elapsed = cmd_start.elapsed();
-                            self.latency_tracker.record(elapsed);
+                            if !is_blocking_cmd {
+                                let elapsed = cmd_start.elapsed();
+                                self.latency_tracker.record(elapsed);
+                            }
                             result
                         }
                         recv_result = timeout_rx => {
@@ -1166,7 +1219,10 @@ impl Client {
                                     let actual_elapsed = cmd_start.elapsed();
                                     let (phase, node, retry_count, command) = {
                                         let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
-                                        let n: String = routing_desc.clone();
+                                        let n: String = routing_for_diag
+                                            .as_ref()
+                                            .map(|r| format!("{:?}", r))
+                                            .unwrap_or_else(|| "unknown".to_owned());
                                         let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
                                         let c = owned_cmd.arg_idx(0)
                                             .map(crate::timeout_watchdog::cmd_name_from_bytes)
@@ -1201,6 +1257,7 @@ impl Client {
                                             node: node.clone(),
                                         }
                                     };
+                                    timeout_cause = Some(cause.clone());
                                     let event = crate::timeout_watchdog::TimeoutEvent {
                                         cause,
                                         command,
@@ -1263,11 +1320,26 @@ impl Client {
                             ) || e.is_connection_dropped()
                         };
                         if counts {
-                            let kind_str = match e.kind() {
-                                ErrorKind::IoError => "IoError",
-                                ErrorKind::FatalSendError => "FatalSendError",
-                                ErrorKind::FatalReceiveError => "FatalReceiveError",
-                                _ => "Timeout",
+                            let kind_str = if e.is_timeout() {
+                                match &timeout_cause {
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                            ..
+                                        },
+                                    ) => "TimeoutSystemOverload",
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                            ..
+                                        },
+                                    ) => "TimeoutClientBackpressure",
+                                    _ => "TimeoutServerUnresponsive",
+                                }
+                            } else {
+                                match e.kind() {
+                                    ErrorKind::FatalSendError => "FatalSendError",
+                                    ErrorKind::FatalReceiveError => "FatalReceiveError",
+                                    _ => "IoError",
+                                }
                             };
                             (true, Some(kind_str))
                         } else {
@@ -1275,7 +1347,10 @@ impl Client {
                         }
                     }
                 };
-                cb.on_result(is_error, error_kind);
+                let current_inflight = (self.inflight_requests_limit
+                    - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                    as u32;
+                cb.on_result(is_error, error_kind, current_inflight);
             }
 
             result
@@ -2370,50 +2445,54 @@ impl Client {
             let inflight_limit: isize = inflight_requests_limit.try_into().unwrap();
             let inflight_log_interval = (inflight_limit / 10).max(1);
             let client = Self {
-                internal_client: internal_client_arc.clone(),
-                request_timeout,
-                inflight_requests_allowed,
-                inflight_requests_limit: inflight_limit,
-                inflight_log_interval,
-                compression_manager: compression_manager.clone(),
-                iam_token_manager: None,
-                pubsub_synchronizer: pubsub_synchronizer.clone(),
-                otel_metadata,
-                client_side_cache,
-                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
-                circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
-                    let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
-                    Arc::new(circuit_breaker::ClientCircuitBreaker::new(
-                        circuit_breaker::ClientCircuitBreakerConfig {
-                            window_size: Duration::from_millis(if config.window_size_ms > 0 {
-                                config.window_size_ms as u64
-                            } else {
-                                defaults.window_size.as_millis() as u64
-                            }),
-                            failure_rate_threshold: if config.failure_rate_threshold > 0.0 {
-                                config.failure_rate_threshold
-                            } else {
-                                defaults.failure_rate_threshold
+                shared: Arc::new(ClientShared {
+                    internal_client: internal_client_arc.clone(),
+                    request_timeout,
+                    inflight_requests_allowed,
+                    inflight_requests_limit: inflight_limit,
+                    inflight_log_interval,
+                    compression_manager: compression_manager.clone(),
+                    pubsub_synchronizer: pubsub_synchronizer.clone(),
+                    client_side_cache,
+                    latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
+                    circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
+                        let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
+                        Arc::new(circuit_breaker::ClientCircuitBreaker::new(
+                            circuit_breaker::ClientCircuitBreakerConfig {
+                                window_size: Duration::from_millis(if config.window_size_ms > 0 {
+                                    config.window_size_ms as u64
+                                } else {
+                                    defaults.window_size.as_millis() as u64
+                                }),
+                                failure_rate_threshold: if config.failure_rate_threshold > 0.0 {
+                                    config.failure_rate_threshold
+                                } else {
+                                    defaults.failure_rate_threshold
+                                },
+                                min_errors: if config.min_errors > 0 {
+                                    config.min_errors
+                                } else {
+                                    defaults.min_errors
+                                },
+                                open_timeout: Duration::from_millis(
+                                    if config.open_timeout_ms > 0 {
+                                        config.open_timeout_ms as u64
+                                    } else {
+                                        defaults.open_timeout.as_millis() as u64
+                                    },
+                                ),
+                                count_timeouts: config.count_timeouts,
+                                consecutive_successes: if config.consecutive_successes > 0 {
+                                    config.consecutive_successes
+                                } else {
+                                    defaults.consecutive_successes
+                                },
                             },
-                            min_errors: if config.min_errors > 0 {
-                                config.min_errors
-                            } else {
-                                defaults.min_errors
-                            },
-                            open_timeout: Duration::from_millis(if config.open_timeout_ms > 0 {
-                                config.open_timeout_ms as u64
-                            } else {
-                                defaults.open_timeout.as_millis() as u64
-                            }),
-                            count_timeouts: config.count_timeouts,
-                            consecutive_successes: if config.consecutive_successes > 0 {
-                                config.consecutive_successes
-                            } else {
-                                defaults.consecutive_successes
-                            },
-                        },
-                    ))
+                        ))
+                    }),
                 }),
+                iam_token_manager: None,
+                otel_metadata: Arc::new(otel_metadata),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2581,24 +2660,26 @@ impl Client {
     ) -> Self {
         use crate::client::types::{NodeAddress, OTelMetadata};
         Client {
-            internal_client,
-            request_timeout: Duration::from_millis(1000),
-            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
-            inflight_requests_limit: 1000,
-            inflight_log_interval: 100,
+            shared: Arc::new(ClientShared {
+                internal_client,
+                request_timeout: Duration::from_millis(1000),
+                inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+                inflight_requests_limit: 1000,
+                inflight_log_interval: 100,
+                compression_manager: None,
+                pubsub_synchronizer,
+                client_side_cache: None,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+                circuit_breaker: None,
+            }),
             iam_token_manager: None,
-            compression_manager: None,
-            pubsub_synchronizer,
-            otel_metadata: OTelMetadata {
+            otel_metadata: Arc::new(OTelMetadata {
                 address: NodeAddress {
                     host: "localhost".to_string(),
                     port: 6379,
                 },
                 db_namespace: "0".to_string(),
-            },
-            client_side_cache: None,
-            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
-            circuit_breaker: None,
+            }),
         }
     }
 }
@@ -2611,7 +2692,8 @@ mod tests {
 
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
-        BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
+        BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
+        get_request_timeout, is_blocking_command,
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
@@ -2880,24 +2962,26 @@ mod tests {
         ));
 
         Client {
-            internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
-            request_timeout: Duration::from_millis(250),
-            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
-            inflight_requests_limit: 1000,
-            inflight_log_interval: 100,
+            shared: Arc::new(ClientShared {
+                internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
+                request_timeout: Duration::from_millis(250),
+                inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+                inflight_requests_limit: 1000,
+                inflight_log_interval: 100,
+                compression_manager: None,
+                pubsub_synchronizer,
+                client_side_cache: None,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+                circuit_breaker: None,
+            }),
             iam_token_manager: None,
-            compression_manager: None,
-            pubsub_synchronizer,
-            otel_metadata: OTelMetadata {
+            otel_metadata: Arc::new(OTelMetadata {
                 address: NodeAddress {
                     host: "localhost".to_string(),
                     port: 6379,
                 },
                 db_namespace: "0".to_string(),
-            },
-            client_side_cache: None,
-            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
-            circuit_breaker: None,
+            }),
         }
     }
 
@@ -3229,5 +3313,74 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("PING");
         assert!(!client.is_reset_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command() {
+        // Always-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("BRPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg("1").arg("5000");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("BLOCK")
+            .arg("5000")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("COUNT")
+            .arg("10")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(!is_blocking_command(&cmd));
+
+        // XREADGROUP with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("BLOCK")
+            .arg("0")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(is_blocking_command(&cmd));
+
+        // XREADGROUP without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(!is_blocking_command(&cmd));
+
+        // Non-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+        assert!(!is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!is_blocking_command(&cmd));
     }
 }
