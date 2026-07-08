@@ -33,7 +33,7 @@ itoa = "1"
 
 # Strum is a set of macros and traits for working with enums and strings easier in Rust.
 strum = "0.28"
-strum_macros = "0.27"
+strum_macros = "0.28"
 
 # This is a dependency that already exists in url
 percent-encoding = "2"
