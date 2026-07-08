@@ -32,7 +32,7 @@
     "license": "Apache-2.0",
     "dependencies": {
         "long": "5",
-        "protobufjs": "^7.6.3"
+        "protobufjs": "^8.7.0"
     },
     "keywords": [
         "valkey",
