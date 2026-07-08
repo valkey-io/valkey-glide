@@ -14,6 +14,8 @@
 * feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
 * Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 * Java: Add client certificate and private key support for mTLS ([#6149](https://github.com/valkey-io/valkey-glide/issues/6149))
+* feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
+* Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 
 ## 2.5
 
