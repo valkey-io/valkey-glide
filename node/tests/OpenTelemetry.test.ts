@@ -1008,7 +1008,11 @@ describe("OpenTelemetry parent span context propagation", () => {
                     ...getClientConfigurationOption(
                         cluster.getAddresses(),
                         ProtocolVersion.RESP3,
+                        { requestTimeout: 10000 },
                     ),
+                    advancedConfiguration: {
+                        connectionTimeout: 10000,
+                    },
                 }),
             );
 
@@ -1080,7 +1084,11 @@ describe("OpenTelemetry parent span context propagation", () => {
                     ...getClientConfigurationOption(
                         cluster.getAddresses(),
                         ProtocolVersion.RESP3,
+                        { requestTimeout: 10000 },
                     ),
+                    advancedConfiguration: {
+                        connectionTimeout: 10000,
+                    },
                 }),
             );
 
