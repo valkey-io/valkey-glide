@@ -531,7 +531,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
+        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=30 if tls else 10):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
