@@ -10,18 +10,20 @@ lazy_static = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"
-futures-util = "0.3"
 tokio = { version = "1", features = ["macros", "time"] }
 
 thiserror = "2"
 url = "2"
-async-trait = "0.1"
-opentelemetry = { version = "0.27", features = ["metrics"] }
-opentelemetry_sdk = { version = "0.27.x", features = ["rt-tokio", "metrics"] }
-opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
+opentelemetry = { version = "0.32", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "metrics", "experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime"] }
+opentelemetry-otlp = { version = "0.32", features = ["http-proto", "http-json", "reqwest-client", "grpc-tonic"] }
 once_cell = "1"
 logger_core = { path = "../../logger_core" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 tempfile = "3"
+# `testing` exposes `InMemoryMetricExporter`, used by the metrics export tests to
+# drive real SDK aggregation (the 0.32 metric data types are no longer
+# externally constructible).
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "metrics", "testing"] }
