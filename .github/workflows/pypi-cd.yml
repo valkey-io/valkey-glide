@@ -493,9 +493,9 @@ jobs:
                   path: python/glide-sync/wheels
                   if-no-files-found: error
 
-    build-source-dist-and-publish-to-pypi:
-        if: ${{ github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true }}
-        name: Publish the base PyPi package
+    publish-async-to-pypi:
+        if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
+        name: Publish the async PyPi package
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         needs: publish-binaries
@@ -545,14 +545,12 @@ jobs:
                   merge-multiple: true
 
             - name: Async client - Collect wheels and sdist for publishing
-              if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
               run: |
                   mkdir -p python/glide-async/dist
                   cp python/glide-async/wheels/*.whl python/glide-async/dist/
                   cp python/glide-async/sdist/*.tar.gz python/glide-async/dist/
 
             - name: Async client - Publish binaries and source to PyPI
-              if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
               uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
@@ -568,6 +566,41 @@ jobs:
                   path: |
                       python/glide-async/wheels/*.whl
                       python/glide-async/dist/*.tar.gz
+
+    publish-sync-to-pypi:
+        if: ${{ github.event_name == 'push' || inputs.publish_sync == true }}
+        name: Publish the sync PyPi package
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: publish-binaries
+        steps:
+            - name: Checkout
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
+
+            - name: Set the package version for Python
+              working-directory: ./python
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  # Set the version for the Async, Sync and Shared packages
+                  # List of packages to update
+                  for package in glide-async glide-sync glide-shared; do
+                    echo "Patching version in $package/pyproject.toml"
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+
+                    # Log the updated file
+                    cat "./$package/pyproject.toml"
+                  done
+
+            - name: Copy README file into package directories
+              working-directory: ./python
+              run: |
+                  cp README.md glide-sync/README.md
+                  cp README.md glide-async/README.md
 
             ### SYNC CLIENT ###
 
@@ -590,14 +623,12 @@ jobs:
                   merge-multiple: true
 
             - name: Sync client - Collect wheels and sdist for publishing
-              if: ${{ github.event_name == 'push' || inputs.publish_sync == true }}
               run: |
                   # The sdist is already in python/glide-sync/dist (from `build --sdist`);
                   # add the wheels alongside it so a single directory is published.
                   cp python/glide-sync/wheels/*.whl python/glide-sync/dist/
 
             - name: Sync client - Publish binaries and source to PyPI
-              if: ${{ github.event_name == 'push' || inputs.publish_sync == true }}
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
               uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
@@ -620,7 +651,8 @@ jobs:
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
             [
-                build-source-dist-and-publish-to-pypi,
+                publish-async-to-pypi,
+                publish-sync-to-pypi,
                 publish-binaries,
                 load-platform-matrix,
             ]
