@@ -376,7 +376,7 @@ describe("NAPI Client Integration Tests", () => {
 
                     tempClient.close();
                 }
-            });
+            }, TIMEOUT);
 
             it("should handle concurrent requests", async () => {
                 const promises = [];
@@ -400,7 +400,7 @@ describe("NAPI Client Integration Tests", () => {
                 for (let i = 0; i < 100; i++) {
                     expect(values[i]).toBe(`value-${i}`);
                 }
-            });
+            }, TIMEOUT);
         });
 
         describe("Inflight Limits", () => {
