@@ -671,6 +671,146 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers(self, glide_sync_client: TGlideClient):
+        """Test mget with buffers writes each value into its own buffer."""
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(3)]
+        values = [os.urandom(100), os.urandom(257), os.urandom(4096)]
+        for k, v in zip(keys, values):
+            assert glide_sync_client.set(k, v) == OK
+
+        bufs = [memoryview(bytearray(4096)) for _ in range(3)]
+        result = glide_sync_client.mget(keys, buffers=bufs)
+        assert result == [b"100", b"257", b"4096"]
+        for buf, val in zip(bufs, values):
+            assert bytes(buf[: len(val)]) == val
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_missing_key(self, glide_sync_client: TGlideClient):
+        """Test mget with buffers reports a missing key as None."""
+        tag = get_random_string(6)
+        present, missing = f"{{{tag}}}:p", f"{{{tag}}}:m"
+        data = os.urandom(64)
+        assert glide_sync_client.set(present, data) == OK
+
+        bufs = [memoryview(bytearray(256)) for _ in range(2)]
+        result = glide_sync_client.mget([present, missing], buffers=bufs)
+        assert result == [b"64", None]
+        assert bytes(bufs[0][:64]) == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_larger_buffer(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test mget with buffers larger than the values."""
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(2)]
+        values = [os.urandom(10), os.urandom(200)]
+        for k, v in zip(keys, values):
+            assert glide_sync_client.set(k, v) == OK
+
+        bufs = [memoryview(bytearray(4096)) for _ in range(2)]
+        result = glide_sync_client.mget(keys, buffers=bufs)
+        assert result == [b"10", b"200"]
+        for buf, val in zip(bufs, values):
+            assert bytes(buf[: len(val)]) == val
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_readonly_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test mget with buffers rejects a read-only buffer entry."""
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(2)]
+        bufs = [memoryview(bytearray(64)), memoryview(b"\x00" * 64)]
+        with pytest.raises(TypeError):
+            glide_sync_client.mget(keys, buffers=bufs)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_too_small_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test mget with buffers raises when a value exceeds its buffer."""
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(2)]
+        assert glide_sync_client.set(keys[0], os.urandom(16)) == OK
+        assert glide_sync_client.set(keys[1], os.urandom(256)) == OK
+
+        bufs = [memoryview(bytearray(64)), memoryview(bytearray(64))]
+        with pytest.raises(RequestError, match="exceeds buffer capacity"):
+            glide_sync_client.mget(keys, buffers=bufs)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_buffers_length_mismatch_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test mget rejects a buffers list whose length differs from keys."""
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(2)]
+        with pytest.raises(ValueError):
+            glide_sync_client.mget(keys, buffers=[memoryview(bytearray(8))])
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_cross_slot(self, glide_sync_client: TGlideClient):
+        """Test mget with buffers where keys map to different cluster slots.
+
+        A multi-slot MGET is split per slot and the per-slot responses are
+        recombined into the original key order, so ``buffers[i]`` must still
+        receive the value of ``keys[i]``. Distinct hash tags force the keys
+        onto different slots; distinct value sizes make any mis-mapping show
+        up in the returned byte counts as well as the buffer contents.
+        """
+        suffix = get_random_string(6)
+        keys = [f"{{abc}}:{suffix}", f"{{zxy}}:{suffix}", f"{{lkn}}:{suffix}"]
+        values = [os.urandom(64), os.urandom(257), os.urandom(1024)]
+        for k, v in zip(keys, values):
+            assert glide_sync_client.set(k, v) == OK
+
+        bufs = [memoryview(bytearray(2048)) for _ in range(3)]
+        result = glide_sync_client.mget(keys, buffers=bufs)
+        assert result == [b"64", b"257", b"1024"]
+        for buf, val in zip(bufs, values):
+            assert bytes(buf[: len(val)]) == val
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_mget_into_buffers_non_byte_format(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Regression: per-buffer capacity is byte-based, not element-based.
+
+        Same contract as ``test_sync_get_into_buffer_non_byte_format`` (#6310)
+        for the multi-buffer path: a memoryview with ``itemsize > 1`` has
+        ``len()`` (element count) smaller than ``nbytes`` (byte capacity). Each
+        value below is 4096 bytes and each buffer is 1024 ``uint32`` elements
+        == 4096 bytes, so it fits exactly; capacity computed with ``len()``
+        would spuriously reject it.
+        """
+        tag = get_random_string(6)
+        keys = [f"{{{tag}}}:{i}" for i in range(2)]
+        values = [os.urandom(4096), os.urandom(4096)]
+        for k, v in zip(keys, values):
+            assert glide_sync_client.set(k, v) == OK
+
+        arrs = [array.array("I", [0] * 1024) for _ in range(2)]
+        bufs = [memoryview(a) for a in arrs]
+        for buf, val in zip(bufs, values):
+            assert len(buf) < len(val)  # element count under-reports capacity
+            assert buf.nbytes == len(val)
+
+        result = glide_sync_client.mget(keys, buffers=bufs)
+        assert result == [b"4096", b"4096"]
+        for buf, val in zip(bufs, values):
+            assert buf.cast("B")[:4096] == val
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_set_get_with_bytearray_and_memoryview(
         self, glide_sync_client: TGlideClient
     ):
