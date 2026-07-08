@@ -126,12 +126,14 @@ describe("NodeDiscoveryMode", () => {
                     addresses: [{ host: primaryAddr[0], port: primaryAddr[1] }],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
                 const probe = await GlideClient.createClient({
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -158,6 +160,7 @@ describe("NodeDiscoveryMode", () => {
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -170,6 +173,7 @@ describe("NodeDiscoveryMode", () => {
                 const probe = await GlideClient.createClient({
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -202,6 +206,7 @@ describe("NodeDiscoveryMode", () => {
                     ],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -210,6 +215,7 @@ describe("NodeDiscoveryMode", () => {
                         { host: replica1Addr[0], port: replica1Addr[1] },
                     ],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -218,6 +224,7 @@ describe("NodeDiscoveryMode", () => {
                         { host: replica2Addr[0], port: replica2Addr[1] },
                     ],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
