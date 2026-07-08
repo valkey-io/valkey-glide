@@ -37,6 +37,7 @@ concurrency:
 
 permissions:
     id-token: write
+    attestations: write
 
 jobs:
     load-platform-matrix:
