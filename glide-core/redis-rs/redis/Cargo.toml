@@ -126,7 +126,7 @@ socket2 = "0.6"
 fnv = "1"
 futures = "0.3"
 futures-time = "3"
-criterion = "0.6"
+criterion = "0.8"
 partial-io = { version = "0.5", features = ["tokio", "quickcheck1"] }
 quickcheck = "1"
 tokio = { version = "1", features = [
