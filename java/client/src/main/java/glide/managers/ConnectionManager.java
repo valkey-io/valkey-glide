@@ -383,10 +383,11 @@ public class ConnectionManager {
                         // re-reads it so a rotated certificate is adopted on the next reconnect.
                         String clientCertPath = extractClientCertPath(configuration);
                         String clientKeyPath = extractClientKeyPath(configuration);
+                        boolean certReloadEnabled = isCertReloadEnabled(configuration);
                         if (clientCertPath != null && clientKeyPath != null) {
                             requestBuilder.setClientCertPath(clientCertPath);
                             requestBuilder.setClientKeyPath(clientKeyPath);
-                            if (isCertReloadEnabled(configuration)) {
+                            if (certReloadEnabled) {
                                 CertReloadConfig.Builder reloadBuilder = CertReloadConfig.newBuilder();
                                 reloadBuilder.setEnabled(true);
                                 Integer reloadInterval = extractCertReloadIntervalSeconds(configuration);

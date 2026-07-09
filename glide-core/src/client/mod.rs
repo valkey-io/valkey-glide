@@ -2114,6 +2114,13 @@ async fn create_cluster_client(
         None
     };
 
+    // `tls_params` seeds the initial nodes and (when present) is handed to the
+    // cluster builder directly. `tls_certificates` carries the raw byte material for
+    // the byte-based case, which the builder re-parses at connect time. For the
+    // path-based case we intentionally leave `tls_certificates` as `None` and pass
+    // the manager's already-validated params instead, so the builder does not
+    // re-read/re-parse the files (which would skip the key-match check and could
+    // observe a torn rotation).
     let (tls_params, tls_certificates) = if let Some(manager) = &cert_material_manager {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
@@ -2121,32 +2128,9 @@ async fn create_cluster_client(
                 "TLS certificates provided but TLS is disabled",
             )));
         }
-        // Path-based mTLS: seed params from the validated manager. The cluster
-        // builder also needs `TlsCertificates` (for its own connect-time parse), so
-        // read the current bytes from disk once to construct it.
-        let client_cert =
-            std::fs::read(request.client_cert_path.as_ref().unwrap()).map_err(|e| {
-                RedisError::from((
-                    ErrorKind::InvalidClientConfig,
-                    "Failed to read client certificate path",
-                    e.to_string(),
-                ))
-            })?;
-        let client_key = std::fs::read(request.client_key_path.as_ref().unwrap()).map_err(|e| {
-            RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Failed to read client key path",
-                e.to_string(),
-            ))
-        })?;
-        let tls_certs = TlsCertificates {
-            client_tls: Some(redis::ClientTlsConfig {
-                client_cert,
-                client_key,
-            }),
-            root_cert: root_cert_bytes.clone(),
-        };
-        (Some(manager.get_params().await), Some(tls_certs))
+        // Path-based mTLS: reuse the manager's validated params as the single source
+        // of truth for the initial cluster connection.
+        (Some(manager.get_params().await), None)
     } else if has_root_certs || has_client_cert || has_client_key {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
@@ -2229,7 +2213,12 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
         if let Some(certs) = tls_certificates {
+            // Byte-based mTLS: the builder re-parses these at connect time.
             builder = builder.certs(certs);
+        } else if let Some(params) = tls_params {
+            // Path-based mTLS: hand the manager's already-validated params to the
+            // builder so it reuses them verbatim instead of re-reading from disk.
+            builder = builder.tls_params(params);
         }
     }
 
