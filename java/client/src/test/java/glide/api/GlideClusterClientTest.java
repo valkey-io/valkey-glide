@@ -329,7 +329,7 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        protected <T> CompletableFuture<T> submitDirectCommand(
+        protected <T> CompletableFuture<T> submitCommandAsync(
                 RequestType requestType,
                 byte[][] args,
                 Route route,
@@ -339,7 +339,7 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        protected <T> CompletableFuture<T> submitDirectBlockingCommand(
+        protected <T> CompletableFuture<T> submitBlockingCommandAsync(
                 RequestType requestType,
                 byte[][] args,
                 Route route,

@@ -183,8 +183,8 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== COMMAND EXECUTION METHODS ====================
 
-    /** Execute batch asynchronously. */
-    public CompletableFuture<Object> executeBatchDirect(
+    /** Execute a batch of commands asynchronously via JNI. */
+    public CompletableFuture<Object> executeBatchAsync(
             int[] requestTypes,
             byte[][][] args,
             boolean isAtomic,
@@ -216,7 +216,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            GlideNativeBridge.executeBatchDirect(
+            GlideNativeBridge.executeBatchAsync(
                     handle,
                     correlationId,
                     requestTypes,
@@ -357,8 +357,8 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
-    /** Execute command asynchronously. Passes requestType, args, and routing directly via JNI. */
-    public CompletableFuture<Object> executeCommandDirect(
+    /** Execute a single command asynchronously via JNI. */
+    public CompletableFuture<Object> executeCommandAsync(
             int requestType,
             byte[][] args,
             boolean hasRoute,
@@ -385,7 +385,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            GlideNativeBridge.executeCommandDirect(
+            GlideNativeBridge.executeCommandAsync(
                     handle,
                     correlationId,
                     requestType,
@@ -405,7 +405,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /** Execute script via native invoke_script path */
+    /** Execute a script asynchronously via JNI. */
     public CompletableFuture<Object> executeScriptAsync(
             String hash,
             byte[][] keys,

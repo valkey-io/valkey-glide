@@ -141,7 +141,7 @@ public class CommandManager {
             RequestType requestType,
             String[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(requestType, stringsToBytes(arguments), null, true, responseHandler);
+        return submitCommandAsync(requestType, stringsToBytes(arguments), null, true, responseHandler);
     }
 
     /** GlideString args expect binary response. */
@@ -149,7 +149,7 @@ public class CommandManager {
             RequestType requestType,
             GlideString[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 requestType, glideStringsToBytes(arguments), null, false, responseHandler);
     }
 
@@ -159,7 +159,7 @@ public class CommandManager {
             GlideString[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
             boolean expectUtf8Response) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 requestType, glideStringsToBytes(arguments), null, expectUtf8Response, responseHandler);
     }
 
@@ -170,7 +170,7 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
             boolean expectUtf8Response) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 requestType, glideStringsToBytes(arguments), route, expectUtf8Response, responseHandler);
     }
 
@@ -180,7 +180,7 @@ public class CommandManager {
             String[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 requestType, stringsToBytes(arguments), route, true, responseHandler);
     }
 
@@ -190,7 +190,7 @@ public class CommandManager {
             GlideString[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 requestType, glideStringsToBytes(arguments), route, false, responseHandler);
     }
 
@@ -203,7 +203,7 @@ public class CommandManager {
             RequestType requestType,
             String[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectBlockingCommand(
+        return submitBlockingCommandAsync(
                 requestType, stringsToBytes(arguments), null, true, responseHandler);
     }
 
@@ -212,7 +212,7 @@ public class CommandManager {
             RequestType requestType,
             GlideString[] arguments,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectBlockingCommand(
+        return submitBlockingCommandAsync(
                 requestType, glideStringsToBytes(arguments), null, false, responseHandler);
     }
 
@@ -222,7 +222,7 @@ public class CommandManager {
             String[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectBlockingCommand(
+        return submitBlockingCommandAsync(
                 requestType, stringsToBytes(arguments), route, true, responseHandler);
     }
 
@@ -232,7 +232,7 @@ public class CommandManager {
             GlideString[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectBlockingCommand(
+        return submitBlockingCommandAsync(
                 requestType, glideStringsToBytes(arguments), route, false, responseHandler);
     }
 
@@ -245,10 +245,10 @@ public class CommandManager {
             String[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         byte[][] args = stringsToBytes(arguments);
         if (isBlockingCustomCommand(arguments)) {
-            return submitDirectBlockingCommand(
+            return submitBlockingCommandAsync(
                     RequestType.CustomCommand, args, null, true, responseHandler);
         }
-        return submitDirectCommand(RequestType.CustomCommand, args, null, true, responseHandler);
+        return submitCommandAsync(RequestType.CustomCommand, args, null, true, responseHandler);
     }
 
     /** Submit a custom command with GlideString args, detecting if it's a blocking command. */
@@ -256,10 +256,10 @@ public class CommandManager {
             GlideString[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         byte[][] args = glideStringsToBytes(arguments);
         if (isBlockingCustomCommand(arguments)) {
-            return submitDirectBlockingCommand(
+            return submitBlockingCommandAsync(
                     RequestType.CustomCommand, args, null, false, responseHandler);
         }
-        return submitDirectCommand(RequestType.CustomCommand, args, null, false, responseHandler);
+        return submitCommandAsync(RequestType.CustomCommand, args, null, false, responseHandler);
     }
 
     /** Submit a custom command with route, detecting if it's a blocking command. */
@@ -267,10 +267,10 @@ public class CommandManager {
             String[] arguments, Route route, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         byte[][] args = stringsToBytes(arguments);
         if (isBlockingCustomCommand(arguments)) {
-            return submitDirectBlockingCommand(
+            return submitBlockingCommandAsync(
                     RequestType.CustomCommand, args, route, true, responseHandler);
         }
-        return submitDirectCommand(RequestType.CustomCommand, args, route, true, responseHandler);
+        return submitCommandAsync(RequestType.CustomCommand, args, route, true, responseHandler);
     }
 
     /** Submit a custom command with route and GlideString args, detecting if it's blocking. */
@@ -280,10 +280,10 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         byte[][] args = glideStringsToBytes(arguments);
         if (isBlockingCustomCommand(arguments)) {
-            return submitDirectBlockingCommand(
+            return submitBlockingCommandAsync(
                     RequestType.CustomCommand, args, route, false, responseHandler);
         }
-        return submitDirectCommand(RequestType.CustomCommand, args, route, false, responseHandler);
+        return submitCommandAsync(RequestType.CustomCommand, args, route, false, responseHandler);
     }
 
     /** Check if a custom command is a blocking command by inspecting the first argument. */
@@ -305,7 +305,7 @@ public class CommandManager {
     /** Specialized path for ObjectEncoding with GlideString args but textual response. */
     public <T> CompletableFuture<T> submitObjectEncoding(
             GlideString[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 RequestType.ObjectEncoding, glideStringsToBytes(arguments), null, true, responseHandler);
     }
 
@@ -314,7 +314,7 @@ public class CommandManager {
             GlideString[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitDirectCommand(
+        return submitCommandAsync(
                 RequestType.ObjectEncoding, glideStringsToBytes(arguments), route, true, responseHandler);
     }
 
@@ -326,7 +326,7 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         boolean expectUtf8Response = !batch.isBinaryOutput();
         int timeout = options.map(BaseBatchOptions::getTimeout).orElse(0);
-        return submitBatchDirect(
+        return submitBatchAsync(
                 batch, raiseOnError, timeout, false, false, null, expectUtf8Response, responseHandler);
     }
 
@@ -480,7 +480,7 @@ public class CommandManager {
             }
             route = opts.getRoute();
         }
-        return submitBatchDirect(
+        return submitBatchAsync(
                 batch,
                 raiseOnError,
                 timeout,
@@ -688,8 +688,8 @@ public class CommandManager {
                         });
     }
 
-    /** Core command submission via JNI. */
-    protected <T> CompletableFuture<T> submitDirectCommand(
+    /** Submit a command asynchronously via JNI. */
+    protected <T> CompletableFuture<T> submitCommandAsync(
             RequestType requestType,
             byte[][] args,
             Route route,
@@ -712,7 +712,7 @@ public class CommandManager {
             }
 
             CompletableFuture<Object> jniFuture =
-                    coreClient.executeCommandDirect(
+                    coreClient.executeCommandAsync(
                             requestType.getNumber(),
                             args,
                             routeArgs.hasRoute,
@@ -733,8 +733,8 @@ public class CommandManager {
         }
     }
 
-    /** Blocking command submission via JNI (timeout=0, Rust handles timeout). */
-    protected <T> CompletableFuture<T> submitDirectBlockingCommand(
+    /** Submit a blocking command asynchronously via JNI (timeout=0, Rust handles timeout). */
+    protected <T> CompletableFuture<T> submitBlockingCommandAsync(
             RequestType requestType,
             byte[][] args,
             Route route,
@@ -757,7 +757,7 @@ public class CommandManager {
             }
 
             CompletableFuture<Object> jniFuture =
-                    coreClient.executeCommandDirect(
+                    coreClient.executeCommandAsync(
                             requestType.getNumber(),
                             args,
                             routeArgs.hasRoute,
@@ -942,8 +942,8 @@ public class CommandManager {
 
     // Removed blocking command detection - Rust handles all timeout logic
 
-    /** Submit batch directly to JNI. */
-    private <T> CompletableFuture<T> submitBatchDirect(
+    /** Submit a batch of commands asynchronously via JNI. */
+    private <T> CompletableFuture<T> submitBatchAsync(
             BaseBatch<?> batch,
             boolean raiseOnError,
             int timeout,
@@ -982,7 +982,7 @@ public class CommandManager {
             }
 
             return coreClient
-                    .executeBatchDirect(
+                    .executeBatchAsync(
                             requestTypes,
                             allArgs,
                             isAtomic,

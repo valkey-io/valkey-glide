@@ -1372,7 +1372,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_markTimedOut(
 /// Execute a batch (pipeline/transaction) asynchronously.
 /// Takes command data directly via JNI arrays.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
@@ -1391,7 +1391,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
     span_ptr: jlong,
 ) {
     run_ffi(|| {
-        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchDirect")
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
         else {
             return Some(());
         };
@@ -1647,7 +1647,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
 /// Takes command parameters directly via JNI: requestType as int, args as byte[][],
 /// and routing as primitives.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandDirect(
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
@@ -1661,7 +1661,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandDirec
     span_ptr: jlong,
 ) {
     run_ffi(|| {
-        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandDirect")
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
         else {
             return Some(());
         };

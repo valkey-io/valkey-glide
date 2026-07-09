@@ -39,10 +39,9 @@ public class GlideNativeBridge {
             byte[] connectionRequestBytes, AddressResolver addressResolver);
 
     /**
-     * Execute command asynchronously. Passes command parameters directly via JNI to avoid
-     * serialize/deserialize overhead.
+     * Execute a single command asynchronously, passing parameters directly via JNI.
      */
-    public static native void executeCommandDirect(
+    public static native void executeCommandAsync(
             long clientPtr,
             long callbackId,
             int requestType,
@@ -54,7 +53,7 @@ public class GlideNativeBridge {
             long spanPtr);
 
     /**
-     * Execute batch asynchronously. Passes batch commands directly via JNI arrays.
+     * Execute a batch of commands asynchronously, passing parameters directly via JNI.
      *
      * @param requestTypes array of request type integers, one per command
      * @param args 3D byte array: args[cmdIndex][argIndex] = byte[] argument
@@ -67,7 +66,7 @@ public class GlideNativeBridge {
      * @param routeType route type int
      * @param routeParam route parameter string
      */
-    public static native void executeBatchDirect(
+    public static native void executeBatchAsync(
             long clientPtr,
             long callbackId,
             int[] requestTypes,
