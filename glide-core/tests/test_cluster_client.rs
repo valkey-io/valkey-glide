@@ -885,7 +885,7 @@ mod cluster_client_tests {
                 .expect("build cluster client");
 
             let mut conn: redis::cluster_async::ClusterConnection = cluster_client
-                .get_async_connection(None, None, None)
+                .get_async_connection(None, None, None, None)
                 .await
                 .expect("connect to cluster");
 

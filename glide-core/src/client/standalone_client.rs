@@ -19,6 +19,79 @@ use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
 
+/// Validate the combination of byte-based and path-based mTLS client material.
+///
+/// Path-based cert and key must be provided together, and the byte-based fields
+/// (which land the static, non-reloading mTLS material) must not be mixed with the
+/// path-based fields (which land the reloadable material) in the same request.
+fn validate_cert_path_config(
+    has_client_cert_bytes: bool,
+    has_cert_path: bool,
+    has_key_path: bool,
+) -> RedisResult<()> {
+    if has_cert_path != has_key_path {
+        return Err(RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "client_cert_path and client_key_path must both be provided or both be empty",
+        )));
+    }
+    if has_cert_path && has_client_cert_bytes {
+        return Err(RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "client certificate path and client certificate bytes cannot both be provided; use one or the other",
+        )));
+    }
+    Ok(())
+}
+
+/// Build a [`crate::tls_reload::CertMaterialManager`] when path-based mTLS is
+/// configured, starting its background reload task if reload is enabled. Returns
+/// `Ok(None)` when no cert paths are configured. The manager performs the initial
+/// parse + validation, so a bad initial cert/key surfaces here as an error.
+async fn build_cert_material_manager(
+    connection_request: &ConnectionRequest,
+) -> Result<Option<Arc<crate::tls_reload::CertMaterialManager>>, String> {
+    let (Some(cert_path), Some(key_path)) = (
+        connection_request.client_cert_path.as_ref(),
+        connection_request.client_key_path.as_ref(),
+    ) else {
+        return Ok(None);
+    };
+
+    let root_cert = if connection_request.root_certs.is_empty() {
+        None
+    } else {
+        let mut combined = Vec::new();
+        for cert in &connection_request.root_certs {
+            combined.extend_from_slice(cert);
+        }
+        Some(combined)
+    };
+
+    let interval_seconds = connection_request
+        .cert_reload
+        .as_ref()
+        .filter(|cfg| cfg.enabled)
+        .map(|cfg| cfg.interval_seconds);
+
+    let mut manager = crate::tls_reload::CertMaterialManager::new(
+        cert_path.into(),
+        key_path.into(),
+        root_cert,
+        interval_seconds.flatten(),
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+
+    // Only spin up the background re-read task when reload is explicitly enabled;
+    // otherwise the path-based config behaves like static (load-once) mTLS.
+    if interval_seconds.is_some() {
+        manager.start_reload_task();
+    }
+
+    Ok(Some(Arc::new(manager)))
+}
+
 #[derive(Debug)]
 enum ReadFrom {
     Primary,
@@ -46,6 +119,10 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
+    /// Owns the background mTLS certificate reload task, when path-based reload is
+    /// configured. Held here so the task lives for the client's lifetime and is
+    /// shut down when the client is dropped.
+    _cert_material_manager: Option<Arc<crate::tls_reload::CertMaterialManager>>,
 }
 
 impl Drop for DropWrapper {
@@ -184,6 +261,8 @@ impl StandaloneClient {
         let has_root_certs = !connection_request.root_certs.is_empty();
         let has_client_cert = !connection_request.client_cert.is_empty();
         let has_client_key = !connection_request.client_key.is_empty();
+        let has_cert_path = connection_request.client_cert_path.is_some();
+        let has_key_path = connection_request.client_key_path.is_some();
         if has_client_cert != has_client_key {
             return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                 None,
@@ -193,8 +272,40 @@ impl StandaloneClient {
                 )),
             )]));
         }
+        validate_cert_path_config(has_client_cert, has_cert_path, has_key_path)
+            .map_err(|err| StandaloneClientConnectionError::FailedConnection(vec![(None, err)]))?;
 
-        let tls_params = if has_root_certs || has_client_cert || has_client_key {
+        // Build the certificate reload manager when path-based mTLS is configured.
+        // It performs the initial parse + validation and, if reload is enabled,
+        // drives the background re-read task. The resulting handle is shared with
+        // every node's reconnection loop.
+        let cert_material_manager = build_cert_material_manager(&connection_request)
+            .await
+            .map_err(|err| {
+                StandaloneClientConnectionError::FailedConnection(vec![(
+                    None,
+                    RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "TLS certificate reload configuration error",
+                        err,
+                    )),
+                )])
+            })?;
+        let cert_material_handle = cert_material_manager.as_ref().map(|m| m.get_handle());
+
+        let tls_params = if let Some(manager) = &cert_material_manager {
+            // Path-based mTLS: seed the initial params from the (validated) manager.
+            if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
+                return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                    None,
+                    RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "TLS certificates provided but TLS is disabled",
+                    )),
+                )]));
+            }
+            Some(manager.get_params().await)
+        } else if has_root_certs || has_client_cert || has_client_key {
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
@@ -250,6 +361,7 @@ impl StandaloneClient {
         let discovery_tls_params = tls_params.clone();
         let discovery_pubsub_sync = pubsub_synchronizer.clone();
         let discovery_iam_handle = iam_token_handle.clone();
+        let discovery_cert_handle = cert_material_handle.clone();
         let discovery_resolver = connection_request.address_resolver.clone();
 
         let mut stream = stream::iter(addresses)
@@ -267,6 +379,7 @@ impl StandaloneClient {
                     read_only || node_discovery_mode == NodeDiscoveryMode::Static;
                 let resolver = connection_request.address_resolver.clone();
                 let iam_handle = iam_token_handle.clone();
+                let cert_handle = cert_material_handle.clone();
                 async move {
                     get_connection_and_replication_info(
                         &address,
@@ -282,6 +395,7 @@ impl StandaloneClient {
                         skip_replication,
                         resolver.as_ref(),
                         iam_handle,
+                        cert_handle,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -386,6 +500,7 @@ impl StandaloneClient {
                     let params = discovery_tls_params.clone();
                     let sync = discovery_pubsub_sync.clone();
                     let iam_handle = discovery_iam_handle.clone();
+                    let cert_handle = discovery_cert_handle.clone();
                     let resolver = discovery_resolver.clone();
                     async move {
                         let result = get_connection_and_replication_info(
@@ -402,6 +517,7 @@ impl StandaloneClient {
                             false,
                             resolver.as_ref(),
                             iam_handle,
+                            cert_handle,
                         )
                         .await;
                         (address, result)
@@ -456,6 +572,7 @@ impl StandaloneClient {
                         let params = discovery_tls_params.clone();
                         let sync = discovery_pubsub_sync.clone();
                         let iam_handle = discovery_iam_handle.clone();
+                        let cert_handle = discovery_cert_handle.clone();
                         let resolver = discovery_resolver.clone();
                         async move {
                             let result = get_connection_and_replication_info(
@@ -472,6 +589,7 @@ impl StandaloneClient {
                                 false,
                                 resolver.as_ref(),
                                 iam_handle,
+                                cert_handle,
                             )
                             .await;
                             (address, result)
@@ -570,6 +688,7 @@ impl StandaloneClient {
                 nodes,
                 read_from,
                 read_only,
+                _cert_material_manager: cert_material_manager,
             }),
         })
     }
@@ -1075,6 +1194,7 @@ async fn get_connection_and_replication_info(
     skip_replication_check: bool,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
+    cert_material_handle: Option<crate::tls_reload::CertMaterialHandle>,
 ) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -1089,6 +1209,7 @@ async fn get_connection_and_replication_info(
         pubsub_synchronizer.clone(),
         address_resolver,
         iam_token_handle,
+        cert_material_handle,
     )
     .await?;
 
