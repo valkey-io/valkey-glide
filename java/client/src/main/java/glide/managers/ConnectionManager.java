@@ -378,6 +378,25 @@ public class ConnectionManager {
                             requestBuilder.setClientKey(com.google.protobuf.ByteString.copyFrom(clientKey));
                         }
 
+                        // Set path-based mTLS client certificate/key and optional reload config. The
+                        // core reads the material from disk and, when reload is enabled, periodically
+                        // re-reads it so a rotated certificate is adopted on the next reconnect.
+                        String clientCertPath = extractClientCertPath(configuration);
+                        String clientKeyPath = extractClientKeyPath(configuration);
+                        if (clientCertPath != null && clientKeyPath != null) {
+                            requestBuilder.setClientCertPath(clientCertPath);
+                            requestBuilder.setClientKeyPath(clientKeyPath);
+                            if (isCertReloadEnabled(configuration)) {
+                                CertReloadConfig.Builder reloadBuilder = CertReloadConfig.newBuilder();
+                                reloadBuilder.setEnabled(true);
+                                Integer reloadInterval = extractCertReloadIntervalSeconds(configuration);
+                                if (reloadInterval != null) {
+                                    reloadBuilder.setIntervalSeconds(reloadInterval);
+                                }
+                                requestBuilder.setCertReload(reloadBuilder.build());
+                            }
+                        }
+
                         // Set pubsub subscriptions
                         if (subExact.length > 0 || subPattern.length > 0 || subSharded.length > 0) {
                             PubSubSubscriptions.Builder subBuilder = PubSubSubscriptions.newBuilder();
@@ -653,5 +672,21 @@ public class ConnectionManager {
 
     private static byte[] extractClientKey(BaseClientConfiguration configuration) {
         return TlsConfigHelper.extractClientKey(configuration);
+    }
+
+    private static String extractClientCertPath(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientCertPath(configuration);
+    }
+
+    private static String extractClientKeyPath(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientKeyPath(configuration);
+    }
+
+    private static boolean isCertReloadEnabled(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.isCertReloadEnabled(configuration);
+    }
+
+    private static Integer extractCertReloadIntervalSeconds(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractCertReloadIntervalSeconds(configuration);
     }
 }

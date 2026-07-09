@@ -96,4 +96,107 @@ public class TlsConfigHelperTest {
 
         assertThrows(ConfigurationError.class, () -> TlsConfigHelper.extractClientKey(configuration));
     }
+
+    @Test
+    void extractCertPathsReturnsConfiguredValues() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .clientKeyPath("/certs/client.key")
+                                .build());
+
+        assertEquals("/certs/client.pem", TlsConfigHelper.extractClientCertPath(configuration));
+        assertEquals("/certs/client.key", TlsConfigHelper.extractClientKeyPath(configuration));
+    }
+
+    @Test
+    void extractCertPathReturnsNullWhenNotConfigured() {
+        GlideClientConfiguration configuration =
+                configWithTls(TlsAdvancedConfiguration.builder().build());
+
+        assertNull(TlsConfigHelper.extractClientCertPath(configuration));
+        assertNull(TlsConfigHelper.extractClientKeyPath(configuration));
+    }
+
+    @Test
+    void certPathWithoutKeyPathThrows() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder().clientCertPath("/certs/client.pem").build());
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsConfigHelper.extractClientCertPath(configuration));
+        assertTrue(error.getMessage().contains("mTLS requires"));
+    }
+
+    @Test
+    void keyPathWithoutCertPathThrows() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder().clientKeyPath("/certs/client.key").build());
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class, () -> TlsConfigHelper.extractClientKeyPath(configuration));
+        assertTrue(error.getMessage().contains("mTLS requires"));
+    }
+
+    @Test
+    void mixingCertPathAndCertBytesThrows() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .clientKeyPath("/certs/client.key")
+                                .clientCertificate(CERT)
+                                .build());
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsConfigHelper.extractClientCertPath(configuration));
+        assertTrue(error.getMessage().contains("cannot both be provided"));
+    }
+
+    @Test
+    void certReloadEnabledReturnsConfiguredValue() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .clientKeyPath("/certs/client.key")
+                                .certReloadEnabled(true)
+                                .certReloadIntervalSeconds(60)
+                                .build());
+
+        assertTrue(TlsConfigHelper.isCertReloadEnabled(configuration));
+        assertEquals(60, TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
+    }
+
+    @Test
+    void certReloadDisabledByDefault() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .clientKeyPath("/certs/client.key")
+                                .build());
+
+        assertFalse(TlsConfigHelper.isCertReloadEnabled(configuration));
+        assertNull(TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
+    }
+
+    @Test
+    void certReloadWithoutCertPathThrows() {
+        GlideClientConfiguration configuration =
+                configWithTls(TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class, () -> TlsConfigHelper.isCertReloadEnabled(configuration));
+        assertTrue(error.getMessage().contains("certReloadEnabled"));
+    }
 }
