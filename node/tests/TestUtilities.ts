@@ -666,9 +666,6 @@ export const getClientConfigurationOption = (
         protocol,
         useTLS: global.TLS ?? false,
         requestTimeout: 5000,
-        advancedConfiguration: {
-            connectionTimeout: 10000,
-        },
         ...configOverrides,
     };
 };
