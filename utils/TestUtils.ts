@@ -5,6 +5,7 @@
 import { execFile } from "child_process";
 import { createConnection } from "net";
 import { lt } from "semver";
+import { connect as tlsConnect } from "tls";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
@@ -100,6 +101,33 @@ async function pingNode(
         });
         sock.on("error", () => { clearTimeout(timer); resolve(false); });
         sock.on("close", () => { clearTimeout(timer); resolve(false); });
+    });
+}
+
+/**
+ * Sanity check for TLS servers: attempts a TLS handshake to verify the server is accepting TLS connections.
+ * Returns true if the TLS connection succeeds within timeoutMs.
+ */
+async function pingNodeTls(
+    host: string,
+    port: number,
+    timeoutMs = 5000,
+): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+            sock.destroy();
+            resolve(false);
+        }, timeoutMs);
+        const sock = tlsConnect(
+            { host, port, rejectUnauthorized: false },
+            () => {
+                // TLS handshake succeeded - server is accepting TLS connections
+                clearTimeout(timer);
+                sock.destroy();
+                resolve(true);
+            },
+        );
+        sock.on("error", () => { clearTimeout(timer); resolve(false); });
     });
 }
 
@@ -291,8 +319,14 @@ export class ValkeyCluster {
                     );
                     await cluster.close().catch(() => void 0);
                 } else {
-                    // For TLS, trust cluster_manager.py's readiness check
-                    return cluster;
+                    // For TLS, verify with an actual TLS handshake
+                    const [host, port] = cluster.getAddresses()[0];
+                    const ok = await pingNodeTls(host, port);
+                    if (ok) return cluster;
+                    console.warn(
+                        `[createCluster] attempt ${attempt}/${maxRetries}: TLS handshake failed, retrying...`,
+                    );
+                    await cluster.close().catch(() => void 0);
                 }
             } catch (e) {
                 lastError = e;
