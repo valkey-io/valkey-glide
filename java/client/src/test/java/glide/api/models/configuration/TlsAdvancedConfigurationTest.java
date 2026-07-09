@@ -288,4 +288,48 @@ public class TlsAdvancedConfigurationTest {
             Files.deleteIfExists(keyPath);
         }
     }
+
+    @Test
+    void testBuilderWithClientCertAndKeyPaths() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .clientCertPath("/certs/client.pem")
+                        .clientKeyPath("/certs/client.key")
+                        .build();
+
+        assertNotNull(config);
+        assertEquals("/certs/client.pem", config.getClientCertPath());
+        assertEquals("/certs/client.key", config.getClientKeyPath());
+    }
+
+    @Test
+    void testBuilderWithNullClientCertAndKeyPaths() {
+        TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
+
+        assertNotNull(config);
+        assertNull(config.getClientCertPath());
+        assertNull(config.getClientKeyPath());
+    }
+
+    @Test
+    void testBuilderCertReloadDefaultsDisabled() {
+        TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
+
+        assertFalse(config.isCertReloadEnabled());
+        assertNull(config.getCertReloadIntervalSeconds());
+    }
+
+    @Test
+    void testBuilderWithCertReloadEnabledAndInterval() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .clientCertPath("/certs/client.pem")
+                        .clientKeyPath("/certs/client.key")
+                        .certReloadEnabled(true)
+                        .certReloadIntervalSeconds(120)
+                        .build();
+
+        assertTrue(config.isCertReloadEnabled());
+        assertEquals(120, config.getCertReloadIntervalSeconds());
+    }
 }
