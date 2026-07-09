@@ -2047,9 +2047,7 @@ describe("GlideClient", () => {
                 const stabilizeStart = Date.now();
 
                 while (Date.now() - stabilizeStart < 5000) {
-                    await new Promise((resolve) =>
-                        setTimeout(resolve, 100),
-                    );
+                    await new Promise((resolve) => setTimeout(resolve, 100));
                     const current = await getClientCount();
 
                     if (current === clientsBeforeLazyInit) {
