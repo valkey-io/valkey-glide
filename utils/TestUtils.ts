@@ -74,6 +74,35 @@ async function waitForReplicasReady(
     );
 }
 
+/**
+ * Sanity check: attempts to PING a node to verify it's accepting connections.
+ * Returns true if PING succeeds within timeoutMs.
+ */
+async function pingNode(
+    host: string,
+    port: number,
+    timeoutMs = 5000,
+): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        const sock = createConnection({ host, port }, () => {
+            sock.write("PING\r\n");
+        });
+        const timer = setTimeout(() => {
+            sock.destroy();
+            resolve(false);
+        }, timeoutMs);
+        sock.on("data", (d: Buffer) => {
+            if (d.toString().includes("+PONG")) {
+                clearTimeout(timer);
+                sock.destroy();
+                resolve(true);
+            }
+        });
+        sock.on("error", () => { clearTimeout(timer); resolve(false); });
+        sock.on("close", () => { clearTimeout(timer); resolve(false); });
+    });
+}
+
 function parseOutput(input: string): {
     clusterFolder: string;
     addresses: [string, number][];
@@ -223,6 +252,65 @@ export class ValkeyCluster {
                 },
             );
         });
+    }
+
+    /**
+     * Creates a cluster with sanity verification (PING check).
+     * If the cluster is created but nodes are not accepting connections,
+     * tears it down and retries up to `maxRetries` times.
+     */
+    public static async createClusterWithRetry(
+        cluster_mode: boolean,
+        shardCount: number,
+        replicaCount: number,
+        getVersionCallback: (
+            addresses: [string, number][],
+            clusterMode: boolean,
+            tlsConfig?: TestTLSConfig,
+        ) => Promise<string>,
+        tls: boolean = false,
+        tlsConfig?: TestTLSConfig,
+        loadModule?: string[],
+        maxRetries = 3,
+    ): Promise<ValkeyCluster> {
+        let lastError: Error | unknown;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let cluster: ValkeyCluster | undefined;
+            try {
+                cluster = await ValkeyCluster.createCluster(
+                    cluster_mode,
+                    shardCount,
+                    replicaCount,
+                    getVersionCallback,
+                    tls,
+                    tlsConfig,
+                    loadModule,
+                );
+                // Sanity check: PING the first node
+                const [host, port] = cluster.getAddresses()[0];
+                const ok = await pingNode(host, port);
+                if (ok) {
+                    return cluster;
+                }
+                // PING failed — cluster started but not healthy
+                console.warn(
+                    `[createClusterWithRetry] attempt ${attempt}/${maxRetries}: cluster started but PING failed, retrying...`,
+                );
+                await cluster.close().catch(() => void 0);
+            } catch (e) {
+                lastError = e;
+                if (cluster) {
+                    await cluster.close().catch(() => void 0);
+                }
+                console.warn(
+                    `[createClusterWithRetry] attempt ${attempt}/${maxRetries} failed: ${e}`,
+                );
+            }
+            if (attempt < maxRetries) {
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+            }
+        }
+        throw lastError ?? new Error(`Failed to create cluster after ${maxRetries} attempts`);
     }
 
     public static async initFromExistingCluster(
