@@ -88,6 +88,71 @@ public final class TlsConfigHelper {
         return clientKey;
     }
 
+    /**
+     * Returns the client certificate file path for path-based mutual TLS, or {@code null} if not
+     * configured.
+     *
+     * <p>Validates that the certificate path and key path are both provided together, and that
+     * path-based and byte-based client certificate configuration are not mixed.
+     *
+     * @throws ConfigurationError if only one of the certificate/key path is provided, or if path-
+     *     based and byte-based client certificate configuration are both provided.
+     */
+    public static String extractClientCertPath(BaseClientConfiguration configuration) {
+        TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
+        if (tlsConfig == null) {
+            return null;
+        }
+        validateCertPathTls(tlsConfig);
+        return tlsConfig.getClientCertPath();
+    }
+
+    /**
+     * Returns the client key file path for path-based mutual TLS, or {@code null} if not configured.
+     *
+     * @throws ConfigurationError if only one of the certificate/key path is provided, or if path-
+     *     based and byte-based client certificate configuration are both provided.
+     */
+    public static String extractClientKeyPath(BaseClientConfiguration configuration) {
+        TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
+        if (tlsConfig == null) {
+            return null;
+        }
+        validateCertPathTls(tlsConfig);
+        return tlsConfig.getClientKeyPath();
+    }
+
+    /**
+     * Returns {@code true} if automatic certificate reload is requested for path-based mTLS.
+     *
+     * <p>Reload is only meaningful when a client certificate path is configured; enabling it without
+     * a certificate path results in a {@link ConfigurationError}.
+     *
+     * @throws ConfigurationError if reload is enabled without a client certificate path.
+     */
+    public static boolean isCertReloadEnabled(BaseClientConfiguration configuration) {
+        TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
+        if (tlsConfig == null) {
+            return false;
+        }
+        if (tlsConfig.isCertReloadEnabled() && tlsConfig.getClientCertPath() == null) {
+            throw new ConfigurationError(
+                    "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath` to be provided.");
+        }
+        return tlsConfig.isCertReloadEnabled();
+    }
+
+    /**
+     * Returns the certificate reload interval in seconds, or {@code null} to use the core default.
+     */
+    public static Integer extractCertReloadIntervalSeconds(BaseClientConfiguration configuration) {
+        TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
+        if (tlsConfig == null) {
+            return null;
+        }
+        return tlsConfig.getCertReloadIntervalSeconds();
+    }
+
     private static TlsAdvancedConfiguration getTlsConfig(BaseClientConfiguration configuration) {
         AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced == null) {
@@ -107,6 +172,30 @@ public final class TlsConfigHelper {
         if (hasKey && !hasCert) {
             throw new ConfigurationError(
                     "`clientKey` is provided but `clientCertificate` is not provided. mTLS requires both.");
+        }
+    }
+
+    /**
+     * Ensures the path-based client certificate/key are provided together and are not mixed with the
+     * byte-based client certificate configuration.
+     */
+    private static void validateCertPathTls(TlsAdvancedConfiguration tlsConfig) {
+        boolean hasCertPath = tlsConfig.getClientCertPath() != null;
+        boolean hasKeyPath = tlsConfig.getClientKeyPath() != null;
+        if (hasCertPath && !hasKeyPath) {
+            throw new ConfigurationError(
+                    "`clientCertPath` is provided but `clientKeyPath` is not provided. mTLS requires"
+                            + " both.");
+        }
+        if (hasKeyPath && !hasCertPath) {
+            throw new ConfigurationError(
+                    "`clientKeyPath` is provided but `clientCertPath` is not provided. mTLS requires"
+                            + " both.");
+        }
+        if (hasCertPath && tlsConfig.getClientCertificate() != null) {
+            throw new ConfigurationError(
+                    "`clientCertPath` and `clientCertificate` cannot both be provided; use one or the"
+                            + " other.");
         }
     }
 }

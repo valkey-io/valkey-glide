@@ -92,6 +92,55 @@ public class TlsAdvancedConfiguration {
     @Builder.Default private final byte[] clientKey = null;
 
     /**
+     * Filesystem path to the client certificate (PEM) for mutual TLS (mTLS) authentication.
+     *
+     * <p>Use this instead of {@link #clientCertificate} to have the GLIDE core read the certificate
+     * from disk. When combined with {@link #certReloadEnabled}, the core periodically re-reads the
+     * file so that a rotated certificate is adopted on the next reconnect, without recreating the
+     * client.
+     *
+     * <p>Must be used together with {@link #clientKeyPath}: providing one without the other results
+     * in a `ConfigurationError`. Path-based and byte-based ({@link #clientCertificate}) client
+     * certificate configuration are mutually exclusive.
+     *
+     * <p>If null (default), no path-based client certificate is used.
+     */
+    @Builder.Default private final String clientCertPath = null;
+
+    /**
+     * Filesystem path to the client private key (PEM) for mutual TLS (mTLS) authentication.
+     *
+     * <p>See {@link #clientCertPath}. Must be provided together with {@link #clientCertPath}.
+     *
+     * <p>If null (default), no path-based client key is used.
+     */
+    @Builder.Default private final String clientKeyPath = null;
+
+    /**
+     * Whether to automatically reload the path-based client certificate and key.
+     *
+     * <p>When true (and {@link #clientCertPath}/{@link #clientKeyPath} are set), the GLIDE core
+     * periodically re-reads the certificate and key files. On a successful reload (the material
+     * parses and the private key matches the certificate), the new material is adopted on the next
+     * reconnect; on any failure, the previously loaded material is kept (last-known-good).
+     *
+     * <p>Root/CA certificate reload is out of scope; only the client certificate and key are
+     * reloaded.
+     *
+     * <p>Default: false (path-based material is loaded once at client creation).
+     */
+    @Builder.Default private final boolean certReloadEnabled = false;
+
+    /**
+     * Interval, in seconds, between certificate reload checks when {@link #certReloadEnabled} is
+     * true.
+     *
+     * <p>If null (default), the core default of 300 seconds (5 minutes) is used. Ignored when
+     * {@link #certReloadEnabled} is false.
+     */
+    @Builder.Default private final Integer certReloadIntervalSeconds = null;
+
+    /**
      * Create TlsAdvancedConfiguration from a Java KeyStore file.
      *
      * @param keyStorePath Path to the KeyStore file
