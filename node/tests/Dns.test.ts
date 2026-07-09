@@ -126,7 +126,7 @@ async function createClusterClient(
     afterAll(async () => {
         await standaloneServer.close();
         await clusterServer.close();
-    });
+    }, TIMEOUT);
 
     it(
         "should connect with valid hostname - standalone",
@@ -212,7 +212,7 @@ async function createClusterClient(
     afterAll(async () => {
         await standaloneServer.close();
         await clusterServer.close();
-    });
+    }, TIMEOUT);
 
     it(
         "should connect with hostname in certificate SAN - standalone",

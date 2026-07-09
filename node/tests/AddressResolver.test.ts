@@ -46,7 +46,7 @@ describe("AddressResolver", () => {
         if (clusterCluster) {
             await clusterCluster.close();
         }
-    });
+    }, TIMEOUT);
 
     it(
         "address resolver with fake address - standalone",
