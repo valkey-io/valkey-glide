@@ -83,8 +83,10 @@ describe("NAPI Client Integration Tests", () => {
         beforeAll(async () => {
             client = await GlideClient.createClient({
                 addresses: getStandaloneAddresses(),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
             });
-        });
+        }, TIMEOUT);
 
         afterAll(async () => {
             if (client) {
@@ -597,8 +599,10 @@ describe("NAPI Client Integration Tests", () => {
         beforeAll(async () => {
             clusterClient = await GlideClusterClient.createClient({
                 addresses: getClusterAddresses(),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
             });
-        });
+        }, TIMEOUT);
 
         afterAll(async () => {
             if (clusterClient) {
@@ -797,8 +801,10 @@ describe("NAPI Client Integration Tests", () => {
         beforeAll(async () => {
             client = await GlideClient.createClient({
                 addresses: getStandaloneAddresses(),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
             });
-        });
+        }, TIMEOUT);
 
         afterAll(async () => {
             if (client) {
