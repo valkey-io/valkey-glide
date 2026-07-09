@@ -41,6 +41,15 @@ pub struct ConnectionRequest {
     pub root_certs: Vec<Vec<u8>>,
     pub client_cert: Vec<u8>,
     pub client_key: Vec<u8>,
+    /// Path to the mTLS client certificate file (PEM). When set together with
+    /// `client_key_path`, the core reads the material from disk and, when
+    /// `cert_reload` is enabled, periodically re-reads it. Mutually exclusive with
+    /// the `client_cert`/`client_key` byte fields.
+    pub client_cert_path: Option<String>,
+    /// Path to the mTLS client private key file (PEM). See `client_cert_path`.
+    pub client_key_path: Option<String>,
+    /// Optional automatic reload configuration for the path-based client cert/key.
+    pub cert_reload: Option<CertReloadConfig>,
     pub compression_config: Option<CompressionConfig>,
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
@@ -74,6 +83,15 @@ pub struct ClientCircuitBreakerConfig {
     pub open_timeout_ms: u32,
     pub count_timeouts: bool,
     pub consecutive_successes: u32,
+}
+
+/// Automatic reload configuration for the path-based mTLS client certificate/key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertReloadConfig {
+    /// Whether periodic reload is enabled.
+    pub enabled: bool,
+    /// Re-read interval in seconds. `None` means the core default (5 minutes).
+    pub interval_seconds: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -363,6 +381,23 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let client_cert = value.client_cert.to_vec();
         let client_key = value.client_key.to_vec();
+        let client_cert_path = value
+            .client_cert_path
+            .as_ref()
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string());
+        let client_key_path = value
+            .client_key_path
+            .as_ref()
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string());
+        let cert_reload = value
+            .cert_reload
+            .as_ref()
+            .map(|proto_reload| CertReloadConfig {
+                enabled: proto_reload.enabled,
+                interval_seconds: proto_reload.interval_seconds.filter(|&s| s != 0),
+            });
 
         // Convert protobuf client-side cache config to internal client-side cache config
         let client_side_cache = value
@@ -453,6 +488,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             client_side_cache,
             client_cert,
             client_key,
+            client_cert_path,
+            client_key_path,
+            cert_reload,
             compression_config,
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,

@@ -126,6 +126,51 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
     })
 }
 
+/// Validate that a parsed client certificate chain and private key form a usable
+/// pair, i.e. the private key corresponds to the public key in the leaf certificate.
+///
+/// `rustls` does not perform this check when the PEM is *parsed*; a mismatched
+/// cert/key pair parses fine and only fails later at handshake time. This uses
+/// the same crypto provider path as connection setup (`CertifiedKey::from_der`,
+/// which internally runs `keys_match`) so that a broken pair is rejected up front
+/// rather than adopted and surfaced as a confusing handshake failure on the next
+/// reconnect.
+///
+/// Returns `Ok(())` when the pair is consistent (or when consistency cannot be
+/// determined for the key type, matching rustls' own lenient behavior), and an
+/// error describing the mismatch otherwise. Params without client TLS material
+/// are trivially valid.
+pub fn validate_client_tls_params(params: &TlsConnParams) -> RedisResult<()> {
+    let Some(client_tls) = params.client_tls_params.as_ref() else {
+        return Ok(());
+    };
+
+    use rustls::crypto::CryptoProvider;
+    use rustls::sign::CertifiedKey;
+
+    // Prefer the process-installed default provider (aws-lc-rs is installed by
+    // `create_rustls_config`); fall back to constructing one so validation works
+    // even before the first connection has installed the default.
+    let provider = CryptoProvider::get_default()
+        .cloned()
+        .unwrap_or_else(|| std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider()));
+
+    CertifiedKey::from_der(
+        client_tls.client_cert_chain.clone(),
+        client_tls.client_key.clone_key(),
+        &provider,
+    )
+    .map_err(|err| {
+        RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "TLS client certificate and private key do not match",
+            err.to_string(),
+        ))
+    })?;
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct ClientTlsParams {
     pub(crate) client_cert_chain: Vec<CertificateDer<'static>>,
@@ -153,4 +198,21 @@ impl Clone for ClientTlsParams {
 pub struct TlsConnParams {
     pub(crate) client_tls_params: Option<ClientTlsParams>,
     pub(crate) root_cert_store: Option<RootCertStore>,
+}
+
+impl TlsConnParams {
+    /// Returns the DER-encoded client certificate chain, if client TLS material is
+    /// present. Exposes only certificate bytes (never key material) so callers can
+    /// compute a fingerprint of the adopted certificate for logging/change
+    /// detection.
+    pub fn client_cert_chain_der(&self) -> Vec<&[u8]> {
+        match &self.client_tls_params {
+            Some(client_tls) => client_tls
+                .client_cert_chain
+                .iter()
+                .map(|cert| cert.as_ref())
+                .collect(),
+            None => Vec::new(),
+        }
+    }
 }
