@@ -91,7 +91,12 @@ where
     opaque!(any_send_sync_partial_state(
         any()
             .then_partial(move |&mut b| {
-                if b == b'*' && count > MAX_RECURSE_DEPTH {
+                // All RESP3 aggregate types recurse into `value()` (incrementing
+                // the depth counter), so the depth guard must cover every one of
+                // them - not just arrays - to prevent stack exhaustion from a
+                // maliciously deep payload.
+                let is_aggregate = matches!(b, b'*' | b'%' | b'|' | b'~' | b'>');
+                if is_aggregate && count > MAX_RECURSE_DEPTH {
                     combine::unexpected_any("Maximum recursion depth exceeded").left()
                 } else {
                     combine::value(b).right()
@@ -666,6 +671,62 @@ mod tests {
         match parse_redis_value(bytes) {
             Ok(_) => panic!("Expected Err"),
             Err(e) => assert!(matches!(e.kind(), ErrorKind::ParseError)),
+        }
+    }
+
+    /// Builds a stream of `depth` aggregate headers of type `agg`, each
+    /// declaring a count of 1, followed by a single terminal integer. The
+    /// recursion guard triggers on reading each aggregate's type byte based on
+    /// the current depth alone (before the aggregate's contents are parsed), so
+    /// this header stream is sufficient to exercise the guard for every
+    /// aggregate type regardless of its element framing.
+    fn nested_aggregate_headers(agg: u8, depth: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        for _ in 0..depth {
+            out.push(agg);
+            out.extend_from_slice(b"1\r\n");
+        }
+        out.extend_from_slice(b":0\r\n");
+        out
+    }
+
+    #[test]
+    fn test_max_recursion_depth_all_aggregate_types() {
+        // Every recursive RESP3 aggregate type must reject nesting beyond
+        // MAX_RECURSE_DEPTH with the same graceful parse error the array guard
+        // produces, rather than crashing the host via stack exhaustion.
+        for agg in [b'*', b'%', b'|', b'~', b'>'] {
+            let bytes = nested_aggregate_headers(agg, MAX_RECURSE_DEPTH + 5);
+            match parse_redis_value(&bytes) {
+                Ok(_) => panic!("Expected parse error for aggregate {:?}", agg as char),
+                Err(e) => {
+                    assert_eq!(
+                        e.kind(),
+                        ErrorKind::ParseError,
+                        "aggregate {:?} produced unexpected error kind",
+                        agg as char
+                    );
+                    assert!(
+                        format!("{e:?}").contains("Maximum recursion depth exceeded"),
+                        "aggregate {:?} did not hit the recursion guard: {e:?}",
+                        agg as char
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_nesting_within_recursion_depth_parses() {
+        // Legally nested structures within the depth limit must still parse.
+        // Arrays and sets nest cleanly with one element per level.
+        for agg in [b'*', b'~'] {
+            let bytes = nested_aggregate_headers(agg, MAX_RECURSE_DEPTH);
+            assert!(
+                parse_redis_value(&bytes).is_ok(),
+                "aggregate {:?} within depth limit failed to parse",
+                agg as char
+            );
         }
     }
 }
