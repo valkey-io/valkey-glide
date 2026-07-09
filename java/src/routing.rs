@@ -6,8 +6,82 @@ use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{Cmd, RedisError, RedisResult};
 
 pub use glide_core::command_request::Routes;
-use glide_core::command_request::SimpleRoutes;
-use glide_core::command_request::SlotTypes;
+use glide_core::command_request::{
+    ByAddressRoute, SimpleRoutes, SlotIdRoute, SlotKeyRoute, SlotTypes,
+};
+use protobuf::EnumOrUnknown;
+
+/// Resolves routing from the JNI primitive encoding used by Java's `computeRouteArgs()`.
+///
+/// The encoding convention from Java:
+/// - `route_type >= 0` with `route_param = None` → SimpleRoutes (0=AllNodes, 1=AllPrimaries, else Random)
+/// - `route_type >= 100` with `route_param = Some(slot_id_str)` → SlotIdRoute (offset by 100)
+/// - `route_type >= 0` with `route_param = Some(slot_key)` → SlotKeyRoute
+/// - `route_type < 0` with `route_param = Some("host:port")` → ByAddressRoute
+pub(crate) fn resolve_routing_from_params(
+    has_route: bool,
+    route_type: i32,
+    route_param: Option<&str>,
+    cmd: Option<&Cmd>,
+) -> RedisResult<Option<RoutingInfo>> {
+    if !has_route {
+        return Ok(None);
+    }
+
+    let mut routes = Routes::default();
+
+    if route_type >= 0 && route_param.is_none() {
+        // SimpleRoutes: no param means multi-node or random
+        let simple = match route_type {
+            0 => SimpleRoutes::AllNodes,
+            1 => SimpleRoutes::AllPrimaries,
+            _ => SimpleRoutes::Random,
+        };
+        routes.set_simple_routes(simple);
+    } else if route_type >= 100 && route_param.is_some() {
+        // SlotIdRoute: routeType 100+ (offset by 100 from SlotKeyRoute)
+        let slot_type = match route_type - 100 {
+            1 => SlotTypes::Replica,
+            _ => SlotTypes::Primary,
+        };
+        let param_str = route_param.unwrap_or_default();
+        if let Ok(slot_id) = param_str.parse::<i32>() {
+            routes.set_slot_id_route(SlotIdRoute {
+                slot_type: EnumOrUnknown::new(slot_type),
+                slot_id,
+                ..Default::default()
+            });
+        }
+    } else if route_type >= 0 && route_param.is_some() {
+        // SlotKeyRoute: routeType 0-1
+        let slot_type = match route_type {
+            1 => SlotTypes::Replica,
+            _ => SlotTypes::Primary,
+        };
+        let param_str = route_param.unwrap_or_default();
+        if !param_str.is_empty() {
+            routes.set_slot_key_route(SlotKeyRoute {
+                slot_type: EnumOrUnknown::new(slot_type),
+                slot_key: param_str.into(),
+                ..Default::default()
+            });
+        }
+    } else if route_type < 0 && route_param.is_some() {
+        // ByAddressRoute: route_type = -1, param = "host:port"
+        let param_str = route_param.unwrap_or_default();
+        if let Some((host, port_str)) = param_str.split_once(':')
+            && let Ok(port) = port_str.parse::<i32>()
+        {
+            routes.set_by_address_route(ByAddressRoute {
+                host: host.to_string().into(),
+                port,
+                ..Default::default()
+            });
+        }
+    }
+
+    get_route(routes, cmd)
+}
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Result<SlotAddr, RedisError> {
     slot_type

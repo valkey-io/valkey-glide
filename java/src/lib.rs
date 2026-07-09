@@ -1534,70 +1534,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
                         }
 
                         // Compute routing
-                        let routing = if has_route_bool {
-                            use glide_core::command_request::{
-                                ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
-                                SlotTypes,
-                            };
-                            use protobuf::EnumOrUnknown;
-                            let mut routes = Routes::default();
-                            if route_type_val >= 0 && route_param_str.is_none() {
-                                let simple = match route_type_val {
-                                    0 => SimpleRoutes::AllNodes,
-                                    1 => SimpleRoutes::AllPrimaries,
-                                    _ => SimpleRoutes::Random,
-                                };
-                                routes.set_simple_routes(simple);
-                            } else if route_type_val >= 100 && route_param_str.is_some() {
-                                // SlotIdRoute: routeType 100+ (offset by 100 from SlotKeyRoute)
-                                let slot_type = match route_type_val - 100 {
-                                    1 => SlotTypes::Replica,
-                                    _ => SlotTypes::Primary,
-                                };
-                                let param_str = route_param_str.as_deref().unwrap_or_default();
-                                if let Ok(slot_id) = param_str.parse::<i32>() {
-                                    routes.set_slot_id_route(SlotIdRoute {
-                                        slot_type: EnumOrUnknown::new(slot_type),
-                                        slot_id,
-                                        ..Default::default()
-                                    });
-                                }
-                            } else if route_type_val >= 0 && route_param_str.is_some() {
-                                // SlotKeyRoute: routeType 0-1
-                                let slot_type = match route_type_val {
-                                    1 => SlotTypes::Replica,
-                                    _ => SlotTypes::Primary,
-                                };
-                                let param_str = route_param_str.as_deref().unwrap_or_default();
-                                if !param_str.is_empty() {
-                                    routes.set_slot_key_route(SlotKeyRoute {
-                                        slot_type: EnumOrUnknown::new(slot_type),
-                                        slot_key: param_str.into(),
-                                        ..Default::default()
-                                    });
-                                }
-                            } else if route_type_val < 0 && route_param_str.is_some() {
-                                let param_str = route_param_str.as_deref().unwrap_or_default();
-                                if let Some((host, port_str)) = param_str.split_once(':')
-                                    && let Ok(port) = port_str.parse::<i32>()
-                                {
-                                    routes.set_by_address_route(ByAddressRoute {
-                                        host: host.to_string().into(),
-                                        port,
-                                        ..Default::default()
-                                    });
-                                }
-                            }
-                            routing::get_route(routes, None).map_err(|e| {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Routing error",
-                                    e.to_string(),
-                                ))
-                            })?
-                        } else {
-                            None
-                        };
+                        let routing = routing::resolve_routing_from_params(
+                            has_route_bool,
+                            route_type_val,
+                            route_param_str.as_deref(),
+                            None,
+                        )
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Routing error",
+                                e.to_string(),
+                            ))
+                        })?;
 
                         // Execute
                         let exec_res = if is_atomic_bool {
@@ -1629,11 +1578,20 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
                             Ok(value) => {
                                 if client.is_compression_enabled() {
                                     if let Some(manager) = client.compression_manager() {
-                                        glide_core::compression::decompress_batch_response(
+                                        match glide_core::compression::decompress_batch_response(
                                             value.clone(),
                                             manager.as_ref(),
-                                        )
-                                        .or(Ok(value))
+                                        ) {
+                                            Ok(decompressed) => Ok(decompressed),
+                                            Err(e) => {
+                                                logger_core::log_warn_rate_limited!(
+                                                    "compression",
+                                                    5,
+                                                    format!("Failed to decompress batch response: {}, returning original", e)
+                                                );
+                                                Ok(value)
+                                            }
+                                        }
                                     } else {
                                         Ok(value)
                                     }
@@ -1685,7 +1643,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchDirect(
     .unwrap_or(())
 }
 
-/// Execute a binary command asynchronously
 /// Execute a Valkey command asynchronously.
 /// Takes command parameters directly via JNI: requestType as int, args as byte[][],
 /// and routing as primitives.
@@ -1823,72 +1780,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandDirec
                 }
 
                 // Compute routing
-                let routing = if has_route_bool {
-                    use glide_core::command_request::{
-                        ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute, SlotTypes,
-                    };
-                    use protobuf::EnumOrUnknown;
-                    let mut routes = Routes::default();
-                    if route_type_val >= 0 && route_param_str.is_none() {
-                        let simple = match route_type_val {
-                            0 => SimpleRoutes::AllNodes,
-                            1 => SimpleRoutes::AllPrimaries,
-                            _ => SimpleRoutes::Random,
-                        };
-                        routes.set_simple_routes(simple);
-                    } else if route_type_val >= 100 && route_param_str.is_some() {
-                        // SlotIdRoute: routeType 100+ (offset by 100 from SlotKeyRoute)
-                        let slot_type = match route_type_val - 100 {
-                            1 => SlotTypes::Replica,
-                            _ => SlotTypes::Primary,
-                        };
-                        let param_str = route_param_str.as_deref().unwrap_or_default();
-                        if let Ok(slot_id) = param_str.parse::<i32>() {
-                            let s = SlotIdRoute {
-                                slot_type: EnumOrUnknown::new(slot_type),
-                                slot_id,
-                                ..Default::default()
-                            };
-                            routes.set_slot_id_route(s);
-                        }
-                    } else if route_type_val >= 0 && route_param_str.is_some() {
-                        // SlotKeyRoute: routeType 0-1
-                        let slot_type = match route_type_val {
-                            1 => SlotTypes::Replica,
-                            _ => SlotTypes::Primary,
-                        };
-                        let param_str = route_param_str.as_deref().unwrap_or_default();
-                        if !param_str.is_empty() {
-                            let s = SlotKeyRoute {
-                                slot_type: EnumOrUnknown::new(slot_type),
-                                slot_key: param_str.into(),
-                                ..Default::default()
-                            };
-                            routes.set_slot_key_route(s);
-                        }
-                    } else if route_type_val < 0 && route_param_str.is_some() {
-                        let param_str = route_param_str.as_deref().unwrap_or_default();
-                        if let Some((host, port_str)) = param_str.split_once(':')
-                            && let Ok(port) = port_str.parse::<i32>()
-                        {
-                            let s = ByAddressRoute {
-                                host: host.to_string().into(),
-                                port,
-                                ..Default::default()
-                            };
-                            routes.set_by_address_route(s);
-                        }
-                    }
-                    routing::get_route(routes, Some(&cmd)).map_err(|e| {
-                        redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Routing error",
-                            e.to_string(),
-                        ))
-                    })?
-                } else {
-                    None
-                };
+                let routing = routing::resolve_routing_from_params(
+                    has_route_bool,
+                    route_type_val,
+                    route_param_str.as_deref(),
+                    Some(&cmd),
+                )
+                .map_err(|e| {
+                    redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Routing error",
+                        e.to_string(),
+                    ))
+                })?;
 
                 client.send_command(&mut cmd, routing).await
             }
@@ -2055,67 +1959,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 Ok(mut client) => {
                     // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
                     let routing_info = if has_route_bool {
-                        use glide_core::command_request::{
-                            ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
-                            SlotTypes,
-                        };
-                        use protobuf::EnumOrUnknown;
-                        let mut routes = Routes::default();
-                        // Build route based on route_type/route_param
-                        // SimpleRoutes
-                        if route_type_val >= 0 && route_param_str.is_none() {
-                            let simple = match route_type_val {
-                                0 => SimpleRoutes::AllNodes,
-                                1 => SimpleRoutes::AllPrimaries,
-                                _ => SimpleRoutes::Random,
-                            };
-                            routes.set_simple_routes(simple);
-                        } else if route_type_val >= 100 && route_param_str.is_some() {
-                            // SlotIdRoute: routeType 100+ (offset by 100)
-                            let slot_type = match route_type_val - 100 {
-                                1 => SlotTypes::Replica,
-                                _ => SlotTypes::Primary,
-                            };
-                            let param_str = route_param_str.unwrap_or_default();
-                            if let Ok(slot_id) = param_str.parse::<i32>() {
-                                let s = SlotIdRoute {
-                                    slot_type: EnumOrUnknown::new(slot_type),
-                                    slot_id,
-                                    ..Default::default()
-                                };
-                                routes.set_slot_id_route(s);
-                            }
-                        } else if route_type_val >= 0 && route_param_str.is_some() {
-                            // SlotKeyRoute: routeType 0-1
-                            let slot_type = match route_type_val {
-                                1 => SlotTypes::Replica,
-                                _ => SlotTypes::Primary,
-                            };
-                            let param_str = route_param_str.unwrap_or_default();
-                            if !param_str.is_empty() {
-                                let s = SlotKeyRoute {
-                                    slot_type: EnumOrUnknown::new(slot_type),
-                                    slot_key: param_str.into(),
-                                    ..Default::default()
-                                };
-                                routes.set_slot_key_route(s);
-                            }
-                        } else if route_type_val < 0 && route_param_str.is_some() {
-                            // ByAddressRoute encoded with route_type = -1 and host:port in route_param
-                            let param_str = route_param_str.unwrap_or_default();
-                            if let Some((host, port_str)) = param_str.split_once(':')
-                                && let Ok(port) = port_str.parse::<i32>()
-                            {
-                                let s = ByAddressRoute {
-                                    host: host.to_string().into(),
-                                    port,
-                                    ..Default::default()
-                                };
-                                routes.set_by_address_route(s);
-                            }
-                        }
-
-                        match routing::get_route(routes, None) {
+                        match routing::resolve_routing_from_params(
+                            true,
+                            route_type_val,
+                            route_param_str.as_deref(),
+                            None,
+                        ) {
                             Ok(r) => r,
                             Err(e) => {
                                 complete_callback(
