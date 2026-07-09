@@ -53,8 +53,7 @@ export function parseActualSubscriptions(result: unknown): {
 } {
     // Result format: ["desired", [{key, value}, ...], "actual", [{key, value}, ...]]
     const actualArray = (result as unknown[])?.[3] as
-        | SubscriptionEntry[]
-        | undefined;
+        SubscriptionEntry[] | undefined;
 
     if (!Array.isArray(actualArray)) {
         return { exact: [], pattern: [], sharded: [] };

@@ -1,16 +1,29 @@
 # Changelog
 
-## Pending 2.5
+## Pending 2.6
 
 ### Fixes
 
+* Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
+* Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
+
+### Changes
+
+* Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
+* feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
+* Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
+
+## 2.5
+
+### Fixes
+
+* Python: Correct the `set` return type hint from `Optional[bytes]` to `Optional[Union[TOK, bytes]]`. The `SET` success reply is a RESP simple string (`+OK`), which GLIDE decodes to `str` (not `bytes`), so byte-only code that trusted the hint (e.g. `result.decode()`) type-checked but failed at runtime. Applies to the async client, sync client, and batch. ([#6347](https://github.com/valkey-io/valkey-glide/issues/6347))
 * Core/FFI: Fix heap corruption in `convert_vec_to_pointer` where `shrink_to_fit()` (a non-binding hint) was followed by `Vec::from_raw_parts` with `capacity = len`. When the allocator kept extra capacity, deallocation passed the wrong size, corrupting heap metadata and causing delayed SIGABRT crashes after many pubsub messages or response frees. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * Python: Fix `get(key, buffer=...)` under-reporting capacity for non-byte-format memoryviews. The sync client passed `len(response_buffer)` (element count) to the FFI instead of `response_buffer.nbytes`, so a memoryview with `itemsize > 1` (e.g. `array("I", ...)`) was treated as `itemsize`× smaller than its real capacity, spuriously failing valid GETs with "Value size exceeds buffer capacity". Byte-format (`"B"`) buffers were unaffected. ([#6310](https://github.com/valkey-io/valkey-glide/issues/6310))
 * Core: Honor `AWS_ENDPOINT_URL_STS` in the IAM credentials-provider loader so ElastiCache/MemoryDB IAM auth works in AWS partitions that do not publish a separate FIPS STS hostname (e.g. `us-gov-west-1`). Previously, setting `AWS_USE_FIPS_ENDPOINT=true` made the SDK construct a non-existent `sts-fips.<region>.amazonaws.com`, causing credential acquisition to hang. Matches `boto3` behavior. ([#5967](https://github.com/valkey-io/valkey-glide/issues/5967))
 * Core: Make the pipeline send-timeout liveness-aware so sustained backpressure on a live-but-slow connection waits for channel capacity instead of failing commands with `FatalSendError`, while a genuinely dead connection still fails fast ([#5446](https://github.com/valkey-io/valkey-glide/issues/5446))
 
 ### Changes
-
 
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))

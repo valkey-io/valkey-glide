@@ -356,6 +356,51 @@ class TestGlideClients:
         assert b"name=TEST_CLIENT_NAME" in client_info
         await glide_client.close()
 
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="glide-py(my-framework:1.2.3)",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The default library identity is preserved and the tag is appended.
+        assert b"lib-name=GlidePy(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name_with_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="custom-lib",
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The tag is appended to the configured lib_name override.
+        assert b"lib-name=custom-lib(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_closed_client_raises_error(self, glide_client: TGlideClient):
@@ -778,6 +823,32 @@ class TestCommands:
         res = await glide_client.set(key, new_value, return_old_value=True)
         assert res == value.encode()
         assert await glide_client.get(key) == new_value.encode()
+
+    @pytest.mark.skip_if_version_below("6.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_return_types(self, glide_client: TGlideClient):
+        # Regression test for https://github.com/valkey-io/valkey-glide/issues/6347:
+        # set() can return a str ("OK"), bytes (old value), or None, so its
+        # return type is Optional[Union[TOK, bytes]] - not Optional[bytes].
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        # Success reply is the simple string "OK", decoded to str (not bytes).
+        ok = await glide_client.set(key, value)
+        assert ok == OK
+        assert isinstance(ok, str)
+
+        # A failed conditional set returns None.
+        none_res = await glide_client.set(
+            key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        )
+        assert none_res is None
+
+        # The old value (a bulk string) is returned as bytes.
+        old = await glide_client.set(key, get_random_string(10), return_old_value=True)
+        assert old == value.encode()
+        assert isinstance(old, bytes)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -673,45 +673,61 @@ where
         const DEAD_TICKS: u32 = 2;
         let send_start = std::time::Instant::now();
         let mut no_progress_ticks = 0u32;
-        let permit = loop {
-            let progress_before = self.progress.load(Ordering::Relaxed);
-            match tokio::time::timeout(liveness_tick, self.sender.reserve()).await {
-                Ok(Ok(permit)) => break permit,
-                Ok(Err(_closed)) => {
-                    return Err(RedisError::from((
-                        crate::ErrorKind::FatalSendError,
-                        "Failed to send the request to the server",
-                        "the pipeline writer task has terminated".to_string(),
-                    )));
-                }
-                Err(_elapsed) => {
-                    if send_start.elapsed() >= timeout {
-                        // Backpressure outlasted the request's own timeout budget.
-                        // Report a genuine timeout (NoRetry, is_timeout()), matching
-                        // the receive-side timeout — not a fatal/reconnect send error.
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            "Timed out waiting for pipeline send capacity",
-                        )
-                        .into());
-                    }
-                    if self.progress.load(Ordering::Relaxed) == progress_before {
-                        no_progress_ticks += 1;
-                        if no_progress_ticks >= DEAD_TICKS {
-                            // No progress across consecutive ticks while the channel
-                            // stays full: the writer is stuck, not merely slow.
-                            return Err(RedisError::from((
-                                crate::ErrorKind::FatalSendError,
-                                "Pipeline channel full — connection likely dead",
-                            )));
-                        }
-                    } else {
-                        // A slot freed or a response arrived: backpressure, not
-                        // death. Reset the dead-tick counter and keep waiting.
-                        no_progress_ticks = 0;
-                    }
-                }
+        // Fast path: if a channel slot is immediately available (the common,
+        // non-contended case) take it without arming the liveness-timeout
+        // machinery — no per-send timeout future, no atomic progress load. The
+        // dead-connection/backpressure detection below is only required when the
+        // channel is actually full, so keep the hot path bare.
+        let permit = match self.sender.try_reserve() {
+            Ok(permit) => permit,
+            Err(mpsc::error::TrySendError::Closed(())) => {
+                return Err(RedisError::from((
+                    crate::ErrorKind::FatalSendError,
+                    "Failed to send the request to the server",
+                    "the pipeline writer task has terminated".to_string(),
+                )));
             }
+            // Channel full: fall back to the liveness-aware slow path (unchanged).
+            Err(mpsc::error::TrySendError::Full(())) => loop {
+                let progress_before = self.progress.load(Ordering::Relaxed);
+                match tokio::time::timeout(liveness_tick, self.sender.reserve()).await {
+                    Ok(Ok(permit)) => break permit,
+                    Ok(Err(_closed)) => {
+                        return Err(RedisError::from((
+                            crate::ErrorKind::FatalSendError,
+                            "Failed to send the request to the server",
+                            "the pipeline writer task has terminated".to_string(),
+                        )));
+                    }
+                    Err(_elapsed) => {
+                        if send_start.elapsed() >= timeout {
+                            // Backpressure outlasted the request's own timeout budget.
+                            // Report a genuine timeout (NoRetry, is_timeout()), matching
+                            // the receive-side timeout — not a fatal/reconnect send error.
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "Timed out waiting for pipeline send capacity",
+                            )
+                            .into());
+                        }
+                        if self.progress.load(Ordering::Relaxed) == progress_before {
+                            no_progress_ticks += 1;
+                            if no_progress_ticks >= DEAD_TICKS {
+                                // No progress across consecutive ticks while the channel
+                                // stays full: the writer is stuck, not merely slow.
+                                return Err(RedisError::from((
+                                    crate::ErrorKind::FatalSendError,
+                                    "Pipeline channel full — connection likely dead",
+                                )));
+                            }
+                        } else {
+                            // A slot freed or a response arrived: backpressure, not
+                            // death. Reset the dead-tick counter and keep waiting.
+                            no_progress_ticks = 0;
+                        }
+                    }
+                }
+            },
         };
         permit.send(PipelineMessage {
             input,

@@ -670,6 +670,20 @@ export const getClientConfigurationOption = (
     };
 };
 
+/**
+ * Flushes the client's database without closing the connection.
+ * Use this in afterEach to reset state while keeping the client alive.
+ */
+export async function flushClient(client?: BaseClient): Promise<void> {
+    if (!client) return;
+
+    try {
+        await (client as GlideClient | GlideClusterClient).flushall();
+    } catch {
+        // Ignore errors - client may already be disconnected
+    }
+}
+
 export async function flushAndCloseClient(
     cluster_mode: boolean,
     addresses: [string, number][] | undefined,

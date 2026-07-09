@@ -79,6 +79,15 @@ EXCLUDED_TESTS = {
         "test_sync_get_into_buffer_readonly_raises",
         "test_sync_get_into_buffer_too_small_raises",
         "test_sync_get_into_buffer_non_byte_format",
+        # mget() with buffers - sync-only FFI path, no async equivalent
+        "test_sync_mget_into_buffers",
+        "test_sync_mget_into_buffers_missing_key",
+        "test_sync_mget_into_buffers_larger_buffer",
+        "test_sync_mget_into_buffers_readonly_raises",
+        "test_sync_mget_into_buffers_too_small_raises",
+        "test_sync_mget_buffers_length_mismatch_raises",
+        "test_sync_mget_into_buffers_non_byte_format",
+        "test_sync_mget_into_buffers_cross_slot",
         # Script invocation span — async tracked in #5601
         "test_sync_span_script_invocation",
     ],
