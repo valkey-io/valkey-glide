@@ -3,6 +3,7 @@
  */
 
 import { execFile } from "child_process";
+import * as fs from "fs";
 import { createConnection } from "net";
 import { lt } from "semver";
 import { connect as tlsConnect } from "tls";
@@ -107,29 +108,33 @@ async function pingNode(
 /**
  * Sanity check for TLS servers: attempts a TLS handshake to verify the server is accepting TLS connections.
  * Returns true if the TLS connection succeeds within timeoutMs.
+ * Uses the CA cert for validation if available; falls back to insecure if not yet generated.
  */
 async function pingNodeTls(
     host: string,
     port: number,
     timeoutMs = 5000,
 ): Promise<boolean> {
+    // Read the CA cert to validate the self-signed test certificate
+    let ca: Buffer | undefined;
+    try {
+        const tlsFolder = __dirname + "/tls_crts";
+        ca = fs.readFileSync(`${tlsFolder}/ca.crt`);
+    } catch {
+        // CA cert not yet generated - will use insecure check
+    }
+
     return new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => {
             sock.destroy();
             resolve(false);
         }, timeoutMs);
+        const tlsOptions = ca
+            ? { host, port, ca } // validate with CA cert
+            : { host, port, rejectUnauthorized: false }; // fallback if no CA yet
         const sock = tlsConnect(
-            {
-                host,
-                port,
-                // Self-signed test certificates are used in tests.
-                // We only need to verify the server accepts TLS connections,
-                // not validate the certificate chain. This is safe because
-                // this function is only used in test infrastructure against localhost.
-                rejectUnauthorized: false,
-            },
+            tlsOptions,
             () => {
-                // TLS handshake succeeded - server is accepting TLS connections
                 clearTimeout(timer);
                 sock.destroy();
                 resolve(true);
