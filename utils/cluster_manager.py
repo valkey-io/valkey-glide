@@ -167,7 +167,7 @@ def generate_tls_certs():
             )
 
     # Build CA key
-    make_key(ca_key, 4096)
+    make_key(ca_key, 2048)
 
     # Build server key
     make_key(SERVER_KEY, 2048)
@@ -531,7 +531,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=30 if tls else 10):
+        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=60 if tls else 10):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -551,7 +551,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10 if not tls else 30, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(server, cluster_folder, tls, 10 if not tls else 60, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
