@@ -160,12 +160,11 @@ impl<'a, T: FromRedisValue + 'a> AsyncIterInner<'a, T> {
             if let Some(v) = self.batch.next() {
                 return Some(v);
             };
-            if let Some(cursor) = self.cmd.cursor {
+            {
+                let cursor = self.cmd.cursor?;
                 if cursor == 0 {
                     return None;
                 }
-            } else {
-                return None;
             }
 
             let rv = self.con.req_packed_command(&self.cmd).await.ok()?;
