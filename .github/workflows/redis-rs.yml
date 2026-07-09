@@ -84,7 +84,7 @@ jobs:
               run: |
                   cargo fmt --all -- --check
                   cargo clippy -- -D warnings
-                  cargo install --locked cargo-deny
+                  cargo install --locked cargo-deny@0.19.9
                   cargo deny check all --config ${GITHUB_WORKSPACE}/deny.toml --exclude-dev all
               working-directory: ./glide-core/redis-rs/redis
 
