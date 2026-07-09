@@ -266,7 +266,7 @@ export class ValkeyCluster {
         tls: boolean = false,
         tlsConfig?: TestTLSConfig,
         loadModule?: string[],
-        maxRetries = 3,
+        maxRetries = 10,
     ): Promise<ValkeyCluster> {
         let lastError: Error | unknown;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -281,14 +281,19 @@ export class ValkeyCluster {
                     tlsConfig,
                     loadModule,
                 );
-                // Sanity PING check
-                const [host, port] = cluster.getAddresses()[0];
-                const ok = await pingNode(host, port);
-                if (ok) return cluster;
-                console.warn(
-                    `[createCluster] attempt ${attempt}/${maxRetries}: PING failed, retrying...`,
-                );
-                await cluster.close().catch(() => void 0);
+                // Sanity PING check (skip for TLS - plain TCP PING doesn't work on TLS servers)
+                if (!tls) {
+                    const [host, port] = cluster.getAddresses()[0];
+                    const ok = await pingNode(host, port);
+                    if (ok) return cluster;
+                    console.warn(
+                        `[createCluster] attempt ${attempt}/${maxRetries}: PING failed, retrying...`,
+                    );
+                    await cluster.close().catch(() => void 0);
+                } else {
+                    // For TLS, trust cluster_manager.py's readiness check
+                    return cluster;
+                }
             } catch (e) {
                 lastError = e;
                 if (cluster) await cluster.close().catch(() => void 0);
