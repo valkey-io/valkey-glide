@@ -38,9 +38,7 @@ public class GlideNativeBridge {
     public static native long createClient(
             byte[] connectionRequestBytes, AddressResolver addressResolver);
 
-    /**
-     * Execute a single command asynchronously, passing parameters directly via JNI.
-     */
+    /** Execute a single command asynchronously, passing parameters directly via JNI. */
     public static native void executeCommandAsync(
             long clientPtr,
             long callbackId,

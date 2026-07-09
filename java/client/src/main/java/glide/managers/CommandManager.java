@@ -180,8 +180,7 @@ public class CommandManager {
             String[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        return submitCommandAsync(
-                requestType, stringsToBytes(arguments), route, true, responseHandler);
+        return submitCommandAsync(requestType, stringsToBytes(arguments), route, true, responseHandler);
     }
 
     /** Submit a command with route. GlideString args expect binary response. */
