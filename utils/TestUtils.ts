@@ -119,7 +119,15 @@ async function pingNodeTls(
             resolve(false);
         }, timeoutMs);
         const sock = tlsConnect(
-            { host, port, rejectUnauthorized: false },
+            {
+                host,
+                port,
+                // Self-signed test certificates are used in tests.
+                // We only need to verify the server accepts TLS connections,
+                // not validate the certificate chain. This is safe because
+                // this function is only used in test infrastructure against localhost.
+                rejectUnauthorized: false,
+            },
             () => {
                 // TLS handshake succeeded - server is accepting TLS connections
                 clearTimeout(timer);
