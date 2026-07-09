@@ -169,7 +169,7 @@ export class ValkeyCluster {
         this.tls = tls;
     }
 
-    public static createCluster(
+    private static startCluster(
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
@@ -254,12 +254,7 @@ export class ValkeyCluster {
         });
     }
 
-    /**
-     * Creates a cluster with sanity verification (PING check).
-     * If the cluster is created but nodes are not accepting connections,
-     * tears it down and retries up to `maxRetries` times.
-     */
-    public static async createClusterWithRetry(
+    public static async createCluster(
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
@@ -277,7 +272,7 @@ export class ValkeyCluster {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             let cluster: ValkeyCluster | undefined;
             try {
-                cluster = await ValkeyCluster.createCluster(
+                cluster = await ValkeyCluster.startCluster(
                     cluster_mode,
                     shardCount,
                     replicaCount,
@@ -286,24 +281,19 @@ export class ValkeyCluster {
                     tlsConfig,
                     loadModule,
                 );
-                // Sanity check: PING the first node
+                // Sanity PING check
                 const [host, port] = cluster.getAddresses()[0];
                 const ok = await pingNode(host, port);
-                if (ok) {
-                    return cluster;
-                }
-                // PING failed — cluster started but not healthy
+                if (ok) return cluster;
                 console.warn(
-                    `[createClusterWithRetry] attempt ${attempt}/${maxRetries}: cluster started but PING failed, retrying...`,
+                    `[createCluster] attempt ${attempt}/${maxRetries}: PING failed, retrying...`,
                 );
                 await cluster.close().catch(() => void 0);
             } catch (e) {
                 lastError = e;
-                if (cluster) {
-                    await cluster.close().catch(() => void 0);
-                }
+                if (cluster) await cluster.close().catch(() => void 0);
                 console.warn(
-                    `[createClusterWithRetry] attempt ${attempt}/${maxRetries} failed: ${e}`,
+                    `[createCluster] attempt ${attempt}/${maxRetries} failed: ${e}`,
                 );
             }
             if (attempt < maxRetries) {
