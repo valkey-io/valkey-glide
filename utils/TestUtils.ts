@@ -107,7 +107,6 @@ async function pingNode(
 /**
  * Sanity check for TLS servers: attempts a TLS handshake to verify the server is accepting TLS connections.
  * Returns true if the TLS connection succeeds within timeoutMs.
- * Uses rejectUnauthorized: false because this is test infrastructure using self-signed certificates.
  */
 async function pingNodeTls(
     host: string,
@@ -120,7 +119,7 @@ async function pingNodeTls(
             resolve(false);
         }, timeoutMs);
         const sock = tlsConnect(
-            { host, port, rejectUnauthorized: false },
+            { host, port, rejectUnauthorized: true },
             () => {
                 clearTimeout(timer);
                 sock.destroy();
