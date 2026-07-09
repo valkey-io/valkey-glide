@@ -104,6 +104,7 @@ class TestAuthCommands:
         assert value == b"test_value"
         await config_set_new_password(glide_client, NEW_PASSWORD)
         await kill_connections(management_client)
+
         # Wait for the client to reconnect with the new password using retry
         # instead of a fixed sleep, which is unreliable in cluster mode under CI load
         async def _check_reconnected_after_first_kill():
@@ -119,6 +120,7 @@ class TestAuthCommands:
             timeout=15,
         )
         await kill_connections(management_client)
+
         # Wait for reconnection again before attempting immediate auth
         async def _check_reconnected_after_second_kill():
             try:

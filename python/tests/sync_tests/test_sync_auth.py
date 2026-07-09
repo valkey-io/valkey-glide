@@ -104,6 +104,7 @@ class TestSyncAuthCommands:
         assert value == b"test_value"
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
         kill_connections(management_sync_client)
+
         # Wait for the client to reconnect with the new password using retry
         # instead of a fixed sleep, which is unreliable in cluster mode under CI load
         def _check_reconnected_after_first_kill():
@@ -118,6 +119,7 @@ class TestSyncAuthCommands:
             "Client failed to reconnect with new password after first kill",
         )
         kill_connections(management_sync_client)
+
         # Wait for reconnection again before attempting immediate auth
         def _check_reconnected_after_second_kill():
             try:
