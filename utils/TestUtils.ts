@@ -3,6 +3,7 @@
  */
 
 import { execFile } from "child_process";
+import * as fs from "fs";
 import { createConnection } from "net";
 import { lt } from "semver";
 import { connect as tlsConnect } from "tls";
@@ -88,16 +89,22 @@ async function pingNode(
     timeoutMs = 5000,
 ): Promise<boolean> {
     if (tls) {
+        // Read the CA cert to properly validate the TLS handshake
+        let ca: Buffer | undefined;
+        try {
+            ca = fs.readFileSync(`${__dirname}/tls_crts/ca.crt`);
+        } catch {
+            // CA cert not yet generated on first cluster creation
+        }
         return new Promise<boolean>((resolve) => {
             const timer = setTimeout(() => {
                 sock.destroy();
                 resolve(false);
             }, timeoutMs);
             const sock = tlsConnect(
-                // rejectUnauthorized: false is intentional - test infrastructure uses
-                // self-signed certificates that would fail strict validation.
-                // We only verify the server accepts TLS connections.
-                { host, port, rejectUnauthorized: false },
+                ca
+                    ? { host, port, ca }
+                    : { host, port, rejectUnauthorized: false },
                 () => {
                     clearTimeout(timer);
                     sock.destroy();
