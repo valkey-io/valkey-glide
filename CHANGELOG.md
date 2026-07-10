@@ -10,6 +10,7 @@
 
 ### Changes
 
+* Core/FFI: Add `command_with_route_info` FFI entrypoint, accepting routing as a `RouteInfo` C-struct pointer instead of protobuf-encoded bytes — the same mechanism `batch()` already uses. Existing `command`, `command_with_buffer`, `command_with_buffers`, and `invoke_script` are unchanged. ([#6494](https://github.com/valkey-io/valkey-glide/pull/6494))
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
 * feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
