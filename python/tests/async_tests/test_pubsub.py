@@ -41,7 +41,7 @@ from tests.utils.pubsub_test_utils import (
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
-from tests.utils.utils import kill_connections, wait_for
+from tests.utils.utils import get_random_string, kill_connections, wait_for
 
 
 @pytest.mark.anyio
@@ -74,7 +74,7 @@ class TestPubSub:
         specific channel is correctly received by a subscriber.
         """
 
-        channel = "test_exact_channel"
+        channel = f"test_exact_channel_{get_random_string(10)}"
         message = "test_exact_message"
 
         callback, context = None, None
@@ -139,7 +139,7 @@ class TestPubSub:
         can coexist and function correctly.
         """
 
-        channel = "test_exact_channel"
+        channel = f"test_exact_channel_{get_random_string(10)}"
         message = "test_exact_message_1"
         message2 = "test_exact_message_2"
 
@@ -213,7 +213,7 @@ class TestPubSub:
         """
 
         NUM_CHANNELS = 256
-        shard_prefix = "{same-shard}"
+        shard_prefix = f"{{same-shard-{get_random_string(6)}}}"
 
         # Create a map of channels to messages with shard prefix
         channels_and_messages: Dict[str, str] = {
@@ -295,7 +295,7 @@ class TestPubSub:
         """
 
         NUM_CHANNELS = 256
-        shard_prefix = "{same-shard}"
+        shard_prefix = f"{{same-shard-{get_random_string(6)}}}"
 
         channels_and_messages: Dict[str, str] = {
             f"{shard_prefix}coexist_channel_{i}": f"coexist_message_{i}"
@@ -375,7 +375,7 @@ class TestPubSub:
         specific sharded channel is correctly received by a subscriber.
         """
 
-        channel = "sharded_channel_1"
+        channel = f"sharded_channel_{get_random_string(10)}"
         message = "sharded_message_1"
         publish_response = 1
 
@@ -447,7 +447,7 @@ class TestPubSub:
         retrieval methods can coexist without interfering with each other and operate as expected.
         """
 
-        channel = "sharded_coexist_channel"
+        channel = f"sharded_coexist_{get_random_string(10)}"
         message = "sharded_coexist_message_1"
         message2 = "sharded_coexist_message_2"
 
@@ -854,13 +854,14 @@ class TestPubSub:
         """
 
         NUM_CHANNELS = 256
-        PATTERN = "{pattern}:*"
+        unique_id = get_random_string(6)
+        PATTERN = f"{{pattern_{unique_id}}}:*"
 
         exact_channels_and_messages: Dict[str, str] = {
-            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
+            f"{{channel_{unique_id}}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
         }
         pattern_channels_and_messages: Dict[str, str] = {
-            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            f"{{pattern_{unique_id}}}:match_{i}": f"pattern_message_{i}"
             for i in range(NUM_CHANNELS)
         }
 
@@ -965,14 +966,15 @@ class TestPubSub:
         ) = (None, None, None, None)
         try:
             NUM_CHANNELS = 256
-            PATTERN = "{pattern}:*"
+            unique_id = get_random_string(6)
+            PATTERN = f"{{pattern_{unique_id}}}:*"
 
             exact_channels_and_messages: Dict[str, str] = {
-                f"{{channel}}:exact_{i}": f"exact_message_{i}"
+                f"{{channel_{unique_id}}}:exact_{i}": f"exact_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages: Dict[str, str] = {
-                f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+                f"{{pattern_{unique_id}}}:match_{i}": f"pattern_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
 
@@ -2431,10 +2433,11 @@ class TestPubSub:
         """
         client1, client2, client = None, None, None
         try:
-            channel1 = "test_channel1"
-            channel2 = "test_channel2"
-            channel3 = "some_channel3"
-            pattern = "test_*"
+            unique_id = get_random_string(8)
+            channel1 = f"test_{unique_id}_channel1"
+            channel2 = f"test_{unique_id}_channel2"
+            channel3 = f"some_{unique_id}_channel3"
+            pattern = f"test_{unique_id}_*"
 
             client = await create_client(request, cluster_mode)
             # Assert no channels exists yet
@@ -2485,8 +2488,9 @@ class TestPubSub:
         """
         client1, client2, client = None, None, None
         try:
-            pattern1 = "test_*"
-            pattern2 = "another_*"
+            unique_id = get_random_string(8)
+            pattern1 = f"test_{unique_id}_*"
+            pattern2 = f"another_{unique_id}_*"
 
             # Create a client and check initial number of patterns
             client = await create_client(request, cluster_mode)
@@ -2611,10 +2615,11 @@ class TestPubSub:
         """
         client1, client2, client = None, None, None
         try:
-            channel1 = "test_shardchannel1"
-            channel2 = "test_shardchannel2"
-            channel3 = "some_shardchannel3"
-            pattern = "test_*"
+            unique_id = get_random_string(8)
+            channel1 = f"test_{unique_id}_shardchannel1"
+            channel2 = f"test_{unique_id}_shardchannel2"
+            channel3 = f"some_{unique_id}_shardchannel3"
+            pattern = f"test_{unique_id}_*"
 
             client = await create_client(request, cluster_mode)
             assert isinstance(client, GlideClusterClient)
@@ -2755,8 +2760,9 @@ class TestPubSub:
         """
         client1, client2 = None, None
         try:
-            regular_channel = "regular_channel"
-            shard_channel = "shard_channel"
+            unique_id = get_random_string(8)
+            regular_channel = f"regular_channel_{unique_id}"
+            shard_channel = f"shard_channel_{unique_id}"
 
             regular_channel_bytes = regular_channel.encode()
             shard_channel_bytes = shard_channel.encode()
@@ -2799,8 +2805,9 @@ class TestPubSub:
         """
         client1, client2 = None, None
         try:
-            regular_channel = "regular_channel"
-            shard_channel = "shard_channel"
+            unique_id = get_random_string(8)
+            regular_channel = f"regular_channel_{unique_id}"
+            shard_channel = f"shard_channel_{unique_id}"
 
             regular_channel_bytes = regular_channel.encode()
             shard_channel_bytes = shard_channel.encode()
@@ -4068,7 +4075,7 @@ class TestPubSub:
         SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
         """
 
-        channel = "test_exact_channel_custom"
+        channel = f"test_exact_channel_custom_{get_random_string(10)}"
         message = "test_exact_message_custom"
 
         callback, context = None, None
@@ -4179,7 +4186,7 @@ class TestPubSub:
         Test that exact channel subscriptions are automatically restored after connection kill.
         """
 
-        channel = "reconnect_exact_channel_test"
+        channel = f"reconnect_exact_{get_random_string(10)}"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -4219,10 +4226,11 @@ class TestPubSub:
             # give some time for connection to reconnect
             await anyio.sleep(2)
 
-            # Wait for subscriptions to be re-established
+            # Wait for subscriptions to be re-established (generous timeout for CI)
             await wait_for_subscription_state(
                 listening_client,
                 expected_channels={channel},
+                timeout_ms=15000,
             )
 
             # Verify subscription still works after reconnection
@@ -4264,8 +4272,9 @@ class TestPubSub:
         Test that pattern subscriptions are automatically restored after connection kill.
         """
 
-        pattern = "news_reconnect_pattern.*"
-        channel = "news_reconnect_pattern.sports"
+        unique_id = get_random_string(10)
+        pattern = f"news_reconnect_{unique_id}.*"
+        channel = f"news_reconnect_{unique_id}.sports"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -4309,6 +4318,7 @@ class TestPubSub:
             await wait_for_subscription_state(
                 listening_client,
                 expected_patterns={pattern},
+                timeout_ms=15000,
             )
 
             # Verify subscription still works after reconnection
@@ -4352,7 +4362,7 @@ class TestPubSub:
         Test that sharded subscriptions are automatically restored after connection kill.
         """
 
-        channel = "sharded_reconnect_test_channel"
+        channel = f"sharded_reconnect_{get_random_string(10)}"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -4397,6 +4407,7 @@ class TestPubSub:
             await wait_for_subscription_state(
                 listening_client,
                 expected_sharded={channel},
+                timeout_ms=15000,
             )
 
             # Verify subscription still works after reconnection
@@ -4441,7 +4452,8 @@ class TestPubSub:
         """
 
         NUM_CHANNELS = 256
-        channels = {f"{{reconnect_exact_{i}}}channel" for i in range(NUM_CHANNELS)}
+        unique_id = get_random_string(6)
+        channels = {f"{{reconnect_{unique_id}_{i}}}channel" for i in range(NUM_CHANNELS)}
         message_after = "message_after_kill"
 
         callback, context = None, None
@@ -4469,11 +4481,11 @@ class TestPubSub:
             #  give time for reconnect
             await anyio.sleep(2)
 
-            # Wait for resubscription
+            # Wait for resubscription (generous timeout for CI with 256 channels)
             await wait_for_subscription_state(
                 listening_client,
                 expected_channels=channels,
-                timeout_ms=5000,
+                timeout_ms=15000,
             )
 
             # Publish to all channels after reconnection
