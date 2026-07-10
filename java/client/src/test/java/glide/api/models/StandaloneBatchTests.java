@@ -21,9 +21,10 @@ import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.ZSET;
 import static glide.api.models.commands.scan.ScanOptions.TYPE_OPTION_STRING;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import command_request.CommandRequestOuterClass;
+import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import java.util.Arrays;
@@ -37,8 +38,7 @@ public class StandaloneBatchTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void standalone_batch_commands(boolean isAtomic) {
-        List<Pair<CommandRequestOuterClass.RequestType, CommandRequestOuterClass.Command.ArgsArray>>
-                results = new LinkedList<>();
+        List<Pair<RequestType, byte[][]>> results = new LinkedList<>();
         Batch batch = new Batch(isAtomic);
 
         batch.select(5L);
@@ -198,15 +198,12 @@ public class StandaloneBatchTests {
                                 TYPE_OPTION_STRING,
                                 ZSET.toString())));
 
-        command_request.CommandRequestOuterClass.Batch protobufBatch = batch.getProtobufBatch().build();
+        java.util.List<BatchCommand> batchCommands = batch.getCommands();
 
-        for (int idx = 0; idx < protobufBatch.getCommandsCount(); idx++) {
-            CommandRequestOuterClass.Command protobuf = protobufBatch.getCommands(idx);
-
-            assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
-            assertEquals(
-                    results.get(idx).getRight().getArgsCount(), protobuf.getArgsArray().getArgsCount());
-            assertEquals(results.get(idx).getRight(), protobuf.getArgsArray());
+        for (int idx = 0; idx < batchCommands.size(); idx++) {
+            BatchCommand cmd = batchCommands.get(idx);
+            assertEquals(results.get(idx).getLeft().getNumber(), cmd.getRequestType());
+            assertArrayEquals(results.get(idx).getRight(), cmd.getArgs());
         }
     }
 }

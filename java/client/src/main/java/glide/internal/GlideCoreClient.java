@@ -183,106 +183,21 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== COMMAND EXECUTION METHODS ====================
 
-    /**
-     * Execute binary command asynchronously using raw protobuf bytes (for compatibility with
-     * CommandManager)
-     */
-    public CompletableFuture<Object> executeBinaryCommandAsync(byte[] requestBytes) {
-        return executeBinaryCommandAsyncInternal(requestBytes, this.requestTimeoutMillis);
-    }
-
-    /**
-     * Execute binary command asynchronously without Java-side timeout. Used for blocking commands
-     * (BLPOP, BRPOP, etc.) where the command has its own timeout that Rust handles.
-     */
-    public CompletableFuture<Object> executeBinaryCommandAsyncNoTimeout(byte[] requestBytes) {
-        return executeBinaryCommandAsyncInternal(requestBytes, 0);
-    }
-
-    private CompletableFuture<Object> executeBinaryCommandAsyncInternal(
-            byte[] requestBytes, long timeoutMs) {
-        try {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(
-                        new glide.api.models.exceptions.ClosingException("Client is closed"));
-                return future;
-            }
-
-            // Create future and register it with the async registry
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            long correlationId;
-            try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
-            } catch (glide.api.models.exceptions.RequestException e) {
-                future.completeExceptionally(e);
-                return future;
-            }
-
-            // Execute binary command directly using protobuf bytes
-            GlideNativeBridge.executeBinaryCommandAsync(handle, requestBytes, correlationId);
-
-            return future;
-
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute command asynchronously using raw protobuf bytes (for compatibility with CommandManager)
-     */
-    public CompletableFuture<Object> executeCommandAsync(byte[] requestBytes) {
-        return executeCommandAsyncInternal(requestBytes, this.requestTimeoutMillis);
-    }
-
-    /**
-     * Execute command asynchronously without Java-side timeout. Used for blocking commands (BLPOP,
-     * BRPOP, etc.) where the command has its own timeout that Rust handles.
-     */
-    public CompletableFuture<Object> executeCommandAsyncNoTimeout(byte[] requestBytes) {
-        return executeCommandAsyncInternal(requestBytes, 0);
-    }
-
-    private CompletableFuture<Object> executeCommandAsyncInternal(
-            byte[] requestBytes, long timeoutMs) {
-        try {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(
-                        new glide.api.models.exceptions.ClosingException("Client is closed"));
-                return future;
-            }
-
-            // Create future and register it with the async registry
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            long correlationId;
-            try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
-            } catch (glide.api.models.exceptions.RequestException e) {
-                future.completeExceptionally(e);
-                return future;
-            }
-
-            // Execute command directly using protobuf bytes
-            GlideNativeBridge.executeCommandAsync(handle, requestBytes, correlationId);
-
-            return future;
-
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /** Execute batch asynchronously using raw protobuf bytes. */
+    /** Execute a batch of commands asynchronously via JNI. */
     public CompletableFuture<Object> executeBatchAsync(
-            byte[] batchRequestBytes, boolean expectUtf8Response, Integer timeoutOverrideMs) {
+            int[] requestTypes,
+            byte[][][] args,
+            boolean isAtomic,
+            boolean raiseOnError,
+            int timeout,
+            boolean retryServerError,
+            boolean retryConnectionError,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -292,13 +207,8 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Create future and register it with the async registry
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
-            long timeoutMs =
-                    timeoutOverrideMs != null && timeoutOverrideMs > 0
-                            ? timeoutOverrideMs
-                            : this.requestTimeoutMillis;
             try {
                 correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
@@ -306,9 +216,21 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute batch directly
             GlideNativeBridge.executeBatchAsync(
-                    handle, batchRequestBytes, expectUtf8Response, correlationId);
+                    handle,
+                    correlationId,
+                    requestTypes,
+                    args,
+                    isAtomic,
+                    raiseOnError,
+                    timeout,
+                    retryServerError,
+                    retryConnectionError,
+                    hasRoute,
+                    routeType,
+                    routeParam,
+                    expectUtf8Response,
+                    spanPtr);
 
             return future;
 
@@ -435,7 +357,55 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
-    /** Execute script via native invoke_script path */
+    /** Execute a single command asynchronously via JNI. */
+    public CompletableFuture<Object> executeCommandAsync(
+            int requestType,
+            byte[][] args,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr) {
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
+                return future;
+            }
+
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            long correlationId;
+            try {
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+            } catch (glide.api.models.exceptions.RequestException e) {
+                future.completeExceptionally(e);
+                return future;
+            }
+
+            GlideNativeBridge.executeCommandAsync(
+                    handle,
+                    correlationId,
+                    requestType,
+                    args != null ? args : EMPTY_2D_BYTE_ARRAY,
+                    hasRoute,
+                    routeType,
+                    routeParam,
+                    expectUtf8Response,
+                    spanPtr);
+
+            return future;
+
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /** Execute a script asynchronously via JNI. */
     public CompletableFuture<Object> executeScriptAsync(
             String hash,
             byte[][] keys,

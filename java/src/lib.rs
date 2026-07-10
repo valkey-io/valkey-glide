@@ -2,7 +2,6 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
-use logger_core::log_warn_lazy;
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
 const TYPE_LIST: &str = "list";
@@ -31,11 +30,10 @@ mod address_resolver;
 mod errors;
 mod jni_client;
 mod linked_hashmap;
-mod protobuf_bridge;
+mod routing;
 
 use errors::{FFIError, handle_errors, run_ffi};
 use jni_client::*;
-use protobuf_bridge::*;
 
 use crate::address_resolver::JavaAddressResolver;
 /// Process command arguments for compression, matching the socket_listener pattern.
@@ -165,38 +163,6 @@ fn complete_callback_with_error_on_caller(env: &mut JNIEnv, callback_id: jlong, 
     }
 }
 
-/// Parse request bytes into a CommandRequest, completing the callback with an error on failure.
-/// Returns `Some(request)` on success, `None` if an error occurred (callback already completed).
-fn parse_request_bytes(
-    env: &mut JNIEnv,
-    request_bytes: &JByteArray,
-    callback_id: jlong,
-) -> Option<protobuf_bridge::CommandRequest> {
-    let raw_bytes = match env.convert_byte_array(request_bytes) {
-        Ok(b) => b,
-        Err(e) => {
-            let msg = format!("Failed to read request bytes: {e}");
-            complete_callback_with_error_on_caller(env, callback_id, &msg);
-            return None;
-        }
-    };
-
-    if raw_bytes.is_empty() {
-        complete_callback_with_error_on_caller(env, callback_id, "Empty request bytes");
-        return None;
-    }
-
-    match protobuf_bridge::parse_command_request(&raw_bytes) {
-        Ok(r) => Some(r),
-        Err(e) => {
-            let msg = format!("Failed to parse command request: {e}");
-            complete_callback_with_error_on_caller(env, callback_id, &msg);
-            None
-        }
-    }
-}
-
-/// Get the JVM Arc, falling back to the cached static if env.get_java_vm() fails.
 /// Completes the callback with an error if both fail.
 fn get_jvm_or_complete_error(
     env: &mut JNIEnv,
@@ -214,246 +180,6 @@ fn get_jvm_or_complete_error(
             }
         },
     }
-}
-
-// Internal helper: execute a parsed CommandRequest and complete Java callback
-async fn execute_command_request_and_complete(
-    handle_id: u64,
-    command_request: protobuf_bridge::CommandRequest,
-    callback_id: jlong,
-    jvm: std::sync::Arc<jni::JavaVM>,
-    expect_utf8: bool,
-) {
-    let result: Result<redis::Value, redis::RedisError> = async {
-        let mut client = jni_client::ensure_client_for_handle(handle_id)
-            .await
-            .map_err(|e| {
-                redis::RedisError::from((
-                    redis::ErrorKind::ClientError,
-                    "Client not found",
-                    e.to_string(),
-                ))
-            })?;
-
-        let root_span_ptr_opt = command_request.root_span_ptr;
-        match &command_request.command {
-            Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let mut cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
-                    redis::RedisError::from((
-                        redis::ErrorKind::ClientError,
-                        "Failed to create command",
-                        e.to_string(),
-                    ))
-                })?;
-
-                // Apply compression to command arguments if compression is enabled
-                // This also validates that the command is compatible with compression
-                // Note: We intentionally keep these as separate if statements for clarity:
-                // - First check: is compression enabled?
-                // - Second check: did compression processing fail?
-                // - Third check: is it an incompatible command error?
-                #[allow(clippy::collapsible_if)]
-                if client.is_compression_enabled() {
-                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
-                        // Incompatible command errors should be returned to the user
-                        if e.is_incompatible_command() {
-                            return Err(redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Incompatible command with compression",
-                                e.to_string(),
-                            )));
-                        }
-                        // For other compression errors, log and continue
-                        log_warn_lazy!(
-                            "compression",
-                            format!("Compression processing failed: {e}, continuing with original command")
-                        );
-                    }
-                }
-
-                // Compute routing
-                let route_box = command_request.route.0;
-                let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::get_route(*route_box, Some(&cmd)).map_err(|e| {
-                        redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Routing error",
-                            e.to_string(),
-                        ))
-                    })?
-                } else {
-                    None
-                };
-
-                let send_start = std::time::Instant::now();
-                let exec = client.send_command(&mut cmd, routing).await;
-                let send_elapsed = send_start.elapsed();
-                if send_elapsed > std::time::Duration::from_secs(1) {
-                    logger_core::log_warn_rate_limited!(
-                        "jni_command",
-                        5,
-                        format!(
-                            "send_command took {:?} for callback_id={}",
-                            send_elapsed, callback_id
-                        )
-                    );
-                }
-
-                if let Some(root_span_ptr) = root_span_ptr_opt
-                    && root_span_ptr != 0
-                {
-                    match unsafe {
-                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                    } {
-                        Ok(span) => {
-                            span.end();
-                            unsafe {
-                                std::sync::Arc::from_raw(
-                                    root_span_ptr as *const glide_core::GlideSpan,
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            log_warn_lazy!(
-                                "otel",
-                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
-                            );
-                        }
-                    }
-                }
-                exec
-            }
-            Some(protobuf_bridge::command_request::Command::Batch(batch)) => {
-                // Build pipeline
-                let mut pipeline = redis::Pipeline::with_capacity(batch.commands.len());
-                if batch.is_atomic {
-                    pipeline.atomic();
-                }
-                for c in &batch.commands {
-                    let mut valkey_cmd = protobuf_bridge::create_valkey_command(c).map_err(|e| {
-                        redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Failed to create batch command",
-                            e.to_string(),
-                        ))
-                    })?;
-                    // Apply compression to each command in the batch
-                    // This also validates that the command is compatible with compression
-                    #[allow(clippy::collapsible_if)]
-                    if client.is_compression_enabled() {
-                        if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
-                            // Incompatible command errors should be returned to the user
-                            if e.is_incompatible_command() {
-                                return Err(redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Incompatible command with compression",
-                                    e.to_string(),
-                                )));
-                            }
-                            // For other compression errors, log and continue
-                            log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
-                        }
-                    }
-                    pipeline.add_command(valkey_cmd);
-                }
-
-                // Routing for batch
-                let route_box = command_request.route.0;
-                let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::get_route(*route_box, None).map_err(|e| {
-                        redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Routing error",
-                            e.to_string(),
-                        ))
-                    })?
-                } else {
-                    None
-                };
-
-                // Child span as per previous behavior
-                let mut send_batch_span: Option<glide_core::GlideSpan> = None;
-                if let Some(root_span_ptr) = root_span_ptr_opt
-                    && root_span_ptr != 0
-                    && let Ok(root_span) =
-                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
-                    && let Ok(child) = root_span.add_span("send_batch")
-                {
-                    send_batch_span = Some(child);
-                }
-
-                let exec_res = if batch.is_atomic {
-                    client
-                        .send_transaction(
-                            &pipeline,
-                            routing,
-                            batch.timeout,
-                            batch.raise_on_error.unwrap_or(true),
-                        )
-                        .await
-                } else {
-                    client
-                        .send_pipeline(
-                            &pipeline,
-                            routing,
-                            batch.raise_on_error.unwrap_or(true),
-                            batch.timeout,
-                            redis::PipelineRetryStrategy {
-                                retry_server_error: batch.retry_server_error.unwrap_or(false),
-                                retry_connection_error: batch
-                                    .retry_connection_error
-                                    .unwrap_or(false),
-                            },
-                        )
-                        .await
-                };
-
-                if let Some(child) = send_batch_span.as_ref() {
-                    child.end();
-                }
-                if let Some(root_span_ptr) = root_span_ptr_opt
-                    && root_span_ptr != 0
-                {
-                    match unsafe {
-                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                    } {
-                        Ok(root_span) => {
-                            root_span.end();
-                            unsafe {
-                                std::sync::Arc::from_raw(
-                                    root_span_ptr as *const glide_core::GlideSpan,
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            log_warn_lazy!(
-                                "otel",
-                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
-                            );
-                        }
-                    }
-                }
-
-                // Process batch response for decompression if compression is enabled
-                match exec_res {
-                    Ok(value) => glide_core::compression::try_decompress_batch_response(
-                        value,
-                        client.compression_manager().as_deref(),
-                    )
-                    .map_err(|e| redis::RedisError::from((redis::ErrorKind::IoError, "Decompression error", e.to_string()))),
-                    Err(e) => Err(e),
-                }
-            }
-            _ => Err(redis::RedisError::from((
-                redis::ErrorKind::ClientError,
-                "Unsupported command type",
-            ))),
-        }
-    }
-    .await;
-
-    let binary_mode = !expect_utf8;
-    jni_client::complete_callback(jvm, callback_id, result, binary_mode);
 }
 
 /// Configuration for OpenTelemetry integration in the Java client.
@@ -1529,70 +1255,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     .unwrap_or(0)
 }
 
-/// Execute Valkey command asynchronously using protobuf with FFI-imported routing.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    request_bytes: JByteArray,
-    callback_id: jlong,
-) {
-    run_ffi(|| {
-        let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
-        else {
-            return Some(());
-        };
-        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
-        else {
-            return Some(());
-        };
-
-        let handle_id = client_ptr as u64;
-
-        // Synchronous inflight check: reject immediately if at capacity.
-        // This prevents Java threads from parking on futures that would be
-        // rejected asynchronously, avoiding thread explosion under memory pressure.
-        {
-            let handle_table = jni_client::get_handle_table();
-            if let Some(client_ref) = handle_table.get(&handle_id) {
-                if client_ref.available_inflight_count() <= 0 {
-                    drop(client_ref);
-                    jni_client::complete_error_sync(
-                        &mut env,
-                        callback_id,
-                        "Client reached maximum inflight requests",
-                        0,
-                    );
-                    return Some(());
-                }
-                // Synchronous circuit breaker check: reject immediately if core is unhealthy.
-                if !client_ref.is_circuit_breaker_healthy() {
-                    drop(client_ref);
-                    jni_client::complete_error_sync(
-                        &mut env,
-                        callback_id,
-                        "Client circuit breaker is open - core unhealthy",
-                        4,
-                    );
-                    return Some(());
-                }
-            }
-        }
-
-        get_runtime().spawn(execute_command_request_and_complete(
-            handle_id,
-            command_request,
-            callback_id,
-            jvm,
-            true, // executeCommandAsync expects UTF-8 decoding
-        ));
-
-        Some(())
-    })
-    .unwrap_or(())
-}
-
 /// Close client and release resources.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
@@ -1707,242 +1369,306 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_markTimedOut(
     jni_client::mark_callback_timed_out(callback_id);
 }
 
-/// Execute a batch (pipeline/transaction) asynchronously using FFI-imported logic
+/// Execute a batch (pipeline/transaction) asynchronously.
+/// Takes command data directly via JNI arrays.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    batch_request_bytes: JByteArray,
+    callback_id: jlong,
+    request_types: jni::objects::JIntArray,
+    args: JObjectArray, // byte[][][]
+    is_atomic: jni::sys::jboolean,
+    raise_on_error: jni::sys::jboolean,
+    timeout: jint,
+    retry_server_error: jni::sys::jboolean,
+    retry_connection_error: jni::sys::jboolean,
+    has_route: jni::sys::jboolean,
+    route_type: jint,
+    route_param: JString,
     expect_utf8: jni::sys::jboolean,
-    callback_id: jlong,
+    span_ptr: jlong,
 ) {
     run_ffi(|| {
-            let Some(command_request) =
-                parse_request_bytes(&mut env, &batch_request_bytes, callback_id)
-            else {
-                return Some(());
-            };
-
-            // Extract optional root span pointer from the request (if provided by Java)
-            let root_span_ptr_opt = command_request.root_span_ptr;
-            let route = command_request.route.0.map(|r| *r);
-
-            // Extract the batch from the command request (take ownership to avoid clone)
-            let batch = match command_request.command {
-                Some(command_request::Command::Batch(batch)) => batch,
-                _ => {
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        "Expected batch command in request",
-                    );
-                    return Some(());
-                }
-            };
-
-            let handle_id = client_ptr as u64;
-            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
-            else {
-                return Some(());
-            };
-
-            get_runtime().spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        // Execute batch using existing FFI methodology
-                        let result: Result<redis::Value, redis::RedisError> = async {
-                            // If we have a root span, create a child span named "send_batch" to match expectations
-                            let mut send_batch_span: Option<glide_core::GlideSpan> = None;
-                            if let Some(root_span_ptr) = root_span_ptr_opt
-                                && root_span_ptr != 0
-                                && let Ok(root_span) = unsafe {
-                                    glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                                }
-                                && let Ok(child) = root_span.add_span("send_batch")
-                            {
-                                send_batch_span = Some(child);
-                            }
-                            // Create pipeline using existing FFI approach
-                            let mut pipeline =
-                                redis::Pipeline::with_capacity(batch.commands.len());
-                            if batch.is_atomic {
-                                pipeline.atomic();
-                            }
-
-                            // Add commands to pipeline using existing bridge logic
-                            for cmd in &batch.commands {
-                                let mut valkey_cmd = match protobuf_bridge::create_valkey_command(cmd) {
-                                    Ok(cmd) => cmd,
-                                    Err(e) => {
-                                        return Err(redis::RedisError::from((
-                                            redis::ErrorKind::ClientError,
-                                            "Failed to create batch command",
-                                            e.to_string(),
-                                        )));
-                                    }
-                                };
-                                // Apply compression to each command in the batch
-                                // This also validates that the command is compatible with compression
-                                #[allow(clippy::collapsible_if)]
-                                if client.is_compression_enabled() {
-                                    if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
-                                        // Incompatible command errors should be returned to the user
-                                        if e.is_incompatible_command() {
-                                            return Err(redis::RedisError::from((
-                                                redis::ErrorKind::ClientError,
-                                                "Incompatible command with compression",
-                                                e.to_string(),
-                                            )));
-                                        }
-                                        // For other compression errors, log and continue
-                                        log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
-                                    }
-                                }
-                                pipeline.add_command(valkey_cmd);
-                            }
-
-                            // Get routing using FFI approach
-                            let route = route.unwrap_or_default();
-                            let routing = protobuf_bridge::get_route(route, None).map_err(|e| {
-                                    redis::RedisError::from((
-                                        redis::ErrorKind::ClientError,
-                                        "Routing error",
-                                        e.to_string(),
-                                    ))
-                                })?;
-
-                            // Execute using existing client methods
-                            let exec_res = if batch.is_atomic {
-                                client
-                                    .send_transaction(
-                                        &pipeline,
-                                        routing,
-                                        batch.timeout,
-                                        batch.raise_on_error.unwrap_or(true),
-                                    )
-                                    .await
-                            } else {
-                                client
-                                    .send_pipeline(
-                                        &pipeline,
-                                        routing,
-                                        batch.raise_on_error.unwrap_or(true),
-                                        batch.timeout,
-                                        redis::PipelineRetryStrategy {
-                                            retry_server_error: batch
-                                                .retry_server_error
-                                                .unwrap_or(false),
-                                            retry_connection_error: batch
-                                                .retry_connection_error
-                                                .unwrap_or(false),
-                                        },
-                                    )
-                                    .await
-                            };
-
-                            // End child span if created
-                            if let Some(child) = send_batch_span.as_ref() {
-                                child.end();
-                            }
-                            // End and drop the root span if provided
-                            if let Some(root_span_ptr) = root_span_ptr_opt
-                                && root_span_ptr != 0
-                            {
-                                match unsafe {
-                                    glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                                } {
-                                    Ok(root_span) => {
-                                        root_span.end();
-                                        unsafe {
-                                            std::sync::Arc::from_raw(
-                                                root_span_ptr as *const glide_core::GlideSpan,
-                                            );
-                                        }
-                                    }
-                                    Err(err) => {
-                                        log_warn_lazy!(
-                                            "otel",
-                                            format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
-                                        );
-                                    }
-                                }
-                            }
-
-                            // Process batch response for decompression if compression is enabled
-                            match exec_res {
-                                Ok(value) => {
-                                    if client.is_compression_enabled() {
-                                        if let Some(manager) = client.compression_manager() {
-                                            match glide_core::compression::decompress_batch_response(
-                                                value.clone(),
-                                                manager.as_ref(),
-                                            ) {
-                                                Ok(decompressed) => Ok(decompressed),
-                                                Err(e) => {
-                                                    log_warn_lazy!(
-                                                        "compression",
-                                                        format!("Failed to decompress batch response: {}, returning original", e)
-                                                    );
-                                                    Ok(value)
-                                                }
-                                            }
-                                        } else {
-                                            Ok(value)
-                                        }
-                                    } else {
-                                        Ok(value)
-                                    }
-                                }
-                                Err(e) => Err(e),
-                            }
-                        }
-                        .await;
-
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, result, binary_mode);
-                    }
-                    Err(err) => {
-                        let error = Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Client not found",
-                            err.to_string(),
-                        )));
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, error, binary_mode);
-                    }
-                }
-            });
-
-            Some(())
-        },
-    ).unwrap_or(())
-}
-
-/// Execute a binary command asynchronously
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryCommandAsync(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    request_bytes: JByteArray,
-    callback_id: jlong,
-) {
-    run_ffi(|| {
-        let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
-        else {
-            return Some(());
-        };
-        let Some(jvm) =
-            get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
         else {
             return Some(());
         };
 
         let handle_id = client_ptr as u64;
 
-        // Synchronous inflight check (same as executeCommandAsync)
+        // Extract request types
+        let cmd_count = match env.get_array_length(&request_types) {
+            Ok(len) => len as usize,
+            Err(e) => {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    &format!("Failed to get request types length: {e}"),
+                    0,
+                );
+                return Some(());
+            }
+        };
+        let mut req_types = vec![0i32; cmd_count];
+        if let Err(e) = env.get_int_array_region(&request_types, 0, &mut req_types) {
+            jni_client::complete_error_sync(
+                &mut env,
+                callback_id,
+                &format!("Failed to read request types: {e}"),
+                0,
+            );
+            return Some(());
+        }
+
+        // Extract args: byte[][][] -> Vec<Vec<Vec<u8>>>
+        let all_args: Result<Vec<Vec<Vec<u8>>>, FFIError> = (|| {
+            let mut result = Vec::with_capacity(cmd_count);
+            for i in 0..cmd_count {
+                let cmd_args_obj = env.get_object_array_element(&args, i as i32)?;
+                let cmd_args_array = JObjectArray::from(cmd_args_obj);
+                let arg_count = env.get_array_length(&cmd_args_array)? as usize;
+                let mut cmd_args = Vec::with_capacity(arg_count);
+                for j in 0..arg_count {
+                    let arg_obj = env.get_object_array_element(&cmd_args_array, j as i32)?;
+                    let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
+                    cmd_args.push(arg_bytes);
+                }
+                result.push(cmd_args);
+            }
+            Ok(result)
+        })();
+
+        let all_args = match all_args {
+            Ok(a) => a,
+            Err(e) => {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    &format!("Failed to extract batch args: {e}"),
+                    0,
+                );
+                return Some(());
+            }
+        };
+
+        let is_atomic_bool = is_atomic != 0;
+        let raise_on_error_bool = raise_on_error != 0;
+        let timeout_val = if timeout > 0 {
+            Some(timeout as u32)
+        } else {
+            None
+        };
+        let retry_server = retry_server_error != 0;
+        let retry_connection = retry_connection_error != 0;
+        let expect_utf8_bool = expect_utf8 != 0;
+
+        // Extract route parameters
+        let has_route_bool = has_route != 0;
+        let route_type_val: i32 = route_type;
+        let route_param_str: Option<String> = if !route_param.is_null() {
+            match env.get_string(&route_param) {
+                Ok(s) => Some(s.into()),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        get_runtime().spawn(async move {
+            let client_result = jni_client::ensure_client_for_handle(handle_id).await;
+            match client_result {
+                Ok(mut client) => {
+                    // Create "send_batch" child span for OTel tracing
+                    let mut send_batch_span: Option<glide_core::GlideSpan> = None;
+                    if span_ptr != 0
+                        && let Ok(root_span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64)
+                        }
+                        && let Ok(child) = root_span.add_span("send_batch")
+                    {
+                        send_batch_span = Some(child);
+                    }
+
+                    let result: Result<redis::Value, redis::RedisError> = async {
+                        // Build pipeline directly from arrays
+                        let mut pipeline = redis::Pipeline::with_capacity(cmd_count);
+                        if is_atomic_bool {
+                            pipeline.atomic();
+                        }
+                        if let Some(ref child) = send_batch_span {
+                            pipeline.set_pipeline_span(Some(child.clone()));
+                        }
+
+                        for (i, rt) in req_types.iter().enumerate() {
+                            let proto_rt = protobuf::EnumOrUnknown::<
+                                glide_core::command_request::RequestType,
+                            >::from_i32(*rt);
+                            let request_type: glide_core::request_type::RequestType =
+                                proto_rt.into();
+                            let Some(mut cmd) = request_type.get_command() else {
+                                return Err(redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Invalid request type in batch",
+                                    format!("request_type={}", rt),
+                                )));
+                            };
+                            for arg in &all_args[i] {
+                                cmd.arg(arg.as_slice());
+                            }
+                            // Apply compression
+                            #[allow(clippy::collapsible_if)]
+                            if client.is_compression_enabled() {
+                                if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                                    if e.is_incompatible_command() {
+                                        return Err(redis::RedisError::from((
+                                            redis::ErrorKind::ClientError,
+                                            "Incompatible command with compression",
+                                            e.to_string(),
+                                        )));
+                                    }
+                                }
+                            }
+                            pipeline.add_command(cmd);
+                        }
+
+                        // Compute routing
+                        let routing = routing::resolve_routing_from_params(
+                            has_route_bool,
+                            route_type_val,
+                            route_param_str.as_deref(),
+                            None,
+                        )
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Routing error",
+                                e.to_string(),
+                            ))
+                        })?;
+
+                        // Execute
+                        let exec_res = if is_atomic_bool {
+                            client
+                                .send_transaction(
+                                    &pipeline,
+                                    routing,
+                                    timeout_val,
+                                    raise_on_error_bool,
+                                )
+                                .await
+                        } else {
+                            client
+                                .send_pipeline(
+                                    &pipeline,
+                                    routing,
+                                    raise_on_error_bool,
+                                    timeout_val,
+                                    redis::PipelineRetryStrategy {
+                                        retry_server_error: retry_server,
+                                        retry_connection_error: retry_connection,
+                                    },
+                                )
+                                .await
+                        };
+
+                        // Decompress if needed
+                        match exec_res {
+                            Ok(value) => {
+                                if client.is_compression_enabled() {
+                                    if let Some(manager) = client.compression_manager() {
+                                        match glide_core::compression::decompress_batch_response(
+                                            value.clone(),
+                                            manager.as_ref(),
+                                        ) {
+                                            Ok(decompressed) => Ok(decompressed),
+                                            Err(e) => {
+                                                logger_core::log_warn_rate_limited!(
+                                                    "compression",
+                                                    5,
+                                                    format!("Failed to decompress batch response: {}, returning original", e)
+                                                );
+                                                Ok(value)
+                                            }
+                                        }
+                                    } else {
+                                        Ok(value)
+                                    }
+                                } else {
+                                    Ok(value)
+                                }
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                    .await;
+
+                    // End send_batch child span
+                    if let Some(ref child) = send_batch_span {
+                        child.end();
+                    }
+
+                    // End OpenTelemetry root span if one was created
+                    if span_ptr != 0
+                        && let Ok(span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64)
+                        }
+                    {
+                        span.end();
+                        unsafe {
+                            std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+                        }
+                    }
+
+                    complete_callback(jvm, callback_id, result, !expect_utf8_bool);
+                }
+                Err(err) => {
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        ))),
+                        !expect_utf8_bool,
+                    );
+                }
+            }
+        });
+
+        Some(())
+    })
+    .unwrap_or(())
+}
+
+/// Execute a Valkey command asynchronously.
+/// Takes command parameters directly via JNI: requestType as int, args as byte[][],
+/// and routing as primitives.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    callback_id: jlong,
+    request_type: jint,
+    args: JObjectArray,
+    has_route: jni::sys::jboolean,
+    route_type: jint,
+    route_param: JString,
+    expect_utf8: jni::sys::jboolean,
+    span_ptr: jlong,
+) {
+    run_ffi(|| {
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
+        else {
+            return Some(());
+        };
+
+        let handle_id = client_ptr as u64;
+
+        // Synchronous inflight check
         {
             let handle_table = jni_client::get_handle_table();
             if let Some(client_ref) = handle_table.get(&handle_id) {
@@ -1969,13 +1695,122 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
             }
         }
 
-        get_runtime().spawn(execute_command_request_and_complete(
-            handle_id,
-            command_request,
-            callback_id,
-            jvm,
-            false, // binary entrypoint expects binary decoding
-        ));
+        // Extract args from byte[][]
+        let args_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
+            if args.is_null() {
+                return Ok(Vec::new());
+            }
+            let length = env.get_array_length(&args)? as usize;
+            let mut args_data = Vec::with_capacity(length);
+            for i in 0..length {
+                let arg_obj = env.get_object_array_element(&args, i as i32)?;
+                let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
+                args_data.push(arg_bytes);
+            }
+            Ok(args_data)
+        })();
+
+        let args_data = match args_vec {
+            Ok(a) => a,
+            Err(e) => {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    &format!("Failed to extract command args: {e}"),
+                    0,
+                );
+                return Some(());
+            }
+        };
+
+        // Extract route parameters
+        let has_route_bool = has_route != 0;
+        let route_type_val: i32 = route_type;
+        let route_param_str: Option<String> = if !route_param.is_null() {
+            match env.get_string(&route_param) {
+                Ok(s) => Some(s.into()),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        let expect_utf8_bool = expect_utf8 != 0;
+
+        get_runtime().spawn(async move {
+            let result: Result<redis::Value, redis::RedisError> = async {
+                let mut client = jni_client::ensure_client_for_handle(handle_id)
+                    .await
+                    .map_err(|e| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            e.to_string(),
+                        ))
+                    })?;
+
+                // Build redis::Cmd directly from requestType int and args
+                let proto_request_type = protobuf::EnumOrUnknown::<
+                    glide_core::command_request::RequestType,
+                >::from_i32(request_type);
+                let rt: glide_core::request_type::RequestType = proto_request_type.into();
+                let Some(mut cmd) = rt.get_command() else {
+                    return Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Invalid request type",
+                        format!("request_type={}", request_type),
+                    )));
+                };
+                for arg in &args_data {
+                    cmd.arg(arg.as_slice());
+                }
+
+                // Apply compression
+                #[allow(clippy::collapsible_if)]
+                if client.is_compression_enabled() {
+                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                        if e.is_incompatible_command() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Incompatible command with compression",
+                                e.to_string(),
+                            )));
+                        }
+                    }
+                }
+
+                // Compute routing
+                let routing = routing::resolve_routing_from_params(
+                    has_route_bool,
+                    route_type_val,
+                    route_param_str.as_deref(),
+                    Some(&cmd),
+                )
+                .map_err(|e| {
+                    redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Routing error",
+                        e.to_string(),
+                    ))
+                })?;
+
+                client.send_command(&mut cmd, routing).await
+            }
+            .await;
+
+            // End OpenTelemetry span if one was created
+            if span_ptr != 0
+                && let Ok(span) =
+                    unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
+            {
+                span.end();
+                unsafe {
+                    std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+                }
+            }
+
+            complete_callback(jvm, callback_id, result, !expect_utf8_bool);
+        });
 
         Some(())
     })
@@ -2124,60 +1959,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 Ok(mut client) => {
                     // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
                     let routing_info = if has_route_bool {
-                        use glide_core::command_request::{
-                            ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
-                            SlotTypes,
-                        };
-                        use protobuf::EnumOrUnknown;
-                        let mut routes = Routes::default();
-                        // Build route based on route_type/route_param
-                        // SimpleRoutes
-                        if route_type_val >= 0 && route_param_str.is_none() {
-                            let simple = match route_type_val {
-                                0 => SimpleRoutes::AllNodes,
-                                1 => SimpleRoutes::AllPrimaries,
-                                _ => SimpleRoutes::Random,
-                            };
-                            routes.set_simple_routes(simple);
-                        } else if route_type_val >= 0 && route_param_str.is_some() {
-                            // Slot routes with slot type
-                            let slot_type = match route_type_val {
-                                1 => SlotTypes::Replica,
-                                _ => SlotTypes::Primary,
-                            };
-                            // Try to parse param as integer slot id; if fails, treat as slot key
-                            let param_str = route_param_str.unwrap_or_default();
-                            if let Ok(slot_id) = param_str.parse::<i32>() {
-                                let s = SlotIdRoute {
-                                    slot_type: EnumOrUnknown::new(slot_type),
-                                    slot_id,
-                                    ..Default::default()
-                                };
-                                routes.set_slot_id_route(s);
-                            } else if !param_str.is_empty() {
-                                let s = SlotKeyRoute {
-                                    slot_type: EnumOrUnknown::new(slot_type),
-                                    slot_key: param_str.into(),
-                                    ..Default::default()
-                                };
-                                routes.set_slot_key_route(s);
-                            }
-                        } else if route_type_val < 0 && route_param_str.is_some() {
-                            // ByAddressRoute encoded with route_type = -1 and host:port in route_param
-                            let param_str = route_param_str.unwrap_or_default();
-                            if let Some((host, port_str)) = param_str.split_once(':')
-                                && let Ok(port) = port_str.parse::<i32>()
-                            {
-                                let s = ByAddressRoute {
-                                    host: host.to_string().into(),
-                                    port,
-                                    ..Default::default()
-                                };
-                                routes.set_by_address_route(s);
-                            }
-                        }
-
-                        match protobuf_bridge::get_route(routes, None) {
+                        match routing::resolve_routing_from_params(
+                            true,
+                            route_type_val,
+                            route_param_str.as_deref(),
+                            None,
+                        ) {
                             Ok(r) => r,
                             Err(e) => {
                                 complete_callback(
@@ -2204,7 +1991,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         for a in &args_data {
                             route_cmd.arg(a.as_slice());
                         }
-                        match protobuf_bridge::get_route(Default::default(), Some(&route_cmd)) {
+                        match routing::get_route(Default::default(), Some(&route_cmd)) {
                             Ok(r) => r,
                             Err(e) => {
                                 complete_callback(
