@@ -232,6 +232,13 @@ jobs:
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git config user.name github-actions
                   git config user.email github-actions@github.com
+                  # Remove go/.gitignore from the released module. 'go mod vendor'
+                  # copies this file into the consumer's vendor/ tree, where its
+                  # rules (*.pb.go, rustbin/, lib.h) cause git to silently drop the
+                  # generated artifacts we force-add below when the consumer commits
+                  # vendor/. This tag commit is never merged back to main, so main
+                  # keeps its .gitignore for development. See issue #6437.
+                  rm -f $GITHUB_WORKSPACE/go/.gitignore
                   git add -f go
                   git status
                   git commit -m "Automated commit from GitHub Actions"
