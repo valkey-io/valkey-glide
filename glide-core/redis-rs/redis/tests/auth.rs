@@ -44,7 +44,7 @@ mod auth {
                 let builder = get_builder(cluster_context, password);
                 let connection = builder
                     .build()?
-                    .get_async_connection(None, None, None)
+                    .get_async_connection(None, None, None, None)
                     .await?;
                 Ok(Connection::Cluster(connection))
             }
