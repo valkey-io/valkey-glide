@@ -76,14 +76,37 @@ async function waitForReplicasReady(
 }
 
 /**
- * Sanity check: attempts to PING a node to verify it's accepting connections.
- * Returns true if PING succeeds within timeoutMs.
+ * Sanity check: verifies a server is accepting connections.
+ * For non-TLS: sends a PING and expects +PONG.
+ * For TLS: attempts a TLS handshake (using rejectUnauthorized: false for self-signed test certs).
+ * Returns true if the check succeeds within timeoutMs.
  */
 async function pingNode(
     host: string,
     port: number,
+    tls = false,
     timeoutMs = 5000,
 ): Promise<boolean> {
+    if (tls) {
+        return new Promise<boolean>((resolve) => {
+            const timer = setTimeout(() => {
+                sock.destroy();
+                resolve(false);
+            }, timeoutMs);
+            const sock = tlsConnect(
+                // rejectUnauthorized: false is intentional - test infrastructure uses
+                // self-signed certificates that would fail strict validation.
+                // We only verify the server accepts TLS connections.
+                { host, port, rejectUnauthorized: false },
+                () => {
+                    clearTimeout(timer);
+                    sock.destroy();
+                    resolve(true);
+                },
+            );
+            sock.on("error", () => { clearTimeout(timer); resolve(false); });
+        });
+    }
     return new Promise<boolean>((resolve) => {
         const sock = createConnection({ host, port }, () => {
             sock.write("PING\r\n");
@@ -101,32 +124,6 @@ async function pingNode(
         });
         sock.on("error", () => { clearTimeout(timer); resolve(false); });
         sock.on("close", () => { clearTimeout(timer); resolve(false); });
-    });
-}
-
-/**
- * Sanity check for TLS servers: attempts a TLS handshake to verify the server is accepting TLS connections.
- * Returns true if the TLS connection succeeds within timeoutMs.
- */
-async function pingNodeTls(
-    host: string,
-    port: number,
-    timeoutMs = 5000,
-): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-        const timer = setTimeout(() => {
-            sock.destroy();
-            resolve(false);
-        }, timeoutMs);
-        const sock = tlsConnect(
-            { host, port, rejectUnauthorized: true },
-            () => {
-                clearTimeout(timer);
-                sock.destroy();
-                resolve(true);
-            },
-        );
-        sock.on("error", () => { clearTimeout(timer); resolve(false); });
     });
 }
 
@@ -293,7 +290,7 @@ export class ValkeyCluster {
         tls: boolean = false,
         tlsConfig?: TestTLSConfig,
         loadModule?: string[],
-        maxRetries = 10,
+        maxRetries = 3,
     ): Promise<ValkeyCluster> {
         let lastError: Error | unknown;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -308,25 +305,14 @@ export class ValkeyCluster {
                     tlsConfig,
                     loadModule,
                 );
-                // Sanity PING check (skip for TLS - plain TCP PING doesn't work on TLS servers)
-                if (!tls) {
-                    const [host, port] = cluster.getAddresses()[0];
-                    const ok = await pingNode(host, port);
-                    if (ok) return cluster;
-                    console.warn(
-                        `[createCluster] attempt ${attempt}/${maxRetries}: PING failed, retrying...`,
-                    );
-                    await cluster.close().catch(() => void 0);
-                } else {
-                    // For TLS, verify with an actual TLS handshake
-                    const [host, port] = cluster.getAddresses()[0];
-                    const ok = await pingNodeTls(host, port);
-                    if (ok) return cluster;
-                    console.warn(
-                        `[createCluster] attempt ${attempt}/${maxRetries}: TLS handshake failed, retrying...`,
-                    );
-                    await cluster.close().catch(() => void 0);
-                }
+                // Sanity check: verify server is accepting connections
+                const [host, port] = cluster.getAddresses()[0];
+                const ok = await pingNode(host, port, tls);
+                if (ok) return cluster;
+                console.warn(
+                    `[createCluster] attempt ${attempt}/${maxRetries}: sanity check failed, retrying...`,
+                );
+                await cluster.close().catch(() => void 0);
             } catch (e) {
                 lastError = e;
                 if (cluster) await cluster.close().catch(() => void 0);
