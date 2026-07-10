@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Registry for storing Java objects returned from JNI calls. This allows us to pass object IDs
- * through the Response protobuf instead of trying to pass Rust pointers that would become invalid.
+ * through the Response wrapper instead of trying to pass Rust pointers that would become invalid.
  *
  * <p>Objects are stored temporarily and must be retrieved via {@link #retrieveAndRemove(long)} or
  * cleaned up via {@link #remove(long)} to prevent memory leaks. The registry includes monitoring to
@@ -39,7 +39,7 @@ public class JniResponseRegistry {
 
     /**
      * Store a Java object and return its ID. This is used when JNI returns a converted Java object
-     * that needs to be passed through the Response protobuf.
+     * that needs to be passed through the Response wrapper.
      *
      * <p>IMPORTANT: The caller is responsible for ensuring the object is eventually removed via
      * {@link #retrieveAndRemove(long)} or {@link #remove(long)}. Failure to do so will cause memory

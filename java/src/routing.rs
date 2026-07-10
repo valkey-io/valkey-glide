@@ -1,67 +1,86 @@
-//! Protobuf bridge for JNI - reuses existing glide-core protobuf parsing logic
-//! This is a surgical change that just parses protobuf and delegates to existing functions
+//! Route resolution - converts route parameters to redis RoutingInfo
 
-use anyhow::{Result, anyhow};
-use protobuf::Message;
 use redis::cluster_routing::RoutingInfo;
 use redis::cluster_routing::{MultipleNodeRoutingInfo, Route, SingleNodeRoutingInfo, SlotAddr};
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{Cmd, RedisError, RedisResult};
 
-// Reuse existing protobuf types from glide-core (no wrapper types needed)
-use glide_core::command_request::SimpleRoutes;
-use glide_core::command_request::SlotTypes;
-pub use glide_core::command_request::{Command, CommandRequest, Routes, command_request};
+pub use glide_core::command_request::Routes;
+use glide_core::command_request::{
+    ByAddressRoute, SimpleRoutes, SlotIdRoute, SlotKeyRoute, SlotTypes,
+};
+use protobuf::EnumOrUnknown;
 
-/// Parse CommandRequest from protobuf bytes (using existing protobuf parsing)
-pub fn parse_command_request(bytes: &[u8]) -> Result<CommandRequest> {
-    CommandRequest::parse_from_bytes(bytes)
-        .map_err(|e| anyhow!("Failed to parse CommandRequest protobuf: {}", e))
-}
-
-/// Since socket_listener functions are private, we'll need to access the core request_type logic
-/// This reuses the same pattern as socket_listener but makes it accessible for JNI
-pub fn create_valkey_command(command: &Command) -> Result<redis::Cmd> {
-    // Get the command using the same logic as socket_listener
-    let request_type: glide_core::request_type::RequestType = command.request_type.into();
-    let Some(mut cmd) = request_type.get_command() else {
-        return Err(anyhow!(
-            "Received invalid request type: {:?}",
-            command.request_type
-        ));
-    };
-
-    // Add arguments using the same logic as socket_listener
-    match &command.args {
-        Some(glide_core::command_request::command::Args::ArgsArray(args_vec)) => {
-            for arg in args_vec.args.iter() {
-                cmd.arg(arg.as_ref());
-            }
-        }
-        Some(glide_core::command_request::command::Args::ArgsVecPointer(pointer)) => {
-            let res = unsafe { *Box::from_raw(*pointer as *mut Vec<bytes::Bytes>) };
-            for arg in res {
-                cmd.arg(arg.as_ref());
-            }
-        }
-        None => {
-            return Err(anyhow!(
-                "Failed to get request arguments, no arguments are set"
-            ));
-        }
-        // Handle any other cases that might be added to the enum
-        Some(_) => {
-            return Err(anyhow!("Unsupported argument type"));
-        }
-    };
-
-    if cmd.args_iter().next().is_none() {
-        return Err(anyhow!(
-            "Received command without a command name or arguments"
-        ));
+/// Resolves routing from the JNI primitive encoding used by Java's `computeRouteArgs()`.
+///
+/// The encoding convention from Java:
+/// - `route_type >= 0` with `route_param = None` → SimpleRoutes (0=AllNodes, 1=AllPrimaries, else Random)
+/// - `route_type >= 100` with `route_param = Some(slot_id_str)` → SlotIdRoute (offset by 100)
+/// - `route_type >= 0` with `route_param = Some(slot_key)` → SlotKeyRoute
+/// - `route_type < 0` with `route_param = Some("host:port")` → ByAddressRoute
+pub(crate) fn resolve_routing_from_params(
+    has_route: bool,
+    route_type: i32,
+    route_param: Option<&str>,
+    cmd: Option<&Cmd>,
+) -> RedisResult<Option<RoutingInfo>> {
+    if !has_route {
+        return Ok(None);
     }
 
-    Ok(cmd)
+    let mut routes = Routes::default();
+
+    if route_type >= 0 && route_param.is_none() {
+        // SimpleRoutes: no param means multi-node or random
+        let simple = match route_type {
+            0 => SimpleRoutes::AllNodes,
+            1 => SimpleRoutes::AllPrimaries,
+            _ => SimpleRoutes::Random,
+        };
+        routes.set_simple_routes(simple);
+    } else if route_type >= 100 && route_param.is_some() {
+        // SlotIdRoute: routeType 100+ (offset by 100 from SlotKeyRoute)
+        let slot_type = match route_type - 100 {
+            1 => SlotTypes::Replica,
+            _ => SlotTypes::Primary,
+        };
+        let param_str = route_param.unwrap_or_default();
+        if let Ok(slot_id) = param_str.parse::<i32>() {
+            routes.set_slot_id_route(SlotIdRoute {
+                slot_type: EnumOrUnknown::new(slot_type),
+                slot_id,
+                ..Default::default()
+            });
+        }
+    } else if route_type >= 0 && route_param.is_some() {
+        // SlotKeyRoute: routeType 0-1
+        let slot_type = match route_type {
+            1 => SlotTypes::Replica,
+            _ => SlotTypes::Primary,
+        };
+        let param_str = route_param.unwrap_or_default();
+        if !param_str.is_empty() {
+            routes.set_slot_key_route(SlotKeyRoute {
+                slot_type: EnumOrUnknown::new(slot_type),
+                slot_key: param_str.into(),
+                ..Default::default()
+            });
+        }
+    } else if route_type < 0 && route_param.is_some() {
+        // ByAddressRoute: route_type = -1, param = "host:port"
+        let param_str = route_param.unwrap_or_default();
+        if let Some((host, port_str)) = param_str.split_once(':')
+            && let Ok(port) = port_str.parse::<i32>()
+        {
+            routes.set_by_address_route(ByAddressRoute {
+                host: host.to_string().into(),
+                port,
+                ..Default::default()
+            });
+        }
+    }
+
+    get_route(routes, cmd)
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Result<SlotAddr, RedisError> {
@@ -88,7 +107,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Result<SlotA
 ///
 /// # Parameters
 ///
-/// * `route`: The protobuf Routes message to convert.
+/// * `route`: The Routes message to convert.
 /// * `cmd`: Optional command used to determine the response policy for multi-node routes.
 ///
 /// # Returns
