@@ -56,11 +56,11 @@ The repository uses a [stale bot](.github/workflows/stale.yml) (powered by the `
 
 Issues with any of the following labels are exempt from the stale bot and will not be automatically marked stale or closed:
 
-- `bug`
+- `bug 🐞`
 - `Users Pain`
-- `Epic`
-- `User issue`
-- `Unatriaged user issue`
+- `Epic ⚡`
+- `User issue 🚨`
+- `Untriaged user issue`
 
 > **Note:** Issues with milestones assigned are also exempt from the stale bot.
 

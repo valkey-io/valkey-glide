@@ -91,7 +91,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import command_request.CommandRequestOuterClass.CommandRequest;
+import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -329,19 +329,22 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        protected <T> CompletableFuture<T> submitCommandToJni(
-                CommandRequest.Builder command,
-                GlideExceptionCheckedFunction<Response, T> responseHandler,
-                boolean binaryMode) {
+        protected <T> CompletableFuture<T> submitCommandAsync(
+                RequestType requestType,
+                byte[][] args,
+                Route route,
+                boolean expectUtf8Response,
+                GlideExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
 
         @Override
-        protected <T> CompletableFuture<T> submitCommandToJni(
-                CommandRequest.Builder command,
-                GlideExceptionCheckedFunction<Response, T> responseHandler,
-                boolean binaryMode,
-                boolean expectUtf8Response) {
+        protected <T> CompletableFuture<T> submitBlockingCommandAsync(
+                RequestType requestType,
+                byte[][] args,
+                Route route,
+                boolean expectUtf8Response,
+                GlideExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }

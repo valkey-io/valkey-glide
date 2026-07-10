@@ -21,7 +21,7 @@ Maintainers and experienced contributors review incoming issues to ensure they a
 
 - Once an issue is accepted for work, the `Untriaged user issue` label is removed.
 - If more information is needed, a comment is left requesting clarification and the label stays until the author responds.
-- Issues inactive for 90 days are automatically marked stale and closed after 14 additional days. Issues labeled `bug`, `Users Pain`, `Epic`, `User issue`, or `Unatriaged user issue` are exempt.
+- Issues inactive for 90 days are automatically marked stale and closed after 14 additional days. Issues labeled `bug 🐞`, `Users Pain`, `Epic ⚡`, `User issue 🚨`, or `Untriaged user issue` are exempt.
 
 For the full triage workflow, stale bot behavior, and exempt labels, see the [Triaging Issues Guide](./TRIAGING_ISSUES.md).
 
