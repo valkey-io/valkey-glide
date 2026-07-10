@@ -5577,7 +5577,7 @@ pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) 
 /// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `arg_count` must be 0 if `args` and `args_len` are null.
 /// * `args` and `args_len` must either be both null or be both not null.
-/// * `route_info` could be `null`, which means no route (equivalent to an unset `route_bytes`); if not `null`, it must be a valid pointer to a [`RouteInfo`] struct for the duration of this call. See the safety documentation of [`create_route`].
+/// * `route_info` could be `null`, which means no route (equivalent to an unset `route_bytes`); if not `null`, it must be a valid pointer to a [`RouteInfo`] struct for the duration of this call.
 /// * When non-null, `response_buf` must point to a writable buffer of at least `response_buf_len` bytes.
 /// * `response_buf_len` must be 0 if `response_buf` is null.
 /// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
