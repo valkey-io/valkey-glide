@@ -81,7 +81,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Batch select(long index) {
-        protobufBatch.addCommands(buildCommand(Select, newArgsBuilder().add(index)));
+        addCommand(Select, newArgsBuilder().add(index));
         return this;
     }
 
@@ -98,7 +98,7 @@ public class Batch extends BaseBatch<Batch> {
      */
     public <ArgType> Batch scan(@NonNull ArgType cursor) {
         checkTypeOrThrow(cursor);
-        protobufBatch.addCommands(buildCommand(Scan, newArgsBuilder().add(cursor)));
+        addCommand(Scan, newArgsBuilder().add(cursor));
         return this;
     }
 
@@ -116,8 +116,7 @@ public class Batch extends BaseBatch<Batch> {
      */
     public <ArgType> Batch scan(@NonNull ArgType cursor, @NonNull ScanOptions options) {
         checkTypeOrThrow(cursor);
-        protobufBatch.addCommands(
-                buildCommand(Scan, newArgsBuilder().add(cursor).add(options.toArgs())));
+        addCommand(Scan, newArgsBuilder().add(cursor).add(options.toArgs()));
         return this;
     }
 }

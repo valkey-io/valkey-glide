@@ -122,7 +122,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
             return super.publish(message, channel);
         }
         checkTypeOrThrow(channel);
-        protobufBatch.addCommands(buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
+        addCommand(SPublish, newArgsBuilder().add(channel).add(message));
         return getThis();
     }
 
@@ -140,7 +140,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public <ArgType> ClusterBatch pubsubShardNumSub(@NonNull ArgType[] channels) {
         checkTypeOrThrow(channels);
-        protobufBatch.addCommands(buildCommand(PubSubShardNumSub, newArgsBuilder().add(channels)));
+        addCommand(PubSubShardNumSub, newArgsBuilder().add(channels));
         return getThis();
     }
 
@@ -151,7 +151,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - An <code>Array</code> of all active shard channels.
      */
     public ClusterBatch pubsubShardChannels() {
-        protobufBatch.addCommands(buildCommand(PubSubShardChannels));
+        addCommand(PubSubShardChannels);
         return getThis();
     }
 
@@ -166,7 +166,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public <ArgType> ClusterBatch pubsubShardChannels(@NonNull ArgType pattern) {
         checkTypeOrThrow(pattern);
-        protobufBatch.addCommands(buildCommand(PubSubShardChannels, newArgsBuilder().add(pattern)));
+        addCommand(PubSubShardChannels, newArgsBuilder().add(pattern));
         return getThis();
     }
 
@@ -179,7 +179,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterMeet(@NonNull String host, long port) {
-        protobufBatch.addCommands(buildCommand(ClusterMeet, newArgsBuilder().add(host).add(port)));
+        addCommand(ClusterMeet, newArgsBuilder().add(host).add(port));
         return getThis();
     }
 
@@ -190,7 +190,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - A <code>String</code> containing cluster state information.
      */
     public ClusterBatch clusterInfo() {
-        protobufBatch.addCommands(buildCommand(ClusterInfo));
+        addCommand(ClusterInfo);
         return getThis();
     }
 
@@ -202,7 +202,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterForget(@NonNull String nodeId) {
-        protobufBatch.addCommands(buildCommand(ClusterForget, newArgsBuilder().add(nodeId)));
+        addCommand(ClusterForget, newArgsBuilder().add(nodeId));
         return getThis();
     }
 
@@ -213,7 +213,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - A <code>String</code> containing node information.
      */
     public ClusterBatch clusterNodes() {
-        protobufBatch.addCommands(buildCommand(ClusterNodes));
+        addCommand(ClusterNodes);
         return getThis();
     }
 
@@ -225,7 +225,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterReplicate(@NonNull String nodeId) {
-        protobufBatch.addCommands(buildCommand(ClusterReplicate, newArgsBuilder().add(nodeId)));
+        addCommand(ClusterReplicate, newArgsBuilder().add(nodeId));
         return getThis();
     }
 
@@ -237,7 +237,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - An <code>array</code> of shard information maps.
      */
     public ClusterBatch clusterShards() {
-        protobufBatch.addCommands(buildCommand(ClusterShards));
+        addCommand(ClusterShards);
         return getThis();
     }
 
@@ -249,7 +249,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - An array of replica node information strings.
      */
     public ClusterBatch clusterReplicas(@NonNull String nodeId) {
-        protobufBatch.addCommands(buildCommand(ClusterReplicas, newArgsBuilder().add(nodeId)));
+        addCommand(ClusterReplicas, newArgsBuilder().add(nodeId));
         return getThis();
     }
 
@@ -261,7 +261,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - An <code>array</code> of link information maps.
      */
     public ClusterBatch clusterLinks() {
-        protobufBatch.addCommands(buildCommand(ClusterLinks));
+        addCommand(ClusterLinks);
         return getThis();
     }
 
@@ -274,8 +274,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - The number of active failure reports.
      */
     public ClusterBatch clusterCountFailureReports(@NonNull String nodeId) {
-        protobufBatch.addCommands(
-                buildCommand(ClusterCountFailureReports, newArgsBuilder().add(nodeId)));
+        addCommand(ClusterCountFailureReports, newArgsBuilder().add(nodeId));
         return getThis();
     }
 
@@ -286,7 +285,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - A <code>String</code> containing the node ID.
      */
     public ClusterBatch clusterMyId() {
-        protobufBatch.addCommands(buildCommand(ClusterMyId));
+        addCommand(ClusterMyId);
         return getThis();
     }
 
@@ -297,7 +296,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterFailover() {
-        protobufBatch.addCommands(buildCommand(ClusterFailover));
+        addCommand(ClusterFailover);
         return getThis();
     }
 
@@ -309,8 +308,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterFailover(@NonNull ClusterFailoverOptions options) {
-        protobufBatch.addCommands(
-                buildCommand(ClusterFailover, newArgsBuilder().add(options.toArgs())));
+        addCommand(ClusterFailover, newArgsBuilder().add(options.toArgs()));
         return getThis();
     }
 
@@ -323,8 +321,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterSetSlot(long slot, @NonNull ClusterSetSlotOptions options) {
-        protobufBatch.addCommands(
-                buildCommand(ClusterSetslot, newArgsBuilder().add(slot).add(options.toArgs())));
+        addCommand(ClusterSetslot, newArgsBuilder().add(slot).add(options.toArgs()));
         return getThis();
     }
 
@@ -335,7 +332,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>BUMPED</code> or <code>STILL</code>.
      */
     public ClusterBatch clusterBumpEpoch() {
-        protobufBatch.addCommands(buildCommand(ClusterBumpEpoch));
+        addCommand(ClusterBumpEpoch);
         return getThis();
     }
 
@@ -347,8 +344,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterSetConfigEpoch(long configEpoch) {
-        protobufBatch.addCommands(
-                buildCommand(ClusterSetConfigEpoch, newArgsBuilder().add(configEpoch)));
+        addCommand(ClusterSetConfigEpoch, newArgsBuilder().add(configEpoch));
         return getThis();
     }
 
@@ -359,7 +355,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterFlushSlots() {
-        protobufBatch.addCommands(buildCommand(ClusterFlushSlots));
+        addCommand(ClusterFlushSlots);
         return getThis();
     }
 
@@ -370,7 +366,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterReset() {
-        protobufBatch.addCommands(buildCommand(ClusterReset));
+        addCommand(ClusterReset);
         return getThis();
     }
 
@@ -382,7 +378,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterReset(@NonNull ClusterResetOptions options) {
-        protobufBatch.addCommands(buildCommand(ClusterReset, newArgsBuilder().add(options.toArgs())));
+        addCommand(ClusterReset, newArgsBuilder().add(options.toArgs()));
         return getThis();
     }
 
@@ -393,7 +389,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch readonly() {
-        protobufBatch.addCommands(buildCommand(ReadOnly));
+        addCommand(ReadOnly);
         return getThis();
     }
 
@@ -404,7 +400,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch readwrite() {
-        protobufBatch.addCommands(buildCommand(ReadWrite));
+        addCommand(ReadWrite);
         return getThis();
     }
 
@@ -415,7 +411,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch asking() {
-        protobufBatch.addCommands(buildCommand(Asking));
+        addCommand(Asking);
         return getThis();
     }
 
@@ -426,7 +422,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>OK</code> on success.
      */
     public ClusterBatch clusterSaveConfig() {
-        protobufBatch.addCommands(buildCommand(ClusterSaveConfig));
+        addCommand(ClusterSaveConfig);
         return getThis();
     }
 
@@ -439,8 +435,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - An array of keys in the slot.
      */
     public ClusterBatch clusterGetKeysInSlot(long slot, long count) {
-        protobufBatch.addCommands(
-                buildCommand(ClusterGetKeysInSlot, newArgsBuilder().add(slot).add(count)));
+        addCommand(ClusterGetKeysInSlot, newArgsBuilder().add(slot).add(count));
         return getThis();
     }
 
@@ -452,7 +447,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - A <code>String</code> containing the shard ID.
      */
     public ClusterBatch clusterMyShardId() {
-        protobufBatch.addCommands(buildCommand(ClusterMyShardId));
+        addCommand(ClusterMyShardId);
         return getThis();
     }
 
@@ -465,7 +460,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public <ArgType> ClusterBatch clusterKeySlot(@NonNull ArgType key) {
         checkTypeOrThrow(key);
-        protobufBatch.addCommands(buildCommand(ClusterKeySlot, newArgsBuilder().add(key)));
+        addCommand(ClusterKeySlot, newArgsBuilder().add(key));
         return getThis();
     }
 
@@ -477,7 +472,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - The number of keys in the specified slot.
      */
     public ClusterBatch clusterCountKeysInSlot(long slot) {
-        protobufBatch.addCommands(buildCommand(ClusterCountKeysInSlot, newArgsBuilder().add(slot)));
+        addCommand(ClusterCountKeysInSlot, newArgsBuilder().add(slot));
         return getThis();
     }
 
@@ -489,7 +484,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>"OK"</code> if the slots were successfully assigned.
      */
     public ClusterBatch clusterAddSlots(long[] slots) {
-        protobufBatch.addCommands(buildCommand(ClusterAddSlots, newArgsBuilder().add(slots)));
+        addCommand(ClusterAddSlots, newArgsBuilder().add(slots));
         return getThis();
     }
 
@@ -503,7 +498,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>"OK"</code> if the slot ranges were successfully assigned.
      */
     public ClusterBatch clusterAddSlotsRange(long[][] slotRanges) {
-        protobufBatch.addCommands(buildCommand(ClusterAddSlotsRange, newArgsBuilder().add(slotRanges)));
+        addCommand(ClusterAddSlotsRange, newArgsBuilder().add(slotRanges));
         return getThis();
     }
 
@@ -515,7 +510,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>"OK"</code> if the slots were successfully removed.
      */
     public ClusterBatch clusterDelSlots(long[] slots) {
-        protobufBatch.addCommands(buildCommand(ClusterDelSlots, newArgsBuilder().add(slots)));
+        addCommand(ClusterDelSlots, newArgsBuilder().add(slots));
         return getThis();
     }
 
@@ -529,7 +524,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return Command response - <code>"OK"</code> if the slot ranges were successfully removed.
      */
     public ClusterBatch clusterDelSlotsRange(long[][] slotRanges) {
-        protobufBatch.addCommands(buildCommand(ClusterDelSlotsRange, newArgsBuilder().add(slotRanges)));
+        addCommand(ClusterDelSlotsRange, newArgsBuilder().add(slotRanges));
         return getThis();
     }
 }
