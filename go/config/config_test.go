@@ -1100,6 +1100,294 @@ func TestLoadClientKeyFromFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to read client key file")
 }
 
+// ============================================================================
+// Path-based mTLS + Certificate Reload Tests
+// ============================================================================
+
+const (
+	testClientCertPath = "/etc/glide/tls/client-cert.pem"
+	testClientKeyPath  = "/etc/glide/tls/client-key.pem"
+)
+
+func TestTlsConfiguration_WithClientCertAndKeyPath(t *testing.T) {
+	// Test that the builder methods set the client certificate/key path fields
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath)
+
+	assert.NotNil(t, tlsConfig)
+	assert.Equal(t, testClientCertPath, tlsConfig.ClientCertPath)
+	assert.Equal(t, testClientKeyPath, tlsConfig.ClientKeyPath)
+}
+
+func TestTlsConfiguration_CertPathAndReloadDefaults(t *testing.T) {
+	// Test that path and reload fields default to empty/false/nil
+	tlsConfig := NewTlsConfiguration()
+
+	assert.Equal(t, "", tlsConfig.ClientCertPath)
+	assert.Equal(t, "", tlsConfig.ClientKeyPath)
+	assert.False(t, tlsConfig.CertReloadEnabled)
+	assert.Nil(t, tlsConfig.CertReloadIntervalSeconds)
+}
+
+func TestTlsConfiguration_WithCertReloadOptions(t *testing.T) {
+	// Test that the reload builder methods set the reload fields
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithCertReloadEnabled(true).
+		WithCertReloadIntervalSeconds(60)
+
+	assert.True(t, tlsConfig.CertReloadEnabled)
+	require.NotNil(t, tlsConfig.CertReloadIntervalSeconds)
+	assert.Equal(t, uint32(60), *tlsConfig.CertReloadIntervalSeconds)
+}
+
+func TestStandaloneConfig_WithClientCertAndKeyPath(t *testing.T) {
+	// Test that both client cert and key paths are populated into the protobuf request
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, protobuf.TlsMode_SecureTls, result.TlsMode)
+	require.NotNil(t, result.ClientCertPath)
+	require.NotNil(t, result.ClientKeyPath)
+	assert.Equal(t, testClientCertPath, result.GetClientCertPath())
+	assert.Equal(t, testClientKeyPath, result.GetClientKeyPath())
+	// Byte-based fields must not be set.
+	assert.Nil(t, result.ClientCert)
+	assert.Nil(t, result.ClientKey)
+	// Reload must not be set unless explicitly enabled.
+	assert.Nil(t, result.CertReload)
+}
+
+func TestClusterConfig_WithClientCertAndKeyPath(t *testing.T) {
+	// Test that both client cert and key paths are populated into the protobuf request for cluster
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, testClientCertPath, result.GetClientCertPath())
+	assert.Equal(t, testClientKeyPath, result.GetClientKeyPath())
+	assert.Nil(t, result.CertReload)
+}
+
+func TestStandaloneConfig_CertReloadEnabledWithInterval(t *testing.T) {
+	// Test that enabling reload with an interval populates CertReloadConfig
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithCertReloadEnabled(true).
+		WithCertReloadIntervalSeconds(120)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	require.NotNil(t, result.CertReload)
+	assert.True(t, result.CertReload.GetEnabled())
+	require.NotNil(t, result.CertReload.IntervalSeconds)
+	assert.Equal(t, uint32(120), result.CertReload.GetIntervalSeconds())
+}
+
+func TestClusterConfig_CertReloadEnabledWithInterval(t *testing.T) {
+	// Test that enabling reload with an interval populates CertReloadConfig for cluster
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithCertReloadEnabled(true).
+		WithCertReloadIntervalSeconds(120)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	require.NotNil(t, result.CertReload)
+	assert.True(t, result.CertReload.GetEnabled())
+	assert.Equal(t, uint32(120), result.CertReload.GetIntervalSeconds())
+}
+
+func TestStandaloneConfig_CertReloadEnabledWithoutInterval(t *testing.T) {
+	// Test that enabling reload without an interval leaves IntervalSeconds unset (core default applies)
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithCertReloadEnabled(true)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	require.NotNil(t, result.CertReload)
+	assert.True(t, result.CertReload.GetEnabled())
+	assert.Nil(t, result.CertReload.IntervalSeconds)
+}
+
+func TestStandaloneConfig_CertPathWithoutKeyPath(t *testing.T) {
+	// Test that providing a client cert path without a key path returns an error
+	tlsConfig := NewTlsConfiguration().WithClientCertPath(testClientCertPath)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate path is provided but client key path is not provided")
+}
+
+func TestClusterConfig_CertPathWithoutKeyPath(t *testing.T) {
+	// Test that providing a client cert path without a key path returns an error for cluster
+	tlsConfig := NewTlsConfiguration().WithClientCertPath(testClientCertPath)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate path is provided but client key path is not provided")
+}
+
+func TestStandaloneConfig_KeyPathWithoutCertPath(t *testing.T) {
+	// Test that providing a client key path without a cert path returns an error
+	tlsConfig := NewTlsConfiguration().WithClientKeyPath(testClientKeyPath)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key path is provided but client certificate path is not provided")
+}
+
+func TestStandaloneConfig_PathAndByteMutuallyExclusive(t *testing.T) {
+	// Test that mixing path-based and byte-based client cert configuration returns an error
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithClientCertificate([]byte(testClientCertData)).
+		WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot both be provided")
+}
+
+func TestClusterConfig_PathAndByteMutuallyExclusive(t *testing.T) {
+	// Test that mixing path-based and byte-based client cert configuration returns an error for cluster
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithClientCertificate([]byte(testClientCertData)).
+		WithClientKey([]byte(testClientKeyData))
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot both be provided")
+}
+
+func TestStandaloneConfig_CertReloadWithoutPaths(t *testing.T) {
+	// Test that enabling reload without any client cert path returns an error
+	tlsConfig := NewTlsConfiguration().WithCertReloadEnabled(true)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate reload is enabled but no client certificate path is provided")
+}
+
+func TestClusterConfig_CertReloadWithoutPaths(t *testing.T) {
+	// Test that enabling reload without any client cert path returns an error for cluster
+	tlsConfig := NewTlsConfiguration().WithCertReloadEnabled(true)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClusterClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate reload is enabled but no client certificate path is provided")
+}
+
+func TestStandaloneConfig_CertReloadWithByteBasedRejected(t *testing.T) {
+	// Test that enabling reload with only byte-based material (no path) returns an error
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertificate([]byte(testClientCertData)).
+		WithClientKey([]byte(testClientKeyData)).
+		WithCertReloadEnabled(true)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate reload is enabled but no client certificate path is provided")
+}
+
+func TestStandaloneConfig_NoCertReloadWhenDisabled(t *testing.T) {
+	// Test that a configured interval is ignored (no CertReload) when reload is disabled
+	tlsConfig := NewTlsConfiguration().
+		WithClientCertPath(testClientCertPath).
+		WithClientKeyPath(testClientKeyPath).
+		WithCertReloadIntervalSeconds(90)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.CertReload)
+}
+
 func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
 	// Test TCP_NODELAY enabled
 	tcpNoDelayTrue := true

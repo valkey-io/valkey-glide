@@ -23,6 +23,7 @@
 * Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 * Core, Java: add mTLS client certificates with automatic reloading ([#6386](https://github.com/valkey-io/valkey-glide/pull/6386))
 * Go: Add client certificate and private key support for mTLS ([#6149](https://github.com/valkey-io/valkey-glide/issues/6149))
+* Go: Add path-based mTLS client certificate/key configuration and automatic certificate reload options (`ClientCertPath`, `ClientKeyPath`, `CertReloadEnabled`, `CertReloadIntervalSeconds`) on `TlsConfiguration`, wired into the connection request on top of the core reload machinery. ([#6189](https://github.com/valkey-io/valkey-glide/issues/6189)) ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
 
 ## 2.5
 
