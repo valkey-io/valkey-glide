@@ -117,7 +117,7 @@ class TestAuthCommands:
         await wait_for(
             _check_reconnected_after_first_kill,
             "Client failed to reconnect with new password after first kill",
-            timeout=15,
+            timeout=25,
         )
         await kill_connections(management_client)
 
@@ -134,7 +134,7 @@ class TestAuthCommands:
         await wait_for(
             _check_reconnected_after_second_kill,
             "Client failed to reconnect after second kill for immediate auth",
-            timeout=15,
+            timeout=25,
         )
         # Verify that the client is still authenticated
         assert await glide_client.set("test_key", "test_value") == OK

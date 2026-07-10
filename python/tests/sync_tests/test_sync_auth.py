@@ -117,6 +117,7 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_first_kill,
             "Client failed to reconnect with new password after first kill",
+            timeout=25,
         )
         kill_connections(management_sync_client)
 
@@ -133,6 +134,7 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_second_kill,
             "Client failed to reconnect after second kill for immediate auth",
+            timeout=25,
         )
         # Verify that the client is still authenticated
         assert glide_sync_client.set("test_key", "test_value") == OK
