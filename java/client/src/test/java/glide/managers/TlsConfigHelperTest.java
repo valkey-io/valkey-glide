@@ -127,8 +127,7 @@ public class TlsConfigHelperTest {
 
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsConfigHelper.extractClientCertPath(configuration));
+                        ConfigurationError.class, () -> TlsConfigHelper.extractClientCertPath(configuration));
         assertTrue(error.getMessage().contains("mTLS requires"));
     }
 
@@ -156,8 +155,7 @@ public class TlsConfigHelperTest {
 
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsConfigHelper.extractClientCertPath(configuration));
+                        ConfigurationError.class, () -> TlsConfigHelper.extractClientCertPath(configuration));
         assertTrue(error.getMessage().contains("cannot both be provided"));
     }
 

@@ -2378,7 +2378,10 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None, None, None, None).await.unwrap();
+                let mut conn = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -7148,7 +7151,10 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
+                let mut connection = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
