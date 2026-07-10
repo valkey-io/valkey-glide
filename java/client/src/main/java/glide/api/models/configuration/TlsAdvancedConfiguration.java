@@ -135,8 +135,8 @@ public class TlsAdvancedConfiguration {
      * Interval, in seconds, between certificate reload checks when {@link #certReloadEnabled} is
      * true.
      *
-     * <p>If null (default), the core default of 300 seconds (5 minutes) is used. Ignored when
-     * {@link #certReloadEnabled} is false.
+     * <p>If null (default), the core default of 300 seconds (5 minutes) is used. Ignored when {@link
+     * #certReloadEnabled} is false.
      */
     @Builder.Default private final Integer certReloadIntervalSeconds = null;
 
