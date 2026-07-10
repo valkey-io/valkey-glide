@@ -31,6 +31,7 @@ from tests.utils.utils import (
     delete_acl_username_and_password,
     kill_connections,
     set_new_acl_username_with_password,
+    sync_wait_for,
 )
 
 
@@ -103,20 +104,38 @@ class TestSyncAuthCommands:
         assert value == b"test_value"
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
         kill_connections(management_sync_client)
-        # Add a short delay to allow the server to apply the new password
-        # without this delay, command may or may not time out while the client reconnect
-        # ending up with a flaky test
-        time.sleep(2)
-        # Verify that the client is able to reconnect with the new password,
-        value = glide_sync_client.get("test_key")
-        assert value == b"test_value"
-        kill_connections(management_sync_client)
-        time.sleep(2)
-        # Verify that the client is able to immediateAuth with the new password after client is killed
-        result = glide_sync_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+
+        # Wait for the client to reconnect with the new password using retry
+        # instead of a fixed sleep, which is unreliable in cluster mode under CI load
+        def _check_reconnected_after_first_kill():
+            try:
+                val = glide_sync_client.get("test_key")
+                return val == b"test_value"
+            except Exception:
+                return False
+
+        sync_wait_for(
+            _check_reconnected_after_first_kill,
+            "Client failed to reconnect with new password after first kill",
+            timeout=25,
         )
-        assert result == OK
+        kill_connections(management_sync_client)
+
+        # Wait for reconnection again before attempting immediate auth
+        def _check_reconnected_after_second_kill():
+            try:
+                result = glide_sync_client.update_connection_password(
+                    NEW_PASSWORD, immediate_auth=True
+                )
+                return result == OK
+            except Exception:
+                return False
+
+        sync_wait_for(
+            _check_reconnected_after_second_kill,
+            "Client failed to reconnect after second kill for immediate auth",
+            timeout=25,
+        )
         # Verify that the client is still authenticated
         assert glide_sync_client.set("test_key", "test_value") == OK
 

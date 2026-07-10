@@ -322,19 +322,21 @@ async def wait_for(
 def sync_wait_for(
     condition: Callable[[], bool],
     failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
 ) -> None:
     """Waits until a condition is met.
 
     Args:
         condition: Callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
+        timeout: Maximum time to wait for the condition to be met, in seconds.
 
     Raises:
         TimeoutError: If the condition is not met within the timeout.
     """
     import time as _time
 
-    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
+    deadline = _time.monotonic() + timeout
 
     while _time.monotonic() < deadline:
         if condition():
