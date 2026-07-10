@@ -136,6 +136,22 @@ npm run test:debug -- --testNamePattern="batch"
 npm run test:modules -- --cluster-endpoints=localhost:7000
 ```
 
+### Testing Connection Establishment (Avoid Count-Based CLIENT LIST Assertions)
+
+Do not assert on `CLIENT LIST` connection *counts* to detect whether a specific
+client connected (e.g. baseline + 1). Since the socket-IPC-to-NAPI change,
+`close()` only drops the JS handle and the Rust worker exits later, so
+connections from a preceding test can linger in `CLIENT LIST` when the baseline
+is taken and disappear one poll later, producing a net-zero delta and a flaky
+test. Polling until the count "stabilizes" does not fix this: two matching
+readings only prove stability for one poll window.
+
+Instead, identify the client deterministically by a unique `clientName`
+(passed in the client configuration) and assert `CLIENT LIST` excludes that name
+before the first command and includes it afterwards. See the
+`lazy connection establishes only on first command` test in
+`tests/GlideClient.test.ts` and the pattern in `tests/NodeDiscoveryMode.test.ts`.
+
 ## Contribution Requirements
 
 ### Developer Certificate of Origin (DCO) Signoff REQUIRED
