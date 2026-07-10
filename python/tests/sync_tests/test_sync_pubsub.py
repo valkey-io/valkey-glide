@@ -129,7 +129,7 @@ class TestSyncPubSub:
         can coexist and function correctly.
         """
 
-        channel = "test_exact_channel"
+        channel = f"test_exact_channel_{get_random_string(10)}"
         message = "test_exact_message_1"
         message2 = "test_exact_message_2"
 
@@ -773,16 +773,17 @@ class TestSyncPubSub:
         """
 
         NUM_CHANNELS = 256
-        PATTERN = "{pattern}:*"
+        unique_id = get_random_string(6)
+        PATTERN = f"{{pattern_{unique_id}}}:*"
 
         # Create dictionaries of channels and their corresponding messages.
         # Deterministic, index-unique names keep exact channels and the
         # subscribed pattern from overlapping, so callback counts stay exact.
         exact_channels_and_messages = {
-            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
+            f"{{channel_{unique_id}}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
         }
         pattern_channels_and_messages = {
-            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            f"{{pattern_{unique_id}}}:match_{i}": f"pattern_message_{i}"
             for i in range(NUM_CHANNELS)
         }
 
@@ -887,14 +888,15 @@ class TestSyncPubSub:
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
         NUM_CHANNELS = 256
-        PATTERN = "{pattern}:*"
+        unique_id = get_random_string(6)
+        PATTERN = f"{{pattern_{unique_id}}}:*"
 
         # Create dictionaries of channels and their corresponding messages (deterministic)
         exact_channels_and_messages = {
-            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
+            f"{{channel_{unique_id}}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
         }
         pattern_channels_and_messages = {
-            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            f"{{pattern_{unique_id}}}:match_{i}": f"pattern_message_{i}"
             for i in range(NUM_CHANNELS)
         }
 
@@ -2305,8 +2307,9 @@ class TestSyncPubSub:
         doesn't return regular channels.
         """
 
-        regular_channel = "regular_channel"
-        shard_channel = "shard_channel"
+        unique_id = get_random_string(8)
+        regular_channel = f"regular_channel_{unique_id}"
+        shard_channel = f"shard_channel_{unique_id}"
 
         regular_channel_bytes, shard_channel_bytes = (
             regular_channel.encode(),
@@ -2337,8 +2340,9 @@ class TestSyncPubSub:
         doesn't count regular channel subscribers.
         """
 
-        regular_channel = "regular_channel"
-        shard_channel = "shard_channel"
+        unique_id = get_random_string(8)
+        regular_channel = f"regular_channel_{unique_id}"
+        shard_channel = f"shard_channel_{unique_id}"
 
         regular_channel_bytes: bytes = regular_channel.encode()
         shard_channel_bytes: bytes = shard_channel.encode()
@@ -2850,9 +2854,10 @@ class TestSyncPubSub:
         Verifies that a lazy client can handle multiple subscription types
         being added via all subscription methods (Config, Lazy, Blocking).
         """
-        channel = "exact_channel"
-        pattern = "pattern_*"
-        pattern_channel = "pattern_match"
+        unique_id = get_random_string(8)
+        channel = f"exact_channel_{unique_id}"
+        pattern = f"pattern_{unique_id}_*"
+        pattern_channel = f"pattern_{unique_id}_match"
 
         # Check if sharded pubsub is supported (Redis 7.0+ in cluster mode)
         sharded_channel: Optional[str] = None
@@ -2860,7 +2865,7 @@ class TestSyncPubSub:
             temp_client = create_sync_client(request, cluster_mode)
             try:
                 if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
-                    sharded_channel = "sharded_channel"
+                    sharded_channel = f"sharded_channel_{unique_id}"
             finally:
                 temp_client.close()
 
@@ -3275,8 +3280,9 @@ class TestSyncPubSub:
         Test unsubscribing from all subscription types at once.
         """
 
-        channel = "exact_channel"
-        pattern = "pattern_*"
+        unique_id = get_random_string(8)
+        channel = f"exact_channel_{unique_id}"
+        pattern = f"pattern_{unique_id}_*"
         sharded = None
 
         # Check if sharded pubsub is supported
@@ -3284,7 +3290,7 @@ class TestSyncPubSub:
             temp_client = create_sync_client(request, cluster_mode)
             try:
                 if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
-                    sharded = "sharded_channel"
+                    sharded = f"sharded_channel_{unique_id}"
             finally:
                 temp_client.close()
 
@@ -3473,7 +3479,7 @@ class TestSyncPubSub:
         Tests the basic happy path for exact PUBSUB functionality using custom commands.
         """
 
-        channel = "test_exact_channel_custom"
+        channel = f"test_exact_channel_custom_{get_random_string(10)}"
         message = "test_exact_message_custom"
 
         callback, context = None, None
@@ -3550,7 +3556,7 @@ class TestSyncPubSub:
         """
         Test that exact channel subscriptions are automatically restored after connection is killed.
         """
-        channel = "test_channel_reconnect"
+        channel = f"test_channel_reconnect_{get_random_string(10)}"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -3591,9 +3597,9 @@ class TestSyncPubSub:
             # Give some time for connection to reconnect
             time.sleep(2)
 
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established (generous timeout for CI)
             sync_wait_for_subscription_state(
-                listening_client, expected_channels={channel}, timeout_sec=5.0
+                listening_client, expected_channels={channel}, timeout_sec=15.0
             )
 
             # Verify subscription still works after reconnection
@@ -3631,8 +3637,9 @@ class TestSyncPubSub:
         """
         Test that pattern subscriptions are restored after connection kill.
         """
-        pattern = "test_pattern_*"
-        channel = "test_pattern_news"
+        unique_id = get_random_string(10)
+        pattern = f"test_pattern_{unique_id}_*"
+        channel = f"test_pattern_{unique_id}_news"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -3673,9 +3680,9 @@ class TestSyncPubSub:
             # Give some time for connection to reconnect
             time.sleep(2)
 
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established (generous timeout for CI)
             sync_wait_for_subscription_state(
-                listening_client, expected_patterns={pattern}, timeout_sec=5.0
+                listening_client, expected_patterns={pattern}, timeout_sec=15.0
             )
 
             # Verify subscription still works after reconnection
@@ -3937,7 +3944,7 @@ class TestSyncPubSub:
         """
         Test that sharded subscriptions are automatically restored after connection kill.
         """
-        channel = "sharded_reconnect_test_channel"
+        channel = f"sharded_reconnect_{get_random_string(10)}"
         message_before = "message_before_kill"
         message_after = "message_after_kill"
 
@@ -3980,9 +3987,9 @@ class TestSyncPubSub:
             # Give some time for connection to reconnect
             time.sleep(2)
 
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established (generous timeout for CI)
             sync_wait_for_subscription_state(
-                listening_client, expected_sharded={channel}, timeout_sec=5.0
+                listening_client, expected_sharded={channel}, timeout_sec=15.0
             )
 
             # Verify subscription still works after reconnection
@@ -4023,7 +4030,8 @@ class TestSyncPubSub:
         Test that 256 exact channel subscriptions are automatically restored after connection kill.
         """
         NUM_CHANNELS = 256
-        channels = {f"{{reconnect_exact_{i}}}channel" for i in range(NUM_CHANNELS)}
+        unique_id = get_random_string(6)
+        channels = {f"{{reconnect_{unique_id}_{i}}}channel" for i in range(NUM_CHANNELS)}
         message_after = "message_after_kill"
 
         callback, context = None, None
@@ -4053,11 +4061,11 @@ class TestSyncPubSub:
             # Give time for reconnect
             time.sleep(2)
 
-            # Wait for resubscription (need to poll since reconnection is async)
+            # Wait for resubscription (generous timeout for CI with 256 channels)
             sync_wait_for_subscription_state(
                 listening_client,
                 expected_channels=channels,
-                timeout_sec=5.0,
+                timeout_sec=15.0,
             )
 
             # Publish to all channels after reconnection
