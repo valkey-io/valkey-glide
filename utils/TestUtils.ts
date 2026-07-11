@@ -3,10 +3,8 @@
  */
 
 import { execFile } from "child_process";
-import * as fs from "fs";
 import { createConnection } from "net";
 import { lt } from "semver";
-import { connect as tlsConnect } from "tls";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
@@ -76,63 +74,6 @@ async function waitForReplicasReady(
     );
 }
 
-/**
- * Sanity check: verifies a server is accepting connections.
- * For non-TLS: sends a PING and expects +PONG.
- * For TLS: attempts a TLS handshake (using rejectUnauthorized: false for self-signed test certs).
- * Returns true if the check succeeds within timeoutMs.
- */
-async function pingNode(
-    host: string,
-    port: number,
-    tls = false,
-    timeoutMs = 5000,
-): Promise<boolean> {
-    if (tls) {
-        // Read the CA cert to properly validate the TLS handshake
-        let ca: Buffer | undefined;
-        try {
-            ca = fs.readFileSync(`${__dirname}/tls_crts/ca.crt`);
-        } catch {
-            // CA cert not yet generated on first cluster creation
-        }
-        return new Promise<boolean>((resolve) => {
-            const timer = setTimeout(() => {
-                sock.destroy();
-                resolve(false);
-            }, timeoutMs);
-            const sock = tlsConnect(
-                ca
-                    ? { host, port, ca }
-                    : { host, port, rejectUnauthorized: false },
-                () => {
-                    clearTimeout(timer);
-                    sock.destroy();
-                    resolve(true);
-                },
-            );
-            sock.on("error", () => { clearTimeout(timer); resolve(false); });
-        });
-    }
-    return new Promise<boolean>((resolve) => {
-        const sock = createConnection({ host, port }, () => {
-            sock.write("PING\r\n");
-        });
-        const timer = setTimeout(() => {
-            sock.destroy();
-            resolve(false);
-        }, timeoutMs);
-        sock.on("data", (d: Buffer) => {
-            if (d.toString().includes("+PONG")) {
-                clearTimeout(timer);
-                sock.destroy();
-                resolve(true);
-            }
-        });
-        sock.on("error", () => { clearTimeout(timer); resolve(false); });
-        sock.on("close", () => { clearTimeout(timer); resolve(false); });
-    });
-}
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -297,7 +238,7 @@ export class ValkeyCluster {
         tls: boolean = false,
         tlsConfig?: TestTLSConfig,
         loadModule?: string[],
-        maxRetries = 3,
+        maxRetries = 5,
     ): Promise<ValkeyCluster> {
         let lastError: Error | unknown;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -312,19 +253,10 @@ export class ValkeyCluster {
                     tlsConfig,
                     loadModule,
                 );
-                // Sanity check: verify server is accepting connections
-                const [host, port] = cluster.getAddresses()[0];
-                const ok = await pingNode(host, port, tls);
-                if (ok) {
-                    // Brief stabilization delay to allow cluster to fully initialize
-                    // after the TCP/TLS layer is ready
-                    await new Promise((r) => setTimeout(r, 500));
-                    return cluster;
-                }
-                console.warn(
-                    `[createCluster] attempt ${attempt}/${maxRetries}: sanity check failed, retrying...`,
-                );
-                await cluster.close().catch(() => void 0);
+                // startCluster already verified connectivity via getVersionCallback
+                // Brief stabilization delay before returning
+                await new Promise((r) => setTimeout(r, 500));
+                return cluster;
             } catch (e) {
                 lastError = e;
                 if (cluster) await cluster.close().catch(() => void 0);
@@ -333,7 +265,8 @@ export class ValkeyCluster {
                 );
             }
             if (attempt < maxRetries) {
-                await new Promise((r) => setTimeout(r, 1000 * attempt));
+                // Exponential backoff: 2s, 4s, 6s, 8s
+                await new Promise((r) => setTimeout(r, 2000 * attempt));
             }
         }
         throw lastError ?? new Error(`Failed to create cluster after ${maxRetries} attempts`);
