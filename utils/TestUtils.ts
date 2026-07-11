@@ -315,7 +315,12 @@ export class ValkeyCluster {
                 // Sanity check: verify server is accepting connections
                 const [host, port] = cluster.getAddresses()[0];
                 const ok = await pingNode(host, port, tls);
-                if (ok) return cluster;
+                if (ok) {
+                    // Brief stabilization delay to allow cluster to fully initialize
+                    // after the TCP/TLS layer is ready
+                    await new Promise((r) => setTimeout(r, 500));
+                    return cluster;
+                }
                 console.warn(
                     `[createCluster] attempt ${attempt}/${maxRetries}: sanity check failed, retrying...`,
                 );
