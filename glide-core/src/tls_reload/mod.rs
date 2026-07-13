@@ -544,4 +544,87 @@ mod tests {
         let result = CertMaterialManager::new(cert, key, None, None).await;
         assert!(result.is_err(), "mismatched initial pair must fail");
     }
+
+    /// Reconnection adoption: the material the reconnect path consumes reflects a
+    /// rotated certificate after a successful reload, and retains last-known-good
+    /// after a failed reload.
+    ///
+    /// The reconnect loop does not read the fingerprint; it reads the actual
+    /// [`redis::TlsConnParams`] through the shared handle before each attempt
+    /// (standalone: `ReconnectingConnection` calls `handle.current_params()`;
+    /// cluster: it calls [`redis::CertParamsProvider::current_tls_params`]). This
+    /// test exercises that exact seam — via the `CertParamsProvider` trait the
+    /// reconnect path uses — rather than the background-adoption fingerprint view
+    /// the other async tests cover. Reloads are driven directly (no timer sleeps)
+    /// so the reconnect sequence is deterministic.
+    #[tokio::test]
+    async fn reconnect_reads_rotated_then_retains_last_known_good() {
+        use redis::CertParamsProvider as _;
+
+        let dir = tempfile::tempdir().unwrap();
+        let cert = write_file(dir.path(), "cert.pem", CERT_A);
+        let key = write_file(dir.path(), "key.pem", KEY_A);
+
+        let manager = CertMaterialManager::new(cert.clone(), key.clone(), None, Some(1))
+            .await
+            .unwrap();
+        // The reconnect path holds a `CertMaterialHandle` (vended as an
+        // `Arc<dyn CertParamsProvider>`) and re-reads it before every attempt.
+        let handle = manager.get_handle();
+
+        // First reconnect attempt reads the initial pair A.
+        let fp_first = fingerprint_params(
+            &handle
+                .current_tls_params()
+                .await
+                .expect("reconnect must see params"),
+        );
+
+        // A complete rotation (matching cert + key, pair B) lands on disk and the
+        // reload adopts it.
+        write_file(dir.path(), "cert.pem", CERT_B);
+        write_file(dir.path(), "key.pem", KEY_B);
+        CertMaterialManager::handle_reload(
+            &manager.state,
+            &manager.cached_params,
+            &manager.fingerprint,
+        )
+        .await;
+
+        // Next reconnect attempt reads the rotated pair B — the adoption the PR
+        // describes as taking effect "on the next reconnect".
+        let fp_after_rotation = fingerprint_params(
+            &handle
+                .current_tls_params()
+                .await
+                .expect("reconnect must see params"),
+        );
+        assert_ne!(
+            fp_first, fp_after_rotation,
+            "reconnect must consume the rotated certificate after a successful reload"
+        );
+
+        // A failed rotation lands next: the cert reverts to A while the key stays
+        // B, so the pair no longer matches and validation rejects it.
+        write_file(dir.path(), "cert.pem", CERT_A);
+        CertMaterialManager::handle_reload(
+            &manager.state,
+            &manager.cached_params,
+            &manager.fingerprint,
+        )
+        .await;
+
+        // Next reconnect attempt still reads last-known-good pair B; the failed
+        // reload never reaches the reconnect path.
+        let fp_after_failed = fingerprint_params(
+            &handle
+                .current_tls_params()
+                .await
+                .expect("reconnect must see params"),
+        );
+        assert_eq!(
+            fp_after_rotation, fp_after_failed,
+            "reconnect must retain last-known-good material after a failed reload"
+        );
+    }
 }
