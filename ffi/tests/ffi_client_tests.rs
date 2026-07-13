@@ -22,25 +22,18 @@ pub(crate) struct AsyncMetrics {
     pub results: HashMap<usize, Result<String, (String, RequestErrorType)>>,
 }
 
-impl AsyncMetrics {
-    fn new() -> Self {
-        Self {
-            success_count: AtomicUsize::new(0),
-            failure_count: AtomicUsize::new(0),
-            results: HashMap::new(),
-        }
-    }
-}
-
 lazy_static! {
-    static ref ASYNC_METRICS: Arc<RwLock<AsyncMetrics>> =
-        Arc::new(RwLock::new(AsyncMetrics::new()));
+    static ref ASYNC_METRICS: Arc<RwLock<AsyncMetrics>> = Arc::new(RwLock::new(AsyncMetrics {
+        success_count: AtomicUsize::new(0),
+        failure_count: AtomicUsize::new(0),
+        results: HashMap::new(),
+    }));
 }
 
 const ASYNC_WRITE_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write lock";
 const ASYNC_READ_LOCK_ERR: &str = "Failed to aquire ASYNC_METRICS the write lock";
 
-/// Success callback for the async client.
+/// Success callback function for String responses for the async client
 extern "C-unwind" fn string_success_callback(index: usize, response_ptr: *const CommandResponse) {
     let mut metrics = ASYNC_METRICS.write().expect(ASYNC_WRITE_LOCK_ERR);
     metrics
@@ -49,7 +42,7 @@ extern "C-unwind" fn string_success_callback(index: usize, response_ptr: *const 
     metrics.success_count.fetch_add(1, Ordering::SeqCst);
 }
 
-/// Failure callback for the async client.
+/// Failure callback function for the async client
 extern "C-unwind" fn failure_callback(
     index: usize,
     err_msg_ptr: *const c_char,
