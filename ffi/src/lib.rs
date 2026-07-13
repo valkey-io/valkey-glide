@@ -3015,7 +3015,7 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         Some(ResponseBuffer::Single((response_buf, response_buf_len)))
     };
     unsafe {
-        execute_command_with_buffer_option(
+        execute_command_with_buffer(
             client_adapter_ptr,
             request_id,
             command_type,
@@ -3030,16 +3030,17 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
     }
 }
 
-/// Shared implementation behind [`command_with_buffer`], [`command_with_buffers`],
-/// and [`command_with_route_info`]: builds and dispatches the command, writing
-/// the reply into `buf_option` when present (a single buffer for a scalar
-/// reply, one buffer per element for an array reply).
+/// The underlying command execution implementation. Used by various command 
+/// execution API like: [`command_with_buffer`], [`command_with_buffers`],
+/// and [`command_with_route_info`]. It builds and dispatches the command, 
+/// writing the reply into `response_buffer` when present (a single buffer for
+/// a scalar reply, one buffer per element for an array reply).
 ///
 /// # Safety
 /// `client_adapter_ptr` and `args`/`args_len` follow the same contract as
 /// [`command_with_buffer`]. `route_input` follows the safety contract
 /// documented on [`RouteInput::resolve`]. Any buffers referenced by
-/// `buf_option` must remain valid and writable until the command completes.
+/// `response_buffer` must remain valid and writable until the command completes.
 // Mirrors the C ABI of the FFI entry points it backs, hence the argument count.
 #[allow(clippy::too_many_arguments)]
 unsafe fn execute_command(
@@ -3050,7 +3051,7 @@ unsafe fn execute_command(
     args: *const usize,
     args_len: *const c_ulong,
     route_input: RouteInput,
-    buf_option: Option<ResponseBuffer>,
+    response_buffer: Option<ResponseBuffer>,
     span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
@@ -3149,7 +3150,7 @@ unsafe fn execute_command(
     client_adapter.execute_request_with_buffer(
         request_id,
         async move { client.send_command(&mut cmd, routing_info).await },
-        buf_option,
+        response_buffer,
     )
 }
 
@@ -3157,13 +3158,40 @@ unsafe fn execute_command(
 /// protobuf-encoded `route_bytes`, matching the contract shared by
 /// [`command_with_buffer`] and [`command_with_buffers`].
 ///
+/// # Parameters
+/// - `client_adapter_ptr`: Pointer to the `Arc<ClientAdapter>` obtained from
+///   [`create_client`]. The strong count is incremented so the caller's
+///   original `Arc` remains valid.
+/// - `request_id`: Caller-supplied ID used to correlate the eventual
+///   response (or async callback invocation) with this call.
+/// - `command_type`: Identifies which Valkey/Redis command to run; mapped to
+///   the internal `Cmd` via `command_type.get_command()`.
+/// - `arg_count`: Number of elements in the `args` / `args_len` arrays.
+/// - `args`: Pointer to an array of pointers, each pointing to one command
+///   argument's raw bytes. Caller-owned; must remain valid for the duration
+///   of the call.
+/// - `args_len`: Parallel array giving the byte length of each argument
+///   pointed to by `args`. Must be null iff `args` is null.
+/// - `route_bytes`: Optional protobuf-encoded `Routes` message describing
+///   where to send the command (e.g. specific node, all primaries). Null
+///   means no explicit route (default routing is used).
+/// - `route_bytes_len`: Number of bytes in `route_bytes`; must be `0` when
+///   `route_bytes` is null.
+/// - `response_buffer`: Optional caller-provided buffer(s) for zero-copy
+///   response writing — `Single` for a scalar reply (e.g. GET), `Multi` with
+///   one buffer per element for an array reply (e.g. MGET). When `None`, the
+///   response is heap/arena-allocated and returned normally.
+/// - `span_ptr`: Pointer (as `u64`) to an `Arc<GlideSpan>` OpenTelemetry span
+///   created by `create_otel_span`, or `0` for no tracing. When non-zero, it
+///   is attached to the command so the request is traced.
+///
 /// # Safety
 /// `client_adapter_ptr`, `args`/`args_len`, and `route_bytes` follow the same
-/// contract as [`command_with_buffer`]. Any buffers referenced by `buf_option`
+/// contract as [`command_with_buffer`]. Any buffers referenced by `response_buffer`
 /// must remain valid and writable until the command completes.
 // Mirrors the C ABI of the FFI entry points it backs, hence the argument count.
 #[allow(clippy::too_many_arguments)]
-unsafe fn execute_command_with_buffer_option(
+unsafe fn execute_command_with_buffer(
     client_adapter_ptr: *const c_void,
     request_id: usize,
     command_type: RequestType,
@@ -3172,7 +3200,7 @@ unsafe fn execute_command_with_buffer_option(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
-    buf_option: Option<ResponseBuffer>,
+    response_buffer: Option<ResponseBuffer>,
     span_ptr: u64,
 ) -> *mut CommandResult {
     unsafe {
@@ -3187,7 +3215,7 @@ unsafe fn execute_command_with_buffer_option(
                 route_bytes,
                 route_bytes_len,
             },
-            buf_option,
+            response_buffer,
             span_ptr,
         )
     }
@@ -3246,7 +3274,7 @@ pub unsafe extern "C-unwind" fn command_with_buffers(
             ))
         };
     unsafe {
-        execute_command_with_buffer_option(
+        execute_command_with_buffer(
             client_adapter_ptr,
             request_id,
             command_type,
@@ -5558,10 +5586,9 @@ pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) 
         let _ = unsafe { Box::from_raw(client_ptr as *mut MonitorAdapter) };
     }
 }
-
-/// [`command_with_buffer`] sibling that takes routing as a [`RouteInfo`]
-/// C-struct pointer instead of protobuf-encoded route bytes.
-///
+/// Execute a command with routing using a [`RouteInfo`] C-struct pointer 
+/// instead of protobuf-encoded route bytes.
+/// 
 /// Behaves identically to [`command_with_buffer`] otherwise, including the
 /// buffer-response behavior: when `response_buf` is null, the response flows
 /// through the normal `execute_request` path; when non-null, the response is
