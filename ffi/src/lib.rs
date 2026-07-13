@@ -3030,9 +3030,9 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
     }
 }
 
-/// The underlying command execution implementation. Used by various command 
+/// The underlying command execution implementation. Used by various command
 /// execution API like: [`command_with_buffer`], [`command_with_buffers`],
-/// and [`command_with_route_info`]. It builds and dispatches the command, 
+/// and [`command_with_route_info`]. It builds and dispatches the command,
 /// writing the reply into `response_buffer` when present (a single buffer for
 /// a scalar reply, one buffer per element for an array reply).
 ///
@@ -5586,9 +5586,9 @@ pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) 
         let _ = unsafe { Box::from_raw(client_ptr as *mut MonitorAdapter) };
     }
 }
-/// Execute a command with routing using a [`RouteInfo`] C-struct pointer 
+/// Execute a command with routing using a [`RouteInfo`] C-struct pointer
 /// instead of protobuf-encoded route bytes.
-/// 
+///
 /// Behaves identically to [`command_with_buffer`] otherwise, including the
 /// buffer-response behavior: when `response_buf` is null, the response flows
 /// through the normal `execute_request` path; when non-null, the response is
