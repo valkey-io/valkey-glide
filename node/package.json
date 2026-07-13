@@ -100,7 +100,7 @@
         "protobufjs-cli": "1",
         "replace": "1",
         "semver": "7",
-        "shx": "0.3",
+        "shx": "0.4",
         "ts-jest": "29",
         "ts-node": "10",
         "typedoc": "0.28",
