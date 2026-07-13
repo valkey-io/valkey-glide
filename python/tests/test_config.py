@@ -680,6 +680,161 @@ def test_tls_configuration_client_cert_key_consistency():
     )
 
 
+# Path-based mTLS client certificate/key + automatic reload tests
+def test_tls_client_auth_paths():
+    """Path-based client certificate/key are mapped onto the protobuf request."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path="/path/to/client-cert.pem",
+        client_key_path="/path/to/client-key.pem",
+    )
+
+    # Standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert request.client_cert_path == "/path/to/client-cert.pem"
+    assert request.client_key_path == "/path/to/client-key.pem"
+    # Byte fields remain unset when the path fields are used.
+    assert request.client_cert == b""
+    assert request.client_key == b""
+    # Reload not requested -> cert_reload is unset.
+    assert not request.HasField("cert_reload")
+
+    # Cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert cluster_request.client_cert_path == "/path/to/client-cert.pem"
+    assert cluster_request.client_key_path == "/path/to/client-key.pem"
+
+
+def test_tls_cert_reload_enabled_with_interval():
+    """cert_reload_enabled with an explicit interval populates cert_reload."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path="/path/to/client-cert.pem",
+        client_key_path="/path/to/client-key.pem",
+        cert_reload_enabled=True,
+        cert_reload_interval_seconds=600,
+    )
+
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.HasField("interval_seconds")
+    assert request.cert_reload.interval_seconds == 600
+
+
+def test_tls_cert_reload_enabled_without_interval_uses_core_default():
+    """cert_reload_enabled without an interval leaves interval_seconds unset (core default)."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path="/path/to/client-cert.pem",
+        client_key_path="/path/to/client-key.pem",
+        cert_reload_enabled=True,
+    )
+
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    # interval_seconds unset means the core applies its default of 300s.
+    assert not request.cert_reload.HasField("interval_seconds")
+
+
+def test_tls_client_auth_paths_both_or_neither():
+    """Providing only one of client_cert_path/client_key_path raises ConfigurationError."""
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(client_cert_path="/c.pem")
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "client_cert_path is provided but client_key_path not provided" in str(
+        exc_info.value
+    )
+
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(client_key_path="/k.pem")
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "client_key_path is provided but client_cert_path not provided" in str(
+        exc_info.value
+    )
+
+
+def test_tls_cert_reload_requires_paths():
+    """cert_reload_enabled without both paths raises ConfigurationError."""
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(cert_reload_enabled=True)
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "cert_reload_enabled requires client_cert_path and client_key_path" in str(
+        exc_info.value
+    )
+
+
+def test_tls_cert_reload_interval_must_be_positive():
+    """A non-positive cert_reload_interval_seconds raises ConfigurationError."""
+    for bad_interval in (0, -5):
+        config = AdvancedBaseClientConfiguration(
+            tls_config=TlsAdvancedConfiguration(
+                client_cert_path="/c.pem",
+                client_key_path="/k.pem",
+                cert_reload_enabled=True,
+                cert_reload_interval_seconds=bad_interval,
+            )
+        )
+        with pytest.raises(ConfigurationError) as exc_info:
+            config._create_a_protobuf_conn_request(ConnectionRequest())
+        assert "cert_reload_interval_seconds must be a positive integer" in str(
+            exc_info.value
+        )
+
+
+def test_tls_client_cert_path_empty_string():
+    """An empty-string path is rejected the same way empty byte fields are."""
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(
+            client_cert_path="", client_key_path="/k.pem"
+        )
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "client_cert_path cannot be an empty string" in str(exc_info.value)
+
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(
+            client_cert_path="/c.pem", client_key_path=""
+        )
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "client_key_path cannot be an empty string" in str(exc_info.value)
+
+
+def test_tls_client_cert_byte_and_path_conflict():
+    """Supplying both a byte field and its corresponding path is ambiguous."""
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(
+            client_cert_pem=TEST_CLIENT_CERT_DATA,
+            client_key_pem=TEST_CLIENT_KEY_DATA,
+            client_cert_path="/c.pem",
+            client_key_path="/k.pem",
+        )
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(ConnectionRequest())
+    assert "client_cert_path and client_cert_pem cannot both be provided" in str(
+        exc_info.value
+    )
+
+
 def test_tcp_nodelay_default_value():
     """Test that tcp_nodelay defaults to None (not set)."""
     standalone_config = AdvancedGlideClientConfiguration()

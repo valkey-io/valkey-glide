@@ -10,6 +10,9 @@ from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
+    CertReloadConfig,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
     CompressionBackend as ProtobufCompressionBackend,
 )
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -516,6 +519,80 @@ class TlsAdvancedConfiguration:
             - The key data should be in PEM format as a bytes object.
 
             - Must be used together with client_cert_pem.
+
+        client_cert_path (Optional[str]): Filesystem path to the client certificate PEM for mutual TLS
+            authentication.
+
+            - This is the path-based alternative to ``client_cert_pem``. Instead of reading the
+              certificate bytes yourself, you give the core the path and it reads the file from disk.
+
+            - Must be used together with ``client_key_path``: providing one without the other raises a
+              `ConfigurationError`.
+
+            - Cannot be combined with ``client_cert_pem``/``client_key_pem``. Supplying both a byte field
+              and its corresponding path is ambiguous and raises a `ConfigurationError`; use one style or
+              the other.
+
+            - If set to an empty string, a `ConfigurationError` will be raised.
+
+            - If None (default), no path-based client certificate will be presented.
+
+            - Path-based material combined with ``cert_reload_enabled`` is the recommended way to handle
+              certificate rotation without restarting the client (see ``cert_reload_enabled``).
+
+            Example usage::
+
+                tls_config = TlsAdvancedConfiguration(
+                    client_cert_path="/path/to/client-cert.pem",
+                    client_key_path="/path/to/client-key.pem",
+                    cert_reload_enabled=True,
+                    cert_reload_interval_seconds=600,
+                )
+
+        client_key_path (Optional[str]): Filesystem path to the client private key PEM for mutual TLS
+            authentication.
+
+            - This is the path-based alternative to ``client_key_pem``. The core reads the key from this
+              path on disk.
+
+            - This private key corresponds to the certificate provided at ``client_cert_path``.
+
+            - Must be used together with ``client_cert_path``.
+
+            - Cannot be combined with ``client_cert_pem``/``client_key_pem`` (see ``client_cert_path``).
+
+            - If set to an empty string, a `ConfigurationError` will be raised.
+
+            - If None (default), no path-based client key will be used.
+
+        cert_reload_enabled (Optional[bool]): Whether the core should periodically re-read the client
+            certificate and key from ``client_cert_path``/``client_key_path`` so that rotated material is
+            adopted automatically.
+
+            - Requires both ``client_cert_path`` and ``client_key_path`` to be set. Enabling reload without
+              the paths raises a `ConfigurationError`.
+
+            - When enabled, the core re-reads the files on an interval (see
+              ``cert_reload_interval_seconds``), validates that the private key matches the certificate,
+              and adopts rotated material on the next reconnect while keeping the last-known-good material
+              on any read/validation failure.
+
+            - Root/CA certificate reload is out of scope; only the client certificate and key are reloaded.
+
+            - This is the recommended way to handle certificate rotation without restarting the client.
+
+            - Default: False (no reloading; the certificate/key are read once at connection time).
+
+        cert_reload_interval_seconds (Optional[int]): Interval, in seconds, between certificate reload
+            checks when ``cert_reload_enabled`` is True.
+
+            - Must be a positive integer when provided; a non-positive value raises a `ConfigurationError`
+              (validated whenever the value is provided, regardless of ``cert_reload_enabled``).
+
+            - Only applied when ``cert_reload_enabled`` is True; otherwise no reload is configured and the
+              value has no effect.
+
+            - If None (default), the core uses its default interval of 300 seconds (5 minutes).
     """
 
     def __init__(
@@ -524,11 +601,19 @@ class TlsAdvancedConfiguration:
         root_pem_cacerts: Optional[bytes] = None,
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
+        client_cert_path: Optional[str] = None,
+        client_key_path: Optional[str] = None,
+        cert_reload_enabled: Optional[bool] = None,
+        cert_reload_interval_seconds: Optional[int] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
         self.client_key_pem = client_key_pem
+        self.client_cert_path = client_cert_path
+        self.client_key_path = client_key_path
+        self.cert_reload_enabled = cert_reload_enabled
+        self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
 
 class ClientCircuitBreakerConfiguration:
@@ -676,17 +761,84 @@ class AdvancedBaseClientConfiguration:
                 )
             request.client_key = client_key
 
-        # Ensure client cert and client key are both provided or not provided
+        # Handle path-based client certificate/key material. Empty strings are
+        # rejected the same way empty byte fields are.
+        self._apply_client_cert_paths(request, tls_config)
+
+        # Validate certificate/key configuration (both-or-neither rules, byte/path
+        # conflicts, and the reload interval) before wiring up reload, so an invalid
+        # interval surfaces as a ConfigurationError rather than a protobuf
+        # ValueError from assigning a negative value to the uint32 field.
         self._validate_client_auth_tls()
 
+        # Handle automatic certificate reload for the path-based client material.
+        if tls_config.cert_reload_enabled:
+            cert_reload = CertReloadConfig(enabled=True)
+            if tls_config.cert_reload_interval_seconds is not None:
+                cert_reload.interval_seconds = tls_config.cert_reload_interval_seconds
+            request.cert_reload.CopyFrom(cert_reload)
+
+    def _apply_client_cert_paths(
+        self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
+    ) -> None:
+        client_cert_path = tls_config.client_cert_path
+        if client_cert_path is not None:
+            if len(client_cert_path) == 0:
+                raise ConfigurationError(
+                    "client_cert_path cannot be an empty string; use None if not providing a client certificate path"
+                )
+            request.client_cert_path = client_cert_path
+
+        client_key_path = tls_config.client_key_path
+        if client_key_path is not None:
+            if len(client_key_path) == 0:
+                raise ConfigurationError(
+                    "client_key_path cannot be an empty string; use None if not providing a client key path"
+                )
+            request.client_key_path = client_key_path
+
     def _validate_client_auth_tls(self):
-        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
+        tls_config = self.tls_config
+        # Both-or-neither for the PEM byte fields.
+        if tls_config.client_cert_pem and not tls_config.client_key_pem:
             raise ConfigurationError(
                 "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
             )
-        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
+        if tls_config.client_key_pem and not tls_config.client_cert_pem:
             raise ConfigurationError(
                 "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
+            )
+        # Both-or-neither for the path fields.
+        if tls_config.client_cert_path and not tls_config.client_key_path:
+            raise ConfigurationError(
+                "client_cert_path is provided but client_key_path not provided. mTLS requires both",
+            )
+        if tls_config.client_key_path and not tls_config.client_cert_path:
+            raise ConfigurationError(
+                "client_key_path is provided but client_cert_path not provided. mTLS requires both",
+            )
+        # The byte fields and the path fields are two ways to supply the same
+        # material; supplying both is ambiguous. The both-or-neither rules above
+        # guarantee the cert and key are supplied as pairs, so checking the
+        # certificate pair is sufficient to detect any byte/path mix.
+        if tls_config.client_cert_path and tls_config.client_cert_pem:
+            raise ConfigurationError(
+                "client_cert_path and client_cert_pem cannot both be provided; use one or the other",
+            )
+        # Reload requires the path-based material.
+        if tls_config.cert_reload_enabled and not (
+            tls_config.client_cert_path and tls_config.client_key_path
+        ):
+            raise ConfigurationError(
+                "cert_reload_enabled requires client_cert_path and client_key_path to be provided",
+            )
+        # Reload interval, when provided, must be a positive integer.
+        if (
+            tls_config.cert_reload_interval_seconds is not None
+            and tls_config.cert_reload_interval_seconds <= 0
+        ):
+            raise ConfigurationError(
+                "cert_reload_interval_seconds must be a positive integer",
             )
 
 

@@ -16,7 +16,9 @@ from tests.utils.utils import (
     create_client_with_retry,
     get_ca_certificate,
     get_client_certificate,
+    get_client_certificate_path,
     get_client_key,
+    get_client_key_path,
 )
 
 
@@ -220,6 +222,105 @@ class TestTls:
             root_pem_cacerts=server_certificate,
             client_cert_pem=client_certificate,
             client_key_pem=client_key,
+        )
+        client = await create_client_with_retry(config)
+
+        await assert_connected(client)
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_fails_if_client_cert_path_provided_but_key_path_not_provided(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        server_certificate = get_ca_certificate()
+
+        with pytest.raises(ConfigurationError):
+            await create_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                use_tls=True,
+                root_pem_cacerts=server_certificate,
+                client_cert_path=get_client_certificate_path(),
+                client_key_path=None,
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_fails_if_client_key_path_provided_but_cert_path_not_provided(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        server_certificate = get_ca_certificate()
+
+        with pytest.raises(ConfigurationError):
+            await create_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                use_tls=True,
+                root_pem_cacerts=server_certificate,
+                client_cert_path=None,
+                client_key_path=get_client_key_path(),
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_fails_if_cert_reload_enabled_without_paths(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        server_certificate = get_ca_certificate()
+
+        with pytest.raises(ConfigurationError):
+            await create_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                use_tls=True,
+                root_pem_cacerts=server_certificate,
+                cert_reload_enabled=True,
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_inits_with_client_cert_and_key_paths(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        server_certificate = get_ca_certificate()
+
+        config = create_client_config(
+            request=request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            use_tls=True,
+            root_pem_cacerts=server_certificate,
+            client_cert_path=get_client_certificate_path(),
+            client_key_path=get_client_key_path(),
+        )
+        client = await create_client_with_retry(config)
+
+        await assert_connected(client)
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_inits_with_cert_reload_enabled(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Path-based mTLS with reload enabled connects; reload behavior itself is
+        validated by the core tests on the #6386 base branch."""
+        server_certificate = get_ca_certificate()
+
+        config = create_client_config(
+            request=request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            use_tls=True,
+            root_pem_cacerts=server_certificate,
+            client_cert_path=get_client_certificate_path(),
+            client_key_path=get_client_key_path(),
+            cert_reload_enabled=True,
+            cert_reload_interval_seconds=300,
         )
         client = await create_client_with_retry(config)
 
