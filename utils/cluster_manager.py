@@ -325,8 +325,47 @@ def print_servers_json(servers: List[Server]):
     print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
+def _resolve_default_port_range() -> Tuple[int, int]:
+    """Return the default ``(min_port, max_port)`` for :func:`next_free_port`.
+
+    ``next_free_port`` bind-checks a candidate port and then immediately closes
+    the test socket before the caller's daemonized ``valkey-server`` has a
+    chance to actually claim it. With a single allocator process that race
+    window is harmless, but pytest-xdist runs each worker in a separate
+    subprocess and ``cluster_manager.py`` inherits ``PYTEST_XDIST_WORKER``
+    when invoked under tests. Two workers picking from the same global range
+    will eventually collide on the same random port, after which one of the
+    two daemons fails to bind and the worker's session-scoped cluster fixture
+    errors out.
+
+    Avoid that by giving each xdist worker a disjoint sub-range. Within a
+    single worker the existing sequential bind-check is already sufficient.
+    For non-xdist invocations (or unrecognized worker IDs) fall back to the
+    historical full default range.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if worker.startswith("gw"):
+        try:
+            n = int(worker[2:])
+        except ValueError:
+            return 6379, 55535
+        # 4000 ports per worker is plenty for the ~22 nodes a cluster fixture
+        # spins up (3 shards × 3 + 1 shard × 2 + TLS variants), and the
+        # arithmetic stays within the user-port range up to gw11.
+        size = 4000
+        base = 20000 + n * size
+        if base + size - 1 <= 65535:
+            return base, base + size - 1
+    return 6379, 55535
+
+
+_DEFAULT_MIN_PORT, _DEFAULT_MAX_PORT = _resolve_default_port_range()
+
+
 def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
+    min_port: int = _DEFAULT_MIN_PORT,
+    max_port: int = _DEFAULT_MAX_PORT,
+    timeout: int = 60,
 ) -> int:
     tic = time.perf_counter()
 
@@ -531,7 +570,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
+        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=90):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -551,7 +590,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(server, cluster_folder, tls, 120, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"

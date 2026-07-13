@@ -1,15 +1,43 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import contextlib
+import fcntl
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 from glide_shared.config import NodeAddress
 
 SCRIPT_FILE = (
     Path(__file__).parent.parent.parent.parent / "utils" / "cluster_manager.py"
 )
+
+# Cross-process lock file used to serialize `cluster_manager.py` subprocess
+# invocations across pytest-xdist workers running on the same host. With
+# `-n 2`, both workers' session-scoped fixtures otherwise spawn ~22 valkey
+# daemons in parallel (cluster + standalone, both TLS variants), and the
+# combined ~44-process startup load on a 4-vCPU CI runner pushes individual
+# daemons past `wait_for_server`'s readiness deadline. Serializing the
+# subprocess invocations halves the peak concurrent daemon count without
+# affecting the test phase, which still runs in parallel after setup.
+_CLUSTER_STARTUP_LOCK_PATH = Path(tempfile.gettempdir()) / "glide-cluster-startup.lock"
+
+
+@contextlib.contextmanager
+def _cluster_startup_lock() -> Iterator[None]:
+    _CLUSTER_STARTUP_LOCK_PATH.touch(exist_ok=True)
+    fd = os.open(str(_CLUSTER_STARTUP_LOCK_PATH), os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 class ValkeyCluster:
@@ -41,17 +69,18 @@ class ValkeyCluster:
                     args_list.extend(["--load-module", module])
             args_list.append(f"-n {shard_count}")
             args_list.append(f"-r {replica_count}")
-            p = subprocess.Popen(
-                args_list,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            output, err = p.communicate(timeout=80)
-            if p.returncode != 0:
-                raise Exception(
-                    f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}"
+            with _cluster_startup_lock():
+                p = subprocess.Popen(
+                    args_list,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
                 )
+                output, err = p.communicate(timeout=600)
+                if p.returncode != 0:
+                    raise Exception(
+                        f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}"
+                    )
             self.parse_cluster_script_start_output(output)
 
     def parse_cluster_script_start_output(self, output: str):
