@@ -28,6 +28,10 @@ LOG_LEVELS = {
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
 
+# Timeout multiplier for environments where server operations are slower (e.g., containers).
+# Set CLUSTER_MANAGER_TIMEOUT_MULTIPLIER environment variable to scale all internal timeouts.
+TIMEOUT_MULTIPLIER = max(1, int(os.getenv("CLUSTER_MANAGER_TIMEOUT_MULTIPLIER", "1")))
+
 # Use /tmp/clusters for Windows WSL, otherwise use the default path
 def _get_clusters_folder():
     if os.getenv("CLUSTERS_FOLDER"):
@@ -574,26 +578,39 @@ def create_cluster(
     tls_ca_cert_file: Optional[str] = None,
 ):
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
-    p = subprocess.Popen(
-        [
-            get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-            "--cluster",
-            "create",
-            *servers_tuple,
-            "--cluster-replicas",
-            str(replica_count),
-            "--cluster-yes",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if err or "[OK] All 16384 slots covered." not in output:
-        raise Exception(f"Failed to create cluster: {err if err else output}")
+    max_retries = 2 * TIMEOUT_MULTIPLIER
+    last_error = None
+    for attempt in range(max_retries + 1):
+        # Rebuild the generator each attempt since it is consumed on use
+        servers_tuple = (str(server) for server in servers)
+        p = subprocess.Popen(
+            [
+                get_cli_command(),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "--cluster",
+                "create",
+                *servers_tuple,
+                "--cluster-replicas",
+                str(replica_count),
+                "--cluster-yes",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=40 * TIMEOUT_MULTIPLIER)
+        if not err and "[OK] All 16384 slots covered." in output:
+            break
+        last_error = err if err else output
+        if attempt < max_retries:
+            logging.warning(
+                f"Cluster creation attempt {attempt + 1} failed: {last_error}. "
+                f"Retrying in 2 seconds..."
+            )
+            time.sleep(2)
+    else:
+        raise Exception(f"Failed to create cluster: {last_error}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
@@ -791,6 +808,7 @@ def wait_for_server(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
+    timeout = timeout * TIMEOUT_MULTIPLIER
     logging.debug(f"Waiting for server: {server}")
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
@@ -829,6 +847,7 @@ def wait_for_message(
     message: str,
     timeout: int = 5,
 ):
+    timeout = timeout * TIMEOUT_MULTIPLIER
     logging.debug(f"checking state changed in {log_file}")
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
@@ -852,6 +871,7 @@ def wait_for_regex_in_log(
     """Read the log file and search for a regular expression 'pattern'. If match is found
     return the regex group identified by 'group'"""
 
+    timeout = timeout * TIMEOUT_MULTIPLIER
     logging.debug(f"searching regex pattern: '{pattern}' in file: '{logfile}'")
     timeout_start = time.time()
 
@@ -875,6 +895,7 @@ def is_address_already_in_use(
     log_file: str,
     timeout: int = 10,
 ):
+    timeout = timeout * TIMEOUT_MULTIPLIER
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
     address_in_use_errors = [
@@ -983,6 +1004,7 @@ def wait_for_server_shutdown(
     auth: str,
     timeout: int = 20,
 ):
+    timeout = timeout * TIMEOUT_MULTIPLIER
     logging.debug(f"Waiting for server {server} to shutdown")
     timeout_start = time.time()
     verify_times = 2

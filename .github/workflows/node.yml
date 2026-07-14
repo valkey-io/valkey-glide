@@ -416,6 +416,7 @@ jobs:
               working-directory: ./node
               env:
                   PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
+                  CLUSTER_MANAGER_TIMEOUT_MULTIPLIER: "3"
               run: |
                   # Verify Rust is available
                   which cargo || echo "Cargo not found in PATH"
