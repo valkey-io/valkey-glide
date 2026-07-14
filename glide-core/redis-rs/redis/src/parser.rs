@@ -599,7 +599,7 @@ mod zero_copy {
 mod aio_support {
     use super::*;
 
-    use bytes::BytesMut;
+    use bytes::{Buf, Bytes, BytesMut};
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
@@ -631,7 +631,17 @@ mod aio_support {
                     }
                 }
                 Some(end) => {
-                    let frame = bytes.split_to(end).freeze();
+                    // Copy the complete frame out in ONE bulk memcpy and
+                    // advance the read buffer. Copying (rather than
+                    // `split_to(end).freeze()`) keeps the codec's BytesMut
+                    // unshared so tokio can keep reusing its allocation —
+                    // freezing was measured to cause realloc+copy churn in
+                    // `BytesMut::reserve` on every read. Individual bulk
+                    // strings are then zero-copy slices of this one frame
+                    // allocation: one alloc+memcpy per frame instead of one
+                    // per value.
+                    let frame = Bytes::copy_from_slice(&bytes[..end]);
+                    bytes.advance(end);
                     let mut pos = 0;
                     let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
                     Ok(Some(Ok(value)))
