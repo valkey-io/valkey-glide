@@ -9,10 +9,10 @@
 //! shares the cache with the reconnection path, which applies the freshest params
 //! before every reconnect attempt (see `reconnecting_connection.rs`).
 //!
-//! Design decisions (see GitHub issue #6189):
+//! Design decisions (see GitHub issue #6529):
 //! - **Client certificate/key only.** Root/CA certificate reload is out of scope
 //!   (higher blast radius, deferred deliberately, tracked in
-//!   <https://github.com/valkey-io/valkey-glide/issues/6189>). Only the leaf cert
+//!   <https://github.com/valkey-io/valkey-glide/issues/6529>). Only the leaf cert
 //!   and its key are re-read.
 //! - **Periodic re-read, no file watcher.** Re-reading on a `tokio::interval` needs
 //!   no new dependency. If a rotation is partially complete (e.g. the client
@@ -71,8 +71,8 @@ pub(crate) struct ClientCertReloadState {
     /// Root/CA certificate bytes (PEM), read once at construction and re-attached
     /// to every produced `TlsConnParams`. Root reload is out of scope, so this is
     /// constant for the client's lifetime.
-    // TODO(#6189): when root/CA reload lands, this field becomes reloadable
-    // material rather than a constant. https://github.com/valkey-io/valkey-glide/issues/6189
+    // TODO(#6529): when root/CA reload lands, this field becomes reloadable
+    // material rather than a constant. https://github.com/valkey-io/valkey-glide/issues/6529
     root_cert: Option<Vec<u8>>,
 }
 
@@ -115,7 +115,7 @@ impl CertReloadManager {
     /// * `key_path` - Path to the PEM client private key file.
     /// * `root_cert` - Optional root/CA certificate bytes (PEM), attached to every
     ///   produced params. Root reload is out of scope (tracked in
-    ///   <https://github.com/valkey-io/valkey-glide/issues/6189>); this is constant.
+    ///   <https://github.com/valkey-io/valkey-glide/issues/6529>); this is constant.
     /// * `interval_seconds` - Optional re-read interval. Defaults to
     ///   `DEFAULT_RELOAD_INTERVAL_SECONDS` when unset.
     pub async fn new(
