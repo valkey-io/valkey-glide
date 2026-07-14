@@ -199,4 +199,36 @@ quickcheck! {
         );
     }
 
+    /// The zero-copy `ValueCodec` must decode identically no matter how the
+    /// frame bytes are chunked across socket reads (frames straddling reads
+    /// must simply wait for more data, consuming nothing).
+    fn codec_chunked_parse(input: ArbitraryValue, chunk_sizes: Vec<usize>) -> () {
+        use tokio_util::codec::Decoder as _;
+
+        let mut encoded_input = Vec::new();
+        encode_value(&input.0, &mut encoded_input).unwrap();
+
+        let mut codec = redis::ValueCodec::default();
+        let mut buf = bytes::BytesMut::new();
+        let mut decoded = None;
+        let mut fed = 0;
+        let mut chunks = chunk_sizes.into_iter();
+
+        while fed < encoded_input.len() {
+            let n = std::cmp::min(
+                chunks.next().unwrap_or(usize::MAX).clamp(1, 4096),
+                encoded_input.len() - fed,
+            );
+            buf.extend_from_slice(&encoded_input[fed..fed + n]);
+            fed += n;
+            if let Some(item) = codec.decode(&mut buf).unwrap() {
+                assert!(decoded.is_none(), "decoded more than one value");
+                assert!(fed == encoded_input.len(), "decoded before full frame was fed");
+                decoded = Some(item.unwrap());
+            }
+        }
+        assert_eq!(decoded.expect("no value decoded"), input.0);
+        assert!(buf.is_empty(), "codec left unconsumed bytes");
+        assert!(codec.decode_eof(&mut buf).unwrap().is_none());
+    }
 }

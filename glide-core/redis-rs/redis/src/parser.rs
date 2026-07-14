@@ -322,17 +322,349 @@ where
     ))
 }
 
+/// Zero-copy RESP parsing for the async codec path.
+///
+/// Strategy: instead of streaming partial frames through the `combine` parser
+/// (which must copy payloads into owned `Vec`s because a bulk string may
+/// straddle socket reads), we first *scan* the buffered bytes for one complete
+/// top-level frame without consuming anything. Once a full frame is buffered,
+/// we `split_to(len).freeze()` it into a refcounted [`bytes::Bytes`] (zero-copy) and
+/// build the [`Value`] tree by slicing bulk-string payloads directly out of
+/// that frame — no per-value allocation or memcpy.
+///
+/// The scan only walks type bytes and length headers (payloads are skipped by
+/// length), so its cost is proportional to the number of RESP elements, not
+/// the payload bytes.
+mod zero_copy {
+    use super::*;
+    use bytes::Bytes;
+
+    fn parse_error(detail: String) -> RedisError {
+        RedisError::from((ErrorKind::ParseError, "parse error", detail))
+    }
+
+    /// Find the `\r\n`-terminated line starting at `pos`.
+    /// Returns `(line_content_end, next_pos)` — content excludes the CRLF.
+    fn find_line(buf: &[u8], pos: usize) -> Option<(usize, usize)> {
+        let rel = buf[pos..].windows(2).position(|w| w == b"\r\n")?;
+        Some((pos + rel, pos + rel + 2))
+    }
+
+    fn line_str(buf: &[u8], start: usize, end: usize) -> RedisResult<&str> {
+        str::from_utf8(&buf[start..end])
+            .map_err(|e| parse_error(format!("invalid utf-8 in line: {e}")))
+    }
+
+    fn line_int(buf: &[u8], start: usize, end: usize) -> RedisResult<i64> {
+        line_str(buf, start, end)?
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| parse_error("Expected integer, got garbage".to_string()))
+    }
+
+    /// How many child values follow an aggregate header byte with count `n`.
+    fn child_count(type_byte: u8, n: i64) -> usize {
+        match type_byte {
+            b'%' => n as usize * 2,
+            b'|' => n as usize * 2 + 1, // attribute: kv pairs + the data value
+            _ => n as usize,
+        }
+    }
+
+    /// Resumable scan state, persisted across `decode` calls so bytes of an
+    /// incomplete frame are only scanned once (previously the scan restarted
+    /// at offset 0 on every socket read — O(reads × elements) on large
+    /// multi-element frames, measured at ~25% of client CPU on MGET-heavy
+    /// load).
+    ///
+    /// Representation: `stack` holds the number of values still expected at
+    /// each open aggregate level, with an artificial root entry of 1 for the
+    /// top-level value. `pos` is the absolute offset (from the front of the
+    /// codec's read buffer) where scanning resumes; it stays valid across
+    /// calls because the codec only consumes buffer bytes once a frame
+    /// completes.
+    pub(super) struct ScanState {
+        pos: usize,
+        stack: Vec<usize>,
+    }
+
+    impl Default for ScanState {
+        fn default() -> Self {
+            ScanState {
+                pos: 0,
+                stack: vec![1],
+            }
+        }
+    }
+
+    impl ScanState {
+        pub(super) fn reset(&mut self) {
+            self.pos = 0;
+            self.stack.clear();
+            self.stack.push(1);
+        }
+    }
+
+    /// Continue scanning one top-level RESP value where the previous call
+    /// left off.
+    /// `Ok(Some(end))` — a complete value spans `0..end` of `buf`.
+    /// `Ok(None)` — need more data (state saved; call again with more bytes).
+    /// `Err` — malformed input (connection-fatal, state irrelevant).
+    pub(super) fn scan_resume(buf: &[u8], st: &mut ScanState) -> RedisResult<Option<usize>> {
+        loop {
+            // Close out completed aggregates.
+            while let Some(&top) = st.stack.last() {
+                if top == 0 {
+                    st.stack.pop();
+                } else {
+                    break;
+                }
+            }
+            let depth = st.stack.len();
+            let Some(remaining) = st.stack.last_mut() else {
+                return Ok(Some(st.pos));
+            };
+
+            let pos = st.pos;
+            if pos >= buf.len() {
+                return Ok(None);
+            }
+            let b = buf[pos];
+            // `depth` equals the recursion depth the old recursive
+            // scanner would have had (root entry counts as depth 1).
+            if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
+                return Err(parse_error("Maximum recursion depth exceeded".to_string()));
+            }
+            match b {
+                // Line-delimited scalars.
+                b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
+                    let Some((_, next)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    *remaining -= 1;
+                    st.pos = next;
+                }
+                // Length-prefixed blobs: bulk string, blob error, verbatim string.
+                b'$' | b'!' | b'=' => {
+                    let Some((line_end, payload_start)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    let size = line_int(buf, pos + 1, line_end)?;
+                    if size < 0 {
+                        *remaining -= 1;
+                        st.pos = payload_start;
+                        continue;
+                    }
+                    let end = payload_start + size as usize + 2;
+                    if end > buf.len() {
+                        return Ok(None);
+                    }
+                    if &buf[end - 2..end] != b"\r\n" {
+                        return Err(parse_error("expected CRLF after blob payload".to_string()));
+                    }
+                    *remaining -= 1;
+                    st.pos = end;
+                }
+                // Aggregates: array, map, attribute, set, push.
+                b'*' | b'%' | b'|' | b'~' | b'>' => {
+                    let Some((line_end, next)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    let n = line_int(buf, pos + 1, line_end)?;
+                    *remaining -= 1;
+                    st.pos = next;
+                    if n >= 0 {
+                        st.stack.push(child_count(b, n));
+                    }
+                }
+                other => {
+                    return Err(parse_error(format!(
+                        "invalid RESP type byte {:?}",
+                        other as char
+                    )))
+                }
+            }
+        }
+    }
+
+    /// Build a [`Value`] from a complete frame, slicing bulk-string payloads
+    /// out of `frame` with zero copies. `scan_value` must have validated the
+    /// frame is complete; bounds are still checked defensively.
+    pub(super) fn parse_value(frame: &Bytes, pos: &mut usize, depth: usize) -> RedisResult<Value> {
+        let buf = &frame[..];
+        if *pos >= buf.len() {
+            return Err(parse_error("unexpected end of frame".to_string()));
+        }
+        let b = buf[*pos];
+        if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
+            return Err(parse_error("Maximum recursion depth exceeded".to_string()));
+        }
+        let type_pos = *pos;
+        match b {
+            b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
+                let (line_end, next) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let line = line_str(buf, type_pos + 1, line_end)?;
+                *pos = next;
+                match b {
+                    b'+' => Ok(if line == "OK" {
+                        Value::Okay
+                    } else {
+                        Value::SimpleString(line.to_string())
+                    }),
+                    b'-' => Ok(Value::ServerError(err_parser(line))),
+                    b':' => Ok(Value::Int(line.trim().parse::<i64>().map_err(|_| {
+                        parse_error("Expected integer, got garbage".to_string())
+                    })?)),
+                    b'_' => Ok(Value::Nil),
+                    b',' => Ok(Value::Double(line.trim().parse::<f64>().map_err(|e| {
+                        parse_error(format!("Expected double, got garbage: {e}"))
+                    })?)),
+                    b'#' => match line {
+                        "t" => Ok(Value::Boolean(true)),
+                        "f" => Ok(Value::Boolean(false)),
+                        _ => Err(parse_error("Expected boolean, got garbage".to_string())),
+                    },
+                    b'(' => BigInt::parse_bytes(line.as_bytes(), 10)
+                        .map(Value::BigNumber)
+                        .ok_or_else(|| parse_error("Expected bigint, got garbage".to_string())),
+                    _ => unreachable!(),
+                }
+            }
+            b'$' | b'!' | b'=' => {
+                let (line_end, payload_start) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let size = line_int(buf, type_pos + 1, line_end)?;
+                if size < 0 {
+                    *pos = payload_start;
+                    return Ok(Value::Nil);
+                }
+                let payload_end = payload_start + size as usize;
+                if payload_end + 2 > buf.len() {
+                    return Err(parse_error("unexpected end of frame".to_string()));
+                }
+                *pos = payload_end + 2;
+                match b {
+                    // The zero-copy slice: shares the frame's refcounted buffer.
+                    b'$' => Ok(Value::BulkString(frame.slice(payload_start..payload_end))),
+                    b'!' => {
+                        let text = String::from_utf8_lossy(&buf[payload_start..payload_end]);
+                        Ok(Value::ServerError(err_parser(&text)))
+                    }
+                    b'=' => {
+                        let text = String::from_utf8_lossy(&buf[payload_start..payload_end]);
+                        if let Some((format, text)) = text.split_once(':') {
+                            let format = match format {
+                                "txt" => VerbatimFormat::Text,
+                                "mkd" => VerbatimFormat::Markdown,
+                                x => VerbatimFormat::Unknown(x.to_string()),
+                            };
+                            Ok(Value::VerbatimString {
+                                format,
+                                text: text.to_string(),
+                            })
+                        } else {
+                            Err(parse_error(
+                                "parse error when decoding verbatim string".to_string(),
+                            ))
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            b'*' | b'%' | b'|' | b'~' | b'>' => {
+                let (line_end, next) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let n = line_int(buf, type_pos + 1, line_end)?;
+                *pos = next;
+                if n < 0 {
+                    return Ok(Value::Nil);
+                }
+                match b {
+                    b'*' | b'~' => {
+                        let mut items = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            items.push(parse_value(frame, pos, depth + 1)?);
+                        }
+                        Ok(if b == b'*' {
+                            Value::Array(items)
+                        } else {
+                            Value::Set(items)
+                        })
+                    }
+                    b'%' => {
+                        let mut items = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            let k = parse_value(frame, pos, depth + 1)?;
+                            let v = parse_value(frame, pos, depth + 1)?;
+                            items.push((k, v));
+                        }
+                        Ok(Value::Map(items))
+                    }
+                    b'|' => {
+                        let mut attributes = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            let k = parse_value(frame, pos, depth + 1)?;
+                            let v = parse_value(frame, pos, depth + 1)?;
+                            attributes.push((k, v));
+                        }
+                        let data = Box::new(parse_value(frame, pos, depth + 1)?);
+                        Ok(Value::Attribute { data, attributes })
+                    }
+                    b'>' => {
+                        if n == 0 {
+                            return Ok(Value::Push {
+                                kind: PushKind::Other("".to_string()),
+                                data: vec![],
+                            });
+                        }
+                        let first = parse_value(frame, pos, depth + 1)?;
+                        let mut data = Vec::with_capacity(n as usize - 1);
+                        for _ in 1..n {
+                            data.push(parse_value(frame, pos, depth + 1)?);
+                        }
+                        let kind = match first {
+                            Value::BulkString(kind) => String::from_utf8(kind.to_vec())
+                                .map_err(|e| parse_error(format!("invalid push kind: {e}")))?,
+                            Value::SimpleString(kind) => kind,
+                            _ => {
+                                return Err(parse_error(
+                                    "parse error when decoding push".to_string(),
+                                ))
+                            }
+                        };
+                        Ok(Value::Push {
+                            kind: get_push_kind(kind),
+                            data,
+                        })
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            other => Err(parse_error(format!(
+                "invalid RESP type byte {:?}",
+                other as char
+            ))),
+        }
+    }
+}
+
 #[cfg(feature = "aio")]
 mod aio_support {
     use super::*;
 
-    use bytes::{Buf, BytesMut};
+    use bytes::{Buf, Bytes, BytesMut};
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
+    /// Tokio codec that decodes RESP frames zero-copy from the read
+    /// buffer. See the `zero_copy` module for the strategy.
     #[derive(Default)]
     pub struct ValueCodec {
-        state: AnySendSyncPartialState,
+        /// Resumable scan progress for the (single) incomplete frame at the
+        /// front of the read buffer. Valid across calls because nothing is
+        /// consumed until the frame completes.
+        scan: super::zero_copy::ScanState,
     }
 
     impl ValueCodec {
@@ -341,30 +673,54 @@ mod aio_support {
             bytes: &mut BytesMut,
             eof: bool,
         ) -> RedisResult<Option<RedisResult<Value>>> {
-            let (opt, removed_len) = {
-                let buffer = &bytes[..];
-                let mut stream =
-                    combine::easy::Stream(combine::stream::MaybePartialStream(buffer, !eof));
-                match combine::stream::decode_tokio(value(None), &mut stream, &mut self.state) {
-                    Ok(x) => x,
-                    Err(err) => {
-                        let err = err
-                            .map_position(|pos| pos.translate_position(buffer))
-                            .map_range(|range| format!("{range:?}"))
-                            .to_string();
-                        return Err(RedisError::from((
+            if bytes.is_empty() {
+                return Ok(None);
+            }
+            // Zero-copy path: wait until a complete top-level frame is
+            // buffered (scan consumes nothing and resumes where the previous
+            // call stopped), then extract that frame and slice bulk-string
+            // payloads out of it.
+            match super::zero_copy::scan_resume(&bytes[..], &mut self.scan) {
+                Err(err) => {
+                    self.scan.reset();
+                    Err(err)
+                }
+                Ok(None) => {
+                    if eof {
+                        Err(RedisError::from((
                             ErrorKind::ParseError,
                             "parse error",
-                            err,
-                        )));
+                            "unexpected end of input".to_string(),
+                        )))
+                    } else {
+                        Ok(None)
                     }
                 }
-            };
-
-            bytes.advance(removed_len);
-            match opt {
-                Some(result) => Ok(Some(Ok(result))),
-                None => Ok(None),
+                Ok(Some(end)) => {
+                    self.scan.reset();
+                    // Hybrid frame extraction, chosen from profiling:
+                    // - Small frames: ONE bulk memcpy out of the read buffer.
+                    //   Keeps the codec's BytesMut unshared so tokio reuses
+                    //   its allocation (freezing every frame caused
+                    //   realloc+copy churn in BytesMut::reserve — 40% of
+                    //   client CPU under pipelined load).
+                    // - Large frames: take ownership zero-copy via
+                    //   split_to().freeze(). The buffer had to grow for them
+                    //   anyway, and copying hundreds of KB costs more than
+                    //   losing one allocation's reuse.
+                    // Bulk strings are then zero-copy slices of the frame.
+                    const FRAME_COPY_MAX: usize = 64 * 1024;
+                    let frame = if end > FRAME_COPY_MAX {
+                        bytes.split_to(end).freeze()
+                    } else {
+                        let frame = Bytes::copy_from_slice(&bytes[..end]);
+                        bytes.advance(end);
+                        frame
+                    };
+                    let mut pos = 0;
+                    let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
+                    Ok(Some(Ok(value)))
+                }
             }
         }
     }
@@ -727,6 +1083,43 @@ mod tests {
             assert!(
                 parse_redis_value(&bytes).is_ok(),
                 "aggregate {:?} within depth limit failed to parse",
+                agg as char
+            );
+        }
+    }
+
+    /// The zero-copy codec's iterative scanner must enforce the same
+    /// recursion-depth guard as the recursive sync parser.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn test_codec_max_recursion_depth_all_aggregate_types() {
+        use tokio_util::codec::Decoder;
+        for agg in [b'*', b'%', b'|', b'~', b'>'] {
+            let mut codec = ValueCodec::default();
+            let mut bytes =
+                bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH + 5)[..]);
+            let result = codec.decode(&mut bytes);
+            let err = result.expect_err("expected recursion depth error");
+            assert!(
+                format!("{err:?}").contains("Maximum recursion depth exceeded"),
+                "aggregate {:?} did not hit the recursion guard: {err:?}",
+                agg as char
+            );
+        }
+    }
+
+    #[cfg(feature = "aio")]
+    #[test]
+    fn test_codec_nesting_within_recursion_depth_parses() {
+        use tokio_util::codec::Decoder;
+        for agg in [b'*', b'~'] {
+            let mut codec = ValueCodec::default();
+            let mut bytes =
+                bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH)[..]);
+            let result = codec.decode(&mut bytes);
+            assert!(
+                matches!(result, Ok(Some(Ok(_)))),
+                "aggregate {:?} within depth limit failed via codec: {result:?}",
                 agg as char
             );
         }

@@ -561,6 +561,39 @@ impl Iterator for OwnedMapIter {
 /// separated at an early point so the value only holds the remaining
 /// types.
 impl Value {
+    /// Deep-copies any [`bytes::Bytes`] payloads so this value no longer
+    /// shares (and therefore pins) the connection read buffer it was parsed
+    /// from. Call this before retaining a value long-term (e.g. inserting
+    /// into a client-side cache); request/response flows that drop values
+    /// promptly do not need it.
+    pub fn detach_buffers(self) -> Value {
+        match self {
+            Value::BulkString(b) => Value::BulkString(bytes::Bytes::copy_from_slice(&b)),
+            Value::Array(items) => {
+                Value::Array(items.into_iter().map(Value::detach_buffers).collect())
+            }
+            Value::Set(items) => Value::Set(items.into_iter().map(Value::detach_buffers).collect()),
+            Value::Map(items) => Value::Map(
+                items
+                    .into_iter()
+                    .map(|(k, v)| (k.detach_buffers(), v.detach_buffers()))
+                    .collect(),
+            ),
+            Value::Attribute { data, attributes } => Value::Attribute {
+                data: Box::new(data.detach_buffers()),
+                attributes: attributes
+                    .into_iter()
+                    .map(|(k, v)| (k.detach_buffers(), v.detach_buffers()))
+                    .collect(),
+            },
+            Value::Push { kind, data } => Value::Push {
+                kind,
+                data: data.into_iter().map(Value::detach_buffers).collect(),
+            },
+            other => other,
+        }
+    }
+
     /// Checks if the return value looks like it fulfils the cursor
     /// protocol.  That means the result is an array item of length
     /// two with the first one being a cursor and the second an
