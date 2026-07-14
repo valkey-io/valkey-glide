@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: Fix flaky `test_update_connection_password` timeout regression in cluster mode by adding a brief initial delay before retry loops and increasing the wait_for timeout from 25s to 45s, preventing exhaustion of the retry budget when each failed attempt blocks for the full 5s request_timeout. ([#6495](https://github.com/valkey-io/valkey-glide/issues/6495))
 * Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))

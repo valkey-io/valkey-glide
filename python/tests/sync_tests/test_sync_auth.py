@@ -105,6 +105,11 @@ class TestSyncAuthCommands:
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
         kill_connections(management_sync_client)
 
+        # Brief initial delay to let the cluster begin reconnection before polling.
+        # Without this, early attempts block for the full request_timeout (5s each),
+        # consuming most of the wait_for budget on guaranteed-to-fail requests.
+        time.sleep(2)
+
         # Wait for the client to reconnect with the new password using retry
         # instead of a fixed sleep, which is unreliable in cluster mode under CI load
         def _check_reconnected_after_first_kill():
@@ -117,9 +122,12 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_first_kill,
             "Client failed to reconnect with new password after first kill",
-            timeout=25,
+            timeout=45,
         )
         kill_connections(management_sync_client)
+
+        # Brief initial delay before polling for reconnection after second kill
+        time.sleep(2)
 
         # Wait for reconnection again before attempting immediate auth
         def _check_reconnected_after_second_kill():
@@ -134,7 +142,7 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_second_kill,
             "Client failed to reconnect after second kill for immediate auth",
-            timeout=25,
+            timeout=45,
         )
         # Verify that the client is still authenticated
         assert glide_sync_client.set("test_key", "test_value") == OK
