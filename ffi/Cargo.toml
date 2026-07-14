@@ -9,6 +9,7 @@ authors = ["Valkey GLIDE Maintainers"]
 crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
+bytes = "1"
 libc = "0.2"
 protobuf = { version = "3", features = [] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
