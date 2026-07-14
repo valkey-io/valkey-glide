@@ -2007,7 +2007,7 @@ pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Dur
 /// Shared by the standalone and cluster connection paths so the combining rule and
 /// the empty-entry validation live in one place. Callers run this *before* building
 /// the cert-reload manager, so the manager never sees unvalidated root material.
-/// (Root/CA reload itself is out of scope; see #6189.)
+/// (Root/CA reload itself is out of scope; see #6529.)
 pub(super) fn combine_root_certs(root_certs: &[Vec<u8>]) -> RedisResult<Option<Vec<u8>>> {
     if root_certs.is_empty() {
         return Ok(None);

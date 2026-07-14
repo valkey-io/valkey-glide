@@ -154,7 +154,7 @@ message ConnectionRequest {
 // provided.
 //
 // Root/CA certificate reload is out of scope (tracked in
-// https://github.com/valkey-io/valkey-glide/issues/6189).
+// https://github.com/valkey-io/valkey-glide/issues/6529).
 message ClientCertReloadConfig {
     bool enabled = 1;
     // Re-read interval in seconds. When unset, the default is defined by
