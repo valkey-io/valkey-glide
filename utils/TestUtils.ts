@@ -238,7 +238,7 @@ export class ValkeyCluster {
         tls: boolean = false,
         tlsConfig?: TestTLSConfig,
         loadModule?: string[],
-        maxRetries = 5,
+        maxRetries = 3,
     ): Promise<ValkeyCluster> {
         let lastError: Error | unknown;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -265,8 +265,8 @@ export class ValkeyCluster {
                 );
             }
             if (attempt < maxRetries) {
-                // Exponential backoff: 2s, 4s, 6s, 8s
-                await new Promise((r) => setTimeout(r, 2000 * attempt));
+                // Fixed 1s delay between retries
+                await new Promise((r) => setTimeout(r, 1000));
             }
         }
         throw lastError ?? new Error(`Failed to create cluster after ${maxRetries} attempts`);

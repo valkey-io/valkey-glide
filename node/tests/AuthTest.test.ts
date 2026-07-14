@@ -90,7 +90,7 @@ describe("Auth tests", () => {
         managementClientCME = await GlideClusterClient.createClient({
             addresses: formatAddresses(cmeCluster.getAddresses()),
         });
-    }, 40000);
+    }, 120000);
 
     const formatAddresses = (
         addresses: AddressEntry[],

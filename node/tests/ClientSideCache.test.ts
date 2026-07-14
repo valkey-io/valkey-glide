@@ -20,6 +20,7 @@ import {
 } from "../build-ts";
 import {
     flushAndCloseClient,
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -104,7 +105,10 @@ describe("ClientSideCache", () => {
                 cache ? { clientSideCache: cache } : {},
             );
 
-            return await GlideClient.createClient(config);
+            return await GlideClient.createClient({
+                ...config,
+                ...getAdvancedConfig(),
+            });
         }
 
         describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -695,12 +699,13 @@ describe("ClientSideCache", () => {
                     ProtocolVersion.RESP3,
                     cache,
                 );
-                const clientB = await GlideClient.createClient(
-                    getClientConfigurationOption(
+                const clientB = await GlideClient.createClient({
+                    ...getClientConfigurationOption(
                         standaloneCluster.getAddresses(),
                         ProtocolVersion.RESP3,
                     ),
-                );
+                    ...getAdvancedConfig(),
+                });
 
                 try {
                     const key = `invalidation_test_${Date.now()}`;
@@ -751,7 +756,10 @@ describe("ClientSideCache", () => {
                 cache ? { clientSideCache: cache } : {},
             );
 
-            return await GlideClusterClient.createClient(config);
+            return await GlideClusterClient.createClient({
+                ...config,
+                ...getAdvancedConfig(),
+            });
         }
 
         describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1380,12 +1388,13 @@ describe("ClientSideCache", () => {
                     ProtocolVersion.RESP3,
                     cache,
                 );
-                const clientB = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
+                const clientB = await GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
                         clusterCluster.getAddresses(),
                         ProtocolVersion.RESP3,
                     ),
-                );
+                    ...getAdvancedConfig(),
+                });
 
                 try {
                     const key = `{invalidation_test}_${Date.now()}`;

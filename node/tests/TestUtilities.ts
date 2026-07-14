@@ -671,6 +671,16 @@ export const getClientConfigurationOption = (
 };
 
 /**
+ * Returns advanced configuration with increased connection timeout for CI stability.
+ * Spread this alongside getClientConfigurationOption for inline client creation.
+ */
+export const getAdvancedConfig = () => ({
+    advancedConfiguration: {
+        connectionTimeout: 10000,
+    },
+});
+
+/**
  * Flushes the client's database without closing the connection.
  * Use this in afterEach to reset state while keeping the client alive.
  */

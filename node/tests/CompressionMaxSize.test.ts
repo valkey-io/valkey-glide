@@ -25,6 +25,7 @@ import {
     RequestError,
 } from "../build-ts";
 import {
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -83,11 +84,14 @@ describe("Compression MaxDecompressedSize", () => {
         clusterMode: boolean,
         compression: CompressionConfiguration,
     ): Promise<GlideClient | GlideClusterClient> {
-        const config: BaseClientConfiguration = getClientConfigurationOption(
-            getAddresses(clusterMode),
-            ProtocolVersion.RESP3,
-            { compression },
-        );
+        const config: BaseClientConfiguration = {
+            ...getClientConfigurationOption(
+                getAddresses(clusterMode),
+                ProtocolVersion.RESP3,
+                { compression },
+            ),
+            ...getAdvancedConfig(),
+        };
 
         if (clusterMode) {
             return await GlideClusterClient.createClient(config);
