@@ -97,6 +97,11 @@ impl Pipeline {
         encode_pipeline(&self.commands, self.transaction_mode)
     }
 
+    #[cfg(feature = "aio")]
+    pub(crate) fn write_packed_pipeline(&self, out: &mut Vec<u8>) {
+        write_pipeline(out, &self.commands, self.transaction_mode)
+    }
+
     /// Returns the encoded pipeline as segments for vectored writes.
     /// Byte-identical on the wire to [`Pipeline::get_packed_pipeline`], with
     /// large shared payloads as their own zero-copy segments.

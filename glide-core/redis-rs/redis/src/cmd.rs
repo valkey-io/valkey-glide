@@ -833,6 +833,16 @@ impl Cmd {
     }
 
     /// Returns an iterator over the arguments in this command (including the command name itself)
+    /// Returns whether any argument is stored out-of-line as a shared
+    /// refcounted payload (via [`Cmd::arg_shared`] or a large [`RedisWrite`]
+    /// arg). When false, the command has no zero-copy send benefit and the
+    /// cheaper contiguous packing path is used.
+    #[inline]
+    pub fn has_out_of_line_args(&self) -> bool {
+        self.args.iter().any(|a| matches!(a, StoredArg::Shared(_)))
+    }
+
+    /// Iterate over the command arguments as byte slices (framing excluded).
     pub fn args_iter(&self) -> impl Clone + ExactSizeIterator<Item = Arg<&[u8]>> {
         let mut prev = 0;
         self.args.iter().map(move |arg| match arg {

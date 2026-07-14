@@ -1328,7 +1328,14 @@ impl ConnectionLike for Connection {
             self.exit_pubsub()?;
         }
 
-        self.con.send_segments(&cmd.get_packed_segments())?;
+        // Only pay the segmented/vectored path when there's a large shared
+        // payload to keep off the copy path; otherwise the contiguous pack +
+        // single write is cheaper for small/normal commands.
+        if cmd.has_out_of_line_args() {
+            self.con.send_segments(&cmd.get_packed_segments())?;
+        } else {
+            self.send_bytes(&cmd.get_packed_command())?;
+        }
         if cmd.is_no_response() {
             return Ok(Value::Nil);
         }

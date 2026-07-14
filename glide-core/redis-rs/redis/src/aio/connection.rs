@@ -207,7 +207,12 @@ where
                 self.exit_pubsub().await?;
             }
             self.buf.clear();
-            write_all_segments_async(&mut self.con, &cmd.get_packed_segments()).await?;
+            if cmd.has_out_of_line_args() {
+                write_all_segments_async(&mut self.con, &cmd.get_packed_segments()).await?;
+            } else {
+                cmd.write_packed_command(&mut self.buf);
+                self.con.write_all(&self.buf).await?;
+            }
             if cmd.is_no_response() {
                 return Ok(Value::Nil);
             }
@@ -234,7 +239,13 @@ where
             }
 
             self.buf.clear();
-            write_all_segments_async(&mut self.con, &cmd.get_packed_pipeline_segments()).await?;
+            if cmd.commands().iter().any(|c| c.has_out_of_line_args()) {
+                write_all_segments_async(&mut self.con, &cmd.get_packed_pipeline_segments())
+                    .await?;
+            } else {
+                cmd.write_packed_pipeline(&mut self.buf);
+                self.con.write_all(&self.buf).await?;
+            }
 
             let mut first_err = None;
 
