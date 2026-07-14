@@ -1237,7 +1237,10 @@ mod compression_tests {
                 // First value should be decompressed
                 assert_eq!(values[0], Value::BulkString(test_data.to_vec().into()));
                 // Second value should remain unchanged
-                assert_eq!(values[1], Value::BulkString(b"uncompressed".to_vec().into()));
+                assert_eq!(
+                    values[1],
+                    Value::BulkString(b"uncompressed".to_vec().into())
+                );
             }
             _ => panic!("Expected array response"),
         }
@@ -1261,7 +1264,8 @@ mod compression_tests {
         let disabled_manager = CompressionManager::new(disabled_backend, disabled_config).unwrap();
 
         // With disabled manager, compressed data should NOT be decompressed
-        let array_with_compressed = Value::Array(vec![Value::BulkString(compressed.clone().into())]);
+        let array_with_compressed =
+            Value::Array(vec![Value::BulkString(compressed.clone().into())]);
         let result = decompress_batch_response(array_with_compressed, &disabled_manager);
         assert!(result.is_ok());
         let not_decompressed = result.unwrap();
@@ -1325,9 +1329,18 @@ mod compression_tests {
                 match &values[1] {
                     Value::Array(mget_values) => {
                         assert_eq!(mget_values.len(), 3);
-                        assert_eq!(mget_values[0], Value::BulkString(test_data1.to_vec().into()));
-                        assert_eq!(mget_values[1], Value::BulkString(test_data2.to_vec().into()));
-                        assert_eq!(mget_values[2], Value::BulkString(test_data3.to_vec().into()));
+                        assert_eq!(
+                            mget_values[0],
+                            Value::BulkString(test_data1.to_vec().into())
+                        );
+                        assert_eq!(
+                            mget_values[1],
+                            Value::BulkString(test_data2.to_vec().into())
+                        );
+                        assert_eq!(
+                            mget_values[2],
+                            Value::BulkString(test_data3.to_vec().into())
+                        );
                     }
                     _ => panic!("Expected nested array for MGET result"),
                 }

@@ -595,8 +595,10 @@ impl GlidePubSubSynchronizer {
                     PubSubSubscriptionKind::Pattern => "Pattern",
                     PubSubSubscriptionKind::Sharded => "Sharded",
                 };
-                let values_array: Vec<Value> =
-                    values.into_iter().map(|v| Value::BulkString(v.into())).collect();
+                let values_array: Vec<Value> = values
+                    .into_iter()
+                    .map(|v| Value::BulkString(v.into()))
+                    .collect();
                 (
                     Value::BulkString(key.as_bytes().to_vec().into()),
                     Value::Array(values_array),

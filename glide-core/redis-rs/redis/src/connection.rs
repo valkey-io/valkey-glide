@@ -689,18 +689,35 @@ impl ActualConnection {
             w: &mut W,
             segments: &crate::cmd::SegmentedBytes,
         ) -> io::Result<()> {
+            const MAX_SLICES: usize = 64;
             let segs = segments.segments().collect::<Vec<_>>();
-            let mut slices: Vec<io::IoSlice> = segs.iter().map(|s| io::IoSlice::new(s)).collect();
-            let mut remaining = &mut slices[..];
-            while !remaining.is_empty() {
-                let n = w.write_vectored(remaining)?;
+            let mut idx = 0;
+            let mut offset = 0;
+            while idx < segs.len() {
+                let end = std::cmp::min(idx + MAX_SLICES, segs.len());
+                let mut slices: Vec<io::IoSlice> = Vec::with_capacity(end - idx);
+                slices.push(io::IoSlice::new(&segs[idx][offset..]));
+                for seg in &segs[idx + 1..end] {
+                    slices.push(io::IoSlice::new(seg));
+                }
+                let mut n = w.write_vectored(&slices)?;
                 if n == 0 {
                     return Err(io::Error::new(
                         io::ErrorKind::WriteZero,
                         "failed to write whole command",
                     ));
                 }
-                io::IoSlice::advance_slices(&mut remaining, n);
+                while n > 0 {
+                    let remaining = segs[idx].len() - offset;
+                    if n >= remaining {
+                        n -= remaining;
+                        idx += 1;
+                        offset = 0;
+                    } else {
+                        offset += n;
+                        n = 0;
+                    }
+                }
             }
             w.flush()
         }

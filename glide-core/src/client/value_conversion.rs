@@ -1879,12 +1879,18 @@ mod tests {
                                 Value::Map(vec![
                                     (
                                         Value::BulkString("name".to_string().into_bytes().into()),
-                                        Value::BulkString("consumer1".to_string().into_bytes().into()),
+                                        Value::BulkString(
+                                            "consumer1".to_string().into_bytes().into(),
+                                        ),
                                     ),
                                     (
-                                        Value::BulkString("pending".to_string().into_bytes().into()),
+                                        Value::BulkString(
+                                            "pending".to_string().into_bytes().into(),
+                                        ),
                                         Value::Array(vec![Value::Array(vec![
-                                            Value::BulkString("1-0".to_string().into_bytes().into()),
+                                            Value::BulkString(
+                                                "1-0".to_string().into_bytes().into(),
+                                            ),
                                             Value::Int(1),
                                         ])]),
                                     ),
@@ -2440,7 +2446,9 @@ mod tests {
                     ]),
                 ]),
             ]),
-            Value::Array(vec![Value::BulkString("1-2".to_string().into_bytes().into())]),
+            Value::Array(vec![Value::BulkString(
+                "1-2".to_string().into_bytes().into(),
+            )]),
         ]);
 
         let expected_v7_response = Value::Array(vec![
@@ -2467,7 +2475,9 @@ mod tests {
                     ])]),
                 ),
             ]),
-            Value::Array(vec![Value::BulkString("1-2".to_string().into_bytes().into())]),
+            Value::Array(vec![Value::BulkString(
+                "1-2".to_string().into_bytes().into(),
+            )]),
         ]);
 
         assert_eq!(
@@ -2500,7 +2510,10 @@ mod tests {
                 Value::BulkString(b"10.5".to_vec().into()),
             ),
             (Value::Double(20.5), Value::Double(19.5)),
-            (Value::Double(18.5), Value::BulkString(b"30.2".to_vec().into())),
+            (
+                Value::Double(18.5),
+                Value::BulkString(b"30.2".to_vec().into()),
+            ),
         ];
 
         let converted_type = ExpectedReturnType::Map {
@@ -2773,8 +2786,10 @@ mod tests {
             ]),
         ];
 
-        let resp2_response_empty_first_part_data =
-            vec![Value::BulkString(bytes::Bytes::from_static(b"running_script")), Value::Nil];
+        let resp2_response_empty_first_part_data = vec![
+            Value::BulkString(bytes::Bytes::from_static(b"running_script")),
+            Value::Nil,
+        ];
 
         let resp2_response_second_part_data = vec![
             Value::BulkString(bytes::Bytes::from_static(b"engines")),
@@ -2834,20 +2849,31 @@ mod tests {
                         Value::BulkString(bytes::Bytes::from_static(b"... rest `fcall` args ...")),
                     ]),
                 ),
-                (Value::BulkString(bytes::Bytes::from_static(b"duration_ms")), Value::Int(24529)),
+                (
+                    Value::BulkString(bytes::Bytes::from_static(b"duration_ms")),
+                    Value::Int(24529),
+                ),
             ]),
         )];
 
-        let resp3_response_empty_first_part_data =
-            vec![(Value::BulkString(bytes::Bytes::from_static(b"running_script")), Value::Nil)];
+        let resp3_response_empty_first_part_data = vec![(
+            Value::BulkString(bytes::Bytes::from_static(b"running_script")),
+            Value::Nil,
+        )];
 
         let resp3_response_second_part_data = vec![(
             Value::BulkString(bytes::Bytes::from_static(b"engines")),
             Value::Map(vec![(
                 Value::BulkString(bytes::Bytes::from_static(b"LUA")),
                 Value::Map(vec![
-                    (Value::BulkString(bytes::Bytes::from_static(b"libraries_count")), Value::Int(3)),
-                    (Value::BulkString(bytes::Bytes::from_static(b"functions_count")), Value::Int(5)),
+                    (
+                        Value::BulkString(bytes::Bytes::from_static(b"libraries_count")),
+                        Value::Int(3),
+                    ),
+                    (
+                        Value::BulkString(bytes::Bytes::from_static(b"functions_count")),
+                        Value::Int(5),
+                    ),
                 ]),
             )]),
         )];
@@ -3063,8 +3089,14 @@ mod tests {
             Value::BulkString(b"2.0".to_vec().into()),
         ]);
         let expected_response = Value::Array(vec![
-            Value::Array(vec![Value::BulkString(b"one".to_vec().into()), Value::Double(1.0)]),
-            Value::Array(vec![Value::BulkString(b"two".to_vec().into()), Value::Double(2.0)]),
+            Value::Array(vec![
+                Value::BulkString(b"one".to_vec().into()),
+                Value::Double(1.0),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"two".to_vec().into()),
+                Value::Double(2.0),
+            ]),
         ]);
         let converted_flat_array = convert_to_expected_type(
             flat_array,
@@ -3406,7 +3438,10 @@ mod tests {
                 Value::BulkString(b"key2".to_vec().into()),
                 Value::BulkString(b"20.8".to_vec().into()),
             ),
-            (Value::Double(20.5), Value::BulkString(b"30.2".to_vec().into())),
+            (
+                Value::Double(20.5),
+                Value::BulkString(b"30.2".to_vec().into()),
+            ),
         ];
 
         let converted_map = convert_to_expected_type(
@@ -3570,7 +3605,7 @@ mod tests {
             Value::Array(vec![
                 Value::BulkString(b"name1".to_vec().into()),
                 Value::BulkString(b"1.23".to_vec().into()), // dist (float)
-                Value::Int(123456),                  // hash (int)
+                Value::Int(123456),                         // hash (int)
                 Value::Array(vec![
                     Value::BulkString(b"10.0".to_vec().into()), // lon (float)
                     Value::BulkString(b"20.0".to_vec().into()), // lat (float)
@@ -3579,7 +3614,7 @@ mod tests {
             Value::Array(vec![
                 Value::BulkString(b"name2".to_vec().into()),
                 Value::BulkString(b"2.34".to_vec().into()), // dist (float)
-                Value::Int(654321),                  // hash (int)
+                Value::Int(654321),                         // hash (int)
                 Value::Array(vec![
                     Value::BulkString(b"30.0".to_vec().into()), // lon (float)
                     Value::BulkString(b"40.0".to_vec().into()), // lat (float)
@@ -3843,7 +3878,10 @@ mod tests {
                 Value::BulkString(b"flags".to_vec().into()),
                 Value::Set(vec![Value::BulkString(b"off".to_vec().into())]),
             ),
-            (Value::BulkString(b"redirect".to_vec().into()), Value::Int(-1)),
+            (
+                Value::BulkString(b"redirect".to_vec().into()),
+                Value::Int(-1),
+            ),
             (
                 Value::BulkString(b"prefixes".to_vec().into()),
                 Value::Array(vec![]),

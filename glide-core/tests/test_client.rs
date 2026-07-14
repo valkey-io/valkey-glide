@@ -709,7 +709,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -805,7 +805,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -1019,7 +1019,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the set value"
                     );
 
@@ -1041,7 +1041,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_after_reconnect.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET after reconnection should return the same value"
                     );
                 }
@@ -1380,7 +1380,7 @@ pub(crate) mod shared_client_tests {
                     );
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the same value after reconnection"
                     );
 
@@ -1747,7 +1747,10 @@ pub(crate) mod shared_client_tests {
                     };
                     assert_eq!(
                         &res[..2],
-                        &[Value::Okay, Value::BulkString(value.as_bytes().to_vec().into()),],
+                        &[
+                            Value::Okay,
+                            Value::BulkString(value.as_bytes().to_vec().into()),
+                        ],
                         "Pipeline result: {res:?}"
                     );
 

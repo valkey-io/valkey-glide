@@ -328,7 +328,7 @@ where
 /// (which must copy payloads into owned `Vec`s because a bulk string may
 /// straddle socket reads), we first *scan* the buffered bytes for one complete
 /// top-level frame without consuming anything. Once a full frame is buffered,
-/// we `split_to(len).freeze()` it into a refcounted [`Bytes`] (zero-copy) and
+/// we `split_to(len).freeze()` it into a refcounted [`bytes::Bytes`] (zero-copy) and
 /// build the [`Value`] tree by slicing bulk-string payloads directly out of
 /// that frame — no per-value allocation or memcpy.
 ///
@@ -658,7 +658,7 @@ mod aio_support {
     use tokio_util::codec::{Decoder, Encoder};
 
     /// Tokio codec that decodes RESP frames zero-copy from the read
-    /// buffer. See the [`super::zero_copy`] module for the strategy.
+    /// buffer. See the `zero_copy` module for the strategy.
     #[derive(Default)]
     pub struct ValueCodec {
         /// Resumable scan progress for the (single) incomplete frame at the

@@ -1046,7 +1046,10 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(result, Value::BulkString(b"cacheable_value".to_vec().into()));
+            assert_eq!(
+                result,
+                Value::BulkString(b"cacheable_value".to_vec().into())
+            );
 
             // Entry count should be 1
             let entry_count = test_basics.client.cache_entry_count().unwrap();

@@ -2413,7 +2413,7 @@ impl FromRedisValue for bytes::Bytes {
     fn from_owned_redis_value(v: Value) -> RedisResult<Self> {
         let v = get_owned_inner_value(v);
         match v {
-            Value::BulkString(bytes_vec) => Ok(bytes_vec.into()),
+            Value::BulkString(bytes_vec) => Ok(bytes_vec),
             _ => invalid_type_error!(v, "Not a bulk string"),
         }
     }

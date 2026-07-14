@@ -729,7 +729,10 @@ mod socket_listener {
         };
         assert_eq!(values.len(), 3);
         for i in 0..3 {
-            assert_eq!(values.get(i).unwrap().1, Value::BulkString(b"foo".to_vec().into()));
+            assert_eq!(
+                values.get(i).unwrap().1,
+                Value::BulkString(b"foo".to_vec().into())
+            );
         }
     }
 
@@ -983,7 +986,9 @@ mod socket_listener {
                                     let values = values_for_read.lock().unwrap();
                                     assert_value(
                                         pointer,
-                                        Some(Value::BulkString(values[callback_index].clone().into())),
+                                        Some(Value::BulkString(
+                                            values[callback_index].clone().into(),
+                                        )),
                                     );
                                     results[callback_index] = State::ReceivedValue;
                                 }
@@ -1286,7 +1291,10 @@ mod socket_listener {
                 Value::Okay,
                 Value::Okay,
                 Value::BulkString(vec![b'b', b'a', b'r'].into()),
-                Value::Array(vec![Value::BulkString(vec![b'b', b'a', b'r'].into()), Value::Nil]),
+                Value::Array(vec![
+                    Value::BulkString(vec![b'b', b'a', b'r'].into()),
+                    Value::Nil,
+                ]),
                 Value::Int(1),
             ]),
         );
