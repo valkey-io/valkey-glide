@@ -388,8 +388,7 @@ public class ConnectionManager {
                             requestBuilder.setClientCertPath(clientCertPath);
                             requestBuilder.setClientKeyPath(clientKeyPath);
                             if (certReloadEnabled) {
-                                ClientCertReloadConfig.Builder reloadBuilder =
-                                        ClientCertReloadConfig.newBuilder();
+                                ClientCertReloadConfig.Builder reloadBuilder = ClientCertReloadConfig.newBuilder();
                                 reloadBuilder.setEnabled(true);
                                 Integer reloadInterval = extractCertReloadIntervalSeconds(configuration);
                                 if (reloadInterval != null) {
