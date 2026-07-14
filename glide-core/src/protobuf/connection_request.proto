@@ -150,11 +150,16 @@ message ConnectionRequest {
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key
-// from `client_cert_path`/`client_key_path`. Root/CA certificate reload is out
-// of scope. Reload only takes effect when the paths are provided.
+// from their configured file paths. Reload only takes effect when the paths are
+// provided.
+//
+// Root/CA certificate reload is out of scope (tracked in
+// https://github.com/valkey-io/valkey-glide/issues/6189).
 message CertReloadConfig {
     bool enabled = 1;
-    // Re-read interval in seconds. Defaults to 300 (5 minutes) when unset.
+    // Re-read interval in seconds. When unset, the default is defined by
+    // glide-core (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
+    // `glide-core/src/tls_reload/mod.rs`).
     optional uint32 interval_seconds = 2;
 }
 
