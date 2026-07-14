@@ -753,7 +753,10 @@ mod test_cluster_pipeline {
                     // When retry is enabled, TRYAGAIN errors should be retried, and `MGET` should return expected values.
                     assert_eq!(
                         result[2],
-                        Value::Array(vec![Value::BulkString(b"value".to_vec().into()), Value::Nil]),
+                        Value::Array(vec![
+                            Value::BulkString(b"value".to_vec().into()),
+                            Value::Nil
+                        ]),
                         "Pipeline result did not match expected output.\n\
                          Keys chosen: ('{migrated_key}', '{key}')\n\
                          key_slot: {key_slot}\n\

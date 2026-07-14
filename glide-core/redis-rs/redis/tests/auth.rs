@@ -254,7 +254,10 @@ mod auth {
         })
         .await
         .expect("Timeout waiting for reconnection");
-        assert_eq!(result_should_succeed, Value::BulkString(b"bar".to_vec().into()));
+        assert_eq!(
+            result_should_succeed,
+            Value::BulkString(b"bar".to_vec().into())
+        );
     }
 
     #[tokio::test]

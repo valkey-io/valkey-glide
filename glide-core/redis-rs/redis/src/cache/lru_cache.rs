@@ -95,7 +95,10 @@ mod tests {
 
         let result = cache.get(b"key1", CachedKeyType::String);
         assert!(result.is_some());
-        assert_eq!(result.unwrap(), Value::BulkString(b"value1".to_vec().into()));
+        assert_eq!(
+            result.unwrap(),
+            Value::BulkString(b"value1".to_vec().into())
+        );
     }
 
     #[test]
@@ -141,7 +144,10 @@ mod tests {
         );
 
         let result = cache.get(b"key1", CachedKeyType::String);
-        assert_eq!(result.unwrap(), Value::BulkString(b"value2".to_vec().into()));
+        assert_eq!(
+            result.unwrap(),
+            Value::BulkString(b"value2".to_vec().into())
+        );
         assert_eq!(cache.entry_count(), 1);
     }
 

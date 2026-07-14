@@ -2484,7 +2484,9 @@ mod cluster_async {
                     assert!(
                         res.iter().any(|(k, _)| k
                             == &Value::BulkString(
-                                format!("{}:{}", node_0_host, node_0_port).into_bytes().into()
+                                format!("{}:{}", node_0_host, node_0_port)
+                                    .into_bytes()
+                                    .into()
                             )),
                         "Expected to see node 0 only"
                     );

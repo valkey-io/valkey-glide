@@ -371,62 +371,119 @@ mod zero_copy {
         }
     }
 
-    /// Scan one RESP value starting at `pos`.
-    /// `Ok(Some(end))` — a complete value spans `pos..end`.
-    /// `Ok(None)` — need more data.
-    /// `Err` — malformed input.
-    pub(super) fn scan_value(buf: &[u8], pos: usize, depth: usize) -> RedisResult<Option<usize>> {
-        if pos >= buf.len() {
-            return Ok(None);
-        }
-        let b = buf[pos];
-        if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
-            return Err(parse_error("Maximum recursion depth exceeded".to_string()));
-        }
-        match b {
-            // Line-delimited scalars.
-            b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
-                Ok(find_line(buf, pos + 1).map(|(_, next)| next))
+    /// Resumable scan state, persisted across `decode` calls so bytes of an
+    /// incomplete frame are only scanned once (previously the scan restarted
+    /// at offset 0 on every socket read — O(reads × elements) on large
+    /// multi-element frames, measured at ~25% of client CPU on MGET-heavy
+    /// load).
+    ///
+    /// Representation: `stack` holds the number of values still expected at
+    /// each open aggregate level, with an artificial root entry of 1 for the
+    /// top-level value. `pos` is the absolute offset (from the front of the
+    /// codec's read buffer) where scanning resumes; it stays valid across
+    /// calls because the codec only consumes buffer bytes once a frame
+    /// completes.
+    pub(super) struct ScanState {
+        pos: usize,
+        stack: Vec<usize>,
+    }
+
+    impl Default for ScanState {
+        fn default() -> Self {
+            ScanState {
+                pos: 0,
+                stack: vec![1],
             }
-            // Length-prefixed blobs: bulk string, blob error, verbatim string.
-            b'$' | b'!' | b'=' => {
-                let Some((line_end, payload_start)) = find_line(buf, pos + 1) else {
-                    return Ok(None);
-                };
-                let size = line_int(buf, pos + 1, line_end)?;
-                if size < 0 {
-                    return Ok(Some(payload_start));
+        }
+    }
+
+    impl ScanState {
+        pub(super) fn reset(&mut self) {
+            self.pos = 0;
+            self.stack.clear();
+            self.stack.push(1);
+        }
+    }
+
+    /// Continue scanning one top-level RESP value where the previous call
+    /// left off.
+    /// `Ok(Some(end))` — a complete value spans `0..end` of `buf`.
+    /// `Ok(None)` — need more data (state saved; call again with more bytes).
+    /// `Err` — malformed input (connection-fatal, state irrelevant).
+    pub(super) fn scan_resume(buf: &[u8], st: &mut ScanState) -> RedisResult<Option<usize>> {
+        loop {
+            // Close out completed aggregates.
+            while let Some(&top) = st.stack.last() {
+                if top == 0 {
+                    st.stack.pop();
+                } else {
+                    break;
                 }
-                let end = payload_start + size as usize + 2;
-                if end > buf.len() {
-                    return Ok(None);
-                }
-                if &buf[end - 2..end] != b"\r\n" {
-                    return Err(parse_error("expected CRLF after blob payload".to_string()));
-                }
-                Ok(Some(end))
             }
-            // Aggregates: array, map, attribute, set, push.
-            b'*' | b'%' | b'|' | b'~' | b'>' => {
-                let Some((line_end, mut cursor)) = find_line(buf, pos + 1) else {
-                    return Ok(None);
-                };
-                let n = line_int(buf, pos + 1, line_end)?;
-                if n < 0 {
-                    return Ok(Some(cursor));
+            let depth = st.stack.len();
+            let Some(remaining) = st.stack.last_mut() else {
+                return Ok(Some(st.pos));
+            };
+
+            let pos = st.pos;
+            if pos >= buf.len() {
+                return Ok(None);
+            }
+            let b = buf[pos];
+            // `depth` equals the recursion depth the old recursive
+            // scanner would have had (root entry counts as depth 1).
+            if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
+                return Err(parse_error("Maximum recursion depth exceeded".to_string()));
+            }
+            match b {
+                // Line-delimited scalars.
+                b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
+                    let Some((_, next)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    *remaining -= 1;
+                    st.pos = next;
                 }
-                for _ in 0..child_count(b, n) {
-                    match scan_value(buf, cursor, depth + 1)? {
-                        Some(end) => cursor = end,
-                        None => return Ok(None),
+                // Length-prefixed blobs: bulk string, blob error, verbatim string.
+                b'$' | b'!' | b'=' => {
+                    let Some((line_end, payload_start)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    let size = line_int(buf, pos + 1, line_end)?;
+                    if size < 0 {
+                        *remaining -= 1;
+                        st.pos = payload_start;
+                        continue;
+                    }
+                    let end = payload_start + size as usize + 2;
+                    if end > buf.len() {
+                        return Ok(None);
+                    }
+                    if &buf[end - 2..end] != b"\r\n" {
+                        return Err(parse_error("expected CRLF after blob payload".to_string()));
+                    }
+                    *remaining -= 1;
+                    st.pos = end;
+                }
+                // Aggregates: array, map, attribute, set, push.
+                b'*' | b'%' | b'|' | b'~' | b'>' => {
+                    let Some((line_end, next)) = find_line(buf, pos + 1) else {
+                        return Ok(None);
+                    };
+                    let n = line_int(buf, pos + 1, line_end)?;
+                    *remaining -= 1;
+                    st.pos = next;
+                    if n >= 0 {
+                        st.stack.push(child_count(b, n));
                     }
                 }
-                Ok(Some(cursor))
+                other => {
+                    return Err(parse_error(format!(
+                        "invalid RESP type byte {:?}",
+                        other as char
+                    )))
+                }
             }
-            other => Err(parse_error(format!(
-                "invalid RESP type byte {:?}",
-                other as char
-            ))),
         }
     }
 
@@ -567,11 +624,8 @@ mod zero_copy {
                             data.push(parse_value(frame, pos, depth + 1)?);
                         }
                         let kind = match first {
-                            Value::BulkString(kind) => {
-                                String::from_utf8(kind.to_vec()).map_err(|e| {
-                                    parse_error(format!("invalid push kind: {e}"))
-                                })?
-                            }
+                            Value::BulkString(kind) => String::from_utf8(kind.to_vec())
+                                .map_err(|e| parse_error(format!("invalid push kind: {e}")))?,
                             Value::SimpleString(kind) => kind,
                             _ => {
                                 return Err(parse_error(
@@ -604,7 +658,12 @@ mod aio_support {
     use tokio_util::codec::{Decoder, Encoder};
 
     #[derive(Default)]
-    pub struct ValueCodec {}
+    pub struct ValueCodec {
+        /// Resumable scan progress for the (single) incomplete frame at the
+        /// front of the read buffer. Valid across calls because nothing is
+        /// consumed until the frame completes.
+        scan: super::zero_copy::ScanState,
+    }
 
     impl ValueCodec {
         fn decode_stream(
@@ -616,10 +675,15 @@ mod aio_support {
                 return Ok(None);
             }
             // Zero-copy path: wait until a complete top-level frame is
-            // buffered (scan consumes nothing), then freeze that frame into a
-            // refcounted `Bytes` and slice bulk-string payloads out of it.
-            match super::zero_copy::scan_value(&bytes[..], 0, 1)? {
-                None => {
+            // buffered (scan consumes nothing and resumes where the previous
+            // call stopped), then extract that frame and slice bulk-string
+            // payloads out of it.
+            match super::zero_copy::scan_resume(&bytes[..], &mut self.scan) {
+                Err(err) => {
+                    self.scan.reset();
+                    Err(err)
+                }
+                Ok(None) => {
                     if eof {
                         Err(RedisError::from((
                             ErrorKind::ParseError,
@@ -630,7 +694,8 @@ mod aio_support {
                         Ok(None)
                     }
                 }
-                Some(end) => {
+                Ok(Some(end)) => {
+                    self.scan.reset();
                     // Hybrid frame extraction, chosen from profiling:
                     // - Small frames: ONE bulk memcpy out of the read buffer.
                     //   Keeps the codec's BytesMut unshared so tokio reuses
@@ -1016,6 +1081,43 @@ mod tests {
             assert!(
                 parse_redis_value(&bytes).is_ok(),
                 "aggregate {:?} within depth limit failed to parse",
+                agg as char
+            );
+        }
+    }
+
+    /// The zero-copy codec's iterative scanner must enforce the same
+    /// recursion-depth guard as the recursive sync parser.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn test_codec_max_recursion_depth_all_aggregate_types() {
+        use tokio_util::codec::Decoder;
+        for agg in [b'*', b'%', b'|', b'~', b'>'] {
+            let mut codec = ValueCodec::default();
+            let mut bytes =
+                bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH + 5)[..]);
+            let result = codec.decode(&mut bytes);
+            let err = result.expect_err("expected recursion depth error");
+            assert!(
+                format!("{err:?}").contains("Maximum recursion depth exceeded"),
+                "aggregate {:?} did not hit the recursion guard: {err:?}",
+                agg as char
+            );
+        }
+    }
+
+    #[cfg(feature = "aio")]
+    #[test]
+    fn test_codec_nesting_within_recursion_depth_parses() {
+        use tokio_util::codec::Decoder;
+        for agg in [b'*', b'~'] {
+            let mut codec = ValueCodec::default();
+            let mut bytes =
+                bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH)[..]);
+            let result = codec.decode(&mut bytes);
+            assert!(
+                matches!(result, Ok(Some(Ok(_)))),
+                "aggregate {:?} within depth limit failed via codec: {result:?}",
                 agg as char
             );
         }

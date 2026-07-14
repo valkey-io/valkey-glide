@@ -572,9 +572,7 @@ impl Value {
             Value::Array(items) => {
                 Value::Array(items.into_iter().map(Value::detach_buffers).collect())
             }
-            Value::Set(items) => {
-                Value::Set(items.into_iter().map(Value::detach_buffers).collect())
-            }
+            Value::Set(items) => Value::Set(items.into_iter().map(Value::detach_buffers).collect()),
             Value::Map(items) => Value::Map(
                 items
                     .into_iter()
