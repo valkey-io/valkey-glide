@@ -7150,7 +7150,7 @@ mod cluster_async {
         /// A path-based [`redis::CertParamsProvider`] that re-reads the client
         /// certificate and key from disk on every call.
         ///
-        /// This mirrors what glide-core's `CertMaterialManager` vends to the
+        /// This mirrors what glide-core's `CertReloadManager` vends to the
         /// reconnection loop in production: the manager re-reads the watched
         /// `client_cert_path` / `client_key_path` on a background interval and
         /// caches the last-known-good [`redis::TlsConnParams`]; the reconnect
