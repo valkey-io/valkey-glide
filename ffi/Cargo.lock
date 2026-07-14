@@ -1044,6 +1044,7 @@ dependencies = [
 name = "glide-ffi"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "glide-core",
  "lazy_static",
  "libc",

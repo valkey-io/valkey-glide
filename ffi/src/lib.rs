@@ -2558,7 +2558,13 @@ pub struct ResponseArena {
     /// All CommandResponse nodes. Index 0 is the root.
     nodes: Vec<CommandResponse>,
     /// Owned string buffers (kept alive until arena is freed).
-    strings: Vec<Vec<u8>>,
+    ///
+    /// Held as [`bytes::Bytes`] so `BulkString` payloads — zero-copy slices
+    /// of the connection read buffer — can be stored without a `to_vec()`
+    /// copy. NOTE: while the arena is alive it pins the read-buffer chunks
+    /// its slices came from; bindings free the arena promptly after
+    /// materializing values, keeping that window short.
+    strings: Vec<bytes::Bytes>,
 }
 
 const MAX_ARENA_POOL_SIZE: usize = 16;
@@ -2620,7 +2626,9 @@ impl ResponseArena {
     }
 
     /// Store a string buffer, returning (ptr, len) for the CommandResponse fields.
-    fn store_string(&mut self, data: Vec<u8>) -> (*mut c_char, c_long) {
+    /// Accepts anything convertible to `Bytes`; `Vec<u8>` converts zero-copy.
+    fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, c_long) {
+        let data = data.into();
         let ptr = data.as_ptr() as *mut c_char;
         let len = data.len() as c_long;
         self.strings.push(data);
@@ -2689,9 +2697,11 @@ impl ResponseArena {
                         unsafe {
                             std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
                         }
-                        data.len().to_string().into_bytes()
+                        bytes::Bytes::from(data.len().to_string().into_bytes())
                     } else {
-                        data.to_vec()
+                        // Zero-copy: the arena keeps the refcounted slice of
+                        // the read buffer alive; no payload copy.
+                        data
                     };
                 let (ptr, len) = self.store_string(data);
                 self.nodes[idx].response_type = ResponseType::String;
@@ -2773,7 +2783,7 @@ impl ResponseArena {
 
                 // kind key
                 let ki = self.alloc_node();
-                let (ptr, len) = self.store_string(b"kind".to_vec());
+                let (ptr, len) = self.store_string(bytes::Bytes::from_static(b"kind"));
                 self.nodes[ki].response_type = ResponseType::String;
                 self.nodes[ki].string_value = ptr;
                 self.nodes[ki].string_value_len = len;
@@ -2788,7 +2798,7 @@ impl ResponseArena {
 
                 // values key
                 let vk = self.alloc_node();
-                let (ptr, len) = self.store_string(b"values".to_vec());
+                let (ptr, len) = self.store_string(bytes::Bytes::from_static(b"values"));
                 self.nodes[vk].response_type = ResponseType::String;
                 self.nodes[vk].string_value = ptr;
                 self.nodes[vk].string_value_len = len;
