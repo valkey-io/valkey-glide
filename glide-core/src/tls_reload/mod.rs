@@ -11,17 +11,21 @@
 //!
 //! Design decisions (see GitHub issue #6189):
 //! - **Client certificate/key only.** Root/CA certificate reload is out of scope
-//!   (higher blast radius, deferred deliberately). Only the leaf cert and its key
-//!   are re-read.
+//!   (higher blast radius, deferred deliberately, tracked in
+//!   <https://github.com/valkey-io/valkey-glide/issues/6189>). Only the leaf cert
+//!   and its key are re-read.
 //! - **Periodic re-read, no file watcher.** Re-reading on a `tokio::interval` needs
-//!   no new dependency and is naturally debounced: a torn write (cert updated
-//!   before key, common with cert-manager / Kubernetes secret projection into two
-//!   separate files) simply fails validation and is retried on the next tick.
+//!   no new dependency. If a rotation is partially complete (e.g. the client
+//!   certificate has been updated but the client key has not yet), validation simply
+//!   rejects the inconsistent pair and the next tick retries.
 //! - **Validate before swap, keep last-known-good on any failure.** The new
 //!   material must fully parse *and* the private key must correspond to the leaf
-//!   certificate (rustls does not verify this at parse time). Any failure — missing
-//!   file, unparseable PEM, or cert/key mismatch — logs and keeps the previously
-//!   adopted params.
+//!   certificate. rustls parses the certificate and private key independently and
+//!   does not check that they match; a mismatched pair only fails later at TLS
+//!   handshake time, so we compare the key material early (the validation in this
+//!   module) to catch a mismatch at load time. Any failure — missing file,
+//!   unparseable PEM, or cert/key mismatch — logs and keeps the previously adopted
+//!   params.
 //! - **Never log cert/key material.** Adoption and rejection are logged with a
 //!   SHA-256 fingerprint of the certificate chain DER only, mirroring the IAM
 //!   module's logging discipline.
@@ -67,14 +71,17 @@ pub(crate) struct CertReloadState {
     /// Root/CA certificate bytes (PEM), read once at construction and re-attached
     /// to every produced `TlsConnParams`. Root reload is out of scope, so this is
     /// constant for the client's lifetime.
+    // TODO(#6189): when root/CA reload lands, this field becomes reloadable
+    // material rather than a constant. https://github.com/valkey-io/valkey-glide/issues/6189
     root_cert: Option<Vec<u8>>,
 }
 
 /// Manages periodic reloading of the mTLS client certificate and key.
 ///
 /// Holds the currently adopted [`redis::TlsConnParams`] plus its fingerprint,
-/// spawns a background re-read task, and vends [`CertMaterialHandle`]s that share
-/// the same cache with the reconnection path.
+/// spawns a background re-read task, and provides a shared [`CertMaterialHandle`]
+/// to the current TLS parameters that the connection layer reads on each reconnect
+/// attempt.
 pub struct CertMaterialManager {
     /// Currently adopted (last-known-good) TLS params. Shared with all handles.
     cached_params: Arc<RwLock<redis::TlsConnParams>>,
@@ -107,8 +114,10 @@ impl CertMaterialManager {
     /// * `cert_path` - Path to the PEM client certificate (chain) file.
     /// * `key_path` - Path to the PEM client private key file.
     /// * `root_cert` - Optional root/CA certificate bytes (PEM), attached to every
-    ///   produced params. Root reload is out of scope; this is constant.
-    /// * `interval_seconds` - Optional re-read interval. Defaults to 5 minutes.
+    ///   produced params. Root reload is out of scope (tracked in
+    ///   <https://github.com/valkey-io/valkey-glide/issues/6189>); this is constant.
+    /// * `interval_seconds` - Optional re-read interval. Defaults to
+    ///   `DEFAULT_RELOAD_INTERVAL_SECONDS` when unset.
     pub async fn new(
         cert_path: PathBuf,
         key_path: PathBuf,
