@@ -44,13 +44,13 @@ fn validate_cert_path_config(
     Ok(())
 }
 
-/// Build a [`crate::tls_reload::CertMaterialManager`] when path-based mTLS is
+/// Build a [`crate::tls_reload::CertReloadManager`] when path-based mTLS is
 /// configured, starting its background reload task if reload is enabled. Returns
 /// `Ok(None)` when no cert paths are configured. The manager performs the initial
 /// parse + validation, so a bad initial cert/key surfaces here as an error.
 async fn build_cert_material_manager(
     connection_request: &ConnectionRequest,
-) -> Result<Option<Arc<crate::tls_reload::CertMaterialManager>>, String> {
+) -> Result<Option<Arc<crate::tls_reload::CertReloadManager>>, String> {
     let (Some(cert_path), Some(key_path)) = (
         connection_request.client_cert_path.as_ref(),
         connection_request.client_key_path.as_ref(),
@@ -74,7 +74,7 @@ async fn build_cert_material_manager(
         .filter(|cfg| cfg.enabled)
         .map(|cfg| cfg.interval_seconds);
 
-    let mut manager = crate::tls_reload::CertMaterialManager::new(
+    let mut manager = crate::tls_reload::CertReloadManager::new(
         cert_path.into(),
         key_path.into(),
         root_cert,
@@ -122,7 +122,7 @@ struct DropWrapper {
     /// Owns the background mTLS certificate reload task, when path-based reload is
     /// configured. Held here so the task lives for the client's lifetime and is
     /// shut down when the client is dropped.
-    _cert_material_manager: Option<Arc<crate::tls_reload::CertMaterialManager>>,
+    _cert_material_manager: Option<Arc<crate::tls_reload::CertReloadManager>>,
 }
 
 impl Drop for DropWrapper {
@@ -1194,7 +1194,7 @@ async fn get_connection_and_replication_info(
     skip_replication_check: bool,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
-    cert_material_handle: Option<crate::tls_reload::CertMaterialHandle>,
+    cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
 ) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,

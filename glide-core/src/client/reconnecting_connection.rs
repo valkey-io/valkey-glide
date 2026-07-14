@@ -122,7 +122,7 @@ struct ConnectionBackend {
     iam_token_handle: Option<IAMTokenHandle>,
     /// Optional handle to the reloaded mTLS certificate cache for refreshing the
     /// client TLS params before reconnection.
-    cert_material_handle: Option<crate::tls_reload::CertMaterialHandle>,
+    cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
 }
 
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
@@ -343,7 +343,7 @@ impl ReconnectingConnection {
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
         address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
         iam_token_handle: Option<IAMTokenHandle>,
-        cert_material_handle: Option<crate::tls_reload::CertMaterialHandle>,
+        cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
