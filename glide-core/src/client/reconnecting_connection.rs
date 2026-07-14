@@ -591,24 +591,6 @@ impl ReconnectingConnection {
         client.update_password(new_password);
     }
 
-    /// Updates the mTLS client certificate/key TLS params saved inside
-    /// connection_info, that will be used on the next reconnection to the server.
-    /// Mirrors [`Self::update_connection_password`] for the certificate-rotation case.
-    ///
-    /// The reconnect loop applies reloaded params directly via [`redis::Client::update_tls_params`]
-    /// before each attempt; this method provides the same swap as an explicit seam,
-    /// matching the `update_connection_*` family.
-    #[allow(dead_code)]
-    pub(crate) fn update_connection_tls_params(&self, new_params: Option<redis::TlsConnParams>) {
-        let mut client = self
-            .inner
-            .backend
-            .connection_info
-            .write()
-            .expect(WRITE_LOCK_ERR);
-        client.update_tls_params(new_params);
-    }
-
     /// Updates the database ID that's saved inside connection_info, that will be used in case of disconnection from the server.
     ///
     /// This method is called when a SELECT command is successfully executed to track the current database.

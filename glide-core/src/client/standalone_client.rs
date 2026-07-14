@@ -19,53 +19,21 @@ use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
 
-/// Validate the combination of byte-based and path-based mTLS client material.
-///
-/// Path-based cert and key must be provided together, and the byte-based fields
-/// (which land the static, non-reloading mTLS material) must not be mixed with the
-/// path-based fields (which land the reloadable material) in the same request.
-fn validate_cert_path_config(
-    has_client_cert_bytes: bool,
-    has_cert_path: bool,
-    has_key_path: bool,
-) -> RedisResult<()> {
-    if has_cert_path != has_key_path {
-        return Err(RedisError::from((
-            redis::ErrorKind::InvalidClientConfig,
-            "client_cert_path and client_key_path must both be provided or both be empty",
-        )));
-    }
-    if has_cert_path && has_client_cert_bytes {
-        return Err(RedisError::from((
-            redis::ErrorKind::InvalidClientConfig,
-            "client certificate path and client certificate bytes cannot both be provided; use one or the other",
-        )));
-    }
-    Ok(())
-}
-
 /// Build a [`crate::tls_reload::CertReloadManager`] when path-based mTLS is
 /// configured, starting its background reload task if reload is enabled. Returns
 /// `Ok(None)` when no cert paths are configured. The manager performs the initial
 /// parse + validation, so a bad initial cert/key surfaces here as an error.
+/// `root_cert` is the already-combined-and-validated root material (see
+/// [`super::combine_root_certs`]).
 async fn build_cert_material_manager(
     connection_request: &ConnectionRequest,
+    root_cert: Option<Vec<u8>>,
 ) -> Result<Option<Arc<crate::tls_reload::CertReloadManager>>, String> {
     let (Some(cert_path), Some(key_path)) = (
         connection_request.client_cert_path.as_ref(),
         connection_request.client_key_path.as_ref(),
     ) else {
         return Ok(None);
-    };
-
-    let root_cert = if connection_request.root_certs.is_empty() {
-        None
-    } else {
-        let mut combined = Vec::new();
-        for cert in &connection_request.root_certs {
-            combined.extend_from_slice(cert);
-        }
-        Some(combined)
     };
 
     let interval_seconds = connection_request
@@ -263,34 +231,36 @@ impl StandaloneClient {
         let has_client_key = !connection_request.client_key.is_empty();
         let has_cert_path = connection_request.client_cert_path.is_some();
         let has_key_path = connection_request.client_key_path.is_some();
-        if has_client_cert != has_client_key {
-            return Err(StandaloneClientConnectionError::FailedConnection(vec![(
-                None,
-                RedisError::from((
-                    redis::ErrorKind::InvalidClientConfig,
-                    "client_cert and client_key must both be provided or both be empty",
-                )),
-            )]));
-        }
-        validate_cert_path_config(has_client_cert, has_cert_path, has_key_path)
+        super::validate_client_cert_config(
+            has_client_cert,
+            has_client_key,
+            has_cert_path,
+            has_key_path,
+        )
+        .map_err(|err| StandaloneClientConnectionError::FailedConnection(vec![(None, err)]))?;
+
+        // Combine + validate the root certs first (fail fast on an empty entry) so the
+        // cert-reload manager, built next, never sees unvalidated root material.
+        let root_cert_bytes = super::combine_root_certs(&connection_request.root_certs)
             .map_err(|err| StandaloneClientConnectionError::FailedConnection(vec![(None, err)]))?;
 
         // Build the certificate reload manager when path-based mTLS is configured.
         // It performs the initial parse + validation and, if reload is enabled,
         // drives the background re-read task. The resulting handle is shared with
         // every node's reconnection loop.
-        let cert_material_manager = build_cert_material_manager(&connection_request)
-            .await
-            .map_err(|err| {
-                StandaloneClientConnectionError::FailedConnection(vec![(
-                    None,
-                    RedisError::from((
-                        redis::ErrorKind::InvalidClientConfig,
-                        "TLS certificate reload configuration error",
-                        err,
-                    )),
-                )])
-            })?;
+        let cert_material_manager =
+            build_cert_material_manager(&connection_request, root_cert_bytes.clone())
+                .await
+                .map_err(|err| {
+                    StandaloneClientConnectionError::FailedConnection(vec![(
+                        None,
+                        RedisError::from((
+                            redis::ErrorKind::InvalidClientConfig,
+                            "TLS certificate reload configuration error",
+                            err,
+                        )),
+                    )])
+                })?;
         let cert_material_handle = cert_material_manager.as_ref().map(|m| m.get_handle());
 
         let tls_params = if let Some(manager) = &cert_material_manager {
@@ -316,16 +286,6 @@ impl StandaloneClient {
                 )]));
             }
 
-            let root_cert = if has_root_certs {
-                let mut combined_certs = Vec::new();
-                for cert in &connection_request.root_certs {
-                    combined_certs.extend_from_slice(cert);
-                }
-                Some(combined_certs)
-            } else {
-                None
-            };
-
             let client_tls = if has_client_cert && has_client_key {
                 Some(redis::ClientTlsConfig {
                     client_cert: connection_request.client_cert.clone(),
@@ -337,7 +297,7 @@ impl StandaloneClient {
 
             let tls_certificates = redis::TlsCertificates {
                 client_tls,
-                root_cert,
+                root_cert: root_cert_bytes,
             };
             Some(
                 redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
