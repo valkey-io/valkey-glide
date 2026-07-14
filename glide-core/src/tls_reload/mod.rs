@@ -337,20 +337,22 @@ async fn load_and_validate(
     // the runtime worker on disk I/O. Torn-rotation protection comes from validating
     // the cert/key pair below, not from any read atomicity, so reading the two files
     // in separate awaits does not change the semantics.
-    let client_cert = tokio::fs::read(cert_path)
-        .await
-        .map_err(|source| CertReloadError::FileRead {
-            kind: "client certificate",
-            path: cert_path.display().to_string(),
-            source,
-        })?;
-    let client_key = tokio::fs::read(key_path)
-        .await
-        .map_err(|source| CertReloadError::FileRead {
-            kind: "client key",
-            path: key_path.display().to_string(),
-            source,
-        })?;
+    let client_cert =
+        tokio::fs::read(cert_path)
+            .await
+            .map_err(|source| CertReloadError::FileRead {
+                kind: "client certificate",
+                path: cert_path.display().to_string(),
+                source,
+            })?;
+    let client_key =
+        tokio::fs::read(key_path)
+            .await
+            .map_err(|source| CertReloadError::FileRead {
+                kind: "client key",
+                path: key_path.display().to_string(),
+                source,
+            })?;
 
     let certificates = redis::TlsCertificates {
         client_tls: Some(redis::ClientTlsConfig {
