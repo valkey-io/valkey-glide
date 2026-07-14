@@ -299,9 +299,9 @@ pub enum ClientWrapper {
         client: ClusterConnection,
         /// Owns the background mTLS certificate reload task for cluster clients, if
         /// path-based reload is configured. Held so the task lives for the client's
-        /// lifetime; the [`CertMaterialHandle`] shared with the reconnect loop keeps
+        /// lifetime; the [`crate::tls_reload::CertReloadHandle`] shared with the reconnect loop keeps
         /// working as long as this manager is alive.
-        _cert_material_manager: Option<Arc<crate::tls_reload::CertMaterialManager>>,
+        _cert_material_manager: Option<Arc<crate::tls_reload::CertReloadManager>>,
     },
     Lazy(Box<LazyClient>),
 }
@@ -2001,12 +2001,12 @@ pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Dur
         .unwrap_or(default)
 }
 
-/// Build a [`crate::tls_reload::CertMaterialManager`] for a cluster client when
+/// Build a [`crate::tls_reload::CertReloadManager`] for a cluster client when
 /// path-based mTLS is configured, starting its background reload task if reload is
 /// enabled. Returns `Ok(None)` when no cert paths are configured.
 async fn build_cluster_cert_material_manager(
     request: &ConnectionRequest,
-) -> RedisResult<Option<Arc<crate::tls_reload::CertMaterialManager>>> {
+) -> RedisResult<Option<Arc<crate::tls_reload::CertReloadManager>>> {
     let (Some(cert_path), Some(key_path)) = (
         request.client_cert_path.as_ref(),
         request.client_key_path.as_ref(),
@@ -2030,7 +2030,7 @@ async fn build_cluster_cert_material_manager(
         .filter(|cfg| cfg.enabled)
         .map(|cfg| cfg.interval_seconds);
 
-    let mut manager = crate::tls_reload::CertMaterialManager::new(
+    let mut manager = crate::tls_reload::CertReloadManager::new(
         cert_path.into(),
         key_path.into(),
         root_cert,
@@ -2060,7 +2060,7 @@ async fn create_cluster_client(
     pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
 ) -> RedisResult<(
     redis::cluster_async::ClusterConnection,
-    Option<Arc<crate::tls_reload::CertMaterialManager>>,
+    Option<Arc<crate::tls_reload::CertReloadManager>>,
 )> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 

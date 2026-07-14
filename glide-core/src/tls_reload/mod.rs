@@ -5,7 +5,7 @@
 //! This module mirrors the credential-rotation shape used by the IAM token
 //! manager ([`crate::iam`]): a background task re-reads the certificate and key
 //! files on a fixed interval, validates the new material, and — only on success —
-//! swaps the cached [`redis::TlsConnParams`]. A lightweight [`CertMaterialHandle`]
+//! swaps the cached [`redis::TlsConnParams`]. A lightweight [`CertReloadHandle`]
 //! shares the cache with the reconnection path, which applies the freshest params
 //! before every reconnect attempt (see `reconnecting_connection.rs`).
 //!
@@ -64,7 +64,7 @@ pub enum CertReloadError {
 /// The paths, interval, and constant root material used by the reload task.
 /// Cloneable so the background task can own an independent copy.
 #[derive(Clone, Debug)]
-pub(crate) struct CertReloadState {
+pub(crate) struct ClientCertReloadState {
     cert_path: PathBuf,
     key_path: PathBuf,
     interval_seconds: u32,
@@ -79,33 +79,33 @@ pub(crate) struct CertReloadState {
 /// Manages periodic reloading of the mTLS client certificate and key.
 ///
 /// Holds the currently adopted [`redis::TlsConnParams`] plus its fingerprint,
-/// spawns a background re-read task, and provides a shared [`CertMaterialHandle`]
+/// spawns a background re-read task, and provides a shared [`CertReloadHandle`]
 /// to the current TLS parameters that the connection layer reads on each reconnect
 /// attempt.
-pub struct CertMaterialManager {
+pub struct CertReloadManager {
     /// Currently adopted (last-known-good) TLS params. Shared with all handles.
     cached_params: Arc<RwLock<redis::TlsConnParams>>,
     /// SHA-256 fingerprint of the adopted certificate chain DER (hex), for logging
     /// and change detection. Never contains key material.
     fingerprint: Arc<RwLock<String>>,
     /// Paths + interval used by the background task.
-    state: CertReloadState,
+    state: ClientCertReloadState,
     /// Background re-read task handle.
     reload_task: Option<JoinHandle<()>>,
     /// Shutdown signal for graceful task termination.
     shutdown_notify: Arc<Notify>,
 }
 
-impl std::fmt::Debug for CertMaterialManager {
+impl std::fmt::Debug for CertReloadManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CertMaterialManager")
+        f.debug_struct("CertReloadManager")
             .field("state", &self.state)
             .field("reload_task", &self.reload_task.is_some())
             .finish()
     }
 }
 
-impl CertMaterialManager {
+impl CertReloadManager {
     /// Create a new manager, performing an initial load + validation of the
     /// certificate and key. Fails if the initial material is missing, unparseable,
     /// or mismatched — the client should not start with unusable mTLS material.
@@ -137,7 +137,7 @@ impl CertMaterialManager {
             );
         }
 
-        let state = CertReloadState {
+        let state = ClientCertReloadState {
             cert_path,
             key_path,
             interval_seconds,
@@ -185,7 +185,7 @@ impl CertMaterialManager {
 
     /// Background re-read loop.
     async fn reload_task(
-        state: CertReloadState,
+        state: ClientCertReloadState,
         cached_params: Arc<RwLock<redis::TlsConnParams>>,
         fingerprint: Arc<RwLock<String>>,
         shutdown_notify: Arc<Notify>,
@@ -212,7 +212,7 @@ impl CertMaterialManager {
     /// changed) swap the cached params and stamp the new fingerprint. On any
     /// failure, log and keep the previously adopted material.
     async fn handle_reload(
-        state: &CertReloadState,
+        state: &ClientCertReloadState,
         cached_params: &Arc<RwLock<redis::TlsConnParams>>,
         fingerprint: &Arc<RwLock<String>>,
     ) {
@@ -274,15 +274,15 @@ impl CertMaterialManager {
 
     /// Create a lightweight handle sharing this manager's caches, for use by the
     /// reconnection path.
-    pub fn get_handle(&self) -> CertMaterialHandle {
-        CertMaterialHandle {
+    pub fn get_handle(&self) -> CertReloadHandle {
+        CertReloadHandle {
             cached_params: Arc::clone(&self.cached_params),
             fingerprint: Arc::clone(&self.fingerprint),
         }
     }
 }
 
-impl Drop for CertMaterialManager {
+impl Drop for CertReloadManager {
     fn drop(&mut self) {
         // Signal shutdown; the task cleanup otherwise happens via the runtime when
         // the JoinHandle is dropped (we cannot await in Drop).
@@ -293,12 +293,12 @@ impl Drop for CertMaterialManager {
 /// Lightweight handle to the reloaded certificate material, shared with the
 /// reconnection path. Cloneable; all clones observe the same background refresh.
 #[derive(Clone)]
-pub struct CertMaterialHandle {
+pub struct CertReloadHandle {
     cached_params: Arc<RwLock<redis::TlsConnParams>>,
     fingerprint: Arc<RwLock<String>>,
 }
 
-impl CertMaterialHandle {
+impl CertReloadHandle {
     /// Return the freshest adopted TLS params.
     pub async fn current_params(&self) -> redis::TlsConnParams {
         self.cached_params.read().await.clone()
@@ -312,7 +312,7 @@ impl CertMaterialHandle {
 }
 
 #[async_trait::async_trait]
-impl redis::CertParamsProvider for CertMaterialHandle {
+impl redis::CertParamsProvider for CertReloadHandle {
     async fn current_tls_params(&self) -> Option<redis::TlsConnParams> {
         Some(self.current_params().await)
     }
@@ -461,7 +461,7 @@ mod tests {
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
         // 1-second interval for a fast test.
-        let mut manager = CertMaterialManager::new(cert.clone(), key.clone(), None, Some(1))
+        let mut manager = CertReloadManager::new(cert.clone(), key.clone(), None, Some(1))
             .await
             .unwrap();
         let handle = manager.get_handle();
@@ -485,7 +485,7 @@ mod tests {
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
-        let mut manager = CertMaterialManager::new(cert.clone(), key.clone(), None, Some(1))
+        let mut manager = CertReloadManager::new(cert.clone(), key.clone(), None, Some(1))
             .await
             .unwrap();
         let handle = manager.get_handle();
@@ -520,7 +520,7 @@ mod tests {
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
-        let mut manager = CertMaterialManager::new(cert.clone(), key.clone(), None, Some(1))
+        let mut manager = CertReloadManager::new(cert.clone(), key.clone(), None, Some(1))
             .await
             .unwrap();
         let handle = manager.get_handle();
@@ -550,7 +550,7 @@ mod tests {
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_B);
 
-        let result = CertMaterialManager::new(cert, key, None, None).await;
+        let result = CertReloadManager::new(cert, key, None, None).await;
         assert!(result.is_err(), "mismatched initial pair must fail");
     }
 
@@ -574,10 +574,10 @@ mod tests {
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
-        let manager = CertMaterialManager::new(cert.clone(), key.clone(), None, Some(1))
+        let manager = CertReloadManager::new(cert.clone(), key.clone(), None, Some(1))
             .await
             .unwrap();
-        // The reconnect path holds a `CertMaterialHandle` (vended as an
+        // The reconnect path holds a `CertReloadHandle` (vended as an
         // `Arc<dyn CertParamsProvider>`) and re-reads it before every attempt.
         let handle = manager.get_handle();
 
@@ -593,7 +593,7 @@ mod tests {
         // reload adopts it.
         write_file(dir.path(), "cert.pem", CERT_B);
         write_file(dir.path(), "key.pem", KEY_B);
-        CertMaterialManager::handle_reload(
+        CertReloadManager::handle_reload(
             &manager.state,
             &manager.cached_params,
             &manager.fingerprint,
@@ -616,7 +616,7 @@ mod tests {
         // A failed rotation lands next: the cert reverts to A while the key stays
         // B, so the pair no longer matches and validation rejects it.
         write_file(dir.path(), "cert.pem", CERT_A);
-        CertMaterialManager::handle_reload(
+        CertReloadManager::handle_reload(
             &manager.state,
             &manager.cached_params,
             &manager.fingerprint,

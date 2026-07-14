@@ -146,7 +146,7 @@ message ConnectionRequest {
     // supported for static (non-reloading) mTLS.
     optional string client_cert_path = 31;
     optional string client_key_path = 32;
-    optional CertReloadConfig cert_reload = 33;
+    optional ClientCertReloadConfig cert_reload = 33;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key
@@ -155,7 +155,7 @@ message ConnectionRequest {
 //
 // Root/CA certificate reload is out of scope (tracked in
 // https://github.com/valkey-io/valkey-glide/issues/6189).
-message CertReloadConfig {
+message ClientCertReloadConfig {
     bool enabled = 1;
     // Re-read interval in seconds. When unset, the default is defined by
     // glide-core (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
