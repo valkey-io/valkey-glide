@@ -26,6 +26,7 @@ async fn main() {
 
     let mut conn = get_conn(port).await;
     let payload = vec![b'x'; size];
+    let shared_payload = bytes::Bytes::from(payload.clone());
 
     // Preload keys.
     let nkeys = 100usize;
@@ -42,6 +43,8 @@ async fn main() {
             let mut c = conn.clone();
             let mode = &mode;
             let keys = &mget_keys;
+            let shared_payload = &shared_payload;
+            let payload = &payload;
             async move {
                 match mode.as_str() {
                     "get" => {
@@ -73,6 +76,21 @@ async fn main() {
                     "mget" => {
                         let vs: Vec<Vec<u8>> = c.mget(keys).await.unwrap();
                         assert_eq!(vs.len(), keys.len());
+                    }
+                    // SET via the plain arg() path (payload copied into Cmd).
+                    "set" => {
+                        let mut cmd = redis::cmd("SET");
+                        cmd.arg(format!("zc:{}", j % 100)).arg(&payload[..]);
+                        let v = c.send_packed_command(&cmd).await.unwrap();
+                        assert_eq!(v, redis::Value::Okay);
+                    }
+                    // SET via arg_shared (zero-copy send for large payloads).
+                    "setv" => {
+                        let mut cmd = redis::cmd("SET");
+                        cmd.arg(format!("zc:{}", j % 100));
+                        cmd.arg_shared(shared_payload.clone());
+                        let v = c.send_packed_command(&cmd).await.unwrap();
+                        assert_eq!(v, redis::Value::Okay);
                     }
                     _ => panic!("bad mode"),
                 }

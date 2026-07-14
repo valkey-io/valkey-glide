@@ -427,8 +427,15 @@ impl From<Vec<u8>> for SegmentedBytes {
 
 impl RedisWrite for Cmd {
     fn write_arg(&mut self, arg: &[u8]) {
-        self.data.extend_from_slice(arg);
-        self.args.push(StoredArg::Inline(self.data.len()));
+        if arg.len() > SHARED_ARG_INLINE_MAX {
+            // One copy into an owned refcounted buffer, then zero-copy all
+            // the way to the socket (skips the packing and encode copies).
+            self.args
+                .push(StoredArg::Shared(bytes::Bytes::copy_from_slice(arg)));
+        } else {
+            self.data.extend_from_slice(arg);
+            self.args.push(StoredArg::Inline(self.data.len()));
+        }
     }
 
     fn write_arg_fmt(&mut self, arg: impl fmt::Display) {
@@ -615,6 +622,20 @@ impl Cmd {
     /// share one contiguous segment.
     pub(crate) fn write_packed_segments(&self, out: &mut SegmentedBytes, scratch: &mut Vec<u8>) {
         let mut int_buf = ::itoa::Buffer::new();
+
+        // Reserve for everything that lands in scratch: all inline payloads
+        // (self.data) plus per-arg framing. Without this, large inline args
+        // pay repeated Vec-growth reallocs (the contiguous packer reserves
+        // exactly, see write_command_to_vec).
+        scratch.reserve(
+            self.data.len()
+                + 32 * (self.args.len() + 1)
+                + if self.is_fenced {
+                    FENCE_COMMAND.len()
+                } else {
+                    0
+                },
+        );
 
         scratch.push(b'*');
         scratch.extend_from_slice(int_buf.format(self.args.len()).as_bytes());
