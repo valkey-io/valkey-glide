@@ -138,7 +138,9 @@ where
                             combine::produce(|| Value::Nil).left()
                         } else {
                             take(*size as usize)
-                                .map(|bs: &[u8]| Value::BulkString(bs.to_vec()))
+                                .map(|bs: &[u8]| {
+                                    Value::BulkString(bytes::Bytes::copy_from_slice(bs))
+                                })
                                 .skip(crlf())
                                 .right()
                         }
@@ -231,7 +233,7 @@ where
                                     let mut it = result.into_iter();
                                     let first = it.next().unwrap_or(Value::Nil);
                                     if let Value::BulkString(kind) = first {
-                                        let push_kind = String::from_utf8(kind)
+                                        let push_kind = String::from_utf8(kind.to_vec())
                                             .map_err(StreamErrorFor::<I>::other)?;
                                         Ok(Value::Push {
                                             kind: get_push_kind(push_kind),
@@ -320,18 +322,289 @@ where
     ))
 }
 
+/// Zero-copy RESP parsing for the async codec path.
+///
+/// Strategy: instead of streaming partial frames through the `combine` parser
+/// (which must copy payloads into owned `Vec`s because a bulk string may
+/// straddle socket reads), we first *scan* the buffered bytes for one complete
+/// top-level frame without consuming anything. Once a full frame is buffered,
+/// we `split_to(len).freeze()` it into a refcounted [`Bytes`] (zero-copy) and
+/// build the [`Value`] tree by slicing bulk-string payloads directly out of
+/// that frame — no per-value allocation or memcpy.
+///
+/// The scan only walks type bytes and length headers (payloads are skipped by
+/// length), so its cost is proportional to the number of RESP elements, not
+/// the payload bytes.
+mod zero_copy {
+    use super::*;
+    use bytes::Bytes;
+
+    fn parse_error(detail: String) -> RedisError {
+        RedisError::from((ErrorKind::ParseError, "parse error", detail))
+    }
+
+    /// Find the `\r\n`-terminated line starting at `pos`.
+    /// Returns `(line_content_end, next_pos)` — content excludes the CRLF.
+    fn find_line(buf: &[u8], pos: usize) -> Option<(usize, usize)> {
+        let rel = buf[pos..].windows(2).position(|w| w == b"\r\n")?;
+        Some((pos + rel, pos + rel + 2))
+    }
+
+    fn line_str(buf: &[u8], start: usize, end: usize) -> RedisResult<&str> {
+        str::from_utf8(&buf[start..end])
+            .map_err(|e| parse_error(format!("invalid utf-8 in line: {e}")))
+    }
+
+    fn line_int(buf: &[u8], start: usize, end: usize) -> RedisResult<i64> {
+        line_str(buf, start, end)?
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| parse_error("Expected integer, got garbage".to_string()))
+    }
+
+    /// How many child values follow an aggregate header byte with count `n`.
+    fn child_count(type_byte: u8, n: i64) -> usize {
+        match type_byte {
+            b'%' => n as usize * 2,
+            b'|' => n as usize * 2 + 1, // attribute: kv pairs + the data value
+            _ => n as usize,
+        }
+    }
+
+    /// Scan one RESP value starting at `pos`.
+    /// `Ok(Some(end))` — a complete value spans `pos..end`.
+    /// `Ok(None)` — need more data.
+    /// `Err` — malformed input.
+    pub(super) fn scan_value(buf: &[u8], pos: usize, depth: usize) -> RedisResult<Option<usize>> {
+        if pos >= buf.len() {
+            return Ok(None);
+        }
+        let b = buf[pos];
+        if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
+            return Err(parse_error("Maximum recursion depth exceeded".to_string()));
+        }
+        match b {
+            // Line-delimited scalars.
+            b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
+                Ok(find_line(buf, pos + 1).map(|(_, next)| next))
+            }
+            // Length-prefixed blobs: bulk string, blob error, verbatim string.
+            b'$' | b'!' | b'=' => {
+                let Some((line_end, payload_start)) = find_line(buf, pos + 1) else {
+                    return Ok(None);
+                };
+                let size = line_int(buf, pos + 1, line_end)?;
+                if size < 0 {
+                    return Ok(Some(payload_start));
+                }
+                let end = payload_start + size as usize + 2;
+                if end > buf.len() {
+                    return Ok(None);
+                }
+                if &buf[end - 2..end] != b"\r\n" {
+                    return Err(parse_error("expected CRLF after blob payload".to_string()));
+                }
+                Ok(Some(end))
+            }
+            // Aggregates: array, map, attribute, set, push.
+            b'*' | b'%' | b'|' | b'~' | b'>' => {
+                let Some((line_end, mut cursor)) = find_line(buf, pos + 1) else {
+                    return Ok(None);
+                };
+                let n = line_int(buf, pos + 1, line_end)?;
+                if n < 0 {
+                    return Ok(Some(cursor));
+                }
+                for _ in 0..child_count(b, n) {
+                    match scan_value(buf, cursor, depth + 1)? {
+                        Some(end) => cursor = end,
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(cursor))
+            }
+            other => Err(parse_error(format!(
+                "invalid RESP type byte {:?}",
+                other as char
+            ))),
+        }
+    }
+
+    /// Build a [`Value`] from a complete frame, slicing bulk-string payloads
+    /// out of `frame` with zero copies. `scan_value` must have validated the
+    /// frame is complete; bounds are still checked defensively.
+    pub(super) fn parse_value(frame: &Bytes, pos: &mut usize, depth: usize) -> RedisResult<Value> {
+        let buf = &frame[..];
+        if *pos >= buf.len() {
+            return Err(parse_error("unexpected end of frame".to_string()));
+        }
+        let b = buf[*pos];
+        if matches!(b, b'*' | b'%' | b'|' | b'~' | b'>') && depth > MAX_RECURSE_DEPTH {
+            return Err(parse_error("Maximum recursion depth exceeded".to_string()));
+        }
+        let type_pos = *pos;
+        match b {
+            b'+' | b'-' | b':' | b'_' | b',' | b'#' | b'(' => {
+                let (line_end, next) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let line = line_str(buf, type_pos + 1, line_end)?;
+                *pos = next;
+                match b {
+                    b'+' => Ok(if line == "OK" {
+                        Value::Okay
+                    } else {
+                        Value::SimpleString(line.to_string())
+                    }),
+                    b'-' => Ok(Value::ServerError(err_parser(line))),
+                    b':' => Ok(Value::Int(line.trim().parse::<i64>().map_err(|_| {
+                        parse_error("Expected integer, got garbage".to_string())
+                    })?)),
+                    b'_' => Ok(Value::Nil),
+                    b',' => Ok(Value::Double(line.trim().parse::<f64>().map_err(|e| {
+                        parse_error(format!("Expected double, got garbage: {e}"))
+                    })?)),
+                    b'#' => match line {
+                        "t" => Ok(Value::Boolean(true)),
+                        "f" => Ok(Value::Boolean(false)),
+                        _ => Err(parse_error("Expected boolean, got garbage".to_string())),
+                    },
+                    b'(' => BigInt::parse_bytes(line.as_bytes(), 10)
+                        .map(Value::BigNumber)
+                        .ok_or_else(|| parse_error("Expected bigint, got garbage".to_string())),
+                    _ => unreachable!(),
+                }
+            }
+            b'$' | b'!' | b'=' => {
+                let (line_end, payload_start) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let size = line_int(buf, type_pos + 1, line_end)?;
+                if size < 0 {
+                    *pos = payload_start;
+                    return Ok(Value::Nil);
+                }
+                let payload_end = payload_start + size as usize;
+                if payload_end + 2 > buf.len() {
+                    return Err(parse_error("unexpected end of frame".to_string()));
+                }
+                *pos = payload_end + 2;
+                match b {
+                    // The zero-copy slice: shares the frame's refcounted buffer.
+                    b'$' => Ok(Value::BulkString(frame.slice(payload_start..payload_end))),
+                    b'!' => {
+                        let text = String::from_utf8_lossy(&buf[payload_start..payload_end]);
+                        Ok(Value::ServerError(err_parser(&text)))
+                    }
+                    b'=' => {
+                        let text = String::from_utf8_lossy(&buf[payload_start..payload_end]);
+                        if let Some((format, text)) = text.split_once(':') {
+                            let format = match format {
+                                "txt" => VerbatimFormat::Text,
+                                "mkd" => VerbatimFormat::Markdown,
+                                x => VerbatimFormat::Unknown(x.to_string()),
+                            };
+                            Ok(Value::VerbatimString {
+                                format,
+                                text: text.to_string(),
+                            })
+                        } else {
+                            Err(parse_error(
+                                "parse error when decoding verbatim string".to_string(),
+                            ))
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            b'*' | b'%' | b'|' | b'~' | b'>' => {
+                let (line_end, next) = find_line(buf, type_pos + 1)
+                    .ok_or_else(|| parse_error("unexpected end of frame".to_string()))?;
+                let n = line_int(buf, type_pos + 1, line_end)?;
+                *pos = next;
+                if n < 0 {
+                    return Ok(Value::Nil);
+                }
+                match b {
+                    b'*' | b'~' => {
+                        let mut items = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            items.push(parse_value(frame, pos, depth + 1)?);
+                        }
+                        Ok(if b == b'*' {
+                            Value::Array(items)
+                        } else {
+                            Value::Set(items)
+                        })
+                    }
+                    b'%' => {
+                        let mut items = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            let k = parse_value(frame, pos, depth + 1)?;
+                            let v = parse_value(frame, pos, depth + 1)?;
+                            items.push((k, v));
+                        }
+                        Ok(Value::Map(items))
+                    }
+                    b'|' => {
+                        let mut attributes = Vec::with_capacity(n as usize);
+                        for _ in 0..n {
+                            let k = parse_value(frame, pos, depth + 1)?;
+                            let v = parse_value(frame, pos, depth + 1)?;
+                            attributes.push((k, v));
+                        }
+                        let data = Box::new(parse_value(frame, pos, depth + 1)?);
+                        Ok(Value::Attribute { data, attributes })
+                    }
+                    b'>' => {
+                        if n == 0 {
+                            return Ok(Value::Push {
+                                kind: PushKind::Other("".to_string()),
+                                data: vec![],
+                            });
+                        }
+                        let first = parse_value(frame, pos, depth + 1)?;
+                        let mut data = Vec::with_capacity(n as usize - 1);
+                        for _ in 1..n {
+                            data.push(parse_value(frame, pos, depth + 1)?);
+                        }
+                        let kind = match first {
+                            Value::BulkString(kind) => {
+                                String::from_utf8(kind.to_vec()).map_err(|e| {
+                                    parse_error(format!("invalid push kind: {e}"))
+                                })?
+                            }
+                            Value::SimpleString(kind) => kind,
+                            _ => {
+                                return Err(parse_error(
+                                    "parse error when decoding push".to_string(),
+                                ))
+                            }
+                        };
+                        Ok(Value::Push {
+                            kind: get_push_kind(kind),
+                            data,
+                        })
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            other => Err(parse_error(format!(
+                "invalid RESP type byte {:?}",
+                other as char
+            ))),
+        }
+    }
+}
+
 #[cfg(feature = "aio")]
 mod aio_support {
     use super::*;
 
-    use bytes::{Buf, BytesMut};
+    use bytes::BytesMut;
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
     #[derive(Default)]
-    pub struct ValueCodec {
-        state: AnySendSyncPartialState,
-    }
+    pub struct ValueCodec {}
 
     impl ValueCodec {
         fn decode_stream(
@@ -339,30 +612,30 @@ mod aio_support {
             bytes: &mut BytesMut,
             eof: bool,
         ) -> RedisResult<Option<RedisResult<Value>>> {
-            let (opt, removed_len) = {
-                let buffer = &bytes[..];
-                let mut stream =
-                    combine::easy::Stream(combine::stream::MaybePartialStream(buffer, !eof));
-                match combine::stream::decode_tokio(value(None), &mut stream, &mut self.state) {
-                    Ok(x) => x,
-                    Err(err) => {
-                        let err = err
-                            .map_position(|pos| pos.translate_position(buffer))
-                            .map_range(|range| format!("{range:?}"))
-                            .to_string();
-                        return Err(RedisError::from((
+            if bytes.is_empty() {
+                return Ok(None);
+            }
+            // Zero-copy path: wait until a complete top-level frame is
+            // buffered (scan consumes nothing), then freeze that frame into a
+            // refcounted `Bytes` and slice bulk-string payloads out of it.
+            match super::zero_copy::scan_value(&bytes[..], 0, 1)? {
+                None => {
+                    if eof {
+                        Err(RedisError::from((
                             ErrorKind::ParseError,
                             "parse error",
-                            err,
-                        )));
+                            "unexpected end of input".to_string(),
+                        )))
+                    } else {
+                        Ok(None)
                     }
                 }
-            };
-
-            bytes.advance(removed_len);
-            match opt {
-                Some(result) => Ok(Some(Ok(result))),
-                None => Ok(None),
+                Some(end) => {
+                    let frame = bytes.split_to(end).freeze();
+                    let mut pos = 0;
+                    let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
+                    Ok(Some(Ok(value)))
+                }
             }
         }
     }

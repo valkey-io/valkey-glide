@@ -1206,7 +1206,7 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> (Vec<u8>, Vec<u8>, Option<
         .iter()
         .filter_map(|v| {
             if let Value::BulkString(s) = v {
-                Some(s.as_slice())
+                Some(s.as_ref())
             } else {
                 None
             }
@@ -1246,7 +1246,7 @@ unsafe fn process_push_notification(
             let Value::BulkString(str) = v else {
                 unreachable!()
             };
-            let (ptr, len) = convert_vec_to_pointer(str.clone());
+            let (ptr, len) = convert_vec_to_pointer(str.to_vec());
             (ptr, len)
         })
         .collect();
@@ -2691,7 +2691,7 @@ impl ResponseArena {
                         }
                         data.len().to_string().into_bytes()
                     } else {
-                        data
+                        data.to_vec()
                     };
                 let (ptr, len) = self.store_string(data);
                 self.nodes[idx].response_type = ResponseType::String;

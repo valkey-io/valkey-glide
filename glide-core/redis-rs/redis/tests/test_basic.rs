@@ -1562,7 +1562,7 @@ mod basic {
                 (
                     PushKind::Invalidate,
                     vec![Value::Array(vec![Value::BulkString(
-                        "key_1".as_bytes().to_vec()
+                        "key_1".as_bytes().to_vec().into()
                     )])]
                 ),
                 (kind, data)
@@ -1578,7 +1578,7 @@ mod basic {
             (
                 PushKind::Invalidate,
                 vec![Value::Array(vec![Value::BulkString(
-                    "key_1".as_bytes().to_vec()
+                    "key_1".as_bytes().to_vec().into()
                 )])]
             ),
             (kind, data)

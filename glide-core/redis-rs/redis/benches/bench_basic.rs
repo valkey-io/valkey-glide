@@ -259,7 +259,7 @@ fn bench_decode(c: &mut Criterion) {
         Value::SimpleString("testing".to_string()),
         Value::Array(vec![]),
         Value::Nil,
-        Value::BulkString(vec![b'a'; 10]),
+        Value::BulkString(vec![b'a'; 10].into()),
         Value::Int(7512182390),
     ]);
 

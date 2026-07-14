@@ -362,7 +362,12 @@ pub enum Value {
     /// the same for all numeric responses.
     Int(i64),
     /// An arbitrary binary data, usually represents a binary-safe string.
-    BulkString(Vec<u8>),
+    ///
+    /// Held as a refcounted [`bytes::Bytes`] so the parser can hand out
+    /// zero-copy slices of the connection read buffer. Note: a long-lived
+    /// `BulkString` pins the read chunk it was sliced from; deep-copy
+    /// (`Bytes::copy_from_slice`) before retaining values indefinitely.
+    BulkString(bytes::Bytes),
     /// A response containing an array with more data. This is generally used by redis
     /// to express nested structures.
     Array(Vec<Value>),
@@ -556,6 +561,41 @@ impl Iterator for OwnedMapIter {
 /// separated at an early point so the value only holds the remaining
 /// types.
 impl Value {
+    /// Deep-copies any [`bytes::Bytes`] payloads so this value no longer
+    /// shares (and therefore pins) the connection read buffer it was parsed
+    /// from. Call this before retaining a value long-term (e.g. inserting
+    /// into a client-side cache); request/response flows that drop values
+    /// promptly do not need it.
+    pub fn detach_buffers(self) -> Value {
+        match self {
+            Value::BulkString(b) => Value::BulkString(bytes::Bytes::copy_from_slice(&b)),
+            Value::Array(items) => {
+                Value::Array(items.into_iter().map(Value::detach_buffers).collect())
+            }
+            Value::Set(items) => {
+                Value::Set(items.into_iter().map(Value::detach_buffers).collect())
+            }
+            Value::Map(items) => Value::Map(
+                items
+                    .into_iter()
+                    .map(|(k, v)| (k.detach_buffers(), v.detach_buffers()))
+                    .collect(),
+            ),
+            Value::Attribute { data, attributes } => Value::Attribute {
+                data: Box::new(data.detach_buffers()),
+                attributes: attributes
+                    .into_iter()
+                    .map(|(k, v)| (k.detach_buffers(), v.detach_buffers()))
+                    .collect(),
+            },
+            Value::Push { kind, data } => Value::Push {
+                kind,
+                data: data.into_iter().map(Value::detach_buffers).collect(),
+            },
+            other => other,
+        }
+    }
+
     /// Checks if the return value looks like it fulfils the cursor
     /// protocol.  That means the result is an array item of length
     /// two with the first one being a cursor and the second an
@@ -1770,14 +1810,14 @@ pub trait FromRedisValue: Sized {
 
     /// Convert bytes to a single element vector.
     fn from_byte_vec(_vec: &[u8]) -> Option<Vec<Self>> {
-        Self::from_owned_redis_value(Value::BulkString(_vec.into()))
+        Self::from_owned_redis_value(Value::BulkString(bytes::Bytes::copy_from_slice(_vec)))
             .map(|rv| vec![rv])
             .ok()
     }
 
     /// Convert bytes to a single element vector.
     fn from_owned_byte_vec(_vec: Vec<u8>) -> RedisResult<Vec<Self>> {
-        Self::from_owned_redis_value(Value::BulkString(_vec)).map(|rv| vec![rv])
+        Self::from_owned_redis_value(Value::BulkString(_vec.into())).map(|rv| vec![rv])
     }
 }
 
@@ -1886,9 +1926,9 @@ impl FromRedisValue for bool {
                 }
             }
             Value::BulkString(ref bytes) => {
-                if bytes == b"1" {
+                if bytes.as_ref() == b"1" {
                     Ok(true)
-                } else if bytes == b"0" {
+                } else if bytes.as_ref() == b"0" {
                     Ok(false)
                 } else {
                     invalid_type_error!(v, "Response type not bool compatible.");
@@ -1905,7 +1945,7 @@ impl FromRedisValue for CString {
     fn from_redis_value(v: &Value) -> RedisResult<CString> {
         let v = get_inner_value(v);
         match *v {
-            Value::BulkString(ref bytes) => Ok(CString::new(bytes.as_slice())?),
+            Value::BulkString(ref bytes) => Ok(CString::new(&bytes[..])?),
             Value::Okay => Ok(CString::new("OK")?),
             Value::SimpleString(ref val) => Ok(CString::new(val.as_bytes())?),
             _ => invalid_type_error!(v, "Response type not CString compatible."),
@@ -1942,7 +1982,7 @@ impl FromRedisValue for String {
     fn from_owned_redis_value(v: Value) -> RedisResult<String> {
         let v = get_owned_inner_value(v);
         match v {
-            Value::BulkString(bytes) => Ok(String::from_utf8(bytes)?),
+            Value::BulkString(bytes) => Ok(String::from_utf8(bytes.to_vec())?),
             Value::Okay => Ok("OK".to_string()),
             Value::SimpleString(val) => Ok(val),
             Value::VerbatimString { format: _, text } => Ok(text),
@@ -2000,7 +2040,7 @@ macro_rules! from_vec_from_redis_value {
                     // Binary data is parsed into a single-element vector, except
                     // for the element type `u8`, which directly consumes the entire
                     // array of bytes.
-                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes).map($convert),
+                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes.to_vec()).map($convert),
                     Value::Array(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Set(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Map(items) => {
