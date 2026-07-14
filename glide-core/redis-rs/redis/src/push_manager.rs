@@ -92,7 +92,7 @@ impl PushManager {
 
         // Extract channel/pattern from push data
         let channel_or_pattern = match data.first() {
-            Some(Value::BulkString(bytes)) => bytes.clone(),
+            Some(Value::BulkString(bytes)) => bytes.to_vec(),
             _ => return,
         };
 
@@ -142,7 +142,7 @@ mod tests {
 
         let value = Ok(Value::Push {
             kind: PushKind::Message,
-            data: vec![Value::BulkString("hello".to_string().into_bytes())],
+            data: vec![Value::BulkString("hello".to_string().into_bytes().into())],
         });
 
         push_manager.try_send(&value);
@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(push_info.kind, PushKind::Message);
         assert_eq!(
             push_info.data,
-            vec![Value::BulkString("hello".to_string().into_bytes())]
+            vec![Value::BulkString("hello".to_string().into_bytes().into())]
         );
     }
     #[test]
@@ -162,7 +162,7 @@ mod tests {
 
         let value = Ok(Value::Push {
             kind: PushKind::Message,
-            data: vec![Value::BulkString("hello".to_string().into_bytes())],
+            data: vec![Value::BulkString("hello".to_string().into_bytes().into())],
         });
 
         drop(rx);
@@ -177,19 +177,19 @@ mod tests {
 
         push_manager.try_send(&Ok(Value::Push {
             kind: PushKind::Message,
-            data: vec![Value::BulkString("hello".to_string().into_bytes())],
+            data: vec![Value::BulkString("hello".to_string().into_bytes().into())],
         })); // nothing happens!
 
         let (tx, mut rx) = mpsc::unbounded_channel();
         push_manager.replace_sender(tx);
         push_manager.try_send(&Ok(Value::Push {
             kind: PushKind::Message,
-            data: vec![Value::BulkString("hello2".to_string().into_bytes())],
+            data: vec![Value::BulkString("hello2".to_string().into_bytes().into())],
         }));
 
         assert_eq!(
             rx.try_recv().unwrap().data,
-            vec![Value::BulkString("hello2".to_string().into_bytes())]
+            vec![Value::BulkString("hello2".to_string().into_bytes().into())]
         );
     }
     #[test]

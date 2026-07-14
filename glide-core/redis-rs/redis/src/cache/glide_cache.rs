@@ -811,7 +811,7 @@ mod tests {
     #[test]
     fn test_cache_entry_not_expired_no_ttl() {
         let entry = CacheEntry::new(
-            Value::BulkString(b"test".to_vec()),
+            Value::BulkString(b"test".to_vec().into()),
             CachedKeyType::String,
             None,
             100,
@@ -821,7 +821,7 @@ mod tests {
     #[test]
     fn test_cache_entry_not_expired_with_future_ttl() {
         let entry = CacheEntry::new(
-            Value::BulkString(b"test".to_vec()),
+            Value::BulkString(b"test".to_vec().into()),
             CachedKeyType::String,
             Some(Instant::now() + Duration::from_secs(60)),
             100,
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn test_cache_entry_expired() {
         let entry = CacheEntry::new(
-            Value::BulkString(b"test".to_vec()),
+            Value::BulkString(b"test".to_vec().into()),
             CachedKeyType::String,
             Some(Instant::now() - Duration::from_secs(1)),
             100,
@@ -983,7 +983,7 @@ mod tests {
     fn test_value_size_bulk_string() {
         let data = b"hello world".to_vec();
         let data_len = data.len();
-        let value = Value::BulkString(data);
+        let value = Value::BulkString(data.into());
         let size = calculate_value_size(&value);
         assert_eq!(size, std::mem::size_of::<Value>() + data_len);
     }

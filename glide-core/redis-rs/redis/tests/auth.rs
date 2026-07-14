@@ -168,7 +168,7 @@ mod auth {
             .arg("foo")
             .query_async(&mut connection_should_succeed)
             .await;
-        assert_eq!(res.unwrap(), Value::BulkString(b"bar".to_vec()));
+        assert_eq!(res.unwrap(), Value::BulkString(b"bar".to_vec().into()));
 
         // Kill the connection to force reconnection
         kill_non_management_connections(&mut Connection::Cluster(management_connection.clone()))
@@ -198,7 +198,7 @@ mod auth {
         })
         .await
         .expect("Timeout waiting for reconnection");
-        assert_eq!(should_be_ok, Value::BulkString(b"bar".to_vec()));
+        assert_eq!(should_be_ok, Value::BulkString(b"bar".to_vec().into()));
 
         // Update the password in the connection
         connection_should_succeed
@@ -254,7 +254,10 @@ mod auth {
         })
         .await
         .expect("Timeout waiting for reconnection");
-        assert_eq!(result_should_succeed, Value::BulkString(b"bar".to_vec()));
+        assert_eq!(
+            result_should_succeed,
+            Value::BulkString(b"bar".to_vec().into())
+        );
     }
 
     #[tokio::test]

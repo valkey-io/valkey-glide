@@ -111,14 +111,14 @@ mod types {
 
             let content: &[u8] = b"\x01\x02\x03\x04";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(content_vec));
 
             let content: &[u8] = b"1";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(vec![b'1']));
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.into()));
             assert_eq!(v, Ok(vec![1_u16]));
         }
     }
@@ -136,14 +136,14 @@ mod types {
 
             let content: &[u8] = b"\x01\x02\x03\x04";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(content_vec.into_boxed_slice()));
 
             let content: &[u8] = b"1";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(vec![b'1'].into_boxed_slice()));
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.into()));
             assert_eq!(v, Ok(vec![1_u16].into_boxed_slice()));
 
             assert_eq!(
@@ -170,14 +170,14 @@ mod types {
 
             let content: &[u8] = b"\x01\x02\x03\x04";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(Arc::from(content_vec)));
 
             let content: &[u8] = b"1";
             let content_vec: Vec<u8> = Vec::from(content);
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone()));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.clone().into()));
             assert_eq!(v, Ok(Arc::from(vec![b'1'])));
-            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec));
+            let v = parse_mode.parse_redis_value(Value::BulkString(content_vec.into()));
             assert_eq!(v, Ok(Arc::from(vec![1_u16])));
 
             assert_eq!(
@@ -334,7 +334,6 @@ mod types {
         }
     }
 
-    #[cfg(feature = "bytes")]
     #[test]
     fn test_bytes() {
         use bytes::Bytes;
@@ -346,7 +345,7 @@ mod types {
             let content_bytes = Bytes::from_static(content);
 
             let v: RedisResult<Bytes> =
-                parse_mode.parse_redis_value(Value::BulkString(content_vec));
+                parse_mode.parse_redis_value(Value::BulkString(content_vec.into()));
             assert_eq!(v, Ok(content_bytes));
 
             let v: RedisResult<Bytes> =
@@ -377,7 +376,7 @@ mod types {
             let content_vec: Vec<u8> = Vec::from(content);
 
             let v: RedisResult<CString> =
-                parse_mode.parse_redis_value(Value::BulkString(content_vec));
+                parse_mode.parse_redis_value(Value::BulkString(content_vec.into()));
             assert_eq!(v, Ok(CString::new(content).unwrap()));
 
             let v: RedisResult<CString> =
@@ -461,7 +460,7 @@ mod types {
 
         let value = Value::Array(
             vec.iter()
-                .map(|val| Value::BulkString(val.clone()))
+                .map(|val| Value::BulkString(val.clone().into()))
                 .collect(),
         );
         let mut encoded_input = Vec::new();
@@ -508,7 +507,7 @@ mod types {
 
         let value = Value::Array(
             vec.iter()
-                .map(|val| Value::BulkString(val.clone()))
+                .map(|val| Value::BulkString(val.clone().into()))
                 .collect(),
         );
         let mut encoded_input = Vec::new();
@@ -530,7 +529,7 @@ mod types {
 
         let value = Value::Array(
             vec.iter()
-                .map(|val| Value::BulkString(val.clone()))
+                .map(|val| Value::BulkString(val.clone().into()))
                 .collect(),
         );
         let mut encoded_input = Vec::new();

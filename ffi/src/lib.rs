@@ -1207,7 +1207,7 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> Option<(Vec<u8>, Vec<u8>, 
         .iter()
         .filter_map(|v| {
             if let Value::BulkString(s) = v {
-                Some(s.as_slice())
+                Some(s.as_ref())
             } else {
                 None
             }
@@ -2688,7 +2688,7 @@ impl ResponseArena {
                         }
                         data.len().to_string().into_bytes()
                     } else {
-                        data
+                        data.to_vec()
                     };
                 let (ptr, len) = self.store_string(data);
                 self.nodes[idx].response_type = ResponseType::String;

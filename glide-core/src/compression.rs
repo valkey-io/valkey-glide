@@ -987,7 +987,7 @@ pub fn decompress_single_value_response(
             }
             // Data is compressed - decompress and propagate any errors (including size limit)
             let decompressed = manager.decompress_value(&bytes)?;
-            Ok(Value::BulkString(decompressed))
+            Ok(Value::BulkString(decompressed.into()))
         }
         Value::SimpleString(s) => {
             let bytes = s.as_bytes();
@@ -1000,7 +1000,7 @@ pub fn decompress_single_value_response(
             let decompressed = manager.decompress_value(bytes)?;
             match String::from_utf8(decompressed) {
                 Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
-                Err(e) => Ok(Value::BulkString(e.into_bytes())),
+                Err(e) => Ok(Value::BulkString(e.into_bytes().into())),
             }
         }
         _ => Ok(value),

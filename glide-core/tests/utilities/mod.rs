@@ -628,7 +628,7 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
     let get_result = client.send_command(&mut get_command, None).await.unwrap();
 
     assert_eq!(set_result, Value::Okay);
-    assert_eq!(get_result, Value::BulkString(value.into_bytes()));
+    assert_eq!(get_result, Value::BulkString(value.into_bytes().into()));
 }
 
 pub struct TestBasics {

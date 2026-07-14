@@ -257,7 +257,7 @@ pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<
 }
 /// Aggregate array responses into a single map.
 pub fn combine_map_results(values: Vec<Value>) -> RedisResult<Value> {
-    let mut map: HashMap<Vec<u8>, i64> = HashMap::new();
+    let mut map: HashMap<bytes::Bytes, i64> = HashMap::new();
 
     for value in values {
         match value {
@@ -1964,8 +1964,8 @@ mod tests_routing {
         // For example `MGET foo bar baz {baz}baz2 {bar}bar2 {foo}foo2`
         let res1 = Value::Array(vec![Value::Nil, Value::Okay]);
         let res2 = Value::Array(vec![
-            Value::BulkString("1".as_bytes().to_vec()),
-            Value::BulkString("4".as_bytes().to_vec()),
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::BulkString("4".as_bytes().to_vec().into()),
         ]);
         let res3 = Value::Array(vec![Value::SimpleString("2".to_string()), Value::Int(3)]);
         let results = super::combine_and_sort_array_results(
@@ -1982,10 +1982,10 @@ mod tests_routing {
             results.unwrap(),
             Value::Array(vec![
                 Value::SimpleString("2".to_string()),
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Nil,
                 Value::Okay,
-                Value::BulkString("4".as_bytes().to_vec()),
+                Value::BulkString("4".as_bytes().to_vec().into()),
                 Value::Int(3),
             ])
         );
@@ -1995,7 +1995,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_key_value_paires() {
         // For example `MSET foo bar foo2 bar2 {foo}foo3 bar3`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2008,7 +2011,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Okay,
                 Value::Nil
             ])
@@ -2019,7 +2022,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_keys_and_path() {
         // For example `JSON.MGET foo bar {foo}foo2 $.a`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2032,7 +2038,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Nil,
                 Value::Okay,
             ])
@@ -2043,7 +2049,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_key_with_two_arg_triples() {
         // For example `JSON.MSET foo $.a bar foo2 $.f.a bar2 {foo}foo3 $.f bar3`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2056,7 +2065,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Okay,
                 Value::Nil
             ])
@@ -2071,23 +2080,23 @@ mod tests_routing {
 
         let input = vec![
             Value::Array(vec![
-                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"key1".to_vec().into()),
                 Value::Int(5),
-                Value::BulkString(b"key2".to_vec()),
+                Value::BulkString(b"key2".to_vec().into()),
                 Value::Int(10),
             ]),
             Value::Array(vec![
-                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"key1".to_vec().into()),
                 Value::Int(3),
-                Value::BulkString(b"key3".to_vec()),
+                Value::BulkString(b"key3".to_vec().into()),
                 Value::Int(15),
             ]),
         ];
         let result = super::combine_map_results(input).unwrap();
         let mut expected = vec![
-            (Value::BulkString(b"key1".to_vec()), Value::Int(8)),
-            (Value::BulkString(b"key2".to_vec()), Value::Int(10)),
-            (Value::BulkString(b"key3".to_vec()), Value::Int(15)),
+            (Value::BulkString(b"key1".to_vec().into()), Value::Int(8)),
+            (Value::BulkString(b"key2".to_vec().into()), Value::Int(10)),
+            (Value::BulkString(b"key3".to_vec().into()), Value::Int(15)),
         ];
         expected.sort_unstable_by(|a, b| match (&a.0, &b.0) {
             (Value::BulkString(a_bytes), Value::BulkString(b_bytes)) => a_bytes.cmp(b_bytes),
