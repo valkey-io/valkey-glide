@@ -1200,7 +1200,8 @@ impl From<redis::PushKind> for PushKind {
 /// # Safety
 /// Extract pubsub message/channel/pattern bytes from a PushInfo.
 /// Returns (message, channel, pattern) as owned byte vectors.
-fn extract_pubsub_data(push_msg: &redis::PushInfo) -> (Vec<u8>, Vec<u8>, Option<Vec<u8>>) {
+#[allow(clippy::type_complexity)]
+fn extract_pubsub_data(push_msg: &redis::PushInfo) -> Option<(Vec<u8>, Vec<u8>, Option<Vec<u8>>)> {
     let strings: Vec<&[u8]> = push_msg
         .data
         .iter()
@@ -1214,15 +1215,15 @@ fn extract_pubsub_data(push_msg: &redis::PushInfo) -> (Vec<u8>, Vec<u8>, Option<
         .collect();
 
     if strings.len() >= 3 {
-        (
+        Some((
             strings[2].to_vec(),
             strings[1].to_vec(),
             Some(strings[0].to_vec()),
-        )
+        ))
     } else if strings.len() == 2 {
-        (strings[1].to_vec(), strings[0].to_vec(), None)
+        Some((strings[1].to_vec(), strings[0].to_vec(), None))
     } else {
-        (vec![], vec![], None)
+        None
     }
 }
 
@@ -1239,30 +1240,14 @@ unsafe fn process_push_notification(
     pubsub_callback: PubSubCallback,
     client_adapter_ptr: usize,
 ) {
-    let strings: Vec<&[u8]> = push_msg
-        .data
-        .iter()
-        .filter_map(|v| {
-            if let Value::BulkString(s) = v {
-                Some(s.as_slice())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let (message, channel, pattern): (&[u8], &[u8], Option<&[u8]>) = if strings.len() >= 3 {
-        (strings[2], strings[1], Some(strings[0]))
-    } else if strings.len() == 2 {
-        (strings[1], strings[0], None)
-    } else {
+    let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg) else {
         return;
     };
 
-    let (message_ptr, message_len) = convert_vec_to_pointer(message.to_vec());
-    let (channel_ptr, channel_len) = convert_vec_to_pointer(channel.to_vec());
+    let (message_ptr, message_len) = convert_vec_to_pointer(message);
+    let (channel_ptr, channel_len) = convert_vec_to_pointer(channel);
     let (pattern_ptr, pattern_len) = match pattern {
-        Some(p) => convert_vec_to_pointer(p.to_vec()),
+        Some(p) => convert_vec_to_pointer(p),
         None => (std::ptr::null_mut::<u8>(), 0),
     };
 
@@ -1432,12 +1417,12 @@ fn create_client_internal(
                         }
                         std::hint::spin_loop();
                     };
-                    if push_msg.kind == redis::PushKind::Message
+                    if (push_msg.kind == redis::PushKind::Message
                         || push_msg.kind == redis::PushKind::PMessage
                         || push_msg.kind == redis::PushKind::SMessage
-                        || push_msg.kind == redis::PushKind::Disconnection
+                        || push_msg.kind == redis::PushKind::Disconnection)
+                        && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
                     {
-                        let (message, channel, pattern) = extract_pubsub_data(&push_msg);
                         let kind: i32 = PushKind::from(push_msg.kind) as i32;
                         let pat_slice = pattern.as_deref().unwrap_or(&[]);
                         let total_len = message.len() + channel.len() + pat_slice.len();
@@ -5650,9 +5635,10 @@ pub unsafe extern "C-unwind" fn command_with_route_info(
 #[cfg(test)]
 mod tests_push_notification_safety {
     use super::*;
-    use serial_test::serial;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     static CALLBACK_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static LAST_CALLBACK_DATA: Mutex<Option<CallbackCapture>> = Mutex::new(None);
@@ -5696,8 +5682,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_non_bulkstring_element_does_not_panic() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
@@ -5712,8 +5698,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_non_bulkstring_with_enough_valid_elements_delivers() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
@@ -5736,8 +5722,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_too_few_elements_does_not_panic() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
@@ -5750,8 +5736,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_empty_data_does_not_panic() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::SMessage,
@@ -5764,8 +5750,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_all_non_bulkstring_elements_does_not_panic() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
@@ -5778,8 +5764,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_well_formed_two_element_message() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
@@ -5800,8 +5786,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_well_formed_three_element_pmessage() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::PMessage,
@@ -5823,8 +5809,8 @@ mod tests_push_notification_safety {
     }
 
     #[test]
-    #[serial]
     fn test_extra_elements_no_leak() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::PMessage,
@@ -5848,5 +5834,32 @@ mod tests_push_notification_safety {
         assert_eq!(capture.pattern.as_deref(), Some(b"pattern".as_slice()));
         assert_eq!(capture.channel, b"channel");
         assert_eq!(capture.message, b"message");
+    }
+
+    #[test]
+    fn test_extract_pubsub_data_returns_none_for_malformed_frames() {
+        let one_bulk_one_int = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::BulkString(b"channel".to_vec()), Value::Int(42)],
+        };
+        assert!(extract_pubsub_data(&one_bulk_one_int).is_none());
+
+        let single_bulk = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::BulkString(b"only_one".to_vec())],
+        };
+        assert!(extract_pubsub_data(&single_bulk).is_none());
+
+        let empty = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![],
+        };
+        assert!(extract_pubsub_data(&empty).is_none());
+
+        let all_ints = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+        };
+        assert!(extract_pubsub_data(&all_ints).is_none());
     }
 }
