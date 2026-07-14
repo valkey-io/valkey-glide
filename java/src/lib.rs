@@ -265,7 +265,7 @@ fn resp_value_to_java<'local>(
         }
         Value::BulkString(data) => {
             if encoding_utf8 {
-                match String::from_utf8(data) {
+                match String::from_utf8(data.to_vec()) {
                     Ok(utf8_str) => Ok(JObject::from(env.new_string(utf8_str)?)),
                     Err(err) => {
                         let bytes = err.into_bytes();

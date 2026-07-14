@@ -676,7 +676,10 @@ impl MockPubSubBroker {
             }
         }
 
-        let result: Vec<Value> = channels.into_iter().map(|v| Value::BulkString(v.into())).collect();
+        let result: Vec<Value> = channels
+            .into_iter()
+            .map(|v| Value::BulkString(v.into()))
+            .collect();
         Ok(Value::Array(result))
     }
 
@@ -774,7 +777,10 @@ impl MockPubSubBroker {
             }
         }
 
-        let result: Vec<Value> = channels.into_iter().map(|v| Value::BulkString(v.into())).collect();
+        let result: Vec<Value> = channels
+            .into_iter()
+            .map(|v| Value::BulkString(v.into()))
+            .collect();
         Ok(Value::Array(result))
     }
 
@@ -870,7 +876,10 @@ impl MockPubSubBroker {
                 PubSubSubscriptionKind::Pattern => "Pattern",
                 PubSubSubscriptionKind::Sharded => "Sharded",
             };
-            let values_array: Vec<Value> = values.into_iter().map(|v| Value::BulkString(v.into())).collect();
+            let values_array: Vec<Value> = values
+                .into_iter()
+                .map(|v| Value::BulkString(v.into()))
+                .collect();
             redis_map.push((
                 Value::BulkString(key.as_bytes().to_vec().into()),
                 Value::Array(values_array),
