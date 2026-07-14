@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Java: Fix flaky `pubsub_with_binary` test in cluster mode ([#6481](https://github.com/valkey-io/valkey-glide/pull/6481))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 
 ### Changes
