@@ -53,6 +53,10 @@ use uuid::Uuid;
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";
 const UNIX_SOCKER_DIR: &str = "/tmp";
+/// Callback index used for responses to the initial connection request.
+/// The connection request does not carry a callback_idx field, so the
+/// convention is to always respond with index 0.
+const CONNECTION_RESPONSE_CALLBACK_IDX: u32 = 0;
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
@@ -925,7 +929,7 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), 0, writer, None).await?;
+    write_result(Ok(Value::Okay), CONNECTION_RESPONSE_CALLBACK_IDX, writer, None).await?;
     Ok(client)
 }
 
@@ -1028,7 +1032,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             let err_message = format!("Socket listener closed due to {reason:?}");
             let _res = write_closing_error(
                 ClosingError { err_message },
-                u32::MAX,
+                CONNECTION_RESPONSE_CALLBACK_IDX,
                 &writer,
                 "client creation",
             )
@@ -1042,7 +1046,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             log_error("client creation", &err_message);
             let _res = write_closing_error(
                 ClosingError { err_message },
-                u32::MAX,
+                CONNECTION_RESPONSE_CALLBACK_IDX,
                 &writer,
                 "client creation",
             )
