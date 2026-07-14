@@ -1681,7 +1681,11 @@ public class PubSubTests {
         waitForCondition(
                 () -> callbackMessages.size() >= 1,
                 MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for binary message");
+                "Timed out waiting for binary callback message");
+        waitForCondition(
+                () -> listener.getPubSubMessageCount() >= 1,
+                MESSAGE_DELIVERY_DELAY,
+                "Timed out waiting for binary message on listener");
 
         assertEquals(message, listener.tryGetPubSubMessage());
         assertEquals(1, callbackMessages.size());
