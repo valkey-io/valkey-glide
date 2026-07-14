@@ -681,6 +681,59 @@ impl ActualConnection {
         })
     }
 
+    /// Vectored send of a packed command's segments, avoiding a contiguous
+    /// copy of large shared payloads ([`crate::cmd::SegmentedBytes`]). On
+    /// partial writes the `IoSlice` cursor is advanced until fully drained.
+    pub fn send_segments(&mut self, segments: &crate::cmd::SegmentedBytes) -> RedisResult<Value> {
+        fn write_all_vectored<W: io::Write>(
+            w: &mut W,
+            segments: &crate::cmd::SegmentedBytes,
+        ) -> io::Result<()> {
+            let segs = segments.segments().collect::<Vec<_>>();
+            let mut slices: Vec<io::IoSlice> = segs.iter().map(|s| io::IoSlice::new(s)).collect();
+            let mut remaining = &mut slices[..];
+            while !remaining.is_empty() {
+                let n = w.write_vectored(remaining)?;
+                if n == 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::WriteZero,
+                        "failed to write whole command",
+                    ));
+                }
+                io::IoSlice::advance_slices(&mut remaining, n);
+            }
+            w.flush()
+        }
+
+        macro_rules! send_via {
+            ($conn:expr, $writer:expr) => {{
+                let res = write_all_vectored($writer, segments).map_err(RedisError::from);
+                match res {
+                    Err(e) => {
+                        if e.is_unrecoverable_error() {
+                            $conn.open = false;
+                        }
+                        Err(e)
+                    }
+                    Ok(_) => Ok(Value::Okay),
+                }
+            }};
+        }
+
+        match *self {
+            ActualConnection::Tcp(ref mut connection) => {
+                send_via!(connection, &mut connection.reader)
+            }
+            ActualConnection::TcpRustls(ref mut connection) => {
+                send_via!(connection, &mut connection.reader)
+            }
+            #[cfg(unix)]
+            ActualConnection::Unix(ref mut connection) => {
+                send_via!(connection, &mut connection.sock)
+            }
+        }
+    }
+
     pub fn send_bytes(&mut self, bytes: &[u8]) -> RedisResult<Value> {
         match *self {
             ActualConnection::Tcp(ref mut connection) => {
@@ -1271,12 +1324,11 @@ impl Connection {
 impl ConnectionLike for Connection {
     /// Sends a [Cmd] into the TCP socket and reads a single response from it.
     fn req_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
-        let pcmd = cmd.get_packed_command();
         if self.pubsub {
             self.exit_pubsub()?;
         }
 
-        self.send_bytes(&pcmd)?;
+        self.con.send_segments(&cmd.get_packed_segments())?;
         if cmd.is_no_response() {
             return Ok(Value::Nil);
         }

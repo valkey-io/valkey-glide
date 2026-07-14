@@ -118,11 +118,6 @@ impl Pipeline {
         out
     }
 
-    #[cfg(feature = "aio")]
-    pub(crate) fn write_packed_pipeline(&self, out: &mut Vec<u8>) {
-        write_pipeline(out, &self.commands, self.transaction_mode)
-    }
-
     fn execute_pipelined(&self, con: &mut dyn ConnectionLike) -> RedisResult<Value> {
         self.make_pipeline_results(con.req_packed_commands(
             &encode_pipeline(&self.commands, false),

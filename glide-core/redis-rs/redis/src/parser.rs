@@ -657,6 +657,8 @@ mod aio_support {
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
+    /// Tokio codec that decodes RESP frames zero-copy from the read
+    /// buffer. See the [`super::zero_copy`] module for the strategy.
     #[derive(Default)]
     pub struct ValueCodec {
         /// Resumable scan progress for the (single) incomplete frame at the
