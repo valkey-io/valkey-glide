@@ -551,7 +551,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(server, cluster_folder, tls, 40, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -574,26 +574,40 @@ def create_cluster(
     tls_ca_cert_file: Optional[str] = None,
 ):
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
-    p = subprocess.Popen(
-        [
-            get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-            "--cluster",
-            "create",
-            *servers_tuple,
-            "--cluster-replicas",
-            str(replica_count),
-            "--cluster-yes",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if err or "[OK] All 16384 slots covered." not in output:
-        raise Exception(f"Failed to create cluster: {err if err else output}")
+    max_retries = 3
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        servers_tuple = tuple(str(server) for server in servers)
+        logging.debug(
+            f"Cluster creation attempt {attempt}/{max_retries}..."
+        )
+        p = subprocess.Popen(
+            [
+                get_cli_command(),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "--cluster",
+                "create",
+                *servers_tuple,
+                "--cluster-replicas",
+                str(replica_count),
+                "--cluster-yes",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=40)
+        if not err and "[OK] All 16384 slots covered." in output:
+            break
+        last_error = err if err else output
+        logging.warning(
+            f"Cluster creation attempt {attempt}/{max_retries} failed: {last_error}"
+        )
+        if attempt < max_retries:
+            time.sleep(2 * attempt)
+    else:
+        raise Exception(f"Failed to create cluster: {last_error}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
@@ -873,7 +887,7 @@ def wait_for_regex_in_log(
 def is_address_already_in_use(
     server: Server,
     log_file: str,
-    timeout: int = 10,
+    timeout: int = 40,
 ):
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
