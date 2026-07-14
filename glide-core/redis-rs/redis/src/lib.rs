@@ -351,6 +351,8 @@ pub use crate::connection::{
     PubSubSubscriptionKind, RedisConnectionInfo, TlsMode,
 };
 pub use crate::parser::{parse_redis_value, Parser};
+#[cfg(feature = "aio")]
+pub use crate::parser::ValueCodec;
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use crate::pubsub_synchronizer::PubSubSynchronizer;
 pub use push_manager::{PushInfo, PushManager};
