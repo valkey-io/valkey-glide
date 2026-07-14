@@ -2001,27 +2001,76 @@ pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Dur
         .unwrap_or(default)
 }
 
+/// Combine the provided root/CA certificate PEM blobs into a single buffer,
+/// rejecting any empty entry. Returns `Ok(None)` when no root certs are provided.
+///
+/// Shared by the standalone and cluster connection paths so the combining rule and
+/// the empty-entry validation live in one place. Callers run this *before* building
+/// the cert-reload manager, so the manager never sees unvalidated root material.
+/// (Root/CA reload itself is out of scope; see #6189.)
+pub(super) fn combine_root_certs(root_certs: &[Vec<u8>]) -> RedisResult<Option<Vec<u8>>> {
+    if root_certs.is_empty() {
+        return Ok(None);
+    }
+    let mut combined = Vec::new();
+    for cert in root_certs {
+        if cert.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Root certificate cannot be empty byte string",
+            )));
+        }
+        combined.extend_from_slice(cert);
+    }
+    Ok(Some(combined))
+}
+
+/// Validate the combination of byte-based and path-based mTLS client material.
+///
+/// Shared by the standalone and cluster connection paths. The byte-based cert/key
+/// must be provided together, the path-based cert/key must be provided together,
+/// and the two families must not be mixed in the same request (byte-based lands the
+/// static, non-reloading material; path-based lands the reloadable material).
+pub(super) fn validate_client_cert_config(
+    has_client_cert_bytes: bool,
+    has_client_key_bytes: bool,
+    has_cert_path: bool,
+    has_key_path: bool,
+) -> RedisResult<()> {
+    if has_client_cert_bytes != has_client_key_bytes {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+    if has_cert_path != has_key_path {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert_path and client_key_path must both be provided or both be empty",
+        )));
+    }
+    if has_cert_path && has_client_cert_bytes {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client certificate path and client certificate bytes cannot both be provided; use one or the other",
+        )));
+    }
+    Ok(())
+}
+
 /// Build a [`crate::tls_reload::CertReloadManager`] for a cluster client when
 /// path-based mTLS is configured, starting its background reload task if reload is
-/// enabled. Returns `Ok(None)` when no cert paths are configured.
+/// enabled. Returns `Ok(None)` when no cert paths are configured. `root_cert` is the
+/// already-combined-and-validated root material (see [`combine_root_certs`]).
 async fn build_cluster_cert_material_manager(
     request: &ConnectionRequest,
+    root_cert: Option<Vec<u8>>,
 ) -> RedisResult<Option<Arc<crate::tls_reload::CertReloadManager>>> {
     let (Some(cert_path), Some(key_path)) = (
         request.client_cert_path.as_ref(),
         request.client_key_path.as_ref(),
     ) else {
         return Ok(None);
-    };
-
-    let root_cert = if request.root_certs.is_empty() {
-        None
-    } else {
-        let mut combined = Vec::new();
-        for cert in &request.root_certs {
-            combined.extend_from_slice(cert);
-        }
-        Some(combined)
     };
 
     let interval_seconds = request
@@ -2071,48 +2120,20 @@ async fn create_cluster_client(
     let has_client_key = !request.client_key.is_empty();
     let has_cert_path = request.client_cert_path.is_some();
     let has_key_path = request.client_key_path.is_some();
-    if has_client_cert != has_client_key {
-        return Err(RedisError::from((
-            ErrorKind::InvalidClientConfig,
-            "client_cert and client_key must both be provided or both be empty",
-        )));
-    }
-    if has_cert_path != has_key_path {
-        return Err(RedisError::from((
-            ErrorKind::InvalidClientConfig,
-            "client_cert_path and client_key_path must both be provided or both be empty",
-        )));
-    }
-    if has_cert_path && has_client_cert {
-        return Err(RedisError::from((
-            ErrorKind::InvalidClientConfig,
-            "client certificate path and client certificate bytes cannot both be provided; use one or the other",
-        )));
-    }
+    validate_client_cert_config(has_client_cert, has_client_key, has_cert_path, has_key_path)?;
+
+    // Combine + validate the root certs first (fail fast on an empty entry) so the
+    // cert-reload manager, built next, never sees unvalidated root material.
+    let root_cert_bytes = combine_root_certs(&request.root_certs)?;
 
     // Build the certificate reload manager when path-based mTLS is configured; it
     // validates the initial material and, if reload is enabled, drives the
     // background re-read task. The handle is wired into the cluster reconnect loop
     // so rotated certificates are adopted on reconnect (see
     // `refresh_cert_params_in_cluster_params`).
-    let cert_material_manager = build_cluster_cert_material_manager(&request).await?;
+    let cert_material_manager =
+        build_cluster_cert_material_manager(&request, root_cert_bytes.clone()).await?;
     let cert_material_handle = cert_material_manager.as_ref().map(|m| m.get_handle());
-
-    let root_cert_bytes = if has_root_certs {
-        let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
-            if cert.is_empty() {
-                return Err(RedisError::from((
-                    ErrorKind::InvalidClientConfig,
-                    "Root certificate cannot be empty byte string",
-                )));
-            }
-            combined_certs.extend_from_slice(cert);
-        }
-        Some(combined_certs)
-    } else {
-        None
-    };
 
     // `tls_params` seeds the initial nodes and (when present) is handed to the
     // cluster builder directly. `tls_certificates` carries the raw byte material for

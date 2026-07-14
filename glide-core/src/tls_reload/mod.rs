@@ -148,7 +148,8 @@ impl CertReloadManager {
             &state.cert_path,
             &state.key_path,
             state.root_cert.as_deref(),
-        )?;
+        )
+        .await?;
         log_info(
             "TLS cert reload",
             format!("Loaded initial client certificate (fingerprint sha256:{fingerprint})"),
@@ -220,7 +221,9 @@ impl CertReloadManager {
             &state.cert_path,
             &state.key_path,
             state.root_cert.as_deref(),
-        ) {
+        )
+        .await
+        {
             Ok((new_params, new_fingerprint)) => {
                 let unchanged = {
                     let current = fingerprint.read().await;
@@ -325,21 +328,29 @@ impl redis::CertParamsProvider for CertReloadHandle {
 /// what makes torn rotations recoverable: if the cert is new but the key is still
 /// the old one, `validate_client_tls_params` rejects the pair and the caller keeps
 /// last-known-good.
-fn load_and_validate(
+async fn load_and_validate(
     cert_path: &Path,
     key_path: &Path,
     root_cert: Option<&[u8]>,
 ) -> Result<(redis::TlsConnParams, String), CertReloadError> {
-    let client_cert = std::fs::read(cert_path).map_err(|source| CertReloadError::FileRead {
-        kind: "client certificate",
-        path: cert_path.display().to_string(),
-        source,
-    })?;
-    let client_key = std::fs::read(key_path).map_err(|source| CertReloadError::FileRead {
-        kind: "client key",
-        path: key_path.display().to_string(),
-        source,
-    })?;
+    // Async reads (`tokio::fs::read`): every caller is async, so we avoid blocking
+    // the runtime worker on disk I/O. Torn-rotation protection comes from validating
+    // the cert/key pair below, not from any read atomicity, so reading the two files
+    // in separate awaits does not change the semantics.
+    let client_cert = tokio::fs::read(cert_path)
+        .await
+        .map_err(|source| CertReloadError::FileRead {
+            kind: "client certificate",
+            path: cert_path.display().to_string(),
+            source,
+        })?;
+    let client_key = tokio::fs::read(key_path)
+        .await
+        .map_err(|source| CertReloadError::FileRead {
+            kind: "client key",
+            path: key_path.display().to_string(),
+            source,
+        })?;
 
     let certificates = redis::TlsCertificates {
         client_tls: Some(redis::ClientTlsConfig {
@@ -396,61 +407,68 @@ mod tests {
         path
     }
 
-    #[test]
-    fn load_and_validate_accepts_matching_pair() {
+    #[tokio::test]
+    async fn load_and_validate_accepts_matching_pair() {
         let dir = tempfile::tempdir().unwrap();
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
-        let (_, fp) = load_and_validate(&cert, &key, None).expect("matching pair should validate");
+        let (_, fp) = load_and_validate(&cert, &key, None)
+            .await
+            .expect("matching pair should validate");
         assert_eq!(fp.len(), 64, "fingerprint should be hex sha256");
     }
 
-    #[test]
-    fn load_and_validate_rejects_mismatched_pair() {
+    #[tokio::test]
+    async fn load_and_validate_rejects_mismatched_pair() {
         let dir = tempfile::tempdir().unwrap();
         // Torn rotation: cert from pair A, key from pair B.
         let cert = write_file(dir.path(), "cert.pem", CERT_A);
         let key = write_file(dir.path(), "key.pem", KEY_B);
 
-        let err =
-            load_and_validate(&cert, &key, None).expect_err("mismatched pair must be rejected");
+        let err = load_and_validate(&cert, &key, None)
+            .await
+            .expect_err("mismatched pair must be rejected");
         assert!(matches!(err, CertReloadError::Invalid(_)), "got {err:?}");
     }
 
-    #[test]
-    fn load_and_validate_rejects_unparseable_material() {
+    #[tokio::test]
+    async fn load_and_validate_rejects_unparseable_material() {
         let dir = tempfile::tempdir().unwrap();
         let cert = write_file(dir.path(), "cert.pem", "not a pem file");
         let key = write_file(dir.path(), "key.pem", KEY_A);
 
-        let err = load_and_validate(&cert, &key, None).expect_err("garbage cert must be rejected");
+        let err = load_and_validate(&cert, &key, None)
+            .await
+            .expect_err("garbage cert must be rejected");
         assert!(matches!(err, CertReloadError::Invalid(_)), "got {err:?}");
     }
 
-    #[test]
-    fn load_and_validate_reports_missing_file() {
+    #[tokio::test]
+    async fn load_and_validate_reports_missing_file() {
         let dir = tempfile::tempdir().unwrap();
         let key = write_file(dir.path(), "key.pem", KEY_A);
         let missing = dir.path().join("does_not_exist.pem");
 
-        let err = load_and_validate(&missing, &key, None).expect_err("missing cert must error");
+        let err = load_and_validate(&missing, &key, None)
+            .await
+            .expect_err("missing cert must error");
         assert!(
             matches!(err, CertReloadError::FileRead { .. }),
             "got {err:?}"
         );
     }
 
-    #[test]
-    fn distinct_certs_have_distinct_fingerprints() {
+    #[tokio::test]
+    async fn distinct_certs_have_distinct_fingerprints() {
         let dir = tempfile::tempdir().unwrap();
         let cert_a = write_file(dir.path(), "a.pem", CERT_A);
         let key_a = write_file(dir.path(), "ka.pem", KEY_A);
         let cert_b = write_file(dir.path(), "b.pem", CERT_B);
         let key_b = write_file(dir.path(), "kb.pem", KEY_B);
 
-        let (_, fp_a) = load_and_validate(&cert_a, &key_a, None).unwrap();
-        let (_, fp_b) = load_and_validate(&cert_b, &key_b, None).unwrap();
+        let (_, fp_a) = load_and_validate(&cert_a, &key_a, None).await.unwrap();
+        let (_, fp_b) = load_and_validate(&cert_b, &key_b, None).await.unwrap();
         assert_ne!(fp_a, fp_b);
     }
 
