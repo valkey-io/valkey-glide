@@ -385,6 +385,14 @@ mod socket_listener {
                 use_tls: use_tls.to_bool(),
                 cluster_mode,
                 request_timeout: Some(REQUEST_TIMEOUT_MS),
+                connection_retry_strategy: Some(
+                    glide_core::connection_request::ConnectionRetryStrategy {
+                        number_of_retries: 3,
+                        factor: 2,
+                        exponent_base: 2,
+                        ..Default::default()
+                    },
+                ),
                 ..Default::default()
             },
         );
