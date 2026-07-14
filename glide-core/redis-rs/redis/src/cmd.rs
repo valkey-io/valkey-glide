@@ -859,10 +859,14 @@ impl Cmd {
     /// Get a reference to the argument at `idx`.
     #[cfg(feature = "cluster")]
     pub fn arg_idx(&self, idx: usize) -> Option<&[u8]> {
-        self.args_iter().nth(idx).and_then(|arg| match arg {
-            Arg::Simple(s) if !s.is_empty() => Some(s),
-            _ => None,
-        })
+        // Return the argument even when it is an empty slice: an empty bulk
+        // string (`b""`) is a present argument and must be distinguished from
+        // a missing one, so cluster routing of a `Cmd` matches routing of its
+        // packed RESP form (see `Routable for Value`).
+        match self.args_iter().nth(idx)? {
+            Arg::Simple(s) => Some(s),
+            Arg::Cursor => None,
+        }
     }
 
     /// Client won't read and wait for results. Currently only used for Pub/Sub commands in RESP3.
@@ -1032,6 +1036,13 @@ mod tests {
         assert_eq!(c.arg_idx(2), Some(&b"42"[..]));
         assert_eq!(c.arg_idx(3), None);
         assert_eq!(c.arg_idx(4), None);
+
+        // An empty bulk-string argument is present, not missing: it must
+        // return Some(b"") so cluster routing matches the packed RESP form.
+        let mut e = Cmd::new();
+        e.arg("GET").arg(b"");
+        assert_eq!(e.arg_idx(1), Some(&b""[..]));
+        assert_eq!(e.arg_idx(2), None);
     }
 
     #[test]
