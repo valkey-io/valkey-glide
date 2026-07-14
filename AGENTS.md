@@ -172,6 +172,16 @@ cd benchmarks && ./install_and_test.sh
 
 **Test Results:** Stored in language-specific directories (`target/`, `build/`, `node_modules/`, etc.)
 
+### Shared TLS / mTLS Test Infrastructure
+
+`utils/cluster_manager.py` is the shared cross-language test-cluster tool. On `--tls` it generates certificates into `utils/tls_crts/`:
+
+- `ca.crt` / `ca.key` - self-signed CA.
+- `server.crt` / `server.key` - server cert, signed by the CA.
+- `client.crt` / `client.key` - dedicated client cert (signed by the CA, `clientAuth` extendedKeyUsage) for mTLS.
+
+By default the server runs with `--tls-auth-clients no`, so it never verifies the client cert. For real mTLS tests, pass `--tls-auth-clients {no,yes,optional}` to make the server require and verify the client certificate. See `utils/README.md` for the full reference and `python/tests/async_tests/test_tls_client_auth.py` for a worked Python example. Java/Node/Go clients can build their mTLS tests on the same generated files and flag.
+
 ## Contribution Requirements
 
 ### Developer Certificate of Origin (DCO) Signoff REQUIRED

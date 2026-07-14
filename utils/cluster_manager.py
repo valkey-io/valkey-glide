@@ -48,6 +48,15 @@ TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
 SERVER_KEY = f"{TLS_FOLDER}/server.key"
+# Dedicated client certificate/key signed by the same CA as the server cert.
+# Used for mTLS tests where the server runs with `--tls-auth-clients yes` and
+# genuinely verifies the certificate the client presents.
+CLIENT_CRT = f"{TLS_FOLDER}/client.crt"
+CLIENT_KEY = f"{TLS_FOLDER}/client.key"
+
+# Accepted values for the `--tls-auth-clients` cluster_manager flag, mirroring
+# valkey's own `--tls-auth-clients` server option.
+TLS_AUTH_CLIENTS_CHOICES = ("no", "yes", "optional")
 
 # Allowed hostname for TLS certificate.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
@@ -124,10 +133,14 @@ def should_generate_new_tls_certs() -> bool:
     try:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
-        files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
+        files_list = [CA_CRT, SERVER_KEY, SERVER_CRT, CLIENT_CRT, CLIENT_KEY]
+        # Regenerate unless every expected file (including the dedicated client
+        # cert/key, which older checkouts lack) is present and still valid.
+        if all(
+            check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)
+            for file in files_list
+        ):
+            return False
     return True
 
 
@@ -251,9 +264,74 @@ def generate_tls_certs():
         raise Exception(
             f"Failed to create server cert. Executed: {str(p.args)}:\n{err}"
         )
+
+    # Build a dedicated client certificate signed by the same CA. It carries a
+    # `clientAuth` extendedKeyUsage so a server running with
+    # `--tls-auth-clients yes` genuinely verifies the cert the client presents,
+    # rather than the client merely reusing the server cert. Compare valkey's
+    # own utils/gen-test-certs.sh, which generates a separate client cert.
+    client_ext_file = f"{TLS_FOLDER}/openssl_client.cnf"
+    f = open(client_ext_file, "w")
+    f.write("keyUsage = digitalSignature\nextendedKeyUsage = clientAuth\n")
+    f.close()
+
+    # Build client key
+    make_key(CLIENT_KEY, 2048)
+
+    # Read client key (create a CSR)
+    p1 = subprocess.Popen(
+        [
+            "openssl",
+            "req",
+            "-new",
+            "-sha256",
+            "-subj",
+            "/O=Valkey GLIDE Test/CN=Client-cert",
+            "-key",
+            CLIENT_KEY,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    # Build client cert
+    p = subprocess.Popen(
+        [
+            "openssl",
+            "x509",
+            "-req",
+            "-sha256",
+            "-CA",
+            CA_CRT,
+            "-CAkey",
+            ca_key,
+            "-CAserial",
+            ca_serial,
+            "-CAcreateserial",
+            "-days",
+            "3650",
+            "-extfile",
+            client_ext_file,
+            "-out",
+            CLIENT_CRT,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=p1.stdout,
+        text=True,
+    )
+    output, err = p.communicate(timeout=10)
+    if p.returncode != 0:
+        raise Exception(
+            f"Failed to create client cert. Executed: {str(p.args)}:\n{err}"
+        )
+
     toc = time.perf_counter()
     logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
-    logging.debug(f"TLS files= {SERVER_CRT}, {SERVER_KEY}, {CA_CRT}")
+    logging.debug(
+        f"TLS files= {SERVER_CRT}, {SERVER_KEY}, {CA_CRT}, {CLIENT_CRT}, {CLIENT_KEY}"
+    )
 
 
 def get_cli_option_args(
@@ -485,6 +563,7 @@ def create_servers(
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
+    tls_auth_clients: str = "no",
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -510,8 +589,11 @@ def create_servers(
             key_file,
             "--tls-ca-cert-file",
             ca_file,
-            "--tls-auth-clients",  # Make it so client doesn't have to send cert
-            "no",
+            # Controls whether the server requires/verifies a client cert.
+            # Defaults to "no" (clients need not send a cert), preserving the
+            # historical behavior; set to "yes"/"optional" for mTLS tests.
+            "--tls-auth-clients",
+            tls_auth_clients,
             "--port",
             "0",
         ]
@@ -1226,6 +1308,18 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--tls-auth-clients",
+        choices=TLS_AUTH_CLIENTS_CHOICES,
+        default="no",
+        help="Whether the server requires and verifies a client certificate "
+        "(passed through to valkey's --tls-auth-clients). "
+        "'no' (default) preserves the historical behavior where clients need "
+        "not present a cert; 'yes' enforces mTLS; 'optional' verifies a cert "
+        "only when one is presented.",
+        required=False,
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1313,6 +1407,7 @@ def main():
             getattr(args, 'tls_cert_file', None),
             getattr(args, 'tls_key_file', None),
             getattr(args, 'tls_ca_cert_file', None),
+            getattr(args, 'tls_auth_clients', 'no'),
         )
         if args.cluster_mode:
             # Create a cluster

@@ -15,6 +15,7 @@
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
 * feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
 * Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
+* Tests: Add shared mTLS client-certificate test infrastructure: `cluster_manager.py` now generates a dedicated CA-signed `client.crt`/`client.key` and accepts a `--tls-auth-clients {no,yes,optional}` flag so any language client can spin up a cluster that genuinely verifies client certificates ([#6528](https://github.com/valkey-io/valkey-glide/pull/6528))
 
 ## 2.5
 

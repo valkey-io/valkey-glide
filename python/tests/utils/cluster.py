@@ -21,7 +21,18 @@ class ValkeyCluster:
         replica_count: int = 1,
         load_module: Optional[List[str]] = None,
         addresses: Optional[List[List[str]]] = None,
+        tls_auth_clients: str = "no",
     ) -> None:
+        """
+        Args:
+            tls_auth_clients: Value forwarded to cluster_manager's
+                ``--tls-auth-clients`` flag (``"no"``, ``"yes"`` or
+                ``"optional"``). Only meaningful when ``tls`` is True. Defaults
+                to ``"no"`` so the server does not require a client cert,
+                preserving the historical behavior. Set to ``"yes"`` to spin up
+                a cluster that genuinely verifies the client certificate for
+                mTLS tests.
+        """
         if addresses:
             self.init_from_existing_cluster(addresses)
         else:
@@ -32,6 +43,8 @@ class ValkeyCluster:
             args_list.append("start")
             if cluster_mode:
                 args_list.append("--cluster-mode")
+            if tls:
+                args_list.extend(["--tls-auth-clients", tls_auth_clients])
             if load_module:
                 if len(load_module) == 0:
                     raise ValueError(
