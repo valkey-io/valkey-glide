@@ -631,17 +631,25 @@ mod aio_support {
                     }
                 }
                 Some(end) => {
-                    // Copy the complete frame out in ONE bulk memcpy and
-                    // advance the read buffer. Copying (rather than
-                    // `split_to(end).freeze()`) keeps the codec's BytesMut
-                    // unshared so tokio can keep reusing its allocation —
-                    // freezing was measured to cause realloc+copy churn in
-                    // `BytesMut::reserve` on every read. Individual bulk
-                    // strings are then zero-copy slices of this one frame
-                    // allocation: one alloc+memcpy per frame instead of one
-                    // per value.
-                    let frame = Bytes::copy_from_slice(&bytes[..end]);
-                    bytes.advance(end);
+                    // Hybrid frame extraction, chosen from profiling:
+                    // - Small frames: ONE bulk memcpy out of the read buffer.
+                    //   Keeps the codec's BytesMut unshared so tokio reuses
+                    //   its allocation (freezing every frame caused
+                    //   realloc+copy churn in BytesMut::reserve — 40% of
+                    //   client CPU under pipelined load).
+                    // - Large frames: take ownership zero-copy via
+                    //   split_to().freeze(). The buffer had to grow for them
+                    //   anyway, and copying hundreds of KB costs more than
+                    //   losing one allocation's reuse.
+                    // Bulk strings are then zero-copy slices of the frame.
+                    const FRAME_COPY_MAX: usize = 64 * 1024;
+                    let frame = if end > FRAME_COPY_MAX {
+                        bytes.split_to(end).freeze()
+                    } else {
+                        let frame = Bytes::copy_from_slice(&bytes[..end]);
+                        bytes.advance(end);
+                        frame
+                    };
                     let mut pos = 0;
                     let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
                     Ok(Some(Ok(value)))
