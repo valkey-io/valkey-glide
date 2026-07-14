@@ -1239,45 +1239,50 @@ unsafe fn process_push_notification(
     pubsub_callback: PubSubCallback,
     client_adapter_ptr: usize,
 ) {
-    let strings: Vec<(*mut u8, i64)> = push_msg
+    let strings: Vec<&[u8]> = push_msg
         .data
         .iter()
-        .map(|v| {
-            let Value::BulkString(str) = v else {
-                unreachable!()
-            };
-            let (ptr, len) = convert_vec_to_pointer(str.clone());
-            (ptr, len)
+        .filter_map(|v| {
+            if let Value::BulkString(s) = v {
+                Some(s.as_slice())
+            } else {
+                None
+            }
         })
         .collect();
 
-    let ((pattern_ptr, pattern_len), (channel, channel_len), (message_ptr, message_len)) = {
-        if strings.len() == 3 {
-            (strings[0], strings[1], strings[2])
-        } else {
-            ((std::ptr::null_mut::<u8>(), 0), strings[0], strings[1])
-        }
+    let (message, channel, pattern): (&[u8], &[u8], Option<&[u8]>) = if strings.len() >= 3 {
+        (strings[2], strings[1], Some(strings[0]))
+    } else if strings.len() == 2 {
+        (strings[1], strings[0], None)
+    } else {
+        return;
     };
 
-    // Call the pubsub callback with the push notification data
+    let (message_ptr, message_len) = convert_vec_to_pointer(message.to_vec());
+    let (channel_ptr, channel_len) = convert_vec_to_pointer(channel.to_vec());
+    let (pattern_ptr, pattern_len) = match pattern {
+        Some(p) => convert_vec_to_pointer(p.to_vec()),
+        None => (std::ptr::null_mut::<u8>(), 0),
+    };
+
     unsafe {
         pubsub_callback(
             client_adapter_ptr,
             push_msg.kind.into(),
             message_ptr,
             message_len,
-            channel,
+            channel_ptr,
             channel_len,
             pattern_ptr,
             pattern_len,
         );
-        // Free memory — allocated via Box::into_raw(vec.into_boxed_slice())
         let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
             message_ptr,
             message_len as usize,
         ));
         let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-            channel,
+            channel_ptr,
             channel_len as usize,
         ));
         if !pattern_ptr.is_null() {
@@ -5639,5 +5644,209 @@ pub unsafe extern "C-unwind" fn command_with_route_info(
             buf_option,
             span_ptr,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests_push_notification_safety {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static CALLBACK_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
+    static LAST_CALLBACK_DATA: Mutex<Option<CallbackCapture>> = Mutex::new(None);
+
+    struct CallbackCapture {
+        message: Vec<u8>,
+        channel: Vec<u8>,
+        pattern: Option<Vec<u8>>,
+    }
+
+    unsafe extern "C-unwind" fn counting_callback(
+        _client_ptr: usize,
+        _kind: PushKind,
+        message: *const u8,
+        message_len: i64,
+        channel: *const u8,
+        channel_len: i64,
+        pattern: *const u8,
+        pattern_len: i64,
+    ) {
+        CALLBACK_INVOCATIONS.fetch_add(1, Ordering::SeqCst);
+        unsafe {
+            let msg = std::slice::from_raw_parts(message, message_len as usize).to_vec();
+            let ch = std::slice::from_raw_parts(channel, channel_len as usize).to_vec();
+            let pat = if pattern.is_null() {
+                None
+            } else {
+                Some(std::slice::from_raw_parts(pattern, pattern_len as usize).to_vec())
+            };
+            *LAST_CALLBACK_DATA.lock().unwrap() = Some(CallbackCapture {
+                message: msg,
+                channel: ch,
+                pattern: pat,
+            });
+        }
+    }
+
+    fn reset_callback_count() {
+        CALLBACK_INVOCATIONS.store(0, Ordering::SeqCst);
+        *LAST_CALLBACK_DATA.lock().unwrap() = None;
+    }
+
+    #[test]
+    #[serial]
+    fn test_non_bulkstring_element_does_not_panic() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::BulkString(b"channel".to_vec()), Value::Int(42)],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        // Only one BulkString element after filtering, so the frame is too short
+        // and is silently dropped (no callback invocation).
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_non_bulkstring_with_enough_valid_elements_delivers() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![
+                Value::BulkString(b"channel".to_vec()),
+                Value::Int(42),
+                Value::BulkString(b"message".to_vec()),
+            ],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        // Two BulkString elements remain after filtering the Int, enough for delivery.
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let data = LAST_CALLBACK_DATA.lock().unwrap();
+        let capture = data.as_ref().unwrap();
+        assert_eq!(capture.channel, b"channel");
+        assert_eq!(capture.message, b"message");
+        assert!(capture.pattern.is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn test_too_few_elements_does_not_panic() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::BulkString(b"only_one".to_vec())],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_empty_data_does_not_panic() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::SMessage,
+            data: vec![],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_all_non_bulkstring_elements_does_not_panic() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_well_formed_two_element_message() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![
+                Value::BulkString(b"my-channel".to_vec()),
+                Value::BulkString(b"hello world".to_vec()),
+            ],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let data = LAST_CALLBACK_DATA.lock().unwrap();
+        let capture = data.as_ref().unwrap();
+        assert_eq!(capture.channel, b"my-channel");
+        assert_eq!(capture.message, b"hello world");
+        assert!(capture.pattern.is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn test_well_formed_three_element_pmessage() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::PMessage,
+            data: vec![
+                Value::BulkString(b"my-pattern*".to_vec()),
+                Value::BulkString(b"my-channel".to_vec()),
+                Value::BulkString(b"hello world".to_vec()),
+            ],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let data = LAST_CALLBACK_DATA.lock().unwrap();
+        let capture = data.as_ref().unwrap();
+        assert_eq!(capture.channel, b"my-channel");
+        assert_eq!(capture.message, b"hello world");
+        assert_eq!(capture.pattern.as_deref(), Some(b"my-pattern*".as_slice()));
+    }
+
+    #[test]
+    #[serial]
+    fn test_extra_elements_no_leak() {
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::PMessage,
+            data: vec![
+                Value::BulkString(b"pattern".to_vec()),
+                Value::BulkString(b"channel".to_vec()),
+                Value::BulkString(b"message".to_vec()),
+                Value::BulkString(b"extra1".to_vec()),
+                Value::BulkString(b"extra2".to_vec()),
+            ],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        // Callback is invoked with the first 3 elements; extra elements are never
+        // allocated as pointers (no leak). We verify the callback received the
+        // correct data from positions 0, 1, 2.
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let data = LAST_CALLBACK_DATA.lock().unwrap();
+        let capture = data.as_ref().unwrap();
+        assert_eq!(capture.pattern.as_deref(), Some(b"pattern".as_slice()));
+        assert_eq!(capture.channel, b"channel");
+        assert_eq!(capture.message, b"message");
     }
 }

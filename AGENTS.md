@@ -237,6 +237,12 @@ Use conventional commit format for all commit messages:
 - Maintain compatibility with supported engine versions
 - Do not modify vendored or third-party code
 
+### FFI Panic Safety
+
+The FFI crate (`ffi/`) uses `panic = "abort"` in the release profile.
+Any panic in FFI code aborts the entire host process, so code that handles server-controlled input (push notifications, responses, connection events) must never use `unreachable!()`, unchecked indexing, or other panicking constructs on data originating from the wire.
+Prefer `filter_map`/`match` with graceful fallback (skip or return early) over `unwrap`/`expect`/`unreachable!()`.
+
 ## Project Structure (Essential)
 
 ```text
