@@ -167,6 +167,10 @@ harness = false
 required-features = ["tokio-comp"]
 
 [[bench]]
+name = "bench_zerocopy"
+harness = false
+
+[[bench]]
 name = "bench_cluster"
 harness = false
 required-features = ["cluster"]
