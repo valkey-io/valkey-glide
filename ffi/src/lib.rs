@@ -2688,7 +2688,7 @@ impl ResponseArena {
                         }
                         data.len().to_string().into_bytes()
                     } else {
-                        data.to_vec()
+                        data.into()
                     };
                 let (ptr, len) = self.store_string(data);
                 self.nodes[idx].response_type = ResponseType::String;

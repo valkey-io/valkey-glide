@@ -712,7 +712,7 @@ fn create_direct_byte_buffer<'local>(
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            let (id, ptr, len) = register_native_buffer(data.to_vec());
+            let (id, ptr, len) = register_native_buffer(data.into());
             let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
             // Register Java-side cleaner to free native buffer when GC'd
             let obj: JObject = bb.into();
