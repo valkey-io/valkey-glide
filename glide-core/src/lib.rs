@@ -4,8 +4,10 @@
 include!("generated/mod.rs");
 pub mod client;
 pub mod otel_db_semantics;
+pub mod pool;
 #[cfg(feature = "socket-layer")]
 pub mod rotating_buffer;
+pub mod scope;
 #[cfg(feature = "socket-layer")]
 mod socket_listener;
 #[cfg(feature = "socket-layer")]

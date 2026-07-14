@@ -4,7 +4,10 @@ import os
 import sys
 import threading
 from types import TracebackType
-from typing import Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from .isolated_scope import IsolatedScope
 
 from glide_shared._fast_response import parse_response as _fast_parse_response
 from glide_shared.commands.command_args import ObjectType
@@ -61,6 +64,30 @@ class FFIClientTypeEnum:
     Sync = 1
 
 
+def _slot_for_key(key: bytes) -> int:
+    """Compute the Redis cluster hash slot for a key (CRC16 mod 16384).
+
+    Handles hash tags: if the key contains {...}, only the content between the
+    first { and first } after it is hashed.
+    """
+    start = key.find(b"{")
+    if start != -1:
+        end = key.find(b"}", start + 1)
+        if end != -1 and end != start + 1:
+            key = key[start + 1 : end]
+
+    crc = 0
+    for b in key:
+        crc ^= b << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc <<= 1
+            crc &= 0xFFFF
+    return crc % 16384
+
+
 class BaseClient(CoreCommands):
 
     def __init__(self, config: BaseClientConfiguration):
@@ -75,6 +102,10 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        # Lock protecting _core_client and _is_closed for free-threading safety.
+        # Under GIL builds this is a no-op (GIL serializes access).
+        # Under free-threaded builds this prevents use-after-free on concurrent close.
+        self._client_lock = threading.Lock()
 
         self._is_closed: bool = False
 
@@ -113,6 +144,8 @@ class BaseClient(CoreCommands):
         if self._config.client_info_tag:
             conn_req.lib_name = f"{conn_req.lib_name}({self._config.client_info_tag})"
         conn_req_bytes = conn_req.SerializeToString()
+        # Store for scoped_connection (Feature 2)
+        self._conn_req_bytes = conn_req_bytes
         client_type = self._ffi.new(
             "ClientType*",
             {
@@ -190,6 +223,10 @@ class BaseClient(CoreCommands):
 
             # Free the connection response to avoid memory leaks
             self._lib.free_connection_response(client_response_ptr)
+
+            # Note: scope prewarm is deferred to first scoped_connection() call
+            # to avoid creating extra connections at client startup (which breaks
+            # lazy connection tests and connection count assertions).
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
 
@@ -1024,13 +1061,14 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
-        if not self._is_closed:
-            self._is_closed = True
-            with self._pubsub_condition:
-                self._pubsub_condition.notify_all()
-            self._lib.close_client(self._core_client)
-            self._core_client = self._ffi.NULL
-            self._pubsub_callback_ref = None
+        with self._client_lock:
+            if not self._is_closed:
+                self._is_closed = True
+                with self._pubsub_condition:
+                    self._pubsub_condition.notify_all()
+                self._lib.close_client(self._core_client)
+                self._core_client = self._ffi.NULL
+                self._pubsub_callback_ref = None
 
     def __enter__(self) -> Self:
         return self
@@ -1042,6 +1080,133 @@ class BaseClient(CoreCommands):
         tb: Optional[TracebackType],
     ) -> None:
         self.close()
+
+    def scoped_connection(
+        self, timeout: float = 5.0, routing_key: Optional[str] = None
+    ) -> "IsolatedScope":
+        """
+        Acquire an isolated execution scope — a dedicated connection for operations
+        requiring per-connection state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking
+        commands).
+
+        The scope bypasses the multiplexer, executing commands on its own TCP
+        connection. Use as a context manager for automatic release:
+
+            with client.scoped_connection(routing_key="my-key") as scope:
+                scope.watch("my-key")
+                val = scope.get("my-key")
+                scope.multi()
+                scope.set("my-key", str(int(val or "0") + 1))
+                result = scope.exec()
+
+        Args:
+            timeout: Maximum seconds to wait for a scope connection (default 5.0).
+            routing_key: In cluster mode, the key whose hash slot determines which
+                node the scope connects to. All keys used in the scope must hash to
+                the same slot. If None, defaults to slot 0.
+
+        Returns:
+            An IsolatedScope instance.
+
+        Raises:
+            TimeoutError: If no scope is available within the timeout.
+            ClosingError: If the client is closed.
+        """
+        import time
+
+        from .isolated_scope import IsolatedScope
+
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+
+        # Use the pointer address as client_id for the scope pool
+        client_id = int(self._ffi.cast("uintptr_t", self._core_client))
+        conn_req_bytes = self._conn_req_bytes
+
+        # Compute routing slot from key
+        if routing_key is not None:
+            routing_slot = _slot_for_key(routing_key.encode("utf-8"))
+        else:
+            routing_slot = 0
+
+        deadline = time.monotonic() + timeout
+        backoff = 0.01  # Start at 10ms (first scope needs ~500ms for TCP connect)
+
+        while True:
+            buf = self._ffi.from_buffer(conn_req_bytes)
+            scope_id = self._lib.glide_scope_try_acquire(
+                client_id,
+                self._ffi.cast("const uint8_t*", buf),
+                len(conn_req_bytes),
+                routing_slot,
+            )
+
+            if scope_id >= 0:
+                return IsolatedScope(
+                    scope_id,
+                    client_id,
+                    _SYNC_FFI,
+                    self._parse_scope_response,
+                )
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    "Timed out waiting for isolated scope (pool exhausted)"
+                )
+
+            time.sleep(min(backoff, remaining))
+            backoff = min(backoff * 2, 0.5)  # Cap at 500ms
+
+    def _parse_scope_response(self, response_ptr) -> Optional[str]:  # noqa: C901
+        """Parse a CommandResponse pointer from a scope execution into a Python string."""
+        if response_ptr == self._ffi.NULL:
+            return None
+
+        resp = response_ptr
+        resp_type = resp.response_type
+
+        # Null response
+        if resp_type == 0:  # ResponseType::Null
+            return None
+        # Int
+        elif resp_type == 1:  # ResponseType::Int
+            return str(resp.int_value)
+        # Float
+        elif resp_type == 2:  # ResponseType::Float
+            return str(resp.float_value)
+        # Bool
+        elif resp_type == 3:  # ResponseType::Bool
+            return str(resp.bool_value)
+        # String
+        elif resp_type == 4:  # ResponseType::String
+            if resp.string_value == self._ffi.NULL:
+                return None
+            return self._ffi.buffer(resp.string_value, resp.string_value_len)[:].decode(
+                "utf-8"
+            )
+        # Array (for EXEC results, LRANGE, etc.)
+        elif resp_type == 5:  # ResponseType::Array
+            if resp.array_value == self._ffi.NULL or resp.array_value_len == 0:
+                return None
+            # For simple scope usage, return a string repr
+            results = []
+            for i in range(resp.array_value_len):
+                elem = self._parse_scope_response(resp.array_value + i)
+                results.append(elem)
+            return str(results)
+        # Ok
+        elif resp_type == 8:  # ResponseType::Ok
+            return "OK"
+        # Error
+        elif resp_type == 9:  # ResponseType::Error
+            if resp.string_value != self._ffi.NULL:
+                msg = self._ffi.string(resp.string_value).decode("utf-8")
+                raise RuntimeError(f"Server error: {msg}")
+            raise RuntimeError("Server error (unknown)")
+        else:
+            # Fallback for Map, Sets, etc.
+            return None
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):
@@ -1138,6 +1303,8 @@ class GlideClient(BaseClient, StandaloneCommands):
     For full documentation, see
     https://glide.valkey.io/how-to/client-initialization/#standalone
     """
+
+    pass
 
 
 TGlideClient = Union[GlideClient, GlideClusterClient]

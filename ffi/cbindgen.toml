@@ -1,8 +1,15 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 language = "C"
 
-header = "/* Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */"
+header = """/* Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
+#define GLIDE_POOL_SUPPORT"""
+
+[defines]
+"feature = pool-support" = "GLIDE_POOL_SUPPORT"
+
+[export]
+exclude = ["FRAME_SIZE", "ASYNC_PIPE", "MAX_ARENA_POOL_SIZE", "POOL_RUNTIME", "POOL_CLIENTS", "POOL_CLIENT_TYPES"]
 
 [parse]
 parse_deps = true
-include = ["glide-core"] 
+include = ["glide-core"]

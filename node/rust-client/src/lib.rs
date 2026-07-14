@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod pool;
+
 use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::compression::process_command_args_for_compression;
@@ -248,6 +250,9 @@ struct WorkerPoolState {
 }
 
 static WORKER_POOL_STATE: OnceLock<PLMutex2<WorkerPoolState>> = OnceLock::new();
+
+/// Global counter for unique client IDs (used for scope registry).
+static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
 fn get_worker_pool_state() -> &'static PLMutex2<WorkerPoolState> {
     WORKER_POOL_STATE.get_or_init(|| {
@@ -759,6 +764,9 @@ pub struct GlideClientHandle {
     /// Wake-up callback to notify JS when responses are available.
     /// Wrapped in Option to allow explicit drop during close(), which allows Node.js to exit.
     wake_callback: Option<Arc<ThreadsafeFunction<(), (), (), Status, false>>>,
+    /// Unique client ID registered in the glide-core scope registry.
+    /// Used for scope operations (try_acquire, execute, release).
+    client_id: u64,
 }
 
 /// Creates a new direct NAPI client connection with response buffering.
@@ -873,11 +881,18 @@ pub fn create_direct_client<'a>(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
+        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+
+        // Register client in scope registry so scoped connections can find
+        // their parent client for compression, timeout, IAM, and CB checks.
+        glide_core::scope::register_client(client_id, client.clone());
+
         let handle = GlideClientHandle {
             command_tx: Some(command_tx_for_handle),
             inflight_requests: inflight_counter.clone(),
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
+            client_id,
         };
 
         // Resolve the promise with the handle
@@ -1275,6 +1290,9 @@ impl GlideClientHandle {
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
 
+        // Unregister from scope registry
+        glide_core::scope::unregister_client(self.client_id);
+
         // Free any leaked Value pointers in pending responses that were never consumed by JS
         self.response_buffer.free_leaked_values();
 
@@ -1297,6 +1315,13 @@ impl GlideClientHandle {
     #[napi]
     pub fn available_inflight_slots(&self) -> i32 {
         self.inflight_requests.load(Ordering::Relaxed) as i32
+    }
+
+    /// Returns the client ID registered in the scope registry.
+    /// Used by IsolatedScope to acquire/execute/release scoped connections.
+    #[napi(getter)]
+    pub fn client_id(&self) -> i64 {
+        self.client_id as i64
     }
 
     /// Sends a batch of commands to the Valkey/Redis server.
