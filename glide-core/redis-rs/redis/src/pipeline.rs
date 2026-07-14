@@ -97,6 +97,27 @@ impl Pipeline {
         encode_pipeline(&self.commands, self.transaction_mode)
     }
 
+    /// Returns the encoded pipeline as segments for vectored writes.
+    /// Byte-identical on the wire to [`Pipeline::get_packed_pipeline`], with
+    /// large shared payloads as their own zero-copy segments.
+    pub fn get_packed_pipeline_segments(&self) -> crate::cmd::SegmentedBytes {
+        let mut out = crate::cmd::SegmentedBytes::default();
+        let mut scratch = Vec::new();
+        if self.transaction_mode {
+            cmd("MULTI").write_packed_segments(&mut out, &mut scratch);
+            for command in &self.commands {
+                command.write_packed_segments(&mut out, &mut scratch);
+            }
+            cmd("EXEC").write_packed_segments(&mut out, &mut scratch);
+        } else {
+            for command in &self.commands {
+                command.write_packed_segments(&mut out, &mut scratch);
+            }
+        }
+        out.push(bytes::Bytes::from(scratch));
+        out
+    }
+
     #[cfg(feature = "aio")]
     pub(crate) fn write_packed_pipeline(&self, out: &mut Vec<u8>) {
         write_pipeline(out, &self.commands, self.transaction_mode)

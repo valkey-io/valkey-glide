@@ -23,6 +23,20 @@ pub enum Arg<D> {
     Cursor,
 }
 
+/// Internal argument storage. Inline arguments live contiguously in
+/// `Cmd::data` (cheap for small args); large payloads are stored out-of-line
+/// as refcounted [`bytes::Bytes`] so they are never copied into the command
+/// buffer (send-side zero-copy).
+#[derive(Clone)]
+enum StoredArg {
+    /// End offset of an inline argument in `Cmd::data`.
+    Inline(usize),
+    /// Refcounted shared payload stored out-of-line.
+    Shared(bytes::Bytes),
+    /// A cursor placeholder created from `cursor_arg()`.
+    Cursor,
+}
+
 /// Atomic phase value: command is queued but not yet sent.
 pub const PHASE_QUEUED: u8 = 0;
 /// Atomic phase value: command has been sent to a node.
@@ -31,8 +45,7 @@ pub const PHASE_SENT: u8 = 1;
 /// Represents redis commands.
 pub struct Cmd {
     data: Vec<u8>,
-    // Arg::Simple contains the offset that marks the end of the argument
-    args: Vec<Arg<usize>>,
+    args: Vec<StoredArg>,
     cursor: Option<u64>,
     // If it's true command's response won't be read from socket. Useful for Pub/Sub.
     no_response: bool,
@@ -346,16 +359,82 @@ where
     Ok(())
 }
 
+/// Payloads at or below this size are inlined into the command buffer by
+/// [`Cmd::arg_shared`]; larger payloads are kept as refcounted segments and
+/// written to the socket via vectored I/O without ever being copied into a
+/// command or write buffer.
+pub const SHARED_ARG_INLINE_MAX: usize = 4 * 1024;
+
+/// A packed command (or pipeline of commands) represented as a sequence of
+/// byte segments for vectored socket writes.
+///
+/// Protocol framing and small inline arguments coalesce into contiguous
+/// segments; large shared payloads ([`Cmd::arg_shared`]) appear as their own
+/// refcounted segments pointing at the caller's allocation.
+#[derive(Debug, Default, Clone)]
+pub struct SegmentedBytes {
+    segments: Vec<bytes::Bytes>,
+    len: usize,
+}
+
+impl SegmentedBytes {
+    /// Append a segment. Empty segments are dropped.
+    pub fn push(&mut self, bytes: bytes::Bytes) {
+        if !bytes.is_empty() {
+            self.len += bytes.len();
+            self.segments.push(bytes);
+        }
+    }
+
+    /// Total byte length across all segments.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// True if there are no bytes.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Iterate over the segments.
+    pub fn segments(&self) -> impl ExactSizeIterator<Item = &bytes::Bytes> {
+        self.segments.iter()
+    }
+
+    /// Consume into the underlying segment list.
+    pub fn into_segments(self) -> Vec<bytes::Bytes> {
+        self.segments
+    }
+
+    /// Concatenate all segments into one contiguous buffer (used by tests and
+    /// non-vectored fallbacks).
+    pub fn to_contiguous(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.len);
+        for seg in &self.segments {
+            out.extend_from_slice(seg);
+        }
+        out
+    }
+}
+
+impl From<Vec<u8>> for SegmentedBytes {
+    fn from(buf: Vec<u8>) -> Self {
+        let mut out = SegmentedBytes::default();
+        out.push(bytes::Bytes::from(buf));
+        out
+    }
+}
+
 impl RedisWrite for Cmd {
     fn write_arg(&mut self, arg: &[u8]) {
         self.data.extend_from_slice(arg);
-        self.args.push(Arg::Simple(self.data.len()));
+        self.args.push(StoredArg::Inline(self.data.len()));
     }
 
     fn write_arg_fmt(&mut self, arg: impl fmt::Display) {
         use std::io::Write;
         write!(self.data, "{arg}").unwrap();
-        self.args.push(Arg::Simple(self.data.len()));
+        self.args.push(StoredArg::Inline(self.data.len()));
     }
 }
 
@@ -455,6 +534,24 @@ impl Cmd {
         self
     }
 
+    /// Appends a binary argument without copying it into the command buffer.
+    ///
+    /// Payloads larger than [`SHARED_ARG_INLINE_MAX`] are stored as
+    /// refcounted [`bytes::Bytes`] and written to the socket directly from
+    /// the caller's allocation (vectored write) — the send-side zero-copy
+    /// path. Smaller payloads are inlined like a normal `arg()`, which is
+    /// cheaper than scatter-gather at small sizes.
+    #[inline]
+    pub fn arg_shared(&mut self, arg: bytes::Bytes) -> &mut Cmd {
+        if arg.len() <= SHARED_ARG_INLINE_MAX {
+            use crate::types::RedisWrite;
+            self.write_arg(&arg);
+        } else {
+            self.args.push(StoredArg::Shared(arg));
+        }
+        self
+    }
+
     /// Associate a trackable span to the command. This allow tracking the lifetime
     /// of the command.
     ///
@@ -484,7 +581,7 @@ impl Cmd {
     pub fn cursor_arg(&mut self, cursor: u64) -> &mut Cmd {
         assert!(!self.in_scan_mode());
         self.cursor = Some(cursor);
-        self.args.push(Arg::Cursor);
+        self.args.push(StoredArg::Cursor);
         self
     }
 
@@ -494,6 +591,73 @@ impl Cmd {
         let mut cmd = Vec::new();
         self.write_packed_command(&mut cmd);
         cmd
+    }
+
+    /// Returns the packed command as segments for vectored writes.
+    ///
+    /// Byte-identical on the wire to [`Cmd::get_packed_command`], but large
+    /// shared payloads ([`Cmd::arg_shared`]) are emitted as their own
+    /// refcounted segments instead of being copied into the packed buffer.
+    #[inline]
+    pub fn get_packed_segments(&self) -> SegmentedBytes {
+        let mut out = SegmentedBytes::default();
+        let mut scratch = Vec::new();
+        self.write_packed_segments(&mut out, &mut scratch);
+        out.push(bytes::Bytes::from(scratch));
+        out
+    }
+
+    /// Append this command's packed form to `out`, coalescing framing and
+    /// inline args into `scratch`. `scratch` is only flushed to `out` at
+    /// shared-payload boundaries — the caller MUST flush the remaining
+    /// `scratch` into `out` after the last command (as
+    /// [`Cmd::get_packed_segments`] does), so consecutive small commands
+    /// share one contiguous segment.
+    pub(crate) fn write_packed_segments(&self, out: &mut SegmentedBytes, scratch: &mut Vec<u8>) {
+        let mut int_buf = ::itoa::Buffer::new();
+
+        scratch.push(b'*');
+        scratch.extend_from_slice(int_buf.format(self.args.len()).as_bytes());
+        scratch.extend_from_slice(b"\r\n");
+
+        let mut prev = 0;
+        for arg in &self.args {
+            match arg {
+                StoredArg::Inline(i) => {
+                    let payload = &self.data[prev..*i];
+                    prev = *i;
+                    scratch.push(b'$');
+                    scratch.extend_from_slice(int_buf.format(payload.len()).as_bytes());
+                    scratch.extend_from_slice(b"\r\n");
+                    scratch.extend_from_slice(payload);
+                    scratch.extend_from_slice(b"\r\n");
+                }
+                StoredArg::Cursor => {
+                    let cursor = int_buf.format(self.cursor.unwrap_or(0));
+                    let mut len_buf = ::itoa::Buffer::new();
+                    scratch.push(b'$');
+                    scratch.extend_from_slice(len_buf.format(cursor.len()).as_bytes());
+                    scratch.extend_from_slice(b"\r\n");
+                    scratch.extend_from_slice(cursor.as_bytes());
+                    scratch.extend_from_slice(b"\r\n");
+                }
+                StoredArg::Shared(payload) => {
+                    scratch.push(b'$');
+                    scratch.extend_from_slice(int_buf.format(payload.len()).as_bytes());
+                    scratch.extend_from_slice(b"\r\n");
+                    // Flush framing accumulated so far, then emit the payload
+                    // as its own zero-copy segment.
+                    out.push(bytes::Bytes::from(std::mem::take(scratch)));
+                    out.push(payload.clone());
+                    scratch.extend_from_slice(b"\r\n");
+                }
+            }
+        }
+
+        // If this is a fenced command, append a PING command
+        if self.is_fenced {
+            scratch.extend_from_slice(FENCE_COMMAND);
+        }
     }
 
     pub(crate) fn write_packed_command(&self, cmd: &mut Vec<u8>) {
@@ -650,40 +814,24 @@ impl Cmd {
     /// Returns an iterator over the arguments in this command (including the command name itself)
     pub fn args_iter(&self) -> impl Clone + ExactSizeIterator<Item = Arg<&[u8]>> {
         let mut prev = 0;
-        self.args.iter().map(move |arg| match *arg {
-            Arg::Simple(i) => {
-                let arg = Arg::Simple(&self.data[prev..i]);
-                prev = i;
+        self.args.iter().map(move |arg| match arg {
+            StoredArg::Inline(i) => {
+                let arg = Arg::Simple(&self.data[prev..*i]);
+                prev = *i;
                 arg
             }
-
-            Arg::Cursor => Arg::Cursor,
+            StoredArg::Shared(bytes) => Arg::Simple(&bytes[..]),
+            StoredArg::Cursor => Arg::Cursor,
         })
     }
 
     /// Get a reference to the argument at `idx`.
     #[cfg(feature = "cluster")]
     pub fn arg_idx(&self, idx: usize) -> Option<&[u8]> {
-        if idx >= self.args.len() {
-            return None;
-        }
-
-        let start = if idx == 0 {
-            0
-        } else {
-            match self.args[idx - 1] {
-                Arg::Simple(n) => n,
-                _ => 0,
-            }
-        };
-        let end = match self.args[idx] {
-            Arg::Simple(n) => n,
-            _ => 0,
-        };
-        if start == 0 && end == 0 {
-            return None;
-        }
-        Some(&self.data[start..end])
+        self.args_iter().nth(idx).and_then(|arg| match arg {
+            Arg::Simple(s) if !s.is_empty() => Some(s),
+            _ => None,
+        })
     }
 
     /// Client won't read and wait for results. Currently only used for Pub/Sub commands in RESP3.
@@ -903,5 +1051,92 @@ mod tests {
 
         let cloned = cmd.clone();
         assert!(cloned.is_blocking(), "clone must preserve is_blocking=true");
+    }
+
+    mod segmented_packing {
+        use super::super::*;
+
+        fn assert_segments_match_packed(cmd: &Cmd) {
+            assert_eq!(
+                cmd.get_packed_segments().to_contiguous(),
+                cmd.get_packed_command(),
+                "segmented packing must be byte-identical to contiguous packing"
+            );
+        }
+
+        #[test]
+        fn simple_command() {
+            assert_segments_match_packed(&crate::cmd("PING"));
+            assert_segments_match_packed(&crate::cmd("SET").arg("key").arg("value"));
+            assert_segments_match_packed(&crate::cmd("SET").arg("key").arg(42));
+        }
+
+        #[test]
+        fn shared_arg_small_is_inlined() {
+            let mut cmd = crate::cmd("SET");
+            cmd.arg("key")
+                .arg_shared(bytes::Bytes::from(vec![b'v'; 128]));
+            assert_segments_match_packed(&cmd);
+            // Small shared args coalesce: exactly one segment.
+            assert_eq!(cmd.get_packed_segments().segments().len(), 1);
+        }
+
+        #[test]
+        fn shared_arg_large_is_own_segment() {
+            let payload = bytes::Bytes::from(vec![b'v'; SHARED_ARG_INLINE_MAX + 1]);
+            let mut cmd = crate::cmd("SET");
+            cmd.arg("key").arg_shared(payload.clone());
+            assert_segments_match_packed(&cmd);
+            let packed = cmd.get_packed_segments();
+            // [framing][payload][trailing crlf]
+            assert_eq!(packed.segments().len(), 3);
+            // The payload segment shares the caller's allocation (zero-copy).
+            let seg = packed.segments().nth(1).unwrap();
+            assert_eq!(seg.as_ptr(), payload.as_ptr());
+        }
+
+        #[test]
+        fn shared_args_interleaved_with_args_iter_and_arg_idx() {
+            let payload = bytes::Bytes::from(vec![b'v'; SHARED_ARG_INLINE_MAX + 1]);
+            let mut cmd = crate::cmd("MSET");
+            cmd.arg("k1")
+                .arg_shared(payload.clone())
+                .arg("k2")
+                .arg("small");
+            assert_segments_match_packed(&cmd);
+            let args: Vec<_> = cmd
+                .args_iter()
+                .map(|a| match a {
+                    Arg::Simple(s) => s.to_vec(),
+                    Arg::Cursor => b"<cursor>".to_vec(),
+                })
+                .collect();
+            assert_eq!(args[0], b"MSET");
+            assert_eq!(args[1], b"k1");
+            assert_eq!(args[2], payload.to_vec());
+            assert_eq!(args[3], b"k2");
+            assert_eq!(args[4], b"small");
+            #[cfg(feature = "cluster")]
+            {
+                assert_eq!(cmd.arg_idx(1), Some(&b"k1"[..]));
+                assert_eq!(cmd.arg_idx(2), Some(&payload[..]));
+                assert_eq!(cmd.arg_idx(3), Some(&b"k2"[..]));
+            }
+        }
+
+        #[test]
+        fn cursor_command() {
+            let mut cmd = crate::cmd("SCAN");
+            cmd.cursor_arg(1234).arg("MATCH").arg("prefix:*");
+            assert_segments_match_packed(&cmd);
+        }
+
+        #[test]
+        fn fenced_command() {
+            let mut cmd = crate::cmd("GET");
+            cmd.arg("key");
+            cmd.set_fenced(true);
+            assert_segments_match_packed(&cmd);
+        }
     }
 }
