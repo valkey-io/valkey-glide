@@ -5,6 +5,8 @@
 ### Fixes
 
 * Python: Restore `BaseClient.__aenter__` return type to `Self` (from the widened `"BaseClient"` introduced in 2.5.0). Entering the async context manager (`async with await GlideClusterClient.create(...) as client`) now preserves the concrete subclass for static type checkers, matching `create()`. ([#6531](https://github.com/valkey-io/valkey-glide/issues/6531))
+* CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
+* Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core/FFI: Fix heap corruption in `convert_vec_to_pointer` where `shrink_to_fit()` (a non-binding hint) was followed by `Vec::from_raw_parts` with `capacity = len`. When the allocator kept extra capacity, deallocation passed the wrong size, corrupting heap metadata and causing delayed SIGABRT crashes after many pubsub messages or response frees. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * Python: Fix `get(key, buffer=...)` under-reporting capacity for non-byte-format memoryviews. The sync client passed `len(response_buffer)` (element count) to the FFI instead of `response_buffer.nbytes`, so a memoryview with `itemsize > 1` (e.g. `array("I", ...)`) was treated as `itemsize`× smaller than its real capacity, spuriously failing valid GETs with "Value size exceeds buffer capacity". Byte-format (`"B"`) buffers were unaffected. ([#6310](https://github.com/valkey-io/valkey-glide/issues/6310))
 * Core: Honor `AWS_ENDPOINT_URL_STS` in the IAM credentials-provider loader so ElastiCache/MemoryDB IAM auth works in AWS partitions that do not publish a separate FIPS STS hostname (e.g. `us-gov-west-1`). Previously, setting `AWS_USE_FIPS_ENDPOINT=true` made the SDK construct a non-existent `sts-fips.<region>.amazonaws.com`, causing credential acquisition to hang. Matches `boto3` behavior. ([#5967](https://github.com/valkey-io/valkey-glide/issues/5967))
@@ -12,7 +14,7 @@
 
 ### Changes
 
-
+* CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))
 * Core, Java, Python, Node, Go: Add `MEMORY DOCTOR`, `MEMORY MALLOC-STATS`, `MEMORY PURGE`, and `MEMORY STATS` commands ([#6286](https://github.com/valkey-io/valkey-glide/issues/6286))
