@@ -646,7 +646,7 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
-        if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true) }}
+        if: ${{ github.repository_owner == 'valkey-io' && !failure() && !cancelled() && (github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true) }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
