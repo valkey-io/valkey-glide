@@ -430,8 +430,16 @@ impl RedisWrite for Cmd {
         if arg.len() > SHARED_ARG_INLINE_MAX {
             // One copy into an owned refcounted buffer, then zero-copy all
             // the way to the socket (skips the packing and encode copies).
+            // The buffer comes from the recycled pool: it stays alive until
+            // the socket write completes, so at pipeline depth N there are N
+            // such buffers in flight — allocating them fresh per command
+            // caused page-fault churn that dominated client CPU (~37
+            // faults/op at 64 KB, depth 16). Pooling keeps the pages
+            // resident across commands.
             self.args
-                .push(StoredArg::Shared(bytes::Bytes::copy_from_slice(arg)));
+                .push(StoredArg::Shared(crate::buf_pool::pooled_bytes_from_slice(
+                    arg,
+                )));
         } else {
             self.data.extend_from_slice(arg);
             self.args.push(StoredArg::Inline(self.data.len()));
