@@ -51,50 +51,40 @@ public class TlsConfigHelperTest {
 
     @Test
     void certificateWithoutKeyThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(TlsAdvancedConfiguration.builder().clientCertificate(CERT).build());
-
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
-                        () -> TlsConfigHelper.extractClientCertificate(configuration));
+                        () -> TlsAdvancedConfiguration.builder().clientCertificate(CERT).build());
         assertTrue(error.getMessage().contains("mTLS requires both"));
     }
 
     @Test
     void keyWithoutCertificateThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(TlsAdvancedConfiguration.builder().clientKey(KEY).build());
-
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class, () -> TlsConfigHelper.extractClientKey(configuration));
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder().clientKey(KEY).build());
         assertTrue(error.getMessage().contains("mTLS requires both"));
     }
 
     @Test
     void emptyCertificateThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder()
-                                .clientCertificate(new byte[0])
-                                .clientKey(KEY)
-                                .build());
-
         assertThrows(
-                ConfigurationError.class, () -> TlsConfigHelper.extractClientCertificate(configuration));
+                ConfigurationError.class,
+                () -> TlsAdvancedConfiguration.builder()
+                        .clientCertificate(new byte[0])
+                        .clientKey(KEY)
+                        .build());
     }
 
     @Test
     void emptyKeyThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder()
-                                .clientCertificate(CERT)
-                                .clientKey(new byte[0])
-                                .build());
-
-        assertThrows(ConfigurationError.class, () -> TlsConfigHelper.extractClientKey(configuration));
+        assertThrows(
+                ConfigurationError.class,
+                () -> TlsAdvancedConfiguration.builder()
+                        .clientCertificate(CERT)
+                        .clientKey(new byte[0])
+                        .build());
     }
 
     @Test
@@ -121,41 +111,36 @@ public class TlsConfigHelperTest {
 
     @Test
     void certPathWithoutKeyPathThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder().clientCertPath("/certs/client.pem").build());
-
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class, () -> TlsConfigHelper.extractClientCertPath(configuration));
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .build());
         assertTrue(error.getMessage().contains("mTLS requires"));
     }
 
     @Test
     void keyPathWithoutCertPathThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder().clientKeyPath("/certs/client.key").build());
-
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class, () -> TlsConfigHelper.extractClientKeyPath(configuration));
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientKeyPath("/certs/client.key")
+                                .build());
         assertTrue(error.getMessage().contains("mTLS requires"));
     }
 
     @Test
     void mixingCertPathAndCertBytesThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder()
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
                                 .clientCertPath("/certs/client.pem")
                                 .clientKeyPath("/certs/client.key")
                                 .clientCertificate(CERT)
                                 .build());
-
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class, () -> TlsConfigHelper.extractClientCertPath(configuration));
         assertTrue(error.getMessage().contains("cannot both be provided"));
     }
 
@@ -189,12 +174,10 @@ public class TlsConfigHelperTest {
 
     @Test
     void certReloadWithoutCertPathThrows() {
-        GlideClientConfiguration configuration =
-                configWithTls(TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
-
         ConfigurationError error =
                 assertThrows(
-                        ConfigurationError.class, () -> TlsConfigHelper.isCertReloadEnabled(configuration));
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
         assertTrue(error.getMessage().contains("certReloadEnabled"));
     }
 }
