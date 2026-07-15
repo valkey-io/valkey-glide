@@ -1030,7 +1030,7 @@ class BaseClient(CoreCommands):
         """
         await self.close(err_message)
 
-    async def __aenter__(self) -> "BaseClient":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
