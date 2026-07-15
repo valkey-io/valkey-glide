@@ -290,6 +290,122 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
+    void testBuilderCertWithoutKeyThrows() {
+        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder().clientCertificate(certBytes).build());
+        assertTrue(
+                error.getMessage()
+                        .contains(
+                                "`clientCertificate` is provided but `clientKey` is not provided."
+                                        + " mTLS requires both."));
+    }
+
+    @Test
+    void testBuilderKeyWithoutCertThrows() {
+        byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder().clientKey(keyBytes).build());
+        assertTrue(
+                error.getMessage()
+                        .contains(
+                                "`clientKey` is provided but `clientCertificate` is not provided."
+                                        + " mTLS requires both."));
+    }
+
+    @Test
+    void testBuilderEmptyCertThrows() {
+        byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientCertificate(new byte[0])
+                                .clientKey(keyBytes)
+                                .build());
+        assertTrue(error.getMessage().contains("`clientCertificate` cannot be an empty byte array"));
+    }
+
+    @Test
+    void testBuilderEmptyKeyThrows() {
+        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientCertificate(certBytes)
+                                .clientKey(new byte[0])
+                                .build());
+        assertTrue(error.getMessage().contains("`clientKey` cannot be an empty byte array"));
+    }
+
+    @Test
+    void testBuilderCertPathWithoutKeyPathThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .build());
+        assertTrue(
+                error.getMessage()
+                        .contains(
+                                "`clientCertPath` is provided but `clientKeyPath` is not provided."
+                                        + " mTLS requires both."));
+    }
+
+    @Test
+    void testBuilderKeyPathWithoutCertPathThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientKeyPath("/certs/client.key")
+                                .build());
+        assertTrue(
+                error.getMessage()
+                        .contains(
+                                "`clientKeyPath` is provided but `clientCertPath` is not provided."
+                                        + " mTLS requires both."));
+    }
+
+    @Test
+    void testBuilderMixingPathAndBytesThrows() {
+        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder()
+                                .clientCertPath("/certs/client.pem")
+                                .clientKeyPath("/certs/client.key")
+                                .clientCertificate(certBytes)
+                                .build());
+        assertTrue(error.getMessage().contains("cannot both be provided"));
+    }
+
+    @Test
+    void testBuilderReloadWithoutPathThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
+        assertTrue(
+                error.getMessage()
+                        .contains(
+                                "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath`"
+                                        + " to be provided."));
+    }
+
+    @Test
     void testBuilderWithClientCertAndKeyPaths() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()

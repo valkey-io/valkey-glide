@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.exceptions.ConfigurationError;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -18,14 +19,18 @@ import java.util.Base64.Encoder;
 import java.util.Enumeration;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.experimental.SuperBuilder;
 
 /**
  * Advanced TLS configuration settings class for creating a client. Shared settings for standalone
  * and cluster clients.
  */
 @Getter
-@SuperBuilder
+@Builder
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification =
+                "Builder validates TLS invariants at construction time and throws before exposing"
+                        + " instance")
 public class TlsAdvancedConfiguration {
 
     /**
@@ -141,6 +146,89 @@ public class TlsAdvancedConfiguration {
     @Builder.Default private final Integer certReloadIntervalSeconds = null;
 
     /**
+     * Creates a new TlsAdvancedConfiguration. Validates self-contained TLS invariants on
+     * construction.
+     *
+     * <p>Use {@link #builder()} to create instances.
+     */
+    TlsAdvancedConfiguration(
+            boolean useInsecureTLS,
+            byte[] rootCertificates,
+            byte[] clientCertificate,
+            byte[] clientKey,
+            String clientCertPath,
+            String clientKeyPath,
+            boolean certReloadEnabled,
+            Integer certReloadIntervalSeconds) {
+        this.useInsecureTLS = useInsecureTLS;
+        this.rootCertificates = rootCertificates;
+        this.clientCertificate = clientCertificate;
+        this.clientKey = clientKey;
+        this.clientCertPath = clientCertPath;
+        this.clientKeyPath = clientKeyPath;
+        this.certReloadEnabled = certReloadEnabled;
+        this.certReloadIntervalSeconds = certReloadIntervalSeconds;
+        validate();
+    }
+
+    /**
+     * Validates self-contained TLS configuration invariants.
+     *
+     * @throws ConfigurationError if any invariant is violated.
+     */
+    private void validate() {
+        boolean hasCert = clientCertificate != null;
+        boolean hasKey = clientKey != null;
+        boolean hasCertPath = clientCertPath != null;
+        boolean hasKeyPath = clientKeyPath != null;
+
+        if (hasCertPath && !hasKeyPath) {
+            throw new ConfigurationError(
+                    "`clientCertPath` is provided but `clientKeyPath` is not provided. mTLS requires"
+                            + " both.");
+        }
+        if (hasKeyPath && !hasCertPath) {
+            throw new ConfigurationError(
+                    "`clientKeyPath` is provided but `clientCertPath` is not provided. mTLS requires"
+                            + " both.");
+        }
+
+        if (hasCertPath && hasCert) {
+            throw new ConfigurationError(
+                    "`clientCertPath` and `clientCertificate` cannot both be provided; use one or"
+                            + " the other.");
+        }
+
+        if (hasCert && !hasKey) {
+            throw new ConfigurationError(
+                    "`clientCertificate` is provided but `clientKey` is not provided. mTLS requires"
+                            + " both.");
+        }
+        if (hasKey && !hasCert) {
+            throw new ConfigurationError(
+                    "`clientKey` is provided but `clientCertificate` is not provided. mTLS requires"
+                            + " both.");
+        }
+
+        if (hasCert && clientCertificate.length == 0) {
+            throw new ConfigurationError(
+                    "`clientCertificate` cannot be an empty byte array; use null if not providing a"
+                            + " client certificate.");
+        }
+        if (hasKey && clientKey.length == 0) {
+            throw new ConfigurationError(
+                    "`clientKey` cannot be an empty byte array; use null if not providing a client"
+                            + " key.");
+        }
+
+        if (certReloadEnabled && clientCertPath == null) {
+            throw new ConfigurationError(
+                    "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath` to be"
+                            + " provided.");
+        }
+    }
+
+    /**
      * Create TlsAdvancedConfiguration from a Java KeyStore file.
      *
      * @param keyStorePath Path to the KeyStore file
@@ -203,6 +291,10 @@ public class TlsAdvancedConfiguration {
      * <p>This is a convenience loader for reading a client certificate from disk to be used as {@link
      * #clientCertificate} in a {@code TlsAdvancedConfiguration}.
      *
+     * <p>Unlike {@link #clientCertPath}, this loads the certificate once at configuration time. The
+     * file does not need to remain on disk after the client is created. For automatic certificate
+     * rotation, use {@link #clientCertPath} and {@link #clientKeyPath} instead.
+     *
      * @param path The file path to the PEM-encoded client certificate file.
      * @return The client certificate data in PEM format as a byte array.
      * @throws ConfigurationError If the file is missing, unreadable, or empty.
@@ -216,6 +308,10 @@ public class TlsAdvancedConfiguration {
      *
      * <p>This is a convenience loader for reading a client private key from disk to be used as {@link
      * #clientKey} in a {@code TlsAdvancedConfiguration}.
+     *
+     * <p>Unlike {@link #clientKeyPath}, this loads the key once at configuration time. The file does
+     * not need to remain on disk after the client is created. For automatic certificate rotation,
+     * use {@link #clientCertPath} and {@link #clientKeyPath} instead.
      *
      * @param path The file path to the PEM-encoded client private key file.
      * @return The client private key data in PEM format as a byte array.
