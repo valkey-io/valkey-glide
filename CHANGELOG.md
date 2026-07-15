@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: Restore `BaseClient.__aenter__` return type to `Self` (from the widened `"BaseClient"` introduced in 2.5.0). Entering the async context manager (`async with await GlideClusterClient.create(...) as client`) now preserves the concrete subclass for static type checkers, matching `create()`. ([#6531](https://github.com/valkey-io/valkey-glide/issues/6531))
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard. PR #6530 inadvertently chained `PushKind::Disconnection` (which carries an empty payload) through `extract_pubsub_data`, causing all disconnect notifications to be silently dropped on the async pipe path. ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
 * CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
 * Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
