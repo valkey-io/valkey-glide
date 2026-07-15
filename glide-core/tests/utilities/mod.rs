@@ -530,6 +530,84 @@ impl TlsFilePaths {
     pub fn read_redis_key_as_bytes(&self) -> Vec<u8> {
         fs::read(&self.redis_key).expect("Failed to read redis private key file")
     }
+    pub fn ca_crt_path(&self) -> &PathBuf {
+        &self.ca_crt
+    }
+}
+
+/// Generate a fresh client certificate and private key, signed by the same CA
+/// that [`build_tls_file_paths`] created, and write them to `dest_crt` and
+/// `dest_key`. This simulates on-disk cert rotation (like cert-manager).
+pub fn rotate_client_cert_and_key(
+    tls_paths: &TlsFilePaths,
+    dest_crt: &std::path::Path,
+    dest_key: &std::path::Path,
+) {
+    let ca_crt = &tls_paths.ca_crt;
+    let ca_key = ca_crt.with_file_name("ca.key");
+    let ca_serial = ca_crt.with_file_name("ca.txt");
+    let ext_file = ca_crt.with_file_name("rotate_openssl.cnf");
+
+    process::Command::new("openssl")
+        .arg("genrsa")
+        .arg("-out")
+        .arg(dest_key)
+        .arg("2048")
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create rotated client key");
+
+    fs::write(
+        &ext_file,
+        format!(
+            "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{},IP:{},DNS:localhost,DNS:{}",
+            IP_ADDRESS_V4, IP_ADDRESS_V6, HOSTNAME_TLS
+        ),
+    )
+    .expect("failed to create x509v3 extensions file");
+
+    let mut csr_cmd = process::Command::new("openssl")
+        .arg("req")
+        .arg("-new")
+        .arg("-sha256")
+        .arg("-subj")
+        .arg("/O=Redis Test/CN=Generic-cert")
+        .arg("-key")
+        .arg(dest_key)
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl");
+
+    process::Command::new("openssl")
+        .arg("x509")
+        .arg("-req")
+        .arg("-sha256")
+        .arg("-CA")
+        .arg(ca_crt)
+        .arg("-CAkey")
+        .arg(&ca_key)
+        .arg("-CAserial")
+        .arg(&ca_serial)
+        .arg("-CAcreateserial")
+        .arg("-days")
+        .arg("365")
+        .arg("-extfile")
+        .arg(&ext_file)
+        .arg("-out")
+        .arg(dest_crt)
+        .stdin(csr_cmd.stdout.take().expect("should have stdout"))
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create rotated client cert");
+
+    csr_cmd.wait().expect("failed to create rotated client CSR");
 }
 
 pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
@@ -765,6 +843,29 @@ pub fn create_connection_request(
     connection_request.client_side_cache =
         protobuf::MessageField::from_option(configuration.client_side_cache.clone());
 
+    if let Some(cert_path) = &configuration.client_cert_path {
+        connection_request.client_cert_path = Some(cert_path.clone().into());
+    }
+    if let Some(key_path) = &configuration.client_key_path {
+        connection_request.client_key_path = Some(key_path.clone().into());
+    }
+    if !configuration.root_certs.is_empty() {
+        connection_request.root_certs = configuration
+            .root_certs
+            .iter()
+            .map(|c| c.clone().into())
+            .collect();
+        connection_request.tls_mode = connection_request::TlsMode::SecureTls.into();
+    }
+    if let Some(interval) = configuration.cert_reload_interval_seconds {
+        connection_request.cert_reload =
+            protobuf::MessageField::some(connection_request::ClientCertReloadConfig {
+                enabled: true,
+                interval_seconds: Some(interval),
+                ..Default::default()
+            });
+    }
+
     connection_request
 }
 
@@ -785,6 +886,14 @@ pub struct TestConfiguration {
     pub client_side_cache: Option<connection_request::ClientSideCache>,
     /// Skip ACL setup when creating a cluster client (use when ACL is already configured).
     pub skip_acl_setup: bool,
+    /// Path to the mTLS client certificate file (PEM) for path-based cert reload.
+    pub client_cert_path: Option<String>,
+    /// Path to the mTLS client private key file (PEM) for path-based cert reload.
+    pub client_key_path: Option<String>,
+    /// Root/CA certificate bytes for SecureTls verification.
+    pub root_certs: Vec<Vec<u8>>,
+    /// Cert reload interval in seconds (enables periodic re-read of client cert/key).
+    pub cert_reload_interval_seconds: Option<u32>,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
