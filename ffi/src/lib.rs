@@ -3045,11 +3045,13 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
 /// instead of being copied again at packing and encode time. Small args are
 /// inlined as before.
 fn append_cmd_arg(cmd: &mut Cmd, arg: &[u8]) {
-    if arg.len() > redis::SHARED_ARG_INLINE_MAX {
-        cmd.arg_shared(bytes::Bytes::copy_from_slice(arg));
-    } else {
-        cmd.arg(arg);
-    }
+    // `write_arg` auto-shares large args (> SHARED_ARG_INLINE_MAX) through
+    // the recycled buffer pool: one pooled copy at the FFI boundary, then
+    // zero-copy vectored I/O to the socket. A direct
+    // `Bytes::copy_from_slice` here would allocate fresh per command and
+    // re-introduce page-fault churn under pipelined load (the buffer lives
+    // until the socket write completes).
+    cmd.arg(arg);
 }
 
 /// Like [`append_cmd_arg`] for owned buffers (compressed args): `Vec<u8>` to
