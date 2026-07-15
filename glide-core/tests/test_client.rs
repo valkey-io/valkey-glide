@@ -3587,6 +3587,11 @@ pub(crate) mod shared_client_tests {
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_mtls_cert_rotation_reconnect(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
+            // TODO(#6532): the cluster arm is skipped because cluster_manager.py
+            // hard-codes `--tls-auth-clients no`, so a cluster-through-cluster_manager
+            // cannot enforce client-cert auth. Once #6532 teaches cluster_manager.py to
+            // optionally require client certs, run the full rotation+reconnect flow here
+            // for use_cluster == true instead of returning early.
             if use_cluster {
                 println!(
                     "Skipping cluster arm: cluster_manager.py does not support \
