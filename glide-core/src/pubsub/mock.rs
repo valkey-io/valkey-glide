@@ -656,7 +656,7 @@ impl MockPubSubBroker {
         let clients = self.clients.read().await;
         let mut channels: HashSet<Vec<u8>> = HashSet::new();
 
-        for (_, client_data) in clients.iter() {
+        for client_data in clients.values() {
             let actual = client_data
                 .synchronizer
                 .actual_subscriptions
@@ -686,7 +686,7 @@ impl MockPubSubBroker {
         let clients = self.clients.read().await;
         let mut patterns: HashSet<Vec<u8>> = HashSet::new();
 
-        for (_, client_data) in clients.iter() {
+        for client_data in clients.values() {
             let actual = client_data
                 .synchronizer
                 .actual_subscriptions
@@ -725,7 +725,7 @@ impl MockPubSubBroker {
 
         for channel in &channels {
             let mut count = 0i64;
-            for (_, client_data) in clients.iter() {
+            for client_data in clients.values() {
                 let actual = client_data
                     .synchronizer
                     .actual_subscriptions
@@ -754,7 +754,7 @@ impl MockPubSubBroker {
         let clients = self.clients.read().await;
         let mut channels: HashSet<Vec<u8>> = HashSet::new();
 
-        for (_, client_data) in clients.iter() {
+        for client_data in clients.values() {
             let actual = client_data
                 .synchronizer
                 .actual_subscriptions
@@ -803,7 +803,7 @@ impl MockPubSubBroker {
 
         for channel in &channels {
             let mut count = 0i64;
-            for (_, client_data) in clients.iter() {
+            for client_data in clients.values() {
                 let actual = client_data
                     .synchronizer
                     .actual_subscriptions

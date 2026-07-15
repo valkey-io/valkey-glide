@@ -278,7 +278,7 @@ valkey-glide/
 
 - **Getting Started:** [README.md](./README.md)
 - **Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md)
-- **Security:** [SECURITY.md](./SECURITY.md)
+- **Security:** [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md)
 - **Documentation:** [docs/README.md](./docs/README.md)
 - **Examples:** [examples/](./examples/)
 - **Language-Specific Guides:**

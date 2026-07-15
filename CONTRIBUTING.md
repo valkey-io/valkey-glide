@@ -75,7 +75,7 @@ opensource-codeofconduct@amazon.com with any additional questions or comments.
 
 
 ## Security issue notifications
-See [SECURITY.md](./SECURITY.md)
+See [SECURITY.md](https://github.com/valkey-io/.github/blob/main/SECURITY.md)
 
 
 ## Licensing
