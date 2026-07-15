@@ -375,7 +375,8 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
     We use `maturin build` from the `glide-async` directory to create a Python wheel that includes the compiled Rust extension and all Python code.
 
 4. **Multiplatform packaging for PyPI**
-    To publish wheels to PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+    To build wheels for PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+    The built wheels and sdist are then uploaded to PyPI with the `pypa/gh-action-pypi-publish` action via Trusted Publishing (OIDC) with PEP 740 attestations, rather than an API token.
 
 5. **Local testing**
     You can test building a wheel and installing it locally using:
