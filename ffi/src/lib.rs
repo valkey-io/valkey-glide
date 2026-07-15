@@ -1240,8 +1240,13 @@ unsafe fn process_push_notification(
     pubsub_callback: PubSubCallback,
     client_adapter_ptr: usize,
 ) {
-    let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg) else {
-        return;
+    let (message, channel, pattern) = if push_msg.kind == redis::PushKind::Disconnection {
+        (vec![], vec![], None)
+    } else {
+        let Some(data) = extract_pubsub_data(&push_msg) else {
+            return;
+        };
+        data
     };
 
     let (message_ptr, message_len) = convert_vec_to_pointer(message);
@@ -1417,10 +1422,12 @@ fn create_client_internal(
                         }
                         std::hint::spin_loop();
                     };
-                    if (push_msg.kind == redis::PushKind::Message
+                    if push_msg.kind == redis::PushKind::Disconnection {
+                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
+                        w.push_pubsub_inline(pipe_cid, kind, &[], &[], &[]);
+                    } else if (push_msg.kind == redis::PushKind::Message
                         || push_msg.kind == redis::PushKind::PMessage
-                        || push_msg.kind == redis::PushKind::SMessage
-                        || push_msg.kind == redis::PushKind::Disconnection)
+                        || push_msg.kind == redis::PushKind::SMessage)
                         && let Some((message, channel, pattern)) = extract_pubsub_data(&push_msg)
                     {
                         let kind: i32 = PushKind::from(push_msg.kind) as i32;
@@ -5861,5 +5868,38 @@ mod tests_push_notification_safety {
             data: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
         };
         assert!(extract_pubsub_data(&all_ints).is_none());
+    }
+
+    #[test]
+    fn test_disconnection_with_empty_data_reaches_callback() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Disconnection,
+            data: vec![],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 1);
+        let data = LAST_CALLBACK_DATA.lock().unwrap();
+        let capture = data.as_ref().unwrap();
+        assert!(capture.message.is_empty());
+        assert!(capture.channel.is_empty());
+        assert!(capture.pattern.is_none());
+    }
+
+    #[test]
+    fn test_malformed_message_frame_still_dropped() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_callback_count();
+        let push_msg = redis::PushInfo {
+            kind: redis::PushKind::Message,
+            data: vec![Value::Int(99)],
+        };
+        unsafe {
+            process_push_notification(push_msg, counting_callback, 0);
+        }
+        assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
     }
 }
