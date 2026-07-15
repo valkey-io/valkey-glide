@@ -1240,15 +1240,14 @@ unsafe fn process_push_notification(
     pubsub_callback: PubSubCallback,
     client_adapter_ptr: usize,
 ) {
-    let (message, channel, pattern) =
-        if push_msg.kind == redis::PushKind::Disconnection {
-            (vec![], vec![], None)
-        } else {
-            let Some(data) = extract_pubsub_data(&push_msg) else {
-                return;
-            };
-            data
+    let (message, channel, pattern) = if push_msg.kind == redis::PushKind::Disconnection {
+        (vec![], vec![], None)
+    } else {
+        let Some(data) = extract_pubsub_data(&push_msg) else {
+            return;
         };
+        data
+    };
 
     let (message_ptr, message_len) = convert_vec_to_pointer(message);
     let (channel_ptr, channel_len) = convert_vec_to_pointer(channel);
