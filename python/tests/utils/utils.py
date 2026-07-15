@@ -322,19 +322,21 @@ async def wait_for(
 def sync_wait_for(
     condition: Callable[[], bool],
     failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
 ) -> None:
     """Waits until a condition is met.
 
     Args:
         condition: Callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
+        timeout: Maximum time to wait for the condition to be met, in seconds.
 
     Raises:
         TimeoutError: If the condition is not met within the timeout.
     """
     import time as _time
 
-    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
+    deadline = _time.monotonic() + timeout
 
     while _time.monotonic() < deadline:
         if condition():
@@ -746,6 +748,8 @@ def create_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -787,6 +791,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -813,6 +819,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -863,6 +871,8 @@ def create_sync_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -904,6 +914,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -929,6 +941,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,

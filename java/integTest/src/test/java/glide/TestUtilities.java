@@ -146,6 +146,10 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClusterClientConfiguration.builder()
+                                                    .connectionTimeout(10000)
+                                                    .build())
                                     .build())
                     .get();
         } else {
@@ -160,6 +164,8 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClientConfiguration.builder().connectionTimeout(10000).build())
                                     .build())
                     .get();
         }
@@ -944,7 +950,9 @@ public class TestUtilities {
         assertTrue((Long) stats.get("aof.buffer") >= 0);
         assertTrue((Long) stats.get("clients.normal") >= 0);
         assertTrue((Long) stats.get("clients.slaves") >= 0);
-        assertTrue((Long) stats.get("dataset.bytes") >= 0);
+        // dataset.bytes (net data memory after subtracting overhead) can be negative depending on
+        // engine memory accounting, so only assert type/presence rather than a non-negative value.
+        assertInstanceOf(Long.class, stats.get("dataset.bytes"));
         assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
         assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
         assertTrue((Long) stats.get("keys.count") >= 0);

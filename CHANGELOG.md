@@ -4,11 +4,17 @@
 
 ### Fixes
 
+* Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
+* Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
 
 ### Changes
 
+* Core/FFI: Add `command_with_route_info` FFI entrypoint, accepting routing as a `RouteInfo` C-struct pointer instead of protobuf-encoded bytes — the same mechanism `batch()` already uses. Existing `command`, `command_with_buffer`, `command_with_buffers`, and `invoke_script` are unchanged. ([#6494](https://github.com/valkey-io/valkey-glide/pull/6494))
+* CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
+* feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
+* Python: Add configurable `lib_name` and `client_info_tag` to client configuration (async and sync). ([#6378](https://github.com/valkey-io/valkey-glide/issues/6378))
 
 ## 2.5
 
@@ -21,7 +27,6 @@
 * Core: Make the pipeline send-timeout liveness-aware so sustained backpressure on a live-but-slow connection waits for channel capacity instead of failing commands with `FatalSendError`, while a genuinely dead connection still fails fast ([#5446](https://github.com/valkey-io/valkey-glide/issues/5446))
 
 ### Changes
-
 
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))

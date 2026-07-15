@@ -243,10 +243,26 @@ pub enum ResponseType {
     Error = 9,
 }
 
-/// A Send-safe wrapper around a raw buffer pointer and length.
-/// The caller guarantees the buffer remains valid for the duration of the FFI call.
-struct ResponseBuffer(*mut u8, usize);
+/// A Send-safe wrapper around caller-provided response buffers.
+/// The caller guarantees the buffers remain valid for the duration of the FFI call.
+enum ResponseBuffer {
+    /// One caller buffer for a scalar reply (e.g. GET into a buffer). Stored
+    /// inline so the common single-buffer path does not allocate.
+    Single((*mut u8, usize)),
+    /// One buffer per top-level array element (e.g. MGET into buffers).
+    Multi(Vec<(*mut u8, usize)>),
+}
 unsafe impl Send for ResponseBuffer {}
+impl ResponseBuffer {
+    /// The buffers as a slice, consumed positionally by the arena builder
+    /// (array element `i` -> buffer `i`; a scalar uses the first entry).
+    fn as_slice(&self) -> &[(*mut u8, usize)] {
+        match self {
+            ResponseBuffer::Single(buf) => std::slice::from_ref(buf),
+            ResponseBuffer::Multi(bufs) => bufs.as_slice(),
+        }
+    }
+}
 
 /// Success callback that is called when a command succeeds.
 ///
@@ -817,7 +833,8 @@ impl ClientAdapter {
                     self.runtime.spawn(async move {
                         match request_future.await {
                             Ok(value) => {
-                                let buf = response_buf.map(|rb| (rb.0, rb.1));
+                                let buf: &[(*mut u8, usize)] =
+                                    response_buf.as_ref().map(|rb| rb.as_slice()).unwrap_or(&[]);
                                 match valkey_value_to_arena_response(value, buf) {
                                     Ok((root_ptr, arena_ptr)) => {
                                         if let Some(w) = ASYNC_PIPE.get() {
@@ -903,7 +920,8 @@ impl ClientAdapter {
     ) -> *mut CommandResult {
         match result {
             Ok(value) => {
-                let buf = response_buf.map(|rb| (rb.0, rb.1));
+                let buf: &[(*mut u8, usize)] =
+                    response_buf.as_ref().map(|rb| rb.as_slice()).unwrap_or(&[]);
                 if let Some(success_callback) = success_callback {
                     // Stack fast-path for simple types: avoids arena allocation.
                     // Only used when the caller opts in (allow_stack_response=true),
@@ -2610,22 +2628,23 @@ impl ResponseArena {
     }
 
     /// Build the response tree into the arena. Returns index of the root node.
-    fn build(
-        &mut self,
-        value: Value,
-        response_buf: Option<(*mut u8, usize)>,
-    ) -> RedisResult<usize> {
+    fn build(&mut self, value: Value, bufs: &[(*mut u8, usize)]) -> RedisResult<usize> {
         let idx = self.alloc_node();
-        self.build_into(idx, value, response_buf)?;
+        self.build_into(idx, value, bufs)?;
         Ok(idx)
     }
 
     /// Build a value into a pre-allocated node at the given index.
+    ///
+    /// `bufs` carries caller-owned response buffers consumed positionally: a
+    /// scalar value uses `bufs[0]`; an `Array` distributes `bufs[i]` to child
+    /// `i`, enabling zero-copy multi-key reads (e.g. MGET-into-buffers). An
+    /// empty slice means "no caller buffer" (normal heap-allocated response).
     fn build_into(
         &mut self,
         idx: usize,
         value: Value,
-        response_buf: Option<(*mut u8, usize)>,
+        bufs: &[(*mut u8, usize)],
     ) -> RedisResult<()> {
         match value {
             Value::Nil => {}
@@ -2651,25 +2670,29 @@ impl ResponseArena {
                 self.nodes[idx].string_value_len = len;
             }
             Value::BulkString(data) => {
-                let data = if let Some((buf, buf_len)) = response_buf {
-                    if data.len() > buf_len {
-                        return Err(RedisError::from((
-                            ErrorKind::ClientError,
-                            "Value size exceeds buffer capacity",
-                            format!(
-                                "value is {} bytes but buffer is {} bytes",
-                                data.len(),
-                                buf_len
-                            ),
-                        )));
-                    }
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
-                    }
-                    data.len().to_string().into_bytes()
-                } else {
-                    data
-                };
+                // Use the caller buffer only when a non-null destination was
+                // provided; a null entry falls back to a normal heap response
+                // (avoids writing through a null/invalid pointer).
+                let data =
+                    if let Some(&(buf, buf_len)) = bufs.first().filter(|&&(p, _)| !p.is_null()) {
+                        if data.len() > buf_len {
+                            return Err(RedisError::from((
+                                ErrorKind::ClientError,
+                                "Value size exceeds buffer capacity",
+                                format!(
+                                    "value is {} bytes but buffer is {} bytes",
+                                    data.len(),
+                                    buf_len
+                                ),
+                            )));
+                        }
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+                        }
+                        data.len().to_string().into_bytes()
+                    } else {
+                        data
+                    };
                 let (ptr, len) = self.store_string(data);
                 self.nodes[idx].response_type = ResponseType::String;
                 self.nodes[idx].string_value = ptr;
@@ -2688,10 +2711,13 @@ impl ResponseArena {
                 for _ in 0..child_count {
                     self.alloc_node();
                 }
-                // Build each child; descendants go after all child slots
+                // Build each child; descendants go after all child slots.
+                // Distribute caller buffers positionally so each element of an
+                // MGET-style response is written into its own buffer.
                 for (i, item) in arr.into_iter().enumerate() {
                     let ci = child_start + i;
-                    self.build_into(ci, item, None)?;
+                    let child_bufs = bufs.get(i).map(core::slice::from_ref).unwrap_or(&[]);
+                    self.build_into(ci, item, child_bufs)?;
                 }
                 self.nodes[idx].response_type = ResponseType::Array;
                 self.nodes[idx].array_value_len = child_count as c_long;
@@ -2707,9 +2733,9 @@ impl ResponseArena {
                 }
                 for (i, (k, v)) in map.into_iter().enumerate() {
                     let ki = self.nodes.len();
-                    self.build(k, None)?;
+                    self.build(k, &[])?;
                     let vi = self.nodes.len();
-                    self.build(v, None)?;
+                    self.build(v, &[])?;
                     // Pointers fixed up in finalize() along with array_value
                     self.nodes[wrapper_start + i].map_key = ki as *mut CommandResponse;
                     self.nodes[wrapper_start + i].map_value = vi as *mut CommandResponse;
@@ -2726,7 +2752,7 @@ impl ResponseArena {
                 }
                 for (i, item) in arr.into_iter().enumerate() {
                     let ci = child_start + i;
-                    self.build_into(ci, item, None)?;
+                    self.build_into(ci, item, &[])?;
                 }
                 self.nodes[idx].response_type = ResponseType::Sets;
                 self.nodes[idx].sets_value_len = child_count as c_long;
@@ -2768,7 +2794,7 @@ impl ResponseArena {
                 self.nodes[vk].string_value_len = len;
                 // values value (array)
                 let vv = self.nodes.len();
-                self.build(Value::Array(data), None)?;
+                self.build(Value::Array(data), &[])?;
                 self.nodes[w1].map_key = vk as *mut CommandResponse;
                 self.nodes[w1].map_value = vv as *mut CommandResponse;
 
@@ -2821,10 +2847,10 @@ impl ResponseArena {
 /// The arena_ptr must be freed with `free_response_arena`.
 fn valkey_value_to_arena_response(
     value: Value,
-    response_buf: Option<(*mut u8, usize)>,
+    bufs: &[(*mut u8, usize)],
 ) -> RedisResult<(*mut CommandResponse, *mut ResponseArena)> {
     let mut arena = ResponseArena::from_pool(&value);
-    arena.build(value, response_buf)?;
+    arena.build(value, bufs)?;
     Ok(arena.finalize())
 }
 
@@ -2886,6 +2912,62 @@ pub unsafe extern "C-unwind" fn command(
     }
 }
 
+/// Where routing info came from across the FFI boundary: legacy protobuf
+/// bytes ([`command_with_buffer`]) or a [`RouteInfo`] C-struct
+/// ([`command_with_route_info`]).
+enum RouteInput {
+    /// Protobuf-encoded `Routes` bytes. Null means no route.
+    ProtobufBytes {
+        route_bytes: *const u8,
+        route_bytes_len: usize,
+    },
+    /// A `RouteInfo` C-struct pointer. Null means no route.
+    RouteInfo(*const RouteInfo),
+}
+
+impl RouteInput {
+    /// Resolves to a [`RoutingInfo`] given a `cmd` is built (needed for
+    /// `AllNodes`/`AllPrimaries` `ResponsePolicy`).
+    ///
+    /// # Safety
+    /// Pointers must be null or valid for their variant. See
+    /// [`create_route`].
+    unsafe fn resolve(self, cmd: &Cmd) -> RedisResult<Option<RoutingInfo>> {
+        match self {
+            RouteInput::ProtobufBytes {
+                route_bytes,
+                route_bytes_len,
+            } => unsafe { Self::resolve_protobuf_bytes(route_bytes, route_bytes_len, cmd) },
+            RouteInput::RouteInfo(route_info) => unsafe { Ok(create_route(route_info, Some(cmd))) },
+        }
+    }
+
+    /// Decodes `route_bytes` as protobuf `Routes` (or defaults when null),
+    /// then converts via [`get_route`].
+    ///
+    /// # Safety
+    /// `route_bytes` must either point to valid `route_bytes_len` bytes or be null.
+    unsafe fn resolve_protobuf_bytes(
+        route_bytes: *const u8,
+        route_bytes_len: usize,
+        cmd: &Cmd,
+    ) -> RedisResult<Option<RoutingInfo>> {
+        let route = if !route_bytes.is_null() {
+            let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+            Routes::parse_from_bytes(r_bytes).map_err(|err| {
+                RedisError::from((
+                    ErrorKind::ClientError,
+                    "Decoding route failed",
+                    err.to_string(),
+                ))
+            })?
+        } else {
+            Routes::default()
+        };
+        get_route(route, Some(cmd))
+    }
+}
+
 /// Executes a command, optionally copying a BulkString response directly into a
 /// caller-provided buffer instead of returning it as a heap-allocated value.
 ///
@@ -2925,6 +3007,51 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
     route_bytes_len: usize,
     response_buf: *mut u8,
     response_buf_len: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    let buf_option = if response_buf.is_null() {
+        None
+    } else {
+        Some(ResponseBuffer::Single((response_buf, response_buf_len)))
+    };
+    unsafe {
+        execute_command_with_buffer(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            route_bytes,
+            route_bytes_len,
+            buf_option,
+            span_ptr,
+        )
+    }
+}
+
+/// The underlying command execution implementation. Used by various command
+/// execution API like: [`command_with_buffer`], [`command_with_buffers`],
+/// and [`command_with_route_info`]. It builds and dispatches the command,
+/// writing the reply into `response_buffer` when present (a single buffer for
+/// a scalar reply, one buffer per element for an array reply).
+///
+/// # Safety
+/// `client_adapter_ptr` and `args`/`args_len` follow the same contract as
+/// [`command_with_buffer`]. `route_input` follows the safety contract
+/// documented on [`RouteInput::resolve`]. Any buffers referenced by
+/// `response_buffer` must remain valid and writable until the command completes.
+// Mirrors the C ABI of the FFI entry points it backs, hence the argument count.
+#[allow(clippy::too_many_arguments)]
+unsafe fn execute_command(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_input: RouteInput,
+    response_buffer: Option<ResponseBuffer>,
     span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
@@ -3010,40 +3137,156 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         set_db_attributes(span, &cmd, &client_adapter.core.client);
     }
 
-    let route = if !route_bytes.is_null() {
-        let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
-        match Routes::parse_from_bytes(r_bytes) {
-            Ok(route) => route,
-            Err(err) => {
-                let err = RedisError::from((
-                    ErrorKind::ClientError,
-                    "Decoding route failed",
-                    err.to_string(),
-                ));
-                return unsafe { client_adapter.handle_redis_error(err, request_id) };
-            }
+    let routing_info = match unsafe { route_input.resolve(&cmd) } {
+        Ok(routing_info) => routing_info,
+        Err(err) => {
+            return unsafe { client_adapter.handle_redis_error(err, request_id) };
         }
-    } else {
-        Routes::default()
     };
 
     // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let mut client = client_adapter.core.client.clone();
 
-    let buf_option = if response_buf.is_null() {
-        None
-    } else {
-        Some(ResponseBuffer(response_buf, response_buf_len))
-    };
-
     client_adapter.execute_request_with_buffer(
         request_id,
-        async move {
-            let routing_info = get_route(route, Some(&cmd))?;
-            client.send_command(&mut cmd, routing_info).await
-        },
-        buf_option,
+        async move { client.send_command(&mut cmd, routing_info).await },
+        response_buffer,
     )
+}
+
+/// Thin wrapper around [`execute_command`] that resolves routing from
+/// protobuf-encoded `route_bytes`, matching the contract shared by
+/// [`command_with_buffer`] and [`command_with_buffers`].
+///
+/// # Parameters
+/// - `client_adapter_ptr`: Pointer to the `Arc<ClientAdapter>` obtained from
+///   [`create_client`]. The strong count is incremented so the caller's
+///   original `Arc` remains valid.
+/// - `request_id`: Caller-supplied ID used to correlate the eventual
+///   response (or async callback invocation) with this call.
+/// - `command_type`: Identifies which Valkey/Redis command to run; mapped to
+///   the internal `Cmd` via `command_type.get_command()`.
+/// - `arg_count`: Number of elements in the `args` / `args_len` arrays.
+/// - `args`: Pointer to an array of pointers, each pointing to one command
+///   argument's raw bytes. Caller-owned; must remain valid for the duration
+///   of the call.
+/// - `args_len`: Parallel array giving the byte length of each argument
+///   pointed to by `args`. Must be null iff `args` is null.
+/// - `route_bytes`: Optional protobuf-encoded `Routes` message describing
+///   where to send the command (e.g. specific node, all primaries). Null
+///   means no explicit route (default routing is used).
+/// - `route_bytes_len`: Number of bytes in `route_bytes`; must be `0` when
+///   `route_bytes` is null.
+/// - `response_buffer`: Optional caller-provided buffer(s) for zero-copy
+///   response writing — `Single` for a scalar reply (e.g. GET), `Multi` with
+///   one buffer per element for an array reply (e.g. MGET). When `None`, the
+///   response is heap/arena-allocated and returned normally.
+/// - `span_ptr`: Pointer (as `u64`) to an `Arc<GlideSpan>` OpenTelemetry span
+///   created by `create_otel_span`, or `0` for no tracing. When non-zero, it
+///   is attached to the command so the request is traced.
+///
+/// # Safety
+/// `client_adapter_ptr`, `args`/`args_len`, and `route_bytes` follow the same
+/// contract as [`command_with_buffer`]. Any buffers referenced by `response_buffer`
+/// must remain valid and writable until the command completes.
+// Mirrors the C ABI of the FFI entry points it backs, hence the argument count.
+#[allow(clippy::too_many_arguments)]
+unsafe fn execute_command_with_buffer(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    response_buffer: Option<ResponseBuffer>,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    unsafe {
+        execute_command(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            RouteInput::ProtobufBytes {
+                route_bytes,
+                route_bytes_len,
+            },
+            response_buffer,
+            span_ptr,
+        )
+    }
+}
+
+/// MGET-style variant of [`command_with_buffer`] that writes each element of an
+/// array response into its own caller-provided buffer (zero-copy multi-key GET).
+///
+/// `response_bufs` / `response_buf_lens` are parallel arrays of
+/// `response_buf_count` writable buffers; element `i` of the array response is
+/// copied into buffer `i`. A `Nil` element (e.g. a missing key) leaves its
+/// buffer untouched and is reported as a null response. The command response
+/// carries the number of bytes written per element instead of the value bytes.
+///
+/// Intended for commands whose reply is a flat array of bulk strings (e.g.
+/// `MGET`) or a scalar bulk string. If an element's value is larger than its
+/// buffer, the whole command fails with a client error. A null buffer entry, or
+/// fewer buffers than reply elements, makes the affected elements fall back to a
+/// normal heap-allocated response (no zero-copy) rather than erroring.
+///
+/// # Safety
+/// Same contract as [`command_with_buffer`]. When non-null, `response_bufs` and
+/// `response_buf_lens` must each point to `response_buf_count` valid entries.
+/// Each buffer must remain valid and writable until the command **completes**:
+/// for sync clients that is until this call returns; for async clients it is
+/// until the success/failure callback fires (the copy happens off-thread).
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn command_with_buffers(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    response_bufs: *const *mut u8,
+    response_buf_lens: *const usize,
+    response_buf_count: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    // Collect the caller's per-element buffers into a single owned Vec, consumed
+    // positionally by the arena builder (element i -> buffer i). Both parallel
+    // arrays must be non-null; otherwise the request runs without buffers.
+    let buf_option =
+        if response_bufs.is_null() || response_buf_lens.is_null() || response_buf_count == 0 {
+            None
+        } else {
+            let ptrs = unsafe { std::slice::from_raw_parts(response_bufs, response_buf_count) };
+            let lens = unsafe { std::slice::from_raw_parts(response_buf_lens, response_buf_count) };
+            Some(ResponseBuffer::Multi(
+                ptrs.iter()
+                    .zip(lens.iter())
+                    .map(|(&p, &l)| (p, l))
+                    .collect(),
+            ))
+        };
+    unsafe {
+        execute_command_with_buffer(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            route_bytes,
+            route_bytes_len,
+            buf_option,
+            span_ptr,
+        )
+    }
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
@@ -3555,7 +3798,7 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
         || (cid != 0 && ASYNC_PIPE.get().is_some());
     if is_pipe_or_sync {
         match result {
-            Ok(value) => match valkey_value_to_arena_response(value, None) {
+            Ok(value) => match valkey_value_to_arena_response(value, &[]) {
                 Ok((root_ptr, arena_ptr)) => Box::into_raw(Box::new(CommandResult {
                     response: root_ptr,
                     command_error: std::ptr::null_mut(),
@@ -5341,5 +5584,60 @@ pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) 
         // Drop calls runtime.block_on(client.stop_async()), ensuring the task
         // has fully exited before the adapter memory is freed.
         let _ = unsafe { Box::from_raw(client_ptr as *mut MonitorAdapter) };
+    }
+}
+/// Execute a command with routing using a [`RouteInfo`] C-struct pointer
+/// instead of protobuf-encoded route bytes.
+///
+/// Behaves identically to [`command_with_buffer`] otherwise, including the
+/// buffer-response behavior: when `response_buf` is null, the response flows
+/// through the normal `execute_request` path; when non-null, the response is
+/// written directly into the buffer.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
+/// * `request_id` must be a request ID from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `arg_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `route_info` could be `null`, which means no route (equivalent to an unset `route_bytes`); if not `null`, it must be a valid pointer to a [`RouteInfo`] struct for the duration of this call.
+/// * When non-null, `response_buf` must point to a writable buffer of at least `response_buf_len` bytes.
+/// * `response_buf_len` must be 0 if `response_buf` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn command_with_route_info(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_info: *const RouteInfo,
+    response_buf: *mut u8,
+    response_buf_len: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    let buf_option = if response_buf.is_null() {
+        None
+    } else {
+        Some(ResponseBuffer::Single((response_buf, response_buf_len)))
+    };
+    unsafe {
+        execute_command(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            RouteInput::RouteInfo(route_info),
+            buf_option,
+            span_ptr,
+        )
     }
 }

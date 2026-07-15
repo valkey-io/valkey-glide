@@ -724,7 +724,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         } else {
             // For regular subscriptions (Exact/Pattern), remove from ALL addresses.
             // These are not slot-bound, and the server's unsubscribe is authoritative.
-            for (_, addr_subs) in current_by_addr.iter_mut() {
+            for addr_subs in current_by_addr.values_mut() {
                 if let Some(existing) = addr_subs.get_mut(&subscription_type) {
                     for channel in &channels {
                         existing.remove(channel);

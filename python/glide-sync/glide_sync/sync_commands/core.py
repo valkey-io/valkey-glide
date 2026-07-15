@@ -82,6 +82,7 @@ class CoreCommands(Protocol):
         args: List[TEncodable],
         route: Optional[Route] = ...,
         response_buffer: Optional[memoryview] = ...,
+        response_buffers: Optional[List[memoryview]] = ...,
     ) -> TResult: ...
 
     def _execute_batch(
@@ -763,7 +764,11 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
-    def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
+    def mget(
+        self,
+        keys: List[TEncodable],
+        buffers: Optional[List[memoryview]] = None,
+    ) -> List[Optional[bytes]]:
         """
         Retrieve the values of multiple keys.
 
@@ -780,19 +785,38 @@ class CoreCommands(Protocol):
 
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
+            buffers (Optional[List[memoryview]]): Optional writable, C-contiguous
+                buffers, one per key, to receive the values without an
+                intermediate allocation (zero-copy). When given, value ``i`` is
+                written into ``buffers[i]`` and the buffer must be large enough to
+                hold it. Must have the same length as ``keys``. When omitted,
+                ``mget`` allocates and returns ``bytes`` as before.
 
         Returns:
-            List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
-            its corresponding value in the list will be None.
+            List[Optional[bytes]]:
+                Without buffers: a list of values corresponding to the provided
+                keys. If a key is not found, its element is None.
+
+                With buffers: each found value is copied into its buffer instead
+                of being allocated, and the corresponding element is the number
+                of bytes written as a byte string (e.g. b'4096'); a missing key
+                is still None. This matches the single-key get(key, buffer=...)
+                convention, so read value i from buffers[i][:int(result[i])].
 
         Examples:
             >>> client.set("key1", "value1")
             >>> client.set("key2", "value2")
             >>> client.mget(["key1", "key2"])
                 [b'value1' , b'value2']
+            >>> bufs = [memoryview(bytearray(64)) for _ in range(2)]
+            >>> client.mget(["key1", "key2"], buffers=bufs)
+                [b'6', b'6']  # 6 bytes written into each buffer; bytes(bufs[0][:6]) == b'value1'
         """
+        if buffers is not None and len(buffers) != len(keys):
+            raise ValueError("buffers must have the same length as keys")
         return cast(
-            List[Optional[bytes]], self._execute_command(RequestType.MGet, keys)
+            List[Optional[bytes]],
+            self._execute_command(RequestType.MGet, keys, response_buffers=buffers),
         )
 
     def decr(self, key: TEncodable) -> int:
