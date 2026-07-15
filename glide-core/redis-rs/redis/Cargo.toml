@@ -120,7 +120,7 @@ keep-alive = ["socket2"]
 sentinel = ["rand"]
 
 [dev-dependencies]
-bytes = "1"
+bytes = "1.9"
 tokio-util = { version = "0.7", features = ["codec"] }
 rand = "0.9"
 socket2 = "0.6"

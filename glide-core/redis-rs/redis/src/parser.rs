@@ -653,7 +653,7 @@ mod zero_copy {
 mod aio_support {
     use super::*;
 
-    use bytes::{Buf, Bytes, BytesMut};
+    use bytes::{Buf, BytesMut};
     use tokio::io::AsyncRead;
     use tokio_util::codec::{Decoder, Encoder};
 
@@ -698,25 +698,24 @@ mod aio_support {
                 }
                 Ok(Some(end)) => {
                     self.scan.reset();
-                    // Hybrid frame extraction, chosen from profiling:
-                    // - Small frames: ONE bulk memcpy out of the read buffer.
-                    //   Keeps the codec's BytesMut unshared so tokio reuses
-                    //   its allocation (freezing every frame caused
-                    //   realloc+copy churn in BytesMut::reserve — 40% of
-                    //   client CPU under pipelined load).
-                    // - Large frames: take ownership zero-copy via
-                    //   split_to().freeze(). The buffer had to grow for them
-                    //   anyway, and copying hundreds of KB costs more than
-                    //   losing one allocation's reuse.
-                    // Bulk strings are then zero-copy slices of the frame.
-                    const FRAME_COPY_MAX: usize = 64 * 1024;
-                    let frame = if end > FRAME_COPY_MAX {
-                        bytes.split_to(end).freeze()
-                    } else {
-                        let frame = Bytes::copy_from_slice(&bytes[..end]);
-                        bytes.advance(end);
-                        frame
-                    };
+                    // Copy the complete frame out of the read buffer into a
+                    // recycled pooled buffer (see `buf_pool`), then slice
+                    // bulk-string payloads out of it zero-copy.
+                    //
+                    // Copy-always was chosen from profiling against a real
+                    // network peer:
+                    // - Freezing frames out of the read buffer (even only
+                    //   large ones) defeats the BytesMut allocation reuse and
+                    //   causes realloc/page-fault churn in `reserve`; a
+                    //   256 KB GET measured 2x the client CPU of the copy
+                    //   path under pipelined load.
+                    // - A fresh allocation per frame is the other churn
+                    //   source (~16 concurrent frames alive at depth 16
+                    //   defeat allocator reuse; fault handling reached 30% of
+                    //   client CPU at 64 KB). The pool recycles the frame
+                    //   buffers so their pages stay resident.
+                    let frame = crate::buf_pool::pooled_bytes_from_slice(&bytes[..end]);
+                    bytes.advance(end);
                     let mut pos = 0;
                     let value = super::zero_copy::parse_value(&frame, &mut pos, 1)?;
                     Ok(Some(Ok(value)))
