@@ -1,10 +1,11 @@
 # Changelog
 
-## Pending 2.5
+## 2.5
 
 ### Fixes
 
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard. PR #6530 inadvertently chained `PushKind::Disconnection` (which carries an empty payload) through `extract_pubsub_data`, causing all disconnect notifications to be silently dropped on the async pipe path. ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
+* CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
 * Core: Enforce the RESP3 parser recursion-depth limit for all aggregate types (map, set, push, attribute), not just arrays. A malicious or compromised server could previously send deeply nested `%`/`~`/`>`/`|` payloads that consumed one native stack frame per level and crashed the host application via stack exhaustion (DoS); such payloads now surface a graceful parse error. ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core/FFI: fix(ffi): prevent pub/sub DoS from malformed server push frames ([#6530](https://github.com/valkey-io/valkey-glide/pull/6530))
 * Core/FFI: Fix heap corruption in `convert_vec_to_pointer` where `shrink_to_fit()` (a non-binding hint) was followed by `Vec::from_raw_parts` with `capacity = len`. When the allocator kept extra capacity, deallocation passed the wrong size, corrupting heap metadata and causing delayed SIGABRT crashes after many pubsub messages or response frees. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
@@ -14,7 +15,7 @@
 
 ### Changes
 
-
+* CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))
 * Core, Java, Python, Node, Go: Add `MEMORY DOCTOR`, `MEMORY MALLOC-STATS`, `MEMORY PURGE`, and `MEMORY STATS` commands ([#6286](https://github.com/valkey-io/valkey-glide/issues/6286))
