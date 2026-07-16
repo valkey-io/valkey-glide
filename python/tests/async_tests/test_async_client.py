@@ -6,9 +6,15 @@ from __future__ import annotations
 import math
 import os
 import platform
+import sys
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 import anyio
 import pytest
@@ -161,6 +167,14 @@ class TestGlideClients:
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         ) as client:
             assert not client._is_closed
+            # __aenter__ must be annotated `-> Self` so that subclasses keep
+            # their concrete type in `async with` (regression guard for
+            # https://github.com/valkey-io/valkey-glide/issues/6531). Annotating
+            # it as `"BaseClient"` widens the type for static type checkers.
+            aenter_return = get_type_hints(type(client).__aenter__)["return"]
+            assert aenter_return is Self, (
+                "BaseClient.__aenter__ must return `Self`, got " f"{aenter_return!r}"
+            )
 
         assert client._is_closed
 
