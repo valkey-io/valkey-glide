@@ -28,6 +28,7 @@ LOG_LEVELS = {
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
 
+
 # Use /tmp/clusters for Windows WSL, otherwise use the default path
 def _get_clusters_folder():
     if os.getenv("CLUSTERS_FOLDER"):
@@ -43,6 +44,7 @@ def _get_clusters_folder():
 
     return os.path.abspath(f"{GLIDE_HOME_DIR}/clusters")
 
+
 CLUSTERS_FOLDER = _get_clusters_folder()
 TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
@@ -55,6 +57,7 @@ HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 # Default hosts (loopback addresses for IPv4 and IPv6)
 DEFAULT_HOST_IPV4: str = "127.0.0.1"
 DEFAULT_HOST_IPV6: str = "::1"
+
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
@@ -257,7 +260,9 @@ def generate_tls_certs():
 
 
 def get_cli_option_args(
-    cluster_folder: str, use_tls: bool, auth: Optional[str] = None,
+    cluster_folder: str,
+    use_tls: bool,
+    auth: Optional[str] = None,
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
@@ -551,7 +556,15 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(
+            server,
+            cluster_folder,
+            tls,
+            10,
+            tls_cert_file,
+            tls_key_file,
+            tls_ca_cert_file,
+        ):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -561,6 +574,31 @@ def create_servers(
     toc = time.perf_counter()
     logging.debug(f"create_servers() Elapsed time: {toc - tic:0.4f}")
     return ready_servers
+
+
+def _cleanup_servers(
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+):
+    """Stop running servers and remove their node folders during retry cleanup."""
+    for server in servers:
+        try:
+            stop_server(server, cluster_folder, use_tls, None)
+        except Exception as e:
+            logging.warning(
+                f"Failed to gracefully stop server {server} during cleanup: {e}"
+            )
+            if server.pid > 0:
+                try:
+                    os.kill(server.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        node_folder = f"{cluster_folder}/{server.port}"
+        try:
+            remove_folder(node_folder)
+        except Exception as e:
+            logging.warning(f"Failed to remove folder {node_folder}: {e}")
 
 
 def create_cluster(
@@ -579,7 +617,14 @@ def create_cluster(
     p = subprocess.Popen(
         [
             get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            *get_cli_option_args(
+                cluster_folder,
+                use_tls,
+                None,
+                tls_cert_file,
+                tls_key_file,
+                tls_ca_cert_file,
+            ),
             "--cluster",
             "create",
             *servers_tuple,
@@ -596,7 +641,9 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+    wait_for_all_topology_views(
+        servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file
+    )
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -744,7 +791,14 @@ def wait_for_all_topology_views(
             server.host,
             "-p",
             str(server.port),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            *get_cli_option_args(
+                cluster_folder,
+                use_tls,
+                None,
+                tls_cert_file,
+                tls_key_file,
+                tls_ca_cert_file,
+            ),
             "cluster",
             "slots",
         ]
@@ -760,7 +814,14 @@ def wait_for_all_topology_views(
                     server.host,
                     "-p",
                     str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    *get_cli_option_args(
+                        cluster_folder,
+                        use_tls,
+                        None,
+                        tls_cert_file,
+                        tls_key_file,
+                        tls_ca_cert_file,
+                    ),
                     "cluster",
                     "nodes",
                 ]
@@ -801,7 +862,14 @@ def wait_for_server(
                 server.host,
                 "-p",
                 str(server.port),
-                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                *get_cli_option_args(
+                    cluster_folder,
+                    use_tls,
+                    None,
+                    tls_cert_file,
+                    tls_key_file,
+                    tls_ca_cert_file,
+                ),
                 "PING",
             ],
             stdout=subprocess.PIPE,
@@ -917,13 +985,24 @@ def dir_path(path: str):
         raise NotADirectoryError(path)
 
 
-def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
+def stop_server(
+    server: Server, cluster_folder: str, use_tls: bool, auth: Optional[str]
+):
     logging.debug(f"Stopping server {server}")
     try:
         ping = subprocess.run(
-            [get_cli_command(), "-h", server.host, "-p", str(server.port),
-             *get_cli_option_args(cluster_folder, use_tls, auth), "PING"],
-            capture_output=True, text=True, timeout=2,
+            [
+                get_cli_command(),
+                "-h",
+                server.host,
+                "-p",
+                str(server.port),
+                *get_cli_option_args(cluster_folder, use_tls, auth),
+                "PING",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         if ping.returncode != 0:
             logging.info(f"Server {server} is already down, skipping shutdown")
@@ -1226,6 +1305,14 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        required=False,
+        help="Maximum retry attempts for cluster/replication creation on transient failures (default: %(default)s)",
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1300,39 +1387,54 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
-        servers = create_servers(
-            args.host,
-            args.shard_count,
-            args.replica_count,
-            args.ports,
-            cluster_folder,
-            args.tls,
-            args.cluster_mode,
-            args.load_module,
-            False,
-            getattr(args, 'tls_cert_file', None),
-            getattr(args, 'tls_key_file', None),
-            getattr(args, 'tls_ca_cert_file', None),
-        )
-        if args.cluster_mode:
-            # Create a cluster
-            create_cluster(
-                servers,
-                args.shard_count,
-                args.replica_count,
-                cluster_folder,
-                args.tls,
-                getattr(args, 'tls_cert_file', None),
-                getattr(args, 'tls_key_file', None),
-                getattr(args, 'tls_ca_cert_file', None),
-            )
-        elif args.replica_count > 0:
-            # Create a standalone replication group
-            create_standalone_replication(
-                servers,
-                cluster_folder,
-                args.tls,
-            )
+        max_retries = args.max_retries
+        servers = None
+        for attempt in range(max_retries + 1):
+            try:
+                servers = create_servers(
+                    args.host,
+                    args.shard_count,
+                    args.replica_count,
+                    args.ports if attempt == 0 else None,
+                    cluster_folder,
+                    args.tls,
+                    args.cluster_mode,
+                    args.load_module,
+                    False,
+                    getattr(args, "tls_cert_file", None),
+                    getattr(args, "tls_key_file", None),
+                    getattr(args, "tls_ca_cert_file", None),
+                )
+                if args.cluster_mode:
+                    create_cluster(
+                        servers,
+                        args.shard_count,
+                        args.replica_count,
+                        cluster_folder,
+                        args.tls,
+                        getattr(args, "tls_cert_file", None),
+                        getattr(args, "tls_key_file", None),
+                        getattr(args, "tls_ca_cert_file", None),
+                    )
+                elif args.replica_count > 0:
+                    create_standalone_replication(
+                        servers,
+                        cluster_folder,
+                        args.tls,
+                    )
+                break
+            except Exception as e:
+                if servers is not None:
+                    _cleanup_servers(servers, cluster_folder, args.tls)
+                    servers = None
+                if attempt == max_retries:
+                    raise
+                backoff = 2 * (attempt + 1)
+                logging.warning(
+                    f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
+                    f"Retrying in {backoff}s..."
+                )
+                time.sleep(backoff)
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
         logging.info(
