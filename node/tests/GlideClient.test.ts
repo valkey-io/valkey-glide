@@ -2207,7 +2207,10 @@ describe("GlideClient", () => {
             // Recreate client if config changed or client is dead
             if (configOverrides || !client || protocol !== lastProtocol) {
                 client?.close();
-                client = await GlideClient.createClient(config);
+                client = await GlideClient.createClient({
+                    ...config,
+                    advancedConfiguration: { connectionTimeout: 10000 },
+                });
             } else {
                 try {
                     await client.ping();

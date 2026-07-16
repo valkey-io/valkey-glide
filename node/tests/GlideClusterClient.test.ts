@@ -169,7 +169,10 @@ describe("GlideClusterClient", () => {
             // Recreate client if config changed or client is dead
             if (configOverrides || !client || protocol !== lastProtocol) {
                 client?.close();
-                client = await GlideClusterClient.createClient(configCurrent);
+                client = await GlideClusterClient.createClient({
+                    ...configCurrent,
+                    advancedConfiguration: { connectionTimeout: 10000 },
+                });
             } else {
                 try {
                     await client.ping();
