@@ -113,7 +113,7 @@ impl<W: AsyncWrite> VectoredSink<W> {
     }
 }
 
-impl<W: AsyncWrite> Sink<crate::cmd::SegmentedBytes> for VectoredSink<W> {
+impl<W: AsyncWrite> Sink<crate::cmd::SendBuf> for VectoredSink<W> {
     type Error = RedisError;
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
@@ -124,15 +124,24 @@ impl<W: AsyncWrite> Sink<crate::cmd::SegmentedBytes> for VectoredSink<W> {
         self.poll_flush_queue(cx)
     }
 
-    fn start_send(
-        self: Pin<&mut Self>,
-        item: crate::cmd::SegmentedBytes,
-    ) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: crate::cmd::SendBuf) -> Result<(), Self::Error> {
         let this = self.project();
-        for segment in item.into_segments() {
-            if !segment.is_empty() {
-                *this.queued_bytes += segment.len();
-                this.queue.push_back(segment);
+        match item {
+            crate::cmd::SendBuf::Contiguous(buf) => {
+                if !buf.is_empty() {
+                    *this.queued_bytes += buf.len();
+                    // from_owner: avoids Bytes::from(Vec)'s shrink-realloc
+                    // on excess capacity.
+                    this.queue.push_back(bytes::Bytes::from_owner(buf));
+                }
+            }
+            crate::cmd::SendBuf::Segmented(segments) => {
+                for segment in segments.into_segments() {
+                    if !segment.is_empty() {
+                        *this.queued_bytes += segment.len();
+                        this.queue.push_back(segment);
+                    }
+                }
             }
         }
         Ok(())
@@ -176,9 +185,9 @@ where
     }
 }
 
-impl<R, W> Sink<crate::cmd::SegmentedBytes> for SplitSinkStream<R, W>
+impl<R, W> Sink<crate::cmd::SendBuf> for SplitSinkStream<R, W>
 where
-    W: Sink<crate::cmd::SegmentedBytes, Error = RedisError>,
+    W: Sink<crate::cmd::SendBuf, Error = RedisError>,
 {
     type Error = RedisError;
 
@@ -186,10 +195,7 @@ where
         self.project().write.poll_ready(cx)
     }
 
-    fn start_send(
-        self: Pin<&mut Self>,
-        item: crate::cmd::SegmentedBytes,
-    ) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: crate::cmd::SendBuf) -> Result<(), Self::Error> {
         self.project().write.start_send(item)
     }
 
@@ -964,7 +970,7 @@ where
 /// on the same underlying connection (tcp/unix socket).
 #[derive(Clone)]
 pub struct MultiplexedConnection {
-    pipeline: Pipeline<crate::cmd::SegmentedBytes>,
+    pipeline: Pipeline<crate::cmd::SendBuf>,
     db: i64,
     response_timeout: Duration,
     protocol: ProtocolVersion,
@@ -1090,7 +1096,13 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_single(
-                cmd.get_packed_segments(),
+                // Commands with no out-of-line payloads skip the segmented
+                // representation entirely (see SendBuf::Contiguous).
+                if cmd.has_out_of_line_args() {
+                    crate::cmd::SendBuf::Segmented(cmd.get_packed_segments())
+                } else {
+                    crate::cmd::SendBuf::Contiguous(cmd.get_packed_command())
+                },
                 timeout,
                 cmd.is_fenced(),
                 cmd.is_blocking(),
@@ -1131,7 +1143,7 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_recv(
-                cmd.get_packed_pipeline_segments(),
+                crate::cmd::SendBuf::Segmented(cmd.get_packed_pipeline_segments()),
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
@@ -1183,9 +1195,7 @@ impl MultiplexedConnection {
     }
 
     /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
-    pub(crate) fn builder(
-        pipeline: Pipeline<crate::cmd::SegmentedBytes>,
-    ) -> MultiplexedConnectionBuilder {
+    pub(crate) fn builder(pipeline: Pipeline<crate::cmd::SendBuf>) -> MultiplexedConnectionBuilder {
         MultiplexedConnectionBuilder::new(pipeline)
     }
 
@@ -1200,7 +1210,7 @@ impl MultiplexedConnection {
 
 /// A builder for creating `MultiplexedConnection` instances.
 pub struct MultiplexedConnectionBuilder {
-    pipeline: Pipeline<crate::cmd::SegmentedBytes>,
+    pipeline: Pipeline<crate::cmd::SendBuf>,
     db: Option<i64>,
     response_timeout: Option<Duration>,
     push_manager: Option<PushManager>,
@@ -1214,7 +1224,7 @@ pub struct MultiplexedConnectionBuilder {
 
 impl MultiplexedConnectionBuilder {
     /// Creates a new builder with the required pipeline
-    pub(crate) fn new(pipeline: Pipeline<crate::cmd::SegmentedBytes>) -> Self {
+    pub(crate) fn new(pipeline: Pipeline<crate::cmd::SendBuf>) -> Self {
         Self {
             pipeline,
             db: None,

@@ -119,7 +119,7 @@ impl Pipeline {
                 command.write_packed_segments(&mut out, &mut scratch);
             }
         }
-        out.push(bytes::Bytes::from(scratch));
+        out.push(bytes::Bytes::from_owner(scratch));
         out
     }
 

@@ -371,9 +371,16 @@ pub const SHARED_ARG_INLINE_MAX: usize = 4 * 1024;
 /// Protocol framing and small inline arguments coalesce into contiguous
 /// segments; large shared payloads ([`Cmd::arg_shared`]) appear as their own
 /// refcounted segments pointing at the caller's allocation.
+///
+/// The first segment is stored inline: the overwhelmingly common case (a
+/// command with no out-of-line payload packs into exactly one contiguous
+/// segment) performs **zero** heap allocations for the container. Profiling
+/// small pipelined commands showed a per-command `Vec<Bytes>` roughly
+/// doubling hot-path malloc/free traffic.
 #[derive(Debug, Default, Clone)]
 pub struct SegmentedBytes {
-    segments: Vec<bytes::Bytes>,
+    first: Option<bytes::Bytes>,
+    rest: Vec<bytes::Bytes>,
     len: usize,
 }
 
@@ -382,7 +389,11 @@ impl SegmentedBytes {
     pub fn push(&mut self, bytes: bytes::Bytes) {
         if !bytes.is_empty() {
             self.len += bytes.len();
-            self.segments.push(bytes);
+            if self.first.is_none() && self.rest.is_empty() {
+                self.first = Some(bytes);
+            } else {
+                self.rest.push(bytes);
+            }
         }
     }
 
@@ -396,21 +407,21 @@ impl SegmentedBytes {
         self.len == 0
     }
 
-    /// Iterate over the segments.
-    pub fn segments(&self) -> impl ExactSizeIterator<Item = &bytes::Bytes> {
-        self.segments.iter()
+    /// Iterate over the segments in order.
+    pub fn segments(&self) -> impl Iterator<Item = &bytes::Bytes> {
+        self.first.iter().chain(self.rest.iter())
     }
 
-    /// Consume into the underlying segment list.
-    pub fn into_segments(self) -> Vec<bytes::Bytes> {
-        self.segments
+    /// Consume into an iterator over the segments in order.
+    pub fn into_segments(self) -> impl Iterator<Item = bytes::Bytes> {
+        self.first.into_iter().chain(self.rest)
     }
 
     /// Concatenate all segments into one contiguous buffer (used by tests and
     /// non-vectored fallbacks).
     pub fn to_contiguous(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.len);
-        for seg in &self.segments {
+        for seg in self.segments() {
             out.extend_from_slice(seg);
         }
         out
@@ -422,6 +433,33 @@ impl From<Vec<u8>> for SegmentedBytes {
         let mut out = SegmentedBytes::default();
         out.push(bytes::Bytes::from(buf));
         out
+    }
+}
+
+/// A packed request travelling to a connection's write task.
+///
+/// Commands with no out-of-line payloads travel as the plain packed byte
+/// buffer (`Contiguous`) — the exact representation the framed writer used,
+/// with no segment container, `Bytes` conversion, or refcount bookkeeping on
+/// the hot path. Only commands carrying large shared payloads pay for the
+/// segmented representation.
+#[derive(Debug, Clone)]
+pub enum SendBuf {
+    /// Fully packed command bytes (no out-of-line payloads).
+    Contiguous(Vec<u8>),
+    /// Framing segments interleaved with zero-copy payload segments.
+    Segmented(SegmentedBytes),
+}
+
+impl From<Vec<u8>> for SendBuf {
+    fn from(buf: Vec<u8>) -> Self {
+        SendBuf::Contiguous(buf)
+    }
+}
+
+impl From<SegmentedBytes> for SendBuf {
+    fn from(segments: SegmentedBytes) -> Self {
+        SendBuf::Segmented(segments)
     }
 }
 
@@ -618,7 +656,10 @@ impl Cmd {
         let mut out = SegmentedBytes::default();
         let mut scratch = Vec::new();
         self.write_packed_segments(&mut out, &mut scratch);
-        out.push(bytes::Bytes::from(scratch));
+        // from_owner: Bytes::from(Vec) shrinks-to-fit when capacity > len
+        // (the framing reserve over-estimates), which reallocs + copies the
+        // whole packed command. from_owner keeps the Vec as-is.
+        out.push(bytes::Bytes::from_owner(scratch));
         out
     }
 
@@ -676,7 +717,7 @@ impl Cmd {
                     scratch.extend_from_slice(b"\r\n");
                     // Flush framing accumulated so far, then emit the payload
                     // as its own zero-copy segment.
-                    out.push(bytes::Bytes::from(std::mem::take(scratch)));
+                    out.push(bytes::Bytes::from_owner(std::mem::take(scratch)));
                     out.push(payload.clone());
                     scratch.extend_from_slice(b"\r\n");
                 }
@@ -1128,7 +1169,7 @@ mod tests {
                 .arg_shared(bytes::Bytes::from(vec![b'v'; 128]));
             assert_segments_match_packed(&cmd);
             // Small shared args coalesce: exactly one segment.
-            assert_eq!(cmd.get_packed_segments().segments().len(), 1);
+            assert_eq!(cmd.get_packed_segments().segments().count(), 1);
         }
 
         #[test]
@@ -1139,7 +1180,7 @@ mod tests {
             assert_segments_match_packed(&cmd);
             let packed = cmd.get_packed_segments();
             // [framing][payload][trailing crlf]
-            assert_eq!(packed.segments().len(), 3);
+            assert_eq!(packed.segments().count(), 3);
             // The payload segment shares the caller's allocation (zero-copy).
             let seg = packed.segments().nth(1).unwrap();
             assert_eq!(seg.as_ptr(), payload.as_ptr());
