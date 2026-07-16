@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard. PR #6530 inadvertently chained `PushKind::Disconnection` (which carries an empty payload) through `extract_pubsub_data`, causing all disconnect notifications to be silently dropped on the async pipe path. ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
 * CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
 * Core/FFI: fix(ffi): prevent pub/sub DoS from malformed server push frames ([#6530](https://github.com/valkey-io/valkey-glide/pull/6530))
 * Python: Restore `BaseClient.__aenter__` return type to `Self` (from the widened `"BaseClient"` introduced in 2.5.0). Entering the async context manager (`async with await GlideClusterClient.create(...) as client`) now preserves the concrete subclass for static type checkers, matching `create()`. ([#6531](https://github.com/valkey-io/valkey-glide/issues/6531))
@@ -64,6 +65,8 @@
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
 * Core: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
 * FFI: Add `client_side_cache` configuration to the URI-based client creation API (`create_client_from_uri`) — supports `max_cache_kb`, `entry_ttl_ms`, `eviction_policy` (LRU/LFU), and `enable_metrics` via JSON options; `cache_id` is auto-generated internally ([#5860](https://github.com/valkey-io/valkey-glide/pull/5860))
+* Go: Add MEMORY server management commands (MEMORY DOCTOR, MEMORY MALLOC-STATS, MEMORY PURGE, MEMORY STATS) with full cluster routing support ([#5957](https://github.com/valkey-io/valkey-glide/issues/5957))
+* Java: Add Jedis 4.x compatibility layer (`jedis-4-compatibility`) and shared `jedis-compat-shared` module for common Jedis 4/5 facade code ([#5751](https://github.com/valkey-io/valkey-glide/pull/5751))
 
 ## 2.4
 
