@@ -13,6 +13,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, ProtocolVersion, RequestError } from "../build-ts";
 import {
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -61,6 +62,7 @@ describe("ReadOnlyMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
                 readOnly: true,
             });
 
@@ -91,6 +93,7 @@ describe("ReadOnlyMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
                 readOnly: true,
             });
 
@@ -112,6 +115,7 @@ describe("ReadOnlyMode", () => {
                         cluster.getAddresses(),
                         protocol,
                     ),
+                    ...getAdvancedConfig(),
                     readOnly: true,
                     readFrom: "AZAffinity",
                     clientAz: "us-east-1a",
@@ -131,6 +135,7 @@ describe("ReadOnlyMode", () => {
                         cluster.getAddresses(),
                         protocol,
                     ),
+                    ...getAdvancedConfig(),
                     readOnly: true,
                     readFrom: "AZAffinityReplicasAndPrimary",
                     clientAz: "us-east-1a",
@@ -148,6 +153,7 @@ describe("ReadOnlyMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
                 readOnly: true,
                 readFrom: "preferReplica",
             });
@@ -167,6 +173,7 @@ describe("ReadOnlyMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
                 // readOnly not set, defaults to false
             });
 

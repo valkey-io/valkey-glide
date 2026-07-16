@@ -2269,7 +2269,7 @@ describe("GlideClient", () => {
             // Test explicit true
             const clientTrue = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: true },
+                advancedConfiguration: { tcpNoDelay: true, connectionTimeout: 10000 },
             });
             expect(await clientTrue.ping()).toBe("PONG");
             expect(await clientTrue.set("key2", "value2")).toBe("OK");
@@ -2279,7 +2279,7 @@ describe("GlideClient", () => {
             // Test explicit false
             const clientFalse = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: false },
+                advancedConfiguration: { tcpNoDelay: false, connectionTimeout: 10000 },
             });
             expect(await clientFalse.ping()).toBe("PONG");
             expect(await clientFalse.set("key3", "value3")).toBe("OK");

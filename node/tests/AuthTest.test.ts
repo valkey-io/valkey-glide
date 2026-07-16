@@ -86,9 +86,11 @@ describe("Auth tests", () => {
 
         managementClientCMD = await GlideClient.createClient({
             addresses: formatAddresses(cmdCluster.getAddresses()),
+            advancedConfiguration: { connectionTimeout: 10000 },
         });
         managementClientCME = await GlideClusterClient.createClient({
             addresses: formatAddresses(cmeCluster.getAddresses()),
+            advancedConfiguration: { connectionTimeout: 10000 },
         });
     }, 120000);
 

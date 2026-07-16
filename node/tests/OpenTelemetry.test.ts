@@ -21,6 +21,7 @@ import {
 } from "../build-ts";
 import {
     flushAndCloseClient,
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -244,6 +245,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 cluster.getAddresses(),
                 ProtocolVersion.RESP3,
             ),
+            ...getAdvancedConfig(),
         });
 
         await client.get("testSpanNotExportedBeforeInitOtel");
@@ -271,6 +273,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     ProtocolVersion.RESP3,
                 ),
+                ...getAdvancedConfig(),
             });
 
             await expect(
@@ -311,6 +314,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute a series of commands sequentially
@@ -340,6 +344,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
             OpenTelemetry.setSamplePercentage(0);
             expect(OpenTelemetry.getSamplePercentage()).toBe(0);
@@ -404,6 +409,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             await client.set(
@@ -434,6 +440,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const batch = new ClusterBatch(true);
@@ -470,12 +477,14 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
             const client2 = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             client1.set("test_key", "value");
@@ -510,6 +519,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const batch = new ClusterBatch(true);
@@ -595,6 +605,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute multiple commands - each should automatically create and clean up its span
@@ -622,6 +633,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const openTelemetryConfig: OpenTelemetryConfig = {
@@ -649,6 +661,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute multiple concurrent commands

@@ -330,6 +330,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should throw error after close", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 tempClient.close();
@@ -343,6 +344,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should throw ClosingError for script on closed client", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
                 tempClient.close();
                 const script = new Script("return 1");
@@ -355,6 +357,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should throw ClosingError for updateConnectionPassword on closed client", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
                 tempClient.close();
                 await expect(
@@ -368,6 +371,7 @@ describe("NAPI Client Integration Tests", () => {
                 for (let i = 0; i < 3; i++) {
                     const tempClient = await GlideClient.createClient({
                         addresses: getStandaloneAddresses(),
+                        advancedConfiguration: { connectionTimeout: 10000 },
                     });
 
                     const result = await tempClient.set(
@@ -410,6 +414,7 @@ describe("NAPI Client Integration Tests", () => {
                 const limitedClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
                     inflightRequestsLimit: 1,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 try {
@@ -434,6 +439,7 @@ describe("NAPI Client Integration Tests", () => {
                 const limitedClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
                     inflightRequestsLimit: 1,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 try {
@@ -466,6 +472,7 @@ describe("NAPI Client Integration Tests", () => {
                 const limitedClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
                     inflightRequestsLimit: 1,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 try {
@@ -499,6 +506,7 @@ describe("NAPI Client Integration Tests", () => {
                 const resp2Client = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
                     protocol: ProtocolVersion.RESP2,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 try {
@@ -519,6 +527,7 @@ describe("NAPI Client Integration Tests", () => {
                 const resp3Client = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
                     protocol: ProtocolVersion.RESP3,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 try {
@@ -540,6 +549,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should reject in-flight requests on close", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 const promises = [];
@@ -570,6 +580,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should handle double close gracefully", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 await tempClient.set("double-close-key", "value");
@@ -582,6 +593,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should throw ClosingError for operations after close", async () => {
                 const tempClient = await GlideClient.createClient({
                     addresses: getStandaloneAddresses(),
+                    advancedConfiguration: { connectionTimeout: 10000 },
                 });
 
                 tempClient.close();

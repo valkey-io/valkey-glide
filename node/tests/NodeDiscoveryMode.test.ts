@@ -13,6 +13,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, ProtocolVersion, NodeDiscoveryMode } from "../build-ts";
 import {
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -51,6 +52,8 @@ describe("NodeDiscoveryMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
                 nodeDiscoveryMode: NodeDiscoveryMode.Static,
             });
 
@@ -69,6 +72,8 @@ describe("NodeDiscoveryMode", () => {
             const primaryAddress = [cluster.getAddresses()[0]];
             client = await GlideClient.createClient({
                 ...getClientConfigurationOption(primaryAddress, protocol),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
                 nodeDiscoveryMode: NodeDiscoveryMode.Static,
             });
 
@@ -127,6 +132,7 @@ describe("NodeDiscoveryMode", () => {
                     protocol,
                     clientName: uniqueName,
                     requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -161,6 +167,7 @@ describe("NodeDiscoveryMode", () => {
                     protocol,
                     clientName: uniqueName,
                     requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -207,6 +214,7 @@ describe("NodeDiscoveryMode", () => {
                     protocol,
                     clientName: uniqueName,
                     requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
