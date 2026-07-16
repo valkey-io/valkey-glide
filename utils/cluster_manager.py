@@ -601,6 +601,27 @@ def _cleanup_servers(
             logging.warning(f"Failed to remove folder {node_folder}: {e}")
 
 
+def _cleanup_cluster_folder(
+    host: str,
+    cluster_folder: str,
+    use_tls: bool,
+):
+    """Clean up orphaned node folders when create_servers fails mid-way."""
+    if not os.path.isdir(cluster_folder):
+        return
+    for entry in os.scandir(cluster_folder):
+        if entry.is_dir() and entry.name.isdigit():
+            port = int(entry.name)
+            try:
+                stop_server(Server(host, port), cluster_folder, use_tls, None)
+            except Exception as e:
+                logging.warning(f"Failed to stop orphaned server on port {port}: {e}")
+            try:
+                remove_folder(entry.path)
+            except Exception as e:
+                logging.warning(f"Failed to remove orphaned folder {entry.path}: {e}")
+
+
 def create_cluster(
     servers: List[Server],
     shard_count: int,
@@ -1387,7 +1408,7 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
-        max_retries = args.max_retries
+        max_retries = args.max_retries if args.ports is None else 0
         servers = None
         for attempt in range(max_retries + 1):
             try:
@@ -1395,7 +1416,7 @@ def main():
                     args.host,
                     args.shard_count,
                     args.replica_count,
-                    args.ports if attempt == 0 else None,
+                    args.ports,
                     cluster_folder,
                     args.tls,
                     args.cluster_mode,
@@ -1427,6 +1448,8 @@ def main():
                 if servers is not None:
                     _cleanup_servers(servers, cluster_folder, args.tls)
                     servers = None
+                else:
+                    _cleanup_cluster_folder(args.host, cluster_folder, args.tls)
                 if attempt == max_retries:
                     raise
                 backoff = 2 * (attempt + 1)
