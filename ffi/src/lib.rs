@@ -5694,7 +5694,10 @@ mod tests_push_notification_safety {
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
-            data: vec![Value::BulkString(b"channel".to_vec()), Value::Int(42)],
+            data: vec![
+                Value::BulkString(b"channel".to_vec().into()),
+                Value::Int(42),
+            ],
         };
         unsafe {
             process_push_notification(push_msg, counting_callback, 0);
@@ -5711,9 +5714,9 @@ mod tests_push_notification_safety {
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
             data: vec![
-                Value::BulkString(b"channel".to_vec()),
+                Value::BulkString(b"channel".to_vec().into()),
                 Value::Int(42),
-                Value::BulkString(b"message".to_vec()),
+                Value::BulkString(b"message".to_vec().into()),
             ],
         };
         unsafe {
@@ -5734,7 +5737,7 @@ mod tests_push_notification_safety {
         reset_callback_count();
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
-            data: vec![Value::BulkString(b"only_one".to_vec())],
+            data: vec![Value::BulkString(b"only_one".to_vec().into())],
         };
         unsafe {
             process_push_notification(push_msg, counting_callback, 0);
@@ -5777,8 +5780,8 @@ mod tests_push_notification_safety {
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::Message,
             data: vec![
-                Value::BulkString(b"my-channel".to_vec()),
-                Value::BulkString(b"hello world".to_vec()),
+                Value::BulkString(b"my-channel".to_vec().into()),
+                Value::BulkString(b"hello world".to_vec().into()),
             ],
         };
         unsafe {
@@ -5799,9 +5802,9 @@ mod tests_push_notification_safety {
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::PMessage,
             data: vec![
-                Value::BulkString(b"my-pattern*".to_vec()),
-                Value::BulkString(b"my-channel".to_vec()),
-                Value::BulkString(b"hello world".to_vec()),
+                Value::BulkString(b"my-pattern*".to_vec().into()),
+                Value::BulkString(b"my-channel".to_vec().into()),
+                Value::BulkString(b"hello world".to_vec().into()),
             ],
         };
         unsafe {
@@ -5822,11 +5825,11 @@ mod tests_push_notification_safety {
         let push_msg = redis::PushInfo {
             kind: redis::PushKind::PMessage,
             data: vec![
-                Value::BulkString(b"pattern".to_vec()),
-                Value::BulkString(b"channel".to_vec()),
-                Value::BulkString(b"message".to_vec()),
-                Value::BulkString(b"extra1".to_vec()),
-                Value::BulkString(b"extra2".to_vec()),
+                Value::BulkString(b"pattern".to_vec().into()),
+                Value::BulkString(b"channel".to_vec().into()),
+                Value::BulkString(b"message".to_vec().into()),
+                Value::BulkString(b"extra1".to_vec().into()),
+                Value::BulkString(b"extra2".to_vec().into()),
             ],
         };
         unsafe {
@@ -5847,13 +5850,16 @@ mod tests_push_notification_safety {
     fn test_extract_pubsub_data_returns_none_for_malformed_frames() {
         let one_bulk_one_int = redis::PushInfo {
             kind: redis::PushKind::Message,
-            data: vec![Value::BulkString(b"channel".to_vec()), Value::Int(42)],
+            data: vec![
+                Value::BulkString(b"channel".to_vec().into()),
+                Value::Int(42),
+            ],
         };
         assert!(extract_pubsub_data(&one_bulk_one_int).is_none());
 
         let single_bulk = redis::PushInfo {
             kind: redis::PushKind::Message,
-            data: vec![Value::BulkString(b"only_one".to_vec())],
+            data: vec![Value::BulkString(b"only_one".to_vec().into())],
         };
         assert!(extract_pubsub_data(&single_bulk).is_none());
 
