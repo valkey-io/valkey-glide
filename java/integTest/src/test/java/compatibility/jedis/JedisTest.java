@@ -4035,7 +4035,7 @@ public class JedisTest {
 
         // Test MINID with XTrimParams (exact trimming)
         String key2 = "stream:" + UUID.randomUUID();
-        StreamEntryID firstId = jedis.xadd(key2, createMap("a", "1"));
+        jedis.xadd(key2, createMap("a", "1"));
         jedis.xadd(key2, createMap("b", "2"));
         StreamEntryID thirdId = jedis.xadd(key2, createMap("c", "3"));
 
