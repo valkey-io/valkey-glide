@@ -531,7 +531,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=60 if tls else 10):
+        if is_address_already_in_use(server, f"{node_folder}/server.log", timeout=120 if tls else 10):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -551,10 +551,17 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10 if not tls else 60, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(server, cluster_folder, tls, 10 if not tls else 120, tls_cert_file, tls_key_file, tls_ca_cert_file):
+            # TODO: remove server log printing once TLS startup reliability is confirmed on CI
+            log_file = f"{node_folder}/server.log"
+            try:
+                with open(log_file, "r") as f:
+                    logging.warning(f"Server {server.host}:{server.port} startup failed. server.log contents:\n{f.read()}")
+            except Exception as read_err:
+                logging.warning(f"Could not read server.log: {read_err}")
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
-                f"See {node_folder}/server.log for more information"
+                f"See {log_file} for more information"
             )
         ready_servers.append(server)
     logging.debug("All servers are up!")
@@ -595,7 +602,7 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok", timeout=60 if use_tls else 10)
+    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok", timeout=120 if use_tls else 10)
     wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
     print_servers_json(servers)
 
@@ -645,7 +652,7 @@ def create_standalone_replication(
         cluster_folder,
         "sync: Finished with success",
         servers_ports[1:],
-        timeout=60 if use_tls else 10,
+        timeout=120 if use_tls else 10,
     )
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"

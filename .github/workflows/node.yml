@@ -114,7 +114,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
         if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 40 }}
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 90 || 60 }}
         strategy:
             fail-fast: false
             matrix:
