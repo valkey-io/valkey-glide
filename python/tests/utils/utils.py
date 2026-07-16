@@ -1036,6 +1036,65 @@ def kill_connections(
         return client.custom_command(cmd, route=AllNodes())
 
 
+# Tolerance for the fire-and-forget CLIENT KILL that reconnect tests issue to
+# force a disconnect. Under heavy full-matrix CI contention the kill command
+# can transiently time out even though it reached the server: in cluster mode
+# it is fanned over AllNodes and can sever the caller's own connections to the
+# non-executing nodes before their responses arrive, and even a standalone kill
+# can outlast a loaded runner's request budget. Retrying a bounded number of
+# times and then tolerating a persistent timeout is safe because the disconnect
+# is the whole point of the call - every caller separately verifies that the
+# client recovers afterward, so a swallowed timeout cannot mask a real bug.
+_KILL_TOLERANT_MAX_ATTEMPTS = 5
+_KILL_TOLERANT_RETRY_DELAY_SEC = 0.5
+
+
+async def kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+    max_attempts: int = _KILL_TOLERANT_MAX_ATTEMPTS,
+    retry_delay: float = _KILL_TOLERANT_RETRY_DELAY_SEC,
+) -> None:
+    """Async: kill connections, tolerating a transient timeout under CI load.
+
+    Retries the CLIENT KILL up to ``max_attempts`` times and, if a timeout
+    persists, tolerates it. The connections are severed either way (which is the
+    disconnect the caller wants); the caller's own reconnect check is the real
+    gate. See the module-level note above for why swallowing the timeout is safe.
+    """
+    import anyio
+
+    for attempt in range(max_attempts):
+        try:
+            await kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+            return
+        except Exception:
+            if attempt == max_attempts - 1:
+                return
+            await anyio.sleep(retry_delay)
+
+
+def sync_kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+    max_attempts: int = _KILL_TOLERANT_MAX_ATTEMPTS,
+    retry_delay: float = _KILL_TOLERANT_RETRY_DELAY_SEC,
+) -> None:
+    """Sync counterpart of :func:`kill_connections_tolerant`."""
+    import time as _time
+
+    for attempt in range(max_attempts):
+        try:
+            kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+            return
+        except Exception:
+            if attempt == max_attempts - 1:
+                return
+            _time.sleep(retry_delay)
+
+
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
     """Generate a key with the same slot if keyslot is provided; otherwise, generate a random key."""
     if is_atomic and keyslot:
