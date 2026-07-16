@@ -1059,7 +1059,7 @@ def wait_for_server_shutdown(
     server: Server,
     cluster_folder: str,
     use_tls: bool,
-    auth: str,
+    auth: Optional[str],
     timeout: int = 20,
 ):
     logging.debug(f"Waiting for server {server} to shutdown")
