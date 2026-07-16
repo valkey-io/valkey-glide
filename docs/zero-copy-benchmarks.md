@@ -150,10 +150,15 @@ larger on Graviton).
 - Unpipelined depth-1: no latency/throughput change for small/medium values (RTT-bound, by
   design); `arg_shared` SET 64KB is the one depth-1 win (+8–15% throughput, −10..20 µs p50).
 
-### Honest costs
+### Honest costs and corrections
 
-- Tiny SET (512B) pays ~+9% instructions/op (~2.6K insn ≈ 1 µs) for the segmented-args
-  bookkeeping — invisible in latency/throughput; a follow-up could special-case tiny
-  commands.
+- An earlier revision regressed sub-4KB commands 10–22% at extreme pipeline depth (d128,
+  ~300k+ ops/s on a single connection). Root causes (profile-verified): per-command
+  container allocation, `Bytes::from(Vec)` shrink-realloc, and segment bookkeeping. Fixed
+  (inline-first `SegmentedBytes`, `Bytes::from_owner`, `SendBuf::Contiguous` fast path) and
+  re-verified with a 41-cell × 3-rep matrix on both architectures: **every small/medium
+  cell is at parity with baseline** (some positive, e.g. GET 512B d128 throughput +11–13%).
+  A "+9% tiny SET CPU" figure quoted in earlier revisions was a measurement artifact
+  (bimodal run-to-run variance present in baseline too) and is retracted.
 - Throughput only improves where CPU was the binding constraint (e.g. SET 256KB depth 1:
-  +37% x86); flow-capped cells are unchanged by design.
+  +37% x86, +15..22% ARM); flow-capped cells are unchanged by design.
