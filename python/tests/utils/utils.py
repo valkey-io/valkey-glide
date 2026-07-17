@@ -91,6 +91,7 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
@@ -1037,62 +1038,41 @@ def kill_connections(
 
 
 # Tolerance for the fire-and-forget CLIENT KILL that reconnect tests issue to
-# force a disconnect. Under heavy full-matrix CI contention the kill command
-# can transiently time out even though it reached the server: in cluster mode
-# it is fanned over AllNodes and can sever the caller's own connections to the
-# non-executing nodes before their responses arrive, and even a standalone kill
-# can outlast a loaded runner's request budget. Retrying a bounded number of
-# times and then tolerating a persistent timeout is safe because the disconnect
-# is the whole point of the call - every caller separately verifies that the
-# client recovers afterward, so a swallowed timeout cannot mask a real bug.
-_KILL_TOLERANT_MAX_ATTEMPTS = 5
-_KILL_TOLERANT_RETRY_DELAY_SEC = 0.5
-
-
+# force a disconnect. Under heavy full-matrix CI contention the kill command can
+# time out even though it reached the server: in cluster mode it is fanned over
+# AllNodes and can sever the caller's own connections to the non-executing nodes
+# before their responses arrive, and even a standalone kill can outlast a loaded
+# runner's request budget. That timeout is a benign outcome - the disconnect is
+# the whole point of the call, and every caller separately verifies that the
+# client recovers afterward - so we tolerate a GLIDE TimeoutError and let any
+# other error propagate as a real failure.
 async def kill_connections_tolerant(
     client: TAnyGlideClient,
     kill_type: Optional[str] = "normal",
     skip_me: str = "yes",
-    max_attempts: int = _KILL_TOLERANT_MAX_ATTEMPTS,
-    retry_delay: float = _KILL_TOLERANT_RETRY_DELAY_SEC,
 ) -> None:
-    """Async: kill connections, tolerating a transient timeout under CI load.
+    """Async: kill connections, tolerating a GLIDE TimeoutError from the kill.
 
-    Retries the CLIENT KILL up to ``max_attempts`` times and, if a timeout
-    persists, tolerates it. The connections are severed either way (which is the
-    disconnect the caller wants); the caller's own reconnect check is the real
-    gate. See the module-level note above for why swallowing the timeout is safe.
+    The CLIENT KILL severs the connections even when the client's own response
+    times out under load, so a ``TimeoutError`` is an acceptable outcome here -
+    the caller's reconnect check is the real gate. Any other error propagates.
     """
-    import anyio
-
-    for attempt in range(max_attempts):
-        try:
-            await kill_connections(client, kill_type=kill_type, skip_me=skip_me)
-            return
-        except Exception:
-            if attempt == max_attempts - 1:
-                return
-            await anyio.sleep(retry_delay)
+    try:
+        await kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
 
 
 def sync_kill_connections_tolerant(
     client: TAnyGlideClient,
     kill_type: Optional[str] = "normal",
     skip_me: str = "yes",
-    max_attempts: int = _KILL_TOLERANT_MAX_ATTEMPTS,
-    retry_delay: float = _KILL_TOLERANT_RETRY_DELAY_SEC,
 ) -> None:
     """Sync counterpart of :func:`kill_connections_tolerant`."""
-    import time as _time
-
-    for attempt in range(max_attempts):
-        try:
-            kill_connections(client, kill_type=kill_type, skip_me=skip_me)
-            return
-        except Exception:
-            if attempt == max_attempts - 1:
-                return
-            _time.sleep(retry_delay)
+    try:
+        kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
