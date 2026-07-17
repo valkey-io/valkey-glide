@@ -656,8 +656,14 @@ export async function testTeardown(
 export const getClientConfigurationOption = (
     addresses: [string, number][],
     protocol: ProtocolVersion,
-    configOverrides?: Partial<BaseClientConfiguration>,
-): BaseClientConfiguration => {
+    configOverrides?: Partial<BaseClientConfiguration> & {
+        advancedConfiguration?: Record<string, unknown>;
+    },
+): BaseClientConfiguration & {
+    advancedConfiguration: { connectionTimeout: number };
+} => {
+    const { advancedConfiguration: overrideAdvanced, ...baseOverrides } =
+        configOverrides ?? {};
     return {
         addresses: addresses.map(([host, port]) => ({
             host,
@@ -666,7 +672,11 @@ export const getClientConfigurationOption = (
         protocol,
         useTLS: global.TLS ?? false,
         requestTimeout: 5000,
-        ...configOverrides,
+        ...baseOverrides,
+        advancedConfiguration: {
+            connectionTimeout: 10000,
+            ...(overrideAdvanced ?? {}),
+        },
     };
 };
 
