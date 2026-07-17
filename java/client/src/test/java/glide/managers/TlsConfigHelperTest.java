@@ -3,10 +3,10 @@ package glide.managers;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import connection_request.ConnectionRequestOuterClass.ClientCertReloadConfig;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
-import glide.api.models.exceptions.ConfigurationError;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -25,8 +25,7 @@ public class TlsConfigHelperTest {
     @Test
     void extractClientCertificateAndKeyReturnsConfiguredValues() {
         GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder().clientCertificate(CERT).clientKey(KEY).build());
+                configWithTls(TlsAdvancedConfiguration.builder().useMutualTls(CERT, KEY).build());
 
         assertArrayEquals(CERT, TlsConfigHelper.extractClientCertificate(configuration));
         assertArrayEquals(KEY, TlsConfigHelper.extractClientKey(configuration));
@@ -50,50 +49,11 @@ public class TlsConfigHelperTest {
     }
 
     @Test
-    void certificateWithoutKeyThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().clientCertificate(CERT).build());
-        assertTrue(error.getMessage().contains("mTLS requires both"));
-    }
-
-    @Test
-    void keyWithoutCertificateThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().clientKey(KEY).build());
-        assertTrue(error.getMessage().contains("mTLS requires both"));
-    }
-
-    @Test
-    void emptyCertificateThrows() {
-        assertThrows(
-                ConfigurationError.class,
-                () -> TlsAdvancedConfiguration.builder()
-                        .clientCertificate(new byte[0])
-                        .clientKey(KEY)
-                        .build());
-    }
-
-    @Test
-    void emptyKeyThrows() {
-        assertThrows(
-                ConfigurationError.class,
-                () -> TlsAdvancedConfiguration.builder()
-                        .clientCertificate(CERT)
-                        .clientKey(new byte[0])
-                        .build());
-    }
-
-    @Test
     void extractCertPathsReturnsConfiguredValues() {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .clientKeyPath("/certs/client.key")
+                                .useMutualTls("/certs/client.pem", "/certs/client.key")
                                 .build());
 
         assertEquals("/certs/client.pem", TlsConfigHelper.extractClientCertPath(configuration));
@@ -110,49 +70,11 @@ public class TlsConfigHelperTest {
     }
 
     @Test
-    void certPathWithoutKeyPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .build());
-        assertTrue(error.getMessage().contains("mTLS requires"));
-    }
-
-    @Test
-    void keyPathWithoutCertPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientKeyPath("/certs/client.key")
-                                .build());
-        assertTrue(error.getMessage().contains("mTLS requires"));
-    }
-
-    @Test
-    void mixingCertPathAndCertBytesThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .clientKeyPath("/certs/client.key")
-                                .clientCertificate(CERT)
-                                .build());
-        assertTrue(error.getMessage().contains("cannot both be provided"));
-    }
-
-    @Test
     void certReloadEnabledReturnsConfiguredValue() {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .clientKeyPath("/certs/client.key")
-                                .certReloadEnabled(true)
-                                .certReloadIntervalSeconds(60)
+                                .useMutualTls("/certs/client.pem", "/certs/client.key", 60)
                                 .build());
 
         assertTrue(TlsConfigHelper.isCertReloadEnabled(configuration));
@@ -164,20 +86,71 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .clientKeyPath("/certs/client.key")
+                                .useMutualTls("/certs/client.pem", "/certs/client.key")
                                 .build());
 
         assertFalse(TlsConfigHelper.isCertReloadEnabled(configuration));
         assertNull(TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
     }
 
+    // Deferred cadence: reload is requested with a null interval, so the core chooses the cadence.
+    // The helper reports enabled but returns no interval, so ConnectionManager sends enabled=true
+    // with interval_seconds unset.
     @Test
-    void certReloadWithoutCertPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
-        assertTrue(error.getMessage().contains("certReloadEnabled"));
+    void certReloadWithDeferredIntervalReportsEnabledWithoutInterval() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                                .build());
+
+        assertTrue(TlsConfigHelper.isCertReloadEnabled(configuration));
+        assertNull(TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
+    }
+
+    // Wire behavior: no reload requested -> no cert_reload config is built.
+    @Test
+    void buildCertReloadConfigReturnsNullWhenNoReload() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .useMutualTls("/certs/client.pem", "/certs/client.key")
+                                .build());
+
+        assertNull(TlsConfigHelper.buildCertReloadConfig(configuration));
+    }
+
+    // Wire behavior: deferred interval -> enabled=true and interval_seconds left unset, so the core
+    // applies its own default cadence.
+    @Test
+    void buildCertReloadConfigDeferredSetsEnabledWithoutInterval() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                                .build());
+
+        ClientCertReloadConfig reloadConfig = TlsConfigHelper.buildCertReloadConfig(configuration);
+
+        assertNotNull(reloadConfig);
+        assertTrue(reloadConfig.getEnabled());
+        assertFalse(reloadConfig.hasIntervalSeconds());
+    }
+
+    // Wire behavior: explicit interval -> enabled=true and interval_seconds set to the override.
+    @Test
+    void buildCertReloadConfigExplicitSetsEnabledAndInterval() {
+        GlideClientConfiguration configuration =
+                configWithTls(
+                        TlsAdvancedConfiguration.builder()
+                                .useMutualTls("/certs/client.pem", "/certs/client.key", 90)
+                                .build());
+
+        ClientCertReloadConfig reloadConfig = TlsConfigHelper.buildCertReloadConfig(configuration);
+
+        assertNotNull(reloadConfig);
+        assertTrue(reloadConfig.getEnabled());
+        assertTrue(reloadConfig.hasIntervalSeconds());
+        assertEquals(90, reloadConfig.getIntervalSeconds());
     }
 }

@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import connection_request.ConnectionRequestOuterClass.ClientCertReloadConfig;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
@@ -125,32 +126,62 @@ public final class TlsConfigHelper {
     /**
      * Returns {@code true} if automatic certificate reload is requested for path-based mTLS.
      *
-     * <p>Reload is only meaningful when a client certificate path is configured; enabling it without
-     * a certificate path results in a {@link ConfigurationError}.
+     * <p>Enablement is separate from the interval: reload is requested by using the three-argument
+     * {@code useMutualTls} overload, whether or not an interval was supplied. This returns {@code
+     * true} both when the interval is deferred to the core ({@code null}) and when an explicit
+     * positive interval is set. Reload is only meaningful when a client certificate path is
+     * configured; requesting it without a certificate path results in a {@link ConfigurationError}.
      *
-     * @throws ConfigurationError if reload is enabled without a client certificate path.
+     * @throws ConfigurationError if reload is requested without a client certificate path.
      */
     public static boolean isCertReloadEnabled(BaseClientConfiguration configuration) {
         TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
         if (tlsConfig == null) {
             return false;
         }
-        if (tlsConfig.isCertReloadEnabled() && tlsConfig.getClientCertPath() == null) {
+        boolean reloadRequested = tlsConfig.isCertReloadRequested();
+        if (reloadRequested && tlsConfig.getClientCertPath() == null) {
             throw new ConfigurationError(
-                    "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath` to be provided.");
+                    "certificate reload requires `clientCertPath` and `clientKeyPath` to be provided.");
         }
-        return tlsConfig.isCertReloadEnabled();
+        return reloadRequested;
     }
 
     /**
-     * Returns the certificate reload interval in seconds, or {@code null} to use the core default.
+     * Returns the certificate reload interval override in seconds, or {@code null} when the interval
+     * is deferred to the GLIDE core's default cadence.
      */
     public static Integer extractCertReloadIntervalSeconds(BaseClientConfiguration configuration) {
         TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
         if (tlsConfig == null) {
             return null;
         }
-        return tlsConfig.getCertReloadIntervalSeconds();
+        Integer interval = tlsConfig.getCertReloadIntervalSeconds();
+        return (interval != null && interval > 0) ? interval : null;
+    }
+
+    /**
+     * Builds the {@link ClientCertReloadConfig} to send when path-based certificate reload is
+     * requested, or {@code null} when reload is not requested.
+     *
+     * <p>The returned config always has {@code enabled = true}. {@code interval_seconds} is set only
+     * when an explicit positive override is configured; when the interval is deferred to the core the
+     * field is left unset, so the GLIDE core applies its own default cadence.
+     *
+     * @throws ConfigurationError if reload is requested without a client certificate path.
+     */
+    public static ClientCertReloadConfig buildCertReloadConfig(
+            BaseClientConfiguration configuration) {
+        if (!isCertReloadEnabled(configuration)) {
+            return null;
+        }
+        ClientCertReloadConfig.Builder reloadBuilder = ClientCertReloadConfig.newBuilder();
+        reloadBuilder.setEnabled(true);
+        Integer reloadInterval = extractCertReloadIntervalSeconds(configuration);
+        if (reloadInterval != null) {
+            reloadBuilder.setIntervalSeconds(reloadInterval);
+        }
+        return reloadBuilder.build();
     }
 
     private static TlsAdvancedConfiguration getTlsConfig(BaseClientConfiguration configuration) {

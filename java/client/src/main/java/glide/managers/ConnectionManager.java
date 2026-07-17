@@ -383,18 +383,12 @@ public class ConnectionManager {
                         // re-reads it so a rotated certificate is adopted on the next reconnect.
                         String clientCertPath = extractClientCertPath(configuration);
                         String clientKeyPath = extractClientKeyPath(configuration);
-                        boolean certReloadEnabled = isCertReloadEnabled(configuration);
+                        ClientCertReloadConfig certReloadConfig = buildCertReloadConfig(configuration);
                         if (clientCertPath != null && clientKeyPath != null) {
                             requestBuilder.setClientCertPath(clientCertPath);
                             requestBuilder.setClientKeyPath(clientKeyPath);
-                            if (certReloadEnabled) {
-                                ClientCertReloadConfig.Builder reloadBuilder = ClientCertReloadConfig.newBuilder();
-                                reloadBuilder.setEnabled(true);
-                                Integer reloadInterval = extractCertReloadIntervalSeconds(configuration);
-                                if (reloadInterval != null) {
-                                    reloadBuilder.setIntervalSeconds(reloadInterval);
-                                }
-                                requestBuilder.setCertReload(reloadBuilder.build());
+                            if (certReloadConfig != null) {
+                                requestBuilder.setCertReload(certReloadConfig);
                             }
                         }
 
@@ -683,11 +677,8 @@ public class ConnectionManager {
         return TlsConfigHelper.extractClientKeyPath(configuration);
     }
 
-    private static boolean isCertReloadEnabled(BaseClientConfiguration configuration) {
-        return TlsConfigHelper.isCertReloadEnabled(configuration);
-    }
-
-    private static Integer extractCertReloadIntervalSeconds(BaseClientConfiguration configuration) {
-        return TlsConfigHelper.extractCertReloadIntervalSeconds(configuration);
+    private static ClientCertReloadConfig buildCertReloadConfig(
+            BaseClientConfiguration configuration) {
+        return TlsConfigHelper.buildCertReloadConfig(configuration);
     }
 }
