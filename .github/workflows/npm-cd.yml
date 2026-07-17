@@ -538,7 +538,27 @@ jobs:
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
               run: |
-                  npm install @valkey/valkey-glide@${{ needs.get-build-parameters.outputs.npm_tag }} --save
+                  # The platform-specific optional dependency (e.g. @valkey/valkey-glide-linux-x64-gnu)
+                  # can lag behind the base package on the npm registry for a short window right after
+                  # publish. When that happens npm silently skips the optional dependency and the test
+                  # fails with "Cannot find module". Retry the install until the native module resolves.
+                  NPM_TAG="${{ needs.get-build-parameters.outputs.npm_tag }}"
+                  MAX_ATTEMPTS=5
+                  DELAY=15
+                  for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+                      rm -rf node_modules package-lock.json
+                      npm install "@valkey/valkey-glide@${NPM_TAG}" --save
+                      if node -e "require('@valkey/valkey-glide')"; then
+                          echo "Native module resolved on attempt ${attempt}."
+                          break
+                      fi
+                      if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
+                          echo "::error::@valkey/valkey-glide native module still unresolved after ${MAX_ATTEMPTS} attempts."
+                          exit 1
+                      fi
+                      echo "Attempt ${attempt}/${MAX_ATTEMPTS}: native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
+                      sleep "${DELAY}"
+                  done
                   npm run build:utils
                   npm test
 

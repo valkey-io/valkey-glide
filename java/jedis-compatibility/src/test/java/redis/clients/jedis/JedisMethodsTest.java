@@ -828,6 +828,7 @@ public class JedisMethodsTest {
         assertEquals(LCSMatchResult.class, lcsBinary.getReturnType());
     }
 
+    @Test
     public void testStreamMethodSignaturesExist() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 

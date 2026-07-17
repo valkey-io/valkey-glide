@@ -340,7 +340,8 @@ pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
 pub use crate::client::IAMTokenProvider;
 pub use crate::cmd::{
-    cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter, PHASE_QUEUED, PHASE_SENT,
+    cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter, SegmentedBytes, PHASE_QUEUED, PHASE_SENT,
+    SHARED_ARG_INLINE_MAX,
 };
 pub use crate::commands::{
     Commands, ControlFlow, Direction, LposOptions, PubSubCommands, SetOptions,
@@ -398,6 +399,8 @@ pub use crate::{
 
 mod macros;
 mod pipeline;
+
+pub(crate) mod buf_pool;
 
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]

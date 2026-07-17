@@ -26,6 +26,8 @@ ext {
 }
 
 dependencies {
+    api project(':jedis-compat-shared')
+
     implementation project(':client')
 
     // Apache Commons Pool 2 for connection pooling - part of public API
