@@ -1408,6 +1408,9 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
+        tls_cert_file = getattr(args, "tls_cert_file", None)
+        tls_key_file = getattr(args, "tls_key_file", None)
+        tls_ca_cert_file = getattr(args, "tls_ca_cert_file", None)
         max_retries = args.max_retries if args.ports is None else 0
         servers = None
         for attempt in range(max_retries + 1):
@@ -1422,9 +1425,9 @@ def main():
                     args.cluster_mode,
                     args.load_module,
                     False,
-                    getattr(args, "tls_cert_file", None),
-                    getattr(args, "tls_key_file", None),
-                    getattr(args, "tls_ca_cert_file", None),
+                    tls_cert_file,
+                    tls_key_file,
+                    tls_ca_cert_file,
                 )
                 if args.cluster_mode:
                     create_cluster(
@@ -1433,9 +1436,9 @@ def main():
                         args.replica_count,
                         cluster_folder,
                         args.tls,
-                        getattr(args, "tls_cert_file", None),
-                        getattr(args, "tls_key_file", None),
-                        getattr(args, "tls_ca_cert_file", None),
+                        tls_cert_file,
+                        tls_key_file,
+                        tls_ca_cert_file,
                     )
                 elif args.replica_count > 0:
                     create_standalone_replication(
