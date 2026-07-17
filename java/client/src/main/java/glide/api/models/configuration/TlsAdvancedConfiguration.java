@@ -6,9 +6,6 @@ import glide.api.models.exceptions.ConfigurationError;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -23,6 +20,26 @@ import lombok.Getter;
 /**
  * Advanced TLS configuration settings class for creating a client. Shared settings for standalone
  * and cluster clients.
+ *
+ * <p>Mutual TLS (mTLS) is configured through the single intent-revealing {@code useMutualTls}
+ * builder method rather than by setting individual certificate fields, which keeps invalid
+ * combinations unrepresentable:
+ *
+ * <ul>
+ *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])} - mTLS from an
+ *       in-memory PEM certificate and key, loaded once (cannot reload).
+ *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTls(String, String)} - mTLS from a
+ *       certificate and key read by the GLIDE core from disk, loaded once (no reload).
+ *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTls(String, String, Integer)} - path-based
+ *       mTLS with automatic reloading. Reload is enabled by using this overload; the interval is
+ *       optional and, when omitted ({@code null}), the GLIDE core chooses the reload cadence (see
+ *       {@link #certReloadIntervalSeconds}).
+ * </ul>
+ *
+ * <p>Enablement and interval are separate: using the three-argument overload turns reloading on,
+ * and the interval only overrides the cadence the core would otherwise pick. Automatic reloading
+ * requires filesystem paths, so it is only offered for the path-based overload; in-memory
+ * certificates are inherently static.
  */
 @Getter
 @Builder
@@ -64,86 +81,94 @@ public class TlsAdvancedConfiguration {
     /**
      * Client certificate data for mutual TLS (mTLS) authentication.
      *
-     * <p>When provided along with {@link #clientKey}, enables mutual TLS authentication so that the
-     * client presents its certificate to the server. Use this when the server requires client
-     * certificate authentication.
+     * <p>Configured via {@link TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])}; the
+     * client presents this certificate to the server when the server requires client certificate
+     * authentication. Always paired with {@link #clientKey}.
      *
-     * <p>If set to an empty (non-null, length 0) byte array, a `ConfigurationError` will be raised.
-     *
-     * <p>If null (default), no client certificate will be presented.
-     *
-     * <p>Must be used together with {@link #clientKey}: providing one without the other results in a
-     * `ConfigurationError`.
+     * <p>If null (default), no in-memory client certificate is presented.
      *
      * <p>The certificate data should be in PEM format as a byte array.
      */
-    @Builder.Default private final byte[] clientCertificate = null;
+    private final byte[] clientCertificate;
 
     /**
      * Client private key data for mutual TLS (mTLS) authentication.
      *
-     * <p>When provided along with {@link #clientCertificate}, enables mutual TLS authentication. This
-     * private key corresponds to the certificate provided in {@link #clientCertificate}.
+     * <p>Configured via {@link TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])}. This
+     * private key corresponds to {@link #clientCertificate} and is always paired with it.
      *
-     * <p>If set to an empty (non-null, length 0) byte array, a `ConfigurationError` will be raised.
-     *
-     * <p>If null (default), no client key will be used.
-     *
-     * <p>Must be used together with {@link #clientCertificate}: providing one without the other
-     * results in a `ConfigurationError`.
+     * <p>If null (default), no in-memory client key is used.
      *
      * <p>The key data should be in PEM format as a byte array.
      */
-    @Builder.Default private final byte[] clientKey = null;
+    private final byte[] clientKey;
 
     /**
      * Filesystem path to the client certificate (PEM) for mutual TLS (mTLS) authentication.
      *
-     * <p>Use this instead of {@link #clientCertificate} to have the GLIDE core read the certificate
-     * from disk. When combined with {@link #certReloadEnabled}, the core periodically re-reads the
-     * file so that a rotated certificate is adopted on the next reconnect, without recreating the
-     * client.
+     * <p>Configured via the path-based {@code useMutualTls} overloads ({@link
+     * TlsAdvancedConfigurationBuilder#useMutualTls(String, String)} or {@link
+     * TlsAdvancedConfigurationBuilder#useMutualTls(String, String, Integer)}), which have the GLIDE
+     * core read the certificate from disk. See {@link #certReloadIntervalSeconds} for reload
+     * behavior.
      *
-     * <p>Must be used together with {@link #clientKeyPath}: providing one without the other results
-     * in a `ConfigurationError`. Path-based and byte-based ({@link #clientCertificate}) client
-     * certificate configuration are mutually exclusive.
+     * <p>Path-based and byte-based ({@link #clientCertificate}) client certificate configuration are
+     * mutually exclusive; always paired with {@link #clientKeyPath}.
      *
      * <p>If null (default), no path-based client certificate is used.
      */
-    @Builder.Default private final String clientCertPath = null;
+    private final String clientCertPath;
 
     /**
      * Filesystem path to the client private key (PEM) for mutual TLS (mTLS) authentication.
      *
-     * <p>See {@link #clientCertPath}. Must be provided together with {@link #clientCertPath}.
+     * <p>See {@link #clientCertPath}. Always paired with {@link #clientCertPath}.
      *
      * <p>If null (default), no path-based client key is used.
      */
-    @Builder.Default private final String clientKeyPath = null;
+    private final String clientKeyPath;
 
     /**
-     * Whether to automatically reload the path-based client certificate and key.
+     * Whether automatic reload of the path-based client certificate and key is requested.
      *
-     * <p>When true (and {@link #clientCertPath}/{@link #clientKeyPath} are set), the GLIDE core
-     * periodically re-reads the certificate and key files. On a successful reload (the material
-     * parses and the private key matches the certificate), the new material is adopted on the next
-     * reconnect; on any failure, the previously loaded material is kept (last-known-good).
+     * <p>Set to {@code true} by {@link TlsAdvancedConfigurationBuilder#useMutualTls(String, String,
+     * Integer)} regardless of whether an interval was supplied, and {@code false} otherwise. This is
+     * what enables reloading; {@link #certReloadIntervalSeconds} only carries the optional cadence
+     * override. Keeping enablement separate from the interval lets the "reload on, cadence deferred
+     * to the core" state be represented (reload requested with a {@code null} interval).
+     *
+     * <p>Reloading requires path-based mTLS, so requesting it without {@link #clientCertPath}/{@link
+     * #clientKeyPath} is rejected.
+     */
+    private final boolean certReloadRequested;
+
+    /**
+     * Optional override, in seconds, for the interval between automatic reload checks of the
+     * path-based client certificate and key.
+     *
+     * <p>Only meaningful when {@link #certReloadRequested} is {@code true}:
+     *
+     * <ul>
+     *   <li>{@code null}: no override; the GLIDE core chooses the reload cadence. When no override is
+     *       supplied the core uses its default cadence (currently 300 seconds; see <a
+     *       href="https://github.com/valkey-io/valkey-glide/blob/06bd09e1549e1ec5c8fced77a85a417a8573236f/glide-core/src/tls_reload/mod.rs#L44">{@code
+     *       DEFAULT_RELOAD_INTERVAL_SECONDS}</a> in glide-core). The three-argument {@code
+     *       useMutualTls} overload leaves this {@code null} when its interval argument is {@code
+     *       null}.
+     *   <li>A positive value: overrides the cadence, so the core re-reads the certificate and key
+     *       files at that interval. On a successful reload (the material parses and the private key
+     *       matches the certificate), the new material is adopted on the next reconnect; on any
+     *       failure, the previously loaded material is kept (last-known-good).
+     * </ul>
+     *
+     * <p>Set via {@link TlsAdvancedConfigurationBuilder#useMutualTls(String, String, Integer)}. A
+     * non-positive value passed to that overload is rejected; "no reload" is expressed by the
+     * two-argument path overload instead.
      *
      * <p>Root/CA certificate reload is out of scope; only the client certificate and key are
      * reloaded.
-     *
-     * <p>Default: false (path-based material is loaded once at client creation).
      */
-    @Builder.Default private final boolean certReloadEnabled = false;
-
-    /**
-     * Interval, in seconds, between certificate reload checks when {@link #certReloadEnabled} is
-     * true.
-     *
-     * <p>If null (default), the core default of 300 seconds (5 minutes) is used. Ignored when {@link
-     * #certReloadEnabled} is false.
-     */
-    @Builder.Default private final Integer certReloadIntervalSeconds = null;
+    private final Integer certReloadIntervalSeconds;
 
     /**
      * Creates a new TlsAdvancedConfiguration. Validates self-contained TLS invariants on
@@ -158,7 +183,7 @@ public class TlsAdvancedConfiguration {
             byte[] clientKey,
             String clientCertPath,
             String clientKeyPath,
-            boolean certReloadEnabled,
+            boolean certReloadRequested,
             Integer certReloadIntervalSeconds) {
         this.useInsecureTLS = useInsecureTLS;
         this.rootCertificates = rootCertificates;
@@ -166,13 +191,17 @@ public class TlsAdvancedConfiguration {
         this.clientKey = clientKey;
         this.clientCertPath = clientCertPath;
         this.clientKeyPath = clientKeyPath;
-        this.certReloadEnabled = certReloadEnabled;
+        this.certReloadRequested = certReloadRequested;
         this.certReloadIntervalSeconds = certReloadIntervalSeconds;
         validate();
     }
 
     /**
      * Validates self-contained TLS configuration invariants.
+     *
+     * <p>The public builder API can only produce valid mutual-TLS combinations; these checks are a
+     * backstop and also guard the empty-byte-array and reload-interval cases that the intent methods
+     * accept as arguments.
      *
      * @throws ConfigurationError if any invariant is violated.
      */
@@ -221,10 +250,23 @@ public class TlsAdvancedConfiguration {
                             + " key.");
         }
 
-        if (certReloadEnabled && clientCertPath == null) {
+        // Enablement and interval are separate. When reload is requested, a supplied interval must
+        // be positive; a non-positive value is rejected because "no reload" is expressed by the
+        // two-argument path overload, not by passing 0 here. A null interval is allowed and means
+        // the core chooses the cadence.
+        if (certReloadRequested
+                && certReloadIntervalSeconds != null
+                && certReloadIntervalSeconds <= 0) {
             throw new ConfigurationError(
-                    "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath` to be"
-                            + " provided.");
+                    "`certReloadIntervalSeconds` must be positive; omit it (null) to defer to the GLIDE"
+                            + " core's default cadence.");
+        }
+
+        // Reloading requires path-based mTLS; key the check off the reload-requested flag, since a
+        // deferred (null) interval still enables reloading.
+        if (certReloadRequested && clientCertPath == null) {
+            throw new ConfigurationError(
+                    "certificate reload requires `clientCertPath` and `clientKeyPath` to be provided.");
         }
     }
 
@@ -272,79 +314,109 @@ public class TlsAdvancedConfiguration {
     }
 
     /**
-     * Load PEM-encoded root certificates from a file for TLS server verification.
+     * Builder for {@link TlsAdvancedConfiguration}.
      *
-     * <p>This is a convenience loader for reading custom root certificates from disk to be used as
-     * {@link #rootCertificates} in a {@code TlsAdvancedConfiguration}.
-     *
-     * @param path The file path to the PEM-encoded certificate file.
-     * @return The certificate data in PEM format as a byte array.
-     * @throws ConfigurationError If the file is missing, unreadable, or empty.
+     * <p>Mutual TLS (mTLS) is configured exclusively through the {@code useMutualTls} overloads
+     * below. The individual client-certificate setters are intentionally not part of the public API,
+     * so callers cannot assemble an invalid combination (a certificate without its key, mixed
+     * byte/path sources, or reload without a path).
      */
-    public static byte[] loadRootCertificatesFromFile(String path) {
-        return loadPemFile(path, "Root certificate");
-    }
+    public static class TlsAdvancedConfigurationBuilder {
 
-    /**
-     * Load a PEM-encoded client certificate from a file for mutual TLS (mTLS) authentication.
-     *
-     * <p>This is a convenience loader for reading a client certificate from disk to be used as {@link
-     * #clientCertificate} in a {@code TlsAdvancedConfiguration}.
-     *
-     * <p>Unlike {@link #clientCertPath}, this loads the certificate once at configuration time. The
-     * file does not need to remain on disk after the client is created. For automatic certificate
-     * rotation, use {@link #clientCertPath} and {@link #clientKeyPath} instead.
-     *
-     * @param path The file path to the PEM-encoded client certificate file.
-     * @return The client certificate data in PEM format as a byte array.
-     * @throws ConfigurationError If the file is missing, unreadable, or empty.
-     */
-    public static byte[] loadClientCertificateFromFile(String path) {
-        return loadPemFile(path, "Client certificate");
-    }
-
-    /**
-     * Load a PEM-encoded client private key from a file for mutual TLS (mTLS) authentication.
-     *
-     * <p>This is a convenience loader for reading a client private key from disk to be used as {@link
-     * #clientKey} in a {@code TlsAdvancedConfiguration}.
-     *
-     * <p>Unlike {@link #clientKeyPath}, this loads the key once at configuration time. The file does
-     * not need to remain on disk after the client is created. For automatic certificate rotation,
-     * use {@link #clientCertPath} and {@link #clientKeyPath} instead.
-     *
-     * @param path The file path to the PEM-encoded client private key file.
-     * @return The client private key data in PEM format as a byte array.
-     * @throws ConfigurationError If the file is missing, unreadable, or empty.
-     */
-    public static byte[] loadClientKeyFromFile(String path) {
-        return loadPemFile(path, "Client key");
-    }
-
-    /**
-     * Read a PEM file from disk, surfacing missing, unreadable, and empty files as {@link
-     * ConfigurationError} with a descriptive, type-specific message.
-     *
-     * @param path The file path to read.
-     * @param description Human-readable description of the PEM contents (e.g. "Client certificate").
-     * @return The file contents as a byte array.
-     * @throws ConfigurationError If the file is missing, unreadable, or empty.
-     */
-    private static byte[] loadPemFile(String path, String description) {
-        byte[] data;
-        try {
-            data = Files.readAllBytes(Paths.get(path));
-        } catch (NoSuchFileException e) {
-            throw new ConfigurationError(description + " file not found: " + path);
-        } catch (IOException e) {
-            throw new ConfigurationError(
-                    "Failed to read " + description.toLowerCase() + " file: " + e.getMessage());
+        /**
+         * Enables mutual TLS (mTLS) using an in-memory client certificate and private key.
+         *
+         * <p>The certificate and key are loaded once from the supplied bytes; the material is static
+         * for the lifetime of the client and cannot reload. Use {@link #useMutualTls(String, String,
+         * Integer)} for automatic rotation.
+         *
+         * @param clientCert PEM-encoded client certificate bytes. Must be non-null and non-empty.
+         * @param clientKey PEM-encoded client private key bytes corresponding to {@code clientCert}.
+         *     Must be non-null and non-empty.
+         * @return this builder instance
+         */
+        public TlsAdvancedConfigurationBuilder useMutualTls(byte[] clientCert, byte[] clientKey) {
+            this.clientCertificate = clientCert;
+            this.clientKey = clientKey;
+            return this;
         }
 
-        if (data.length == 0) {
-            throw new ConfigurationError(description + " file is empty: " + path);
+        /**
+         * Enables mutual TLS (mTLS) using client certificate and key files read from disk by the GLIDE
+         * core.
+         *
+         * <p>The certificate and key are read once when the client connects; the files are not re-read
+         * afterwards. Use {@link #useMutualTls(String, String, Integer)} to automatically pick up
+         * rotated certificates.
+         *
+         * @param clientCertPath Filesystem path to the PEM-encoded client certificate.
+         * @param clientKeyPath Filesystem path to the PEM-encoded client private key.
+         * @return this builder instance
+         */
+        public TlsAdvancedConfigurationBuilder useMutualTls(
+                String clientCertPath, String clientKeyPath) {
+            this.clientCertPath = clientCertPath;
+            this.clientKeyPath = clientKeyPath;
+            return this;
         }
 
-        return data;
+        /**
+         * Enables mutual TLS (mTLS) from certificate and key files, with automatic reloading. Using
+         * this overload turns reloading on; {@code reloadIntervalSeconds} is an optional cadence
+         * override. See {@link #certReloadIntervalSeconds} for the full reload semantics.
+         *
+         * @param clientCertPath Filesystem path to the PEM-encoded client certificate.
+         * @param clientKeyPath Filesystem path to the PEM-encoded client private key.
+         * @param reloadIntervalSeconds Optional override for the reload interval, in seconds. Pass
+         *     {@code null} to defer the cadence to the GLIDE core's default (the core owns the default
+         *     value; see {@link #certReloadIntervalSeconds}). A positive value overrides that cadence.
+         *     A value {@code <= 0} is rejected; to load the certificate once without reloading, use
+         *     {@link #useMutualTls(String, String)} instead.
+         * @return this builder instance
+         */
+        public TlsAdvancedConfigurationBuilder useMutualTls(
+                String clientCertPath, String clientKeyPath, Integer reloadIntervalSeconds) {
+            this.clientCertPath = clientCertPath;
+            this.clientKeyPath = clientKeyPath;
+            this.certReloadRequested = true;
+            this.certReloadIntervalSeconds = reloadIntervalSeconds;
+            return this;
+        }
+
+        // The individual mutual-TLS setters below are hidden from the public API so that mTLS can only
+        // be configured through the intent-revealing methods above, which always produce a valid
+        // combination. Declaring them here suppresses Lombok's public setter generation for these
+        // fields.
+
+        private TlsAdvancedConfigurationBuilder clientCertificate(byte[] clientCertificate) {
+            this.clientCertificate = clientCertificate;
+            return this;
+        }
+
+        private TlsAdvancedConfigurationBuilder clientKey(byte[] clientKey) {
+            this.clientKey = clientKey;
+            return this;
+        }
+
+        private TlsAdvancedConfigurationBuilder clientCertPath(String clientCertPath) {
+            this.clientCertPath = clientCertPath;
+            return this;
+        }
+
+        private TlsAdvancedConfigurationBuilder clientKeyPath(String clientKeyPath) {
+            this.clientKeyPath = clientKeyPath;
+            return this;
+        }
+
+        private TlsAdvancedConfigurationBuilder certReloadRequested(boolean certReloadRequested) {
+            this.certReloadRequested = certReloadRequested;
+            return this;
+        }
+
+        private TlsAdvancedConfigurationBuilder certReloadIntervalSeconds(
+                Integer certReloadIntervalSeconds) {
+            this.certReloadIntervalSeconds = certReloadIntervalSeconds;
+            return this;
+        }
     }
 }

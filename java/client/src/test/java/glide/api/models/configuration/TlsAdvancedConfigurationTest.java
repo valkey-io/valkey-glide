@@ -36,16 +36,19 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
-    void testBuilderWithClientCertificateAndKey() {
+    void testUseMutualTlsWithBytes() {
         byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
         byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
 
         TlsAdvancedConfiguration config =
-                TlsAdvancedConfiguration.builder().clientCertificate(certBytes).clientKey(keyBytes).build();
+                TlsAdvancedConfiguration.builder().useMutualTls(certBytes, keyBytes).build();
 
         assertNotNull(config);
         assertArrayEquals(certBytes, config.getClientCertificate());
         assertArrayEquals(keyBytes, config.getClientKey());
+        assertNull(config.getClientCertPath());
+        assertNull(config.getClientKeyPath());
+        assertNull(config.getCertReloadIntervalSeconds());
     }
 
     @Test
@@ -163,259 +166,40 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
-    void testLoadRootCertificatesFromFile() throws Exception {
-        byte[] certBytes = "root-cert-data".getBytes(StandardCharsets.UTF_8);
-        Path certPath = Files.createTempFile("root-cert", ".pem");
-
-        try {
-            Files.write(certPath, certBytes);
-            String path = certPath.toString();
-
-            byte[] loaded = TlsAdvancedConfiguration.loadRootCertificatesFromFile(path);
-
-            assertArrayEquals(certBytes, loaded);
-        } finally {
-            Files.deleteIfExists(certPath);
-        }
-    }
-
-    @Test
-    void testLoadRootCertificatesFromFileNotFound() {
-        String path = "/nonexistent/path/ca-cert.pem";
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.loadRootCertificatesFromFile(path));
-        assertTrue(error.getMessage().contains("Root certificate file not found"));
-    }
-
-    @Test
-    void testLoadRootCertificatesFromFileEmpty() throws Exception {
-        Path certPath = Files.createTempFile("empty-root-cert", ".pem");
-
-        try {
-            String path = certPath.toString();
-            ConfigurationError error =
-                    assertThrows(
-                            ConfigurationError.class,
-                            () -> TlsAdvancedConfiguration.loadRootCertificatesFromFile(path));
-            assertTrue(error.getMessage().contains("Root certificate file is empty"));
-        } finally {
-            Files.deleteIfExists(certPath);
-        }
-    }
-
-    @Test
-    void testLoadClientCertificateFromFile() throws Exception {
-        byte[] certBytes = "client-cert-data".getBytes(StandardCharsets.UTF_8);
-        Path certPath = Files.createTempFile("client-cert", ".pem");
-
-        try {
-            Files.write(certPath, certBytes);
-            String path = certPath.toString();
-
-            byte[] loaded = TlsAdvancedConfiguration.loadClientCertificateFromFile(path);
-
-            assertArrayEquals(certBytes, loaded);
-        } finally {
-            Files.deleteIfExists(certPath);
-        }
-    }
-
-    @Test
-    void testLoadClientCertificateFromFileNotFound() {
-        String path = "/nonexistent/path/client-cert.pem";
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.loadClientCertificateFromFile(path));
-        assertTrue(error.getMessage().contains("Client certificate file not found"));
-    }
-
-    @Test
-    void testLoadClientCertificateFromFileEmpty() throws Exception {
-        Path certPath = Files.createTempFile("empty-client-cert", ".pem");
-
-        try {
-            String path = certPath.toString();
-            ConfigurationError error =
-                    assertThrows(
-                            ConfigurationError.class,
-                            () -> TlsAdvancedConfiguration.loadClientCertificateFromFile(path));
-            assertTrue(error.getMessage().contains("Client certificate file is empty"));
-        } finally {
-            Files.deleteIfExists(certPath);
-        }
-    }
-
-    @Test
-    void testLoadClientKeyFromFile() throws Exception {
-        byte[] keyBytes = "client-key-data".getBytes(StandardCharsets.UTF_8);
-        Path keyPath = Files.createTempFile("client-key", ".pem");
-
-        try {
-            Files.write(keyPath, keyBytes);
-            String path = keyPath.toString();
-
-            byte[] loaded = TlsAdvancedConfiguration.loadClientKeyFromFile(path);
-
-            assertArrayEquals(keyBytes, loaded);
-        } finally {
-            Files.deleteIfExists(keyPath);
-        }
-    }
-
-    @Test
-    void testLoadClientKeyFromFileNotFound() {
-        String path = "/nonexistent/path/client-key.pem";
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class, () -> TlsAdvancedConfiguration.loadClientKeyFromFile(path));
-        assertTrue(error.getMessage().contains("Client key file not found"));
-    }
-
-    @Test
-    void testLoadClientKeyFromFileEmpty() throws Exception {
-        Path keyPath = Files.createTempFile("empty-client-key", ".pem");
-
-        try {
-            String path = keyPath.toString();
-            ConfigurationError error =
-                    assertThrows(
-                            ConfigurationError.class, () -> TlsAdvancedConfiguration.loadClientKeyFromFile(path));
-            assertTrue(error.getMessage().contains("Client key file is empty"));
-        } finally {
-            Files.deleteIfExists(keyPath);
-        }
-    }
-
-    @Test
-    void testBuilderCertWithoutKeyThrows() {
-        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
-
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().clientCertificate(certBytes).build());
-        assertTrue(
-                error.getMessage()
-                        .contains(
-                                "`clientCertificate` is provided but `clientKey` is not provided."
-                                        + " mTLS requires both."));
-    }
-
-    @Test
-    void testBuilderKeyWithoutCertThrows() {
+    void testUseMutualTlsEmptyCertThrows() {
         byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
 
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().clientKey(keyBytes).build());
-        assertTrue(
-                error.getMessage()
-                        .contains(
-                                "`clientKey` is provided but `clientCertificate` is not provided."
-                                        + " mTLS requires both."));
-    }
-
-    @Test
-    void testBuilderEmptyCertThrows() {
-        byte[] keyBytes = "client-key".getBytes(StandardCharsets.UTF_8);
-
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertificate(new byte[0])
-                                .clientKey(keyBytes)
-                                .build());
+                        () -> TlsAdvancedConfiguration.builder().useMutualTls(new byte[0], keyBytes).build());
         assertTrue(error.getMessage().contains("`clientCertificate` cannot be an empty byte array"));
     }
 
     @Test
-    void testBuilderEmptyKeyThrows() {
+    void testUseMutualTlsEmptyKeyThrows() {
         byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
 
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertificate(certBytes)
-                                .clientKey(new byte[0])
-                                .build());
+                        () -> TlsAdvancedConfiguration.builder().useMutualTls(certBytes, new byte[0]).build());
         assertTrue(error.getMessage().contains("`clientKey` cannot be an empty byte array"));
     }
 
     @Test
-    void testBuilderCertPathWithoutKeyPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .build());
-        assertTrue(
-                error.getMessage()
-                        .contains(
-                                "`clientCertPath` is provided but `clientKeyPath` is not provided."
-                                        + " mTLS requires both."));
-    }
-
-    @Test
-    void testBuilderKeyPathWithoutCertPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientKeyPath("/certs/client.key")
-                                .build());
-        assertTrue(
-                error.getMessage()
-                        .contains(
-                                "`clientKeyPath` is provided but `clientCertPath` is not provided."
-                                        + " mTLS requires both."));
-    }
-
-    @Test
-    void testBuilderMixingPathAndBytesThrows() {
-        byte[] certBytes = "client-cert".getBytes(StandardCharsets.UTF_8);
-
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder()
-                                .clientCertPath("/certs/client.pem")
-                                .clientKeyPath("/certs/client.key")
-                                .clientCertificate(certBytes)
-                                .build());
-        assertTrue(error.getMessage().contains("cannot both be provided"));
-    }
-
-    @Test
-    void testBuilderReloadWithoutPathThrows() {
-        ConfigurationError error =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> TlsAdvancedConfiguration.builder().certReloadEnabled(true).build());
-        assertTrue(
-                error.getMessage()
-                        .contains(
-                                "`certReloadEnabled` requires `clientCertPath` and `clientKeyPath`"
-                                        + " to be provided."));
-    }
-
-    @Test
-    void testBuilderWithClientCertAndKeyPaths() {
+    void testUseMutualTlsWithPaths() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()
-                        .clientCertPath("/certs/client.pem")
-                        .clientKeyPath("/certs/client.key")
+                        .useMutualTls("/certs/client.pem", "/certs/client.key")
                         .build();
 
         assertNotNull(config);
         assertEquals("/certs/client.pem", config.getClientCertPath());
         assertEquals("/certs/client.key", config.getClientKeyPath());
+        assertNull(config.getClientCertificate());
+        assertNull(config.getClientKey());
+        assertNull(config.getCertReloadIntervalSeconds());
     }
 
     @Test
@@ -431,21 +215,71 @@ public class TlsAdvancedConfigurationTest {
     void testBuilderCertReloadDefaultsDisabled() {
         TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
 
-        assertFalse(config.isCertReloadEnabled());
+        assertFalse(config.isCertReloadRequested());
+        assertNull(config.getCertReloadIntervalSeconds());
+    }
+
+    // The two-argument path overload loads once and does not request reload.
+    @Test
+    void testUseMutualTlsPathsDoesNotRequestReload() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .useMutualTls("/certs/client.pem", "/certs/client.key")
+                        .build();
+
+        assertFalse(config.isCertReloadRequested());
+        assertNull(config.getCertReloadIntervalSeconds());
+    }
+
+    // A null interval requests reload but defers the cadence to the core (no interval set).
+    @Test
+    void testUseMutualTlsPathReloadDeferredInterval() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                        .build();
+
+        assertEquals("/certs/client.pem", config.getClientCertPath());
+        assertEquals("/certs/client.key", config.getClientKeyPath());
+        assertTrue(config.isCertReloadRequested());
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
     @Test
-    void testBuilderWithCertReloadEnabledAndInterval() {
+    void testUseMutualTlsPathReloadCustomInterval() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()
-                        .clientCertPath("/certs/client.pem")
-                        .clientKeyPath("/certs/client.key")
-                        .certReloadEnabled(true)
-                        .certReloadIntervalSeconds(120)
+                        .useMutualTls("/certs/client.pem", "/certs/client.key", 120)
                         .build();
 
-        assertTrue(config.isCertReloadEnabled());
+        assertEquals("/certs/client.pem", config.getClientCertPath());
+        assertEquals("/certs/client.key", config.getClientKeyPath());
+        assertTrue(config.isCertReloadRequested());
         assertEquals(120, config.getCertReloadIntervalSeconds());
+    }
+
+    // A zero interval is rejected: "no reload" is expressed by the two-argument path overload.
+    @Test
+    void testUseMutualTlsPathZeroIntervalThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                TlsAdvancedConfiguration.builder()
+                                        .useMutualTls("/certs/client.pem", "/certs/client.key", 0)
+                                        .build());
+        assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
+    }
+
+    @Test
+    void testUseMutualTlsPathNegativeIntervalThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                TlsAdvancedConfiguration.builder()
+                                        .useMutualTls("/certs/client.pem", "/certs/client.key", -1)
+                                        .build());
+        assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
 }
