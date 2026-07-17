@@ -6684,7 +6684,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.13.0
+Package: bitflags:2.13.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -7371,7 +7371,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bytes:1.12.0
+Package: bytes:1.12.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18795,7 +18795,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: http-body:1.0.1
+Package: http-body:1.1.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18820,7 +18820,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: http-body-util:0.1.3
+Package: http-body-util:0.1.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24586,7 +24586,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: memchr:2.8.2
+Package: memchr:2.8.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25116,7 +25116,7 @@ the following restrictions:
 
 ----
 
-Package: mio:1.2.1
+Package: mio:1.2.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32192,7 +32192,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.8.6
+Package: rand:0.8.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32421,7 +32421,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.9.4
+Package: rand:0.9.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34760,7 +34760,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.41
+Package: rustls:0.23.42
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38785,7 +38785,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: simd-adler32:0.3.9
+Package: simd-adler32:0.3.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -39293,7 +39293,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: socket2:0.6.4
+Package: socket2:0.6.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -40111,7 +40111,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.118
+Package: syn:2.0.119
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -41697,7 +41697,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thread_local:1.1.9
+Package: thread_local:1.1.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42651,7 +42651,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.52.3
+Package: tokio:1.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44348,7 +44348,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.23.4
+Package: uuid:1.24.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -53737,7 +53737,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.53
+Package: zerocopy:0.8.54
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -53989,7 +53989,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.53
+Package: zerocopy-derive:0.8.54
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -54660,7 +54660,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zmij:1.0.21
+Package: zmij:1.0.23
 
 The following copyrights and licenses were found in the source code of this package:
 
