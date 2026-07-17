@@ -1308,6 +1308,7 @@ def main():
     parser_start.add_argument(
         "--tls-cert-file",
         type=str,
+        default=None,
         help="Path to TLS certificate file (default: uses generated certificates)",
         required=False,
     )
@@ -1315,6 +1316,7 @@ def main():
     parser_start.add_argument(
         "--tls-key-file",
         type=str,
+        default=None,
         help="Path to TLS key file (default: uses generated certificates)",
         required=False,
     )
@@ -1322,6 +1324,7 @@ def main():
     parser_start.add_argument(
         "--tls-ca-cert-file",
         type=str,
+        default=None,
         help="Path to TLS CA certificate file (default: uses generated certificates)",
         required=False,
     )
@@ -1408,12 +1411,11 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
-        tls_cert_file = getattr(args, "tls_cert_file", None)
-        tls_key_file = getattr(args, "tls_key_file", None)
-        tls_ca_cert_file = getattr(args, "tls_ca_cert_file", None)
-        max_retries = args.max_retries if args.ports is None else 0
+
         servers = None
-        for attempt in range(max_retries + 1):
+
+        max_attempts = args.max_retries + 1
+        for attempt in range(1, max_attempts + 1):
             try:
                 servers = create_servers(
                     args.host,
@@ -1425,9 +1427,9 @@ def main():
                     args.cluster_mode,
                     args.load_module,
                     False,
-                    tls_cert_file,
-                    tls_key_file,
-                    tls_ca_cert_file,
+                    args.tls_cert_file,
+                    args.tls_key_file,
+                    args.tls_ca_cert_file,
                 )
                 if args.cluster_mode:
                     create_cluster(
@@ -1436,9 +1438,9 @@ def main():
                         args.replica_count,
                         cluster_folder,
                         args.tls,
-                        tls_cert_file,
-                        tls_key_file,
-                        tls_ca_cert_file,
+                        args.tls_cert_file,
+                        args.tls_key_file,
+                        args.tls_ca_cert_file,
                     )
                 elif args.replica_count > 0:
                     create_standalone_replication(
@@ -1453,14 +1455,14 @@ def main():
                     servers = None
                 else:
                     _cleanup_cluster_folder(args.host, cluster_folder, args.tls)
-                if attempt == max_retries:
+                if attempt >= max_attempts:
                     raise
-                backoff = 2 * (attempt + 1)
                 logging.warning(
-                    f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
-                    f"Retrying in {backoff}s..."
+                    f"Attempt {attempt}/{max_attempts} failed: {e}. "
+                    f"Retrying in 2s..."
                 )
-                time.sleep(backoff)
+                time.sleep(2)
+
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
         logging.info(
