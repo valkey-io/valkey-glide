@@ -362,7 +362,12 @@ pub enum Value {
     /// the same for all numeric responses.
     Int(i64),
     /// An arbitrary binary data, usually represents a binary-safe string.
-    BulkString(Vec<u8>),
+    ///
+    /// Held as a refcounted [`bytes::Bytes`] so the parser can hand out
+    /// zero-copy slices of the connection read buffer. Note: a long-lived
+    /// `BulkString` pins the read chunk it was sliced from; deep-copy
+    /// (`Bytes::copy_from_slice`) before retaining values indefinitely.
+    BulkString(bytes::Bytes),
     /// A response containing an array with more data. This is generally used by redis
     /// to express nested structures.
     Array(Vec<Value>),
@@ -1770,14 +1775,14 @@ pub trait FromRedisValue: Sized {
 
     /// Convert bytes to a single element vector.
     fn from_byte_vec(_vec: &[u8]) -> Option<Vec<Self>> {
-        Self::from_owned_redis_value(Value::BulkString(_vec.into()))
+        Self::from_owned_redis_value(Value::BulkString(bytes::Bytes::copy_from_slice(_vec)))
             .map(|rv| vec![rv])
             .ok()
     }
 
     /// Convert bytes to a single element vector.
     fn from_owned_byte_vec(_vec: Vec<u8>) -> RedisResult<Vec<Self>> {
-        Self::from_owned_redis_value(Value::BulkString(_vec)).map(|rv| vec![rv])
+        Self::from_owned_redis_value(Value::BulkString(_vec.into())).map(|rv| vec![rv])
     }
 }
 
@@ -1886,9 +1891,9 @@ impl FromRedisValue for bool {
                 }
             }
             Value::BulkString(ref bytes) => {
-                if bytes == b"1" {
+                if bytes.as_ref() == b"1" {
                     Ok(true)
-                } else if bytes == b"0" {
+                } else if bytes.as_ref() == b"0" {
                     Ok(false)
                 } else {
                     invalid_type_error!(v, "Response type not bool compatible.");
@@ -1905,7 +1910,7 @@ impl FromRedisValue for CString {
     fn from_redis_value(v: &Value) -> RedisResult<CString> {
         let v = get_inner_value(v);
         match *v {
-            Value::BulkString(ref bytes) => Ok(CString::new(bytes.as_slice())?),
+            Value::BulkString(ref bytes) => Ok(CString::new(&bytes[..])?),
             Value::Okay => Ok(CString::new("OK")?),
             Value::SimpleString(ref val) => Ok(CString::new(val.as_bytes())?),
             _ => invalid_type_error!(v, "Response type not CString compatible."),
@@ -1942,7 +1947,7 @@ impl FromRedisValue for String {
     fn from_owned_redis_value(v: Value) -> RedisResult<String> {
         let v = get_owned_inner_value(v);
         match v {
-            Value::BulkString(bytes) => Ok(String::from_utf8(bytes)?),
+            Value::BulkString(bytes) => Ok(String::from_utf8(bytes.to_vec())?),
             Value::Okay => Ok("OK".to_string()),
             Value::SimpleString(val) => Ok(val),
             Value::VerbatimString { format: _, text } => Ok(text),
@@ -2000,7 +2005,7 @@ macro_rules! from_vec_from_redis_value {
                     // Binary data is parsed into a single-element vector, except
                     // for the element type `u8`, which directly consumes the entire
                     // array of bytes.
-                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes).map($convert),
+                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes.into()).map($convert),
                     Value::Array(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Set(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Map(items) => {
@@ -2375,7 +2380,7 @@ impl FromRedisValue for bytes::Bytes {
     fn from_owned_redis_value(v: Value) -> RedisResult<Self> {
         let v = get_owned_inner_value(v);
         match v {
-            Value::BulkString(bytes_vec) => Ok(bytes_vec.into()),
+            Value::BulkString(bytes_vec) => Ok(bytes_vec),
             _ => invalid_type_error!(v, "Not a bulk string"),
         }
     }

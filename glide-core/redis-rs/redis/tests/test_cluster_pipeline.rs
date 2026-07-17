@@ -234,9 +234,9 @@ mod test_cluster_pipeline {
         // Assert that the pipeline with the good key succeeds.
         let expected = vec![
             Value::Okay,
-            Value::BulkString(b"value".to_vec()),
+            Value::BulkString(b"value".to_vec().into()),
             Value::Okay,
-            Value::BulkString(b"value2".to_vec()),
+            Value::BulkString(b"value2".to_vec().into()),
         ];
         assert_eq!(
             &res[3..],
@@ -316,7 +316,7 @@ mod test_cluster_pipeline {
                 let expected = vec![
                     Value::Int(5),
                     Value::Okay,
-                    Value::BulkString(b"value".to_vec()),
+                    Value::BulkString(b"value".to_vec().into()),
                 ];
                 assert_eq!(
                     result, expected,
@@ -395,7 +395,7 @@ mod test_cluster_pipeline {
             if retries == 1 {
                 let expected = vec![Value::Array(vec![
                     Value::Okay,
-                    Value::BulkString(b"value".to_vec()),
+                    Value::BulkString(b"value".to_vec().into()),
                 ])];
                 assert!(result.is_ok());
                 let response = result.unwrap();
@@ -453,9 +453,9 @@ mod test_cluster_pipeline {
         // Verify the pipeline result.
         let expected = vec![
             Value::Okay,
-            Value::BulkString(b"pipeline_value".to_vec()),
+            Value::BulkString(b"pipeline_value".to_vec().into()),
             Value::Okay,
-            Value::BulkString(b"pipeline_value2".to_vec()),
+            Value::BulkString(b"pipeline_value2".to_vec().into()),
         ];
 
         assert_eq!(
@@ -524,9 +524,9 @@ mod test_cluster_pipeline {
 
             let inner = vec![
                 Value::Okay,
-                Value::BulkString(b"pipeline_value".to_vec()),
+                Value::BulkString(b"pipeline_value".to_vec().into()),
                 Value::Okay,
-                Value::BulkString(b"pipeline_value2".to_vec()),
+                Value::BulkString(b"pipeline_value2".to_vec().into()),
             ];
 
             let expected = if atomic {
@@ -626,8 +626,8 @@ mod test_cluster_pipeline {
                         Value::Int(1),
                         Value::Okay,
                         Value::Array(vec![
-                            Value::BulkString(b"value1".to_vec()),
-                            Value::BulkString(b"3".to_vec())
+                            Value::BulkString(b"value1".to_vec().into()),
+                            Value::BulkString(b"3".to_vec().into())
                         ])
                     ],
                     "Expected MSET to succeed and MGET to return the values, but got: {result:?} key: {moved_key} key2: {key2}"
@@ -753,7 +753,10 @@ mod test_cluster_pipeline {
                     // When retry is enabled, TRYAGAIN errors should be retried, and `MGET` should return expected values.
                     assert_eq!(
                         result[2],
-                        Value::Array(vec![Value::BulkString(b"value".to_vec()), Value::Nil]),
+                        Value::Array(vec![
+                            Value::BulkString(b"value".to_vec().into()),
+                            Value::Nil
+                        ]),
                         "Pipeline result did not match expected output.\n\
                          Keys chosen: ('{migrated_key}', '{key}')\n\
                          key_slot: {key_slot}\n\

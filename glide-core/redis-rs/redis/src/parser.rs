@@ -138,7 +138,9 @@ where
                             combine::produce(|| Value::Nil).left()
                         } else {
                             take(*size as usize)
-                                .map(|bs: &[u8]| Value::BulkString(bs.to_vec()))
+                                .map(|bs: &[u8]| {
+                                    Value::BulkString(bytes::Bytes::copy_from_slice(bs))
+                                })
                                 .skip(crlf())
                                 .right()
                         }
@@ -231,7 +233,7 @@ where
                                     let mut it = result.into_iter();
                                     let first = it.next().unwrap_or(Value::Nil);
                                     if let Value::BulkString(kind) = first {
-                                        let push_kind = String::from_utf8(kind)
+                                        let push_kind = String::from_utf8(kind.to_vec())
                                             .map_err(StreamErrorFor::<I>::other)?;
                                         Ok(Value::Push {
                                             kind: get_push_kind(push_kind),

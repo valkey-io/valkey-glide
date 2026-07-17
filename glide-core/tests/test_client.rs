@@ -305,12 +305,12 @@ pub(crate) mod shared_client_tests {
                 result,
                 Value::Map(vec![
                     (
-                        Value::BulkString("foo".as_bytes().to_vec()),
-                        Value::BulkString("baz".as_bytes().to_vec())
+                        Value::BulkString("foo".as_bytes().to_vec().into()),
+                        Value::BulkString("baz".as_bytes().to_vec().into())
                     ),
                     (
-                        Value::BulkString("bar".as_bytes().to_vec()),
-                        Value::BulkString("foobar".as_bytes().to_vec())
+                        Value::BulkString("bar".as_bytes().to_vec().into()),
+                        Value::BulkString("foobar".as_bytes().to_vec().into())
                     )
                 ])
             );
@@ -709,7 +709,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -805,7 +805,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -1019,7 +1019,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the set value"
                     );
 
@@ -1041,7 +1041,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_after_reconnect.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET after reconnection should return the same value"
                     );
                 }
@@ -1380,7 +1380,7 @@ pub(crate) mod shared_client_tests {
                     );
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the same value after reconnection"
                     );
 
@@ -1682,12 +1682,12 @@ pub(crate) mod shared_client_tests {
                     Value::Int(1),
                     Value::Map(vec![
                         (
-                            Value::BulkString(field.as_bytes().to_vec()),
-                            Value::BulkString(value.as_bytes().to_vec())
+                            Value::BulkString(field.as_bytes().to_vec().into()),
+                            Value::BulkString(value.as_bytes().to_vec().into())
                         ),
                         (
-                            Value::BulkString(field2.as_bytes().to_vec()),
-                            Value::BulkString(value2.as_bytes().to_vec())
+                            Value::BulkString(field2.as_bytes().to_vec().into()),
+                            Value::BulkString(value2.as_bytes().to_vec().into())
                         )
                     ])
                 ]),
@@ -1747,7 +1747,10 @@ pub(crate) mod shared_client_tests {
                     };
                     assert_eq!(
                         &res[..2],
-                        &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
+                        &[
+                            Value::Okay,
+                            Value::BulkString(value.as_bytes().to_vec().into()),
+                        ],
                         "Pipeline result: {res:?}"
                     );
 
@@ -1823,7 +1826,7 @@ pub(crate) mod shared_client_tests {
                 result,
                 Value::Array(vec![
                     Value::Okay,
-                    Value::BulkString(b"value1".to_vec()),
+                    Value::BulkString(b"value1".to_vec().into()),
                     Value::Nil,
                     Value::Nil,
                 ]),
@@ -1928,7 +1931,7 @@ pub(crate) mod shared_client_tests {
                 res,
                 Value::Array(vec![
                     Value::Okay,
-                    Value::BulkString(b"value1".to_vec()),
+                    Value::BulkString(b"value1".to_vec().into()),
                     Value::Nil,
                     Value::Nil,
                 ]),
@@ -2030,9 +2033,9 @@ pub(crate) mod shared_client_tests {
 
             let expected = Value::Array(vec![
                 Value::Okay,
-                Value::BulkString(value.as_bytes().to_vec()),
+                Value::BulkString(value.as_bytes().to_vec().into()),
                 Value::Okay,
-                Value::BulkString(value2.as_bytes().to_vec()),
+                Value::BulkString(value2.as_bytes().to_vec().into()),
             ]);
 
             assert_eq!(res, expected, "Pipeline result: {res:?}");
@@ -2187,9 +2190,9 @@ pub(crate) mod shared_client_tests {
 
             let expected = Value::Array(vec![
                 Value::Okay,
-                Value::BulkString("value1".as_bytes().to_vec()),
+                Value::BulkString("value1".as_bytes().to_vec().into()),
                 Value::Okay,
-                Value::BulkString("value2".as_bytes().to_vec()),
+                Value::BulkString("value2".as_bytes().to_vec().into()),
             ]);
 
             assert_eq!(res, expected, "Pipeline result: {res:?}");
@@ -2252,7 +2255,7 @@ pub(crate) mod shared_client_tests {
             let items = keys.iter().map(|key| (key, key)).collect::<Vec<_>>();
             let expected = keys
                 .iter()
-                .map(|key| Value::BulkString(key.as_bytes().to_vec()))
+                .map(|key| Value::BulkString(key.as_bytes().to_vec().into()))
                 .collect::<Vec<_>>();
             let mut pipeline = Pipeline::new();
             pipeline.mset(&items);
@@ -2322,8 +2325,8 @@ pub(crate) mod shared_client_tests {
                 Value::Array(vec![
                     Value::Okay,
                     Value::Map(vec![(
-                        Value::BulkString(b"appendonly".to_vec()),
-                        Value::BulkString(b"no".to_vec()),
+                        Value::BulkString(b"appendonly".to_vec().into()),
+                        Value::BulkString(b"no".to_vec().into()),
                     )])
                 ]),
                 "Pipeline result: {result:?}"
@@ -2565,8 +2568,8 @@ pub(crate) mod shared_client_tests {
                 Ok(Value::Array(vec![
                     Value::Int(1),
                     Value::Map(vec![(
-                        Value::BulkString(b"bar".to_vec()),
-                        Value::BulkString(b"vaz".to_vec()),
+                        Value::BulkString(b"bar".to_vec().into()),
+                        Value::BulkString(b"vaz".to_vec().into()),
                     )]),
                     Value::Boolean(true),
                     Value::Int(1),

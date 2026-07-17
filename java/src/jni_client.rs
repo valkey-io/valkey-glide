@@ -233,7 +233,7 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
 
     let as_bytes = |v: &Value| -> Option<Vec<u8>> {
         match v {
-            Value::BulkString(b) => Some(b.clone()),
+            Value::BulkString(b) => Some(b.to_vec()),
             _ => None,
         }
     };
@@ -712,7 +712,7 @@ fn create_direct_byte_buffer<'local>(
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            let (id, ptr, len) = register_native_buffer(data);
+            let (id, ptr, len) = register_native_buffer(data.into());
             let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
             // Register Java-side cleaner to free native buffer when GC'd
             let obj: JObject = bb.into();

@@ -1808,7 +1808,7 @@ mod tests {
         // If poll_read is called during poll_ready (the fix), this response will be
         // delivered to cmd1_handle. If not (the bug), cmd1_handle will hang.
         resp_tx
-            .try_send(Ok(Value::BulkString(b"response1".to_vec())))
+            .try_send(Ok(Value::BulkString(b"response1".to_vec().into())))
             .expect("Failed to inject response");
 
         // Wait for command #1 to complete — with the bug, this times out
@@ -1821,7 +1821,7 @@ mod tests {
 
         match result {
             Ok(Ok(Ok(value))) => {
-                assert_eq!(value, Value::BulkString(b"response1".to_vec()));
+                assert_eq!(value, Value::BulkString(b"response1".to_vec().into()));
             }
             Ok(Ok(Err(e))) => {
                 panic!("Command 1 returned error: {:?}", e);

@@ -473,7 +473,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 .into_any()
                 .unbind()),
             Value::BulkString(data) => {
-                let data_bytes = PyBytes::new(py, &data);
+                let data_bytes = PyBytes::new(py, &data[..]);
                 Ok(data_bytes
                     .into_pyobject(py)
                     .expect("BulkString: expected a proper conversion into Python bytes.")
