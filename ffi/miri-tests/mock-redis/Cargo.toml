@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bytes = "1"
 redis = { path = "../../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 telemetrylib = { path = "../mock-telemetry", package = "mock-telemetry" }
 url = "2"

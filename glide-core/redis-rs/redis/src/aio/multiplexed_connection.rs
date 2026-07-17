@@ -31,11 +31,182 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
-#[cfg(feature = "tokio-comp")]
-use tokio_util::codec::Decoder;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
+
+/// Flush-directly threshold for the vectored sink's queued bytes. Above this,
+/// `poll_ready` applies backpressure by flushing before accepting more items.
+const VECTORED_SINK_HIGH_WATERMARK: usize = 512 * 1024;
+/// Max iovec entries per `write_vectored` call (typical kernel UIO_MAXIOV is
+/// 1024; 64 keeps the stack array small while amortizing syscalls well).
+const MAX_WRITE_SLICES: usize = 64;
+
+pin_project! {
+    /// Send-side zero-copy sink: queues the segments of packed commands and
+    /// writes them with vectored I/O. Large shared payloads
+    /// ([`crate::cmd::SegmentedBytes`]) go from the caller's allocation
+    /// straight to the socket without ever being copied into a write buffer.
+    struct VectoredSink<W> {
+        #[pin]
+        writer: W,
+        queue: VecDeque<bytes::Bytes>,
+        queued_bytes: usize,
+    }
+}
+
+impl<W> VectoredSink<W> {
+    fn new(writer: W) -> Self {
+        VectoredSink {
+            writer,
+            queue: VecDeque::new(),
+            queued_bytes: 0,
+        }
+    }
+}
+
+impl<W: AsyncWrite> VectoredSink<W> {
+    /// Drive queued segments into the writer. Completes when the queue is
+    /// empty and the writer is flushed.
+    fn poll_flush_queue(
+        self: Pin<&mut Self>,
+        cx: &mut task::Context,
+    ) -> Poll<Result<(), RedisError>> {
+        let mut this = self.project();
+        loop {
+            if this.queue.is_empty() {
+                return this
+                    .writer
+                    .as_mut()
+                    .poll_flush(cx)
+                    .map_err(RedisError::from);
+            }
+            let mut slices = [std::io::IoSlice::new(&[]); MAX_WRITE_SLICES];
+            let mut n = 0;
+            for seg in this.queue.iter().take(MAX_WRITE_SLICES) {
+                slices[n] = std::io::IoSlice::new(seg);
+                n += 1;
+            }
+            match ready!(this.writer.as_mut().poll_write_vectored(cx, &slices[..n])) {
+                Ok(0) => {
+                    return Poll::Ready(Err(RedisError::from(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "failed to write queued segments to socket",
+                    ))));
+                }
+                Ok(mut written) => {
+                    *this.queued_bytes -= written;
+                    while written > 0 {
+                        let front = this.queue.front_mut().expect("queue can't be empty");
+                        if written >= front.len() {
+                            written -= front.len();
+                            this.queue.pop_front();
+                        } else {
+                            bytes::Buf::advance(front, written);
+                            written = 0;
+                        }
+                    }
+                }
+                Err(err) => return Poll::Ready(Err(err.into())),
+            }
+        }
+    }
+}
+
+impl<W: AsyncWrite> Sink<crate::cmd::SendBuf> for VectoredSink<W> {
+    type Error = RedisError;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
+        if self.queued_bytes <= VECTORED_SINK_HIGH_WATERMARK {
+            return Poll::Ready(Ok(()));
+        }
+        // Backpressure: drain before accepting more.
+        self.poll_flush_queue(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: crate::cmd::SendBuf) -> Result<(), Self::Error> {
+        let this = self.project();
+        match item {
+            crate::cmd::SendBuf::Contiguous(buf) => {
+                if !buf.is_empty() {
+                    *this.queued_bytes += buf.len();
+                    // from_owner: avoids Bytes::from(Vec)'s shrink-realloc
+                    // on excess capacity.
+                    this.queue.push_back(bytes::Bytes::from_owner(buf));
+                }
+            }
+            crate::cmd::SendBuf::Segmented(segments) => {
+                for segment in segments.into_segments() {
+                    if !segment.is_empty() {
+                        *this.queued_bytes += segment.len();
+                        this.queue.push_back(segment);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
+        self.poll_flush_queue(cx)
+    }
+
+    fn poll_close(
+        mut self: Pin<&mut Self>,
+        cx: &mut task::Context,
+    ) -> Poll<Result<(), Self::Error>> {
+        ready!(self.as_mut().poll_flush_queue(cx))?;
+        self.project()
+            .writer
+            .poll_shutdown(cx)
+            .map_err(RedisError::from)
+    }
+}
+
+pin_project! {
+    /// Combines the decode stream (read half) and the vectored sink (write
+    /// half) back into one `Stream + Sink` object for [`Pipeline::new`].
+    struct SplitSinkStream<R, W> {
+        #[pin]
+        read: R,
+        #[pin]
+        write: W,
+    }
+}
+
+impl<R, W> Stream for SplitSinkStream<R, W>
+where
+    R: Stream<Item = RedisResult<Value>>,
+{
+    type Item = RedisResult<Value>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Option<Self::Item>> {
+        self.project().read.poll_next(cx)
+    }
+}
+
+impl<R, W> Sink<crate::cmd::SendBuf> for SplitSinkStream<R, W>
+where
+    W: Sink<crate::cmd::SendBuf, Error = RedisError>,
+{
+    type Error = RedisError;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
+        self.project().write.poll_ready(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: crate::cmd::SendBuf) -> Result<(), Self::Error> {
+        self.project().write.start_send(item)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
+        self.project().write.poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Result<(), Self::Error>> {
+        self.project().write.poll_close(cx)
+    }
+}
 
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
@@ -799,7 +970,7 @@ where
 /// on the same underlying connection (tcp/unix socket).
 #[derive(Clone)]
 pub struct MultiplexedConnection {
-    pipeline: Pipeline<Vec<u8>>,
+    pipeline: Pipeline<crate::cmd::SendBuf>,
     db: i64,
     response_timeout: Duration,
     protocol: ProtocolVersion,
@@ -849,9 +1020,13 @@ impl MultiplexedConnection {
     where
         C: Unpin + AsyncRead + AsyncWrite + Send + 'static,
     {
-        let codec = ValueCodec::default()
-            .framed(stream)
+        let (read_half, write_half) = ::tokio::io::split(stream);
+        let read_stream = tokio_util::codec::FramedRead::new(read_half, ValueCodec::default())
             .and_then(|msg| async move { msg });
+        let codec = SplitSinkStream {
+            read: read_stream,
+            write: VectoredSink::new(write_half),
+        };
         let (mut pipeline, driver) = Pipeline::new(
             codec,
             glide_connection_options.disconnect_notifier,
@@ -921,7 +1096,13 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_single(
-                cmd.get_packed_command(),
+                // Commands with no out-of-line payloads skip the segmented
+                // representation entirely (see SendBuf::Contiguous).
+                if cmd.has_out_of_line_args() {
+                    crate::cmd::SendBuf::Segmented(cmd.get_packed_segments())
+                } else {
+                    crate::cmd::SendBuf::Contiguous(cmd.get_packed_command())
+                },
                 timeout,
                 cmd.is_fenced(),
                 cmd.is_blocking(),
@@ -962,7 +1143,7 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_recv(
-                cmd.get_packed_pipeline(),
+                crate::cmd::SendBuf::Segmented(cmd.get_packed_pipeline_segments()),
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
@@ -1014,7 +1195,7 @@ impl MultiplexedConnection {
     }
 
     /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
-    pub(crate) fn builder(pipeline: Pipeline<Vec<u8>>) -> MultiplexedConnectionBuilder {
+    pub(crate) fn builder(pipeline: Pipeline<crate::cmd::SendBuf>) -> MultiplexedConnectionBuilder {
         MultiplexedConnectionBuilder::new(pipeline)
     }
 
@@ -1029,7 +1210,7 @@ impl MultiplexedConnection {
 
 /// A builder for creating `MultiplexedConnection` instances.
 pub struct MultiplexedConnectionBuilder {
-    pipeline: Pipeline<Vec<u8>>,
+    pipeline: Pipeline<crate::cmd::SendBuf>,
     db: Option<i64>,
     response_timeout: Option<Duration>,
     push_manager: Option<PushManager>,
@@ -1043,7 +1224,7 @@ pub struct MultiplexedConnectionBuilder {
 
 impl MultiplexedConnectionBuilder {
     /// Creates a new builder with the required pipeline
-    pub(crate) fn new(pipeline: Pipeline<Vec<u8>>) -> Self {
+    pub(crate) fn new(pipeline: Pipeline<crate::cmd::SendBuf>) -> Self {
         Self {
             pipeline,
             db: None,

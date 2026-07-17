@@ -2364,7 +2364,6 @@ impl<T: FromRedisValue> FromRedisValue for Option<T> {
     }
 }
 
-#[cfg(feature = "bytes")]
 impl FromRedisValue for bytes::Bytes {
     fn from_redis_value(v: &Value) -> RedisResult<Self> {
         let v = get_inner_value(v);
