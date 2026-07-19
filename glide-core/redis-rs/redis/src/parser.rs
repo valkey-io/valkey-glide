@@ -362,13 +362,26 @@ mod zero_copy {
             .map_err(|_| parse_error("Expected integer, got garbage".to_string()))
     }
 
-    /// How many child values follow an aggregate header byte with count `n`.
-    fn child_count(type_byte: u8, n: i64) -> usize {
+    /// How many child values follow an aggregate header byte with count `n`
+    /// (`n >= 0`). Errors instead of wrapping if the count overflows `usize`
+    /// (only reachable on 32-bit targets — a hostile length header must not
+    /// silently truncate into a misparse).
+    fn child_count(type_byte: u8, n: i64) -> RedisResult<usize> {
+        let n = usize::try_from(n)
+            .map_err(|_| parse_error("aggregate length exceeds platform limits".to_string()))?;
         match type_byte {
-            b'%' => n as usize * 2,
-            b'|' => n as usize * 2 + 1, // attribute: kv pairs + the data value
-            _ => n as usize,
+            b'%' => n.checked_mul(2),
+            b'|' => n.checked_mul(2).and_then(|c| c.checked_add(1)), // kv pairs + the data value
+            _ => Some(n),
         }
+        .ok_or_else(|| parse_error("aggregate length exceeds platform limits".to_string()))
+    }
+
+    /// Convert a non-negative blob size to `usize`, erroring instead of
+    /// truncating on 32-bit targets.
+    fn blob_size(size: i64) -> RedisResult<usize> {
+        usize::try_from(size)
+            .map_err(|_| parse_error("blob length exceeds platform limits".to_string()))
     }
 
     /// Resumable scan state, persisted across `decode` calls so bytes of an
@@ -455,7 +468,12 @@ mod zero_copy {
                         st.pos = payload_start;
                         continue;
                     }
-                    let end = payload_start + size as usize + 2;
+                    let end = blob_size(size)?
+                        .checked_add(payload_start)
+                        .and_then(|e| e.checked_add(2))
+                        .ok_or_else(|| {
+                            parse_error("blob length exceeds platform limits".to_string())
+                        })?;
                     if end > buf.len() {
                         return Ok(None);
                     }
@@ -474,7 +492,7 @@ mod zero_copy {
                     *remaining -= 1;
                     st.pos = next;
                     if n >= 0 {
-                        st.stack.push(child_count(b, n));
+                        st.stack.push(child_count(b, n)?);
                     }
                 }
                 other => {
@@ -539,7 +557,12 @@ mod zero_copy {
                     *pos = payload_start;
                     return Ok(Value::Nil);
                 }
-                let payload_end = payload_start + size as usize;
+                let payload_end = blob_size(size)?
+                    .checked_add(payload_start)
+                    .filter(|e| e.checked_add(2).is_some())
+                    .ok_or_else(|| {
+                        parse_error("blob length exceeds platform limits".to_string())
+                    })?;
                 if payload_end + 2 > buf.len() {
                     return Err(parse_error("unexpected end of frame".to_string()));
                 }
@@ -578,7 +601,19 @@ mod zero_copy {
                 let n = line_int(buf, type_pos + 1, line_end)?;
                 *pos = next;
                 if n < 0 {
-                    return Ok(Value::Nil);
+                    // Negative aggregate counts: `*-1`/`~-1` are RESP2 nil
+                    // arrays. The old parser mapped a negative push count to
+                    // an empty Push (same as `>0`), so preserve that; other
+                    // negative counts are treated as Nil (the old parser had
+                    // no sane behavior for them).
+                    return Ok(if b == b'>' {
+                        Value::Push {
+                            kind: PushKind::Other("".to_string()),
+                            data: vec![],
+                        }
+                    } else {
+                        Value::Nil
+                    });
                 }
                 match b {
                     b'*' | b'~' => {
@@ -1121,6 +1156,42 @@ mod tests {
                 "aggregate {:?} within depth limit failed via codec: {result:?}",
                 agg as char
             );
+        }
+    }
+
+    /// Negative aggregate counts: `>-1` must decode like the old recursive
+    /// parser (an empty Push), while `*-1`/`~-1` remain RESP2 nil.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn test_codec_negative_aggregate_counts() {
+        use tokio_util::codec::Decoder;
+        let cases: &[(&[u8], Value)] = &[
+            (
+                b">-1\r\n",
+                Value::Push {
+                    kind: PushKind::Other("".to_string()),
+                    data: vec![],
+                },
+            ),
+            (b"*-1\r\n", Value::Nil),
+            (b"~-1\r\n", Value::Nil),
+            (b"$-1\r\n", Value::Nil),
+        ];
+        for (input, expected) in cases {
+            let mut codec = ValueCodec::default();
+            let mut bytes = bytes::BytesMut::from(*input);
+            let decoded = codec
+                .decode(&mut bytes)
+                .expect("decode failed")
+                .expect("expected a value")
+                .expect("expected Ok value");
+            assert_eq!(
+                &decoded,
+                expected,
+                "input {:?}",
+                String::from_utf8_lossy(input)
+            );
+            assert!(bytes.is_empty(), "codec must consume the whole frame");
         }
     }
 }
