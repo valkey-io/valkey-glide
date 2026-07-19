@@ -345,6 +345,14 @@ mod zero_copy {
 
     /// Find the `\r\n`-terminated line starting at `pos`.
     /// Returns `(line_content_end, next_pos)` — content excludes the CRLF.
+    ///
+    /// Known worst case: while a line is *incomplete*, each `decode` call
+    /// rescans it from `pos` (`ScanState.pos` only advances on complete
+    /// elements), so a line-delimited element straddling many reads costs
+    /// O(reads × line length). Bulk payloads are skipped by length and
+    /// unaffected; RESP lines (headers, simple strings/errors) are short in
+    /// practice, so we keep the scanner simple rather than tracking
+    /// intra-line progress.
     fn find_line(buf: &[u8], pos: usize) -> Option<(usize, usize)> {
         let rel = buf[pos..].windows(2).position(|w| w == b"\r\n")?;
         Some((pos + rel, pos + rel + 2))

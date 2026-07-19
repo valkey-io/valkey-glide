@@ -566,6 +566,13 @@ impl Value {
     /// from. Call this before retaining a value long-term (e.g. inserting
     /// into a client-side cache); request/response flows that drop values
     /// promptly do not need it.
+    ///
+    /// Note the amplification: every `BulkString` produced by the zero-copy
+    /// decoder is a slice of its response's single frame buffer, so
+    /// retaining even one small slice pins the *entire* frame (e.g. keeping
+    /// one 16-byte element of a 6 MB MGET response holds all 6 MB — plus its
+    /// recycled `buf_pool` allocation — alive). If you extract and keep a
+    /// subset of a response, detach it first.
     pub fn detach_buffers(self) -> Value {
         match self {
             Value::BulkString(b) => Value::BulkString(bytes::Bytes::copy_from_slice(&b)),

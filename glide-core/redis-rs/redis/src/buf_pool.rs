@@ -125,6 +125,13 @@ mod tests {
     /// Pool tests assert on shared shard state; serialize them so one test's
     /// pops/pushes can't race another's assertions (test threads round-robin
     /// onto the same 8 shards).
+    ///
+    /// NOTE: this guard only covers tests in this module. Any other lib test
+    /// that routes a >[`POOL_MIN`] payload through
+    /// [`pooled_bytes_from_slice`] (e.g. decoding a large frame through the
+    /// codec) touches the same shards without taking `SERIAL` and would race
+    /// the shard-state assertions below. Keep such tests out of the lib test
+    /// binary or extend this guard if that ever happens.
     static SERIAL: Mutex<()> = Mutex::new(());
 
     #[test]
@@ -170,8 +177,11 @@ mod tests {
     #[test]
     fn oversized_requests_do_not_drain_the_pool() {
         let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        // Dedicated thread => dedicated shard; SERIAL keeps other pool tests
-        // from touching the shards concurrently.
+        // A fresh thread gets a round-robin shard index — possibly one
+        // shared with a previous thread, so the assertions below are
+        // self-contained (fill to cap, then compare against the cap) rather
+        // than assuming an empty shard. SERIAL keeps other pool tests from
+        // touching the shards concurrently.
         std::thread::spawn(|| {
             // Fill this thread's shard to its retention cap: hold
             // SHARD_MAX_COUNT pooled buffers alive at once, then drop them
