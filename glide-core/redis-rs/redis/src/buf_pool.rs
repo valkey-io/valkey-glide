@@ -31,12 +31,42 @@ pub(crate) const POOL_MIN: usize = 4 * 1024;
 /// cannot leave large allocations parked in the pool.
 const POOL_MAX_BUF_CAPACITY: usize = 1024 * 1024;
 
-/// Maximum number of retained idle buffers. In-flight buffers are not
-/// counted; this only bounds idle memory
-/// (`POOL_MAX_COUNT * POOL_MAX_BUF_CAPACITY` worst case).
-const POOL_MAX_COUNT: usize = 64;
+/// Number of independent pool shards. Threads are assigned a shard
+/// round-robin, so concurrent connections on different runtime threads don't
+/// serialize on a single process-wide lock for every large payload.
+const SHARD_COUNT: usize = 8;
 
-static POOL: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
+/// Maximum number of retained idle buffers **per shard**. In-flight buffers
+/// are not counted; this only bounds idle memory
+/// (`SHARD_COUNT * SHARD_MAX_COUNT * POOL_MAX_BUF_CAPACITY` = 64 MiB worst
+/// case process-wide, unchanged from the previous single-pool bound).
+const SHARD_MAX_COUNT: usize = 8;
+
+static POOL: [Mutex<Vec<Vec<u8>>>; SHARD_COUNT] = [
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+    Mutex::new(Vec::new()),
+];
+
+/// The shard this thread checks first. Buffers may be popped from one shard
+/// and returned to another (a `Bytes` can be dropped on any thread); the
+/// pool is a best-effort cache, so that only shifts where buffers idle.
+fn shard() -> &'static Mutex<Vec<Vec<u8>>> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    thread_local! {
+        static SHARD_IDX: usize = NEXT.fetch_add(1, Ordering::Relaxed) % SHARD_COUNT;
+    }
+    // TLS can be unavailable while a thread is being torn down (a `Bytes`
+    // drop can run that late); fall back to shard 0 rather than panicking.
+    let idx = SHARD_IDX.try_with(|i| *i).unwrap_or(0);
+    &POOL[idx]
+}
 
 /// Owner type handed to [`Bytes::from_owner`]; returns its allocation to the
 /// pool when the last referencing `Bytes` drops.
@@ -56,8 +86,8 @@ impl Drop for PooledBuf {
         }
         // A poisoned lock only means another thread panicked mid push/pop;
         // the Vec is still structurally valid, so keep recycling.
-        let mut pool = POOL.lock().unwrap_or_else(|e| e.into_inner());
-        if pool.len() < POOL_MAX_COUNT {
+        let mut pool = shard().lock().unwrap_or_else(|e| e.into_inner());
+        if pool.len() < SHARD_MAX_COUNT {
             pool.push(buf);
         }
     }
@@ -73,7 +103,7 @@ pub(crate) fn pooled_bytes_from_slice(data: &[u8]) -> Bytes {
         return Bytes::copy_from_slice(data);
     }
     let mut buf = {
-        let mut pool = POOL.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pool = shard().lock().unwrap_or_else(|e| e.into_inner());
         pool.pop().unwrap_or_default()
     };
     buf.clear();
@@ -117,5 +147,31 @@ mod tests {
         assert_eq!(b.len(), big.len());
         // Exercises the oversized drop branch (buffer freed, not pooled).
         drop(b);
+    }
+
+    /// Concurrent pop/recycle across threads: every returned `Bytes` must
+    /// contain exactly the caller's data (no cross-thread buffer mixups),
+    /// including slices that outlive the parent handle.
+    #[test]
+    fn concurrent_reuse_is_correct() {
+        let threads: Vec<_> = (0..8)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    for i in 0..200usize {
+                        let fill = (t * 31 + i) as u8;
+                        let len = POOL_MIN + 1 + (i % 3) * 1024;
+                        let payload = vec![fill; len];
+                        let b = pooled_bytes_from_slice(&payload);
+                        let slice = b.slice(len / 2..len);
+                        drop(b);
+                        assert!(slice.iter().all(|&x| x == fill), "corrupted slice");
+                        drop(slice); // recycles the buffer for other threads
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
