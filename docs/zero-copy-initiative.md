@@ -132,9 +132,12 @@ the pages stay resident. Design points:
   collapse ~8.6× under parallel load (see the multi-connection contention
   section in `zero-copy-benchmarks.md`).
 - **Bounds:** copies ≤4 KB bypass the pool (allocator small-size classes
-  handle them well); buffers >1 MB are never retained; idle retention is
-  capped at 8 buffers/shard → 64 MiB worst-case process-wide. In-flight
-  buffers are unbounded by design (bounded by pipeline depth).
+  handle them well); copies >1 MB also bypass it entirely — no pooled buffer
+  could satisfy them without an immediate realloc, so popping one would only
+  drain a warm buffer from mid-size traffic, and their allocations are never
+  retained (a burst of huge values can't park large idle memory). Idle
+  retention is capped at 8 buffers/shard → 64 MiB worst-case process-wide.
+  In-flight buffers are unbounded by design (bounded by pipeline depth).
 - **Poison recovery:** a poisoned shard lock only means another thread
   panicked mid push/pop; the `Vec` is structurally valid, so recycling
   continues (`unwrap_or_else(into_inner)`). Thread-teardown TLS access falls

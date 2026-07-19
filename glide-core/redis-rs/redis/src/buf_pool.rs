@@ -97,9 +97,16 @@ impl Drop for PooledBuf {
 ///
 /// The backing allocation returns to the pool when the returned `Bytes` (and
 /// every clone/slice of it) has dropped. Small copies (≤ [`POOL_MIN`]) use a
-/// plain [`Bytes::copy_from_slice`].
+/// plain [`Bytes::copy_from_slice`]. Oversized copies
+/// (> [`POOL_MAX_BUF_CAPACITY`]) bypass the pool entirely: no pooled buffer
+/// can satisfy them without an immediate realloc, so popping one would only
+/// drain a warm buffer from mid-size traffic and then discard it (the drop
+/// hook never retains capacities above the cap).
 pub(crate) fn pooled_bytes_from_slice(data: &[u8]) -> Bytes {
     if data.len() <= POOL_MIN {
+        return Bytes::copy_from_slice(data);
+    }
+    if data.len() > POOL_MAX_BUF_CAPACITY {
         return Bytes::copy_from_slice(data);
     }
     let mut buf = {
@@ -115,8 +122,14 @@ pub(crate) fn pooled_bytes_from_slice(data: &[u8]) -> Bytes {
 mod tests {
     use super::*;
 
+    /// Pool tests assert on shared shard state; serialize them so one test's
+    /// pops/pushes can't race another's assertions (test threads round-robin
+    /// onto the same 8 shards).
+    static SERIAL: Mutex<()> = Mutex::new(());
+
     #[test]
     fn roundtrip_and_reuse() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let payload = vec![7u8; POOL_MIN + 1];
         let b = pooled_bytes_from_slice(&payload);
         assert_eq!(&b[..], &payload[..]);
@@ -135,6 +148,7 @@ mod tests {
 
     #[test]
     fn small_copies_bypass_pool() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let payload = vec![1u8; 16];
         let b = pooled_bytes_from_slice(&payload);
         assert_eq!(&b[..], &payload[..]);
@@ -142,11 +156,46 @@ mod tests {
 
     #[test]
     fn oversized_buffers_not_retained() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let big = vec![3u8; POOL_MAX_BUF_CAPACITY + 1];
         let b = pooled_bytes_from_slice(&big);
         assert_eq!(b.len(), big.len());
-        // Exercises the oversized drop branch (buffer freed, not pooled).
+        assert_eq!(&b[..4], &[3u8; 4]);
+        // Oversized requests take the bypass (plain copy, nothing pooled).
         drop(b);
+    }
+
+    /// Regression: an oversized request must not pop (and then destroy) a
+    /// warm pooled buffer that mid-size traffic could have reused.
+    #[test]
+    fn oversized_requests_do_not_drain_the_pool() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        // Dedicated thread => dedicated shard; SERIAL keeps other pool tests
+        // from touching the shards concurrently.
+        std::thread::spawn(|| {
+            // Fill this thread's shard to its retention cap: hold
+            // SHARD_MAX_COUNT pooled buffers alive at once, then drop them
+            // all so each parks.
+            let held: Vec<_> = (0..SHARD_MAX_COUNT)
+                .map(|_| pooled_bytes_from_slice(&vec![1u8; POOL_MIN + 1]))
+                .collect();
+            drop(held);
+            let parked = shard().lock().unwrap_or_else(|e| e.into_inner()).len();
+            assert_eq!(parked, SHARD_MAX_COUNT, "shard should be full");
+
+            // Oversized request: must bypass the pool entirely.
+            let big = pooled_bytes_from_slice(&vec![2u8; POOL_MAX_BUF_CAPACITY + 1]);
+            assert_eq!(big.len(), POOL_MAX_BUF_CAPACITY + 1);
+            drop(big);
+
+            let after = shard().lock().unwrap_or_else(|e| e.into_inner()).len();
+            assert_eq!(
+                after, SHARD_MAX_COUNT,
+                "oversized request consumed a pooled buffer"
+            );
+        })
+        .join()
+        .unwrap();
     }
 
     /// Concurrent pop/recycle across threads: every returned `Bytes` must
@@ -154,6 +203,7 @@ mod tests {
     /// including slices that outlive the parent handle.
     #[test]
     fn concurrent_reuse_is_correct() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let threads: Vec<_> = (0..8)
             .map(|t| {
                 std::thread::spawn(move || {
