@@ -1024,3 +1024,43 @@ pub fn verify_subscription_addresses_changed(
 
     (changed, unchanged, not_found)
 }
+
+/// Wait for subscriptions to migrate to different addresses after slot migration.
+/// Polls until all channels are found at addresses different from their pre-migration locations.
+/// Returns (changed, unchanged, not_found) counts, or times out and returns the last observed state.
+///
+/// This replaces the fragile pattern of `sleep(500ms) + wait_for_pubsub_state + verify_addresses`
+/// with a single deterministic polling loop that checks the actual condition we care about:
+/// all subscriptions have moved to their new addresses.
+#[cfg(not(feature = "mock-pubsub"))]
+pub async fn wait_for_subscriptions_migrated(
+    setup: &PubSubTestSetup,
+    subs_before: &HashMap<String, PubSubSubscriptionInfo>,
+    channels: &[Vec<u8>],
+    kind: PubSubSubscriptionKind,
+    timeout: Duration,
+) -> (usize, usize, usize) {
+    let start = std::time::Instant::now();
+    loop {
+        let subs_after = setup.get_subscriptions_by_address();
+        let (changed, unchanged, not_found) =
+            verify_subscription_addresses_changed(subs_before, &subs_after, channels, kind);
+
+        if not_found == 0 && unchanged == 0 {
+            return (changed, unchanged, not_found);
+        }
+
+        if start.elapsed() >= timeout {
+            logger_core::log_warn(
+                "wait_for_subscriptions_migrated",
+                format!(
+                    "Timed out after {:?}: changed={}, unchanged={}, not_found={}",
+                    timeout, changed, unchanged, not_found
+                ),
+            );
+            return (changed, unchanged, not_found);
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}

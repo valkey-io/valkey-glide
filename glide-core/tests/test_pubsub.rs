@@ -16,7 +16,8 @@ use utilities::cluster::{
     ClusterTopology, LONG_CLUSTER_TEST_TIMEOUT, PubSubTestSetup, RedisCluster,
     generate_test_subscriptions_different_slots, migrate_channel_to_different_node,
     migrate_channels_to_different_nodes, subscribe_and_wait, trigger_failover,
-    verify_subscription_addresses_changed, wait_for_node_to_become_primary, wait_for_pubsub_state,
+    verify_subscription_addresses_changed, wait_for_node_to_become_primary,
+    wait_for_pubsub_state, wait_for_subscriptions_migrated,
 };
 
 const LOG_PREFIX: &str = "test_pubsub";
@@ -156,30 +157,17 @@ fn test_exact_subscriptions_survive_slot_migrations(#[case] num_channels: usize)
         )
         .await;
 
-        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
-        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        let all_resubscribed = wait_for_pubsub_state(
-            &setup.synchronizer,
+        // Wait for subscriptions to migrate to new addresses using a deterministic
+        // polling loop instead of a fixed sleep. This avoids the race condition where
+        // the topology refresh hasn't fired yet or subscriptions are mid-reconciliation.
+        let (changed, unchanged, not_found) = wait_for_subscriptions_migrated(
+            &setup,
+            &subs_before,
+            &channels,
             PubSubSubscriptionKind::Exact,
-            &channels.iter().cloned().collect(),
-            true,
             RESUBSCRIPTION_TIMEOUT,
         )
         .await;
-        assert!(
-            all_resubscribed,
-            "All exact subscriptions should be re-established after migrations"
-        );
-
-        let subs_after = setup.get_subscriptions_by_address();
-        let (changed, unchanged, not_found) = verify_subscription_addresses_changed(
-            &subs_before,
-            &subs_after,
-            &channels,
-            PubSubSubscriptionKind::Exact,
-        );
 
         logger_core::log_info(
             LOG_PREFIX,
@@ -244,30 +232,17 @@ fn test_pattern_subscriptions_survive_slot_migrations(#[case] num_patterns: usiz
         )
         .await;
 
-        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
-        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        let all_resubscribed = wait_for_pubsub_state(
-            &setup.synchronizer,
+        // Wait for subscriptions to migrate to new addresses using a deterministic
+        // polling loop instead of a fixed sleep. This avoids the race condition where
+        // the topology refresh hasn't fired yet or subscriptions are mid-reconciliation.
+        let (changed, unchanged, not_found) = wait_for_subscriptions_migrated(
+            &setup,
+            &subs_before,
+            &patterns,
             PubSubSubscriptionKind::Pattern,
-            &patterns.iter().cloned().collect(),
-            true,
             RESUBSCRIPTION_TIMEOUT,
         )
         .await;
-        assert!(
-            all_resubscribed,
-            "All pattern subscriptions should be re-established after migrations"
-        );
-
-        let subs_after = setup.get_subscriptions_by_address();
-        let (changed, unchanged, not_found) = verify_subscription_addresses_changed(
-            &subs_before,
-            &subs_after,
-            &patterns,
-            PubSubSubscriptionKind::Pattern,
-        );
 
         logger_core::log_info(
             LOG_PREFIX,
