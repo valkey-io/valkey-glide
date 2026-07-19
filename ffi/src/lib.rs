@@ -175,6 +175,15 @@ pub struct CommandResponse {
     /// Below two values are related to each other.
     /// `string_value` represents the string.
     /// `string_value_len` represents the length of the string.
+    ///
+    /// Despite the `*mut` type (kept for C ABI compatibility), callers MUST
+    /// treat this memory as **read-only**: for arena-allocated responses it
+    /// points into a refcounted buffer shared with every other string in the
+    /// same response (a zero-copy slice of the decoded network frame), so
+    /// writing through it corrupts sibling values. It is valid only until
+    /// `free_command_response` / `free_response_arena`; the backing buffer is
+    /// recycled afterwards, so a stale pointer reads (or corrupts) unrelated
+    /// future response data rather than faulting.
     pub string_value: *mut c_char,
     pub string_value_len: c_long,
 
@@ -2584,7 +2593,16 @@ impl ResponseArena {
             }
         })
     }
-    fn return_to_pool(self) {
+    fn return_to_pool(mut self) {
+        // Drop the string buffers NOW, not when this pool slot is next
+        // reused: `strings` holds refcounted `Bytes` that pin the decoded
+        // response frames (and their recycled `buf_pool` allocations). A
+        // parked arena that kept them alive would pin up to
+        // MAX_ARENA_POOL_SIZE frames per thread indefinitely on an idle
+        // thread and starve the frame-buffer pool. Only the node Vec's
+        // capacity is worth recycling.
+        self.strings.clear();
+        self.nodes.clear();
         ARENA_POOL.with(|p| {
             let mut p = p.borrow_mut();
             if p.len() < MAX_ARENA_POOL_SIZE {
@@ -2624,6 +2642,13 @@ impl ResponseArena {
 
     /// Store a string buffer, returning (ptr, len) for the CommandResponse fields.
     /// Accepts anything convertible to `Bytes`; `Vec<u8>` converts zero-copy.
+    ///
+    /// The returned pointer aliases the (possibly shared) `Bytes` buffer —
+    /// for zero-copy `BulkString`s that is the decoded network frame, shared
+    /// by every other slice of the same response and recycled through
+    /// `buf_pool` after release. It is therefore read-only and valid only
+    /// until the arena releases its strings (`return_to_pool`); see the
+    /// `CommandResponse::string_value` contract.
     fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, c_long) {
         let data = data.into();
         let ptr = data.as_ptr() as *mut c_char;
@@ -2873,6 +2898,158 @@ pub unsafe extern "C" fn free_response_arena(arena_ptr: *mut ResponseArena) {
     }
 }
 
+#[cfg(test)]
+mod tests_response_arena {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// Owner for `Bytes::from_owner` that records when the allocation is
+    /// released, so tests can observe whether a `Bytes` slice is still
+    /// pinning its backing buffer (as zero-copy `BulkString`s pin the
+    /// decoded response frame).
+    struct DropTracked(Vec<u8>, Arc<AtomicBool>);
+
+    impl AsRef<[u8]> for DropTracked {
+        fn as_ref(&self) -> &[u8] {
+            &self.0
+        }
+    }
+
+    impl Drop for DropTracked {
+        fn drop(&mut self) {
+            self.1.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Regression test: freeing a response arena must release the `Bytes`
+    /// frame slices it holds, even though the arena itself is parked in
+    /// `ARENA_POOL` for reuse. If `return_to_pool` kept `strings` populated,
+    /// a freed GET/MGET response would pin its read-buffer frame (and its
+    /// recycled `buf_pool` allocation) indefinitely on an idle thread.
+    #[test]
+    fn free_response_arena_releases_frame_buffers() {
+        let released = Arc::new(AtomicBool::new(false));
+        let frame = bytes::Bytes::from_owner(DropTracked(vec![7u8; 64], released.clone()));
+
+        // Two BulkStrings slicing the same frame, as the zero-copy decoder
+        // produces for an MGET response.
+        let value = Value::Array(vec![
+            Value::BulkString(frame.slice(0..16)),
+            Value::BulkString(frame.slice(16..32)),
+        ]);
+        drop(frame);
+
+        let (root, arena_ptr) =
+            valkey_value_to_arena_response(value, &[]).expect("arena build failed");
+
+        // While the response is alive, its string pointers alias the pinned
+        // frame; read them back the way a binding would (this also gives
+        // MIRI a provenance check on the handed-out pointers).
+        unsafe {
+            let root_ref = &*root;
+            assert!(matches!(root_ref.response_type, ResponseType::Array));
+            assert_eq!(root_ref.array_value_len, 2);
+            for i in 0..root_ref.array_value_len {
+                let child = &*root_ref.array_value.add(i as usize);
+                assert!(matches!(child.response_type, ResponseType::String));
+                assert_eq!(child.string_value_len, 16);
+                let payload = std::slice::from_raw_parts(
+                    child.string_value as *const u8,
+                    child.string_value_len as usize,
+                );
+                assert_eq!(payload, &[7u8; 16]);
+            }
+        }
+        assert!(
+            !released.load(Ordering::SeqCst),
+            "frame must stay pinned while the response is alive"
+        );
+
+        // Freeing the response must drop the frame slices immediately —
+        // NOT hold them until the pooled arena slot is next reused.
+        unsafe { free_response_arena(arena_ptr) };
+        assert!(
+            released.load(Ordering::SeqCst),
+            "freed arena parked in ARENA_POOL must not keep pinning response frame buffers"
+        );
+    }
+
+    /// The caller-buffer path (`response_buffers=` / MGET-into-buffers):
+    /// exercises the bounds-checked `copy_nonoverlapping` into caller memory
+    /// under MIRI, plus the undersized-buffer error before the copy.
+    #[test]
+    fn response_buffer_copy_path_is_bounds_checked() {
+        let payload = bytes::Bytes::from_static(b"0123456789abcdef");
+
+        // Large enough buffer: value copied, node reports the byte count.
+        let mut buf = vec![0u8; 32];
+        let value = Value::BulkString(payload.clone());
+        let (root, arena_ptr) =
+            valkey_value_to_arena_response(value, &[(buf.as_mut_ptr(), buf.len())])
+                .expect("arena build failed");
+        unsafe {
+            let root_ref = &*root;
+            assert!(matches!(root_ref.response_type, ResponseType::String));
+            // string_value holds the written-length as a decimal string.
+            let len_str = std::slice::from_raw_parts(
+                root_ref.string_value as *const u8,
+                root_ref.string_value_len as usize,
+            );
+            assert_eq!(len_str, b"16");
+            assert_eq!(&buf[..16], &payload[..]);
+            free_response_arena(arena_ptr);
+        }
+
+        // Undersized buffer: must error before any copy happens.
+        let mut small = vec![0u8; 4];
+        let value = Value::BulkString(payload);
+        let res = valkey_value_to_arena_response(value, &[(small.as_mut_ptr(), small.len())]);
+        assert!(res.is_err(), "oversized value must not be copied");
+        assert_eq!(&small[..], &[0u8; 4], "no partial write on error");
+    }
+
+    /// Map-shaped tree: exercises `finalize`'s index->pointer fixups for
+    /// `map_key`/`map_value` and nested string reads under MIRI.
+    #[test]
+    fn map_tree_finalize_fixups() {
+        let frame = bytes::Bytes::from_static(b"key1val1key2val2");
+        let value = Value::Map(vec![
+            (
+                Value::BulkString(frame.slice(0..4)),
+                Value::BulkString(frame.slice(4..8)),
+            ),
+            (
+                Value::BulkString(frame.slice(8..12)),
+                Value::BulkString(frame.slice(12..16)),
+            ),
+        ]);
+        let (root, arena_ptr) = valkey_value_to_arena_response(value, &[]).expect("build failed");
+        unsafe {
+            let root_ref = &*root;
+            assert!(matches!(root_ref.response_type, ResponseType::Map));
+            assert_eq!(root_ref.array_value_len, 2);
+            let expected: [(&[u8], &[u8]); 2] = [(b"key1", b"val1"), (b"key2", b"val2")];
+            for (i, (ek, ev)) in expected.iter().enumerate() {
+                let wrapper = &*root_ref.array_value.add(i);
+                let k = &*wrapper.map_key;
+                let v = &*wrapper.map_value;
+                let kb = std::slice::from_raw_parts(
+                    k.string_value as *const u8,
+                    k.string_value_len as usize,
+                );
+                let vb = std::slice::from_raw_parts(
+                    v.string_value as *const u8,
+                    v.string_value_len as usize,
+                );
+                assert_eq!(kb, *ek);
+                assert_eq!(vb, *ev);
+            }
+            free_response_arena(arena_ptr);
+        }
+    }
+}
+
 /// Executes a command.
 ///
 /// # Safety
@@ -3037,13 +3214,6 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
     }
 }
 
-/// The underlying command execution implementation. Used by various command
-/// execution API like: [`command_with_buffer`], [`command_with_buffers`],
-/// and [`command_with_route_info`]. It builds and dispatches the command,
-/// writing the reply into `response_buffer` when present (a single buffer for
-/// a scalar reply, one buffer per element for an array reply).
-///
-/// # Safety
 /// Append a caller-provided argument to `cmd` with minimal copying.
 ///
 /// Large payloads are copied ONCE at the FFI boundary into a refcounted
@@ -3061,16 +3231,25 @@ fn append_cmd_arg(cmd: &mut Cmd, arg: &[u8]) {
     cmd.arg(arg);
 }
 
-/// Like [`append_cmd_arg`] for owned buffers (compressed args): `Vec<u8>` to
-/// `Bytes` conversion is zero-copy, so large args are never copied at all.
+/// Like [`append_cmd_arg`] for owned buffers (compressed args): the `Vec` is
+/// adopted as-is via `Bytes::from_owner`, so large args are never copied at
+/// all. (`Bytes::from(Vec)` would shrink-to-fit — a realloc + full copy —
+/// whenever the compressor left excess capacity.)
 fn append_cmd_arg_owned(cmd: &mut Cmd, arg: Vec<u8>) {
     if arg.len() > redis::SHARED_ARG_INLINE_MAX {
-        cmd.arg_shared(bytes::Bytes::from(arg));
+        cmd.arg_shared(bytes::Bytes::from_owner(arg));
     } else {
         cmd.arg(arg);
     }
 }
 
+/// The underlying command execution implementation. Used by various command
+/// execution API like: [`command_with_buffer`], [`command_with_buffers`],
+/// and [`command_with_route_info`]. It builds and dispatches the command,
+/// writing the reply into `response_buffer` when present (a single buffer for
+/// a scalar reply, one buffer per element for an array reply).
+///
+/// # Safety
 /// `client_adapter_ptr` and `args`/`args_len` follow the same contract as
 /// [`command_with_buffer`]. `route_input` follows the safety contract
 /// documented on [`RouteInput::resolve`]. Any buffers referenced by
