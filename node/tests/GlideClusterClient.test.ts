@@ -2514,8 +2514,8 @@ describe("GlideClusterClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     await expect(
                         GlideClusterClient.createClient({
-                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
-                            ...config, // Include the rest of the config
+                            ...config,
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout - must come after ...config to override
                         }),
                     ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
@@ -2525,8 +2525,8 @@ describe("GlideClusterClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     const longerTimeoutClient =
                         await GlideClusterClient.createClient({
-                            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
-                            ...config, // Include the rest of the config
+                            ...config,
+                            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout - must come after ...config to override
                         });
                     expect(await client.set("x", "y")).toEqual("OK");
                     longerTimeoutClient.close(); // Close the client after successful connection
@@ -2579,8 +2579,8 @@ describe("GlideClusterClient", () => {
 
                 await expect(
                     GlideClusterClient.createClient({
-                        advancedConfiguration: { connectionTimeout: 3000 },
                         ...config,
+                        advancedConfiguration: { connectionTimeout: 3000 }, // must come after ...config to override
                     }),
                 ).rejects.toThrowError(/timed?\s*out/i);
 

@@ -1320,13 +1320,13 @@ describe("GlideClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     await expect(
                         GlideClient.createClient({
+                            ...config,
                             connectionBackoff: {
                                 exponentBase: 2,
                                 factor: 100,
                                 numberOfRetries: 1,
                             },
-                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
-                            ...config, // Include the rest of the config
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout - must come after ...config to override
                         }),
                     ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
@@ -1335,13 +1335,13 @@ describe("GlideClient", () => {
                 const connectWithLargeTimeout = async () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     const longerTimeoutClient = await GlideClient.createClient({
+                        ...config,
                         connectionBackoff: {
                             exponentBase: 2,
                             factor: 100,
                             numberOfRetries: 1,
                         },
-                        advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
-                        ...config, // Include the rest of the config
+                        advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout - must come after ...config to override
                     });
                     expect(await client.set("x", "y")).toEqual("OK");
                     longerTimeoutClient.close(); // Close the client after successful connection
@@ -1395,13 +1395,13 @@ describe("GlideClient", () => {
 
                 await expect(
                     GlideClient.createClient({
+                        ...config,
                         connectionBackoff: {
                             exponentBase: 2,
                             factor: 100,
                             numberOfRetries: 1,
                         },
-                        advancedConfiguration: { connectionTimeout: 3000 },
-                        ...config,
+                        advancedConfiguration: { connectionTimeout: 3000 }, // must come after ...config to override
                     }),
                 ).rejects.toThrowError(/timed?\s*out/i);
 
