@@ -222,20 +222,21 @@ const (
 type AddressResolver func(host string, port int) (string, int)
 
 type baseClientConfiguration struct {
-	addresses            []NodeAddress
-	useTLS               bool
-	credentials          *ServerCredentials
-	readFrom             ReadFrom
-	requestTimeout       time.Duration
-	clientName           string
-	clientAZ             string
-	reconnectStrategy    *BackoffStrategy
-	lazyConnect          bool
-	DatabaseId           *int `json:"database_id,omitempty"`
-	compressionConfig    *CompressionConfiguration
-	clientSideCache      *ClientSideCache
-	addressResolver      AddressResolver
-	clientCircuitBreaker *ClientCircuitBreakerConfiguration
+	addresses             []NodeAddress
+	useTLS                bool
+	credentials           *ServerCredentials
+	readFrom              ReadFrom
+	requestTimeout        time.Duration
+	clientName            string
+	clientAZ              string
+	reconnectStrategy     *BackoffStrategy
+	lazyConnect           bool
+	DatabaseId            *int `json:"database_id,omitempty"`
+	compressionConfig     *CompressionConfiguration
+	clientSideCache       *ClientSideCache
+	addressResolver       AddressResolver
+	inflightRequestsLimit uint32
+	clientCircuitBreaker  *ClientCircuitBreakerConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -308,6 +309,10 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 			return nil, fmt.Errorf("invalid circuit breaker configuration: %w", err)
 		}
 		request.ClientCircuitBreaker = cbPb
+	}
+
+	if config.inflightRequestsLimit != 0 {
+		request.InflightRequestsLimit = config.inflightRequestsLimit
 	}
 
 	return &request, nil
@@ -611,6 +616,14 @@ func (config *ClientConfiguration) WithClientCircuitBreaker(
 	return config
 }
 
+// WithInflightRequestsLimit sets the maximum number of concurrent requests allowed to be in-flight (sent but not yet
+// completed). This limit is used to control memory usage and prevent the client from overwhelming the server or getting
+// stuck in case of a queue backlog. If not set, a default value of 1000 will be used.
+func (config *ClientConfiguration) WithInflightRequestsLimit(limit uint32) *ClientConfiguration {
+	config.inflightRequestsLimit = limit
+	return config
+}
+
 func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
@@ -854,6 +867,14 @@ func (config *ClusterClientConfiguration) WithClientCircuitBreaker(
 	cb *ClientCircuitBreakerConfiguration,
 ) *ClusterClientConfiguration {
 	config.clientCircuitBreaker = cb
+	return config
+}
+
+// WithInflightRequestsLimit sets the maximum number of concurrent requests allowed to be in-flight (sent but not yet
+// completed). This limit is used to control memory usage and prevent the client from overwhelming the server or getting
+// stuck in case of a queue backlog. If not set, a default value of 1000 will be used.
+func (config *ClusterClientConfiguration) WithInflightRequestsLimit(limit uint32) *ClusterClientConfiguration {
+	config.inflightRequestsLimit = limit
 	return config
 }
 
