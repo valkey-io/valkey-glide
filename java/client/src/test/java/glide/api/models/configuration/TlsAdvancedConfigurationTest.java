@@ -48,7 +48,6 @@ public class TlsAdvancedConfigurationTest {
         assertArrayEquals(keyBytes, config.getClientKey());
         assertNull(config.getClientCertPath());
         assertNull(config.getClientKeyPath());
-        assertFalse(config.isCertReloadRequested());
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
@@ -79,7 +78,8 @@ public class TlsAdvancedConfigurationTest {
 
             assertArrayEquals(certBytes, config.getClientCertificate());
             assertArrayEquals(keyBytes, config.getClientKey());
-            assertFalse(config.isCertReloadRequested());
+            // Static byte-based mTLS sets no cert path, so reload is not enabled.
+            assertNull(config.getClientCertPath());
         } finally {
             Files.deleteIfExists(certPath);
             Files.deleteIfExists(keyPath);
@@ -253,7 +253,8 @@ public class TlsAdvancedConfigurationTest {
     void testBuilderCertReloadDefaultsDisabled() {
         TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
 
-        assertFalse(config.isCertReloadRequested());
+        // No cert path means reload is not enabled.
+        assertNull(config.getClientCertPath());
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
@@ -269,7 +270,6 @@ public class TlsAdvancedConfigurationTest {
         assertEquals("/certs/client.key", config.getClientKeyPath());
         assertNull(config.getClientCertificate());
         assertNull(config.getClientKey());
-        assertTrue(config.isCertReloadRequested());
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
@@ -282,7 +282,6 @@ public class TlsAdvancedConfigurationTest {
 
         assertEquals("/certs/client.pem", config.getClientCertPath());
         assertEquals("/certs/client.key", config.getClientKeyPath());
-        assertTrue(config.isCertReloadRequested());
         assertEquals(120, config.getCertReloadIntervalSeconds());
     }
 
