@@ -41,7 +41,7 @@ from tests.utils.pubsub_test_utils import (
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
-from tests.utils.utils import kill_connections, wait_for
+from tests.utils.utils import kill_connections_tolerant, wait_for
 
 
 @pytest.mark.anyio
@@ -4214,7 +4214,7 @@ class TestPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4301,7 +4301,7 @@ class TestPubSub:
             assert msg_before.pattern == pattern
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4389,7 +4389,7 @@ class TestPubSub:
             assert msg_before.channel == channel
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4465,7 +4465,7 @@ class TestPubSub:
             )
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
             #  give time for reconnect
             await anyio.sleep(2)
 
