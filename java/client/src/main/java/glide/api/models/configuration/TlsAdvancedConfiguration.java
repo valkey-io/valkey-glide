@@ -20,12 +20,12 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * Advanced TLS configuration settings class for creating a client. Shared settings for standalone
- * and cluster clients.
+ * Advanced TLS configuration settings class for creating a client. Shared settings for standalone and
+ * cluster clients.
  *
  * <p>Mutual TLS (mTLS) is configured through the intent-revealing {@code useMutualTls} and {@code
- * useMutualTlsWithReload} builder methods rather than by setting individual certificate fields,
- * which keeps invalid combinations unrepresentable:
+ * useMutualTlsWithReload} builder methods rather than by setting individual certificate fields, which
+ * keeps invalid combinations unrepresentable:
  *
  * <ul>
  *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])} - in-memory PEM
@@ -96,9 +96,10 @@ public class TlsAdvancedConfiguration {
      * Filesystem path to the PEM client certificate, set via the {@code useMutualTlsWithReload}
      * overloads ({@link TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String, String)},
      * {@link TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String, String, int)}) so the
-     * GLIDE core reads it from disk; see {@link #certReloadIntervalSeconds} for reload behavior. Path-
-     * and byte-based ({@link #clientCertificate}) configuration are mutually exclusive, and this is
-     * always paired with {@link #clientKeyPath}. If null (default), no path-based certificate is used.
+     * GLIDE core reads it from disk; see {@link #certReloadIntervalSeconds} for reload behavior.
+     * Path- and byte-based ({@link #clientCertificate}) configuration are mutually exclusive, and
+     * this is always paired with {@link #clientKeyPath}. If null (default), no path-based certificate
+     * is used.
      */
     private final String clientCertPath;
 
@@ -114,19 +115,22 @@ public class TlsAdvancedConfiguration {
      * useMutualTlsWithReload} overload).
      *
      * <ul>
-     *   <li>{@code null} (set by {@link TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String,
-     *       String)}): the core uses its default cadence, currently 300 seconds (see <a
+     *   <li>{@code null} (set by {@link
+     *       TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String, String)}): the core uses
+     *       its default cadence, currently 300 seconds (see <a
      *       href="https://github.com/valkey-io/valkey-glide/blob/06bd09e1549e1ec5c8fced77a85a417a8573236f/glide-core/src/tls_reload/mod.rs#L44">{@code
      *       DEFAULT_RELOAD_INTERVAL_SECONDS}</a> in glide-core).
      *   <li>A positive value (set by {@link
      *       TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String, String, int)}): the core
      *       re-reads the files at that interval. A successful reload (material parses and key matches
-     *       the certificate) is adopted on the next reconnect; on failure the last-known-good material
-     *       is kept. A non-positive value is rejected; use {@link
-     *       TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])} for static (no-reload) mTLS.
+     *       the certificate) is adopted on the next reconnect; on failure the last-known-good
+     *       material is kept. A non-positive value is rejected; use {@link
+     *       TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])} for static (no-reload)
+     *       mTLS.
      * </ul>
      *
-     * <p>Root/CA certificate reload is out of scope; only the client certificate and key are reloaded.
+     * <p>Root/CA certificate reload is out of scope; only the client certificate and key are
+     * reloaded.
      */
     private final Integer certReloadIntervalSeconds;
 
@@ -298,9 +302,9 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Reads a PEM-encoded client certificate file into raw bytes. Convenience loader mirroring the
-         * Go and Python clients; combine it with {@link #loadClientKeyFromFile(String)} and pass the
-         * results to {@link #useMutualTls(byte[], byte[])} for static mTLS from files.
+         * Reads a PEM-encoded client certificate file into raw bytes. Convenience loader mirroring
+         * the Go and Python clients; combine it with {@link #loadClientKeyFromFile(String)} and pass
+         * the results to {@link #useMutualTls(byte[], byte[])} for static mTLS from files.
          *
          * @param path Filesystem path to the PEM-encoded client certificate.
          * @return the certificate bytes in PEM format
@@ -323,10 +327,10 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Enables path-based mTLS with automatic reloading at the GLIDE core's default cadence: the core
-         * reads the files from disk and periodically re-reads them to pick up rotated material. The
-         * cadence is deferred to the core's default (see {@link #certReloadIntervalSeconds}); use {@link
-         * #useMutualTlsWithReload(String, String, int)} to override it.
+         * Enables path-based mTLS with automatic reloading at the GLIDE core's default cadence: the
+         * core reads the files from disk and periodically re-reads them to pick up rotated material.
+         * The cadence is deferred to the core's default (see {@link #certReloadIntervalSeconds}); use
+         * {@link #useMutualTlsWithReload(String, String, int)} to override it.
          *
          * @param clientCertPath Filesystem path to the PEM-encoded client certificate.
          * @param clientKeyPath Filesystem path to the PEM-encoded client private key.
@@ -341,8 +345,8 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Enables path-based mTLS with automatic reloading every {@code intervalSecs} seconds: the core
-         * re-reads the files at that interval to pick up rotated material. See {@link
+         * Enables path-based mTLS with automatic reloading every {@code intervalSecs} seconds: the
+         * core re-reads the files at that interval to pick up rotated material. See {@link
          * #certReloadIntervalSeconds} for the full reload semantics.
          *
          * @param clientCertPath Filesystem path to the PEM-encoded client certificate.
