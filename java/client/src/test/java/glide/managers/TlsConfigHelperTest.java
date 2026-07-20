@@ -53,7 +53,7 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key")
+                                .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key")
                                 .build());
 
         assertEquals("/certs/client.pem", TlsConfigHelper.extractClientCertPath(configuration));
@@ -74,20 +74,18 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key", 60)
+                                .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", 60)
                                 .build());
 
         assertTrue(TlsConfigHelper.isCertReloadEnabled(configuration));
         assertEquals(60, TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
     }
 
+    // Static byte-based mTLS does not request reload and configures no paths.
     @Test
-    void certReloadDisabledByDefault() {
+    void certReloadDisabledForStaticMutualTls() {
         GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key")
-                                .build());
+                configWithTls(TlsAdvancedConfiguration.builder().useMutualTls(CERT, KEY).build());
 
         assertFalse(TlsConfigHelper.isCertReloadEnabled(configuration));
         assertNull(TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
@@ -101,21 +99,18 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                                .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key")
                                 .build());
 
         assertTrue(TlsConfigHelper.isCertReloadEnabled(configuration));
         assertNull(TlsConfigHelper.extractCertReloadIntervalSeconds(configuration));
     }
 
-    // Wire behavior: no reload requested -> no cert_reload config is built.
+    // Wire behavior: no reload requested (static byte-based mTLS) -> no cert_reload config is built.
     @Test
     void buildCertReloadConfigReturnsNullWhenNoReload() {
         GlideClientConfiguration configuration =
-                configWithTls(
-                        TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key")
-                                .build());
+                configWithTls(TlsAdvancedConfiguration.builder().useMutualTls(CERT, KEY).build());
 
         assertNull(TlsConfigHelper.buildCertReloadConfig(configuration));
     }
@@ -127,7 +122,7 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                                .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key")
                                 .build());
 
         ClientCertReloadConfig reloadConfig = TlsConfigHelper.buildCertReloadConfig(configuration);
@@ -143,7 +138,7 @@ public class TlsConfigHelperTest {
         GlideClientConfiguration configuration =
                 configWithTls(
                         TlsAdvancedConfiguration.builder()
-                                .useMutualTls("/certs/client.pem", "/certs/client.key", 90)
+                                .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", 90)
                                 .build());
 
         ClientCertReloadConfig reloadConfig = TlsConfigHelper.buildCertReloadConfig(configuration);

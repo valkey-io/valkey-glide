@@ -126,8 +126,8 @@ public final class TlsConfigHelper {
     /**
      * Returns {@code true} if automatic certificate reload is requested for path-based mTLS.
      *
-     * <p>Enablement is separate from the interval: reload is requested by using the three-argument
-     * {@code useMutualTls} overload, whether or not an interval was supplied. This returns {@code
+     * <p>Enablement is separate from the interval: reload is requested by using either {@code
+     * useMutualTlsWithReload} overload, whether or not an interval was supplied. This returns {@code
      * true} both when the interval is deferred to the core ({@code null}) and when an explicit
      * positive interval is set. Reload is only meaningful when a client certificate path is
      * configured; requesting it without a certificate path results in a {@link ConfigurationError}.
