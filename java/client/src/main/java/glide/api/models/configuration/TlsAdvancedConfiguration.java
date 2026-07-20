@@ -109,18 +109,9 @@ public class TlsAdvancedConfiguration {
     private final String clientKeyPath;
 
     /**
-     * Whether automatic reload of the path-based client certificate and key is requested. Set to
-     * {@code true} by either {@code useMutualTlsWithReload} overload (regardless of interval), {@code
-     * false} otherwise; this alone enables reloading, while {@link #certReloadIntervalSeconds} carries
-     * only the optional cadence override (so "reload on, cadence deferred to the core" is a {@code
-     * true} flag with a {@code null} interval). Reloading requires path-based mTLS, so requesting it
-     * without {@link #clientCertPath}/{@link #clientKeyPath} is rejected.
-     */
-    private final boolean certReloadRequested;
-
-    /**
-     * Optional override, in seconds, for the automatic reload interval; only meaningful when {@link
-     * #certReloadRequested} is {@code true}.
+     * Optional override, in seconds, for the automatic reload interval; only meaningful when
+     * path-based mTLS reloading is enabled (that is, when {@link #clientCertPath} is set via a {@code
+     * useMutualTlsWithReload} overload).
      *
      * <ul>
      *   <li>{@code null} (set by {@link TlsAdvancedConfigurationBuilder#useMutualTlsWithReload(String,
@@ -152,7 +143,6 @@ public class TlsAdvancedConfiguration {
             byte[] clientKey,
             String clientCertPath,
             String clientKeyPath,
-            boolean certReloadRequested,
             Integer certReloadIntervalSeconds) {
         this.useInsecureTLS = useInsecureTLS;
         this.rootCertificates = rootCertificates;
@@ -160,7 +150,6 @@ public class TlsAdvancedConfiguration {
         this.clientKey = clientKey;
         this.clientCertPath = clientCertPath;
         this.clientKeyPath = clientKeyPath;
-        this.certReloadRequested = certReloadRequested;
         this.certReloadIntervalSeconds = certReloadIntervalSeconds;
         validate();
     }
@@ -219,23 +208,16 @@ public class TlsAdvancedConfiguration {
                             + " key.");
         }
 
-        // Enablement and interval are separate. When reload is requested, a supplied interval must
-        // be positive; a non-positive value is rejected because static (no-reload) mTLS is expressed
-        // by the byte-based useMutualTls overload, not by passing 0 here. A null interval is allowed
-        // and means the core chooses the cadence.
-        if (certReloadRequested
+        // Enablement and interval are separate. When path-based reloading is enabled (a cert path is
+        // set), a supplied interval must be positive; a non-positive value is rejected because static
+        // (no-reload) mTLS is expressed by the byte-based useMutualTls overload, not by passing 0
+        // here. A null interval is allowed and means the core chooses the cadence.
+        if (clientCertPath != null
                 && certReloadIntervalSeconds != null
                 && certReloadIntervalSeconds <= 0) {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` must be positive; omit it (null) to defer to the GLIDE"
                             + " core's default cadence.");
-        }
-
-        // Reloading requires path-based mTLS; key the check off the reload-requested flag, since a
-        // deferred (null) interval still enables reloading.
-        if (certReloadRequested && clientCertPath == null) {
-            throw new ConfigurationError(
-                    "certificate reload requires `clientCertPath` and `clientKeyPath` to be provided.");
         }
     }
 
@@ -354,7 +336,6 @@ public class TlsAdvancedConfiguration {
                 String clientCertPath, String clientKeyPath) {
             this.clientCertPath = clientCertPath;
             this.clientKeyPath = clientKeyPath;
-            this.certReloadRequested = true;
             this.certReloadIntervalSeconds = null;
             return this;
         }
@@ -374,7 +355,6 @@ public class TlsAdvancedConfiguration {
                 String clientCertPath, String clientKeyPath, int intervalSecs) {
             this.clientCertPath = clientCertPath;
             this.clientKeyPath = clientKeyPath;
-            this.certReloadRequested = true;
             this.certReloadIntervalSeconds = intervalSecs;
             return this;
         }
@@ -401,11 +381,6 @@ public class TlsAdvancedConfiguration {
 
         private TlsAdvancedConfigurationBuilder clientKeyPath(String clientKeyPath) {
             this.clientKeyPath = clientKeyPath;
-            return this;
-        }
-
-        private TlsAdvancedConfigurationBuilder certReloadRequested(boolean certReloadRequested) {
-            this.certReloadRequested = certReloadRequested;
             return this;
         }
 

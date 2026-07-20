@@ -126,25 +126,19 @@ public final class TlsConfigHelper {
     /**
      * Returns {@code true} if automatic certificate reload is requested for path-based mTLS.
      *
-     * <p>Enablement is separate from the interval: reload is requested by using either {@code
-     * useMutualTlsWithReload} overload, whether or not an interval was supplied. This returns {@code
-     * true} both when the interval is deferred to the core ({@code null}) and when an explicit
-     * positive interval is set. Reload is only meaningful when a client certificate path is
-     * configured; requesting it without a certificate path results in a {@link ConfigurationError}.
-     *
-     * @throws ConfigurationError if reload is requested without a client certificate path.
+     * <p>Enablement is separate from the interval: reload is enabled whenever a path-based client
+     * certificate is configured (set by either {@code useMutualTlsWithReload} overload), whether or
+     * not an interval was supplied. This returns {@code true} both when the interval is deferred to
+     * the core ({@code null}) and when an explicit positive interval is set.
      */
     public static boolean isCertReloadEnabled(BaseClientConfiguration configuration) {
         TlsAdvancedConfiguration tlsConfig = getTlsConfig(configuration);
         if (tlsConfig == null) {
             return false;
         }
-        boolean reloadRequested = tlsConfig.isCertReloadRequested();
-        if (reloadRequested && tlsConfig.getClientCertPath() == null) {
-            throw new ConfigurationError(
-                    "certificate reload requires `clientCertPath` and `clientKeyPath` to be provided.");
-        }
-        return reloadRequested;
+        // Reload is enabled iff a path-based client certificate is configured, which is only set by
+        // the useMutualTlsWithReload overloads. The cert/key path pairing is validated elsewhere.
+        return tlsConfig.getClientCertPath() != null;
     }
 
     /**
@@ -167,8 +161,6 @@ public final class TlsConfigHelper {
      * <p>The returned config always has {@code enabled = true}. {@code interval_seconds} is set only
      * when an explicit positive override is configured; when the interval is deferred to the core the
      * field is left unset, so the GLIDE core applies its own default cadence.
-     *
-     * @throws ConfigurationError if reload is requested without a client certificate path.
      */
     public static ClientCertReloadConfig buildCertReloadConfig(
             BaseClientConfiguration configuration) {
