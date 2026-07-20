@@ -48,7 +48,60 @@ public class TlsAdvancedConfigurationTest {
         assertArrayEquals(keyBytes, config.getClientKey());
         assertNull(config.getClientCertPath());
         assertNull(config.getClientKeyPath());
+        assertFalse(config.isCertReloadRequested());
         assertNull(config.getCertReloadIntervalSeconds());
+    }
+
+    @Test
+    void testLoadClientCertificateAndKeyFromFile() throws Exception {
+        byte[] certBytes = "client-cert-from-file".getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = "client-key-from-file".getBytes(StandardCharsets.UTF_8);
+        Path certPath = Files.createTempFile("client-cert", ".pem");
+        Path keyPath = Files.createTempFile("client-key", ".pem");
+
+        try {
+            Files.write(certPath, certBytes);
+            Files.write(keyPath, keyBytes);
+
+            byte[] loadedCert =
+                    TlsAdvancedConfiguration.TlsAdvancedConfigurationBuilder.loadClientCertificateFromFile(
+                            certPath.toString());
+            byte[] loadedKey =
+                    TlsAdvancedConfiguration.TlsAdvancedConfigurationBuilder.loadClientKeyFromFile(
+                            keyPath.toString());
+
+            assertArrayEquals(certBytes, loadedCert);
+            assertArrayEquals(keyBytes, loadedKey);
+
+            // The loaders feed straight into the byte-based static overload.
+            TlsAdvancedConfiguration config =
+                    TlsAdvancedConfiguration.builder().useMutualTls(loadedCert, loadedKey).build();
+
+            assertArrayEquals(certBytes, config.getClientCertificate());
+            assertArrayEquals(keyBytes, config.getClientKey());
+            assertFalse(config.isCertReloadRequested());
+        } finally {
+            Files.deleteIfExists(certPath);
+            Files.deleteIfExists(keyPath);
+        }
+    }
+
+    @Test
+    void testLoadClientCertificateFromFileMissingThrows() {
+        assertThrows(
+                IOException.class,
+                () ->
+                        TlsAdvancedConfiguration.TlsAdvancedConfigurationBuilder.loadClientCertificateFromFile(
+                                "/nonexistent/path/client-cert.pem"));
+    }
+
+    @Test
+    void testLoadClientKeyFromFileMissingThrows() {
+        assertThrows(
+                IOException.class,
+                () ->
+                        TlsAdvancedConfiguration.TlsAdvancedConfigurationBuilder.loadClientKeyFromFile(
+                                "/nonexistent/path/client-key.pem"));
     }
 
     @Test
@@ -188,21 +241,6 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
-    void testUseMutualTlsWithPaths() {
-        TlsAdvancedConfiguration config =
-                TlsAdvancedConfiguration.builder()
-                        .useMutualTls("/certs/client.pem", "/certs/client.key")
-                        .build();
-
-        assertNotNull(config);
-        assertEquals("/certs/client.pem", config.getClientCertPath());
-        assertEquals("/certs/client.key", config.getClientKeyPath());
-        assertNull(config.getClientCertificate());
-        assertNull(config.getClientKey());
-        assertNull(config.getCertReloadIntervalSeconds());
-    }
-
-    @Test
     void testBuilderWithNullClientCertAndKeyPaths() {
         TlsAdvancedConfiguration config = TlsAdvancedConfiguration.builder().build();
 
@@ -219,37 +257,27 @@ public class TlsAdvancedConfigurationTest {
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
-    // The two-argument path overload loads once and does not request reload.
+    // The two-argument reload overload requests reload but defers the cadence to the core.
     @Test
-    void testUseMutualTlsPathsDoesNotRequestReload() {
+    void testUseMutualTlsWithReloadDefaultInterval() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()
-                        .useMutualTls("/certs/client.pem", "/certs/client.key")
-                        .build();
-
-        assertFalse(config.isCertReloadRequested());
-        assertNull(config.getCertReloadIntervalSeconds());
-    }
-
-    // A null interval requests reload but defers the cadence to the core (no interval set).
-    @Test
-    void testUseMutualTlsPathReloadDeferredInterval() {
-        TlsAdvancedConfiguration config =
-                TlsAdvancedConfiguration.builder()
-                        .useMutualTls("/certs/client.pem", "/certs/client.key", null)
+                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key")
                         .build();
 
         assertEquals("/certs/client.pem", config.getClientCertPath());
         assertEquals("/certs/client.key", config.getClientKeyPath());
+        assertNull(config.getClientCertificate());
+        assertNull(config.getClientKey());
         assertTrue(config.isCertReloadRequested());
         assertNull(config.getCertReloadIntervalSeconds());
     }
 
     @Test
-    void testUseMutualTlsPathReloadCustomInterval() {
+    void testUseMutualTlsWithReloadCustomInterval() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()
-                        .useMutualTls("/certs/client.pem", "/certs/client.key", 120)
+                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", 120)
                         .build();
 
         assertEquals("/certs/client.pem", config.getClientCertPath());
@@ -258,27 +286,27 @@ public class TlsAdvancedConfigurationTest {
         assertEquals(120, config.getCertReloadIntervalSeconds());
     }
 
-    // A zero interval is rejected: "no reload" is expressed by the two-argument path overload.
+    // A zero interval is rejected: static (no-reload) mTLS is expressed by useMutualTls(bytes).
     @Test
-    void testUseMutualTlsPathZeroIntervalThrows() {
+    void testUseMutualTlsWithReloadZeroIntervalThrows() {
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
                         () ->
                                 TlsAdvancedConfiguration.builder()
-                                        .useMutualTls("/certs/client.pem", "/certs/client.key", 0)
+                                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", 0)
                                         .build());
         assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
 
     @Test
-    void testUseMutualTlsPathNegativeIntervalThrows() {
+    void testUseMutualTlsWithReloadNegativeIntervalThrows() {
         ConfigurationError error =
                 assertThrows(
                         ConfigurationError.class,
                         () ->
                                 TlsAdvancedConfiguration.builder()
-                                        .useMutualTls("/certs/client.pem", "/certs/client.key", -1)
+                                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", -1)
                                         .build());
         assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
