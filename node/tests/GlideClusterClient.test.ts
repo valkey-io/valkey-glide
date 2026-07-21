@@ -2886,6 +2886,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -2974,6 +2975,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -3031,6 +3033,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("AZAffinityReplicasAndPrimary Read Strategy Tests", () => {
@@ -3139,6 +3142,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -3210,6 +3214,7 @@ describe("GlideClusterClient", () => {
                     client?.close();
                 }
             },
+            TIMEOUT,
         );
     });
 
