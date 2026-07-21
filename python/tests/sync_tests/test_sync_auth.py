@@ -35,10 +35,10 @@ from tests.utils.utils import (
 )
 
 # Reconnect budget for the disconnect-and-recover flow in
-# test_sync_update_connection_password. In cluster mode a CLIENT KILL is fanned
-# out over AllNodes and, under heavy full-matrix CI contention, the full-cluster
-# reconnect + re-auth can take considerably longer than on an unloaded host, so
-# cluster mode gets a wider tolerance. Standalone keeps the original budget.
+# test_update_connection_password. In cluster mode a CLIENT KILL is fanned out
+# over AllNodes and, under heavy full-matrix CI contention, the full-cluster
+# reconnect + re-auth can take considerably longer than on an unloaded host,
+# so cluster mode gets a wider tolerance.
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
@@ -89,6 +89,7 @@ class TestSyncAuthCommands:
         except RequestError:
             pass
 
+    @pytest.mark.timeout(600)
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_update_connection_password(
@@ -154,8 +155,9 @@ class TestSyncAuthCommands:
         )
 
         # Verify that the client is still authenticated.
-        # Use a retry loop because the connection pool may still be stabilizing
-        # right after reconnection succeeds.
+        # Use a retry loop because the per-node connections (plus, in cluster mode,
+        # the topology refresh) may still be re-stabilizing right after reconnection
+        # reports success.
         def _verify_authenticated():
             try:
                 return glide_sync_client.set("test_key", "test_value") == OK
