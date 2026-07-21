@@ -392,86 +392,36 @@ func NewClientConfiguration() *ClientConfiguration {
 	return &ClientConfiguration{}
 }
 
-// applyClientCertAndKey validates the client certificate and key for mutual TLS and, when valid, sets them on request.
+// applyClientCertAndKey serializes the mutual-TLS client certificate/key state on tlsConfig
+// into request. Because the mTLS fields are unexported and only set through the WithMutualTLS*
+// methods (which validate their inputs), the state here is already well-formed: at most one of
+// (bytes, paths) is populated, and byte pairs are never empty.
 //
-// It supports two mutually exclusive configuration styles:
-//   - Byte-based (ClientCertificate/ClientKey): static, non-reloading mTLS. Each value is either nil or non-empty,
-//     and both must be provided together.
-//   - Path-based (ClientCertPath/ClientKeyPath): the core reads the material from disk and, when reload is enabled,
-//     periodically re-reads it. Both paths must be provided together, and reload requires the paths.
-func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) error {
-	hasCertBytes := tlsConfig.ClientCertificate != nil
-	hasKeyBytes := tlsConfig.ClientKey != nil
-	hasCertPath := tlsConfig.ClientCertPath != ""
-	hasKeyPath := tlsConfig.ClientKeyPath != ""
-
-	// Reject empty (non-nil) byte arrays: use nil to indicate "not provided".
-	if hasCertBytes && len(tlsConfig.ClientCertificate) == 0 {
-		return errors.New(
-			"client certificate cannot be an empty byte array; use nil if not providing a client certificate")
+// Wire semantics:
+//   - Byte-based:  request.ClientCert / ClientKey (proto fields 22/23).
+//   - Path-based:  request.ClientCertPath / ClientKeyPath (fields 31/32) plus
+//     request.CertReload = { Enabled: true, IntervalSeconds: <optional> } (field 33).
+func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) {
+	if len(tlsConfig.clientCertificate) > 0 {
+		request.ClientCert = tlsConfig.clientCertificate
 	}
-	if hasKeyBytes && len(tlsConfig.ClientKey) == 0 {
-		return errors.New("client key cannot be an empty byte array; use nil if not providing a client key")
+	if len(tlsConfig.clientKey) > 0 {
+		request.ClientKey = tlsConfig.clientKey
 	}
 
-	// Path-based and byte-based client certificate configuration are mutually exclusive.
-	if (hasCertPath || hasKeyPath) && (hasCertBytes || hasKeyBytes) {
-		return errors.New(
-			"path-based (ClientCertPath/ClientKeyPath) and byte-based (ClientCertificate/ClientKey) client " +
-				"certificate configuration cannot both be provided; use one or the other")
-	}
-
-	// Ensure byte-based client certificate and key are both provided or neither: mTLS requires both.
-	if hasCertBytes && !hasKeyBytes {
-		return errors.New("client certificate is provided but client key is not provided; mTLS requires both")
-	}
-	if hasKeyBytes && !hasCertBytes {
-		return errors.New("client key is provided but client certificate is not provided; mTLS requires both")
-	}
-
-	// Ensure path-based client certificate and key are both provided or neither: mTLS requires both.
-	if hasCertPath && !hasKeyPath {
-		return errors.New(
-			"client certificate path is provided but client key path is not provided; mTLS requires both")
-	}
-	if hasKeyPath && !hasCertPath {
-		return errors.New(
-			"client key path is provided but client certificate path is not provided; mTLS requires both")
-	}
-
-	// Certificate reload only applies to path-based configuration.
-	if tlsConfig.CertReloadEnabled && !hasCertPath {
-		return errors.New(
-			"certificate reload is enabled but no client certificate path is provided; " +
-				"reload requires ClientCertPath and ClientKeyPath")
-	}
-
-	// Apply byte-based client certificate/key.
-	if hasCertBytes {
-		request.ClientCert = tlsConfig.ClientCertificate
-	}
-	if hasKeyBytes {
-		request.ClientKey = tlsConfig.ClientKey
-	}
-
-	// Apply path-based client certificate/key and optional reload config.
-	if hasCertPath && hasKeyPath {
-		certPath := tlsConfig.ClientCertPath
-		keyPath := tlsConfig.ClientKeyPath
+	if tlsConfig.clientCertPath != "" {
+		certPath := tlsConfig.clientCertPath
+		keyPath := tlsConfig.clientKeyPath
 		request.ClientCertPath = &certPath
 		request.ClientKeyPath = &keyPath
 
-		if tlsConfig.CertReloadEnabled {
-			reload := &protobuf.CertReloadConfig{Enabled: true}
-			if tlsConfig.CertReloadIntervalSeconds != nil {
-				interval := *tlsConfig.CertReloadIntervalSeconds
-				reload.IntervalSeconds = &interval
-			}
-			request.CertReload = reload
+		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
+		if tlsConfig.certReloadIntervalSeconds != nil {
+			interval := *tlsConfig.certReloadIntervalSeconds
+			reload.IntervalSeconds = &interval
 		}
+		request.CertReload = reload
 	}
-
-	return nil
 }
 
 func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -540,9 +490,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		}
 
 		// Handle client certificate and key for mutual TLS
-		if err := applyClientCertAndKey(tlsConfig, request); err != nil {
-			return nil, err
-		}
+		applyClientCertAndKey(tlsConfig, request)
 	}
 
 	return request, nil
@@ -814,9 +762,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		}
 
 		// Handle client certificate and key for mutual TLS
-		if err := applyClientCertAndKey(tlsConfig, request); err != nil {
-			return nil, err
-		}
+		applyClientCertAndKey(tlsConfig, request)
 	}
 
 	return request, nil
@@ -1042,70 +988,21 @@ type TlsConfiguration struct {
 	// Default: false (verification is enforced).
 	UseInsecureTLS bool
 
-	// ClientCertificate contains the client certificate data for mutual TLS (mTLS) authentication in PEM format.
+	// Unexported mTLS state. The three wire states are mutually exclusive by construction: only the
+	// WithMutualTLS* methods populate these fields, and each method writes a consistent pair, so no
+	// invalid combination is reachable from outside this package.
 	//
-	// When provided along with ClientKey, enables mutual TLS authentication so that the client presents its
-	// certificate to the server. This is used when the server requires client certificate authentication.
-	// If set to an empty byte array (non-nil but length 0), an error will be returned.
-	// If nil, no client certificate will be presented.
-	//
-	// Must be used together with ClientKey: providing one without the other is a configuration error.
-	//
-	// The certificate data should be in PEM format as a byte array.
-	ClientCertificate []byte
-
-	// ClientKey contains the client private key data for mutual TLS (mTLS) authentication in PEM format.
-	//
-	// When provided along with ClientCertificate, enables mutual TLS authentication. This private key
-	// corresponds to the certificate provided in ClientCertificate.
-	// If set to an empty byte array (non-nil but length 0), an error will be returned.
-	// If nil, no client key will be used.
-	//
-	// Must be used together with ClientCertificate: providing one without the other is a configuration error.
-	//
-	// The key data should be in PEM format as a byte array.
-	ClientKey []byte
-
-	// ClientCertPath is the filesystem path to the client certificate (PEM) for mutual TLS (mTLS) authentication.
-	//
-	// Use this instead of ClientCertificate to have the GLIDE core read the certificate from disk. When combined
-	// with CertReloadEnabled, the core periodically re-reads the file so that a rotated certificate is adopted on
-	// the next reconnect, without recreating the client.
-	//
-	// Must be used together with ClientKeyPath: providing one without the other is a configuration error.
-	// Path-based (ClientCertPath) and byte-based (ClientCertificate) client certificate configuration are mutually
-	// exclusive.
-	//
-	// If empty (default), no path-based client certificate is used.
-	ClientCertPath string
-
-	// ClientKeyPath is the filesystem path to the client private key (PEM) for mutual TLS (mTLS) authentication.
-	//
-	// See ClientCertPath. Must be provided together with ClientCertPath.
-	//
-	// If empty (default), no path-based client key is used.
-	ClientKeyPath string
-
-	// CertReloadEnabled controls whether the path-based client certificate and key are automatically reloaded.
-	//
-	// When true (and ClientCertPath/ClientKeyPath are set), the GLIDE core periodically re-reads the certificate
-	// and key files. On a successful reload (the material parses and the private key matches the certificate), the
-	// new material is adopted on the next reconnect; on any failure, the previously loaded material is kept
-	// (last-known-good).
-	//
-	// Root/CA certificate reload is out of scope; only the client certificate and key are reloaded.
-	//
-	// Enabling reload without a client certificate path is a configuration error.
-	//
-	// Default: false (path-based material is loaded once at client creation).
-	CertReloadEnabled bool
-
-	// CertReloadIntervalSeconds is the interval, in seconds, between certificate reload checks when
-	// CertReloadEnabled is true.
-	//
-	// If nil (default), the core default of 300 seconds (5 minutes) is used. Ignored when CertReloadEnabled is
-	// false.
-	CertReloadIntervalSeconds *uint32
+	// State 1 (no mTLS): all five fields zero-valued.
+	// State 2 (static bytes): clientCertificate + clientKey non-nil, non-empty. All path fields
+	//                         empty; certReloadIntervalSeconds nil.
+	// State 3 (path + reload): clientCertPath + clientKeyPath non-empty. Byte fields nil.
+	//                          certReloadIntervalSeconds is either nil (core default cadence) or a
+	//                          positive uint32.
+	clientCertificate         []byte
+	clientKey                 []byte
+	clientCertPath            string
+	clientKeyPath             string
+	certReloadIntervalSeconds *uint32
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -1133,68 +1030,6 @@ func (config *TlsConfiguration) WithRootCertificates(rootCerts []byte) *TlsConfi
 // Default: false (verification is enforced).
 func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration {
 	config.UseInsecureTLS = insecure
-	return config
-}
-
-// WithClientCertificate sets the client certificate used for mutual TLS (mTLS) authentication.
-// The certificate should be in PEM format.
-// Must be used together with WithClientKey; providing one without the other will result in an error during connection.
-// Pass nil to not present a client certificate (default behavior).
-// Passing an empty byte array will result in an error during connection.
-func (config *TlsConfiguration) WithClientCertificate(clientCert []byte) *TlsConfiguration {
-	config.ClientCertificate = clientCert
-	return config
-}
-
-// WithClientKey sets the client private key used for mutual TLS (mTLS) authentication.
-// The key should be in PEM format and correspond to the certificate set with WithClientCertificate.
-// Must be used together with WithClientCertificate; providing one without the other will result in an error during connection.
-// Pass nil to not use a client key (default behavior).
-// Passing an empty byte array will result in an error during connection.
-func (config *TlsConfiguration) WithClientKey(clientKey []byte) *TlsConfiguration {
-	config.ClientKey = clientKey
-	return config
-}
-
-// WithClientCertPath sets the filesystem path to the client certificate (PEM) used for mutual TLS (mTLS)
-// authentication. The GLIDE core reads the certificate from disk.
-// Must be used together with WithClientKeyPath; providing one without the other will result in an error during
-// connection. Path-based configuration is mutually exclusive with WithClientCertificate.
-// Pass an empty string to not use a path-based client certificate (default behavior).
-func (config *TlsConfiguration) WithClientCertPath(clientCertPath string) *TlsConfiguration {
-	config.ClientCertPath = clientCertPath
-	return config
-}
-
-// WithClientKeyPath sets the filesystem path to the client private key (PEM) used for mutual TLS (mTLS)
-// authentication. The key should correspond to the certificate set with WithClientCertPath.
-// Must be used together with WithClientCertPath; providing one without the other will result in an error during
-// connection. Path-based configuration is mutually exclusive with WithClientKey.
-// Pass an empty string to not use a path-based client key (default behavior).
-func (config *TlsConfiguration) WithClientKeyPath(clientKeyPath string) *TlsConfiguration {
-	config.ClientKeyPath = clientKeyPath
-	return config
-}
-
-// WithCertReloadEnabled enables or disables automatic reloading of the path-based client certificate and key.
-//
-// When enabled (and WithClientCertPath/WithClientKeyPath are set), the GLIDE core periodically re-reads the
-// certificate and key files and adopts rotated material on the next reconnect, keeping the last-known-good
-// material on any failure. Root/CA certificate reload is out of scope.
-//
-// Enabling reload without a client certificate path will result in an error during connection.
-//
-// Default: false.
-func (config *TlsConfiguration) WithCertReloadEnabled(enabled bool) *TlsConfiguration {
-	config.CertReloadEnabled = enabled
-	return config
-}
-
-// WithCertReloadIntervalSeconds sets the interval, in seconds, between certificate reload checks when reload is
-// enabled with WithCertReloadEnabled. Ignored when reload is disabled.
-// If not set, the core default of 300 seconds (5 minutes) is used.
-func (config *TlsConfiguration) WithCertReloadIntervalSeconds(intervalSeconds uint32) *TlsConfiguration {
-	config.CertReloadIntervalSeconds = &intervalSeconds
 	return config
 }
 

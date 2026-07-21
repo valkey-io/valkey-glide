@@ -243,31 +243,6 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 	assert.Contains(suite.T(), err.Error(), "failed to read client key file")
 }
 
-// TestTlsClientCertPathValidation_Standalone drives the public NewClient API to confirm that
-// path-based mTLS and certificate-reload misconfiguration surface as connection errors, without
-// requiring a live TLS server (the errors are raised while building the connection request).
-func (suite *GlideTestSuite) TestTlsClientCertPathValidation_Standalone() {
-	// Cert path provided without key path.
-	tlsConfig := config.NewTlsConfiguration().WithClientCertPath("/etc/glide/tls/client-cert.pem")
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
-	_, err := glide.NewClient(clientConfig)
-	assert.Error(suite.T(), err)
-	assert.Contains(suite.T(), err.Error(), "client certificate path is provided but client key path is not provided")
-
-	// Reload enabled without paths.
-	tlsConfig = config.NewTlsConfiguration().WithCertReloadEnabled(true)
-	advancedConfig = defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig = defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
-	_, err = glide.NewClient(clientConfig)
-	assert.Error(suite.T(), err)
-	assert.Contains(suite.T(), err.Error(), "certificate reload is enabled but no client certificate path is provided")
-}
-
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
