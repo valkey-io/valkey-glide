@@ -26,12 +26,6 @@ except ImportError:
     HAS_ANYIO = False
 
 from glide._ffi_instance import _ASYNC_FFI
-
-# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
-# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
-# call. `_ASYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
-# share across clients.
-_EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
 from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared._fast_response import parse_response as _c_parse_response
 from glide_shared.commands.command_args import ObjectType
@@ -74,6 +68,13 @@ if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
+
+
+# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
+# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
+# call. `_ASYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
+# share across clients.
+_EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 
 # ==================== Framework-Agnostic Future ====================

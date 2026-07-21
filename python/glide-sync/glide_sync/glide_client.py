@@ -35,12 +35,6 @@ from glide_shared.routes import (
 )
 from glide_sync._ffi_instance import _SYNC_FFI
 
-# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
-# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
-# call. `_SYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
-# share across clients.
-_EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
-
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
@@ -51,6 +45,12 @@ if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
+
+# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
+# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
+# call. `_SYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
+# share across clients.
+_EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
 
