@@ -166,7 +166,9 @@ describe("Auth tests", () => {
         test: (client: BaseClient) => Promise<void>,
         protocol: ProtocolVersion,
         clusterMode: boolean,
-        configOverrides?: Partial<BaseClientConfiguration>,
+        configOverrides?: Partial<BaseClientConfiguration> & {
+            advancedConfiguration?: Record<string, unknown>;
+        },
     ) => {
         const activeCluster = clusterMode ? cmeCluster : cmdCluster;
 
@@ -195,7 +197,6 @@ describe("Auth tests", () => {
             ...configOverrides,
             advancedConfiguration: {
                 connectionTimeout: 10000,
-                ...(configOverrides?.advancedConfiguration ?? {}),
             },
         });
 

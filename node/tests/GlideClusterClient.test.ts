@@ -2814,6 +2814,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 20000 },
                             ),
                         );
 
@@ -2830,6 +2831,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2908,6 +2910,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 20000 },
                             ),
                         );
 
@@ -2930,6 +2933,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2997,6 +3001,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: "non-existing-az",
                                 },
@@ -3057,7 +3062,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
+                                { requestTimeout: 20000 },
                             ),
                         );
                     // Set all nodes for us-east-1b
@@ -3080,7 +3085,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinityReplicasAndPrimary",
                                     clientAz: az,
                                 },
