@@ -152,6 +152,7 @@ class TestSyncAuthCommands:
             "Client failed to reconnect after second kill for immediate auth",
             timeout=reconnect_timeout,
         )
+
         # Verify that the client is still authenticated.
         # Use a retry loop because the connection pool may still be stabilizing
         # right after reconnection succeeds.
