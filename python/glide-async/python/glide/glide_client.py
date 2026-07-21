@@ -849,7 +849,7 @@ class BaseClient(CoreCommands):
         try:
             return await fut
         finally:
-            if span:
+            if span != 0:
                 self._lib.drop_otel_span(span)
 
     # ==================== Cache Metrics ====================
