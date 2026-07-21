@@ -15,6 +15,7 @@
 ### Changes
 
 * Core: perf(core): zero-copy receive path for GET/MGET. The async RESP decoder now scans the read buffer for one complete frame, extracts it into a recycled pooled buffer, and slices bulk-string payloads out of it as refcounted `Bytes` — eliminating the per-value allocation + copy. The FFI response arena stores those slices directly, so non-buffered GET/MGET responses are one-copy end to end (kernel read buffer → caller). Benchmarked on ElastiCache: −44…−77% client CPU per op on pipelined MGET workloads, GET ≤16KB at parity. ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
+* Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
 * Core/FFI: Add `command_with_route_info` FFI entrypoint, accepting routing as a `RouteInfo` C-struct pointer instead of protobuf-encoded bytes — the same mechanism `batch()` already uses. Existing `command`, `command_with_buffer`, `command_with_buffers`, and `invoke_script` are unchanged. ([#6494](https://github.com/valkey-io/valkey-glide/pull/6494))
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))

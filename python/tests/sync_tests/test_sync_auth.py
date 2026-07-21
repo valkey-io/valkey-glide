@@ -29,10 +29,18 @@ from tests.utils.utils import (
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
-    kill_connections,
     set_new_acl_username_with_password,
+    sync_kill_connections_tolerant,
     sync_wait_for,
 )
+
+# Reconnect budget for the disconnect-and-recover flow in
+# test_sync_update_connection_password. In cluster mode a CLIENT KILL is fanned
+# out over AllNodes and, under heavy full-matrix CI contention, the full-cluster
+# reconnect + re-auth can take considerably longer than on an unloaded host, so
+# cluster mode gets a wider tolerance. Standalone keeps the original budget.
+_CLUSTER_RECONNECT_TIMEOUT_SEC = 60
+_STANDALONE_RECONNECT_TIMEOUT_SEC = 25
 
 
 def create_iam_client(
@@ -84,7 +92,10 @@ class TestSyncAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_update_connection_password(
-        self, glide_sync_client: TGlideClient, management_sync_client: TGlideClient
+        self,
+        glide_sync_client: TGlideClient,
+        management_sync_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password without immediate re-authentication.
@@ -94,6 +105,11 @@ class TestSyncAuthCommands:
         3. The client can reconnect using the new password after server password change
         This test is only for cluster mode, as standalone mode does not have a connection available handler
         """
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
         result = glide_sync_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )
@@ -103,7 +119,7 @@ class TestSyncAuthCommands:
         value = glide_sync_client.get("test_key")
         assert value == b"test_value"
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
-        kill_connections(management_sync_client)
+        sync_kill_connections_tolerant(management_sync_client)
 
         # Wait for the client to reconnect with the new password using retry
         # instead of a fixed sleep, which is unreliable in cluster mode under CI load
@@ -117,9 +133,9 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_first_kill,
             "Client failed to reconnect with new password after first kill",
-            timeout=25,
+            timeout=reconnect_timeout,
         )
-        kill_connections(management_sync_client)
+        sync_kill_connections_tolerant(management_sync_client)
 
         # Wait for reconnection again before attempting immediate auth
         def _check_reconnected_after_second_kill():
@@ -134,7 +150,7 @@ class TestSyncAuthCommands:
         sync_wait_for(
             _check_reconnected_after_second_kill,
             "Client failed to reconnect after second kill for immediate auth",
-            timeout=25,
+            timeout=reconnect_timeout,
         )
         # Verify that the client is still authenticated
         assert glide_sync_client.set("test_key", "test_value") == OK
@@ -156,7 +172,7 @@ class TestSyncAuthCommands:
         try:
             test_client.set("test_key", "test_value")
             config_set_new_password(test_client, NEW_PASSWORD)
-            kill_connections(management_sync_client)
+            sync_kill_connections_tolerant(management_sync_client)
             # Wait for glide-core to detect dead connection and fail reconnect
             # (reconnects with old/empty password, which server now rejects)
             time.sleep(2)

@@ -1482,3 +1482,32 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	cache.WithServerAssisted(false)
 	assert.False(t, cache.ServerAssisted)
 }
+
+func TestClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithInflightRequestsLimit(5000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(5000), result.InflightRequestsLimit)
+}
+
+func TestClientConfiguration_WithInflightRequestsLimit_notSet(t *testing.T) {
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379})
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), result.InflightRequestsLimit)
+}
+
+func TestClusterClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithInflightRequestsLimit(2000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(2000), result.InflightRequestsLimit)
+}
