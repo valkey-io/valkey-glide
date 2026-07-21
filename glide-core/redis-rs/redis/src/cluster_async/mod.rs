@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -201,6 +201,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
         iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+        cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
@@ -208,6 +209,7 @@ where
             push_sender,
             pubsub_synchronizer,
             iam_token_provider,
+            cert_params_provider,
         )
         .await
         .map(|inner| {
@@ -253,7 +255,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1103,6 +1105,7 @@ mod iam_token_refresh_tests {
             tcp_nodelay: false,
             pubsub_synchronizer: None,
             iam_token_provider: provider,
+            cert_params_provider: None,
         }
     }
 
@@ -1512,6 +1515,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
         iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+        cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1539,6 +1543,7 @@ where
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
             iam_token_provider,
+            cert_params_provider,
         };
 
         let connections = Self::create_initial_connections(
@@ -1742,6 +1747,20 @@ where
         }
     }
 
+    /// If mTLS certificate reload is configured, refresh the client TLS params in
+    /// `cluster_params` so that any subsequent connection attempts use the freshest
+    /// (last-known-good) certificate/key. Mirrors
+    /// [`Self::refresh_iam_token_in_cluster_params`] for the cert-rotation case.
+    async fn refresh_cert_params_in_cluster_params(inner: &Arc<InnerCore<C>>) {
+        if let Some(ref cert_provider) = inner.glide_connection_options.cert_params_provider {
+            if let Some(params) = cert_provider.current_tls_params().await {
+                inner.set_cluster_param(|cluster_params| {
+                    cluster_params.tls_params = Some(params);
+                });
+            }
+        }
+    }
+
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
@@ -1749,6 +1768,7 @@ where
         let inner = inner.clone();
         Box::pin(async move {
             Self::refresh_iam_token_in_cluster_params(&inner).await;
+            Self::refresh_cert_params_in_cluster_params(&inner).await;
             let cluster_params = inner.get_cluster_param(|params| params.clone());
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
@@ -1960,6 +1980,7 @@ where
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
                     Self::refresh_iam_token_in_cluster_params(&inner_clone).await;
+                    Self::refresh_cert_params_in_cluster_params(&inner_clone).await;
 
                     let cluster_params = inner_clone.get_cluster_param(|params| params.clone());
 
@@ -2678,8 +2699,9 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
-        // Ensure cluster_params has a fresh IAM token before creating connections
+        // Ensure cluster_params has a fresh IAM token and reloaded cert before creating connections
         Self::refresh_iam_token_in_cluster_params(&inner).await;
+        Self::refresh_cert_params_in_cluster_params(&inner).await;
         let cluster_params = inner.get_cluster_param(|params| params.clone());
         let glide_connection_options = &inner.glide_connection_options;
 

@@ -336,6 +336,7 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 #![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 
 // public api
+pub use crate::client::CertParamsProvider;
 pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
 pub use crate::client::IAMTokenProvider;
@@ -460,7 +461,10 @@ pub mod sentinel;
 
 mod tls;
 
-pub use crate::tls::{retrieve_tls_certificates, ClientTlsConfig, TlsCertificates, TlsConnParams};
+pub use crate::tls::{
+    retrieve_tls_certificates, validate_client_tls_params, ClientTlsConfig, TlsCertificates,
+    TlsConnParams,
+};
 
 /// Cache module
 pub mod cache;

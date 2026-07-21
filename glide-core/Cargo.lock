@@ -1291,6 +1291,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sha1_smol",
+ "sha2",
  "socket2",
  "strum 0.26.3",
  "strum_macros 0.26.4",

@@ -139,6 +139,28 @@ message ConnectionRequest {
     NodeDiscoveryMode node_discovery_mode = 28;
     optional string address_resolver_key = 29;
     optional ClientCircuitBreakerConfig client_circuit_breaker = 30;
+    // mTLS client certificate/key file paths. When set (instead of the byte
+    // fields 22/23), the core reads the certificate and key from disk and,
+    // when `cert_reload` is enabled, periodically re-reads them so rotated
+    // material is adopted on the next reconnect. The byte fields remain
+    // supported for static (non-reloading) mTLS.
+    optional string client_cert_path = 31;
+    optional string client_key_path = 32;
+    optional ClientCertReloadConfig cert_reload = 33;
+}
+
+// Configuration for automatic reloading of the mTLS client certificate and key
+// from their configured file paths. Reload only takes effect when the paths are
+// provided.
+//
+// Root/CA certificate reload is out of scope (tracked in
+// https://github.com/valkey-io/valkey-glide/issues/6529).
+message ClientCertReloadConfig {
+    bool enabled = 1;
+    // Re-read interval in seconds. When unset, the default is defined by
+    // glide-core (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
+    // `glide-core/src/tls_reload/mod.rs`).
+    optional uint32 interval_seconds = 2;
 }
 
 message ClientCircuitBreakerConfig {

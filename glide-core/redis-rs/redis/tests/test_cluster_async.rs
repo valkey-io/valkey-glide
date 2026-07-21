@@ -955,7 +955,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1058,7 +1058,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1163,7 +1163,7 @@ mod cluster_async {
             )
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1341,7 +1341,7 @@ mod cluster_async {
             let client = ClusterClient::builder(cluster_addresses.clone())
                 .read_from_replicas()
                 .build()?;
-            let mut connection = client.get_async_connection(None, None, None).await?;
+            let mut connection = client.get_async_connection(None, None, None, None).await?;
 
             let route_to_all_nodes = redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes;
             let routing = RoutingInfo::MultiNode((route_to_all_nodes, None));
@@ -2378,7 +2378,10 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None, None, None).await.unwrap();
+                let mut conn = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -6498,7 +6501,7 @@ mod cluster_async {
                 .unwrap();
 
             let mut connection = test_user_client
-                .get_async_connection(None, None, None)
+                .get_async_connection(None, None, None, None)
                 .await
                 .unwrap();
 
@@ -7144,13 +7147,249 @@ mod cluster_async {
 
         use super::*;
 
+        /// A path-based [`redis::CertParamsProvider`] that re-reads the client
+        /// certificate and key from disk on every call.
+        ///
+        /// This mirrors what glide-core's `CertReloadManager` vends to the
+        /// reconnection loop in production: the manager re-reads the watched
+        /// `client_cert_path` / `client_key_path` on a background interval and
+        /// caches the last-known-good [`redis::TlsConnParams`]; the reconnect
+        /// path then calls `current_tls_params` before each connection attempt.
+        /// Re-reading directly here lets the test drive rotation deterministically
+        /// (write new files, then force a reconnect) instead of waiting on a timer.
+        struct PathReloadingCertProvider {
+            cert_path: PathBuf,
+            key_path: PathBuf,
+            root_cert: Vec<u8>,
+        }
+
+        impl PathReloadingCertProvider {
+            /// Read + parse the currently-on-disk material, returning `None` if the
+            /// files are missing or unparseable (matching the manager's
+            /// keep-last-known-good discipline, which simply skips a bad read).
+            fn load(&self) -> Option<redis::TlsConnParams> {
+                let client_cert = std::fs::read(&self.cert_path).ok()?;
+                let client_key = std::fs::read(&self.key_path).ok()?;
+                let certificates = redis::TlsCertificates {
+                    client_tls: Some(redis::ClientTlsConfig {
+                        client_cert,
+                        client_key,
+                    }),
+                    root_cert: Some(self.root_cert.clone()),
+                };
+                redis::retrieve_tls_certificates(certificates).ok()
+            }
+
+            /// DER of the leaf certificate chain currently on disk, owned so it can
+            /// be compared across a rotation (never contains key material).
+            fn current_cert_chain_der(&self) -> Vec<Vec<u8>> {
+                match self.load() {
+                    Some(params) => params
+                        .client_cert_chain_der()
+                        .into_iter()
+                        .map(|der| der.to_vec())
+                        .collect(),
+                    None => Vec::new(),
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl redis::CertParamsProvider for PathReloadingCertProvider {
+            async fn current_tls_params(&self) -> Option<redis::TlsConnParams> {
+                self.load()
+            }
+        }
+
+        /// End-to-end mTLS certificate rotation + reconnect test requested on
+        /// PR #6386. It exercises the complete scenario the reload unit test
+        /// (`tls_reload::reconnect_reads_rotated_then_retains_last_known_good`)
+        /// deliberately does not cover:
+        ///
+        /// 1. Stand up a TLS-enabled cluster (`new_with_mtls`).
+        /// 2. Connect with a path-based cert/key provider (reload enabled),
+        ///    mirroring the `client_cert_path` / `client_key_path` config.
+        /// 3. Rotate the cert and key files on disk (new CA-signed leaf material
+        ///    written to the same paths the provider watches).
+        /// 4. Force a reconnect by killing the connection (the established
+        ///    reconnection-test pattern, see
+        ///    `test_client.rs::test_username_persistence_after_reconnection`).
+        /// 5. Assert re-authentication succeeds: the reconnected client executes a
+        ///    SET/GET round-trip, and the material the reconnect path adopts is the
+        ///    rotated certificate (its DER differs from the pre-rotation cert).
+        #[test]
+        #[serial_test::serial]
+        fn test_async_cluster_mtls_cert_rotation_reconnect() {
+            let cluster = TestClusterContext::new_with_mtls(3, 0);
+
+            // mTLS reload can only be exercised against a real TLS cluster. When the
+            // suite is run without `REDISRS_SERVER_TYPE=tcp+tls` there are no cert
+            // files to rotate, so skip (CI provides the TLS cluster). This mirrors
+            // how the neighboring mTLS tests degrade on a non-TLS server.
+            let Some(tls_paths) = cluster.cluster.tls_paths.clone() else {
+                eprintln!(
+                    "Skipping test_async_cluster_mtls_cert_rotation_reconnect: \
+                     cluster is not TLS-enabled (set REDISRS_SERVER_TYPE=tcp+tls)."
+                );
+                return;
+            };
+
+            block_on_all(async move {
+                // The watched cert/key files live in the CA's tempdir (alive for the
+                // cluster's lifetime). Seed them with valid CA-signed material so the
+                // provider is consistent with the server before any rotation.
+                let watch_dir = tls_paths.ca_crt.parent().unwrap().to_path_buf();
+                let watched_cert = watch_dir.join("reload_client.crt");
+                let watched_key = watch_dir.join("reload_client.key");
+                rotate_client_cert_and_key(&tls_paths, &watched_cert, &watched_key);
+                let root_cert = std::fs::read(&tls_paths.ca_crt).unwrap();
+
+                let provider = Arc::new(PathReloadingCertProvider {
+                    cert_path: watched_cert.clone(),
+                    key_path: watched_key.clone(),
+                    root_cert,
+                });
+
+                // Capture the pre-rotation certificate the provider would serve.
+                let cert_before = provider.current_cert_chain_der();
+                assert!(
+                    !cert_before.is_empty(),
+                    "expected a client certificate chain before rotation"
+                );
+
+                // Connect with mTLS. The initial connection authenticates with the
+                // client cert built into the cluster client; the provider supplies
+                // rotated material to the reconnect path.
+                let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
+                let mut connection = client
+                    .get_async_connection(
+                        None,
+                        None,
+                        None,
+                        Some(provider.clone() as Arc<dyn redis::CertParamsProvider>),
+                    )
+                    .await
+                    .unwrap();
+
+                // Sanity: authenticated round-trip works before rotation.
+                cmd("SET")
+                    .arg("mtls_rotation_key")
+                    .arg("before")
+                    .query_async::<_, ()>(&mut connection)
+                    .await?;
+                let res: String = cmd("GET")
+                    .arg("mtls_rotation_key")
+                    .query_async(&mut connection)
+                    .await?;
+                assert_eq!(res, "before");
+
+                // Record the server-side connection id on a specific node so we can
+                // prove a fresh mTLS handshake (a *new* connection) happens on
+                // reconnect, rather than reuse of the pre-rotation connection.
+                let node_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(0, SlotAddr::Master),
+                ));
+                let client_id_before = match connection
+                    .route_command(cmd("CLIENT").arg("ID"), node_routing.clone())
+                    .await?
+                {
+                    Value::Int(id) => id,
+                    other => panic!("Unexpected CLIENT ID response: {other:?}"),
+                };
+
+                // Rotate: write brand-new CA-signed client cert/key to the watched
+                // paths. This is what cert-manager / secret projection does on disk.
+                rotate_client_cert_and_key(&tls_paths, &watched_cert, &watched_key);
+                let cert_after = provider.current_cert_chain_der();
+                assert!(
+                    !cert_after.is_empty(),
+                    "expected a client certificate chain after rotation"
+                );
+                assert_ne!(
+                    cert_before, cert_after,
+                    "rotation must change the on-disk client certificate that the \
+                     reconnect path will adopt"
+                );
+
+                // Force a reconnect by killing the user connections on all nodes,
+                // following the established reconnection-test pattern
+                // (`CLIENT KILL SKIPME NO`). The kill may drop the response on the
+                // issuing connection, so tolerate an error here.
+                let kill_routing = RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
+                ));
+                let mut kill_cmd = cmd("CLIENT");
+                kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+                let _ = connection.route_command(&kill_cmd, kill_routing).await;
+
+                // Give the connections a moment to fully drop before probing.
+                let _ = sleep(futures_time::time::Duration::from_millis(100)).await;
+
+                // Re-authentication must succeed with the rotated material: the next
+                // command triggers reconnection, which reads the provider (rotated
+                // cert) before reconnecting. Retry until the round-trip succeeds.
+                let max_requests = 10;
+                let mut last_err = None;
+                for _ in 0..max_requests {
+                    let set_res = cmd("SET")
+                        .arg("mtls_rotation_key")
+                        .arg("after")
+                        .query_async::<_, ()>(&mut connection)
+                        .await;
+                    match set_res {
+                        Ok(()) => {
+                            let value: String = cmd("GET")
+                                .arg("mtls_rotation_key")
+                                .query_async(&mut connection)
+                                .await?;
+                            assert_eq!(
+                                value, "after",
+                                "reconnected client must read/write with the rotated cert"
+                            );
+
+                            // Confirm a genuine reconnect (new server-side
+                            // connection) occurred on the probed node: a fresh mTLS
+                            // handshake using the rotated material established a new
+                            // connection with a different client id.
+                            let client_id_after = match connection
+                                .route_command(cmd("CLIENT").arg("ID"), node_routing.clone())
+                                .await?
+                            {
+                                Value::Int(id) => id,
+                                other => panic!("Unexpected CLIENT ID response: {other:?}"),
+                            };
+                            assert_ne!(
+                                client_id_before, client_id_after,
+                                "reconnect after cert rotation should establish a new \
+                                 server-side connection (new client id)"
+                            );
+                            return Ok::<_, RedisError>(());
+                        }
+                        Err(err) => {
+                            last_err = Some(err);
+                            let _ = sleep(futures_time::time::Duration::from_millis(200)).await;
+                        }
+                    }
+                }
+                panic!(
+                    "Re-authentication after cert rotation + reconnect failed. \
+                     Last error: {last_err:?}"
+                );
+            })
+            .unwrap();
+        }
+
         #[test]
         #[serial_test::serial]
         fn test_async_cluster_basic_cmd_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+                let mut connection = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
@@ -7173,7 +7412,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
             let client = create_cluster_client_from_cluster(&cluster, false).unwrap();
-            let connection = client.get_async_connection(None, None, None).await;
+            let connection = client.get_async_connection(None, None, None, None).await;
             match cluster.cluster.servers.first().unwrap().connection_info() {
                 ConnectionInfo {
                     addr: redis::ConnectionAddr::TcpTls { .. },
