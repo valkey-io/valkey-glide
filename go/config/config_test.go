@@ -927,20 +927,30 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			name:          "files/sub-second-interval",
+			// Sub-second values are accepted silently: they round down to
+			// zero seconds on the wire, which is equivalent to omitting the
+			// option entirely (the core applies its default cadence).
+			name:     "files/sub-second-interval-accepted",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts:     []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
+		},
+		{
+			name:          "files/zero-interval-rejected",
 			kind:          kindFiles,
 			certPath:      testClientCertPath,
 			keyPath:       testClientKeyPath,
-			opts:          []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
-			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be at least 1s",
+			opts:          []MutualTLSOption{WithReloadInterval(0)},
+			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
 		{
-			name:          "files/negative-interval",
+			name:          "files/negative-interval-rejected",
 			kind:          kindFiles,
 			certPath:      testClientCertPath,
 			keyPath:       testClientKeyPath,
 			opts:          []MutualTLSOption{WithReloadInterval(-1 * time.Second)},
-			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be at least 1s",
+			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
 	}
 
@@ -1065,6 +1075,18 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 				certReloadEnabled:   true,
 				certReloadHasIntSec: true,
 				certReloadIntSec:    60,
+			},
+		},
+		{
+			// Sub-second intervals round down to zero seconds on the wire,
+			// which means the interval field is omitted and the core
+			// applies its default cadence, same as "no option passed".
+			name:  "paths-sub-second-interval-rounds-to-no-wire-interval",
+			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
+			want: wantWire{
+				clientCertPath:    testClientCertPath,
+				clientKeyPath:     testClientKeyPath,
+				certReloadEnabled: true,
 			},
 		},
 	}

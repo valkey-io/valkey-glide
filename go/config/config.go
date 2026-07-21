@@ -420,8 +420,10 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 			if seconds > uint64(^uint32(0)) {
 				seconds = uint64(^uint32(0))
 			}
-			s := uint32(seconds)
-			reload.IntervalSeconds = &s
+			if seconds > 0 {
+				s := uint32(seconds)
+				reload.IntervalSeconds = &s
+			}
 		}
 		request.CertReload = reload
 	}
@@ -1084,16 +1086,20 @@ type MutualTLSOption interface {
 // mtlsSettings accumulates option values before they are validated and
 // materialized into the TlsConfiguration.
 type mtlsSettings struct {
-	// reloadInterval, when non-zero, overrides the core's default reload
-	// cadence. Zero means "use the core default" and causes no interval
-	// field to be sent on the wire.
-	reloadInterval time.Duration
+	// reloadInterval is a pointer so an explicit WithReloadInterval(0) is
+	// distinguishable from "option not passed": nil means "option not
+	// passed" (the core applies its default cadence); non-nil is the
+	// caller-supplied value, subject to validation.
+	reloadInterval *time.Duration
 }
 
 // reloadIntervalOption is the concrete option produced by [WithReloadInterval].
 type reloadIntervalOption struct{ interval time.Duration }
 
-func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) { s.reloadInterval = o.interval }
+func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
+	d := o.interval
+	s.reloadInterval = &d
+}
 
 // WithReloadInterval overrides the certificate reload cadence used by
 // [TlsConfiguration.WithMutualTLSFromFiles]. The interval must be strictly
@@ -1154,8 +1160,10 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 // seconds). Override it by passing [WithReloadInterval](d).
 //
 // certPath and keyPath must both be non-empty. Any provided reload interval
-// must be strictly positive; if any input is invalid an error is returned
-// and the receiver is left unchanged.
+// must be strictly positive; a non-positive value returns an error and the
+// receiver is left unchanged. Intervals below one second silently round
+// down to whole seconds on the wire; a value like 500ms is equivalent to
+// omitting the option entirely (the core applies its default cadence).
 //
 // Calling WithMutualTLSFromFiles on a TlsConfiguration that already had
 // [TlsConfiguration.WithMutualTLS] applied replaces the earlier byte-based
@@ -1175,17 +1183,21 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 		opt.applyMutualTLS(&settings)
 	}
 
-	if settings.reloadInterval != 0 && settings.reloadInterval < time.Second {
+	if settings.reloadInterval != nil && *settings.reloadInterval <= 0 {
 		return nil, fmt.Errorf(
-			"WithMutualTLSFromFiles: reload interval must be at least 1s, got %v",
-			settings.reloadInterval)
+			"WithMutualTLSFromFiles: reload interval must be positive; got %v",
+			*settings.reloadInterval)
 	}
 
 	config.clientCertificate = nil
 	config.clientKey = nil
 	config.clientCertPath = certPath
 	config.clientKeyPath = keyPath
-	config.certReloadInterval = settings.reloadInterval
+	if settings.reloadInterval != nil {
+		config.certReloadInterval = *settings.reloadInterval
+	} else {
+		config.certReloadInterval = 0
+	}
 	return config, nil
 }
 
