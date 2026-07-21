@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Integration tests for Feature 1: Client-Instance Pooling (Python sync client).
+Integration tests for Client-Instance Pooling (Python sync client).
 Requires a Valkey server (uses test infrastructure endpoints).
 
 Parameterized over cluster_mode (True/False) to ensure both standalone and

@@ -192,7 +192,7 @@ where
 pub struct ClusterConnection<C = MultiplexedConnection> {
     sender: mpsc::Sender<Message<C>>,
     /// Direct access to the cluster's slot map for address resolution.
-    /// Used by isolated execution (Feature 2) to determine which node
+    /// Used by isolated execution to determine which node
     /// to open a scoped connection to.
     inner_core: Arc<InnerCore<C>>,
 }

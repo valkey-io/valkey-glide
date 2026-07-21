@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Client-instance pool for the synchronous GLIDE client (Feature 1).
+Client-instance pool for the synchronous GLIDE client.
 
 Backed by the shared Rust pool in glide-core via FFI. The Rust pool owns
 client lifecycle (creation, LIFO reuse, bounded size). This Python

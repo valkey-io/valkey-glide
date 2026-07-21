@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLIENT-INSTANCE POOL FFI (Feature 1)
+// CLIENT-INSTANCE POOL FFI
 //
 // These functions expose glide-core's ClientPool to all language bindings.
 // The pool manages GlideClient lifecycle (creation, LIFO reuse, bounded size).
@@ -132,8 +132,11 @@ pub unsafe extern "C" fn glide_pool_create(
         use protobuf::Message as _;
         let req = connection_request::ConnectionRequest::parse_from_bytes(&connection_request);
         if let Ok(ref r) = req {
-            // Reject pubsub subscriptions in pool config — pool state reset doesn't
-            // handle UNSUBSCRIBE, so connections would be stuck in subscription mode.
+            // Reject pubsub subscriptions in pool config — pool state reset on release
+            // sends DISCARD + SELECT to clean connection state, but cannot UNSUBSCRIBE
+            // from channels/patterns. A subscribed connection enters a special mode where
+            // only (P|S)SUBSCRIBE/(P|S)UNSUBSCRIBE/PING are allowed, making it unusable
+            // for the next borrower. Rather than silently breaking, we reject upfront.
             if r.pubsub_subscriptions.is_some() {
                 logger_core::log_error(
                     "pool",
@@ -533,7 +536,7 @@ pub unsafe extern "C" fn glide_pool_metrics(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ISOLATED EXECUTION SCOPES (Feature 2) — C-ABI FFI
+// ISOLATED EXECUTION SCOPES — C-ABI FFI
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Execute a command on a scoped connection (async — non-blocking, fires callback).
@@ -594,7 +597,11 @@ pub unsafe extern "C" fn glide_scope_execute_async(
         };
 
         // OTel: create span for scope command
-        let span_ptr = create_otel_span(RequestType::CustomCommand);
+        let span_ptr = if GlideOpenTelemetry::is_initialized() {
+            create_otel_span(RequestType::CustomCommand)
+        } else {
+            0
+        };
 
         // Watchdog: register for timeout diagnostics
         let cmd_start = std::time::Instant::now();
@@ -834,7 +841,11 @@ pub unsafe extern "C" fn glide_scope_execute(
     let runtime = get_pool_runtime();
 
     // OTel: create span for scope command
-    let span_ptr = create_otel_span(RequestType::CustomCommand);
+    let span_ptr = if GlideOpenTelemetry::is_initialized() {
+        create_otel_span(RequestType::CustomCommand)
+    } else {
+        0
+    };
 
     // Watchdog: register for timeout diagnostics
     let cmd_start = std::time::Instant::now();

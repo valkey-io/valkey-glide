@@ -51,6 +51,28 @@ A dedicated, non-multiplexed connection borrowed from a per-client scope pool. P
 - **CLIENT TRACKING** (server-side key invalidation)
 - **Blocking commands** (BLPOP, XREAD BLOCK)
 
+### Cluster Routing (`routing_key`)
+
+In cluster mode, pass a `routing_key` to `scoped_connection()` to connect the scope to the node owning that key's hash slot:
+
+```python
+async with await client.scoped_connection(routing_key="user:123") as scope:
+    await scope.watch("user:123")
+    # ...
+```
+
+The client computes `CRC16(key) % 16384` to determine the slot, then connects to the node owning it. Hash tags are supported (`{tag}` content is extracted before hashing).
+
+If `routing_key` is omitted, defaults to slot 0's node. In standalone mode, `routing_key` is ignored (only one node).
+
+### Slot-Aware Reuse
+
+The scope pool filters idle connections by `target_slot` on acquire. A connection previously used for slot 5000 will not be handed to a caller requesting slot 8000 — a new connection is created instead. This prevents MOVED errors from stale connections.
+
+### Cross-Slot Rejection
+
+Once the first keyed command pins the scope to a slot, subsequent commands targeting a different slot are rejected with a `CROSSSLOT` error. All keys in a scope must hash to the same slot.
+
 ### Current Limitations
 
 - **Pub/Sub subscriptions** are not supported on scoped connections. SUBSCRIBE puts the connection into a push-message mode that requires a dedicated message handler — scoped connections don't wire one up. Use the main client's pubsub API instead (which manages its own dedicated subscription connections internally). This is consistent with how other Redis/Valkey clients handle pubsub (Lettuce, redis-py, node-redis all use separate connection types for subscriptions).
@@ -74,16 +96,15 @@ If the parent client calls `SELECT 5` at runtime, subsequently acquired scopes w
 
 When a scope is released back to the pool:
 
-**Zero-cost path** (no state mutations detected):
-- Connection returned immediately to idle — no round-trip
+**Clean state** (successful EXEC or no state mutations):
+- A batched `DISCARD + SELECT <parent_db>` pipeline resets the connection (one round-trip)
+- Connection returned to idle
 
-**Dirty state path** (WATCH, MULTI, SELECT, subscriptions, etc.):
-- A single pipeline (one round-trip) cleans up all state:
-  - `DISCARD` or `UNWATCH` (cancel transactions)
-  - `UNSUBSCRIBE` / `PUNSUBSCRIBE` / `SUNSUBSCRIBE` (clear subscriptions)
-  - `CLIENT TRACKING OFF` (disable tracking)
-  - `SELECT <parent_db>` (reset database)
+**Dirty state** (abandoned MULTI, subscriptions, tracking, etc.):
+- Same pipeline cleans up all state — DISCARD covers MULTI+WATCH in one command
 - On cleanup failure, the connection is discarded
+
+> **Note:** Cleanup currently always sends DISCARD+SELECT even when state is provably clean. A future optimization will track dirty flags and skip the round-trip when no state was mutated (zero-cost release).
 
 ### No Auto-Reconnection (By Design)
 
@@ -104,13 +125,13 @@ Transparently reconnecting would create a fresh connection with none of this sta
 ```python
 # OCC retry loop — handles scope disconnection naturally
 while not committed:
-    with client.scoped_connection() as scope:
+    async with await client.scoped_connection(routing_key=key) as scope:
         try:
-            scope.watch(key)
-            val = scope.get(key)
-            scope.multi()
-            scope.set(key, str(int(val) + 1))
-            result = scope.exec()
+            await scope.watch(key)
+            val = await scope.get(key)
+            await scope.multi()
+            await scope.set(key, str(int(val) + 1))
+            result = await scope.exec()
             if result is not None:
                 committed = True
         except ConnectionError:
@@ -151,5 +172,5 @@ Scoped commands go through the same pipeline as regular GlideClient commands:
 |-----------|-------------|---------|
 | `max_total` | Maximum concurrent scoped connections per client | 64 |
 | `min_idle` | Pre-warmed idle connections (via `glide_scope_prewarm`) | 0 |
-| `idle_timeout` | Evict stale idle connections | 5 minutes |
+| `idle_timeout` | Evict stale idle connections | 30s |
 | `test_on_borrow` | PING before returning connection | false |

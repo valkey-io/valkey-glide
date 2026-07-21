@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! Client-Instance Pool (RFC #5815 Feature 1)
+//! Client-Instance Pool (RFC #5815)
 //!
 //! A shared, cross-language connection pool that manages `GlideClient` instances.
 //! Callers borrow a client via `try_acquire`, use it for commands, and return it
@@ -881,6 +881,12 @@ pub struct ScopeEntry {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Global scope_id allocator — ensures uniqueness across all scope pools.
+///
+/// IDs are allocated sequentially from a single atomic counter shared by all pools.
+/// This means IDs are not sequential per-client — if client A gets scope 1 and client B
+/// gets scope 2, client A's next scope will be 3, not 2. This is intentional: it prevents
+/// ID collisions when multiple pool clients each have their own scope pool, and simplifies
+/// the global SCOPE_REGISTRY lookup (every ID is unique regardless of origin).
 static NEXT_SCOPE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Allocate a globally unique scope_id.

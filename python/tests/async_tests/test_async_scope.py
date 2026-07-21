@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Integration tests for Feature 2: Isolated Execution Scopes (Python async).
+Integration tests for Isolated Execution Scopes (Python async).
 Mirrors Java IsolatedScopeIntegrationTest and sync test_sync_scope.py
 for cross-language parity.
 

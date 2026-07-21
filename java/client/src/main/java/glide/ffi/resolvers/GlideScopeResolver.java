@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.ffi.resolvers;
 
-/** Native method declarations for isolated execution (Feature 2 scopes). */
+/** Native method declarations for isolated execution. */
 public class GlideScopeResolver {
     static {
         NativeUtils.loadGlideLib();

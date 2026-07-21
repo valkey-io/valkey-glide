@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! JNI bridge for client-instance pooling (Feature 1).
+//! JNI bridge for client-instance pooling.
 //!
 //! Delegates to glide-core::pool for all pool state management.
 //! Background client creation produces entries in the JNI_HANDLE_TABLE

@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.ffi.resolvers;
 
-/** Native method declarations for the client-instance pool (Feature 1). */
+/** Native method declarations for the client-instance pool. */
 public class GlidePoolResolver {
 
     static {

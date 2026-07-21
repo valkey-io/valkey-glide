@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! Isolated Execution (Feature 2) — Core Logic
+//! Isolated Execution — Core Logic
 //!
 //! This module contains the language-agnostic core logic for scoped connections:
 //! - Command deserialization (wire format)
@@ -8,6 +8,11 @@
 //! - Command execution on a scoped connection (with timeout, decompression, IAM)
 //! - Background connection creation
 //!
+//! Each client has a per-client `ScopePool` (stored in `CLIENT_SCOPE_POOLS`).
+//! The pool maintains idle `ScopedConnection`s, each pinned to a cluster slot's node.
+//! On acquire, idle connections are filtered by `target_slot` — only matching connections
+//! are reused; mismatched ones are preserved for future acquires. When no match exists,
+//! a new connection is created targeting the correct node.
 //! Language bindings (Java JNI, Python CFFI, Node N-API, Go CGO) should call
 //! these functions rather than duplicating the logic.
 
@@ -365,6 +370,7 @@ pub async fn create_scope_connection(
         tcp_nodelay: true,
         pubsub_synchronizer: None,
         iam_token_provider: None,
+        cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
         std::time::Duration::from_secs(5),

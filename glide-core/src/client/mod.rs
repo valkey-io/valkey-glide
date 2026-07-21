@@ -1470,12 +1470,12 @@ impl Client {
     /// Returns the host:port string for the primary that owns the slot.
     /// Returns None in standalone mode or if the slot is unmapped.
     ///
-    /// Used by isolated execution (Feature 2) to open scoped connections
+    /// Used by isolated execution to open scoped connections
     /// directly to the correct node, avoiding MOVED redirects.
     pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
         let client = self.internal_client.read().await;
         match &*client {
-            ClientWrapper::Cluster { client } => client.address_for_slot(slot),
+            ClientWrapper::Cluster { client, .. } => client.address_for_slot(slot),
             _ => None,
         }
     }

@@ -144,7 +144,7 @@ class BaseClient(CoreCommands):
         if self._config.client_info_tag:
             conn_req.lib_name = f"{conn_req.lib_name}({self._config.client_info_tag})"
         conn_req_bytes = conn_req.SerializeToString()
-        # Store for scoped_connection (Feature 2)
+        # Store for scoped_connection
         self._conn_req_bytes = conn_req_bytes
         client_type = self._ffi.new(
             "ClientType*",

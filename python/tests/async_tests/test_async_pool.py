@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Integration tests for Feature 1: Client-Instance Pooling (Python async).
+Integration tests for Client-Instance Pooling (Python async).
 Mirrors sync test_sync_pool.py and Java ClientPoolIntegrationTest for
 cross-language parity.
 

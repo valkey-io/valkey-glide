@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! JNI bridge for isolated execution (Feature 2 scopes).
+//! JNI bridge for isolated execution.
 //!
 //! This is a thin adapter that converts JNI types and delegates all logic
 //! to `glide_core::scope` for cross-language reuse.

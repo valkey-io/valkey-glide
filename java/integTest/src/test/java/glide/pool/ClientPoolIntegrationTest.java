@@ -22,8 +22,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Integration tests for Feature 1: Client-Instance Pooling. Requires a Valkey server (uses test
- * infrastructure endpoints).
+ * Integration tests for Client-Instance Pooling. Requires a Valkey server (uses test infrastructure
+ * endpoints).
  *
  * <p>Tests are parameterized over cluster mode (true/false) to ensure both standalone and cluster
  * deployments behave identically.

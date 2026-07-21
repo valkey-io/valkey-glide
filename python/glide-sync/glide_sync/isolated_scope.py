@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Isolated Execution Scope for the synchronous GLIDE client (Feature 2).
+Isolated Execution Scope for the synchronous GLIDE client.
 
 Provides a dedicated connection for operations requiring per-connection state:
 WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands, and pub/sub without

@@ -54,7 +54,7 @@ public class IsolatedScopeBenchmark {
         // --- Scenario A: Fresh client per transaction (old workaround) ---
         System.out.println("--- Scenario A: Fresh client per WATCH transaction ---");
         System.out.println(
-                "    (Only way to do WATCH before Feature 2 — creates TCP connection each time)");
+                "    (Only way to do WATCH before scoped connections — creates TCP connection each time)");
 
         long scenarioAStart = System.nanoTime();
 
@@ -81,7 +81,7 @@ public class IsolatedScopeBenchmark {
         // Reset counter
         sharedClient.set(counterKey, "0").get(5, TimeUnit.SECONDS);
 
-        // --- Scenario B: IsolatedScope (Feature 2) ---
+        // --- Scenario B: IsolatedScope ---
         System.out.println("--- Scenario B: IsolatedScope from pool ---");
         System.out.println("    (Borrow dedicated connection, WATCH safely, return to pool)");
 

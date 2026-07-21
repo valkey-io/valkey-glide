@@ -407,7 +407,7 @@ class _GlideFFI:
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
 
-            // ============== CLIENT-INSTANCE POOL (Feature 1) ==============
+            // ============== CLIENT-INSTANCE POOL ==============
             int64_t glide_pool_create(
                 uint32_t max_size,
                 uint32_t min_idle,
@@ -430,7 +430,7 @@ class _GlideFFI:
                 uint32_t* total_out
             );
 
-            // ============== ISOLATED EXECUTION SCOPES (Feature 2) ==============
+            // ============== ISOLATED EXECUTION SCOPES ==============
             int64_t glide_scope_try_acquire(
                 uint64_t client_id,
                 const uint8_t* connection_request_ptr,

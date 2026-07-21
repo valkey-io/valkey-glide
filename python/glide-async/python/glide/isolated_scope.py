@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-Async Isolated Execution Scope for the GLIDE async client (Feature 2).
+Async Isolated Execution Scope for the GLIDE async client.
 
 Provides a dedicated connection for operations requiring per-connection state:
 WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands. Commands bypass the
@@ -30,7 +30,7 @@ from glide_shared._glide_ffi import _GlideFFI
 
 class AsyncIsolatedScope:
     """
-    Async wrapper around a dedicated scoped connection (Feature 2).
+    Async wrapper around a dedicated scoped connection.
 
     Commands are dispatched to a thread pool executor (since the underlying
     FFI call blocks on Tokio), keeping the asyncio event loop free.

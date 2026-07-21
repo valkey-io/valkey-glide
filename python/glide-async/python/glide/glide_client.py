@@ -506,7 +506,7 @@ class BaseClient(CoreCommands):
         if config.client_info_tag:
             conn_req.lib_name = f"{conn_req.lib_name}({config.client_info_tag})"
         conn_req_bytes = conn_req.SerializeToString()
-        # Store for scoped_connection (Feature 2)
+        # Store for scoped_connection
         self._conn_req_bytes = conn_req_bytes
 
         # Create AsyncClient type

@@ -207,7 +207,7 @@ func skipMode(t *testing.T, cluster bool) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Feature 1: ClientPool tests (parameterized: standalone + cluster)
+// ClientPool tests (parameterized: standalone + cluster)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // newPool creates a ClientPool appropriate for the mode.
@@ -414,7 +414,7 @@ func TestPoolCloseRejectsAcquire(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Feature 2: IsolatedScope tests (parameterized: standalone + cluster)
+// IsolatedScope tests (parameterized: standalone + cluster)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 func TestScopeAcquirePingRelease(t *testing.T) {

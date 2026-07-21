@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration tests for Feature 2: Isolated Execution. Tests WATCH/MULTI/EXEC, scope isolation, and
- * zero-cost release. Requires a Valkey server (uses test infrastructure endpoints).
+ * Integration tests for Isolated Execution. Tests WATCH/MULTI/EXEC, scope isolation, and zero-cost
+ * release. Requires a Valkey server (uses test infrastructure endpoints).
  */
 public class IsolatedScopeIntegrationTest {
 
