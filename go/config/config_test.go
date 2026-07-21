@@ -4,10 +4,13 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
@@ -825,6 +828,309 @@ func TestTlsConfiguration_InsecureTLSDefaultValue(t *testing.T) {
 	request, err := config.ToProtobuf()
 	assert.NoError(t, err)
 	assert.Equal(t, protobuf.TlsMode_SecureTls, request.TlsMode)
+}
+
+// ============================================================================
+// Mutual TLS (mTLS) Client Certificate / Key Tests
+// ============================================================================
+
+const (
+	testClientCertData = "-----BEGIN CERTIFICATE-----\nMIICclient...\n-----END CERTIFICATE-----"
+	testClientKeyData  = "-----BEGIN PRIVATE KEY-----\nMIIEvkey...\n-----END PRIVATE KEY-----"
+	testClientCertPath = "/etc/glide/tls/client-cert.pem"
+	testClientKeyPath  = "/etc/glide/tls/client-key.pem"
+)
+
+func TestTlsConfiguration_WithMutualTLS_BytesPopulated(t *testing.T) {
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().WithMutualTLS(clientCert, clientKey)
+
+	// Byte-based state populated on the byte-based wire fields (via ToProtobuf) and
+	// path/interval state remains at its zero value.
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, clientCert, req.ClientCert)
+	assert.Equal(t, clientKey, req.ClientKey)
+	assert.Nil(t, req.ClientCertPath)
+	assert.Nil(t, req.ClientKeyPath)
+	assert.Nil(t, req.CertReload)
+}
+
+func TestTlsConfiguration_WithMutualTLS_NilCertPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLS: clientCert must be a non-empty PEM byte slice",
+		func() { NewTlsConfiguration().WithMutualTLS(nil, []byte(testClientKeyData)) })
+}
+
+func TestTlsConfiguration_WithMutualTLS_NilKeyPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLS: clientKey must be a non-empty PEM byte slice",
+		func() { NewTlsConfiguration().WithMutualTLS([]byte(testClientCertData), nil) })
+}
+
+func TestTlsConfiguration_WithMutualTLS_EmptyCertPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLS: clientCert must be a non-empty PEM byte slice",
+		func() { NewTlsConfiguration().WithMutualTLS([]byte{}, []byte(testClientKeyData)) })
+}
+
+func TestTlsConfiguration_WithMutualTLS_EmptyKeyPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLS: clientKey must be a non-empty PEM byte slice",
+		func() { NewTlsConfiguration().WithMutualTLS([]byte(testClientCertData), []byte{}) })
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReload_PathsPopulated(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	require.NotNil(t, req.ClientCertPath)
+	require.NotNil(t, req.ClientKeyPath)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	assert.Equal(t, testClientKeyPath, req.GetClientKeyPath())
+	assert.Nil(t, req.ClientCert)
+	assert.Nil(t, req.ClientKey)
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	assert.Nil(t, req.CertReload.IntervalSeconds)
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReload_EmptyCertPathPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLSWithReload: clientCertPath must be a non-empty filesystem path",
+		func() { NewTlsConfiguration().WithMutualTLSWithReload("", testClientKeyPath) })
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReload_EmptyKeyPathPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLSWithReload: clientKeyPath must be a non-empty filesystem path",
+		func() { NewTlsConfiguration().WithMutualTLSWithReload(testClientCertPath, "") })
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReloadInterval_ExplicitInterval(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	require.NotNil(t, req.CertReload.IntervalSeconds)
+	assert.Equal(t, uint32(60), req.CertReload.GetIntervalSeconds())
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReloadInterval_ZeroPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLSWithReloadInterval: interval must be strictly positive",
+		func() {
+			NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 0)
+		})
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReloadInterval_NegativePanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLSWithReloadInterval: interval must be strictly positive",
+		func() {
+			NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, -1*time.Second)
+		})
+}
+
+func TestTlsConfiguration_WithMutualTLSWithReloadInterval_SubSecondPanics(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"WithMutualTLSWithReloadInterval: interval must be at least one second (wire representation is uint32 seconds)",
+		func() {
+			NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 500*time.Millisecond)
+		})
+}
+
+func TestTlsConfiguration_DefaultBuildersReloadDisabled(t *testing.T) {
+	// A fresh TlsConfiguration has no mTLS state at all: bytes nil, paths empty, no cert_reload on the wire.
+	tlsConfig := NewTlsConfiguration()
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Nil(t, req.ClientCert)
+	assert.Nil(t, req.ClientKey)
+	assert.Nil(t, req.ClientCertPath)
+	assert.Nil(t, req.ClientKeyPath)
+	assert.Nil(t, req.CertReload)
+}
+
+// PEM file loader tests
+
+func TestLoadClientCertificateFromFile(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "client-cert.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte(testClientCertData), 0o600))
+
+	data, err := LoadClientCertificateFromFile(certPath)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(testClientCertData), data)
+}
+
+func TestLoadClientCertificateFromFile_MissingFileErrors(t *testing.T) {
+	_, err := LoadClientCertificateFromFile(filepath.Join(t.TempDir(), "nonexistent.pem"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read client certificate file")
+}
+
+func TestLoadClientCertificateFromFile_EmptyFileErrors(t *testing.T) {
+	emptyPath := filepath.Join(t.TempDir(), "empty-cert.pem")
+	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
+
+	_, err := LoadClientCertificateFromFile(emptyPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client certificate file is empty")
+}
+
+func TestLoadClientKeyFromFile(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "client-key.pem")
+	require.NoError(t, os.WriteFile(keyPath, []byte(testClientKeyData), 0o600))
+
+	data, err := LoadClientKeyFromFile(keyPath)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(testClientKeyData), data)
+}
+
+func TestLoadClientKeyFromFile_MissingFileErrors(t *testing.T) {
+	_, err := LoadClientKeyFromFile(filepath.Join(t.TempDir(), "nonexistent.pem"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read client key file")
+}
+
+func TestLoadClientKeyFromFile_EmptyFileErrors(t *testing.T) {
+	emptyPath := filepath.Join(t.TempDir(), "empty-key.pem")
+	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
+
+	_, err := LoadClientKeyFromFile(emptyPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client key file is empty")
+}
+
+// ToProtobuf wire-snapshot tests
+
+func TestStandaloneConfig_MutualTLS_BytesOnWire(t *testing.T) {
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().WithMutualTLS(clientCert, clientKey)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, clientCert, req.ClientCert)
+	assert.Equal(t, clientKey, req.ClientKey)
+	assert.Nil(t, req.ClientCertPath)
+	assert.Nil(t, req.ClientKeyPath)
+	assert.Nil(t, req.CertReload)
+}
+
+func TestClusterConfig_MutualTLS_BytesOnWire(t *testing.T) {
+	clientCert := []byte(testClientCertData)
+	clientKey := []byte(testClientKeyData)
+	tlsConfig := NewTlsConfiguration().WithMutualTLS(clientCert, clientKey)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, clientCert, req.ClientCert)
+	assert.Equal(t, clientKey, req.ClientKey)
+	assert.Nil(t, req.ClientCertPath)
+	assert.Nil(t, req.ClientKeyPath)
+	assert.Nil(t, req.CertReload)
+}
+
+func TestStandaloneConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	assert.Equal(t, testClientKeyPath, req.GetClientKeyPath())
+	assert.Nil(t, req.ClientCert)
+	assert.Nil(t, req.ClientKey)
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	assert.Nil(t, req.CertReload.IntervalSeconds)
+}
+
+func TestClusterConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	assert.Equal(t, testClientKeyPath, req.GetClientKeyPath())
+	assert.Nil(t, req.ClientCert)
+	assert.Nil(t, req.ClientKey)
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	assert.Nil(t, req.CertReload.IntervalSeconds)
+}
+
+func TestStandaloneConfig_MutualTLSWithReloadInterval_PathsAndIntervalOnWire(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	require.NotNil(t, req.CertReload.IntervalSeconds)
+	assert.Equal(t, uint32(60), req.CertReload.GetIntervalSeconds())
+}
+
+func TestClusterConfig_MutualTLSWithReloadInterval_PathsAndIntervalOnWire(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().
+		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+	require.NotNil(t, req.CertReload)
+	assert.True(t, req.CertReload.GetEnabled())
+	require.NotNil(t, req.CertReload.IntervalSeconds)
+	assert.Equal(t, uint32(60), req.CertReload.GetIntervalSeconds())
+}
+
+func TestConfig_NoMutualTLS_NoMTLSFieldsOnWire(t *testing.T) {
+	tlsConfig := NewTlsConfiguration().WithRootCertificates([]byte(testCertData1))
+	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
+
+	req, err := cfg.ToProtobuf()
+	require.NoError(t, err)
+	assert.Nil(t, req.ClientCert)
+	assert.Nil(t, req.ClientKey)
+	assert.Nil(t, req.ClientCertPath)
+	assert.Nil(t, req.ClientKeyPath)
+	assert.Nil(t, req.CertReload)
 }
 
 func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
