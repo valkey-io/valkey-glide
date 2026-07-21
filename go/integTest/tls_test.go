@@ -321,7 +321,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 
 	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
-		WithMutualTLSWithReload(certPath, keyPath)
+		WithMutualTLSFromFiles(certPath, keyPath)
 	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).

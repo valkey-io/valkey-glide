@@ -885,9 +885,9 @@ func TestTlsConfiguration_WithMutualTLS_EmptyKeyReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "WithMutualTLS: clientKey must be non-empty")
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReload_PathsPopulated(t *testing.T) {
+func TestTlsConfiguration_WithMutualTLSFromFiles_PathsPopulated(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath)
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
@@ -905,21 +905,21 @@ func TestTlsConfiguration_WithMutualTLSWithReload_PathsPopulated(t *testing.T) {
 	assert.Nil(t, req.CertReload.IntervalSeconds)
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReload_EmptyCertPathReturnsError(t *testing.T) {
-	_, err := NewTlsConfiguration().WithMutualTLSWithReload("", testClientKeyPath)
+func TestTlsConfiguration_WithMutualTLSFromFiles_EmptyCertPathReturnsError(t *testing.T) {
+	_, err := NewTlsConfiguration().WithMutualTLSFromFiles("", testClientKeyPath)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WithMutualTLSWithReload: clientCertPath must be non-empty")
+	assert.Contains(t, err.Error(), "WithMutualTLSFromFiles: certPath must be non-empty")
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReload_EmptyKeyPathReturnsError(t *testing.T) {
-	_, err := NewTlsConfiguration().WithMutualTLSWithReload(testClientCertPath, "")
+func TestTlsConfiguration_WithMutualTLSFromFiles_EmptyKeyPathReturnsError(t *testing.T) {
+	_, err := NewTlsConfiguration().WithMutualTLSFromFiles(testClientCertPath, "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WithMutualTLSWithReload: clientKeyPath must be non-empty")
+	assert.Contains(t, err.Error(), "WithMutualTLSFromFiles: keyPath must be non-empty")
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReloadInterval_ExplicitInterval(t *testing.T) {
+func TestTlsConfiguration_WithMutualTLSFromFiles_ExplicitInterval(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
@@ -933,22 +933,18 @@ func TestTlsConfiguration_WithMutualTLSWithReloadInterval_ExplicitInterval(t *te
 	assert.Equal(t, uint32(60), req.CertReload.GetIntervalSeconds())
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReloadInterval_ZeroReturnsError(t *testing.T) {
-	_, err := NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 0)
+func TestTlsConfiguration_WithMutualTLSFromFiles_SubSecondReturnsError(t *testing.T) {
+	_, err := NewTlsConfiguration().WithMutualTLSFromFiles(
+		testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WithMutualTLSWithReloadInterval: interval must be at least 1s")
+	assert.Contains(t, err.Error(), "WithMutualTLSFromFiles: reload interval must be at least 1s")
 }
 
-func TestTlsConfiguration_WithMutualTLSWithReloadInterval_NegativeReturnsError(t *testing.T) {
-	_, err := NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, -1*time.Second)
+func TestTlsConfiguration_WithMutualTLSFromFiles_NegativeIntervalReturnsError(t *testing.T) {
+	_, err := NewTlsConfiguration().WithMutualTLSFromFiles(
+		testClientCertPath, testClientKeyPath, WithReloadInterval(-1*time.Second))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WithMutualTLSWithReloadInterval: interval must be at least 1s")
-}
-
-func TestTlsConfiguration_WithMutualTLSWithReloadInterval_SubSecondReturnsError(t *testing.T) {
-	_, err := NewTlsConfiguration().WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 500*time.Millisecond)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WithMutualTLSWithReloadInterval: interval must be at least 1s")
+	assert.Contains(t, err.Error(), "WithMutualTLSFromFiles: reload interval must be at least 1s")
 }
 
 func TestTlsConfiguration_DefaultBuildersReloadDisabled(t *testing.T) {
@@ -1054,9 +1050,9 @@ func TestClusterConfig_MutualTLS_BytesOnWire(t *testing.T) {
 	assert.Nil(t, req.CertReload)
 }
 
-func TestStandaloneConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
+func TestStandaloneConfig_MutualTLSFromFiles_PathsOnWire(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath)
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
@@ -1072,9 +1068,9 @@ func TestStandaloneConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
 	assert.Nil(t, req.CertReload.IntervalSeconds)
 }
 
-func TestClusterConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
+func TestClusterConfig_MutualTLSFromFiles_PathsOnWire(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReload(testClientCertPath, testClientKeyPath)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath)
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
@@ -1090,9 +1086,9 @@ func TestClusterConfig_MutualTLSWithReload_PathsOnWire(t *testing.T) {
 	assert.Nil(t, req.CertReload.IntervalSeconds)
 }
 
-func TestStandaloneConfig_MutualTLSWithReloadInterval_PathsAndIntervalOnWire(t *testing.T) {
+func TestStandaloneConfig_MutualTLSFromFiles_PathsAndIntervalOnWire(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
@@ -1106,9 +1102,9 @@ func TestStandaloneConfig_MutualTLSWithReloadInterval_PathsAndIntervalOnWire(t *
 	assert.Equal(t, uint32(60), req.CertReload.GetIntervalSeconds())
 }
 
-func TestClusterConfig_MutualTLSWithReloadInterval_PathsAndIntervalOnWire(t *testing.T) {
+func TestClusterConfig_MutualTLSFromFiles_PathsAndIntervalOnWire(t *testing.T) {
 	tlsConfig, err := NewTlsConfiguration().
-		WithMutualTLSWithReloadInterval(testClientCertPath, testClientKeyPath, 60*time.Second)
+		WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
 	require.NoError(t, err)
 	advancedConfig := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
 	cfg := NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(advancedConfig)
