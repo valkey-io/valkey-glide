@@ -1042,6 +1042,20 @@ type TlsConfiguration struct {
 	certReloadInterval time.Duration
 }
 
+// DefaultCertReloadInterval is the default cadence at which the GLIDE core
+// re-reads on-disk client certificate and key material when path-based mTLS
+// is configured via [TlsConfiguration.WithMutualTLSFromFiles]. It mirrors
+// the core's DEFAULT_RELOAD_INTERVAL_SECONDS constant:
+//
+// https://github.com/valkey-io/valkey-glide/blob/67790a317c494a2f5d1a6ef6c9c2e6a25e6622fc/glide-core/src/tls_reload/mod.rs#L44
+//
+// Callers can reference this value in their own configuration (for example,
+// scaling it: WithReloadInterval(2 * config.DefaultCertReloadInterval)) or in
+// assertions. Passing this exact value to [WithReloadInterval] and passing
+// no option produce the same wire-level default: the interval is only sent
+// on the wire when the caller explicitly overrides the core default.
+const DefaultCertReloadInterval = 300 * time.Second
+
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
 func NewTlsConfiguration() *TlsConfiguration {
 	return &TlsConfiguration{}
@@ -1185,6 +1199,44 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 	config.clientKeyPath = keyPath
 	config.certReloadInterval = settings.reloadInterval
 	return config, nil
+}
+
+// MustWithMutualTLS is like [TlsConfiguration.WithMutualTLS] but panics if
+// the inputs are invalid. It simplifies safe initialization of static mTLS
+// configurations known at compile time (init(), global vars) where a bad
+// value is a programmer error, not a runtime condition.
+//
+// Do not use MustWithMutualTLS for values loaded at runtime from disk,
+// Kubernetes secrets, Vault, environment variables, or any other source
+// that can produce empty data as a transient failure: use
+// [TlsConfiguration.WithMutualTLS] and handle the error. This mirrors
+// [regexp.MustCompile] / [regexp.Compile].
+func (config *TlsConfiguration) MustWithMutualTLS(clientCert, clientKey []byte) *TlsConfiguration {
+	c, err := config.WithMutualTLS(clientCert, clientKey)
+	if err != nil {
+		panic(err)
+	}
+	return c
+}
+
+// MustWithMutualTLSFromFiles is like [TlsConfiguration.WithMutualTLSFromFiles]
+// but panics if the inputs are invalid. It simplifies safe initialization of
+// static mTLS configurations known at compile time (init(), global vars)
+// where a bad value is a programmer error, not a runtime condition.
+//
+// Do not use MustWithMutualTLSFromFiles for values loaded at runtime from
+// configuration files, environment variables, or any other source that can
+// produce empty or invalid data as a transient failure: use
+// [TlsConfiguration.WithMutualTLSFromFiles] and handle the error. This
+// mirrors [regexp.MustCompile] / [regexp.Compile].
+func (config *TlsConfiguration) MustWithMutualTLSFromFiles(
+	certPath, keyPath string, opts ...MutualTLSOption,
+) *TlsConfiguration {
+	c, err := config.WithMutualTLSFromFiles(certPath, keyPath, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 // LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.

@@ -1194,6 +1194,52 @@ func TestLoadClientCertificateAndKeyFromFile_TableDriven(t *testing.T) {
 	}
 }
 
+func TestDefaultCertReloadInterval(t *testing.T) {
+	// The exported constant is the caller-visible name for the core's default
+	// reload cadence. It must be 300s to match glide-core's
+	// DEFAULT_RELOAD_INTERVAL_SECONDS.
+	assert.Equal(t, 300*time.Second, DefaultCertReloadInterval)
+}
+
+func TestMustWithMutualTLS_PanicsOnEmptyCert(t *testing.T) {
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "MustWithMutualTLS did not panic on empty cert")
+		err, ok := r.(error)
+		require.True(t, ok, "expected panic value to be an error, got %T", r)
+		assert.Contains(t, err.Error(), "WithMutualTLS: clientCert must be non-empty")
+	}()
+	NewTlsConfiguration().MustWithMutualTLS(nil, []byte(testClientKeyData))
+}
+
+func TestMustWithMutualTLS_HappyPath(t *testing.T) {
+	tls := NewTlsConfiguration().MustWithMutualTLS(
+		[]byte(testClientCertData), []byte(testClientKeyData))
+	require.NotNil(t, tls)
+	assert.Equal(t, []byte(testClientCertData), tls.clientCertificate)
+	assert.Equal(t, []byte(testClientKeyData), tls.clientKey)
+}
+
+func TestMustWithMutualTLSFromFiles_PanicsOnEmptyPath(t *testing.T) {
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "MustWithMutualTLSFromFiles did not panic on empty path")
+		err, ok := r.(error)
+		require.True(t, ok, "expected panic value to be an error, got %T", r)
+		assert.Contains(t, err.Error(), "WithMutualTLSFromFiles: certPath must be non-empty")
+	}()
+	NewTlsConfiguration().MustWithMutualTLSFromFiles("", testClientKeyPath)
+}
+
+func TestMustWithMutualTLSFromFiles_HappyPath(t *testing.T) {
+	tls := NewTlsConfiguration().MustWithMutualTLSFromFiles(
+		testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
+	require.NotNil(t, tls)
+	assert.Equal(t, testClientCertPath, tls.clientCertPath)
+	assert.Equal(t, testClientKeyPath, tls.clientKeyPath)
+	assert.Equal(t, 60*time.Second, tls.certReloadInterval)
+}
+
 func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
 	// Test TCP_NODELAY enabled
 	tcpNoDelayTrue := true
