@@ -7,6 +7,7 @@
  * to suppress unused import errors for types referenced only in JSDoc.
  */
 
+import { readFile, stat } from "node:fs/promises";
 import Long from "long";
 import { Buffer } from "protobufjs/minimal";
 import {
@@ -330,6 +331,291 @@ export type GlideReturnType =
  * Union type that can store either a valid UTF-8 string or array of bytes.
  */
 export type GlideString = string | Buffer;
+
+/**
+ * Mutual TLS (mTLS) client authentication material.
+ *
+ * A discriminated union: the `kind` field selects between two mutually
+ * exclusive ways of supplying the client certificate and private key.
+ *
+ * - `kind: "bytes"` — supply PEM-encoded certificate and key material inline.
+ *   The material is sent to the core at connect time and never re-read; use
+ *   this for static (non-rotating) certificates. Both `cert` and `key` must
+ *   be non-empty. `string` inputs are UTF-8 encoded to bytes.
+ *
+ * - `kind: "path"` — supply filesystem paths to PEM-encoded certificate and
+ *   key files. The core reads the material from disk at connect time and, in
+ *   this variant, **automatic certificate reload is always enabled**: the
+ *   core periodically re-reads the files, validates that the private key
+ *   matches the certificate, and adopts rotated material on the next
+ *   reconnect (last-known-good is kept on any failure). Reload cadence uses
+ *   the core default unless `reloadIntervalSeconds` is provided.
+ *
+ * Reload enablement is derived state: it is on iff `kind === "path"`.
+ * There is no separate enable/disable toggle.
+ *
+ * @example
+ * ```typescript
+ * // Static (byte-based) mTLS — no reload.
+ * const staticMtls: MutualTls = {
+ *     kind: "bytes",
+ *     cert: await loadClientCertificateFromFile("/etc/ssl/client.crt"),
+ *     key: await loadClientKeyFromFile("/etc/ssl/client.key"),
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Path-based mTLS — reload is implicitly on; override cadence to 60 s.
+ * const reloadingMtls: MutualTls = {
+ *     kind: "path",
+ *     certPath: "/etc/ssl/client.crt",
+ *     keyPath: "/etc/ssl/client.key",
+ *     reloadIntervalSeconds: 60,
+ * };
+ * ```
+ */
+export type MutualTls =
+    | {
+          readonly kind: "bytes";
+          readonly cert: Buffer | string;
+          readonly key: Buffer | string;
+      }
+    | {
+          readonly kind: "path";
+          readonly certPath: string;
+          readonly keyPath: string;
+          readonly reloadIntervalSeconds?: number;
+      };
+
+/**
+ * Reads a PEM file from disk for use in TLS configuration.
+ *
+ * Shared implementation behind {@link loadRootCertificatesFromFile},
+ * {@link loadClientCertificateFromFile}, and {@link loadClientKeyFromFile}.
+ *
+ * @param path - Filesystem path to the PEM-encoded file.
+ * @param label - Human-readable label used in error messages (e.g. `"Root certificate"`).
+ * @returns Promise resolving to the file contents as a `Buffer`.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ * @internal
+ */
+async function loadTlsPemFile(path: string, label: string): Promise<Buffer> {
+    let data: Buffer;
+
+    try {
+        data = await readFile(path);
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
+        const message =
+            fsError.code === "ENOENT"
+                ? `${label} file not found: ${path}`
+                : `Failed to read ${label.toLowerCase()} file at ${path}: ${
+                      error instanceof Error ? error.message : String(error)
+                  }`;
+        const wrapped = new ConfigurationError(message);
+        (wrapped as Error).cause = error;
+        throw wrapped;
+    }
+
+    if (data.length === 0) {
+        throw new ConfigurationError(`${label} file is empty: ${path}`);
+    }
+
+    return data;
+}
+
+/**
+ * Loads PEM-encoded root certificates from a file for TLS server verification.
+ *
+ * Convenience loader for the `rootCertificates` field of
+ * {@link AdvancedBaseClientConfiguration.tlsAdvancedConfiguration}.
+ *
+ * @param path - Filesystem path to a PEM root certificate or bundle.
+ * @returns Promise resolving to the certificate bytes.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ *
+ * @example
+ * ```typescript
+ * const rootCertificates = await loadRootCertificatesFromFile("/etc/ssl/ca.pem");
+ * ```
+ */
+export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
+    return loadTlsPemFile(path, "Root certificate");
+}
+
+/**
+ * Loads a PEM-encoded client certificate from a file for mTLS authentication.
+ *
+ * Convenience loader for {@link MutualTls}'s byte-based variant (`kind: "bytes"`).
+ * When automatic reload is desired, use the path-based variant of
+ * {@link MutualTls} directly instead of loading the bytes here.
+ *
+ * @param path - Filesystem path to a PEM client certificate.
+ * @returns Promise resolving to the certificate bytes.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ *
+ * @example
+ * ```typescript
+ * const cert = await loadClientCertificateFromFile("/etc/ssl/client.crt");
+ * ```
+ */
+export function loadClientCertificateFromFile(path: string): Promise<Buffer> {
+    return loadTlsPemFile(path, "Client certificate");
+}
+
+/**
+ * Loads a PEM-encoded client private key from a file for mTLS authentication.
+ *
+ * Convenience loader for {@link MutualTls}'s byte-based variant (`kind: "bytes"`).
+ * When automatic reload is desired, use the path-based variant of
+ * {@link MutualTls} directly instead of loading the bytes here.
+ *
+ * @param path - Filesystem path to a PEM client private key.
+ * @returns Promise resolving to the private key bytes.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ *
+ * @example
+ * ```typescript
+ * const key = await loadClientKeyFromFile("/etc/ssl/client.key");
+ * ```
+ */
+export function loadClientKeyFromFile(path: string): Promise<Buffer> {
+    return loadTlsPemFile(path, "Client key");
+}
+
+/**
+ * Coerces a PEM cert/key input (`Buffer` or UTF-8 string) into a non-empty
+ * `Uint8Array` for wire serialization. Throws a {@link ConfigurationError}
+ * on empty inputs so the caller sees a specific error rather than a generic
+ * core-side parse failure.
+ *
+ * @internal
+ */
+function toPemBytes(value: Buffer | string, fieldName: string): Uint8Array {
+    const buffer =
+        typeof value === "string" ? Buffer.from(value, "utf-8") : value;
+
+    if (buffer.length === 0) {
+        throw new ConfigurationError(
+            `${fieldName} cannot be empty; omit ${fieldName} if not configuring mTLS.`,
+        );
+    }
+
+    return new Uint8Array(buffer);
+}
+
+/**
+ * Runtime narrowing and file-existence check for a path-based mTLS variant.
+ * Rejects empty strings, non-integer / non-positive reload intervals, and
+ * paths that do not resolve to a regular non-empty file at connect time.
+ *
+ * @internal
+ */
+async function assertPathVariant(
+    mtls: Extract<MutualTls, { kind: "path" }>,
+): Promise<void> {
+    if (typeof mtls.certPath !== "string" || mtls.certPath.length === 0) {
+        throw new ConfigurationError(
+            "mutualTls.certPath must be a non-empty string.",
+        );
+    }
+
+    if (typeof mtls.keyPath !== "string" || mtls.keyPath.length === 0) {
+        throw new ConfigurationError(
+            "mutualTls.keyPath must be a non-empty string.",
+        );
+    }
+
+    if (mtls.reloadIntervalSeconds !== undefined) {
+        const interval = mtls.reloadIntervalSeconds;
+
+        if (
+            typeof interval !== "number" ||
+            !Number.isFinite(interval) ||
+            !Number.isInteger(interval) ||
+            interval <= 0
+        ) {
+            throw new ConfigurationError(
+                "mutualTls.reloadIntervalSeconds must be a positive integer.",
+            );
+        }
+    }
+
+    await Promise.all([
+        assertRegularNonEmptyFile(mtls.certPath, "mutualTls.certPath"),
+        assertRegularNonEmptyFile(mtls.keyPath, "mutualTls.keyPath"),
+    ]);
+}
+
+/**
+ * @internal
+ */
+async function assertRegularNonEmptyFile(
+    path: string,
+    fieldName: string,
+): Promise<void> {
+    let stats;
+
+    try {
+        stats = await stat(path);
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
+        const message =
+            fsError.code === "ENOENT"
+                ? `${fieldName} references a file that does not exist: ${path}`
+                : `Failed to stat ${fieldName} (${path}): ${
+                      error instanceof Error ? error.message : String(error)
+                  }`;
+        const wrapped = new ConfigurationError(message);
+        (wrapped as Error).cause = error;
+        throw wrapped;
+    }
+
+    if (!stats.isFile()) {
+        throw new ConfigurationError(
+            `${fieldName} must reference a regular file: ${path}`,
+        );
+    }
+
+    if (stats.size === 0) {
+        throw new ConfigurationError(
+            `${fieldName} references an empty file: ${path}`,
+        );
+    }
+}
+
+/**
+ * Validates and serializes a {@link MutualTls} value into the corresponding
+ * connection-request protobuf fields.
+ *
+ * @internal
+ */
+async function applyMutualTls(
+    mtls: MutualTls,
+    request: connection_request.IConnectionRequest,
+): Promise<void> {
+    if (mtls.kind === "bytes") {
+        request.clientCert = toPemBytes(mtls.cert, "mutualTls.cert");
+        request.clientKey = toPemBytes(mtls.key, "mutualTls.key");
+        return;
+    }
+
+    if (mtls.kind === "path") {
+        await assertPathVariant(mtls);
+        request.clientCertPath = mtls.certPath;
+        request.clientKeyPath = mtls.keyPath;
+        request.certReload = {
+            enabled: true,
+            intervalSeconds: mtls.reloadIntervalSeconds ?? null,
+        };
+        return;
+    }
+
+    throw new ConfigurationError(
+        `Unsupported mutualTls variant: ${JSON.stringify(mtls)}`,
+    );
+}
 
 /**
  * Enum representing the different types of decoders.
@@ -1057,6 +1343,49 @@ export interface AdvancedBaseClientConfiguration {
          * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
          */
         rootCertificates?: string | Buffer;
+
+        /**
+         * Mutual TLS (mTLS) client authentication material.
+         *
+         * See {@link MutualTls} for the two supported variants (`kind: "bytes"`
+         * for static material, `kind: "path"` for automatic reload from disk).
+         * The two variants are mutually exclusive at the type level. Reload is
+         * enabled iff `kind === "path"` — there is no separate toggle.
+         *
+         * Requires TLS to be enabled on the base client configuration
+         * (`useTLS: true`). Setting `mutualTls` alongside `useTLS: false`
+         * raises a {@link ConfigurationError}.
+         *
+         * @example
+         * ```typescript
+         * // Path-based mTLS with automatic reload every 60 seconds.
+         * const config: AdvancedBaseClientConfiguration = {
+         *     tlsAdvancedConfiguration: {
+         *         mutualTls: {
+         *             kind: "path",
+         *             certPath: "/etc/ssl/client.crt",
+         *             keyPath: "/etc/ssl/client.key",
+         *             reloadIntervalSeconds: 60,
+         *         },
+         *     },
+         * };
+         * ```
+         *
+         * @example
+         * ```typescript
+         * // Static byte-based mTLS.
+         * const config: AdvancedBaseClientConfiguration = {
+         *     tlsAdvancedConfiguration: {
+         *         mutualTls: {
+         *             kind: "bytes",
+         *             cert: await loadClientCertificateFromFile("/etc/ssl/client.crt"),
+         *             key: await loadClientKeyFromFile("/etc/ssl/client.key"),
+         *         },
+         *     },
+         * };
+         * ```
+         */
+        readonly mutualTls?: MutualTls;
     };
 
     /**
@@ -9542,9 +9871,9 @@ export class BaseClient {
     /**
      * @internal
      */
-    protected createClientRequest(
+    protected async createClientRequest(
         options: BaseClientConfiguration,
-    ): connection_request.IConnectionRequest {
+    ): Promise<connection_request.IConnectionRequest> {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : connection_request.ReadFrom.Primary;
@@ -9701,10 +10030,10 @@ export class BaseClient {
     /**
      * @internal
      */
-    protected configureAdvancedConfigurationBase(
+    protected async configureAdvancedConfigurationBase(
         options: AdvancedBaseClientConfiguration,
         request: connection_request.IConnectionRequest,
-    ) {
+    ): Promise<void> {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
@@ -9720,31 +10049,34 @@ export class BaseClient {
                 options.pubsubReconciliationIntervalMs;
         }
 
-        // Apply TLS configuration if present
-        if (options.tlsAdvancedConfiguration) {
-            // request.tlsMode is either SecureTls or InsecureTls here
-            if (request.tlsMode === connection_request.TlsMode.NoTls) {
-                throw new ConfigurationError(
-                    "TLS advanced configuration cannot be set when useTLS is disabled.",
-                );
-            }
+        if (!options.tlsAdvancedConfiguration) {
+            return;
+        }
 
-            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
-            if (options.tlsAdvancedConfiguration.insecure) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            }
+        const tls = options.tlsAdvancedConfiguration;
 
-            if (options.tlsAdvancedConfiguration.rootCertificates) {
-                const certData =
-                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
-                    "string"
-                        ? Buffer.from(
-                              options.tlsAdvancedConfiguration.rootCertificates,
-                              "utf-8",
-                          )
-                        : options.tlsAdvancedConfiguration.rootCertificates;
-                request.rootCerts = [new Uint8Array(certData)];
-            }
+        // request.tlsMode is either SecureTls or InsecureTls here
+        if (request.tlsMode === connection_request.TlsMode.NoTls) {
+            throw new ConfigurationError(
+                "TLS advanced configuration cannot be set when useTLS is disabled.",
+            );
+        }
+
+        // If tls.insecure is true then use InsecureTls mode
+        if (tls.insecure) {
+            request.tlsMode = connection_request.TlsMode.InsecureTls;
+        }
+
+        if (tls.rootCertificates) {
+            const certData =
+                typeof tls.rootCertificates === "string"
+                    ? Buffer.from(tls.rootCertificates, "utf-8")
+                    : tls.rootCertificates;
+            request.rootCerts = [new Uint8Array(certData)];
+        }
+
+        if (tls.mutualTls !== undefined) {
+            await applyMutualTls(tls.mutualTls, request);
         }
     }
 
@@ -9755,7 +10087,7 @@ export class BaseClient {
     protected async connectToServer(
         options: BaseClientConfiguration,
     ): Promise<void> {
-        const request = this.createClientRequest(options);
+        const request = await this.createClientRequest(options);
 
         if (options.addressResolver) {
             this.addressResolverKey = registerAddressResolver(

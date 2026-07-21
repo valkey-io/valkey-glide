@@ -2,19 +2,31 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
+    ConfigurationError,
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
+    loadClientCertificateFromFile,
+    loadClientKeyFromFile,
+    loadRootCertificatesFromFile,
+    MutualTls,
 } from "../build-ts";
 import {
     createLeakedStringVec,
     freeLeakedStringVec,
     valueFromSplitPointer,
 } from "../build-ts/native";
-import { command_request } from "../build-ts/ProtobufMessage";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType } = command_request;
@@ -309,5 +321,420 @@ describe("createMigrate (multi-key) validation", () => {
                 "k",
             ]),
         );
+    });
+});
+
+// Exposes the protected configureAdvancedConfigurationBase so the resulting
+// protobuf connection request can be inspected without spinning up a client.
+class TlsConfigProbe extends BaseClient {
+    public constructor() {
+        super();
+    }
+
+    public async buildTlsRequest(
+        advancedConfiguration: AdvancedBaseClientConfiguration,
+    ): Promise<connection_request.IConnectionRequest> {
+        const request: connection_request.IConnectionRequest = {
+            tlsMode: connection_request.TlsMode.SecureTls,
+        };
+        await this.configureAdvancedConfigurationBase(
+            advancedConfiguration,
+            request,
+        );
+        return request;
+    }
+}
+
+const CLIENT_CERT_PEM =
+    "-----BEGIN CERTIFICATE-----\nMIICLIENTCERT\n-----END CERTIFICATE-----";
+const CLIENT_KEY_PEM =
+    "-----BEGIN PRIVATE KEY-----\nMIICLIENTKEY\n-----END PRIVATE KEY-----";
+const ROOT_CERT_PEM =
+    "-----BEGIN CERTIFICATE-----\nMIICROOTCERT\n-----END CERTIFICATE-----";
+
+const expectConfigurationError = async (
+    build: () => Promise<unknown>,
+    messageSubstring: string,
+): Promise<void> => {
+    await expect(build()).rejects.toBeInstanceOf(ConfigurationError);
+    await expect(build()).rejects.toThrow(messageSubstring);
+};
+
+describe('mutualTls kind: "bytes"', () => {
+    it("populates clientCert and clientKey from string PEM inputs", async () => {
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                mutualTls: {
+                    kind: "bytes",
+                    cert: CLIENT_CERT_PEM,
+                    key: CLIENT_KEY_PEM,
+                },
+            },
+        });
+
+        expect(request.clientCert).toEqual(
+            new Uint8Array(Buffer.from(CLIENT_CERT_PEM, "utf-8")),
+        );
+        expect(request.clientKey).toEqual(
+            new Uint8Array(Buffer.from(CLIENT_KEY_PEM, "utf-8")),
+        );
+        expect(request.certReload).toBeFalsy();
+        expect(request.clientCertPath).toBeFalsy();
+        expect(request.clientKeyPath).toBeFalsy();
+    });
+
+    it("populates clientCert and clientKey from Buffer PEM inputs", async () => {
+        const certBuffer = Buffer.from(CLIENT_CERT_PEM, "utf-8");
+        const keyBuffer = Buffer.from(CLIENT_KEY_PEM, "utf-8");
+
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                mutualTls: {
+                    kind: "bytes",
+                    cert: certBuffer,
+                    key: keyBuffer,
+                },
+            },
+        });
+
+        expect(request.clientCert).toEqual(new Uint8Array(certBuffer));
+        expect(request.clientKey).toEqual(new Uint8Array(keyBuffer));
+    });
+
+    it("rejects an empty cert (string)", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            cert: "",
+                            key: CLIENT_KEY_PEM,
+                        },
+                    },
+                }),
+            "mutualTls.cert cannot be empty",
+        );
+    });
+
+    it("rejects an empty key (Buffer)", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            cert: CLIENT_CERT_PEM,
+                            key: Buffer.alloc(0),
+                        },
+                    },
+                }),
+            "mutualTls.key cannot be empty",
+        );
+    });
+
+    it("rejects mutualTls when TLS is disabled on the base connection", async () => {
+        const probe = new (class extends TlsConfigProbe {
+            public override async buildTlsRequest(
+                advancedConfiguration: AdvancedBaseClientConfiguration,
+            ): Promise<connection_request.IConnectionRequest> {
+                const request: connection_request.IConnectionRequest = {
+                    tlsMode: connection_request.TlsMode.NoTls,
+                };
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (this as any).configureAdvancedConfigurationBase(
+                    advancedConfiguration,
+                    request,
+                );
+                return request;
+            }
+        })();
+
+        await expectConfigurationError(
+            () =>
+                probe.buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            cert: CLIENT_CERT_PEM,
+                            key: CLIENT_KEY_PEM,
+                        },
+                    },
+                }),
+            "TLS advanced configuration cannot be set",
+        );
+    });
+});
+
+describe('mutualTls kind: "path" (implicit reload)', () => {
+    let tmpDir: string;
+    let certPath: string;
+    let keyPath: string;
+
+    beforeAll(() => {
+        tmpDir = mkdtempSync(join(tmpdir(), "glide-mtls-path-"));
+        certPath = join(tmpDir, "client.crt");
+        keyPath = join(tmpDir, "client.key");
+        writeFileSync(certPath, CLIENT_CERT_PEM);
+        writeFileSync(keyPath, CLIENT_KEY_PEM);
+    });
+
+    afterAll(() => {
+        rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("sets the path fields and enables reload with default cadence", async () => {
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                mutualTls: {
+                    kind: "path",
+                    certPath,
+                    keyPath,
+                },
+            },
+        });
+
+        expect(request.clientCertPath).toBe(certPath);
+        expect(request.clientKeyPath).toBe(keyPath);
+        expect(request.certReload).toEqual({
+            enabled: true,
+            intervalSeconds: null,
+        });
+        expect(request.clientCert).toBeFalsy();
+        expect(request.clientKey).toBeFalsy();
+    });
+
+    it("propagates a custom reloadIntervalSeconds", async () => {
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                mutualTls: {
+                    kind: "path",
+                    certPath,
+                    keyPath,
+                    reloadIntervalSeconds: 120,
+                },
+            },
+        });
+
+        expect(request.certReload).toEqual({
+            enabled: true,
+            intervalSeconds: 120,
+        });
+    });
+
+    const invalidIntervals: Array<[string, number]> = [
+        ["zero", 0],
+        ["negative", -10],
+        ["non-integer", 12.5],
+        ["NaN", Number.NaN],
+        ["Infinity", Number.POSITIVE_INFINITY],
+    ];
+
+    it.each(invalidIntervals)(
+        "rejects reloadIntervalSeconds when %s",
+        async (_label, value) => {
+            await expectConfigurationError(
+                () =>
+                    new TlsConfigProbe().buildTlsRequest({
+                        tlsAdvancedConfiguration: {
+                            mutualTls: {
+                                kind: "path",
+                                certPath,
+                                keyPath,
+                                reloadIntervalSeconds: value,
+                            },
+                        },
+                    }),
+                "mutualTls.reloadIntervalSeconds must be a positive integer",
+            );
+        },
+    );
+
+    it("rejects an empty certPath", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "path",
+                            certPath: "",
+                            keyPath,
+                        },
+                    },
+                }),
+            "mutualTls.certPath must be a non-empty string",
+        );
+    });
+
+    it("rejects an empty keyPath", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "path",
+                            certPath,
+                            keyPath: "",
+                        },
+                    },
+                }),
+            "mutualTls.keyPath must be a non-empty string",
+        );
+    });
+
+    it("rejects a missing cert file at connect time", async () => {
+        const missing = join(tmpDir, "does-not-exist.crt");
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "path",
+                            certPath: missing,
+                            keyPath,
+                        },
+                    },
+                }),
+            `mutualTls.certPath references a file that does not exist: ${missing}`,
+        );
+    });
+
+    it("rejects an empty cert file at connect time", async () => {
+        const empty = join(tmpDir, "empty.crt");
+        writeFileSync(empty, "");
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "path",
+                            certPath: empty,
+                            keyPath,
+                        },
+                    },
+                }),
+            `mutualTls.certPath references an empty file: ${empty}`,
+        );
+    });
+});
+
+describe("mutualTls interaction with existing TLS knobs", () => {
+    it("leaves rootCertificates handling unchanged when mutualTls is absent", async () => {
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                rootCertificates: ROOT_CERT_PEM,
+            },
+        });
+
+        expect(request.rootCerts).toEqual([
+            new Uint8Array(Buffer.from(ROOT_CERT_PEM, "utf-8")),
+        ]);
+        expect(request.clientCert).toBeFalsy();
+        expect(request.clientKey).toBeFalsy();
+        expect(request.certReload).toBeFalsy();
+    });
+
+    it("flips to InsecureTls when insecure is true, without touching mTLS fields", async () => {
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                insecure: true,
+                mutualTls: {
+                    kind: "bytes",
+                    cert: CLIENT_CERT_PEM,
+                    key: CLIENT_KEY_PEM,
+                },
+            },
+        });
+
+        expect(request.tlsMode).toBe(connection_request.TlsMode.InsecureTls);
+        expect(request.clientCert).toBeTruthy();
+    });
+});
+
+describe("TLS PEM file loaders", () => {
+    let tmpDir: string;
+
+    beforeAll(() => {
+        tmpDir = mkdtempSync(join(tmpdir(), "glide-tls-loader-"));
+    });
+
+    afterAll(() => {
+        rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    const writeFixture = (name: string, contents: string): string => {
+        const filePath = join(tmpDir, name);
+        writeFileSync(filePath, contents);
+        return filePath;
+    };
+
+    const loaders = [
+        {
+            name: "loadRootCertificatesFromFile",
+            load: loadRootCertificatesFromFile,
+            contents: ROOT_CERT_PEM,
+            errorLabel: "Root certificate",
+        },
+        {
+            name: "loadClientCertificateFromFile",
+            load: loadClientCertificateFromFile,
+            contents: CLIENT_CERT_PEM,
+            errorLabel: "Client certificate",
+        },
+        {
+            name: "loadClientKeyFromFile",
+            load: loadClientKeyFromFile,
+            contents: CLIENT_KEY_PEM,
+            errorLabel: "Client key",
+        },
+    ];
+
+    describe.each(loaders)(
+        "$name",
+        ({ name, load, contents, errorLabel }) => {
+            it("loads PEM bytes from a file", async () => {
+                const filePath = writeFixture(`${name}-ok.pem`, contents);
+                const data = await load(filePath);
+                expect(Buffer.isBuffer(data)).toBe(true);
+                expect(data).toEqual(Buffer.from(contents));
+            });
+
+            it("rejects with a ConfigurationError when the file is missing", async () => {
+                const missingPath = join(tmpDir, `${name}-missing.pem`);
+                const promise = load(missingPath);
+                await expect(promise).rejects.toBeInstanceOf(
+                    ConfigurationError,
+                );
+                await expect(load(missingPath)).rejects.toThrow(
+                    `${errorLabel} file not found: ${missingPath}`,
+                );
+                await expect(load(missingPath)).rejects.toMatchObject({
+                    cause: expect.objectContaining({ code: "ENOENT" }),
+                });
+            });
+
+            it("rejects with a ConfigurationError when the file is empty", async () => {
+                const emptyPath = writeFixture(`${name}-empty.pem`, "");
+                await expect(load(emptyPath)).rejects.toBeInstanceOf(
+                    ConfigurationError,
+                );
+                await expect(load(emptyPath)).rejects.toThrow(
+                    `${errorLabel} file is empty: ${emptyPath}`,
+                );
+            });
+        },
+    );
+
+    it("MutualTls compile-time exclusivity guard exists", () => {
+        // The MutualTls discriminated union is imported above; this test is a
+        // compile-time smoke check that ensures the two variants remain
+        // distinguishable at the type level. If someone flattens the union or
+        // relaxes it into a common shape, this line will stop type-checking.
+        const _pathVariant: Extract<MutualTls, { kind: "path" }> = {
+            kind: "path",
+            certPath: "/tmp/c",
+            keyPath: "/tmp/k",
+        };
+        expect(_pathVariant.kind).toBe("path");
     });
 });
