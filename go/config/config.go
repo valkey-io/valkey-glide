@@ -1033,6 +1033,111 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 	return config
 }
 
+// WithMutualTLS enables mutual TLS (mTLS) with an in-memory PEM client certificate and private
+// key, loaded once at connection time. The material is static: automatic reload is not
+// performed. For automatic rotation of on-disk material, use [TlsConfiguration.WithMutualTLSWithReload]
+// or [TlsConfiguration.WithMutualTLSWithReloadInterval] instead.
+//
+// clientCert and clientKey must both be non-nil and non-empty PEM byte slices; this method
+// panics if either is nil or empty so that misuse surfaces where it is written rather than at
+// connect time.
+//
+// To load PEM material from disk into byte slices, use [LoadClientCertificateFromFile] and
+// [LoadClientKeyFromFile]:
+//
+//	cert, err := config.LoadClientCertificateFromFile("/path/to/client-cert.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	key, err := config.LoadClientKeyFromFile("/path/to/client-key.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	tls := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//
+// Calling WithMutualTLS on a TlsConfiguration that already had [TlsConfiguration.WithMutualTLSWithReload]
+// (or [TlsConfiguration.WithMutualTLSWithReloadInterval]) applied replaces the earlier
+// path-based state with the new byte-based state.
+func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) *TlsConfiguration {
+	if len(clientCert) == 0 {
+		panic("WithMutualTLS: clientCert must be a non-empty PEM byte slice")
+	}
+	if len(clientKey) == 0 {
+		panic("WithMutualTLS: clientKey must be a non-empty PEM byte slice")
+	}
+	config.clientCertificate = clientCert
+	config.clientKey = clientKey
+	config.clientCertPath = ""
+	config.clientKeyPath = ""
+	config.certReloadIntervalSeconds = nil
+	return config
+}
+
+// WithMutualTLSWithReload enables mutual TLS with path-based client certificate and key that
+// the GLIDE core reads from disk and periodically re-reads to pick up rotated material. The
+// reload cadence is deferred to the core's default (currently 300 seconds; see
+// DEFAULT_RELOAD_INTERVAL_SECONDS in glide-core/src/tls_reload/mod.rs). Use
+// [TlsConfiguration.WithMutualTLSWithReloadInterval] to override the cadence.
+//
+// clientCertPath and clientKeyPath must both be non-empty; this method panics otherwise so
+// that misuse surfaces where it is written rather than at connect time.
+//
+// Calling WithMutualTLSWithReload on a TlsConfiguration that already had [TlsConfiguration.WithMutualTLS]
+// (or [TlsConfiguration.WithMutualTLSWithReloadInterval]) applied replaces the earlier state
+// with the new path-based state at the core-default cadence.
+func (config *TlsConfiguration) WithMutualTLSWithReload(clientCertPath, clientKeyPath string) *TlsConfiguration {
+	if clientCertPath == "" {
+		panic("WithMutualTLSWithReload: clientCertPath must be a non-empty filesystem path")
+	}
+	if clientKeyPath == "" {
+		panic("WithMutualTLSWithReload: clientKeyPath must be a non-empty filesystem path")
+	}
+	config.clientCertificate = nil
+	config.clientKey = nil
+	config.clientCertPath = clientCertPath
+	config.clientKeyPath = clientKeyPath
+	config.certReloadIntervalSeconds = nil
+	return config
+}
+
+// WithMutualTLSWithReloadInterval enables path-based mTLS reloading at the specified cadence.
+//
+// clientCertPath and clientKeyPath must both be non-empty and interval must be strictly
+// positive and at least one full second (the wire representation is uint32 seconds); this
+// method panics otherwise. interval is rounded down to whole seconds and clamped to the uint32
+// range on the wire.
+//
+// Calling WithMutualTLSWithReloadInterval on a TlsConfiguration that already had
+// [TlsConfiguration.WithMutualTLS] (or [TlsConfiguration.WithMutualTLSWithReload]) applied
+// replaces the earlier state with the new path-based state at the requested cadence.
+func (config *TlsConfiguration) WithMutualTLSWithReloadInterval(
+	clientCertPath, clientKeyPath string, interval time.Duration,
+) *TlsConfiguration {
+	if clientCertPath == "" {
+		panic("WithMutualTLSWithReloadInterval: clientCertPath must be a non-empty filesystem path")
+	}
+	if clientKeyPath == "" {
+		panic("WithMutualTLSWithReloadInterval: clientKeyPath must be a non-empty filesystem path")
+	}
+	if interval <= 0 {
+		panic("WithMutualTLSWithReloadInterval: interval must be strictly positive")
+	}
+	if interval < time.Second {
+		panic("WithMutualTLSWithReloadInterval: interval must be at least one second (wire representation is uint32 seconds)")
+	}
+	seconds := uint64(interval / time.Second)
+	if seconds > uint64(^uint32(0)) {
+		seconds = uint64(^uint32(0))
+	}
+	intervalSeconds := uint32(seconds)
+	config.clientCertificate = nil
+	config.clientKey = nil
+	config.clientCertPath = clientCertPath
+	config.clientKeyPath = clientKeyPath
+	config.certReloadIntervalSeconds = &intervalSeconds
+	return config
+}
+
 // LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.
 // This is a convenience function for loading custom root certificates from disk.
 //
@@ -1091,9 +1196,7 @@ func loadPEMFile(path, label string) ([]byte, error) {
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	tlsConfig := config.NewTlsConfiguration().
-//	    WithClientCertificate(clientCert).
-//	    WithClientKey(clientKey)
+//	tlsConfig := config.NewTlsConfiguration().WithMutualTLS(clientCert, clientKey)
 //	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 func LoadClientCertificateFromFile(path string) ([]byte, error) {
 	return loadPEMFile(path, "client certificate")
