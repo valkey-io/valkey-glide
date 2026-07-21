@@ -963,6 +963,37 @@ func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientC
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.
+//
+// Server verification is controlled through RootCertificates and UseInsecureTLS.
+//
+// Mutual TLS (mTLS) client authentication is configured through exactly one of the three
+// [TlsConfiguration.WithMutualTLS], [TlsConfiguration.WithMutualTLSWithReload], or
+// [TlsConfiguration.WithMutualTLSWithReloadInterval] methods; those methods are the only way
+// to enable mTLS on a TlsConfiguration. Path-based methods imply automatic reload of the
+// on-disk material by the GLIDE core.
+//
+// Example (static byte-based mTLS, loaded from PEM files at startup):
+//
+//	cert, err := config.LoadClientCertificateFromFile("/etc/glide/client.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	key, err := config.LoadClientKeyFromFile("/etc/glide/client.key")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	tls := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	advCfg := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+//	cfg := config.NewClientConfiguration().
+//	    WithAddress(&config.NodeAddress{Host: "cache.example", Port: 6379}).
+//	    WithUseTLS(true).
+//	    WithAdvancedConfiguration(advCfg)
+//	client, err := glide.NewClient(cfg)
+//
+// Example (path-based mTLS with automatic reload every 60 seconds):
+//
+//	tls := config.NewTlsConfiguration().
+//	    WithMutualTLSWithReloadInterval("/etc/glide/client.pem", "/etc/glide/client.key", 60*time.Second)
 type TlsConfiguration struct {
 	// RootCertificates contains custom root certificate data for TLS connections in PEM format.
 	//
