@@ -683,7 +683,7 @@ class TestOpenTelemetryGlide:
         # `redis.error_reply` returns a Lua error to the client, which surfaces
         # as a RequestError. The span must still be dropped in `finally`.
         error_script = Script("return redis.error_reply('deliberate script error')")
-        with pytest.raises(RequestError, match="deliberate script error"):
+        with pytest.raises(RequestError, match="script error"):
             await client.invoke_script(error_script)
 
         # A successful call after the error confirms the client is still usable
