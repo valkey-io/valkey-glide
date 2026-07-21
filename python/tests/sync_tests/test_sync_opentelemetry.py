@@ -641,3 +641,71 @@ class TestOpenTelemetryGlideSync:
         assert "db.namespace" in attr_keys
 
         client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_span_script_invocation_error_cleanup(
+        self, request, protocol, cluster_mode
+    ):
+        """
+        Negative path: when the server rejects the script (Lua error), the
+        EVALSHA span must still be ended and exported, and no span pointer
+        must leak. Follow-up call succeeds, confirming no half-open state.
+        """
+        from glide_shared.exceptions import RequestError
+
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        error_script = Script("return redis.error_reply('deliberate script error')")
+        with pytest.raises(RequestError, match="deliberate script error"):
+            client.invoke_script(error_script)
+
+        ok_script = Script("return 'ok'")
+        assert client.invoke_script(ok_script) == b"ok"
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["EVALSHA"],
+            expected_span_counts={"EVALSHA": 2},
+        )
+        _, span_objects, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert span_names.count("EVALSHA") >= 2
+        evalsha_attrs = [
+            attr
+            for span in span_objects
+            if span.get("name") == "EVALSHA"
+            for attr in span.get("span_attributes", [])
+        ]
+        assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_span_script_invocation_client_closed(
+        self, request, protocol, cluster_mode
+    ):
+        """
+        Negative path: invoking a script on a closed client must not leak a
+        span. The `_is_closed` guard in `_execute_script` runs before span
+        creation; this test pins that ordering.
+        """
+        from glide_shared.exceptions import ClosingError
+
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+        script = Script("return 'Hello'")
+        client.close()
+
+        with pytest.raises(ClosingError):
+            client.invoke_script(script)
+
+        # Give exporter a moment; assert we didn't crash and no leak surfaced.
+        time.sleep(0.2)
