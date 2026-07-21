@@ -1174,7 +1174,12 @@ func TestLoadClientCertificateAndKeyFromFile_TableDriven(t *testing.T) {
 		wantErrSubstr string
 	}{
 		{name: "happy", certState: fileOK, keyState: fileOK},
-		{name: "missing-cert", certState: fileMissing, keyState: fileOK, wantErrSubstr: "failed to read client certificate file"},
+		{
+			name:          "missing-cert",
+			certState:     fileMissing,
+			keyState:      fileOK,
+			wantErrSubstr: "failed to read client certificate file",
+		},
 		{name: "missing-key", certState: fileOK, keyState: fileMissing, wantErrSubstr: "failed to read client key file"},
 		{name: "empty-cert", certState: fileEmpty, keyState: fileOK, wantErrSubstr: "client certificate file is empty"},
 		{name: "empty-key", certState: fileOK, keyState: fileEmpty, wantErrSubstr: "client key file is empty"},
