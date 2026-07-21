@@ -193,6 +193,10 @@ describe("Auth tests", () => {
             addresses,
             protocol,
             ...configOverrides,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(configOverrides?.advancedConfiguration ?? {}),
+            },
         });
 
         try {
