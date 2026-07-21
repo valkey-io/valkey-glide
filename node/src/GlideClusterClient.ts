@@ -655,10 +655,10 @@ export class GlideClusterClient extends BaseClient {
     /**
      * @internal
      */
-    protected createClientRequest(
+    protected async createClientRequest(
         options: GlideClusterClientConfiguration,
-    ): connection_request.IConnectionRequest {
-        const configuration = super.createClientRequest(options);
+    ): Promise<connection_request.IConnectionRequest> {
+        const configuration = await super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
 
         // "enabledDefaultConfigs" is the default configuration and doesn't need setting
@@ -680,7 +680,7 @@ export class GlideClusterClient extends BaseClient {
         this.configurePubsub(options, configuration);
 
         if (options.advancedConfiguration) {
-            this.configureAdvancedConfigurationBase(
+            await this.configureAdvancedConfigurationBase(
                 options.advancedConfiguration,
                 configuration,
             );
