@@ -579,6 +579,9 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
     }
 
     fn insert(&self, key: Vec<u8>, key_type: CachedKeyType, value: Value) {
+        // Cached values outlive the request; deep-copy so they don't pin the
+        // connection read buffers their BulkStrings were zero-copy sliced from.
+        let value = value.detach_buffers();
         let entry_size = calculate_entry_size(&key, &value);
 
         if self.core.entry_too_big(entry_size) {

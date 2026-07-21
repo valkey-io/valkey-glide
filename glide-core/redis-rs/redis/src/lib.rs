@@ -351,6 +351,11 @@ pub use crate::connection::{
     IntoConnectionInfo, Msg, PubSub, PubSubChannelOrPattern, PubSubSubscriptionInfo,
     PubSubSubscriptionKind, RedisConnectionInfo, TlsMode,
 };
+// Exposed for the codec integration tests (tests/parser.rs); not a supported
+// public API surface.
+#[cfg(feature = "aio")]
+#[doc(hidden)]
+pub use crate::parser::ValueCodec;
 pub use crate::parser::{parse_redis_value, Parser};
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use crate::pubsub_synchronizer::PubSubSynchronizer;

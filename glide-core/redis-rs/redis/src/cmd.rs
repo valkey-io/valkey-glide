@@ -1229,5 +1229,31 @@ mod tests {
             cmd.set_fenced(true);
             assert_segments_match_packed(&cmd);
         }
+
+        /// Pipeline-level parity: MULTI/EXEC interleaving and the scratch
+        /// buffer carried across commands must still be byte-identical to
+        /// the contiguous pipeline packer, with and without shared payloads.
+        #[test]
+        fn pipeline_segments_match_packed() {
+            let payload = bytes::Bytes::from(vec![b'v'; SHARED_ARG_INLINE_MAX + 1]);
+            for transaction in [false, true] {
+                let mut pl = crate::pipe();
+                if transaction {
+                    pl.atomic();
+                }
+                let mut c1 = crate::cmd("SET");
+                c1.arg("k1").arg_shared(payload.clone());
+                let mut c2 = crate::cmd("GET");
+                c2.arg("k2");
+                let mut c3 = crate::cmd("SET");
+                c3.arg("k3").arg_shared(payload.clone());
+                pl.add_command(c1).add_command(c2).add_command(c3);
+                assert_eq!(
+                    pl.get_packed_pipeline_segments().to_contiguous(),
+                    pl.get_packed_pipeline(),
+                    "segmented pipeline packing must be byte-identical (transaction={transaction})"
+                );
+            }
+        }
     }
 }

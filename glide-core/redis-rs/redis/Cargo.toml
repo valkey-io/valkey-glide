@@ -120,6 +120,8 @@ keep-alive = ["socket2"]
 sentinel = ["rand"]
 
 [dev-dependencies]
+bytes = "1.9"
+tokio-util = { version = "0.7", features = ["codec"] }
 rand = "0.9"
 socket2 = "0.6"
 fnv = "1"
@@ -162,6 +164,11 @@ required-features = ["cluster-async"]
 
 [[bench]]
 name = "bench_basic"
+harness = false
+required-features = ["tokio-comp"]
+
+[[bench]]
+name = "bench_zerocopy"
 harness = false
 required-features = ["tokio-comp"]
 
