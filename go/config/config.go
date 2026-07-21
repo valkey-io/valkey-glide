@@ -1231,50 +1231,36 @@ func loadPEMFile(path, label string) ([]byte, error) {
 	return data, nil
 }
 
-// LoadClientCertificateFromFile reads a PEM-encoded client certificate file and returns its contents as a byte array.
-// This is a convenience function for loading a client certificate from disk for mutual TLS (mTLS) authentication.
+// LoadClientCertificateAndKeyFromFile reads the PEM-encoded client certificate
+// and private key files and returns their contents as byte slices, suitable
+// for passing to [TlsConfiguration.WithMutualTLS]. This mirrors the shape of
+// [crypto/tls.LoadX509KeyPair]: one call, one error path, both files read
+// together as a single atom.
 //
-// Parameters:
-//   - path: The file path to the PEM-encoded client certificate file
-//
-// Returns:
-//   - []byte: The client certificate data in PEM format
-//   - error: An error if the file cannot be read or is empty
-//
-// Example usage:
-//
-//	clientCert, err := config.LoadClientCertificateFromFile("/path/to/client-cert.pem")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	clientKey, err := config.LoadClientKeyFromFile("/path/to/client-key.pem")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	tlsConfig := config.NewTlsConfiguration().WithMutualTLS(clientCert, clientKey)
-//	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
-func LoadClientCertificateFromFile(path string) ([]byte, error) {
-	return loadPEMFile(path, "client certificate")
-}
-
-// LoadClientKeyFromFile reads a PEM-encoded client private key file and returns its contents as a byte array.
-// This is a convenience function for loading a client private key from disk for mutual TLS (mTLS) authentication.
-//
-// Parameters:
-//   - path: The file path to the PEM-encoded client private key file
-//
-// Returns:
-//   - []byte: The client private key data in PEM format
-//   - error: An error if the file cannot be read or is empty
+// On any failure (either file missing, unreadable, or empty), both return
+// slices are nil and a non-nil error describes which file failed.
 //
 // Example usage:
 //
-//	clientKey, err := config.LoadClientKeyFromFile("/path/to/client-key.pem")
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/path/to/client-cert.pem", "/path/to/client-key.pem")
 //	if err != nil {
-//	    log.Fatal(err)
+//	    return err
 //	}
-func LoadClientKeyFromFile(path string) ([]byte, error) {
-	return loadPEMFile(path, "client key")
+//	tlsConfig, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+func LoadClientCertificateAndKeyFromFile(certPath, keyPath string) (cert, key []byte, err error) {
+	cert, err = loadPEMFile(certPath, "client certificate")
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err = loadPEMFile(keyPath, "client key")
+	if err != nil {
+		return nil, nil, err
+	}
+	return cert, key, nil
 }
 
 // Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].

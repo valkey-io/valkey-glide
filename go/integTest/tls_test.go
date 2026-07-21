@@ -229,18 +229,14 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 	assert.Contains(suite.T(), err.Error(), "failed to read certificate file")
 }
 
-// TestTlsLoadClientCertificateAndKeyFromFile tests the LoadClientCertificateFromFile and
-// LoadClientKeyFromFile helper functions for mutual TLS (mTLS).
+// TestTlsLoadClientCertificateAndKeyFromFile tests the
+// LoadClientCertificateAndKeyFromFile helper function for mutual TLS (mTLS).
 func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 	// Test loading non-existent client certificate file
-	_, err := config.LoadClientCertificateFromFile("/nonexistent/path/client-cert.pem")
+	_, _, err := config.LoadClientCertificateAndKeyFromFile(
+		"/nonexistent/path/client-cert.pem", "/nonexistent/path/client-key.pem")
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "failed to read client certificate file")
-
-	// Test loading non-existent client key file
-	_, err = config.LoadClientKeyFromFile("/nonexistent/path/client-key.pem")
-	assert.Error(suite.T(), err)
-	assert.Contains(suite.T(), err.Error(), "failed to read client key file")
 }
 
 // getClientCertAndKeyPaths returns absolute filesystem paths to a client certificate/key pair
@@ -281,9 +277,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 	if err != nil {
 		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
 	}
-	clientCert, err := config.LoadClientCertificateFromFile(certPath)
-	require.NoError(suite.T(), err)
-	clientKey, err := config.LoadClientKeyFromFile(keyPath)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
 	require.NoError(suite.T(), err)
 
 	tlsConfig, err := config.NewTlsConfiguration().
@@ -349,9 +343,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 	if err != nil {
 		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
 	}
-	clientCert, err := config.LoadClientCertificateFromFile(certPath)
-	require.NoError(suite.T(), err)
-	clientKey, err := config.LoadClientKeyFromFile(keyPath)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
 	require.NoError(suite.T(), err)
 
 	tlsConfig, err := config.NewTlsConfiguration().

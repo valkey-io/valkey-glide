@@ -964,53 +964,68 @@ func TestTlsConfiguration_DefaultBuildersReloadDisabled(t *testing.T) {
 
 // PEM file loader tests
 
-func TestLoadClientCertificateFromFile(t *testing.T) {
+func TestLoadClientCertificateAndKeyFromFile_HappyPath(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "client-cert.pem")
+	keyPath := filepath.Join(dir, "client-key.pem")
 	require.NoError(t, os.WriteFile(certPath, []byte(testClientCertData), 0o600))
+	require.NoError(t, os.WriteFile(keyPath, []byte(testClientKeyData), 0o600))
 
-	data, err := LoadClientCertificateFromFile(certPath)
+	cert, key, err := LoadClientCertificateAndKeyFromFile(certPath, keyPath)
 	assert.NoError(t, err)
-	assert.Equal(t, []byte(testClientCertData), data)
+	assert.Equal(t, []byte(testClientCertData), cert)
+	assert.Equal(t, []byte(testClientKeyData), key)
 }
 
-func TestLoadClientCertificateFromFile_MissingFileErrors(t *testing.T) {
-	_, err := LoadClientCertificateFromFile(filepath.Join(t.TempDir(), "nonexistent.pem"))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read client certificate file")
-}
-
-func TestLoadClientCertificateFromFile_EmptyFileErrors(t *testing.T) {
-	emptyPath := filepath.Join(t.TempDir(), "empty-cert.pem")
-	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
-
-	_, err := LoadClientCertificateFromFile(emptyPath)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "client certificate file is empty")
-}
-
-func TestLoadClientKeyFromFile(t *testing.T) {
+func TestLoadClientCertificateAndKeyFromFile_MissingCertErrors(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "client-key.pem")
 	require.NoError(t, os.WriteFile(keyPath, []byte(testClientKeyData), 0o600))
 
-	data, err := LoadClientKeyFromFile(keyPath)
-	assert.NoError(t, err)
-	assert.Equal(t, []byte(testClientKeyData), data)
+	cert, key, err := LoadClientCertificateAndKeyFromFile(filepath.Join(dir, "nonexistent.pem"), keyPath)
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Nil(t, key)
+	assert.Contains(t, err.Error(), "failed to read client certificate file")
 }
 
-func TestLoadClientKeyFromFile_MissingFileErrors(t *testing.T) {
-	_, err := LoadClientKeyFromFile(filepath.Join(t.TempDir(), "nonexistent.pem"))
-	assert.Error(t, err)
+func TestLoadClientCertificateAndKeyFromFile_MissingKeyErrors(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "client-cert.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte(testClientCertData), 0o600))
+
+	cert, key, err := LoadClientCertificateAndKeyFromFile(certPath, filepath.Join(dir, "nonexistent.pem"))
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Nil(t, key)
 	assert.Contains(t, err.Error(), "failed to read client key file")
 }
 
-func TestLoadClientKeyFromFile_EmptyFileErrors(t *testing.T) {
-	emptyPath := filepath.Join(t.TempDir(), "empty-key.pem")
-	require.NoError(t, os.WriteFile(emptyPath, []byte{}, 0o600))
+func TestLoadClientCertificateAndKeyFromFile_EmptyCertErrors(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "empty-cert.pem")
+	keyPath := filepath.Join(dir, "client-key.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte{}, 0o600))
+	require.NoError(t, os.WriteFile(keyPath, []byte(testClientKeyData), 0o600))
 
-	_, err := LoadClientKeyFromFile(emptyPath)
-	assert.Error(t, err)
+	cert, key, err := LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Nil(t, key)
+	assert.Contains(t, err.Error(), "client certificate file is empty")
+}
+
+func TestLoadClientCertificateAndKeyFromFile_EmptyKeyErrors(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "client-cert.pem")
+	keyPath := filepath.Join(dir, "empty-key.pem")
+	require.NoError(t, os.WriteFile(certPath, []byte(testClientCertData), 0o600))
+	require.NoError(t, os.WriteFile(keyPath, []byte{}, 0o600))
+
+	cert, key, err := LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Nil(t, key)
 	assert.Contains(t, err.Error(), "client key file is empty")
 }
 
