@@ -286,9 +286,10 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 	clientKey, err := config.LoadClientKeyFromFile(keyPath)
 	require.NoError(suite.T(), err)
 
-	tlsConfig := config.NewTlsConfiguration().
+	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
@@ -318,9 +319,10 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
 	}
 
-	tlsConfig := config.NewTlsConfiguration().
+	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
 		WithMutualTLSWithReload(certPath, keyPath)
+	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
@@ -352,9 +354,10 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 	clientKey, err := config.LoadClientKeyFromFile(keyPath)
 	require.NoError(suite.T(), err)
 
-	tlsConfig := config.NewTlsConfiguration().
+	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true).
