@@ -831,22 +831,21 @@ class BaseClient(CoreCommands):
         if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
             span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
 
-        self._lib.invoke_script(
-            self._core_client,
-            callback_id,
-            hash_buffer,
-            len(keys),
-            keys_c_args,
-            keys_c_lengths,
-            len(args),
-            args_c_args,
-            args_c_lengths,
-            route_ptr,
-            route_len,
-            span,
-        )
-
         try:
+            self._lib.invoke_script(
+                self._core_client,
+                callback_id,
+                hash_buffer,
+                len(keys),
+                keys_c_args,
+                keys_c_lengths,
+                len(args),
+                args_c_args,
+                args_c_lengths,
+                route_ptr,
+                route_len,
+                span,
+            )
             return await fut
         finally:
             if span != 0:
