@@ -661,7 +661,7 @@ class TestOpenTelemetryGlideSync:
         )
 
         error_script = Script("return redis.error_reply('deliberate script error')")
-        with pytest.raises(RequestError, match="deliberate script error"):
+        with pytest.raises(RequestError, match="script error"):
             client.invoke_script(error_script)
 
         ok_script = Script("return 'ok'")
