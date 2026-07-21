@@ -1042,20 +1042,6 @@ type TlsConfiguration struct {
 	certReloadInterval time.Duration
 }
 
-// DefaultCertReloadInterval is the default cadence at which the GLIDE core
-// re-reads on-disk client certificate and key material when path-based mTLS
-// is configured via [TlsConfiguration.WithMutualTLSFromFiles]. It mirrors
-// the core's DEFAULT_RELOAD_INTERVAL_SECONDS constant:
-//
-// https://github.com/valkey-io/valkey-glide/blob/67790a317c494a2f5d1a6ef6c9c2e6a25e6622fc/glide-core/src/tls_reload/mod.rs#L44
-//
-// Callers can reference this value in their own configuration (for example,
-// scaling it: WithReloadInterval(2 * config.DefaultCertReloadInterval)) or in
-// assertions. Passing this exact value to [WithReloadInterval] and passing
-// no option produce the same wire-level default: the interval is only sent
-// on the wire when the caller explicitly overrides the core default.
-const DefaultCertReloadInterval = 300 * time.Second
-
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
 func NewTlsConfiguration() *TlsConfiguration {
 	return &TlsConfiguration{}
@@ -1099,8 +1085,8 @@ type MutualTLSOption interface {
 // materialized into the TlsConfiguration.
 type mtlsSettings struct {
 	// reloadInterval, when non-zero, overrides the core's default reload
-	// cadence. Zero means "use the core default"
-	// (see [DefaultCertReloadInterval]).
+	// cadence. Zero means "use the core default" and causes no interval
+	// field to be sent on the wire.
 	reloadInterval time.Duration
 }
 
@@ -1110,10 +1096,13 @@ type reloadIntervalOption struct{ interval time.Duration }
 func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) { s.reloadInterval = o.interval }
 
 // WithReloadInterval overrides the certificate reload cadence used by
-// [TlsConfiguration.WithMutualTLSFromFiles]. The default is
-// [DefaultCertReloadInterval]. The interval must be at least one second
-// because the wire representation is uint32 seconds; sub-second values are
-// rejected at WithMutualTLSFromFiles time.
+// [TlsConfiguration.WithMutualTLSFromFiles]. The interval must be strictly
+// positive; a non-positive value is rejected at WithMutualTLSFromFiles time.
+//
+// The wire representation is uint32 seconds, so the value is rounded down to
+// whole seconds when it is sent on the wire. A sub-second value rounds down
+// to zero seconds, which is equivalent to omitting this option entirely (the
+// core applies its default cadence).
 func WithReloadInterval(d time.Duration) MutualTLSOption {
 	return reloadIntervalOption{interval: d}
 }
@@ -1160,14 +1149,13 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 
 // WithMutualTLSFromFiles enables mutual TLS with path-based client certificate
 // and key that the GLIDE core reads from disk and periodically re-reads to
-// pick up rotated material. The default reload cadence is
-// [DefaultCertReloadInterval]; override it by passing
-// [WithReloadInterval](d).
+// pick up rotated material. When no [WithReloadInterval] option is passed,
+// the reload cadence defers to the GLIDE core default (currently 300
+// seconds). Override it by passing [WithReloadInterval](d).
 //
 // certPath and keyPath must both be non-empty. Any provided reload interval
-// must be at least one full second (the wire representation is uint32
-// seconds). If any input is invalid an error is returned and the receiver
-// is left unchanged.
+// must be strictly positive; if any input is invalid an error is returned
+// and the receiver is left unchanged.
 //
 // Calling WithMutualTLSFromFiles on a TlsConfiguration that already had
 // [TlsConfiguration.WithMutualTLS] applied replaces the earlier byte-based

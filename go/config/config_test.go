@@ -1194,13 +1194,6 @@ func TestLoadClientCertificateAndKeyFromFile_TableDriven(t *testing.T) {
 	}
 }
 
-func TestDefaultCertReloadInterval(t *testing.T) {
-	// The exported constant is the caller-visible name for the core's default
-	// reload cadence. It must be 300s to match glide-core's
-	// DEFAULT_RELOAD_INTERVAL_SECONDS.
-	assert.Equal(t, 300*time.Second, DefaultCertReloadInterval)
-}
-
 func TestMustWithMutualTLS_PanicsOnEmptyCert(t *testing.T) {
 	defer func() {
 		r := recover()
