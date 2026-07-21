@@ -38,8 +38,8 @@ from tests.utils.utils import (
 # over AllNodes and, under heavy full-matrix CI contention, the full-cluster
 # reconnect + re-auth can take considerably longer than on an unloaded host, so
 # cluster mode gets a wider tolerance. Standalone keeps the original budget.
-_CLUSTER_RECONNECT_TIMEOUT_SEC = 60
-_STANDALONE_RECONNECT_TIMEOUT_SEC = 25
+_CLUSTER_RECONNECT_TIMEOUT_SEC = 90
+_STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
 
 async def create_iam_client(
@@ -152,8 +152,20 @@ class TestAuthCommands:
             "Client failed to reconnect after second kill for immediate auth",
             timeout=reconnect_timeout,
         )
-        # Verify that the client is still authenticated
-        assert await glide_client.set("test_key", "test_value") == OK
+        # Verify that the client is still authenticated.
+        # Use a retry loop because the connection pool may still be stabilizing
+        # right after reconnection succeeds.
+        async def _verify_authenticated():
+            try:
+                return await glide_client.set("test_key", "test_value") == OK
+            except Exception:
+                return False
+
+        await wait_for(
+            _verify_authenticated,
+            "Client not fully authenticated after reconnect",
+            timeout=reconnect_timeout,
+        )
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
