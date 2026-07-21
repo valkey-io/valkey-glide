@@ -617,7 +617,7 @@ class TestOpenTelemetryGlide:
         )
 
         script = Script("return 'Hello'")
-        result = await client.invoke_script(script)
+        result = await client.invoke_script(script, keys=["k"], args=["a"])
         assert result == b"Hello"
 
         # Wait for spans to be flushed
@@ -631,12 +631,34 @@ class TestOpenTelemetryGlide:
         assert "EVALSHA" in span_names
 
         # The core attaches DB semantic convention attributes via invoke_script.
+        # Mirror the attributes set by `set_db_script_attributes` in
+        # glide-core/src/otel_db_semantics.rs: db.operation.name, db.query.text
+        # (script hash + keys, args masked), plus the connection-level attributes
+        # from `set_db_connection_attributes` (db.system.name, server.address,
+        # server.port, db.namespace).
         evalsha_attrs = [
             attr
             for span in span_objects
             if span.get("name") == "EVALSHA"
             for attr in span.get("span_attributes", [])
         ]
+        attr_keys = {k for attr in evalsha_attrs for k in attr.keys()}
+
+        # Command-level attributes
         assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+        assert "db.query.text" in attr_keys
+        query_texts = [
+            attr["db.query.text"] for attr in evalsha_attrs if "db.query.text" in attr
+        ]
+        # Script query text starts with "EVALSHA <hash> <numkeys>" and masks args.
+        assert any(
+            qt.startswith("EVALSHA ") and script.get_hash() in qt for qt in query_texts
+        )
+
+        # Connection-level attributes
+        assert {"db.system.name": "redis"} in evalsha_attrs
+        assert "server.address" in attr_keys
+        assert "server.port" in attr_keys
+        assert "db.namespace" in attr_keys
 
         await client.close()
