@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: de-flake `test_script_isnt_removed_while_another_instance_exists` ([#6581](https://github.com/valkey-io/valkey-glide/pull/6581))
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard. PR #6530 inadvertently chained `PushKind::Disconnection` (which carries an empty payload) through `extract_pubsub_data`, causing all disconnect notifications to be silently dropped on the async pipe path. ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
 * CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
 * Core/FFI: fix(ffi): prevent pub/sub DoS from malformed server push frames ([#6530](https://github.com/valkey-io/valkey-glide/pull/6530))

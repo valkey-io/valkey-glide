@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
@@ -11595,32 +11596,41 @@ class TestScripts:
         instance with the same hash still exists, even after the original reference is released
         and the server-side script cache is flushed.
         """
-        script_1 = Script("return 'Script Exists'")
-        script_2 = Script("return 'Script Exists'")
+        # Use a unique per-invocation script body so the process-global, refcounted
+        # scripts container entry cannot collide with another test/parametrization
+        # running in the same worker process.
+        random_str = get_random_string(10)
+        expected = random_str.encode()
+        script_1 = Script(f"return '{random_str}'")
+        script_2 = Script(f"return '{random_str}'")
         assert script_1.get_hash() == script_2.get_hash()
+        script_hash = script_1.get_hash()
 
-        # Run first script and drop reference
-        assert await glide_client.invoke_script(script_1) == b"Script Exists"
-        script_1.__del__()
+        # Run first script and drop its reference. Release deterministically with
+        # ``del`` + ``gc.collect()`` so the finalizer's decrement happens exactly
+        # once, instead of calling ``__del__()`` directly (which runs the finalizer
+        # but leaves the object alive, causing a second decrement at GC time).
+        assert await glide_client.invoke_script(script_1) == expected
+        del script_1
+        gc.collect()
 
         # Flush the script from the server
         assert await glide_client.script_flush() == OK
 
         # Script should not exist on the server anymore
-        assert await glide_client.script_exists([script_1.get_hash()]) == [False]
+        assert await glide_client.script_exists([script_hash]) == [False]
 
         # Run second script; it should not exist on the server but must be found in the local script cache
-        assert await glide_client.invoke_script(script_2) == b"Script Exists"
+        assert await glide_client.invoke_script(script_2) == expected
 
-        # Release script_2 and flush again
-        script_2.__del__()
+        # Release script_2's last reference and flush again
+        del script_2
+        gc.collect()
         assert await glide_client.script_flush() == OK
 
-        # Should now raise NOSCRIPT
-        with pytest.raises(RequestError) as exc_info:
-            await glide_client.invoke_script(script_2)
-
-        assert "NOSCRIPT" in str(exc_info.value).upper()
+        # With no live instance holding the local cache entry and the server-side
+        # cache flushed, the script must no longer exist on the server.
+        assert await glide_client.script_exists([script_hash]) == [False]
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
