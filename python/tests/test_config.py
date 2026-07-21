@@ -680,6 +680,175 @@ def test_tls_configuration_client_cert_key_consistency():
     )
 
 
+# -------- Path-based mTLS with automatic client cert/key reload --------
+
+
+def _write_cert_key(tmp_path):
+    cert_path = tmp_path / "client-cert.pem"
+    key_path = tmp_path / "client-key.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    return cert_path, key_path
+
+
+def test_tls_path_based_mtls_defaults_to_core_reload(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+    )
+
+    for build in (_build_standalone_config, _build_cluster_config):
+        config = build(tls_config)
+        request = (
+            config._create_a_protobuf_conn_request(cluster_mode=True)
+            if build is _build_cluster_config
+            else config._create_a_protobuf_conn_request()
+        )
+        assert request.client_cert_path == str(cert_path)
+        assert request.client_key_path == str(key_path)
+        assert request.HasField("cert_reload")
+        assert request.cert_reload.enabled is True
+        assert not request.cert_reload.HasField("interval_seconds")
+        # Path-based must NOT populate byte-based fields.
+        assert request.client_cert == b""
+        assert request.client_key == b""
+
+
+def test_tls_path_based_mtls_with_explicit_interval(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=120,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.HasField("interval_seconds")
+    assert request.cert_reload.interval_seconds == 120
+
+
+def test_tls_path_based_mtls_accepts_pathlib_and_stores_str(tmp_path):
+    from pathlib import Path
+
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=Path(cert_path),
+        client_key_path=Path(key_path),
+    )
+    assert isinstance(tls_config.client_cert_path, str)
+    assert isinstance(tls_config.client_key_path, str)
+    assert tls_config.client_cert_path == str(cert_path)
+    assert tls_config.client_key_path == str(key_path)
+
+
+def test_tls_path_based_mtls_missing_key_path(tmp_path):
+    cert_path, _ = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError) as exc_info:
+        TlsAdvancedConfiguration(client_cert_path=str(cert_path))
+    assert "must be provided together" in str(exc_info.value)
+
+
+def test_tls_path_based_mtls_missing_cert_path(tmp_path):
+    _, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError) as exc_info:
+        TlsAdvancedConfiguration(client_key_path=str(key_path))
+    assert "must be provided together" in str(exc_info.value)
+
+
+def test_tls_path_based_and_byte_based_mutually_exclusive(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError) as exc_info:
+        TlsAdvancedConfiguration(
+            client_cert_pem=TEST_CLIENT_CERT_DATA,
+            client_key_pem=TEST_CLIENT_KEY_DATA,
+            client_cert_path=str(cert_path),
+            client_key_path=str(key_path),
+        )
+    assert "mutually exclusive" in str(exc_info.value)
+
+
+def test_tls_cert_reload_interval_requires_paths():
+    with pytest.raises(ConfigurationError) as exc_info:
+        TlsAdvancedConfiguration(cert_reload_interval_seconds=60)
+    assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
+
+
+def test_tls_cert_reload_interval_rejects_zero_and_negative(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    for bad in (0, -1, -100):
+        with pytest.raises(ConfigurationError):
+            TlsAdvancedConfiguration(
+                client_cert_path=str(cert_path),
+                client_key_path=str(key_path),
+                cert_reload_interval_seconds=bad,
+            )
+
+
+def test_tls_cert_reload_interval_rejects_bool_and_float(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    for bad in (True, False, 1.0, 30.5):
+        with pytest.raises(ConfigurationError):
+            TlsAdvancedConfiguration(
+                client_cert_path=str(cert_path),
+                client_key_path=str(key_path),
+                cert_reload_interval_seconds=bad,
+            )
+
+
+def test_tls_path_based_mtls_nonexistent_path_raises_file_not_found(tmp_path):
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    missing_cert = tmp_path / "does-not-exist.pem"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        TlsAdvancedConfiguration(
+            client_cert_path=str(missing_cert),
+            client_key_path=str(key_path),
+        )
+    assert str(missing_cert) in str(exc_info.value)
+
+
+def test_tls_path_based_mtls_empty_string_path_rejected(tmp_path):
+    cert_path, _ = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError):
+        TlsAdvancedConfiguration(
+            client_cert_path=str(cert_path),
+            client_key_path="",
+        )
+
+
+def test_tls_path_based_mtls_empty_file_rejected(tmp_path):
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(b"")
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    with pytest.raises(ConfigurationError) as exc_info:
+        TlsAdvancedConfiguration(
+            client_cert_path=str(cert_path),
+            client_key_path=str(key_path),
+        )
+    assert "empty" in str(exc_info.value)
+
+
+def test_tls_byte_based_still_emits_no_reload_config():
+    """Byte-based mTLS remains static: no cert_reload field on the request."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+    assert not request.HasField("cert_reload")
+    assert request.client_cert_path == ""
+    assert request.client_key_path == ""
+
+
 def test_tcp_nodelay_default_value():
     """Test that tcp_nodelay defaults to None (not set)."""
     standalone_config = AdvancedGlideClientConfiguration()
