@@ -108,6 +108,41 @@ pack-and-write path — the segmented/vectored machinery is only paid when a
 large shared payload can actually skip a copy (avoids a measured +10%
 small-command regression).
 
+### Recycled buffer pool (`buf_pool`) — shared by both phases
+
+Two hot paths briefly need an owned buffer of tens-to-hundreds of KB whose
+lifetime is tied to a refcounted `Bytes`: the decoder's per-frame copy
+(receive) and `write_arg`'s auto-share copy of large borrowed args (send).
+Allocating these fresh per operation caused page-fault churn under pipelined
+load (~37 faults/op at 64 KB, depth 16); the pool recycles the allocations so
+the pages stay resident. Design points:
+
+- **Recycling via drop hook:** buffers are handed out as
+  `Bytes::from_owner(PooledBuf)`; the allocation returns to the pool only when
+  the *last* `Bytes` clone/slice drops, so a buffer can never be reused while
+  still referenced. No `unsafe`.
+- **Sharded, not global:** the pool is **8 independent `Mutex<Vec<Vec<u8>>>`
+  shards**. Threads are assigned a shard round-robin via a cached
+  `thread_local` index — **no threads are created**; existing runtime/binding
+  threads simply stop sharing one lock. A `Bytes` may be dropped on a
+  different thread than allocated it; the buffer then parks in the dropping
+  thread's shard, which is harmless (the pool is a best-effort cache, not an
+  ownership structure). Rationale: a single process-global mutex on every
+  >4 KB payload across *all* connections is a scalability cliff — measured to
+  collapse ~8.6× under parallel load (see the multi-connection contention
+  section in `zero-copy-benchmarks.md`).
+- **Bounds:** copies ≤4 KB bypass the pool (allocator small-size classes
+  handle them well); copies >1 MB also bypass it entirely — no pooled buffer
+  could satisfy them without an immediate realloc, so popping one would only
+  drain a warm buffer from mid-size traffic, and their allocations are never
+  retained (a burst of huge values can't park large idle memory). Idle
+  retention is capped at 8 buffers/shard → 64 MiB worst-case process-wide.
+  In-flight buffers are unbounded by design (bounded by pipeline depth).
+- **Poison recovery:** a poisoned shard lock only means another thread
+  panicked mid push/pop; the `Vec` is structurally valid, so recycling
+  continues (`unwrap_or_else(into_inner)`). Thread-teardown TLS access falls
+  back to shard 0 instead of panicking.
+
 ---
 
 ## 3. Safety

@@ -162,3 +162,53 @@ larger on Graviton).
   (bimodal run-to-run variance present in baseline too) and is retracted.
 - Throughput only improves where CPU was the binding constraint (e.g. SET 256KB depth 1:
   +37% x86, +15..22% ARM); flow-capped cells are unchanged by design.
+
+## Multi-connection pool contention (ElastiCache + microbench, 2026-07-19)
+
+**Question:** the recycled buffer pool originally used one process-global
+`Mutex<Vec<Vec<u8>>>`, taken by every payload >4 KB (send args and receive
+frames) across all connections. Does it contend under multi-connection load,
+and does the 8-shard thread-affine pool fix it?
+
+**Method:** two builds byte-identical except `buf_pool.rs` (`sharded` vs
+`global`); same infra as the real-network validation (c7i.8xlarge client +
+same-AZ `cache.r7g.4xlarge`, us-west-2a). Harnesses: `zc_multiconn`
+(C independent `MultiplexedConnection`s × depth-16 persistent workers) and
+`zc_poolstress` (pure pool build/drop, no I/O). 3 alternating reps/cell,
+`perf stat` (task-clock, instructions, context-switches).
+
+### Live ElastiCache (GET/SET × 8 KB/64 KB × 1–32 connections, depth 16)
+
+- **Throughput identical in every cell** (Δ < 0.1%): all ≥8-connection cells
+  sit on the ~12.4 Gbps instance network plateau, so the wire — not the pool
+  lock — is the ceiling.
+- **Client CPU/op: sharded −3..5% at 16–32 connections** (8 KB GET @32 conns:
+  20.0 µs vs 21.2 µs), with instructions/op flat → the recovered time is
+  lock-wait, not executed work. Single-connection cells: parity.
+
+### Pure pool microbenchmark (no I/O — worst case, 8 KB payload)
+
+| threads | sharded M ops/s | global M ops/s | global CPU ns/op | sharded ns/op |
+|---:|---:|---:|---:|---:|
+| 1 | 3.78 | 3.81 | 262 | 265 |
+| 4 | 6.48 | 2.01 | 1 959 | 515 |
+| 8 | 12.10 | **1.41** | 4 673 | 527 |
+| 16 | 6.57 | 1.50 | 8 956 | 1 904 |
+| 32 | 5.34 | 1.62 | 18 672 | 3 731 |
+
+The global mutex collapses beyond ~4 threads: throughput drops *below* its
+single-thread rate, CPU/op inflates ~70×, and context switches explode to
+~165 K per M-ops (futex convoy). The sharded pool scales to ~12 M ops/s and
+degrades gracefully.
+
+### Honest framing
+
+The global-lock collapse point (~2–4 M pool-ops/s) is roughly 10× beyond what
+any real network workload drives on this hardware (max observed live rate:
+~190 K ops/s over the wire, ~380 K/s loopback — where the variants are
+indistinguishable in throughput). Sharding is justified as removing a hard
+scalability cliff (faster NICs / bigger instances / more runtime threads move
+workloads toward it) plus the measured −3..5% CPU/op at high connection
+counts, with no regression in any cell (worst: +0.9% CPU single-threaded,
+within noise). No new threads are created by the sharding — see the design
+doc.

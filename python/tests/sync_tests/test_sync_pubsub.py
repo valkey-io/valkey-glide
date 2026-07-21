@@ -42,9 +42,9 @@ from tests.utils.pubsub_test_utils import (
 )
 from tests.utils.utils import (
     get_random_string,
-    kill_connections,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
+    sync_kill_connections_tolerant,
 )
 
 # Defaults for the publish-and-retry loop used to verify message delivery after
@@ -3640,7 +3640,7 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Wait for subscriptions to be re-established after reconnection.
             # In cluster mode, reconnection involves multiple nodes, topology
@@ -3735,7 +3735,7 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Wait for subscriptions to be re-established after reconnection.
             # In cluster mode, reconnection involves multiple nodes, topology
@@ -4055,14 +4055,19 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Give some time for connection to reconnect
             time.sleep(2)
 
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established (need to poll since reconnection is async).
+            # Cluster reconnect + resubscribe spans multiple nodes and topology
+            # refresh, which can take significantly longer under CI load.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
-                listening_client, expected_sharded={channel}, timeout_sec=5.0
+                listening_client,
+                expected_sharded={channel},
+                timeout_sec=resubscribe_timeout,
             )
 
             # Verify subscription still works after reconnection
@@ -4128,16 +4133,19 @@ class TestSyncPubSub:
             )
 
             # Kill connections
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Give time for reconnect
             time.sleep(2)
 
-            # Wait for resubscription (need to poll since reconnection is async)
+            # Wait for resubscription (need to poll since reconnection is async).
+            # Restoring 256 subscriptions across a reconnecting cluster can take
+            # significantly longer under CI load than in standalone.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
                 listening_client,
                 expected_channels=channels,
-                timeout_sec=5.0,
+                timeout_sec=resubscribe_timeout,
             )
 
             # Publish to all channels after reconnection
