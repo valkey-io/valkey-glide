@@ -41,7 +41,7 @@ describe("Scan GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 40000);
+    }, 120000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster?.getAddresses(), client);
@@ -557,7 +557,7 @@ describe("Scan GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         await flushAndCloseClient(false, cluster?.getAddresses(), client);

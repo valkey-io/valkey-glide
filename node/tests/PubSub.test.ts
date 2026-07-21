@@ -94,7 +94,7 @@ describe("PubSub", () => {
         ]);
         cmdCluster = _cmdCluster;
         cmeCluster = _cmeCluster;
-    }, 40000);
+    }, 120000);
     afterEach(async () => {
         if (cmdCluster) {
             await flushAndCloseClient(false, cmdCluster.getAddresses());
