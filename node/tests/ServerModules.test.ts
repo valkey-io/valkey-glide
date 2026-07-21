@@ -56,7 +56,7 @@ describe("Server Module Tests", () => {
             parseEndpoints(clusterAddresses),
             getServerVersion,
         );
-    }, 40000);
+    }, 120000);
 
     afterAll(async () => {
         await cluster.close();

@@ -42,7 +42,7 @@ describe("ReadOnlyMode", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         // Just close the client - no flush needed for read-only tests
