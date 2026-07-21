@@ -20,12 +20,12 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * Advanced TLS configuration settings class for creating a client. Shared settings for standalone and
- * cluster clients.
+ * Advanced TLS configuration settings class for creating a client. Shared settings for standalone
+ * and cluster clients.
  *
  * <p>Mutual TLS (mTLS) is configured through the intent-revealing {@code useMutualTls} and {@code
- * useMutualTlsWithReload} builder methods rather than by setting individual certificate fields, which
- * keeps invalid combinations unrepresentable:
+ * useMutualTlsWithReload} builder methods rather than by setting individual certificate fields,
+ * which keeps invalid combinations unrepresentable:
  *
  * <ul>
  *   <li>{@link TlsAdvancedConfigurationBuilder#useMutualTls(byte[], byte[])} - in-memory PEM
@@ -302,9 +302,9 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Reads a PEM-encoded client certificate file into raw bytes. Convenience loader mirroring
-         * the Go and Python clients; combine it with {@link #loadClientKeyFromFile(String)} and pass
-         * the results to {@link #useMutualTls(byte[], byte[])} for static mTLS from files.
+         * Reads a PEM-encoded client certificate file into raw bytes. Convenience loader mirroring the
+         * Go and Python clients; combine it with {@link #loadClientKeyFromFile(String)} and pass the
+         * results to {@link #useMutualTls(byte[], byte[])} for static mTLS from files.
          *
          * @param path Filesystem path to the PEM-encoded client certificate.
          * @return the certificate bytes in PEM format
@@ -345,8 +345,8 @@ public class TlsAdvancedConfiguration {
         }
 
         /**
-         * Enables path-based mTLS with automatic reloading every {@code intervalSecs} seconds: the
-         * core re-reads the files at that interval to pick up rotated material. See {@link
+         * Enables path-based mTLS with automatic reloading every {@code intervalSecs} seconds: the core
+         * re-reads the files at that interval to pick up rotated material. See {@link
          * #certReloadIntervalSeconds} for the full reload semantics.
          *
          * @param clientCertPath Filesystem path to the PEM-encoded client certificate.
