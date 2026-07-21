@@ -404,9 +404,8 @@ func NewClientConfiguration() *ClientConfiguration {
 func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) {
 	if len(tlsConfig.clientCertificate) > 0 {
 		request.ClientCert = tlsConfig.clientCertificate
-	}
-	if len(tlsConfig.clientKey) > 0 {
 		request.ClientKey = tlsConfig.clientKey
+		return
 	}
 
 	if tlsConfig.clientCertPath != "" {
@@ -416,9 +415,13 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 		request.ClientKeyPath = &keyPath
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
-		if tlsConfig.certReloadIntervalSeconds != nil {
-			interval := *tlsConfig.certReloadIntervalSeconds
-			reload.IntervalSeconds = &interval
+		if tlsConfig.certReloadInterval > 0 {
+			seconds := uint64(tlsConfig.certReloadInterval / time.Second)
+			if seconds > uint64(^uint32(0)) {
+				seconds = uint64(^uint32(0))
+			}
+			s := uint32(seconds)
+			reload.IntervalSeconds = &s
 		}
 		request.CertReload = reload
 	}
@@ -1028,15 +1031,15 @@ type TlsConfiguration struct {
 	//
 	// State 1 (no mTLS): all five fields zero-valued.
 	// State 2 (static bytes): clientCertificate + clientKey non-nil, non-empty. All path fields
-	//                         empty; certReloadIntervalSeconds nil.
+	//                         empty; certReloadInterval zero.
 	// State 3 (path + reload): clientCertPath + clientKeyPath non-empty. Byte fields nil.
-	//                          certReloadIntervalSeconds is either nil (core default cadence) or a
-	//                          positive uint32.
-	clientCertificate         []byte
-	clientKey                 []byte
-	clientCertPath            string
-	clientKeyPath             string
-	certReloadIntervalSeconds *uint32
+	//                          certReloadInterval is either zero (core default cadence) or a
+	//                          positive duration explicitly provided via WithReloadInterval.
+	clientCertificate  []byte
+	clientKey          []byte
+	clientCertPath     string
+	clientKeyPath      string
+	certReloadInterval time.Duration
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -1137,7 +1140,7 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 	config.clientKey = clientKey
 	config.clientCertPath = ""
 	config.clientKeyPath = ""
-	config.certReloadIntervalSeconds = nil
+	config.certReloadInterval = 0
 	return config, nil
 }
 
@@ -1170,26 +1173,17 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 		opt.applyMutualTLS(&settings)
 	}
 
-	var intervalSecondsPtr *uint32
-	if settings.reloadInterval != 0 {
-		if settings.reloadInterval < time.Second {
-			return nil, fmt.Errorf(
-				"WithMutualTLSFromFiles: reload interval must be at least 1s, got %v",
-				settings.reloadInterval)
-		}
-		seconds := uint64(settings.reloadInterval / time.Second)
-		if seconds > uint64(^uint32(0)) {
-			seconds = uint64(^uint32(0))
-		}
-		s := uint32(seconds)
-		intervalSecondsPtr = &s
+	if settings.reloadInterval != 0 && settings.reloadInterval < time.Second {
+		return nil, fmt.Errorf(
+			"WithMutualTLSFromFiles: reload interval must be at least 1s, got %v",
+			settings.reloadInterval)
 	}
 
 	config.clientCertificate = nil
 	config.clientKey = nil
 	config.clientCertPath = certPath
 	config.clientKeyPath = keyPath
-	config.certReloadIntervalSeconds = intervalSecondsPtr
+	config.certReloadInterval = settings.reloadInterval
 	return config, nil
 }
 
