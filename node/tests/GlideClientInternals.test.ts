@@ -522,7 +522,7 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         });
     });
 
-    const invalidIntervals: Array<[string, number]> = [
+    const invalidIntervals: [string, number][] = [
         ["zero", 0],
         ["negative", -10],
         ["non-integer", 12.5],
