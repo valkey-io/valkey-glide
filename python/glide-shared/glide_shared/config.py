@@ -679,13 +679,9 @@ def _validate_readable_nonempty_file(path: Optional[str], field_name: str) -> No
         with open(path, "rb") as f:
             first_byte = f.read(1)
     except PermissionError as exc:
-        raise ConfigurationError(
-            f"{field_name} file is not readable ({path}): {exc}"
-        )
+        raise ConfigurationError(f"{field_name} file is not readable ({path}): {exc}")
     except OSError as exc:
-        raise ConfigurationError(
-            f"Failed to read {field_name} file {path}: {exc}"
-        )
+        raise ConfigurationError(f"Failed to read {field_name} file {path}: {exc}")
     if not first_byte:
         raise ConfigurationError(f"{field_name} file is empty: {path}")
 
