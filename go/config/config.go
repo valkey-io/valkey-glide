@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -408,7 +409,7 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 		return
 	}
 
-	if tlsConfig.clientCertPath != "" {
+	if len(tlsConfig.clientCertPath) > 0 {
 		certPath := tlsConfig.clientCertPath
 		keyPath := tlsConfig.clientKeyPath
 		request.ClientCertPath = &certPath
@@ -417,8 +418,8 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
 			seconds := uint64(tlsConfig.certReloadInterval / time.Second)
-			if seconds > uint64(^uint32(0)) {
-				seconds = uint64(^uint32(0))
+			if seconds > math.MaxUint32 {
+				seconds = math.MaxUint32
 			}
 			if seconds > 0 {
 				s := uint32(seconds)
@@ -1099,7 +1100,8 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 // The wire representation is uint32 seconds, so the value is rounded down to
 // whole seconds when it is sent on the wire. A sub-second value rounds down
 // to zero seconds, which is equivalent to omitting this option entirely (the
-// core applies its default cadence).
+// core applies its default cadence). Intervals above roughly 136 years
+// (math.MaxUint32 seconds) are clamped to the uint32 maximum on the wire.
 func WithReloadInterval(d time.Duration) MutualTLSOption {
 	return reloadIntervalOption{interval: d}
 }
@@ -1162,10 +1164,10 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 func (config *TlsConfiguration) WithMutualTLSFromFiles(
 	certPath, keyPath string, opts ...MutualTLSOption,
 ) (*TlsConfiguration, error) {
-	if certPath == "" {
+	if len(certPath) == 0 {
 		return nil, fmt.Errorf("WithMutualTLSFromFiles: certPath must be non-empty; got %q", certPath)
 	}
-	if keyPath == "" {
+	if len(keyPath) == 0 {
 		return nil, fmt.Errorf("WithMutualTLSFromFiles: keyPath must be non-empty; got %q", keyPath)
 	}
 
