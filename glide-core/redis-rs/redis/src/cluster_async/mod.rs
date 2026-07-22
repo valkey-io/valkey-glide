@@ -637,10 +637,14 @@ pub(crate) struct ClusterConnInner<C> {
     periodic_checks_handler: Option<JoinHandle<()>>,
     // Handler of fast connection validation task
     connections_validation_handler: Option<JoinHandle<()>>,
+    /// Requests buffered during a reconnect/recovery window.
+    /// Drained to `in_flight_requests` once recovery completes.
+    /// Bounded by a hard cap of 1000 to prevent unbounded memory growth.
+    recovery_queue: std::collections::VecDeque<PendingRequest<C>>,
 }
 
 impl<C> Dispose for ClusterConnInner<C> {
-    fn dispose(self) {
+    fn dispose(mut self) {
         if let Some(conn_lock) = self.inner.conn_lock.try_read() {
             // Each node may contain user and *maybe* a management connection
             let mut count = 0usize;
@@ -658,6 +662,14 @@ impl<C> Dispose for ClusterConnInner<C> {
         if let Some(handle) = self.connections_validation_handler {
             #[cfg(feature = "tokio-comp")]
             handle.abort()
+        }
+
+        // Fail any requests buffered in the recovery queue
+        for request in self.recovery_queue.drain(..) {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Connection dropped",
+            ))));
         }
 
         // Reduce the number of clients
@@ -1578,6 +1590,7 @@ where
             state: ConnectionState::PollComplete,
             periodic_checks_handler: None,
             connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
         };
         // Initial slots and subscriptions refresh
         Self::refresh_slots_and_subscriptions_with_retries(
@@ -3543,34 +3556,75 @@ where
     }
 
     /// Fail all pending requests immediately with ClientError.
-    /// Called when entering recovery to prevent requests from waiting for slow
-    /// reconnection cycles.
-    fn fail_pending_requests(inner: &Core<C>) {
-        let mut rx_guard = inner
+    /// Buffer incoming requests into the recovery queue while reconnect is in progress.
+    /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
+    /// The cap is hard-coded at 1000 to prevent unbounded memory growth during recovery.
+    fn buffer_pending_requests_to_recovery_queue(&mut self) {
+        const CAP: usize = 1000;
+
+        let mut rx_guard = self
+            .inner
             .pending_requests_rx
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let mut requests = Vec::new();
+
+        let mut overflow = Vec::new();
         while let Ok(request) = rx_guard.try_recv() {
-            requests.push(request);
+            if self.recovery_queue.len() < CAP {
+                self.recovery_queue.push_back(request);
+            } else {
+                overflow.push(request);
+            }
         }
         drop(rx_guard);
-        let count = requests.len();
-        if count > 0 {
+
+        if !overflow.is_empty() {
             log_warn_rate_limited!(
                 "cluster",
                 5,
                 format!(
-                    "fail_pending_requests: failing {} pending requests (Connection in recovery)",
-                    count
+                    "buffer_pending_requests_to_recovery_queue: recovery queue full (cap={}), \
+                     failing {} overflow requests",
+                    CAP,
+                    overflow.len()
                 )
             );
+            for request in overflow {
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection in recovery",
+                ))));
+            }
         }
-        for request in requests {
-            let _ = request.sender.send(Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Connection in recovery",
-            ))));
+    }
+
+    /// Drain the recovery queue into `in_flight_requests` now that recovery is complete.
+    /// Requests are dispatched in FIFO order (the order they arrived while recovering).
+    fn drain_recovery_queue_to_inflight(&mut self) {
+        if self.recovery_queue.is_empty() {
+            return;
+        }
+        let retry_params = self.inner.cluster_params.read().retry_params.clone();
+        let count = self.recovery_queue.len();
+        log_info_rate_limited!(
+            "cluster",
+            10,
+            format!(
+                "drain_recovery_queue_to_inflight: dispatching {} queued requests after recovery",
+                count
+            )
+        );
+        while let Some(request) = self.recovery_queue.pop_front() {
+            if request.sender.is_closed() {
+                continue; // caller gave up
+            }
+            let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
+            self.in_flight_requests.push(Request {
+                retry_params: retry_params.clone(),
+                request: Some(request),
+                core: self.inner.clone(),
+                future: RequestState::Future { future },
+            });
         }
     }
 
@@ -3621,7 +3675,8 @@ where
                             self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
                                 new_handle,
                             ));
-                            Poll::Ready(Ok(()))
+                            cx.waker().wake_by_ref(); // ensure we are polled again to check the new handle
+                            Poll::Pending // stay in recovery, do NOT drain the queue yet
                         }
                     }
                     Poll::Ready(Err(join_err)) => {
@@ -3962,16 +4017,19 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Fail any requests queued while in recovery
-                ClusterConnInner::fail_pending_requests(&self.inner);
+                // Buffer any requests queued while in recovery to retry after reconnect
+                self.buffer_pending_requests_to_recovery_queue();
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
+                self.buffer_pending_requests_to_recovery_queue();
                 self.refresh_error = Some(err);
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
-            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Ok(())) => {
+                self.drain_recovery_queue_to_inflight();
+            }
         }
 
         match ready!(self.poll_complete(cx)) {
@@ -4078,6 +4136,13 @@ where
         // If we no longer have any requests in flight we are done (skips any reconnection
         // attempts)
         if self.in_flight_requests.is_empty() {
+            // Fail any requests buffered during recovery — we are closing, they won't be retried.
+            for request in self.recovery_queue.drain(..) {
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection closed",
+                ))));
+            }
             return Poll::Ready(Ok(()));
         }
 

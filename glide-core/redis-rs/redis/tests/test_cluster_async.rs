@@ -7141,6 +7141,172 @@ mod cluster_async {
         );
     }
 
+    /// Reproduces the bug: concurrent requests fail with "Connection in recovery"
+    /// during the circular MOVED reconnect window.
+    ///
+    /// When a circular MOVED triggers a reconnect, requests queued in `pending_requests_tx`
+    /// while the connection is in recovery state are immediately failed with
+    /// `ClientError("Connection in recovery")` by `fail_pending_requests()` in
+    /// `cluster_async/mod.rs`.
+    ///
+    /// ## Why this requires a multi-threaded runtime
+    ///
+    /// On a single-threaded (current_thread) runtime, the reconnect's outer JoinHandle
+    /// always completes before the background connection task's next `poll_flush`, because
+    /// `tokio::spawn` schedules the reconnect task BEFORE `wake_by_ref()` schedules the
+    /// background task. This means `poll_recover` always returns `Poll::Ready` and
+    /// `fail_pending_requests` is never called with pending requests.
+    ///
+    /// On a multi-threaded runtime, the background task can be scheduled on one thread
+    /// while the reconnect task runs on another. The background task's `poll_recover` may
+    /// poll the JoinHandle before the reconnect task has completed, returning
+    /// `Poll::Pending` and triggering `fail_pending_requests`.
+    ///
+    /// ## Test flow
+    ///
+    /// 1. Use a multi-threaded Tokio runtime with 4 worker threads.
+    /// 2. Register mock behaviour for a synthetic cluster name.
+    /// 3. Run 50 concurrent SET tasks (more concurrency = higher probability of the race).
+    /// 4. The first SET gets a circular MOVED → recovery triggered.
+    /// 5. Concurrent tasks that reach `pending_requests_tx` while recovery is `Poll::Pending`
+    ///    are killed with "Connection in recovery".
+    /// 6. Assert that at least one such failure occurred.
+    ///
+    /// When the fix (queuing pending requests instead of failing them during recovery) is
+    /// applied, change the final assertion to:
+    ///   assert_eq!(recovery_errors.len(), 0, "After fix: no requests should fail during reconnect");
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_concurrent_requests_during_circular_moved_reconnect() {
+        let name = "test_concurrent_circular_moved";
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let name_handler = name.to_string();
+
+        // Register the mock handler globally so it is available to the multi-threaded
+        // runtime's background connection task.
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == 0 {
+                        // First SET: return circular MOVED to trigger reconnect
+                        return Err(parse_redis_value(
+                            format!("-MOVED 5000 {name}:{port}\r\n").as_bytes(),
+                        ));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        // Use a multi-threaded runtime so that the background connection task and the
+        // reconnect task can run on different OS threads simultaneously. On a
+        // current_thread runtime the reconnect task always completes before the background
+        // task's next poll, so poll_recover always returns Ready and fail_pending_requests
+        // is never called with pending requests.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(4)
+            .build()
+            .expect("failed to build multi-thread runtime");
+
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        // Spawn 50 concurrent SET tasks sharing the same ClusterConnection.
+        // More concurrency increases the window for the race condition.
+        // The barrier ensures all tasks are ready before any fires.
+        const TASK_COUNT: usize = 50;
+        let results = runtime.block_on(async move {
+            let barrier = Arc::new(tokio::sync::Barrier::new(TASK_COUNT));
+            let tasks: Vec<_> = (0..TASK_COUNT)
+                .map(|i| {
+                    let mut conn = connection.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        cmd("SET")
+                            .arg(format!("key{i}"))
+                            .arg("value")
+                            .query_async::<_, ()>(&mut conn)
+                            .await
+                    })
+                })
+                .collect();
+            futures::future::join_all(tasks).await
+        });
+
+        let recovery_errors: Vec<_> = results
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Err(e)) if e.to_string().contains("Connection in recovery") => {
+                    Some(e.to_string())
+                }
+                _ => None,
+            })
+            .collect();
+
+        let succeeded = results.iter().filter(|r| matches!(r, Ok(Ok(_)))).count();
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+
+        println!(
+            "Results: {} total, {} succeeded, {} 'Connection in recovery' errors, \
+             {} SET requests reached mock",
+            results.len(),
+            succeeded,
+            recovery_errors.len(),
+            total_sets,
+        );
+
+        // After fix: requests buffered in the recovery queue during reconnect should
+        // be retried successfully once recovery completes, not failed immediately.
+        assert_eq!(
+            recovery_errors.len(),
+            0,
+            "After fix: no requests should fail with 'Connection in recovery' during reconnect. \
+             {} requests failed: {:?}",
+            recovery_errors.len(),
+            recovery_errors
+        );
+
+        println!(
+            "FIXED: 0 tasks failed with 'Connection in recovery' during reconnect window \
+             ({} total, {} succeeded)",
+            results.len(),
+            succeeded
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
