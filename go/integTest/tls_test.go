@@ -232,8 +232,22 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 // TestTlsLoadClientCertificateAndKeyFromFile tests the
 // LoadClientCertificateAndKeyFromFile helper function for mutual TLS (mTLS).
 func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	// Test successful loading of a real client cert/key pair from disk.
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	certData, keyData, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), certData)
+	assert.NotEmpty(suite.T(), keyData)
+	assert.Contains(suite.T(), string(certData), "-----BEGIN CERTIFICATE-----")
+	assert.Contains(suite.T(), string(keyData), "-----BEGIN")
+	assert.Contains(suite.T(), string(keyData), "PRIVATE KEY-----")
+
 	// Test loading non-existent client certificate file
-	_, _, err := config.LoadClientCertificateAndKeyFromFile(
+	_, _, err = config.LoadClientCertificateAndKeyFromFile(
 		"/nonexistent/path/client-cert.pem", "/nonexistent/path/client-key.pem")
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "failed to read client certificate file")
