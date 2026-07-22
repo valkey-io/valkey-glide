@@ -689,41 +689,36 @@ describe("TLS PEM file loaders", () => {
         },
     ];
 
-    describe.each(loaders)(
-        "$name",
-        ({ name, load, contents, errorLabel }) => {
-            it("loads PEM bytes from a file", async () => {
-                const filePath = writeFixture(`${name}-ok.pem`, contents);
-                const data = await load(filePath);
-                expect(Buffer.isBuffer(data)).toBe(true);
-                expect(data).toEqual(Buffer.from(contents));
-            });
+    describe.each(loaders)("$name", ({ name, load, contents, errorLabel }) => {
+        it("loads PEM bytes from a file", async () => {
+            const filePath = writeFixture(`${name}-ok.pem`, contents);
+            const data = await load(filePath);
+            expect(Buffer.isBuffer(data)).toBe(true);
+            expect(data).toEqual(Buffer.from(contents));
+        });
 
-            it("rejects with a ConfigurationError when the file is missing", async () => {
-                const missingPath = join(tmpDir, `${name}-missing.pem`);
-                const promise = load(missingPath);
-                await expect(promise).rejects.toBeInstanceOf(
-                    ConfigurationError,
-                );
-                await expect(load(missingPath)).rejects.toThrow(
-                    `${errorLabel} file not found: ${missingPath}`,
-                );
-                await expect(load(missingPath)).rejects.toMatchObject({
-                    cause: expect.objectContaining({ code: "ENOENT" }),
-                });
+        it("rejects with a ConfigurationError when the file is missing", async () => {
+            const missingPath = join(tmpDir, `${name}-missing.pem`);
+            const promise = load(missingPath);
+            await expect(promise).rejects.toBeInstanceOf(ConfigurationError);
+            await expect(load(missingPath)).rejects.toThrow(
+                `${errorLabel} file not found: ${missingPath}`,
+            );
+            await expect(load(missingPath)).rejects.toMatchObject({
+                cause: expect.objectContaining({ code: "ENOENT" }),
             });
+        });
 
-            it("rejects with a ConfigurationError when the file is empty", async () => {
-                const emptyPath = writeFixture(`${name}-empty.pem`, "");
-                await expect(load(emptyPath)).rejects.toBeInstanceOf(
-                    ConfigurationError,
-                );
-                await expect(load(emptyPath)).rejects.toThrow(
-                    `${errorLabel} file is empty: ${emptyPath}`,
-                );
-            });
-        },
-    );
+        it("rejects with a ConfigurationError when the file is empty", async () => {
+            const emptyPath = writeFixture(`${name}-empty.pem`, "");
+            await expect(load(emptyPath)).rejects.toBeInstanceOf(
+                ConfigurationError,
+            );
+            await expect(load(emptyPath)).rejects.toThrow(
+                `${errorLabel} file is empty: ${emptyPath}`,
+            );
+        });
+    });
 
     it("MutualTls compile-time exclusivity guard exists", () => {
         // The MutualTls discriminated union is imported above; this test is a
