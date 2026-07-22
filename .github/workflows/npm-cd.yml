@@ -553,14 +553,21 @@ jobs:
                   DELAY=15
                   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
                       rm -rf node_modules package-lock.json
-                      npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save
-                      # Read the version from the installed package.json on disk. The package's
-                      # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
-                      # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
-                      INSTALLED_VERSION=$(jq -r .version node_modules/@valkey/valkey-glide/package.json 2>/dev/null || true)
-                      if [ "${INSTALLED_VERSION}" = "${RELEASE_VERSION}" ] && node -e "require('@valkey/valkey-glide')"; then
-                          echo "Version ${RELEASE_VERSION} installed and native module resolved on attempt ${attempt}."
-                          break
+                      # The install itself is what waits on registry propagation: when the exact
+                      # version is not visible on an npm edge yet, `npm install` exits non-zero
+                      # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
+                      # a transient miss is retried instead of aborting the step on the first attempt.
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                          # Read the version from the installed package.json on disk. The package's
+                          # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
+                          # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
+                          INSTALLED_VERSION=$(jq -r .version node_modules/@valkey/valkey-glide/package.json 2>/dev/null || true)
+                          if [ "${INSTALLED_VERSION}" = "${RELEASE_VERSION}" ] && node -e "require('@valkey/valkey-glide')"; then
+                              echo "Version ${RELEASE_VERSION} installed and native module resolved on attempt ${attempt}."
+                              break
+                          fi
+                      else
+                          INSTALLED_VERSION=""
                       fi
                       if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
                           echo "::error::@valkey/valkey-glide@${RELEASE_VERSION} not fully installable after ${MAX_ATTEMPTS} attempts (installed version: '${INSTALLED_VERSION:-none}')."
