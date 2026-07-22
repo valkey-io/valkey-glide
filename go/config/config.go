@@ -429,6 +429,33 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 	}
 }
 
+// applyTlsConfig serializes the TLS state on tlsConfig into request, covering
+// insecure-TLS mode, root certificates, and (via applyClientCertAndKey) any
+// configured mutual-TLS client certificate and key. Both ToProtobuf sites
+// call this helper so the two paths cannot drift.
+func applyTlsConfig(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) error {
+	// Handle insecure TLS mode
+	if tlsConfig.UseInsecureTLS {
+		if request.TlsMode == protobuf.TlsMode_NoTls {
+			return errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
+		}
+		// Override SecureTls mode to InsecureTls when user explicitly requests it
+		request.TlsMode = protobuf.TlsMode_InsecureTls
+	}
+
+	// Handle root certificates
+	if tlsConfig.RootCertificates != nil {
+		if len(tlsConfig.RootCertificates) == 0 {
+			return errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
+		}
+		request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+	}
+
+	// Handle client certificate and key for mutual TLS
+	applyClientCertAndKey(tlsConfig, request)
+	return nil
+}
+
 func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
@@ -475,27 +502,9 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 
 	// Handle TLS configuration
 	if config.AdvancedClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
+		if err := applyTlsConfig(config.AdvancedClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
-
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
-		}
-
-		// Handle client certificate and key for mutual TLS
-		applyClientCertAndKey(tlsConfig, request)
 	}
 
 	return request, nil
@@ -747,27 +756,9 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	// Handle TLS configuration
 	if config.AdvancedClusterClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClusterClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
+		if err := applyTlsConfig(config.AdvancedClusterClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
-
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
-		}
-
-		// Handle client certificate and key for mutual TLS
-		applyClientCertAndKey(tlsConfig, request)
 	}
 
 	return request, nil
