@@ -324,6 +324,8 @@ describe("createMigrate (multi-key) validation", () => {
     });
 });
 
+const { TlsMode } = connection_request;
+
 // Exposes the protected configureAdvancedConfigurationBase so the resulting
 // protobuf connection request can be inspected without spinning up a client.
 class TlsConfigProbe extends BaseClient {
@@ -333,10 +335,9 @@ class TlsConfigProbe extends BaseClient {
 
     public async buildTlsRequest(
         advancedConfiguration: AdvancedBaseClientConfiguration,
+        tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
     ): Promise<connection_request.IConnectionRequest> {
-        const request: connection_request.IConnectionRequest = {
-            tlsMode: connection_request.TlsMode.SecureTls,
-        };
+        const request: connection_request.IConnectionRequest = { tlsMode };
         await this.configureAdvancedConfigurationBase(
             advancedConfiguration,
             request,
@@ -434,33 +435,20 @@ describe('mutualTls kind: "bytes"', () => {
     });
 
     it("rejects mutualTls when TLS is disabled on the base connection", async () => {
-        const probe = new (class extends TlsConfigProbe {
-            public override async buildTlsRequest(
-                advancedConfiguration: AdvancedBaseClientConfiguration,
-            ): Promise<connection_request.IConnectionRequest> {
-                const request: connection_request.IConnectionRequest = {
-                    tlsMode: connection_request.TlsMode.NoTls,
-                };
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (this as any).configureAdvancedConfigurationBase(
-                    advancedConfiguration,
-                    request,
-                );
-                return request;
-            }
-        })();
-
         await expectConfigurationError(
             () =>
-                probe.buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            cert: CLIENT_CERT_PEM,
-                            key: CLIENT_KEY_PEM,
+                new TlsConfigProbe().buildTlsRequest(
+                    {
+                        tlsAdvancedConfiguration: {
+                            mutualTls: {
+                                kind: "bytes",
+                                cert: CLIENT_CERT_PEM,
+                                key: CLIENT_KEY_PEM,
+                            },
                         },
                     },
-                }),
+                    TlsMode.NoTls,
+                ),
             "TLS advanced configuration cannot be set",
         );
     });
@@ -646,7 +634,7 @@ describe("mutualTls interaction with existing TLS knobs", () => {
             },
         });
 
-        expect(request.tlsMode).toBe(connection_request.TlsMode.InsecureTls);
+        expect(request.tlsMode).toBe(TlsMode.InsecureTls);
         expect(request.clientCert).toBeTruthy();
     });
 });
@@ -689,41 +677,36 @@ describe("TLS PEM file loaders", () => {
         },
     ];
 
-    describe.each(loaders)(
-        "$name",
-        ({ name, load, contents, errorLabel }) => {
-            it("loads PEM bytes from a file", async () => {
-                const filePath = writeFixture(`${name}-ok.pem`, contents);
-                const data = await load(filePath);
-                expect(Buffer.isBuffer(data)).toBe(true);
-                expect(data).toEqual(Buffer.from(contents));
-            });
+    describe.each(loaders)("$name", ({ name, load, contents, errorLabel }) => {
+        it("loads PEM bytes from a file", async () => {
+            const filePath = writeFixture(`${name}-ok.pem`, contents);
+            const data = await load(filePath);
+            expect(Buffer.isBuffer(data)).toBe(true);
+            expect(data).toEqual(Buffer.from(contents));
+        });
 
-            it("rejects with a ConfigurationError when the file is missing", async () => {
-                const missingPath = join(tmpDir, `${name}-missing.pem`);
-                const promise = load(missingPath);
-                await expect(promise).rejects.toBeInstanceOf(
-                    ConfigurationError,
-                );
-                await expect(load(missingPath)).rejects.toThrow(
-                    `${errorLabel} file not found: ${missingPath}`,
-                );
-                await expect(load(missingPath)).rejects.toMatchObject({
-                    cause: expect.objectContaining({ code: "ENOENT" }),
-                });
+        it("rejects with a ConfigurationError when the file is missing", async () => {
+            const missingPath = join(tmpDir, `${name}-missing.pem`);
+            const promise = load(missingPath);
+            await expect(promise).rejects.toBeInstanceOf(ConfigurationError);
+            await expect(load(missingPath)).rejects.toThrow(
+                `${errorLabel} file not found: ${missingPath}`,
+            );
+            await expect(load(missingPath)).rejects.toMatchObject({
+                cause: expect.objectContaining({ code: "ENOENT" }),
             });
+        });
 
-            it("rejects with a ConfigurationError when the file is empty", async () => {
-                const emptyPath = writeFixture(`${name}-empty.pem`, "");
-                await expect(load(emptyPath)).rejects.toBeInstanceOf(
-                    ConfigurationError,
-                );
-                await expect(load(emptyPath)).rejects.toThrow(
-                    `${errorLabel} file is empty: ${emptyPath}`,
-                );
-            });
-        },
-    );
+        it("rejects with a ConfigurationError when the file is empty", async () => {
+            const emptyPath = writeFixture(`${name}-empty.pem`, "");
+            await expect(load(emptyPath)).rejects.toBeInstanceOf(
+                ConfigurationError,
+            );
+            await expect(load(emptyPath)).rejects.toThrow(
+                `${errorLabel} file is empty: ${emptyPath}`,
+            );
+        });
+    });
 
     it("MutualTls compile-time exclusivity guard exists", () => {
         // The MutualTls discriminated union is imported above; this test is a
