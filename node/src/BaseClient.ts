@@ -613,7 +613,7 @@ async function applyMutualTls(
     }
 
     throw new ConfigurationError(
-        `Unsupported mutualTls variant: ${JSON.stringify(mtls)}`,
+        `Unsupported mutualTls variant: ${String((mtls as { kind?: unknown }).kind)}`,
     );
 }
 
