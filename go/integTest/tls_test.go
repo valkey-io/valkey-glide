@@ -363,6 +363,39 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 	assertConnected(suite.T(), client)
 }
 
+// TestTlsMutualTLSWithReload_Cluster mirrors TestTlsMutualTLSWithReload_Standalone against a
+// cluster. It exercises path-based mTLS with automatic reload end-to-end; rotation itself is
+// covered in core tests (glide-core/tests/test_client.rs).
+func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	caCert, err := getCaCertificate()
+	if err != nil {
+		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
+	}
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	if err != nil {
+		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
+	}
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLSFromFiles(certPath, keyPath)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.

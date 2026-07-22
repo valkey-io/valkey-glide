@@ -955,7 +955,6 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 	}
 
 	for _, tc := range rows {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			base := NewTlsConfiguration()
 			var (
@@ -992,6 +991,62 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTlsConfiguration_WithMutualTLS_ModeReplacement verifies that calling one
+// mTLS builder overwrites state left behind by the other: bytes -> paths must
+// clear the byte fields and enable cert reload; paths -> bytes must clear the
+// path fields and drop the reload block. The wire representation is asserted
+// via ToProtobuf so both the in-memory clearing and the encoding round-trip
+// are covered.
+func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
+	byteCert := []byte(testClientCertData)
+	byteKey := []byte(testClientKeyData)
+
+	t.Run("bytes-to-files", func(t *testing.T) {
+		tls, err := NewTlsConfiguration().WithMutualTLS(byteCert, byteKey)
+		require.NoError(t, err)
+		tls, err = tls.WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath)
+		require.NoError(t, err)
+
+		assert.Nil(t, tls.clientCertificate)
+		assert.Nil(t, tls.clientKey)
+		assert.Equal(t, testClientCertPath, tls.clientCertPath)
+		assert.Equal(t, testClientKeyPath, tls.clientKeyPath)
+
+		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+		require.NoError(t, err)
+		assert.Nil(t, req.ClientCert)
+		assert.Nil(t, req.ClientKey)
+		assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+		assert.Equal(t, testClientKeyPath, req.GetClientKeyPath())
+		require.NotNil(t, req.CertReload)
+		assert.True(t, req.CertReload.GetEnabled())
+	})
+
+	t.Run("files-to-bytes", func(t *testing.T) {
+		tls, err := NewTlsConfiguration().WithMutualTLSFromFiles(
+			testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
+		require.NoError(t, err)
+		tls, err = tls.WithMutualTLS(byteCert, byteKey)
+		require.NoError(t, err)
+
+		assert.Equal(t, byteCert, tls.clientCertificate)
+		assert.Equal(t, byteKey, tls.clientKey)
+		assert.Empty(t, tls.clientCertPath)
+		assert.Empty(t, tls.clientKeyPath)
+		assert.Equal(t, time.Duration(0), tls.certReloadInterval)
+
+		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+		require.NoError(t, err)
+		assert.Equal(t, byteCert, req.ClientCert)
+		assert.Equal(t, byteKey, req.ClientKey)
+		assert.Nil(t, req.ClientCertPath)
+		assert.Nil(t, req.ClientKeyPath)
+		assert.Nil(t, req.CertReload)
+	})
 }
 
 // TestTlsConfiguration_WireSnapshot_TableDriven asserts that ToProtobuf emits
@@ -1112,9 +1167,7 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 	}
 
 	for _, tc := range rows {
-		tc := tc
 		for _, topo := range topologies {
-			topo := topo
 			t.Run(tc.name+"/"+topo.name, func(t *testing.T) {
 				req, err := topo.toReq(tc.build())
 				require.NoError(t, err)
@@ -1200,7 +1253,6 @@ func TestLoadClientCertificateAndKeyFromFile_TableDriven(t *testing.T) {
 	}
 
 	for _, tc := range rows {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			certPath := makePath(t, dir, "cert.pem", tc.certState, []byte(testClientCertData))
