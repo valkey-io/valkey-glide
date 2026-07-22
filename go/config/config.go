@@ -1176,21 +1176,21 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 		opt.applyMutualTLS(&settings)
 	}
 
-	if settings.reloadInterval != nil && *settings.reloadInterval <= 0 {
-		return nil, fmt.Errorf(
-			"WithMutualTLSFromFiles: reload interval must be positive; got %v",
-			*settings.reloadInterval)
+	var interval time.Duration
+	if settings.reloadInterval != nil {
+		if *settings.reloadInterval <= 0 {
+			return nil, fmt.Errorf(
+				"WithMutualTLSFromFiles: reload interval must be positive; got %v",
+				*settings.reloadInterval)
+		}
+		interval = *settings.reloadInterval
 	}
 
 	config.clientCertificate = nil
 	config.clientKey = nil
 	config.clientCertPath = certPath
 	config.clientKeyPath = keyPath
-	if settings.reloadInterval != nil {
-		config.certReloadInterval = *settings.reloadInterval
-	} else {
-		config.certReloadInterval = 0
-	}
+	config.certReloadInterval = interval
 	return config, nil
 }
 
