@@ -254,7 +254,9 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 }
 
 // getClientCertAndKeyPaths returns absolute filesystem paths to a client certificate/key pair
-// suitable for mutual TLS. It looks under utils/tls_crts, matching getCaCertificate.
+// suitable for mutual TLS. It looks under utils/tls_crts, matching getCaCertificate. The paths
+// are resolved but not stat-checked here; callers use require.NoError so any missing file
+// surfaces as a hard failure at the top of the test rather than a silent skip.
 func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
 	glideHome := os.Getenv("GLIDE_HOME_DIR")
 	if glideHome == "" {
@@ -268,29 +270,20 @@ func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if _, err := os.Stat(certPath); err != nil {
-		return "", "", err
-	}
-	if _, err := os.Stat(keyPath); err != nil {
-		return "", "", err
-	}
 	return certPath, keyPath, nil
 }
 
 // TestTlsMutualTLS_Standalone exercises byte-based mTLS end-to-end against a real standalone
-// server. Skipped when TLS is disabled in CI or when client cert/key files are unavailable.
+// server. Skipped when TLS is disabled in CI; missing cert material under TLS-enabled runs is a
+// hard failure so setup bugs cannot masquerade as passing tests.
 func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	caCert, err := getCaCertificate()
-	if err != nil {
-		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
-	if err != nil {
-		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
 	require.NoError(suite.T(), err)
 
@@ -313,19 +306,16 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 
 // TestTlsMutualTLSWithReload_Standalone exercises path-based mTLS with automatic reload against
 // a real standalone server. It only verifies the client is functional; rotation itself is
-// covered in core tests (glide-core/tests/test_client.rs).
+// covered in core tests (glide-core/tests/test_client.rs). Missing cert material under
+// TLS-enabled runs is a hard failure.
 func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	caCert, err := getCaCertificate()
-	if err != nil {
-		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
-	if err != nil {
-		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 
 	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
@@ -350,13 +340,9 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 	skipIfTlsDisabled(suite)
 
 	caCert, err := getCaCertificate()
-	if err != nil {
-		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
-	if err != nil {
-		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
 	require.NoError(suite.T(), err)
 
@@ -379,19 +365,16 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 
 // TestTlsMutualTLSWithReload_Cluster mirrors TestTlsMutualTLSWithReload_Standalone against a
 // cluster. It exercises path-based mTLS with automatic reload end-to-end; rotation itself is
-// covered in core tests (glide-core/tests/test_client.rs).
+// covered in core tests (glide-core/tests/test_client.rs). Missing cert material under
+// TLS-enabled runs is a hard failure.
 func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	caCert, err := getCaCertificate()
-	if err != nil {
-		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
-	if err != nil {
-		suite.T().Skipf("client cert/key not found, skipping test: %v", err)
-	}
+	require.NoError(suite.T(), err)
 
 	tlsConfig, err := config.NewTlsConfiguration().
 		WithRootCertificates(caCert).
