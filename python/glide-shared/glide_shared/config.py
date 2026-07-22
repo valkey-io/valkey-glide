@@ -672,16 +672,25 @@ def _normalize_optional_path(
 
 
 def _validate_readable_nonempty_file(path: Optional[str], field_name: str) -> None:
-    assert path is not None
+    """Validate ``path`` at construction time (TOCTOU note: a later unlink or
+    permission change is caught at connect time inside glide-core, not here)."""
+    if path is None:
+        raise ConfigurationError(
+            f"{field_name} path is None; internal validation bug"
+        )
     if not os.path.isfile(path):
         raise FileNotFoundError(f"{field_name} file not found: {path}")
     try:
         with open(path, "rb") as f:
             first_byte = f.read(1)
     except PermissionError as exc:
-        raise ConfigurationError(f"{field_name} file is not readable ({path}): {exc}")
+        raise ConfigurationError(
+            f"{field_name} file is not readable ({path}): {exc}"
+        ) from exc
     except OSError as exc:
-        raise ConfigurationError(f"Failed to read {field_name} file {path}: {exc}")
+        raise ConfigurationError(
+            f"Failed to read {field_name} file {path}: {exc}"
+        ) from exc
     if not first_byte:
         raise ConfigurationError(f"{field_name} file is empty: {path}")
 
