@@ -829,7 +829,7 @@ class BaseClient(CoreCommands):
         # OTel span creation only when initialized (rare). The core attaches the
         # EVALSHA DB semantic convention attributes to the span via invoke_script.
         span = 0
-        if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
+        if OpenTelemetry.should_sample():
             span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
 
         try:
