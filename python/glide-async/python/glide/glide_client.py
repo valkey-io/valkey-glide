@@ -70,6 +70,13 @@ else:
     from typing_extensions import Self
 
 
+# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
+# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
+# call. `_ASYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
+# share across clients.
+_EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
+
+
 # ==================== Framework-Agnostic Future ====================
 
 
@@ -819,22 +826,31 @@ class BaseClient(CoreCommands):
 
         route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-        self._lib.invoke_script(
-            self._core_client,
-            callback_id,
-            hash_buffer,
-            len(keys),
-            keys_c_args,
-            keys_c_lengths,
-            len(args),
-            args_c_args,
-            args_c_lengths,
-            route_ptr,
-            route_len,
-            0,
-        )
+        # OTel span creation only when initialized (rare). The core attaches the
+        # EVALSHA DB semantic convention attributes to the span via invoke_script.
+        span = 0
+        if OpenTelemetry.should_sample():
+            span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
 
-        return await fut
+        try:
+            self._lib.invoke_script(
+                self._core_client,
+                callback_id,
+                hash_buffer,
+                len(keys),
+                keys_c_args,
+                keys_c_lengths,
+                len(args),
+                args_c_args,
+                args_c_lengths,
+                route_ptr,
+                route_len,
+                span,
+            )
+            return await fut
+        finally:
+            if span != 0:
+                self._lib.drop_otel_span(span)
 
     # ==================== Cache Metrics ====================
 

@@ -88,8 +88,6 @@ EXCLUDED_TESTS = {
         "test_sync_mget_buffers_length_mismatch_raises",
         "test_sync_mget_into_buffers_non_byte_format",
         "test_sync_mget_into_buffers_cross_slot",
-        # Script invocation span — async tracked in #5601
-        "test_sync_span_script_invocation",
     ],
 }
 

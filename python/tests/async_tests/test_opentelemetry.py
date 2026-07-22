@@ -12,11 +12,12 @@ from glide import (
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
+    Script,
 )
 from glide.opentelemetry import OpenTelemetry
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import ProtocolVersion
-from glide_shared.exceptions import ConfigurationError
+from glide_shared.exceptions import ClosingError, ConfigurationError, RequestError
 
 from tests.async_tests.conftest import create_client
 from tests.otel_test_utils import (
@@ -604,3 +605,135 @@ class TestOpenTelemetryGlide:
         # Close clients
         await client1.close()
         await client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_script_invocation(self, request, protocol, cluster_mode):
+        """Test that script invocation (EVALSHA) creates a span with DB attributes"""
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        script = Script("return 'Hello'")
+        result = await client.invoke_script(script, keys=["k"], args=["a"])
+        assert result == b"Hello"
+
+        # Wait for spans to be flushed
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["EVALSHA"]
+        )
+
+        # Read the span file and check the EVALSHA span and its DB attributes
+        _, span_objects, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        assert "EVALSHA" in span_names
+
+        # The core attaches DB semantic convention attributes via invoke_script.
+        # Mirror the attributes set by `set_db_script_attributes` in
+        # glide-core/src/otel_db_semantics.rs: db.operation.name, db.query.text
+        # (script hash + keys, args masked), plus the connection-level attributes
+        # from `set_db_connection_attributes` (db.system.name, server.address,
+        # server.port, db.namespace).
+        evalsha_attrs = [
+            attr
+            for span in span_objects
+            if span.get("name") == "EVALSHA"
+            for attr in span.get("span_attributes", [])
+        ]
+        attr_keys = {k for attr in evalsha_attrs for k in attr.keys()}
+
+        # Command-level attributes
+        assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+        assert "db.query.text" in attr_keys
+        query_texts = [
+            attr["db.query.text"] for attr in evalsha_attrs if "db.query.text" in attr
+        ]
+        # Script query text starts with "EVALSHA <hash> <numkeys>" and masks args.
+        assert any(
+            qt.startswith("EVALSHA ") and script.get_hash() in qt for qt in query_texts
+        )
+
+        # Connection-level attributes
+        assert {"db.system.name": "redis"} in evalsha_attrs
+        assert "server.address" in attr_keys
+        assert "server.port" in attr_keys
+        assert "db.namespace" in attr_keys
+
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_script_invocation_error_cleanup(
+        self, request, protocol, cluster_mode
+    ):
+        """
+        Negative path: when the server rejects the script (Lua error), the EVALSHA
+        span must still be created, ended, and exported, and no span pointer must
+        leak. Mirrors the error-path expectations that `_execute_command` already
+        satisfies for regular commands.
+        """
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        # `redis.error_reply` returns a Lua error to the client, which surfaces
+        # as a RequestError. The span must still be dropped in `finally`.
+        error_script = Script("return redis.error_reply('deliberate script error')")
+        with pytest.raises(RequestError, match="script error"):
+            await client.invoke_script(error_script)
+
+        # A successful call after the error confirms the client is still usable
+        # and that the error path did not leak a span pointer / half-open state.
+        ok_script = Script("return 'ok'")
+        assert await client.invoke_script(ok_script) == b"ok"
+
+        # Two EVALSHA spans should have been exported: the failed one and the
+        # follow-up successful one. The failed span still carries the DB attrs
+        # because `set_db_script_attributes` runs before the server call.
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["EVALSHA"],
+            expected_span_counts={"EVALSHA": 2},
+        )
+        _, span_objects, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert span_names.count("EVALSHA") >= 2
+        evalsha_attrs = [
+            attr
+            for span in span_objects
+            if span.get("name") == "EVALSHA"
+            for attr in span.get("span_attributes", [])
+        ]
+        assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_script_invocation_client_closed(
+        self, request, protocol, cluster_mode
+    ):
+        """
+        Negative path: invoking a script on a closed client must not leak a span.
+        The `_is_closed` guard runs before the span is ever created, so the
+        `finally` cleanup contract holds trivially, but exercise it explicitly to
+        pin the behaviour and catch a future refactor that reorders the checks.
+        """
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+        script = Script("return 'Hello'")
+        await client.close()
+
+        with pytest.raises(ClosingError):
+            await client.invoke_script(script)
+
+        # Give the exporter a moment; no EVALSHA span should be attributed to the
+        # closed-client call. Any pre-existing spans from other tests are fine;
+        # we just assert we didn't crash and no leak surfaced.
+        await anyio.sleep(0.2)
