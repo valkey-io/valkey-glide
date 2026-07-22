@@ -635,6 +635,11 @@ class TlsAdvancedConfiguration:
                     "cert_reload_interval_seconds must be a positive int (> 0); "
                     f"got {self.cert_reload_interval_seconds}"
                 )
+            if self.cert_reload_interval_seconds > 2**32 - 1:
+                raise ConfigurationError(
+                    "cert_reload_interval_seconds must fit in an unsigned 32-bit "
+                    f"integer; got {self.cert_reload_interval_seconds}"
+                )
             if not path_based:
                 raise ConfigurationError(
                     "cert_reload_interval_seconds may only be set when path-based mTLS is "
@@ -671,10 +676,17 @@ def _validate_readable_nonempty_file(path: Optional[str], field_name: str) -> No
     if not os.path.isfile(path):
         raise FileNotFoundError(f"{field_name} file not found: {path}")
     try:
-        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            first_byte = f.read(1)
+    except PermissionError as exc:
+        raise ConfigurationError(
+            f"{field_name} file is not readable ({path}): {exc}"
+        )
     except OSError as exc:
-        raise ConfigurationError(f"Failed to stat {field_name} file {path}: {exc}")
-    if size == 0:
+        raise ConfigurationError(
+            f"Failed to read {field_name} file {path}: {exc}"
+        )
+    if not first_byte:
         raise ConfigurationError(f"{field_name} file is empty: {path}")
 
 

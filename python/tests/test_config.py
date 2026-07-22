@@ -1,5 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import os
+
 import pytest
 from glide_shared.config import (
     AdvancedBaseClientConfiguration,
@@ -797,6 +799,56 @@ def test_tls_cert_reload_interval_rejects_bool_and_float(tmp_path):
                 client_key_path=str(key_path),
                 cert_reload_interval_seconds=bad,
             )
+
+
+def test_tls_cert_reload_interval_rejects_values_exceeding_uint32(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    # 2**32 is exactly one past the uint32 max and must be rejected;
+    # 2**63 - 1 is grossly too large and must also be rejected.
+    for bad in (2**32, 2**63 - 1):
+        with pytest.raises(ConfigurationError) as exc_info:
+            TlsAdvancedConfiguration(
+                client_cert_path=str(cert_path),
+                client_key_path=str(key_path),
+                cert_reload_interval_seconds=bad,
+            )
+        assert "unsigned 32-bit" in str(exc_info.value)
+
+    # 2**32 - 1 is the maximum valid uint32 value and must be accepted.
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=2**32 - 1,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.HasField("interval_seconds")
+    assert request.cert_reload.interval_seconds == 2**32 - 1
+
+
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="cannot test unreadable file as root",
+)
+def test_tls_path_based_mtls_unreadable_file_rejected(tmp_path):
+    cert_path = tmp_path / "client-cert.pem"
+    key_path = tmp_path / "client-key.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    os.chmod(cert_path, 0o000)
+    try:
+        with pytest.raises(ConfigurationError) as exc_info:
+            TlsAdvancedConfiguration(
+                client_cert_path=str(cert_path),
+                client_key_path=str(key_path),
+            )
+        assert "not readable" in str(exc_info.value) or "PermissionError" in str(
+            exc_info.value
+        )
+    finally:
+        os.chmod(cert_path, 0o600)
 
 
 def test_tls_path_based_mtls_nonexistent_path_raises_file_not_found(tmp_path):
