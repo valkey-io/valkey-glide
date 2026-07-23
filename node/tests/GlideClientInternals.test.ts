@@ -13,8 +13,7 @@ import {
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
-    loadClientCertificateFromFile,
-    loadClientKeyFromFile,
+    loadClientCertificateAndKeyFromFile,
     loadRootCertificatesFromFile,
     MutualTls,
 } from "../build-ts";
@@ -656,54 +655,79 @@ describe("TLS PEM file loaders", () => {
         return filePath;
     };
 
-    const loaders = [
-        {
-            name: "loadRootCertificatesFromFile",
-            load: loadRootCertificatesFromFile,
-            contents: ROOT_CERT_PEM,
-            errorLabel: "Root certificate",
-        },
-        {
-            name: "loadClientCertificateFromFile",
-            load: loadClientCertificateFromFile,
-            contents: CLIENT_CERT_PEM,
-            errorLabel: "Client certificate",
-        },
-        {
-            name: "loadClientKeyFromFile",
-            load: loadClientKeyFromFile,
-            contents: CLIENT_KEY_PEM,
-            errorLabel: "Client key",
-        },
-    ];
-
-    describe.each(loaders)("$name", ({ name, load, contents, errorLabel }) => {
+    describe("loadRootCertificatesFromFile", () => {
         it("loads PEM bytes from a file", async () => {
-            const filePath = writeFixture(`${name}-ok.pem`, contents);
-            const data = await load(filePath);
+            const filePath = writeFixture("root-ok.pem", ROOT_CERT_PEM);
+            const data = await loadRootCertificatesFromFile(filePath);
             expect(Buffer.isBuffer(data)).toBe(true);
-            expect(data).toEqual(Buffer.from(contents));
+            expect(data).toEqual(Buffer.from(ROOT_CERT_PEM));
         });
 
         it("rejects with a ConfigurationError when the file is missing", async () => {
-            const missingPath = join(tmpDir, `${name}-missing.pem`);
-            const promise = load(missingPath);
-            await expect(promise).rejects.toBeInstanceOf(ConfigurationError);
-            await expect(load(missingPath)).rejects.toThrow(
-                `${errorLabel} file not found: ${missingPath}`,
+            const missingPath = join(tmpDir, "root-missing.pem");
+            await expect(
+                loadRootCertificatesFromFile(missingPath),
+            ).rejects.toBeInstanceOf(ConfigurationError);
+            await expect(
+                loadRootCertificatesFromFile(missingPath),
+            ).rejects.toThrow(
+                `Root certificate file not found: ${missingPath}`,
             );
-            await expect(load(missingPath)).rejects.toMatchObject({
+            await expect(
+                loadRootCertificatesFromFile(missingPath),
+            ).rejects.toMatchObject({
                 cause: expect.objectContaining({ code: "ENOENT" }),
             });
         });
 
         it("rejects with a ConfigurationError when the file is empty", async () => {
-            const emptyPath = writeFixture(`${name}-empty.pem`, "");
-            await expect(load(emptyPath)).rejects.toBeInstanceOf(
-                ConfigurationError,
+            const emptyPath = writeFixture("root-empty.pem", "");
+            await expect(
+                loadRootCertificatesFromFile(emptyPath),
+            ).rejects.toBeInstanceOf(ConfigurationError);
+            await expect(
+                loadRootCertificatesFromFile(emptyPath),
+            ).rejects.toThrow(`Root certificate file is empty: ${emptyPath}`);
+        });
+    });
+
+    describe("loadClientCertificateAndKeyFromFile", () => {
+        it("returns both cert and key buffers", async () => {
+            const certPath = writeFixture("client-cert.pem", CLIENT_CERT_PEM);
+            const keyPath = writeFixture("client-key.pem", CLIENT_KEY_PEM);
+            const { cert, key } = await loadClientCertificateAndKeyFromFile(
+                certPath,
+                keyPath,
             );
-            await expect(load(emptyPath)).rejects.toThrow(
-                `${errorLabel} file is empty: ${emptyPath}`,
+            expect(cert).toEqual(Buffer.from(CLIENT_CERT_PEM));
+            expect(key).toEqual(Buffer.from(CLIENT_KEY_PEM));
+        });
+
+        it("labels a missing cert as 'Client certificate'", async () => {
+            const keyPath = writeFixture("k1.pem", CLIENT_KEY_PEM);
+            const missingCert = join(tmpDir, "missing-cert.pem");
+            await expect(
+                loadClientCertificateAndKeyFromFile(missingCert, keyPath),
+            ).rejects.toThrow(
+                `Client certificate file not found: ${missingCert}`,
+            );
+        });
+
+        it("labels a missing key as 'Client key'", async () => {
+            const certPath = writeFixture("c2.pem", CLIENT_CERT_PEM);
+            const missingKey = join(tmpDir, "missing-key.pem");
+            await expect(
+                loadClientCertificateAndKeyFromFile(certPath, missingKey),
+            ).rejects.toThrow(`Client key file not found: ${missingKey}`);
+        });
+
+        it("rejects an empty cert file with the cert-specific label", async () => {
+            const emptyCert = writeFixture("empty-cert.pem", "");
+            const keyPath = writeFixture("k3.pem", CLIENT_KEY_PEM);
+            await expect(
+                loadClientCertificateAndKeyFromFile(emptyCert, keyPath),
+            ).rejects.toThrow(
+                `Client certificate file is empty: ${emptyCert}`,
             );
         });
     });

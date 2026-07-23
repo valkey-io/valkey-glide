@@ -356,17 +356,17 @@ export type GlideString = string | Buffer;
  *
  * @example
  * ```typescript
- * // Static (byte-based) mTLS — no reload.
- * const staticMtls: MutualTls = {
- *     kind: "bytes",
- *     cert: await loadClientCertificateFromFile("/etc/ssl/client.crt"),
- *     key: await loadClientKeyFromFile("/etc/ssl/client.key"),
- * };
+ * // Static (byte-based) mTLS. No reload.
+ * const { cert, key } = await loadClientCertificateAndKeyFromFile(
+ *     "/etc/ssl/client.crt",
+ *     "/etc/ssl/client.key",
+ * );
+ * const staticMtls: MutualTls = { kind: "bytes", cert, key };
  * ```
  *
  * @example
  * ```typescript
- * // Path-based mTLS — reload is implicitly on; override cadence to 60 s.
+ * // Path-based mTLS. Reload is implicitly on; override cadence to 60 s.
  * const reloadingMtls: MutualTls = {
  *     kind: "path",
  *     certPath: "/etc/ssl/client.crt",
@@ -391,8 +391,8 @@ export type MutualTls =
 /**
  * Reads a PEM file from disk for use in TLS configuration.
  *
- * Shared implementation behind {@link loadRootCertificatesFromFile},
- * {@link loadClientCertificateFromFile}, and {@link loadClientKeyFromFile}.
+ * Shared implementation behind {@link loadRootCertificatesFromFile} and
+ * {@link loadClientCertificateAndKeyFromFile}.
  *
  * @param path - Filesystem path to the PEM-encoded file.
  * @param label - Human-readable label used in error messages (e.g. `"Root certificate"`).
@@ -445,43 +445,34 @@ export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
 }
 
 /**
- * Loads a PEM-encoded client certificate from a file for mTLS authentication.
+ * Loads a PEM-encoded client certificate and its private key from disk for
+ * {@link MutualTls}'s byte-based variant (`kind: "bytes"`). When automatic
+ * reload is desired, use the path-based variant of {@link MutualTls} directly
+ * so the core owns the file lifecycle.
  *
- * Convenience loader for {@link MutualTls}'s byte-based variant (`kind: "bytes"`).
- * When automatic reload is desired, use the path-based variant of
- * {@link MutualTls} directly instead of loading the bytes here.
+ * The cert file is read first; if it fails, the key file is not touched.
  *
- * @param path - Filesystem path to a PEM client certificate.
- * @returns Promise resolving to the certificate bytes.
- * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
- *
- * @example
- * ```typescript
- * const cert = await loadClientCertificateFromFile("/etc/ssl/client.crt");
- * ```
- */
-export function loadClientCertificateFromFile(path: string): Promise<Buffer> {
-    return loadTlsPemFile(path, "Client certificate");
-}
-
-/**
- * Loads a PEM-encoded client private key from a file for mTLS authentication.
- *
- * Convenience loader for {@link MutualTls}'s byte-based variant (`kind: "bytes"`).
- * When automatic reload is desired, use the path-based variant of
- * {@link MutualTls} directly instead of loading the bytes here.
- *
- * @param path - Filesystem path to a PEM client private key.
- * @returns Promise resolving to the private key bytes.
- * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ * @param certPath - Filesystem path to a PEM client certificate.
+ * @param keyPath - Filesystem path to a PEM client private key.
+ * @returns Promise resolving to `{ cert, key }` Buffers.
+ * @throws {@link ConfigurationError} If either file is missing, unreadable, or empty.
  *
  * @example
  * ```typescript
- * const key = await loadClientKeyFromFile("/etc/ssl/client.key");
+ * const { cert, key } = await loadClientCertificateAndKeyFromFile(
+ *     "/etc/ssl/client.crt",
+ *     "/etc/ssl/client.key",
+ * );
+ * const mtls: MutualTls = { kind: "bytes", cert, key };
  * ```
  */
-export function loadClientKeyFromFile(path: string): Promise<Buffer> {
-    return loadTlsPemFile(path, "Client key");
+export async function loadClientCertificateAndKeyFromFile(
+    certPath: string,
+    keyPath: string,
+): Promise<{ cert: Buffer; key: Buffer }> {
+    const cert = await loadTlsPemFile(certPath, "Client certificate");
+    const key = await loadTlsPemFile(keyPath, "Client key");
+    return { cert, key };
 }
 
 /**
@@ -1374,13 +1365,13 @@ export interface AdvancedBaseClientConfiguration {
          * @example
          * ```typescript
          * // Static byte-based mTLS.
+         * const { cert, key } = await loadClientCertificateAndKeyFromFile(
+         *     "/etc/ssl/client.crt",
+         *     "/etc/ssl/client.key",
+         * );
          * const config: AdvancedBaseClientConfiguration = {
          *     tlsAdvancedConfiguration: {
-         *         mutualTls: {
-         *             kind: "bytes",
-         *             cert: await loadClientCertificateFromFile("/etc/ssl/client.crt"),
-         *             key: await loadClientKeyFromFile("/etc/ssl/client.key"),
-         *         },
+         *         mutualTls: { kind: "bytes", cert, key },
          *     },
          * };
          * ```
