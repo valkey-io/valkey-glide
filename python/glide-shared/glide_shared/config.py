@@ -1884,3 +1884,47 @@ def load_client_key_from_file(path: str) -> bytes:
         raise ConfigurationError(f"Client key file is empty: {path}")
 
     return data
+
+
+def load_client_certificate_and_key_from_file(
+    cert_path: Union[str, os.PathLike[str]],
+    key_path: Union[str, os.PathLike[str]],
+) -> Tuple[bytes, bytes]:
+    """
+    Load a PEM-encoded client certificate and its private key from disk
+    for byte-based mutual TLS (mTLS).
+
+    Convenience wrapper around
+    :func:`load_client_certificate_from_file` and
+    :func:`load_client_key_from_file`. The certificate is read first;
+    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_client_paths`
+    for automatic reload from disk; use this helper when static, byte-based
+    mTLS is desired.
+
+    Args:
+        cert_path: Path to the PEM-encoded client certificate file.
+        key_path: Path to the PEM-encoded client private key file.
+
+    Returns:
+        Tuple of ``(cert_bytes, key_bytes)`` in PEM format.
+
+    Raises:
+        FileNotFoundError: If either file does not exist.
+        ConfigurationError: If either file is empty or unreadable.
+
+    Example::
+
+        from glide_shared.config import (
+            TlsAdvancedConfiguration,
+            load_client_certificate_and_key_from_file,
+        )
+
+        cert, key = load_client_certificate_and_key_from_file(
+            "/etc/mtls/client-cert.pem",
+            "/etc/mtls/client-key.pem",
+        )
+        tls_config = TlsAdvancedConfiguration.with_client_pem(cert, key)
+    """
+    cert = load_client_certificate_from_file(os.fspath(cert_path))
+    key = load_client_key_from_file(os.fspath(key_path))
+    return cert, key

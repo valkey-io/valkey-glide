@@ -940,6 +940,43 @@ def test_tls_with_client_paths_missing_file(tmp_path):
         TlsAdvancedConfiguration.with_client_paths(missing_cert, key_path)
 
 
+def test_load_client_certificate_and_key_from_file_success(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    key_path = tmp_path / "client-key.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+
+    cert, key = load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert cert == TEST_CLIENT_CERT_DATA
+    assert key == TEST_CLIENT_KEY_DATA
+
+
+def test_load_client_certificate_and_key_from_file_missing_cert(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_certificate_and_key_from_file(
+            tmp_path / "missing-cert.pem", key_path
+        )
+    assert "Client certificate file not found" in str(exc_info.value)
+
+
+def test_load_client_certificate_and_key_from_file_empty_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(b"")
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert "Client key file is empty" in str(exc_info.value)
+
+
 def test_tls_byte_based_still_emits_no_reload_config():
     """Byte-based mTLS remains static: no cert_reload field on the request."""
     tls_config = TlsAdvancedConfiguration(
