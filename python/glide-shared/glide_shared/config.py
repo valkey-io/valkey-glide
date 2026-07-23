@@ -521,58 +521,37 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with client_cert_pem.
 
-        client_cert_path (Optional[Union[str, pathlib.Path]]): Filesystem path to the PEM-encoded
-            client certificate used for mutual TLS authentication.
+        client_cert_path (Optional[Union[str, pathlib.Path]]): Path to the PEM-encoded
+            client certificate for mutual TLS.
 
-            - When provided together with ``client_key_path``, enables path-based mTLS. The GLIDE
-              core reads the certificate and key from disk and, because reload is enabled implicitly,
-              periodically re-reads them so rotated material is adopted on the next reconnect.
+            - Requires ``client_key_path`` to be set; the pair enables path-based mTLS
+              and the client reloads both files on a cadence so a rotated certificate
+              is picked up on the next reconnect.
 
-            - Must be used together with ``client_key_path``. Providing only one of the two raises a
-              `ConfigurationError`.
+            - Cannot be combined with byte-based mTLS (``client_cert_pem`` / ``client_key_pem``).
 
-            - Mutually exclusive with byte-based mTLS (``client_cert_pem`` / ``client_key_pem``).
-              Mixing the two forms in the same configuration raises a `ConfigurationError`.
+            - The file must exist and be non-empty when this configuration is
+              constructed; otherwise `FileNotFoundError` or `ConfigurationError`
+              is raised.
 
-            - The referenced file must exist, be readable, and be non-empty at construction time,
-              otherwise `FileNotFoundError` (missing) or `ConfigurationError` (empty) is raised.
+            - Accepts ``str`` or ``pathlib.Path``; stored as ``str``.
 
-            - Accepts either ``str`` or ``pathlib.Path``; the value is normalized to ``str``.
+        client_key_path (Optional[Union[str, pathlib.Path]]): Path to the PEM-encoded
+            client private key. Same rules as ``client_cert_path``; must be paired with it.
 
-        client_key_path (Optional[Union[str, pathlib.Path]]): Filesystem path to the PEM-encoded
-            client private key used for mutual TLS authentication.
-
-            - See ``client_cert_path`` above; the same rules apply. Must be provided together with
-              ``client_cert_path``.
-
-        cert_reload_interval_seconds (Optional[int]): Override for the client certificate/key
-            reload cadence in seconds.
-
-            - Only valid when path-based mTLS is configured (``client_cert_path`` and
-              ``client_key_path``). Setting this without paths, or together with byte-based mTLS,
-              raises `ConfigurationError`.
-
-            - Must be a positive ``int`` when set. ``bool`` and non-positive values are rejected
-              with `ConfigurationError`.
-
-            - When ``None`` (default), the GLIDE core applies its own default reload cadence.
-
-    Note:
-        Byte-based mTLS (``client_cert_pem`` / ``client_key_pem``) is static and never reloads.
-        Path-based mTLS (``client_cert_path`` / ``client_key_path``) enables automatic reload
-        with a core-default cadence; ``cert_reload_interval_seconds`` overrides that cadence.
-        The two forms are mutually exclusive.
+        cert_reload_interval_seconds (Optional[int]): Override for the reload cadence
+            in seconds. Positive integer up to 4294967295. Only meaningful with
+            path-based mTLS; ``None`` leaves the cadence at the core default.
 
     Example::
 
         from pathlib import Path
         from glide_shared.config import TlsAdvancedConfiguration
 
-        # Path-based mTLS with automatic client certificate/key reload.
-        tls_config = TlsAdvancedConfiguration(
-            client_cert_path=Path("/etc/mtls/client-cert.pem"),
-            client_key_path=Path("/etc/mtls/client-key.pem"),
-            cert_reload_interval_seconds=300,  # optional; omit for core-default cadence
+        tls_config = TlsAdvancedConfiguration.with_client_paths(
+            Path("/etc/mtls/client-cert.pem"),
+            Path("/etc/mtls/client-key.pem"),
+            cert_reload_interval_seconds=300,
         )
     """
 
@@ -918,9 +897,8 @@ class AdvancedBaseClientConfiguration:
                 )
             request.client_key = client_key
 
-        # Handle path-based mutual TLS with automatic reload. The
-        # TlsAdvancedConfiguration constructor validates that path-based and
-        # byte-based mTLS are mutually exclusive, so at most one branch runs.
+        # Path-based mTLS with automatic reload; the byte and path
+        # branches never both apply (enforced in `_validate_mtls`).
         if (
             tls_config.client_cert_path is not None
             and tls_config.client_key_path is not None
