@@ -1051,9 +1051,7 @@ def test_tls_with_client_paths_factory_negative_interval_rejected(tmp_path):
 
 def test_tls_with_client_paths_factory_bool_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(
-        ConfigurationError, match="cert_reload_interval_seconds"
-    ):
+    with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
         TlsAdvancedConfiguration.with_client_paths(
             cert_path,
             key_path,
@@ -1063,9 +1061,7 @@ def test_tls_with_client_paths_factory_bool_interval_rejected(tmp_path):
 
 def test_tls_with_client_paths_factory_float_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(
-        ConfigurationError, match="cert_reload_interval_seconds"
-    ):
+    with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
         TlsAdvancedConfiguration.with_client_paths(
             cert_path,
             key_path,
@@ -1075,9 +1071,7 @@ def test_tls_with_client_paths_factory_float_interval_rejected(tmp_path):
 
 def test_tls_with_client_paths_factory_uint32_overflow_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(
-        ConfigurationError, match="between 1 and 4294967295"
-    ):
+    with pytest.raises(ConfigurationError, match="between 1 and 4294967295"):
         TlsAdvancedConfiguration.with_client_paths(
             cert_path,
             key_path,
