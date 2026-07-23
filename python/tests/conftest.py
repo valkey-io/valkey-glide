@@ -155,15 +155,6 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             load_module=load_module,
             addresses=standalone_endpoints,
         )
-        # Dedicated 3-master cluster used only by the auth tests. Cuts cluster setup
-        # and full-cluster reconnect time versus the default 9-node cluster.
-        pytest.valkey_auth_cluster = ValkeyCluster(
-            tls=tls,
-            cluster_mode=True,
-            shard_count=3,
-            replica_count=0,
-            load_module=load_module,
-        )
 
     if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
@@ -177,14 +168,6 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=False,
             shard_count=1,
             replica_count=1,
-            load_module=load_module,
-        )
-        # TLS twin of pytest.valkey_auth_cluster; used when --tls is set.
-        pytest.valkey_auth_tls_cluster = ValkeyCluster(
-            tls=True,
-            cluster_mode=True,
-            shard_count=3,
-            replica_count=0,
             load_module=load_module,
         )
 
@@ -218,8 +201,6 @@ def pytest_sessionfinish(session, exitstatus):
         "standalone_cluster",
         "valkey_tls_cluster",
         "standalone_tls_cluster",
-        "valkey_auth_cluster",
-        "valkey_auth_tls_cluster",
     ):
         try:
             delattr(pytest, attr)
