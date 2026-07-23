@@ -604,13 +604,23 @@ class TlsAdvancedConfiguration:
                 "mTLS requires both."
             )
 
+        if self.client_cert_pem is not None and self.client_key_pem is not None:
+            if len(self.client_cert_pem) == 0:
+                raise ConfigurationError(
+                    "client_cert_pem must not be empty; got zero-length bytes."
+                )
+            if len(self.client_key_pem) == 0:
+                raise ConfigurationError(
+                    "client_key_pem must not be empty; got zero-length bytes."
+                )
+
         path_based = has_cert_path and has_key_path
 
         _validate_reload_interval(
             self.cert_reload_interval_seconds, path_based=path_based
         )
 
-        if path_based:
+        if self.client_cert_path is not None and self.client_key_path is not None:
             _validate_readable_nonempty_file(self.client_cert_path, "client_cert_path")
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
 

@@ -995,15 +995,13 @@ def test_tls_byte_based_still_emits_no_reload_config():
 
 
 def test_tls_with_client_pem_factory_empty_cert():
-    tls_config = TlsAdvancedConfiguration.with_client_pem(b"", TEST_CLIENT_KEY_DATA)
     with pytest.raises(ConfigurationError, match="client_cert_pem"):
-        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+        TlsAdvancedConfiguration.with_client_pem(b"", TEST_CLIENT_KEY_DATA)
 
 
 def test_tls_with_client_pem_factory_empty_key():
-    tls_config = TlsAdvancedConfiguration.with_client_pem(TEST_CLIENT_CERT_DATA, b"")
     with pytest.raises(ConfigurationError, match="client_key_pem"):
-        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+        TlsAdvancedConfiguration.with_client_pem(TEST_CLIENT_CERT_DATA, b"")
 
 
 def test_tls_with_client_pem_factory_forwards_use_insecure_tls():
@@ -1174,27 +1172,21 @@ def test_load_client_certificate_and_key_from_file_unreadable_key(tmp_path):
 
 
 def test_tls_client_cert_pem_empty_bytes_rejected():
-    """Empty client_cert_pem bytes must be rejected at request-build time."""
-    tls_config = TlsAdvancedConfiguration(
-        client_cert_pem=b"",
-        client_key_pem=TEST_CLIENT_KEY_DATA,
-    )
-    with pytest.raises(
-        ConfigurationError, match="client_cert_pem cannot be an empty bytes"
-    ):
-        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    """Empty client_cert_pem bytes must be rejected at construction."""
+    with pytest.raises(ConfigurationError, match="client_cert_pem must not be empty"):
+        TlsAdvancedConfiguration(
+            client_cert_pem=b"",
+            client_key_pem=TEST_CLIENT_KEY_DATA,
+        )
 
 
 def test_tls_client_key_pem_empty_bytes_rejected():
-    """Empty client_key_pem bytes must be rejected at request-build time."""
-    tls_config = TlsAdvancedConfiguration(
-        client_cert_pem=TEST_CLIENT_CERT_DATA,
-        client_key_pem=b"",
-    )
-    with pytest.raises(
-        ConfigurationError, match="client_key_pem cannot be an empty bytes"
-    ):
-        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    """Empty client_key_pem bytes must be rejected at construction."""
+    with pytest.raises(ConfigurationError, match="client_key_pem must not be empty"):
+        TlsAdvancedConfiguration(
+            client_cert_pem=TEST_CLIENT_CERT_DATA,
+            client_key_pem=b"",
+        )
 
 
 def test_tcp_nodelay_default_value():
