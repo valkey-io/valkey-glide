@@ -7,6 +7,7 @@ import anyio
 import pytest
 from glide.glide_client import TGlideClient
 from glide_shared.config import (
+    BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
     ServerCredentials,
@@ -50,6 +51,23 @@ from tests.utils.utils import (
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
+# Tightened reconnect backoff for auth-test clients. The library-wide default
+# is factor=100, exponent_base=2, num_of_retries=5, which yields per-attempt
+# wait windows of roughly 100-200ms up to 1.6-3.2s (with ~20% jitter) and a
+# cumulative worst case above 3s just for the retry waits. Under CI
+# contention this stretches the disconnect-and-recover flow past the test's
+# tolerance. factor=25 quarters the wait windows (25-50ms first retry,
+# 400-800ms fifth) which recovers headroom without altering library
+# defaults for real users. num_of_retries is left at the library default so
+# retry count semantics are unchanged. See jeremyprime's #6602 analysis
+# attached to #6604.
+_AUTH_RECONNECT_STRATEGY = BackoffStrategy(
+    num_of_retries=5,
+    factor=25,
+    exponent_base=2,
+)
+
+
 def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
     """Route auth-test clients to the dedicated single-shard cluster."""
     if not cluster_mode:
@@ -68,7 +86,8 @@ async def management_client(
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     """Override: management client for the auth suite. Routes cluster-mode
-    clients to a dedicated single-shard cluster."""
+    clients to a dedicated single-shard cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
     use_tls = request.config.getoption("--tls")
     valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
     client = await create_client(
@@ -76,6 +95,7 @@ async def management_client(
         cluster_mode,
         protocol=protocol,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:
@@ -96,7 +116,7 @@ async def glide_client(
     """Override: primary client under test for the auth suite. Bypasses the
     session-wide pool because auth tests routinely kill connections and
     rotate passwords, and routes cluster-mode clients to the dedicated
-    single-shard auth cluster."""
+    single-shard auth cluster with the tightened _AUTH_RECONNECT_STRATEGY."""
     use_tls = request.config.getoption("--tls")
     valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
     client = await create_client(
@@ -105,6 +125,7 @@ async def glide_client(
         protocol=protocol,
         request_timeout=5000,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:
@@ -122,7 +143,8 @@ async def acl_glide_client(
 ) -> AsyncGenerator[TGlideClient, None]:
     """Override: ACL-user client for the auth suite. Routes to the same
     dedicated single-shard auth cluster as management_client so ACL state
-    stays consistent between the two clients."""
+    stays consistent between the two clients, and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
     await set_new_acl_username_with_password(
         management_client, USERNAME, INITIAL_PASSWORD
     )
@@ -136,6 +158,7 @@ async def acl_glide_client(
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
         request_timeout=2000,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:

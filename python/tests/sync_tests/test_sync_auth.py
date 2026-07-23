@@ -6,6 +6,7 @@ from typing import Generator
 
 import pytest
 from glide_shared.config import (
+    BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
     ServerCredentials,
@@ -50,6 +51,15 @@ from tests.utils.utils import (
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
+# Tightened reconnect backoff for auth-test clients. See the matching comment
+# in tests/async_tests/test_auth.py for rationale.
+_AUTH_RECONNECT_STRATEGY = BackoffStrategy(
+    num_of_retries=5,
+    factor=25,
+    exponent_base=2,
+)
+
+
 def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
     """Route auth-test clients to the dedicated single-shard cluster."""
     if not cluster_mode:
@@ -68,7 +78,8 @@ def management_sync_client(
     protocol: ProtocolVersion,
 ) -> Generator[TGlideClient, None, None]:
     """Override: management client for the sync auth suite. Routes cluster-mode
-    clients to a dedicated single-shard cluster."""
+    clients to a dedicated single-shard cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
     use_tls = request.config.getoption("--tls")
     valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
     client = create_sync_client(
@@ -76,6 +87,7 @@ def management_sync_client(
         cluster_mode,
         protocol=protocol,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:
@@ -96,7 +108,7 @@ def glide_sync_client(
     """Override: primary client under test for the sync auth suite. Bypasses
     the session-wide pool because auth tests routinely kill connections and
     rotate passwords, and routes cluster-mode clients to the dedicated
-    single-shard auth cluster."""
+    single-shard auth cluster with the tightened _AUTH_RECONNECT_STRATEGY."""
     use_tls = request.config.getoption("--tls")
     valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
     client = create_sync_client(
@@ -105,6 +117,7 @@ def glide_sync_client(
         protocol=protocol,
         request_timeout=5000,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:
@@ -122,7 +135,8 @@ def acl_glide_sync_client(
 ) -> Generator[TGlideClient, None, None]:
     """Override: ACL-user client for the sync auth suite. Routes to the same
     dedicated single-shard auth cluster as management_sync_client so ACL
-    state stays consistent."""
+    state stays consistent, and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
     set_new_acl_username_with_password(
         management_sync_client, USERNAME, INITIAL_PASSWORD
     )
@@ -136,6 +150,7 @@ def acl_glide_sync_client(
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
         request_timeout=2000,
         lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
         valkey_cluster=valkey_cluster,
     )
     try:
