@@ -599,18 +599,15 @@ class TlsAdvancedConfiguration:
         )
         self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
-        self._validate_path_based_mtls()
+        self._validate_mtls()
 
-    def _validate_path_based_mtls(self) -> None:
+    def _validate_mtls(self) -> None:
         has_cert_path = self.client_cert_path is not None
         has_key_path = self.client_key_path is not None
         has_cert_pem = self.client_cert_pem is not None
         has_key_pem = self.client_key_pem is not None
 
-        any_path_based = has_cert_path or has_key_path
-        any_byte_based = has_cert_pem or has_key_pem
-
-        if any_path_based and any_byte_based:
+        if (has_cert_path or has_key_path) and (has_cert_pem or has_key_pem):
             raise ConfigurationError(
                 "path-based and byte-based mTLS are mutually exclusive; choose one."
             )
@@ -621,34 +618,42 @@ class TlsAdvancedConfiguration:
                 "provide both to enable path-based mTLS or neither."
             )
 
+        if has_cert_pem != has_key_pem:
+            missing = "client_key_pem" if has_cert_pem else "client_cert_pem"
+            provided = "client_cert_pem" if has_cert_pem else "client_key_pem"
+            raise ConfigurationError(
+                f"{provided} is provided but {missing} is not provided. "
+                "mTLS requires both."
+            )
+
         path_based = has_cert_path and has_key_path
 
-        if self.cert_reload_interval_seconds is not None:
-            if isinstance(self.cert_reload_interval_seconds, bool) or not isinstance(
-                self.cert_reload_interval_seconds, int
-            ):
-                raise ConfigurationError(
-                    "cert_reload_interval_seconds must be a positive int"
-                )
-            if self.cert_reload_interval_seconds <= 0:
-                raise ConfigurationError(
-                    "cert_reload_interval_seconds must be a positive int (> 0); "
-                    f"got {self.cert_reload_interval_seconds}"
-                )
-            if self.cert_reload_interval_seconds > 2**32 - 1:
-                raise ConfigurationError(
-                    "cert_reload_interval_seconds must fit in an unsigned 32-bit "
-                    f"integer; got {self.cert_reload_interval_seconds}"
-                )
-            if not path_based:
-                raise ConfigurationError(
-                    "cert_reload_interval_seconds may only be set when path-based mTLS is "
-                    "configured (both client_cert_path and client_key_path)."
-                )
+        _validate_reload_interval(
+            self.cert_reload_interval_seconds, path_based=path_based
+        )
 
         if path_based:
             _validate_readable_nonempty_file(self.client_cert_path, "client_cert_path")
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
+
+
+def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> None:
+    if interval is None:
+        return
+    if isinstance(interval, bool) or not isinstance(interval, int):
+        raise ConfigurationError(
+            "cert_reload_interval_seconds must be a positive int"
+        )
+    if interval <= 0 or interval > 2**32 - 1:
+        raise ConfigurationError(
+            "cert_reload_interval_seconds must be a positive int (> 0) and fit in "
+            f"an unsigned 32-bit integer; got {interval}"
+        )
+    if not path_based:
+        raise ConfigurationError(
+            "cert_reload_interval_seconds may only be set when path-based mTLS is "
+            "configured (both client_cert_path and client_key_path)."
+        )
 
 
 def _normalize_optional_path(
@@ -854,19 +859,6 @@ class AdvancedBaseClientConfiguration:
             if tls_config.cert_reload_interval_seconds is not None:
                 reload_config.interval_seconds = tls_config.cert_reload_interval_seconds
             request.cert_reload.CopyFrom(reload_config)
-
-        # Ensure client cert and client key are both provided or not provided
-        self._validate_client_auth_tls()
-
-    def _validate_client_auth_tls(self):
-        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
-            raise ConfigurationError(
-                "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
-            )
-        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
-            raise ConfigurationError(
-                "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
-            )
 
 
 class BaseClientConfiguration:
