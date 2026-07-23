@@ -2,6 +2,7 @@
 
 
 import time
+from typing import Generator
 
 import pytest
 from glide_shared.config import (
@@ -20,6 +21,7 @@ from tests.constants import (
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
 )
+from tests.sync_tests import conftest as _sync_conftest
 from tests.sync_tests.conftest import (
     _get_worker_id,
     _sync_client_pool,
@@ -27,6 +29,7 @@ from tests.sync_tests.conftest import (
     create_sync_client,
 )
 from tests.utils.utils import (
+    INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
@@ -46,6 +49,102 @@ from tests.utils.utils import (
 # so cluster mode gets a wider tolerance.
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
+
+def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
+    """Route auth-test clients to the dedicated single-shard cluster."""
+    if not cluster_mode:
+        return None  # standalone tests keep the shared standalone cluster
+    return (
+        pytest.valkey_auth_tls_cluster  # type: ignore[attr-defined]
+        if use_tls
+        else pytest.valkey_auth_cluster  # type: ignore[attr-defined]
+    )
+
+
+@pytest.fixture(scope="function")
+def management_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> Generator[TGlideClient, None, None]:
+    """Override: management client for the sync auth suite. Routes cluster-mode
+    clients to a dedicated single-shard cluster."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        lazy_connect=False,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+        _sync_conftest.sync_test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
+
+
+@pytest.fixture(scope="function")
+def glide_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> Generator[TGlideClient, None, None]:
+    """Override: primary client under test for the sync auth suite. Bypasses
+    the session-wide pool because auth tests routinely kill connections and
+    rotate passwords, and routes cluster-mode clients to the dedicated
+    single-shard auth cluster."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+@pytest.fixture(scope="function")
+def acl_glide_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    management_sync_client: TGlideClient,
+) -> Generator[TGlideClient, None, None]:
+    """Override: ACL-user client for the sync auth suite. Routes to the same
+    dedicated single-shard auth cluster as management_sync_client so ACL
+    state stays consistent."""
+    set_new_acl_username_with_password(
+        management_sync_client, USERNAME, INITIAL_PASSWORD
+    )
+
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
+        lazy_connect=False,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+        _sync_conftest.sync_test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
 
 
 def create_iam_client(
