@@ -213,41 +213,18 @@ def pytest_sessionfinish(session, exitstatus):
     Called after whole test run finished, right before
     returning the exit status to the system.
     """
-    try:
-        del pytest.valkey_cluster
-    except AttributeError:
-        # valkey_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.standalone_cluster
-    except AttributeError:
-        # standalone_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.valkey_tls_cluster
-    except AttributeError:
-        # valkey_tls_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.standalone_tls_cluster
-    except AttributeError:
-        # standalone_tls_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.valkey_auth_cluster
-    except AttributeError:
-        # valkey_auth_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.valkey_auth_tls_cluster
-    except AttributeError:
-        # valkey_auth_tls_cluster was not set, skip deletion
-        pass
+    for attr in (
+        "valkey_cluster",
+        "standalone_cluster",
+        "valkey_tls_cluster",
+        "standalone_tls_cluster",
+        "valkey_auth_cluster",
+        "valkey_auth_tls_cluster",
+    ):
+        try:
+            delattr(pytest, attr)
+        except AttributeError:
+            pass
 
 
 def pytest_collection_modifyitems(config, items):
