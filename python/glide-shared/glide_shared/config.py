@@ -635,6 +635,86 @@ class TlsAdvancedConfiguration:
             _validate_readable_nonempty_file(self.client_cert_path, "client_cert_path")
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
 
+    @classmethod
+    def with_client_pem(
+        cls,
+        client_cert_pem: bytes,
+        client_key_pem: bytes,
+        *,
+        root_pem_cacerts: Optional[bytes] = None,
+        use_insecure_tls: Optional[bool] = None,
+    ) -> "TlsAdvancedConfiguration":
+        """
+        Build a `TlsAdvancedConfiguration` for byte-based mutual TLS.
+
+        Both PEM buffers are required and are used verbatim; the client
+        presents them on connect and does not reload them. For automatic
+        reload from disk, use :meth:`with_client_paths` instead.
+
+        Args:
+            client_cert_pem: Client certificate bytes in PEM format.
+            client_key_pem: Client private key bytes in PEM format.
+            root_pem_cacerts: Optional custom root CA bundle for the
+                connection's server verification.
+            use_insecure_tls: When True, skip server certificate
+                verification. Discouraged in production.
+
+        Raises:
+            ConfigurationError: If either PEM buffer is empty.
+        """
+        return cls(
+            use_insecure_tls=use_insecure_tls,
+            root_pem_cacerts=root_pem_cacerts,
+            client_cert_pem=client_cert_pem,
+            client_key_pem=client_key_pem,
+        )
+
+    @classmethod
+    def with_client_paths(
+        cls,
+        client_cert_path: Union[str, os.PathLike[str]],
+        client_key_path: Union[str, os.PathLike[str]],
+        *,
+        cert_reload_interval_seconds: Optional[int] = None,
+        root_pem_cacerts: Optional[bytes] = None,
+        use_insecure_tls: Optional[bool] = None,
+    ) -> "TlsAdvancedConfiguration":
+        """
+        Build a `TlsAdvancedConfiguration` for path-based mutual TLS with
+        automatic client certificate/key reload.
+
+        Both paths are required. The GLIDE core reads the certificate and
+        key from disk and, because reload is enabled implicitly, re-reads
+        them on a cadence so a rotated certificate is picked up on the
+        next reconnect. To customize the cadence, pass
+        `cert_reload_interval_seconds`; otherwise the core default is
+        used.
+
+        Args:
+            client_cert_path: Path to the client certificate PEM file
+                (``str`` or ``pathlib.Path``).
+            client_key_path: Path to the client private key PEM file.
+            cert_reload_interval_seconds: Optional override for the
+                reload cadence, in seconds.
+            root_pem_cacerts: Optional custom root CA bundle for the
+                connection's server verification.
+            use_insecure_tls: When True, skip server certificate
+                verification. Discouraged in production.
+
+        Raises:
+            ConfigurationError: If a path is empty, or the reload
+                interval is not a positive int within uint32 range.
+            FileNotFoundError: If either path does not exist at
+                construction time.
+        """
+        return cls(
+            use_insecure_tls=use_insecure_tls,
+            root_pem_cacerts=root_pem_cacerts,
+            client_cert_path=client_cert_path,
+            client_key_path=client_key_path,
+            cert_reload_interval_seconds=cert_reload_interval_seconds,
+        )
+
 
 def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> None:
     if interval is None:
