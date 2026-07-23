@@ -721,12 +721,13 @@ def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> N
         return
     if isinstance(interval, bool) or not isinstance(interval, int):
         raise ConfigurationError(
-            "cert_reload_interval_seconds must be a positive int"
+            "cert_reload_interval_seconds must be a positive integer "
+            f"between 1 and 4294967295 seconds; got {interval!r}"
         )
     if interval <= 0 or interval > 2**32 - 1:
         raise ConfigurationError(
-            "cert_reload_interval_seconds must be a positive int (> 0) and fit in "
-            f"an unsigned 32-bit integer; got {interval}"
+            "cert_reload_interval_seconds must be a positive integer "
+            f"between 1 and 4294967295 seconds; got {interval}"
         )
     if not path_based:
         raise ConfigurationError(
@@ -754,8 +755,7 @@ def _normalize_optional_path(
 
 
 def _validate_readable_nonempty_file(path: str, field_name: str) -> None:
-    """Validate ``path`` at construction time (TOCTOU note: a later unlink or
-    permission change is caught at connect time inside glide-core, not here)."""
+    """Reject a missing, unreadable, or empty file at construction time."""
     if not os.path.isfile(path):
         raise FileNotFoundError(f"{field_name} file not found: {path}")
     try:
