@@ -155,16 +155,13 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             load_module=load_module,
             addresses=standalone_endpoints,
         )
-        # Dedicated single-shard cluster for the auth tests. The auth suite
-        # exercises a CLIENT KILL fan-out on a single shard and does not need
-        # multi-shard behavior; shrinking to 3 nodes (1 primary + 2 replicas)
-        # cuts cluster setup, kill fan-out, and full-cluster reconnect
-        # time considerably, which is the dominant cost behind #6604.
+        # Dedicated 3-master cluster used only by the auth tests. Cuts cluster setup
+        # and full-cluster reconnect time versus the default 9-node cluster.
         pytest.valkey_auth_cluster = ValkeyCluster(
             tls=tls,
             cluster_mode=True,
-            shard_count=1,
-            replica_count=2,
+            shard_count=3,
+            replica_count=0,
             load_module=load_module,
         )
 
@@ -186,8 +183,8 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
         pytest.valkey_auth_tls_cluster = ValkeyCluster(
             tls=True,
             cluster_mode=True,
-            shard_count=1,
-            replica_count=2,
+            shard_count=3,
+            replica_count=0,
             load_module=load_module,
         )
 

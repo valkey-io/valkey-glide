@@ -342,7 +342,7 @@ async def test_teardown(
     errors that can occur after password changes and connection kills.
 
     ``valkey_cluster`` routes the teardown client to a non-default cluster
-    (e.g. the auth-test single-shard cluster); when ``None`` the ambient
+    (e.g. the dedicated auth-test cluster); when ``None`` the ambient
     ``pytest.valkey_cluster`` / ``pytest.standalone_cluster`` is used.
     """
     # Add a small delay to allow server to stabilize after password/connection changes
