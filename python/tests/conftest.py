@@ -155,6 +155,18 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             load_module=load_module,
             addresses=standalone_endpoints,
         )
+        # Dedicated cluster for the auth suite. Auth tests fan CLIENT KILL out
+        # over AllNodes and rotate requirepass; sharing the main cluster
+        # bleeds a damaged topology into every cluster-mode test that runs
+        # after. 3 primaries with no replicas is the smallest bootable Redis
+        # Cluster shape and keeps setup cost low.
+        pytest.valkey_auth_cluster = ValkeyCluster(
+            tls=tls,
+            cluster_mode=True,
+            shard_count=3,
+            replica_count=0,
+            load_module=load_module,
+        )
 
     if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
@@ -168,6 +180,14 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=False,
             shard_count=1,
             replica_count=1,
+            load_module=load_module,
+        )
+        # TLS twin of pytest.valkey_auth_cluster; used when --tls is set.
+        pytest.valkey_auth_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=True,
+            shard_count=3,
+            replica_count=0,
             load_module=load_module,
         )
 
@@ -201,6 +221,8 @@ def pytest_sessionfinish(session, exitstatus):
         "standalone_cluster",
         "valkey_tls_cluster",
         "standalone_tls_cluster",
+        "valkey_auth_cluster",
+        "valkey_auth_tls_cluster",
     ):
         try:
             delattr(pytest, attr)
