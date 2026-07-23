@@ -841,11 +841,10 @@ const (
 	testClientKeyPath  = "/etc/glide/tls/client-key.pem"
 )
 
-// TestTlsConfiguration_WithMutualTLS_TableDriven exercises WithMutualTLS
-// (bytes mode) and WithMutualTLSFromFiles (path mode with optional
-// WithReloadInterval option) across happy paths and every validation error.
-// The table centralizes coverage so a new failure mode is one row, not one
-// function.
+// TestTlsConfiguration_WithMutualTLS_TableDriven covers WithMutualTLS (bytes
+// mode) and WithMutualTLSFromFiles (path mode, with optional WithReloadInterval)
+// across happy paths and every validation error. New failure modes go in as
+// a new table row.
 func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 	type kind int
 	const (
@@ -927,9 +926,8 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			// Sub-second values are accepted silently: they round down to
-			// zero seconds on the wire, which is equivalent to omitting the
-			// option entirely (the core applies its default cadence).
+			// Sub-second values are accepted; they round to zero on the wire,
+			// which is the same as not passing the option (core default cadence).
 			name:     "files/sub-second-interval-accepted",
 			kind:     kindFiles,
 			certPath: testClientCertPath,
@@ -993,12 +991,11 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 	}
 }
 
-// TestTlsConfiguration_WithMutualTLS_ModeReplacement verifies that calling one
-// mTLS builder overwrites state left behind by the other: bytes -> paths must
-// clear the byte fields and enable cert reload; paths -> bytes must clear the
-// path fields and drop the reload block. The wire representation is asserted
-// via ToProtobuf so both the in-memory clearing and the encoding round-trip
-// are covered.
+// TestTlsConfiguration_WithMutualTLS_ModeReplacement checks that calling one
+// mTLS builder clears whatever the other left behind. Bytes to paths must
+// clear the byte fields and enable cert reload; paths to bytes must clear
+// the path fields and drop the reload block. Both the in-memory state and
+// the ToProtobuf wire output are checked.
 func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 	byteCert := []byte(testClientCertData)
 	byteKey := []byte(testClientKeyData)
@@ -1049,10 +1046,10 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 	})
 }
 
-// TestTlsConfiguration_WireSnapshot_TableDriven asserts that ToProtobuf emits
-// the expected wire fields for every mTLS configuration mode across both
-// standalone and cluster topologies. Cases are kept identical across the two
-// topologies so a divergence would show up as one row failing on cluster only.
+// TestTlsConfiguration_WireSnapshot_TableDriven checks that ToProtobuf emits
+// the right wire fields for every mTLS mode, run against both standalone and
+// cluster. The two topologies share the same cases so any divergence shows
+// up as one row failing on cluster only.
 func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 	type buildFn func() *TlsConfiguration
 	mustBytes := func(cert, key []byte) buildFn {
@@ -1133,9 +1130,9 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			// Sub-second intervals round down to zero seconds on the wire,
-			// which means the interval field is omitted and the core
-			// applies its default cadence, same as "no option passed".
+			// Sub-second intervals round to zero on the wire, so the interval
+			// field is omitted and the core uses its default cadence, same as
+			// not passing the option.
 			name:  "paths-sub-second-interval-rounds-to-no-wire-interval",
 			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
 			want: wantWire{
