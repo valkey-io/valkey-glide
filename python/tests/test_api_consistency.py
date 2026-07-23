@@ -67,6 +67,12 @@ EXCLUDED_TESTS = {
         "cb",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
+        # Module-scoped fixture overrides declared in test_auth.py; the sync
+        # twins are named *_sync_client in test_sync_auth.py and cannot share
+        # a name because async fixtures need an async generator body.
+        "acl_glide_client",
+        "glide_client",
+        "management_client",
     ],
     "sync_only": [
         "test_sync_fork",
