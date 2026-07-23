@@ -88,6 +88,12 @@ EXCLUDED_TESTS = {
         "test_sync_mget_buffers_length_mismatch_raises",
         "test_sync_mget_into_buffers_non_byte_format",
         "test_sync_mget_into_buffers_cross_slot",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 
