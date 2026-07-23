@@ -104,6 +104,12 @@ EXCLUDED_TESTS = {
         # Pool blocking test nested helper functions (sync-only threading pattern)
         "blocking_worker",
         "fast_worker",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 
