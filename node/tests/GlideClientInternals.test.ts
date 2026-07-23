@@ -731,9 +731,7 @@ describe("mutualTls unsupported variant fallthrough", () => {
 
         expect(thrown).toBeInstanceOf(ConfigurationError);
         const message = (thrown as Error).message;
-        expect(message).toBe(
-            "Unsupported mutualTls variant: kind=future",
-        );
+        expect(message).toBe("Unsupported mutualTls variant: kind=future");
         // The error surface never mentions the caller's PEM material.
         expect(message).not.toContain("SENSITIVE-PEM-BYTES");
         expect(message).not.toContain("SENSITIVE-KEY-BYTES");
@@ -861,9 +859,7 @@ describe("TLS PEM file loaders", () => {
             const keyPath = writeFixture("k3.pem", CLIENT_KEY_PEM);
             await expect(
                 loadClientCertificateAndKeyFromFile(emptyCert, keyPath),
-            ).rejects.toThrow(
-                `Client certificate file is empty: ${emptyCert}`,
-            );
+            ).rejects.toThrow(`Client certificate file is empty: ${emptyCert}`);
         });
 
         it("rejects an empty key file with the key-specific label", async () => {
