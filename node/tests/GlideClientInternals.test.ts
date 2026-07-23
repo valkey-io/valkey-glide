@@ -720,6 +720,7 @@ describe("mutualTls unsupported variant fallthrough", () => {
 
         const probe = new TlsConfigProbe();
         let thrown: unknown;
+
         try {
             await probe.buildTlsRequest({
                 tlsAdvancedConfiguration: { mutualTls: bogus },
