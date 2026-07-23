@@ -663,16 +663,14 @@ def test_tls_configuration_client_cert_key_consistency():
 
     with pytest.raises(ConfigurationError) as exc_info:
         TlsAdvancedConfiguration(client_cert_pem=b"nonempty", client_key_pem=None)
-    assert (
-        "client_cert_pem is provided but client_key_pem is not provided"
-        in str(exc_info.value)
+    assert "client_cert_pem is provided but client_key_pem is not provided" in str(
+        exc_info.value
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
         TlsAdvancedConfiguration(client_cert_pem=None, client_key_pem=b"nonempty")
-    assert (
-        "client_key_pem is provided but client_cert_pem is not provided"
-        in str(exc_info.value)
+    assert "client_key_pem is provided but client_cert_pem is not provided" in str(
+        exc_info.value
     )
 
 
