@@ -159,14 +159,25 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
         # over AllNodes and rotate requirepass; sharing the main cluster
         # bleeds a damaged topology into every cluster-mode test that runs
         # after. 3 primaries with no replicas is the smallest bootable Redis
-        # Cluster shape and keeps setup cost low.
-        pytest.valkey_auth_cluster = ValkeyCluster(
-            tls=tls,
-            cluster_mode=True,
-            shard_count=3,
-            replica_count=0,
-            load_module=load_module,
-        )
+        # Cluster shape and keeps setup cost low. Only the twin matching the
+        # session's --tls mode is booted; the auth fixtures consume exactly
+        # one of them per session.
+        if tls:
+            pytest.valkey_auth_tls_cluster = ValkeyCluster(
+                tls=True,
+                cluster_mode=True,
+                shard_count=3,
+                replica_count=0,
+                load_module=load_module,
+            )
+        else:
+            pytest.valkey_auth_cluster = ValkeyCluster(
+                tls=False,
+                cluster_mode=True,
+                shard_count=3,
+                replica_count=0,
+                load_module=load_module,
+            )
 
     if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
@@ -180,14 +191,6 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=False,
             shard_count=1,
             replica_count=1,
-            load_module=load_module,
-        )
-        # TLS twin of pytest.valkey_auth_cluster; used when --tls is set.
-        pytest.valkey_auth_tls_cluster = ValkeyCluster(
-            tls=True,
-            cluster_mode=True,
-            shard_count=3,
-            replica_count=0,
             load_module=load_module,
         )
 
