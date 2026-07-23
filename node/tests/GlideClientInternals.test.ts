@@ -325,8 +325,8 @@ describe("createMigrate (multi-key) validation", () => {
 
 const { TlsMode } = connection_request;
 
-// Exposes the protected configureAdvancedConfigurationBase so the resulting
-// protobuf connection request can be inspected without spinning up a client.
+// Test subclass that opens configureAdvancedConfigurationBase so the built
+// connection request can be inspected without a live client.
 class TlsConfigProbe extends BaseClient {
     public constructor() {
         super();
@@ -733,10 +733,9 @@ describe("TLS PEM file loaders", () => {
     });
 
     it("MutualTls compile-time exclusivity guard exists", () => {
-        // The MutualTls discriminated union is imported above; this test is a
-        // compile-time smoke check that ensures the two variants remain
-        // distinguishable at the type level. If someone flattens the union or
-        // relaxes it into a common shape, this line will stop type-checking.
+        // If someone flattens MutualTls into a shape without a `kind`
+        // discriminator, `Extract<..., { kind: "path" }>` collapses to
+        // `never` and this line stops type-checking.
         const _pathVariant: Extract<MutualTls, { kind: "path" }> = {
             kind: "path",
             certPath: "/tmp/c",

@@ -335,28 +335,25 @@ export type GlideString = string | Buffer;
 /**
  * Mutual TLS (mTLS) client authentication material.
  *
- * A discriminated union: the `kind` field selects between two mutually
- * exclusive ways of supplying the client certificate and private key.
+ * The `kind` field picks one of two ways to supply the client certificate
+ * and private key. The two variants are mutually exclusive.
  *
- * - `kind: "bytes"` — supply PEM-encoded certificate and key material inline.
- *   The material is sent to the core at connect time and never re-read; use
- *   this for static (non-rotating) certificates. Both `cert` and `key` must
- *   be non-empty. `string` inputs are UTF-8 encoded to bytes.
+ * With `kind: "bytes"`, `cert` and `key` are PEM material passed inline.
+ * The core reads it once at connect time. Both fields must be non-empty.
+ * A `string` value is encoded as UTF-8 before it goes on the wire.
  *
- * - `kind: "path"` — supply filesystem paths to PEM-encoded certificate and
- *   key files. The core reads the material from disk at connect time and, in
- *   this variant, **automatic certificate reload is always enabled**: the
- *   core periodically re-reads the files, validates that the private key
- *   matches the certificate, and adopts rotated material on the next
- *   reconnect (last-known-good is kept on any failure). Reload cadence uses
- *   the core default unless `reloadIntervalSeconds` is provided.
+ * With `kind: "path"`, `certPath` and `keyPath` point at files on disk.
+ * The core reads them at connect time and re-reads them on a schedule so
+ * a rotated cert is picked up on the next reconnect. If the reload fails
+ * (missing file, key does not match cert, unreadable), the last known good
+ * material is kept. Reload cadence defaults to the core's, or takes
+ * `reloadIntervalSeconds` when set.
  *
- * Reload enablement is derived state: it is on iff `kind === "path"`.
- * There is no separate enable/disable toggle.
+ * Reload is on iff `kind === "path"`. There is no separate toggle.
  *
  * @example
  * ```typescript
- * // Static (byte-based) mTLS. No reload.
+ * // Static byte-based mTLS. No reload.
  * const { cert, key } = await loadClientCertificateAndKeyFromFile(
  *     "/etc/ssl/client.crt",
  *     "/etc/ssl/client.key",
@@ -366,7 +363,7 @@ export type GlideString = string | Buffer;
  *
  * @example
  * ```typescript
- * // Path-based mTLS. Reload is implicitly on; override cadence to 60 s.
+ * // Path-based mTLS with reload every 60 seconds.
  * const reloadingMtls: MutualTls = {
  *     kind: "path",
  *     certPath: "/etc/ssl/client.crt",
@@ -389,14 +386,13 @@ export type MutualTls =
       };
 
 /**
- * Reads a PEM file from disk for use in TLS configuration.
- *
- * Shared implementation behind {@link loadRootCertificatesFromFile} and
+ * Reads a PEM file for TLS configuration. Shared by
+ * {@link loadRootCertificatesFromFile} and
  * {@link loadClientCertificateAndKeyFromFile}.
  *
- * @param path - Filesystem path to the PEM-encoded file.
- * @param label - Human-readable label used in error messages (e.g. `"Root certificate"`).
- * @returns Promise resolving to the file contents as a `Buffer`.
+ * @param path - Path to the PEM file.
+ * @param label - Label used in error messages (e.g. `"Root certificate"`).
+ * @returns The file contents.
  * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
  * @internal
  */
@@ -426,13 +422,12 @@ async function loadTlsPemFile(path: string, label: string): Promise<Buffer> {
 }
 
 /**
- * Loads PEM-encoded root certificates from a file for TLS server verification.
- *
- * Convenience loader for the `rootCertificates` field of
+ * Loads PEM-encoded root certificates for TLS server verification. Feed the
+ * result to `rootCertificates` on
  * {@link AdvancedBaseClientConfiguration.tlsAdvancedConfiguration}.
  *
- * @param path - Filesystem path to a PEM root certificate or bundle.
- * @returns Promise resolving to the certificate bytes.
+ * @param path - Path to a PEM root certificate or bundle.
+ * @returns The certificate bytes.
  * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
  *
  * @example
@@ -445,16 +440,15 @@ export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
 }
 
 /**
- * Loads a PEM-encoded client certificate and its private key from disk for
- * {@link MutualTls}'s byte-based variant (`kind: "bytes"`). When automatic
- * reload is desired, use the path-based variant of {@link MutualTls} directly
- * so the core owns the file lifecycle.
+ * Loads a PEM client certificate and its private key for the byte-based
+ * {@link MutualTls} variant (`kind: "bytes"`). For automatic reload, use the
+ * path-based variant instead; the core then owns the file lifecycle.
  *
- * The cert file is read first; if it fails, the key file is not touched.
+ * The cert is read first. If it fails, the key file is not touched.
  *
- * @param certPath - Filesystem path to a PEM client certificate.
- * @param keyPath - Filesystem path to a PEM client private key.
- * @returns Promise resolving to `{ cert, key }` Buffers.
+ * @param certPath - Path to a PEM client certificate.
+ * @param keyPath - Path to a PEM client private key.
+ * @returns `{ cert, key }` as Buffers.
  * @throws {@link ConfigurationError} If either file is missing, unreadable, or empty.
  *
  * @example
@@ -476,7 +470,7 @@ export async function loadClientCertificateAndKeyFromFile(
 }
 
 /**
- * Coerces a PEM cert/key input to non-empty bytes.
+ * Turns a PEM cert or key input into non-empty bytes for the wire.
  *
  * @internal
  */
@@ -497,7 +491,7 @@ function requireNonEmptyPem(
 }
 
 /**
- * Requires a non-empty string on a named mTLS path field.
+ * Type-guards a named mTLS path field as a non-empty string.
  *
  * @internal
  */
@@ -512,9 +506,8 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
 }
 
 /**
- * Confirms that a path resolves to a regular non-empty file. Any fs error is
- * wrapped in a {@link ConfigurationError} with the original error attached as
- * `cause`.
+ * Confirms that a path is a regular non-empty file. Any fs error is wrapped
+ * in a {@link ConfigurationError} with the original error kept as `cause`.
  *
  * @internal
  */
@@ -553,8 +546,10 @@ async function requireRegularNonEmptyFile(
 }
 
 /**
- * Validates and serializes a {@link MutualTls} value into the corresponding
- * connection-request protobuf fields.
+ * Validates a {@link MutualTls} value and writes it into the connection
+ * request. Wire fields: `client_cert`/`client_key` (proto 22/23) for the
+ * byte-based variant; `client_cert_path`/`client_key_path`/`cert_reload`
+ * (proto 31/32/33) for the path-based variant.
  *
  * @internal
  */
@@ -1338,20 +1333,17 @@ export interface AdvancedBaseClientConfiguration {
         rootCertificates?: string | Buffer;
 
         /**
-         * Mutual TLS (mTLS) client authentication material.
+         * Mutual TLS (mTLS) client authentication material. See
+         * {@link MutualTls} for the two variants: `kind: "bytes"` for static
+         * material and `kind: "path"` for material the core reloads from
+         * disk. Reload is on iff `kind === "path"`.
          *
-         * See {@link MutualTls} for the two supported variants (`kind: "bytes"`
-         * for static material, `kind: "path"` for automatic reload from disk).
-         * The two variants are mutually exclusive at the type level. Reload is
-         * enabled iff `kind === "path"` — there is no separate toggle.
-         *
-         * Requires TLS to be enabled on the base client configuration
-         * (`useTLS: true`). Setting `mutualTls` alongside `useTLS: false`
-         * raises a {@link ConfigurationError}.
+         * Requires `useTLS: true` on the base client configuration. Setting
+         * `mutualTls` when TLS is disabled raises a {@link ConfigurationError}.
          *
          * @example
          * ```typescript
-         * // Path-based mTLS with automatic reload every 60 seconds.
+         * // Path-based mTLS with reload every 60 seconds.
          * const config: AdvancedBaseClientConfiguration = {
          *     tlsAdvancedConfiguration: {
          *         mutualTls: {
