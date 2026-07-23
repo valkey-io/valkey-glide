@@ -306,7 +306,12 @@ def glide_sync_tls_client(
         sync_test_teardown(request, cluster_mode, protocol)
 
 
-def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+def sync_test_teardown(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+):
     """
     Perform teardown tasks such as flushing all data from the cluster.
 
@@ -315,6 +320,10 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     This function is made robust to handle connection timeouts and other transient
     errors that can occur after password changes and connection kills.
+
+    ``valkey_cluster`` routes the teardown client to a non-default cluster
+    (e.g. the auth-test single-shard cluster); when ``None`` the ambient
+    ``pytest.valkey_cluster`` / ``pytest.standalone_cluster`` is used.
     """
     # Add a small delay to allow server to stabilize after password/connection changes
     time.sleep(0.5)
@@ -325,7 +334,7 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     for attempt in range(max_retries):
         try:
-            _attempt_teardown(request, cluster_mode, protocol)
+            _attempt_teardown(request, cluster_mode, protocol, valkey_cluster)
             return  # Success, exit the function
         except (ClosingError, TimeoutError) as e:
             if attempt == max_retries - 1:
@@ -347,7 +356,12 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 time.sleep(delay)
 
 
-def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+def _attempt_teardown(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+):
     """
     Single attempt at teardown operations. This function may raise exceptions
     which will be handled by the retry logic in test_teardown.
@@ -361,6 +375,7 @@ def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
             protocol=protocol,
             request_timeout=5000,  # Increased from 2000ms
             connection_timeout=5000,  # Increased from default 1000ms
+            valkey_cluster=valkey_cluster,
         )
         client.custom_command(["FLUSHALL"])
         client.close()
@@ -376,6 +391,7 @@ def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 request_timeout=5000,  # Increased timeout
                 connection_timeout=5000,  # Increased timeout
                 credentials=credentials,
+                valkey_cluster=valkey_cluster,
             )
             try:
                 auth_client(client, NEW_PASSWORD)

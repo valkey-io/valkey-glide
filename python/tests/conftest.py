@@ -155,6 +155,18 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             load_module=load_module,
             addresses=standalone_endpoints,
         )
+        # Dedicated single-shard cluster for the auth tests. The auth suite
+        # exercises a CLIENT KILL fan-out on a single shard and does not need
+        # multi-shard behavior; shrinking to 3 nodes (1 primary + 2 replicas)
+        # cuts cluster setup, kill fan-out, and full-cluster reconnect
+        # time considerably, which is the dominant cost behind #6604.
+        pytest.valkey_auth_cluster = ValkeyCluster(
+            tls=tls,
+            cluster_mode=True,
+            shard_count=1,
+            replica_count=2,
+            load_module=load_module,
+        )
 
     if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
@@ -168,6 +180,14 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=False,
             shard_count=1,
             replica_count=1,
+            load_module=load_module,
+        )
+        # TLS twin of pytest.valkey_auth_cluster; used when --tls is set.
+        pytest.valkey_auth_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=True,
+            shard_count=1,
+            replica_count=2,
             load_module=load_module,
         )
 
@@ -218,6 +238,18 @@ def pytest_sessionfinish(session, exitstatus):
         del pytest.standalone_tls_cluster
     except AttributeError:
         # standalone_tls_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_auth_cluster
+    except AttributeError:
+        # valkey_auth_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_auth_tls_cluster
+    except AttributeError:
+        # valkey_auth_tls_cluster was not set, skip deletion
         pass
 
 
