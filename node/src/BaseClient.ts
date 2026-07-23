@@ -476,14 +476,14 @@ export async function loadClientCertificateAndKeyFromFile(
 }
 
 /**
- * Coerces a PEM cert/key input (`Buffer` or UTF-8 string) into a non-empty
- * `Uint8Array` for wire serialization. Throws a {@link ConfigurationError}
- * on empty inputs so the caller sees a specific error rather than a generic
- * core-side parse failure.
+ * Coerces a PEM cert/key input to non-empty bytes.
  *
  * @internal
  */
-function toPemBytes(value: Buffer | string, fieldName: string): Uint8Array {
+function requireNonEmptyPem(
+    value: Buffer | string,
+    fieldName: string,
+): Uint8Array {
     const buffer =
         typeof value === "string" ? Buffer.from(value, "utf-8") : value;
 
@@ -497,52 +497,28 @@ function toPemBytes(value: Buffer | string, fieldName: string): Uint8Array {
 }
 
 /**
- * Runtime narrowing and file-existence check for a path-based mTLS variant.
- * Rejects empty strings, non-integer / non-positive reload intervals, and
- * paths that do not resolve to a regular non-empty file at connect time.
+ * Requires a non-empty string on a named mTLS path field.
  *
  * @internal
  */
-async function assertPathVariant(
-    mtls: Extract<MutualTls, { kind: "path" }>,
-): Promise<void> {
-    if (typeof mtls.certPath !== "string" || mtls.certPath.length === 0) {
+function requireNonEmptyString(value: unknown, fieldName: string): string {
+    if (typeof value !== "string" || value.length === 0) {
         throw new ConfigurationError(
-            "mutualTls.certPath must be a non-empty string.",
+            `${fieldName} must be a non-empty string.`,
         );
     }
 
-    if (typeof mtls.keyPath !== "string" || mtls.keyPath.length === 0) {
-        throw new ConfigurationError(
-            "mutualTls.keyPath must be a non-empty string.",
-        );
-    }
-
-    if (mtls.reloadIntervalSeconds !== undefined) {
-        const interval = mtls.reloadIntervalSeconds;
-
-        if (
-            typeof interval !== "number" ||
-            !Number.isFinite(interval) ||
-            !Number.isInteger(interval) ||
-            interval <= 0
-        ) {
-            throw new ConfigurationError(
-                "mutualTls.reloadIntervalSeconds must be a positive integer.",
-            );
-        }
-    }
-
-    await Promise.all([
-        assertRegularNonEmptyFile(mtls.certPath, "mutualTls.certPath"),
-        assertRegularNonEmptyFile(mtls.keyPath, "mutualTls.keyPath"),
-    ]);
+    return value;
 }
 
 /**
+ * Confirms that a path resolves to a regular non-empty file. Any fs error is
+ * wrapped in a {@link ConfigurationError} with the original error attached as
+ * `cause`.
+ *
  * @internal
  */
-async function assertRegularNonEmptyFile(
+async function requireRegularNonEmptyFile(
     path: string,
     fieldName: string,
 ): Promise<void> {
@@ -587,24 +563,50 @@ async function applyMutualTls(
     request: connection_request.IConnectionRequest,
 ): Promise<void> {
     if (mtls.kind === "bytes") {
-        request.clientCert = toPemBytes(mtls.cert, "mutualTls.cert");
-        request.clientKey = toPemBytes(mtls.key, "mutualTls.key");
+        request.clientCert = requireNonEmptyPem(mtls.cert, "mutualTls.cert");
+        request.clientKey = requireNonEmptyPem(mtls.key, "mutualTls.key");
         return;
     }
 
     if (mtls.kind === "path") {
-        await assertPathVariant(mtls);
-        request.clientCertPath = mtls.certPath;
-        request.clientKeyPath = mtls.keyPath;
+        const certPath = requireNonEmptyString(
+            mtls.certPath,
+            "mutualTls.certPath",
+        );
+        const keyPath = requireNonEmptyString(
+            mtls.keyPath,
+            "mutualTls.keyPath",
+        );
+
+        const interval = mtls.reloadIntervalSeconds;
+
+        if (
+            interval !== undefined &&
+            (typeof interval !== "number" ||
+                !Number.isInteger(interval) ||
+                interval <= 0)
+        ) {
+            throw new ConfigurationError(
+                "mutualTls.reloadIntervalSeconds must be a positive integer.",
+            );
+        }
+
+        await requireRegularNonEmptyFile(certPath, "mutualTls.certPath");
+        await requireRegularNonEmptyFile(keyPath, "mutualTls.keyPath");
+
+        request.clientCertPath = certPath;
+        request.clientKeyPath = keyPath;
         request.certReload = {
             enabled: true,
-            intervalSeconds: mtls.reloadIntervalSeconds ?? null,
+            intervalSeconds: interval ?? null,
         };
         return;
     }
 
     throw new ConfigurationError(
-        `Unsupported mutualTls variant: ${JSON.stringify(mtls)}`,
+        `Unsupported mutualTls variant: kind=${String(
+            (mtls as { kind?: unknown }).kind,
+        )}`,
     );
 }
 
