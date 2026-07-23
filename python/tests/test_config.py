@@ -993,6 +993,218 @@ def test_tls_byte_based_still_emits_no_reload_config():
     assert request.client_key_path == ""
 
 
+# -------- with_client_pem factory: negative cases + forwarding --------
+
+
+def test_tls_with_client_pem_factory_empty_cert():
+    tls_config = TlsAdvancedConfiguration.with_client_pem(b"", TEST_CLIENT_KEY_DATA)
+    with pytest.raises(ConfigurationError, match="client_cert_pem"):
+        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+
+
+def test_tls_with_client_pem_factory_empty_key():
+    tls_config = TlsAdvancedConfiguration.with_client_pem(TEST_CLIENT_CERT_DATA, b"")
+    with pytest.raises(ConfigurationError, match="client_key_pem"):
+        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+
+
+def test_tls_with_client_pem_factory_forwards_use_insecure_tls():
+    tls_config = TlsAdvancedConfiguration.with_client_pem(
+        TEST_CLIENT_CERT_DATA,
+        TEST_CLIENT_KEY_DATA,
+        use_insecure_tls=True,
+    )
+    assert tls_config.use_insecure_tls is True
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.tls_mode == TlsMode.InsecureTls
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+
+
+# -------- with_client_paths factory: negative cases + forwarding --------
+
+
+def test_tls_with_client_paths_factory_zero_interval_rejected(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(
+        ConfigurationError, match="cert_reload_interval_seconds.*positive"
+    ):
+        TlsAdvancedConfiguration.with_client_paths(
+            cert_path,
+            key_path,
+            cert_reload_interval_seconds=0,
+        )
+
+
+def test_tls_with_client_paths_factory_negative_interval_rejected(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(
+        ConfigurationError, match="cert_reload_interval_seconds.*positive"
+    ):
+        TlsAdvancedConfiguration.with_client_paths(
+            cert_path,
+            key_path,
+            cert_reload_interval_seconds=-1,
+        )
+
+
+def test_tls_with_client_paths_factory_bool_interval_rejected(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(
+        ConfigurationError, match="cert_reload_interval_seconds"
+    ):
+        TlsAdvancedConfiguration.with_client_paths(
+            cert_path,
+            key_path,
+            cert_reload_interval_seconds=True,
+        )
+
+
+def test_tls_with_client_paths_factory_float_interval_rejected(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(
+        ConfigurationError, match="cert_reload_interval_seconds"
+    ):
+        TlsAdvancedConfiguration.with_client_paths(
+            cert_path,
+            key_path,
+            cert_reload_interval_seconds=1.5,
+        )
+
+
+def test_tls_with_client_paths_factory_uint32_overflow_rejected(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(
+        ConfigurationError, match="between 1 and 4294967295"
+    ):
+        TlsAdvancedConfiguration.with_client_paths(
+            cert_path,
+            key_path,
+            cert_reload_interval_seconds=2**32,
+        )
+
+
+def test_tls_with_client_paths_factory_empty_cert_path(tmp_path):
+    _, key_path = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError, match="client_cert_path"):
+        TlsAdvancedConfiguration.with_client_paths("", key_path)
+
+
+def test_tls_with_client_paths_factory_empty_key_path(tmp_path):
+    cert_path, _ = _write_cert_key(tmp_path)
+    with pytest.raises(ConfigurationError, match="client_key_path"):
+        TlsAdvancedConfiguration.with_client_paths(cert_path, "")
+
+
+def test_tls_with_client_paths_factory_accepts_pathlib_path(tmp_path):
+    from pathlib import Path
+
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration.with_client_paths(
+        Path(cert_path), Path(key_path)
+    )
+    assert isinstance(tls_config.client_cert_path, str)
+    assert isinstance(tls_config.client_key_path, str)
+    assert tls_config.client_cert_path == str(cert_path)
+    assert tls_config.client_key_path == str(key_path)
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.client_cert_path == str(cert_path)
+    assert request.client_key_path == str(key_path)
+    assert request.cert_reload.enabled is True
+
+
+def test_tls_with_client_paths_factory_forwards_root_pem_cacerts(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration.with_client_paths(
+        cert_path,
+        key_path,
+        root_pem_cacerts=TEST_CERT_DATA_1,
+    )
+    assert tls_config.root_pem_cacerts == TEST_CERT_DATA_1
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == TEST_CERT_DATA_1
+
+
+# -------- load_client_certificate_and_key_from_file: negative cases --------
+
+
+def test_load_client_certificate_and_key_from_file_missing_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    missing_key = tmp_path / "missing-key.pem"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, missing_key)
+    assert "Client key file not found" in str(exc_info.value)
+    assert str(missing_key) in str(exc_info.value)
+
+
+def test_load_client_certificate_and_key_from_file_empty_cert(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(b"")
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert "Client certificate file is empty" in str(exc_info.value)
+    assert str(cert_path) in str(exc_info.value)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="chmod 0o000 does not restrict root or Windows",
+)
+def test_load_client_certificate_and_key_from_file_unreadable_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    os.chmod(key_path, 0o000)
+    try:
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_client_certificate_and_key_from_file(cert_path, key_path)
+        assert "client key" in str(exc_info.value).lower()
+        assert str(key_path) in str(exc_info.value)
+    finally:
+        os.chmod(key_path, 0o600)
+
+
+# -------- recovered pre-reshape coverage: empty byte PEM inputs --------
+
+
+def test_tls_client_cert_pem_empty_bytes_rejected():
+    """Empty client_cert_pem bytes must be rejected at request-build time."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"",
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    with pytest.raises(
+        ConfigurationError, match="client_cert_pem cannot be an empty bytes"
+    ):
+        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+
+
+def test_tls_client_key_pem_empty_bytes_rejected():
+    """Empty client_key_pem bytes must be rejected at request-build time."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=b"",
+    )
+    with pytest.raises(
+        ConfigurationError, match="client_key_pem cannot be an empty bytes"
+    ):
+        _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+
+
 def test_tcp_nodelay_default_value():
     """Test that tcp_nodelay defaults to None (not set)."""
     standalone_config = AdvancedGlideClientConfiguration()
