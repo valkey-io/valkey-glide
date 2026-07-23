@@ -62,6 +62,16 @@ pub(crate) fn convert_to_expected_type(
         return Ok(value);
     }
 
+    // If the value is the RESP "QUEUED" status reply (sent for any command issued
+    // while the connection is inside a MULTI transaction, before EXEC), return it
+    // as-is without attempting per-command type coercion - the real reply doesn't
+    // exist yet until EXEC runs, so e.g. coercing it to Boolean would incorrectly fail.
+    if let Value::SimpleString(ref s) = value
+        && s == "QUEUED"
+    {
+        return Ok(value);
+    }
+
     match expected {
         ExpectedReturnType::Map {
             key_type,
@@ -3588,6 +3598,39 @@ mod tests {
         assert!(
             convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::JsonToggleReturnType))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn test_convert_to_expected_type_passes_through_queued_reply() {
+        // While a connection is mid-MULTI, the server replies with the "QUEUED"
+        // status for any command, regardless of that command's real reply type.
+        // convert_to_expected_type must return it as-is, not attempt coercion.
+        let queued = Value::SimpleString("QUEUED".to_string());
+
+        assert_eq!(
+            convert_to_expected_type(queued.clone(), Some(ExpectedReturnType::Boolean)).unwrap(),
+            queued
+        );
+        assert_eq!(
+            convert_to_expected_type(queued.clone(), Some(ExpectedReturnType::Double)).unwrap(),
+            queued
+        );
+        assert_eq!(
+            convert_to_expected_type(queued.clone(), Some(ExpectedReturnType::Set)).unwrap(),
+            queued
+        );
+        assert_eq!(
+            convert_to_expected_type(queued.clone(), None).unwrap(),
+            queued
+        );
+
+        // A real "QUEUED"-looking value should still coerce normally once it's
+        // not standing in for a queued reply - i.e. any other command's actual
+        // Boolean-coercible reply is unaffected by this guard.
+        assert_eq!(
+            convert_to_expected_type(Value::Int(1), Some(ExpectedReturnType::Boolean)).unwrap(),
+            Value::Boolean(true)
         );
     }
 

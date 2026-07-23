@@ -46,6 +46,12 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
+# Pre-allocated null-terminated span name for the EVALSHA (`_execute_script`)
+# path. Kept at module scope so we do not re-allocate a `char[]` per sampled
+# call. `_SYNC_FFI.ffi` is a process-wide singleton so this buffer is safe to
+# share across clients.
+_EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
+
 ENCODING = "utf-8"
 
 
@@ -839,10 +845,8 @@ class BaseClient(CoreCommands):
         from .opentelemetry import OpenTelemetry
 
         span = 0
-        span_name_cstr = None
         if OpenTelemetry.should_sample():
-            span_name_cstr = self._ffi.new("char[]", b"EVALSHA")
-            span = self._lib.create_named_otel_span(span_name_cstr)
+            span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
 
         try:
             result = self._lib.invoke_script(

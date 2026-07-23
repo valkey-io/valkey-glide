@@ -1,9 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -50,6 +54,23 @@ public class GlideStringTest {
 
         // Then
         assertTrue(canConvert);
+    }
+
+    @Test
+    public void shouldReturnReadOnlyByteBufferWithoutCopyingBytes() {
+        // Given
+        byte[] bytes = {1, 2, 3};
+        GlideString glideString = GlideString.of(bytes);
+
+        // When
+        ByteBuffer buffer = glideString.asReadOnlyByteBuffer();
+        byte[] actualBytes = new byte[buffer.remaining()];
+        buffer.get(actualBytes);
+
+        // Then
+        assertArrayEquals(bytes, actualBytes);
+        assertTrue(buffer.isReadOnly());
+        assertThrows(ReadOnlyBufferException.class, () -> buffer.put((byte) 4));
     }
 
     private static Stream<byte[]> validUtf8Provider() {
