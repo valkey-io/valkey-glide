@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
 
 from glide_shared.cache import ClientSideCache
@@ -583,8 +582,8 @@ class TlsAdvancedConfiguration:
         root_pem_cacerts: Optional[bytes] = None,
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
-        client_cert_path: Optional[Union[str, "os.PathLike[str]"]] = None,
-        client_key_path: Optional[Union[str, "os.PathLike[str]"]] = None,
+        client_cert_path: Optional[Union[str, os.PathLike[str]]] = None,
+        client_key_path: Optional[Union[str, os.PathLike[str]]] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
@@ -657,13 +656,11 @@ def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> N
 
 
 def _normalize_optional_path(
-    value: Optional[Union[str, "os.PathLike[str]"]], field_name: str
+    value: Optional[Union[str, os.PathLike[str]]], field_name: str
 ) -> Optional[str]:
     if value is None:
         return None
-    if isinstance(value, Path):
-        text = str(value)
-    elif isinstance(value, str):
+    if isinstance(value, str):
         text = value
     elif isinstance(value, os.PathLike):
         text = os.fspath(value)
@@ -676,13 +673,9 @@ def _normalize_optional_path(
     return text
 
 
-def _validate_readable_nonempty_file(path: Optional[str], field_name: str) -> None:
+def _validate_readable_nonempty_file(path: str, field_name: str) -> None:
     """Validate ``path`` at construction time (TOCTOU note: a later unlink or
     permission change is caught at connect time inside glide-core, not here)."""
-    if path is None:
-        raise ConfigurationError(
-            f"{field_name} path is None; internal validation bug"
-        )
     if not os.path.isfile(path):
         raise FileNotFoundError(f"{field_name} file not found: {path}")
     try:
