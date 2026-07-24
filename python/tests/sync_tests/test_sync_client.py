@@ -354,7 +354,7 @@ class TestGlideClients:
     def test_sync_select(self, glide_sync_client: GlideClient, cluster_mode):
         if cluster_mode:
             if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
-                return pytest.mark.skip(
+                pytest.skip(
                     reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
                 )
 
@@ -528,6 +528,9 @@ class TestGlideClients:
         # Clean up the main client
         client.close()
 
+    @pytest.mark.filterwarnings(
+        "ignore:This process.*multi-threaded.*fork.*deadlocks:DeprecationWarning"
+    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_fork(self, glide_sync_client: TGlideClient):

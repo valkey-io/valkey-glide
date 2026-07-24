@@ -615,9 +615,11 @@ class TestSyncBatch:
 
         transaction: Union[Transaction, ClusterTransaction]
         if isinstance(glide_sync_client, GlideClient):
-            transaction = Transaction()
+            with pytest.warns(DeprecationWarning, match="Use Batch"):
+                transaction = Transaction()
         else:
-            transaction = ClusterTransaction()
+            with pytest.warns(DeprecationWarning, match="Use ClusterBatch"):
+                transaction = ClusterTransaction()
 
         assert transaction.is_atomic is True
 

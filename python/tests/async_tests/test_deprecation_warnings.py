@@ -48,6 +48,9 @@ class TestDeprecationWarnings:
             # Import the module and access an attribute to trigger the warning
             exec(f"from {module_name} import {symbol_name}")
 
+    @pytest.mark.filterwarnings(
+        "ignore:Importing from .* is deprecated:DeprecationWarning"
+    )
     def test_deprecated_imports_still_work(self):
         """Test that deprecated imports still provide the correct classes."""
         for module_name, symbol_name in _legacy_modules_and_symbols.items():

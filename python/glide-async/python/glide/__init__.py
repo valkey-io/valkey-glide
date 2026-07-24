@@ -227,6 +227,11 @@ class _LegacyModule(types.ModuleType):
         self._warned = False
 
     def __getattr__(self, name):
+        # Dunder lookups (e.g. inspect.getmodule -> hasattr(mod, "__file__"))
+        # traverse every module in sys.modules and would otherwise fire the
+        # deprecation warning even when no real symbol was imported.
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
         if not self._warned:
             warnings.warn(
                 f"Importing from '{self.__name__}' is deprecated. "
