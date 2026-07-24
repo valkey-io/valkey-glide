@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -392,6 +393,67 @@ func NewClientConfiguration() *ClientConfiguration {
 	return &ClientConfiguration{}
 }
 
+// applyClientCertAndKey copies mTLS client cert/key state from tlsConfig onto request.
+// The WithMutualTLS* methods validate their inputs, so this function trusts them:
+// at most one of (bytes, paths) is set, and byte pairs are never empty.
+//
+// Byte mode sets request.ClientCert and ClientKey (proto fields 22/23).
+// Path mode sets request.ClientCertPath and ClientKeyPath (fields 31/32) plus
+// request.CertReload with Enabled=true and an optional IntervalSeconds (field 33).
+func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) {
+	if len(tlsConfig.clientCertificate) > 0 {
+		request.ClientCert = tlsConfig.clientCertificate
+		request.ClientKey = tlsConfig.clientKey
+		return
+	}
+
+	if len(tlsConfig.clientCertPath) > 0 {
+		certPath := tlsConfig.clientCertPath
+		keyPath := tlsConfig.clientKeyPath
+		request.ClientCertPath = &certPath
+		request.ClientKeyPath = &keyPath
+
+		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
+		if tlsConfig.certReloadInterval > 0 {
+			seconds := uint64(tlsConfig.certReloadInterval / time.Second)
+			if seconds > math.MaxUint32 {
+				seconds = math.MaxUint32
+			}
+			if seconds > 0 {
+				s := uint32(seconds)
+				reload.IntervalSeconds = &s
+			}
+		}
+		request.CertReload = reload
+	}
+}
+
+// applyTlsConfig copies TLS state onto request: insecure-TLS mode, root certificates,
+// and (through applyClientCertAndKey) the mTLS client cert/key. Both ToProtobuf sites
+// call it, so the standalone and cluster paths stay in sync.
+func applyTlsConfig(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) error {
+	// Handle insecure TLS mode
+	if tlsConfig.UseInsecureTLS {
+		if request.TlsMode == protobuf.TlsMode_NoTls {
+			return errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
+		}
+		// Override SecureTls mode to InsecureTls when user explicitly requests it
+		request.TlsMode = protobuf.TlsMode_InsecureTls
+	}
+
+	// Handle root certificates
+	if tlsConfig.RootCertificates != nil {
+		if len(tlsConfig.RootCertificates) == 0 {
+			return errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
+		}
+		request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+	}
+
+	// Handle client certificate and key for mutual TLS
+	applyClientCertAndKey(tlsConfig, request)
+	return nil
+}
+
 func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
@@ -438,23 +500,8 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 
 	// Handle TLS configuration
 	if config.AdvancedClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
-		}
-
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		if err := applyTlsConfig(config.AdvancedClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
 	}
 
@@ -707,23 +754,8 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	// Handle TLS configuration
 	if config.AdvancedClusterClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClusterClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
-		}
-
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		if err := applyTlsConfig(config.AdvancedClusterClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
 	}
 
@@ -925,6 +957,39 @@ func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientC
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.
+//
+// Use RootCertificates and UseInsecureTLS to control server verification.
+//
+// For mutual TLS, pick one of [TlsConfiguration.WithMutualTLS] (in-memory PEM
+// bytes) or [TlsConfiguration.WithMutualTLSFromFiles] (paths on disk; the GLIDE
+// core re-reads them periodically to pick up rotated material).
+//
+// Example: static byte-based mTLS loaded once at startup.
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/etc/glide/client.pem", "/etc/glide/client.key")
+//	if err != nil {
+//	    return err
+//	}
+//	tls, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+//	advCfg := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+//	cfg := config.NewClientConfiguration().
+//	    WithAddress(&config.NodeAddress{Host: "cache.example", Port: 6379}).
+//	    WithUseTLS(true).
+//	    WithAdvancedConfiguration(advCfg)
+//	client, err := glide.NewClient(cfg)
+//
+// Example: path-based mTLS with automatic reload every 60 seconds.
+//
+//	tls, err := config.NewTlsConfiguration().WithMutualTLSFromFiles(
+//	    "/etc/glide/client.pem", "/etc/glide/client.key",
+//	    config.WithReloadInterval(60*time.Second))
+//	if err != nil {
+//	    return err
+//	}
 type TlsConfiguration struct {
 	// RootCertificates contains custom root certificate data for TLS connections in PEM format.
 	//
@@ -949,6 +1014,21 @@ type TlsConfiguration struct {
 	//
 	// Default: false (verification is enforced).
 	UseInsecureTLS bool
+
+	// Unexported mTLS state. Only the WithMutualTLS* methods write these fields, and
+	// each writes a consistent pair, so callers cannot reach an invalid combination.
+	//
+	// State 1 (no mTLS): all five fields zero.
+	// State 2 (static bytes): clientCertificate and clientKey are non-nil and non-empty;
+	//                         path fields empty; certReloadInterval zero.
+	// State 3 (path + reload): clientCertPath and clientKeyPath non-empty; byte fields nil;
+	//                          certReloadInterval is zero (core default cadence) or a
+	//                          positive value from WithReloadInterval.
+	clientCertificate  []byte
+	clientKey          []byte
+	clientCertPath     string
+	clientKeyPath      string
+	certReloadInterval time.Duration
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -979,6 +1059,133 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 	return config
 }
 
+// MutualTLSOption is an optional argument to [TlsConfiguration.WithMutualTLSFromFiles].
+// Options are variadic and applied in order.
+//
+// The only way to get one is through the exported constructors (currently
+// [WithReloadInterval]). applyMutualTLS is unexported, so packages outside
+// this one cannot implement the interface.
+type MutualTLSOption interface {
+	applyMutualTLS(*mtlsSettings)
+}
+
+// mtlsSettings collects option values before they are validated and applied
+// to the TlsConfiguration.
+type mtlsSettings struct {
+	// reloadInterval is a pointer so we can tell "option not passed" (nil,
+	// use the core default cadence) apart from an explicit
+	// WithReloadInterval(0) (a value we then validate and reject).
+	reloadInterval *time.Duration
+}
+
+// reloadIntervalOption is the concrete option produced by [WithReloadInterval].
+type reloadIntervalOption struct{ interval time.Duration }
+
+func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
+	d := o.interval
+	s.reloadInterval = &d
+}
+
+// WithReloadInterval overrides the cert reload cadence for
+// [TlsConfiguration.WithMutualTLSFromFiles]. The interval must be positive;
+// WithMutualTLSFromFiles rejects zero or negative values.
+//
+// The wire field is uint32 seconds, so values round down to whole seconds.
+// A sub-second value rounds to zero, which is the same as not passing the
+// option at all (the core uses its default cadence). Values above roughly
+// 136 years (math.MaxUint32 seconds) clamp to the uint32 max on the wire.
+func WithReloadInterval(d time.Duration) MutualTLSOption {
+	return reloadIntervalOption{interval: d}
+}
+
+// WithMutualTLS enables mutual TLS with an in-memory PEM cert and key loaded
+// once at connection time. The material is static; nothing is reloaded later.
+// For automatic rotation of on-disk material, use
+// [TlsConfiguration.WithMutualTLSFromFiles].
+//
+// Both clientCert and clientKey must be non-empty PEM byte slices. If either
+// is nil or empty, this returns an error and leaves the receiver unchanged.
+//
+// Use [LoadClientCertificateAndKeyFromFile] to read PEM material off disk:
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/path/to/client-cert.pem", "/path/to/client-key.pem")
+//	if err != nil {
+//	    return err
+//	}
+//	tls, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+//
+// Calling this after [TlsConfiguration.WithMutualTLSFromFiles] replaces the
+// path-based state with the new byte-based state.
+func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*TlsConfiguration, error) {
+	if len(clientCert) == 0 {
+		return nil, fmt.Errorf("WithMutualTLS: clientCert must be non-empty; got %d-byte slice", len(clientCert))
+	}
+	if len(clientKey) == 0 {
+		return nil, fmt.Errorf("WithMutualTLS: clientKey must be non-empty; got %d-byte slice", len(clientKey))
+	}
+	config.clientCertificate = clientCert
+	config.clientKey = clientKey
+	config.clientCertPath = ""
+	config.clientKeyPath = ""
+	config.certReloadInterval = 0
+	return config, nil
+}
+
+// WithMutualTLSFromFiles enables mutual TLS by pointing at cert and key files
+// on disk. The GLIDE core reads them at connect time and re-reads them
+// periodically so rotated material is picked up. If no [WithReloadInterval]
+// option is passed, the cadence is the core's default (currently 300 seconds).
+// Pass [WithReloadInterval](d) to override it.
+//
+// Both certPath and keyPath must be non-empty. A reload interval, if passed,
+// must be positive; a non-positive value returns an error and leaves the
+// receiver unchanged. Sub-second intervals round down to whole seconds on
+// the wire, so a value like 500ms is the same as not passing the option
+// (the core uses its default cadence).
+//
+// Calling this after [TlsConfiguration.WithMutualTLS] replaces the byte-based
+// state with the new path-based state.
+func (config *TlsConfiguration) WithMutualTLSFromFiles(
+	certPath, keyPath string, opts ...MutualTLSOption,
+) (*TlsConfiguration, error) {
+	if len(certPath) == 0 {
+		return nil, fmt.Errorf("WithMutualTLSFromFiles: certPath must be non-empty; got %q", certPath)
+	}
+	if len(keyPath) == 0 {
+		return nil, fmt.Errorf("WithMutualTLSFromFiles: keyPath must be non-empty; got %q", keyPath)
+	}
+
+	var settings mtlsSettings
+	for _, opt := range opts {
+		opt.applyMutualTLS(&settings)
+	}
+
+	// interval is zero when the caller did not pass WithReloadInterval; any
+	// user-supplied value is validated to be positive. applyClientCertAndKey
+	// relies on that: it treats certReloadInterval == 0 as "not specified"
+	// and only emits IntervalSeconds when the value is > 0.
+	var interval time.Duration
+	if settings.reloadInterval != nil {
+		if *settings.reloadInterval <= 0 {
+			return nil, fmt.Errorf(
+				"WithMutualTLSFromFiles: reload interval must be positive; got %v",
+				*settings.reloadInterval)
+		}
+		interval = *settings.reloadInterval
+	}
+
+	config.clientCertificate = nil
+	config.clientKey = nil
+	config.clientCertPath = certPath
+	config.clientKeyPath = keyPath
+	config.certReloadInterval = interval
+	return config, nil
+}
+
 // LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.
 // This is a convenience function for loading custom root certificates from disk.
 //
@@ -998,16 +1205,54 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 //	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certs)
 //	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 func LoadRootCertificatesFromFile(path string) ([]byte, error) {
+	return loadPEMFile(path, "certificate")
+}
+
+// loadPEMFile reads a PEM-encoded file and returns its contents. label is used
+// in error messages ("certificate", "client certificate", "client key") so
+// callers can report which file failed.
+func loadPEMFile(path, label string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		return nil, fmt.Errorf("failed to read %s file: %w", label, err)
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("certificate file is empty: %s", path)
+		return nil, fmt.Errorf("%s file is empty: %s", label, path)
 	}
 
 	return data, nil
+}
+
+// LoadClientCertificateAndKeyFromFile reads PEM-encoded client cert and key
+// files and returns their contents as byte slices, ready to pass to
+// [TlsConfiguration.WithMutualTLS]. It mirrors [crypto/tls.LoadX509KeyPair]:
+// one call reads both files with a single error path.
+//
+// If either file is missing, unreadable, or empty, both return slices are nil
+// and the error names the file that failed.
+//
+// Example:
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/path/to/client-cert.pem", "/path/to/client-key.pem")
+//	if err != nil {
+//	    return err
+//	}
+//	tlsConfig, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+func LoadClientCertificateAndKeyFromFile(certPath, keyPath string) (cert, key []byte, err error) {
+	cert, err = loadPEMFile(certPath, "client certificate")
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err = loadPEMFile(keyPath, "client key")
+	if err != nil {
+		return nil, nil, err
+	}
+	return cert, key, nil
 }
 
 // Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].
