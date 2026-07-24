@@ -531,7 +531,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
+        if is_address_already_in_use(server, f"{node_folder}/server.log", 30):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -551,7 +551,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        if not wait_for_server(server, cluster_folder, tls, 30, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"

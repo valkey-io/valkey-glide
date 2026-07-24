@@ -5,6 +5,8 @@
 ### Fixes
 
 * Core: unify callback_idx for connection response error paths to 0, matching the success path, so the initial ConnectionRequest response is consistent regardless of outcome (fixes flaky assertion in socket_listener Standalone tests) ([#6434](https://github.com/valkey-io/valkey-glide/issues/6434))
+* Test infra: switch the DNS Failover Test Dockerfile to install the static Docker CLI, since `amazon-linux-extras` is no longer available on the AL2023-based `amazoncorretto:21` image ([#6612](https://github.com/valkey-io/valkey-glide/pull/6612))
+* Test infra: raise the `cluster_manager.py` per-server readiness timeouts from 10s to 30s so TLS cluster startup does not flake on busy CI runners ([#6612](https://github.com/valkey-io/valkey-glide/pull/6612))
 * Core: Fix native panic for setex psetex and setnx commands ([#6551](https://github.com/valkey-io/valkey-glide/pull/6551))
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
 * CI: Run `test-release` in `pypi-cd.yml` when only one package is published manually, so a skipped sibling publish job no longer causes post-publish validation to be skipped entirely ([#6542](https://github.com/valkey-io/valkey-glide/pull/6542))
