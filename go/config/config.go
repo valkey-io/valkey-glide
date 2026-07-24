@@ -1164,6 +1164,10 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 		opt.applyMutualTLS(&settings)
 	}
 
+	// interval is zero when the caller did not pass WithReloadInterval; any
+	// user-supplied value is validated to be positive. applyClientCertAndKey
+	// relies on that: it treats certReloadInterval == 0 as "not specified"
+	// and only emits IntervalSeconds when the value is > 0.
 	var interval time.Duration
 	if settings.reloadInterval != nil {
 		if *settings.reloadInterval <= 0 {
