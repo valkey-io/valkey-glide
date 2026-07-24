@@ -77,6 +77,10 @@ on:
                 description: "Run only container tests (skip regular test-python job)"
                 type: boolean
                 default: false
+            enable-core-tracing:
+                description: "Enable Rust core trace logging (RUST_LOG=debug,redis=trace) for diagnostic runs"
+                type: boolean
+                default: false
 
     workflow_call:
         inputs:
@@ -90,6 +94,10 @@ on:
                 default: "false"
             use-self-hosted-linux:
                 description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
+            enable-core-tracing:
+                description: "Enable Rust core trace logging (RUST_LOG=debug,redis=trace) for diagnostic runs"
                 type: boolean
                 default: false
 
@@ -202,6 +210,8 @@ jobs:
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
+                  RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
+                  GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
@@ -212,6 +222,8 @@ jobs:
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
+                  RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
+                  GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
@@ -222,6 +234,8 @@ jobs:
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
+                  RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
+                  GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
@@ -232,6 +246,8 @@ jobs:
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
+                  RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
+                  GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
