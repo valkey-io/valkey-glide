@@ -17,7 +17,7 @@ use socket2::{Domain, Socket, Type};
 use std::{
     collections::HashMap,
     env, fs, io,
-    net::{IpAddr, SocketAddr, TcpListener, TcpStream},
+    net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs},
     ops::Deref,
     path::PathBuf,
     process,
@@ -143,6 +143,17 @@ pub fn get_listener_on_available_port() -> TcpListener {
     TcpListener::from(socket)
 }
 
+struct ChildKiller(Option<process::Child>);
+
+impl Drop for ChildKiller {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 impl RedisServer {
     pub fn new(server_type: ServerType) -> RedisServer {
         RedisServer::with_modules(server_type, &[])
@@ -211,10 +222,18 @@ impl RedisServer {
     /// downstream client code performs the full protocol handshake, and only
     /// the "process hasn't opened its listen socket" window is racy.
     fn wait_for_tcp_ready(host: &str, port: u16) {
-        let ip: IpAddr = host
-            .parse()
-            .unwrap_or_else(|e| panic!("failed to parse redis-server host {host}: {e}"));
-        let addr = SocketAddr::new(ip, port);
+        let addr = match host.parse::<IpAddr>() {
+            Ok(ip) => SocketAddr::new(ip, port),
+            Err(_) => (host, port)
+                .to_socket_addrs()
+                .unwrap_or_else(|e| {
+                    panic!("failed to resolve redis-server host {host}:{port}: {e}")
+                })
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("no addresses resolved for redis-server host {host}:{port}")
+                }),
+        };
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             if TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_ok() {
@@ -265,8 +284,9 @@ impl RedisServer {
                     .arg("--bind")
                     .arg(bind);
 
-                let process = spawner(&mut redis_cmd);
+                let mut guard = ChildKiller(Some(spawner(&mut redis_cmd)));
                 Self::wait_for_tcp_ready(bind, server_port);
+                let process = guard.0.take().unwrap();
                 RedisServer {
                     process,
                     tempdir: None,
@@ -304,8 +324,9 @@ impl RedisServer {
                     tls_params: None,
                 };
 
-                let process = spawner(&mut redis_cmd);
+                let mut guard = ChildKiller(Some(spawner(&mut redis_cmd)));
                 Self::wait_for_tcp_ready(host, port);
+                let process = guard.0.take().unwrap();
                 RedisServer {
                     process,
                     tempdir: Some(tempdir),
@@ -318,8 +339,9 @@ impl RedisServer {
                     .arg("0")
                     .arg("--unixsocket")
                     .arg(path);
-                let process = spawner(&mut redis_cmd);
+                let mut guard = ChildKiller(Some(spawner(&mut redis_cmd)));
                 Self::wait_for_unix_ready(path);
+                let process = guard.0.take().unwrap();
                 RedisServer {
                     process,
                     tempdir: Some(tempdir),
