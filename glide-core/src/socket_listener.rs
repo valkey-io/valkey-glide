@@ -932,7 +932,13 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), CONNECTION_RESPONSE_CALLBACK_IDX, writer, None).await?;
+    write_result(
+        Ok(Value::Okay),
+        CONNECTION_RESPONSE_CALLBACK_IDX,
+        writer,
+        None,
+    )
+    .await?;
     Ok(client)
 }
 
