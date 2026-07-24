@@ -821,8 +821,8 @@ def test_tls_cert_reload_interval_rejects_values_exceeding_uint32(tmp_path):
 
 
 @pytest.mark.skipif(
-    hasattr(os, "geteuid") and os.geteuid() == 0,
-    reason="cannot test unreadable file as root",
+    os.name == "nt" or os.geteuid() == 0,
+    reason="chmod 0o000 does not restrict root or Windows",
 )
 def test_tls_path_based_mtls_unreadable_file_rejected(tmp_path):
     cert_path = tmp_path / "client-cert.pem"
