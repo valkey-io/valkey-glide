@@ -17,12 +17,12 @@ use socket2::{Domain, Socket, Type};
 use std::{
     collections::HashMap,
     env, fs, io,
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, TcpListener, TcpStream},
     ops::Deref,
     path::PathBuf,
     process,
     sync::Mutex,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
 use versions::Versioning;
@@ -201,6 +201,32 @@ impl RedisServer {
         })
     }
 
+    /// Synchronously probe the given TCP `host:port` until the socket accepts
+    /// connections or the deadline elapses. Used to make `RedisServer::new` block
+    /// until the spawned `redis-server` process is actually listening, so that
+    /// callers (and `Lazy` initializers reachable from `#[tokio::test]`) never
+    /// see a not-yet-ready address.
+    ///
+    /// A successful TCP handshake is sufficient here even for TLS listeners:
+    /// downstream client code performs the full protocol handshake, and only
+    /// the "process hasn't opened its listen socket" window is racy.
+    fn wait_for_tcp_ready(host: &str, port: u16) {
+        let addr_str = format!("{host}:{port}");
+        let addr: SocketAddr = addr_str
+            .parse()
+            .unwrap_or_else(|e| panic!("failed to parse redis-server address {addr_str}: {e}"));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_ok() {
+                return;
+            }
+            if Instant::now() >= deadline {
+                panic!("redis-server at {addr_str} did not start listening within 30s");
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+
     pub fn new_with_addr_tls_modules_and_spawner<
         F: FnOnce(&mut process::Command) -> process::Child,
     >(
@@ -239,8 +265,10 @@ impl RedisServer {
                     .arg("--bind")
                     .arg(bind);
 
+                let process = spawner(&mut redis_cmd);
+                Self::wait_for_tcp_ready(bind, server_port);
                 RedisServer {
-                    process: spawner(&mut redis_cmd),
+                    process,
                     tempdir: None,
                     addr,
                 }
@@ -276,8 +304,10 @@ impl RedisServer {
                     tls_params: None,
                 };
 
+                let process = spawner(&mut redis_cmd);
+                Self::wait_for_tcp_ready(host, port);
                 RedisServer {
-                    process: spawner(&mut redis_cmd),
+                    process,
                     tempdir: Some(tempdir),
                     addr,
                 }
@@ -288,12 +318,33 @@ impl RedisServer {
                     .arg("0")
                     .arg("--unixsocket")
                     .arg(path);
+                let process = spawner(&mut redis_cmd);
+                Self::wait_for_unix_ready(path);
                 RedisServer {
-                    process: spawner(&mut redis_cmd),
+                    process,
                     tempdir: Some(tempdir),
                     addr,
                 }
             }
+        }
+    }
+
+    /// Wait until the Unix domain socket at `path` exists and accepts
+    /// connections. Same purpose as [`Self::wait_for_tcp_ready`] but for
+    /// `ServerType::Unix`.
+    fn wait_for_unix_ready(path: &std::path::Path) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if std::os::unix::net::UnixStream::connect(path).is_ok() {
+                return;
+            }
+            if Instant::now() >= deadline {
+                panic!(
+                    "redis-server at {} did not start listening on unix socket within 30s",
+                    path.display()
+                );
+            }
+            std::thread::sleep(Duration::from_millis(25));
         }
     }
 
