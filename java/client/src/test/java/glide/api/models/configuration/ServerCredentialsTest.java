@@ -136,4 +136,73 @@ public class ServerCredentialsTest {
                             .build(); // Missing region
                 });
     }
+
+    @Test
+    public void testIamWithCustomCredentialsProvider() throws Exception {
+        GlideCredentialProvider provider =
+                () -> new String[] {"test_access_key", "test_secret_key", "test_session_token"};
+
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .credentialsProvider(provider)
+                        .build();
+
+        assertNotNull(iamConfig.getCredentialsProvider());
+        // Invoke the provider and verify the returned credentials
+        String[] creds = iamConfig.getCredentialsProvider().getCredentials();
+        assertEquals(3, creds.length);
+        assertEquals("test_access_key", creds[0]);
+        assertEquals("test_secret_key", creds[1]);
+        assertEquals("test_session_token", creds[2]);
+    }
+
+    @Test
+    public void testIamWithCustomCredentialsProviderNullSessionToken() throws Exception {
+        // Long-term credentials without a session token
+        GlideCredentialProvider provider =
+                () -> new String[] {"test_access_key", "test_secret_key", null};
+
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.MEMORYDB)
+                        .region("eu-west-1")
+                        .credentialsProvider(provider)
+                        .build();
+
+        assertNotNull(iamConfig.getCredentialsProvider());
+        String[] creds = iamConfig.getCredentialsProvider().getCredentials();
+        assertEquals(3, creds.length);
+        assertNull(creds[2]);
+    }
+
+    @Test
+    public void testIamWithNoCredentialsProviderDefaultsToNull() {
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .build();
+
+        assertNull(iamConfig.getCredentialsProvider());
+    }
+
+    @Test
+    public void testIamCredentialsProviderIsNotRequired() {
+        // Builds without throwing even without credentialsProvider
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .refreshIntervalSeconds(120)
+                        .build();
+
+        assertNull(iamConfig.getCredentialsProvider());
+        assertEquals(120, iamConfig.getRefreshIntervalSeconds());
+    }
 }
