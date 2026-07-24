@@ -17,7 +17,7 @@ use socket2::{Domain, Socket, Type};
 use std::{
     collections::HashMap,
     env, fs, io,
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::{IpAddr, SocketAddr, TcpListener, TcpStream},
     ops::Deref,
     path::PathBuf,
     process,
@@ -211,17 +211,17 @@ impl RedisServer {
     /// downstream client code performs the full protocol handshake, and only
     /// the "process hasn't opened its listen socket" window is racy.
     fn wait_for_tcp_ready(host: &str, port: u16) {
-        let addr_str = format!("{host}:{port}");
-        let addr: SocketAddr = addr_str
+        let ip: IpAddr = host
             .parse()
-            .unwrap_or_else(|e| panic!("failed to parse redis-server address {addr_str}: {e}"));
+            .unwrap_or_else(|e| panic!("failed to parse redis-server host {host}: {e}"));
+        let addr = SocketAddr::new(ip, port);
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             if TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_ok() {
                 return;
             }
             if Instant::now() >= deadline {
-                panic!("redis-server at {addr_str} did not start listening within 30s");
+                panic!("redis-server at {host}:{port} did not start listening within 30s");
             }
             std::thread::sleep(Duration::from_millis(25));
         }
