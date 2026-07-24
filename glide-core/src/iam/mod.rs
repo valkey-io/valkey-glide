@@ -32,6 +32,11 @@ const TOKEN_GEN_INITIAL_BACKOFF_MS: u64 = 100;
 /// Safety cap so we never sleep unreasonably long between attempts
 const TOKEN_GEN_MAX_BACKOFF_MS: u64 = 3_000;
 
+/// Type alias for the custom credentials callback function.
+/// Returns `(access_key_id, secret_access_key, session_token)` or an error.
+pub(crate) type CredentialsProviderFn =
+    Arc<dyn Fn() -> Result<(String, String, Option<String>), GlideIAMError> + Send + Sync>;
+
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
 pub enum GlideIAMError {
@@ -156,7 +161,7 @@ async fn get_signing_identity(
 }
 
 /// Internal state structure for IAM token management
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct IamTokenState {
     /// AWS region for signing requests
     region: String,
@@ -168,6 +173,32 @@ pub(crate) struct IamTokenState {
     service_type: ServiceType,
     /// Token refresh interval in seconds
     refresh_interval_seconds: u32,
+    /// Optional custom credentials callback.
+    ///
+    /// When `Some`, this closure is invoked to obtain AWS credentials
+    /// `(access_key_id, secret_access_key, session_token)` instead of using the
+    /// default AWS credential chain. The callback must be `Send + Sync` so that
+    /// it can be called from the async background refresh task.
+    pub(crate) credentials_provider: Option<CredentialsProviderFn>,
+}
+
+impl std::fmt::Debug for IamTokenState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IamTokenState")
+            .field("region", &self.region)
+            .field("cluster_name", &self.cluster_name)
+            .field("username", &self.username)
+            .field("service_type", &self.service_type)
+            .field("refresh_interval_seconds", &self.refresh_interval_seconds)
+            .field(
+                "credentials_provider",
+                &self
+                    .credentials_provider
+                    .as_ref()
+                    .map(|_| "<custom callback>"),
+            )
+            .finish()
+    }
 }
 
 /// IAM-based token manager for ElastiCache/MemoryDB.
@@ -216,12 +247,19 @@ impl IAMTokenManager {
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 5 minutes (300 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
+    /// * `credentials_provider` - Optional custom callback to retrieve AWS credentials.
+    ///   When `Some`, this closure is called instead of the default AWS credential chain.
+    ///   Returns `(access_key_id, secret_access_key, session_token)` where session token
+    ///   may be `None` for long-term credentials.
+    ///   When `None`, the default AWS credential chain (environment variables,
+    ///   `~/.aws/credentials`, EC2/ECS metadata, etc.) is used.
     pub async fn new(
         cluster_name: String,
         username: String,
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
+        credentials_provider: Option<CredentialsProviderFn>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
 
@@ -232,6 +270,7 @@ impl IAMTokenManager {
             service_type,
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
+            credentials_provider,
         };
 
         // Generate initial token using the state
@@ -442,8 +481,27 @@ impl IAMTokenManager {
         let base_url = build_base_url(&hostname, &state.username);
 
         // Fetch fresh credentials on every token generation to handle credential rotation
-        // (e.g., EC2 instance profile credentials rotate every ~6 hours)
-        let creds = get_signing_identity(&state.region, state.service_type).await?;
+        // (e.g., EC2 instance profile credentials rotate every ~6 hours).
+        // When a custom credentials callback is configured, use it; otherwise fall back to
+        // the default AWS credential chain.
+        let creds = if let Some(provider) = &state.credentials_provider {
+            let provider = Arc::clone(provider);
+            let (access_key_id, secret_access_key, session_token) =
+                tokio::task::spawn_blocking(move || provider())
+                    .await
+                    .map_err(|e| {
+                        GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
+                    })??;
+            aws_credential_types::Credentials::new(
+                access_key_id,
+                secret_access_key,
+                session_token,
+                None,
+                "glide-custom-credentials",
+            )
+        } else {
+            get_signing_identity(&state.region, state.service_type).await?
+        };
         let identity_value = creds.into();
 
         let mut signing_settings = SigningSettings::default();
@@ -599,6 +657,7 @@ mod tests {
             username: username.to_string(),
             service_type,
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
+            credentials_provider: None,
         }
     }
 
@@ -619,6 +678,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
+            None,    // credentials_provider
         )
         .await
         .unwrap();
@@ -674,6 +734,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -710,6 +771,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
 
@@ -749,6 +811,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -778,6 +841,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -834,6 +898,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
+            None,    // credentials_provider
         )
         .await
         .unwrap();
@@ -879,6 +944,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                None, // credentials_provider
             )
             .await;
 
@@ -897,6 +963,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                None, // credentials_provider
             )
             .await;
 
@@ -939,6 +1006,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -1049,6 +1117,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
         assert!(
@@ -1073,6 +1142,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 None,
+                None, // credentials_provider
             )
             .await;
             assert!(
@@ -1093,6 +1163,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
         assert!(
@@ -1107,5 +1178,137 @@ mod tests {
         unsafe {
             env::remove_var("AWS_ENDPOINT_URL_STS");
         }
+    }
+
+    /// Test that a custom credentials callback is used when provided.
+    ///
+    /// The callback returns hard-coded mock credentials.  No real AWS account
+    /// is needed – the SigV4 signing step accepts any non-empty key material.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_with_custom_callback() {
+        initialize_test_environment();
+
+        let callback: CredentialsProviderFn = Arc::new(|| {
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+            ))
+        });
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "IAMTokenManager creation with custom callback should succeed: {:?}",
+            result.err()
+        );
+
+        let manager = result.unwrap();
+        let token = manager.get_token().await;
+        assert!(
+            !token.is_empty(),
+            "Token generated via callback should not be empty"
+        );
+        assert!(
+            token.starts_with("test-cluster/"),
+            "Token should start with cluster name, got: {token}"
+        );
+        assert!(
+            token.contains("Action=connect"),
+            "Token should contain Action=connect"
+        );
+        assert!(
+            token.contains("X-Amz-Signature="),
+            "Token should contain X-Amz-Signature"
+        );
+    }
+
+    /// Test that an error returned by the custom callback propagates correctly.
+    ///
+    /// The callback always returns a `CredentialsError`; we verify that
+    /// `IAMTokenManager::new` surfaces that error rather than silently swallowing it.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_callback_error_propagates() {
+        initialize_test_environment();
+
+        let callback: CredentialsProviderFn = Arc::new(|| {
+            Err(GlideIAMError::CredentialsError(
+                "injected credential failure".to_string(),
+            ))
+        });
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "IAMTokenManager creation should fail when callback returns an error"
+        );
+
+        match result.unwrap_err() {
+            GlideIAMError::CredentialsError(msg) => {
+                assert!(
+                    msg.contains("injected credential failure"),
+                    "Error message should propagate the callback's message, got: {msg}"
+                );
+            }
+            other => panic!("Expected CredentialsError, got: {other:?}"),
+        }
+    }
+
+    /// Verify that the default credential-chain path (no callback) still works.
+    ///
+    /// This is a regression guard: the existing test
+    /// `test_iam_token_manager_new_creates_initial_token` already covers this,
+    /// but we add an explicit assertion here to document the expectation.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_default_path_when_no_callback() {
+        initialize_test_environment();
+        // Set standard env-var credentials so the default chain resolves.
+        setup_test_credentials();
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            None, // <-- no callback: default AWS credential chain
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Default credential chain path should succeed when env-var creds are set: {:?}",
+            result.err()
+        );
+        let token = result.unwrap().get_token().await;
+        assert!(
+            !token.is_empty(),
+            "Token from default chain should not be empty"
+        );
+        assert!(
+            token.starts_with("test-cluster/"),
+            "Token should start with cluster name"
+        );
     }
 }

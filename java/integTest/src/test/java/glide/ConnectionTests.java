@@ -5,6 +5,10 @@ import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
+import static glide.TestUtilities.IAM_TEST_CLUSTER_NAME;
+import static glide.TestUtilities.IAM_TEST_REGION_US_EAST_1;
+import static glide.TestUtilities.IAM_USERNAME;
+import static glide.TestUtilities.createTestIamConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -30,6 +34,8 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.GlideCredentialProvider;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
@@ -37,6 +43,8 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.ResolvedAddress;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
@@ -53,6 +61,7 @@ import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -1189,5 +1198,136 @@ public class ConnectionTests {
                         .get();
         assertEquals("PONG", standaloneClient.ping().get());
         standaloneClient.close();
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_standalone_with_mock_credentials() {
+        // See DEVELOPER.md for instructions on running IAM authentication tests
+        try (GlideClient client = createStandaloneClientWithIam(5)) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+            client.refreshIamToken().get();
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_standalone_automatic_token_refresh() {
+        try (GlideClient client = createStandaloneClientWithIam(2)) {
+            TestUtilities.assertConnected(client);
+            Thread.sleep(3000);
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_standalone_with_custom_credentials_provider() {
+        GlideCredentialProvider provider =
+                () ->
+                        new String[] {
+                            System.getenv("AWS_ACCESS_KEY_ID"),
+                            System.getenv("AWS_SECRET_ACCESS_KEY"),
+                            System.getenv("AWS_SESSION_TOKEN")
+                        };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(5)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
+            assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_cluster_with_mock_credentials() {
+        try (GlideClusterClient client = createClusterClientWithIam(5)) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+            client.refreshIamToken().get();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_cluster_automatic_token_refresh() {
+        try (GlideClusterClient client = createClusterClientWithIam(2)) {
+            TestUtilities.assertConnected(client);
+            Thread.sleep(3000);
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_cluster_with_custom_credentials_provider() {
+        GlideCredentialProvider provider =
+                () ->
+                        new String[] {
+                            System.getenv("AWS_ACCESS_KEY_ID"),
+                            System.getenv("AWS_SECRET_ACCESS_KEY"),
+                            System.getenv("AWS_SESSION_TOKEN")
+                        };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(5)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().credentials(credentials).build())
+                        .get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
+            assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
+        }
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().credentials(credentials).build())
+                .get();
     }
 }
