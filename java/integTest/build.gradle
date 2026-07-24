@@ -296,6 +296,10 @@ tasks.withType(Test) {
         systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
+        // Opt-in flag for the (disabled-by-default) shutdown-hook IT; see ShutdownHookIT.
+        if (System.getProperty("RUN_SHUTDOWN_HOOK_IT") != null) {
+            systemProperty 'RUN_SHUTDOWN_HOOK_IT', System.getProperty("RUN_SHUTDOWN_HOOK_IT")
+        }
     }
 
     testLogging {

@@ -182,6 +182,54 @@ public class AsyncRegistryTest {
         assertFalse(AsyncRegistry.isShutdown());
     }
 
+    // ==================== JVM Shutdown Hook Behavior (issue #4809) ====================
+
+    @Test
+    void handleJvmShutdown_doesNotSetShutdownFlag() {
+        assertFalse(AsyncRegistry.isShutdown());
+
+        AsyncRegistry.handleJvmShutdown();
+
+        // The automatic JVM-exit hook must be non-destructive so concurrent user shutdown
+        // hooks can keep using the client.
+        assertFalse(AsyncRegistry.isShutdown());
+    }
+
+    @Test
+    void handleJvmShutdown_allowsSubsequentRegistration() {
+        // Simulate the JVM exit hook firing.
+        AsyncRegistry.handleJvmShutdown();
+
+        // A command issued from a user's own shutdown hook (running concurrently) must still
+        // register successfully rather than being rejected with a ClosingException. This is the
+        // regression guard for issue #4809.
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 0, 1L, 0);
+
+        assertTrue(id > 0, "register() must succeed after the JVM shutdown hook runs");
+        assertFalse(f.isDone(), "future must not be pre-failed");
+        assertEquals(1, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void handleJvmShutdown_doesNotCancelPendingFutures() {
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        // Register with a Java-side timeout so we also cover the scheduled timeout-task path.
+        AsyncRegistry.register(f, 0, 1L, 60_000);
+
+        assertEquals(1, AsyncRegistry.getActiveFutureCount());
+        assertEquals(1, AsyncRegistry.getPendingTimeoutCount());
+
+        AsyncRegistry.handleJvmShutdown();
+
+        // In-flight requests must not be aborted by the JVM-exit hook; they are left to complete
+        // (or be reclaimed at process exit). Both futures and their scheduled timeout tasks must
+        // survive.
+        assertFalse(f.isDone());
+        assertEquals(1, AsyncRegistry.getActiveFutureCount());
+        assertEquals(1, AsyncRegistry.getPendingTimeoutCount());
+    }
+
     private static void assertClosingException(CompletableFuture<?> future, String expectedMessage) {
         try {
             future.get();
