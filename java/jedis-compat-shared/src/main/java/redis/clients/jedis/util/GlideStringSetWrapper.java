@@ -9,8 +9,8 @@ import java.util.Iterator;
 import java.util.Set;
 
 /**
- * A Set<byte[]> wrapper around Set<GlideString> that avoids the performance degradation of
- * HashSet<byte[]>.
+ * A {@code Set<byte[]>} wrapper around {@code Set<GlideString>} that avoids the performance
+ * degradation of {@code HashSet<byte[]>}.
  *
  * <p>byte[] arrays use identity hashCode, causing all entries to hash to the same bucket in a
  * HashSet, degrading performance to O(n). This wrapper keeps data as GlideString internally (which

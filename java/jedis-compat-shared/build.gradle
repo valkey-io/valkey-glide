@@ -51,6 +51,7 @@ javadoc {
     dependsOn delombok
     source = delombok.outputs
     options.tags = [ "example:a:Example:", "apiNote:a:API Note:" ]
+    options.addStringOption('Xdoclint:none', '-quiet')
     failOnError = false
 }
 

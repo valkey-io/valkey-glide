@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Umbrella base for Valkey GLIDE Jedis compatibility facades.
  *
- * <p>Both the classic {@link Jedis} implementation path ({@link AbstractGlideJedis}) and the
+ * <p>Both the classic {@code Jedis} implementation path ({@link AbstractGlideJedis}) and the
  * unified standalone/cluster path ({@link AbstractUnifiedJedis}) extend this type so callers,
  * tests, or adapters can treat them under one supertype (e.g. {@code instance of JedisCommon})
  * while sharing layer-discrimination hooks.
