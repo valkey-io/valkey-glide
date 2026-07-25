@@ -168,9 +168,9 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         // (unchanged for existing consumers); when set, mirror the target-filter fallback
         // below so directives like "debug,redis=trace" still route through as TRACE.
         let stdout_initial_filter = match std::env::var("RUST_LOG") {
-            Ok(v) => LevelFilter::from(
-                tracing::Level::from_str(&v).unwrap_or(tracing::Level::TRACE),
-            ),
+            Ok(v) => {
+                LevelFilter::from(tracing::Level::from_str(&v).unwrap_or(tracing::Level::TRACE))
+            }
             Err(_) => LevelFilter::OFF,
         };
 
