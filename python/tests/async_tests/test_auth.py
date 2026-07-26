@@ -18,6 +18,7 @@ from glide_shared.exceptions import ClosingError, RequestError
 
 from tests.async_tests import conftest as _async_conftest
 from tests.async_tests.conftest import (
+    _client_is_usable,
     _client_pool,
     _client_pool_lock,
     _get_worker_id,
@@ -75,6 +76,32 @@ def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
         if use_tls
         else pytest.valkey_auth_cluster  # type: ignore[attr-defined]
     )
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def _evict_pool_after_auth_module():
+    """Evict every pooled main-cluster client after the auth module runs.
+
+    The auth suite fans CLIENT KILL out over AllNodes on the shared main
+    cluster's clients (before this PR isolated the auth clients to the
+    dedicated auth cluster, and still true for any other test module that
+    consumes the pooled main-cluster client next). That disturbs the
+    multiplexer's state in a way that trips a cluster retry storm on the
+    next RESP3 atomic ClusterBatch on the pooled client. Forcing the pool
+    to be empty on module teardown makes the next suite build a fresh
+    client instead of resurrecting a poisoned one. The underlying
+    glide-core cluster retry race is tracked as a separate follow-up.
+    """
+    yield
+    with _client_pool_lock:
+        clients = list(_client_pool.values())
+        _client_pool.clear()
+    for client in clients:
+        if _client_is_usable(client):
+            try:
+                await client.close()
+            except Exception:
+                pass
 
 
 @pytest.fixture(scope="function")

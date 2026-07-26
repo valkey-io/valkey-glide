@@ -24,6 +24,7 @@ from tests.constants import (
 )
 from tests.sync_tests import conftest as _sync_conftest
 from tests.sync_tests.conftest import (
+    _client_is_usable,
     _get_worker_id,
     _sync_client_pool,
     _sync_client_pool_lock,
@@ -75,6 +76,33 @@ def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
         if use_tls
         else pytest.valkey_auth_cluster  # type: ignore[attr-defined]
     )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _evict_pool_after_auth_module():
+    """Evict every pooled main-cluster client after the auth module runs.
+
+    The auth suite fans CLIENT KILL out over AllNodes; on any pooled
+    main-cluster client that survives the module (via another suite that
+    later reuses the pool key), the disrupted multiplexer trips a cluster
+    retry storm on the next RESP3 atomic ClusterBatch. Forcing the pool
+    to be empty on module teardown makes the next suite build a fresh
+    client instead of resurrecting a poisoned one. Close is opportunistic
+    (the client's event loop may already be gone by module teardown); the
+    load-bearing mechanic is that the pool no longer hands the disrupted
+    client back. The underlying glide-core cluster retry race is tracked
+    as a separate follow-up.
+    """
+    yield
+    with _sync_client_pool_lock:
+        clients = list(_sync_client_pool.values())
+        _sync_client_pool.clear()
+    for client in clients:
+        if _client_is_usable(client):
+            try:
+                client.close()
+            except Exception:
+                pass
 
 
 @pytest.fixture(scope="function")
