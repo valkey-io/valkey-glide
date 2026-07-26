@@ -621,6 +621,81 @@ describe("Auth tests", () => {
 
 // IAM Auth tests with mock credentials
 describe("IAM Auth: Mock Credentials", () => {
+    let iamCluster: ValkeyCluster;
+    let iamStandalone: ValkeyCluster;
+
+    /**
+     * Creates a ValkeyCluster with retry logic to handle transient failures
+     * such as port conflicts or slow server startup in CI environments.
+     */
+    async function createClusterWithRetry(
+        clusterMode: boolean,
+        shardCount: number,
+        replicaCount: number,
+        maxRetries: number = 3,
+    ): Promise<ValkeyCluster> {
+        let lastError: Error | undefined;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await ValkeyCluster.createCluster(
+                    clusterMode,
+                    shardCount,
+                    replicaCount,
+                    getServerVersion,
+                );
+            } catch (error) {
+                lastError = error as Error;
+                console.warn(
+                    `Cluster creation attempt ${attempt}/${maxRetries} failed: ${lastError.message}`,
+                );
+
+                if (attempt < maxRetries) {
+                    // Wait before retrying with exponential backoff
+                    const delay = 2000 * attempt;
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, delay),
+                    );
+                }
+            }
+        }
+
+        throw new Error(
+            `Failed to create cluster after ${maxRetries} attempts. Last error: ${lastError?.message}`,
+        );
+    }
+
+    beforeAll(async () => {
+        // Skip setup if AWS credentials are not set
+        if (!process.env.AWS_ACCESS_KEY_ID) {
+            return;
+        }
+
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+
+        iamCluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await createClusterWithRetry(true, 3, 1);
+
+        iamStandalone = standaloneAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
+            : await createClusterWithRetry(false, 1, 0);
+    }, 120000);
+
+    afterAll(async () => {
+        await iamCluster?.close();
+        await iamStandalone?.close();
+    });
+
     it(
         "test_iam_authentication_with_mock_credentials",
         async () => {
@@ -637,35 +712,20 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME; // Use default user
             const iamConfig = createTestIamConfig(5);
 
-            // Use existing cluster from global setup
-            const clusterAddresses = global.CLUSTER_ENDPOINTS;
-            const cluster = clusterAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      true,
-                      parseEndpoints(clusterAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      true,
-                      3,
-                      1,
-                      getServerVersion,
-                  );
-
-            const addresses = cluster
+            const addresses = iamCluster
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            try {
-                const client = await GlideClusterClient.createClient({
-                    addresses: addresses,
-                    credentials: {
-                        username: username,
-                        iamConfig: iamConfig,
-                    },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
-                });
+            const client = await GlideClusterClient.createClient({
+                addresses: addresses,
+                credentials: {
+                    username: username,
+                    iamConfig: iamConfig,
+                },
+                useTLS: global.TLS, // Use TLS setting from test configuration
+            });
 
+            try {
                 // Basic ping test to verify connection
                 await assertConnected(client);
 
@@ -681,10 +741,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 await client.set("iam_test_key2", "iam_test_value2");
                 const value2 = await client.get("iam_test_key2");
                 expect(value2).toBe("iam_test_value2");
-
-                client.close();
             } finally {
-                await cluster.close();
+                client.close();
             }
         },
         TIMEOUT,
@@ -706,35 +764,20 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
 
-            // Use existing cluster from global setup
-            const clusterAddresses = global.CLUSTER_ENDPOINTS;
-            const cluster = clusterAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      true,
-                      parseEndpoints(clusterAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      true,
-                      3,
-                      1,
-                      getServerVersion,
-                  );
-
-            const addresses = cluster
+            const addresses = iamCluster
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            try {
-                const client = await GlideClusterClient.createClient({
-                    addresses: addresses,
-                    credentials: {
-                        username: username,
-                        iamConfig: iamConfig,
-                    },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
-                });
+            const client = await GlideClusterClient.createClient({
+                addresses: addresses,
+                credentials: {
+                    username: username,
+                    iamConfig: iamConfig,
+                },
+                useTLS: global.TLS, // Use TLS setting from test configuration
+            });
 
+            try {
                 // Verify initial connection
                 await assertConnected(client);
 
@@ -748,10 +791,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 );
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
-
-                client.close();
             } finally {
-                await cluster.close();
+                client.close();
             }
         },
         TIMEOUT,
@@ -773,35 +814,20 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(5);
 
-            // Use existing standalone server from global setup
-            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
-            const server = standaloneAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      false,
-                      parseEndpoints(standaloneAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      false,
-                      1,
-                      0,
-                      getServerVersion,
-                  );
-
-            const addresses = server
+            const addresses = iamStandalone
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            try {
-                const client = await GlideClient.createClient({
-                    addresses: addresses,
-                    credentials: {
-                        username: username,
-                        iamConfig: iamConfig,
-                    },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
-                });
+            const client = await GlideClient.createClient({
+                addresses: addresses,
+                credentials: {
+                    username: username,
+                    iamConfig: iamConfig,
+                },
+                useTLS: global.TLS, // Use TLS setting from test configuration
+            });
 
+            try {
                 // Basic ping test to verify connection
                 await assertConnected(client);
 
@@ -817,10 +843,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 await client.set("iam_test_key2", "iam_test_value2");
                 const value2 = await client.get("iam_test_key2");
                 expect(value2).toBe("iam_test_value2");
-
-                client.close();
             } finally {
-                await server.close();
+                client.close();
             }
         },
         TIMEOUT,
@@ -842,35 +866,20 @@ describe("IAM Auth: Mock Credentials", () => {
             const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2);
 
-            // Use existing standalone server from global setup
-            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
-            const server = standaloneAddresses
-                ? await ValkeyCluster.initFromExistingCluster(
-                      false,
-                      parseEndpoints(standaloneAddresses),
-                      getServerVersion,
-                  )
-                : await ValkeyCluster.createCluster(
-                      false,
-                      1,
-                      0,
-                      getServerVersion,
-                  );
-
-            const addresses = server
+            const addresses = iamStandalone
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            try {
-                const client = await GlideClient.createClient({
-                    addresses: addresses,
-                    credentials: {
-                        username: username,
-                        iamConfig: iamConfig,
-                    },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
-                });
+            const client = await GlideClient.createClient({
+                addresses: addresses,
+                credentials: {
+                    username: username,
+                    iamConfig: iamConfig,
+                },
+                useTLS: global.TLS, // Use TLS setting from test configuration
+            });
 
+            try {
                 // Verify initial connection
                 await assertConnected(client);
 
@@ -884,10 +893,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 );
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
-
-                client.close();
             } finally {
-                await server.close();
+                client.close();
             }
         },
         TIMEOUT,
