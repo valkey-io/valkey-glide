@@ -213,7 +213,8 @@ jobs:
                   RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
                   GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
-                  python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
+                  python3 dev.py test --args -m "not auth_suite" --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
+                  python3 dev.py test --args -m auth_suite --async-backend=asyncio --html=pytest_report_auth.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
@@ -225,7 +226,8 @@ jobs:
                   RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
                   GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
-                  python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -m "not auth_suite" --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -m auth_suite --async-backend=asyncio --async-backend=trio --html=pytest_report_auth.html --self-contained-html
 
             - name: Test with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
@@ -237,7 +239,8 @@ jobs:
                   RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
                   GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
-                  python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args tests/async_tests -m "not auth_suite" --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args tests/async_tests -m auth_suite --async-backend=asyncio --async-backend=trio --html=pytest_report_auth.html --self-contained-html
 
             - name: Test with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
@@ -249,7 +252,8 @@ jobs:
                   RUST_LOG: ${{ inputs.enable-core-tracing && 'debug,redis=trace' || '' }}
                   GLIDE_LOG_LEVEL: ${{ inputs.enable-core-tracing && 'trace' || '' }}
               run: |
-                  python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args tests/sync_tests -m "not auth_suite" --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args tests/sync_tests -m auth_suite --html=pytest_report_auth.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}

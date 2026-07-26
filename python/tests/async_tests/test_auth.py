@@ -355,6 +355,7 @@ def _evict_pooled_async_client(request) -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.auth_suite
 class TestAuthCommands:
     """Test cases for password authentication and management"""
 
