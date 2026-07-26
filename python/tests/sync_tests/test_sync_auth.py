@@ -63,6 +63,25 @@ _STABILIZATION_TIMEOUT_SEC = 5.0
 _STABILIZATION_INTERVAL_SEC = 0.1
 
 
+def _drain_all_pooled_sync_clients() -> None:
+    """Force-close every entry in the session-wide sync client pool.
+
+    Sync twin of _drain_all_pooled_clients in the async test_auth module.
+    Auth's CLIENT KILL fan-out plus subsequent pooled reuse of a client
+    whose tokio state was concurrent with the auth cluster is what races
+    the atomic pipeline aggregator; evicting the pool at end-of-auth-suite
+    forces fresh clients for subsequent modules.
+    """
+    import contextlib
+
+    with _sync_client_pool_lock:
+        clients = list(_sync_client_pool.values())
+        _sync_client_pool.clear()
+    for client in clients:
+        with contextlib.suppress(Exception):
+            client.close()
+
+
 def _await_shared_cluster_stabilization_sync() -> None:
     """Ping every primary on the shared main cluster until quiescent or timeout.
 
@@ -112,11 +131,14 @@ def _await_shared_cluster_stabilization_sync() -> None:
 
 @pytest.fixture(autouse=True, scope="module")
 def _stabilize_shared_cluster_after_sync_auth():
-    """Module-scoped teardown that waits for the shared main cluster to settle
-    after this suite's CLIENT KILL fan-out. Purely synchronous so pytest-anyio
+    """Module-scoped teardown that isolates the sync auth suite from
+    subsequent modules. Drains the session-wide sync client pool so
+    test_sync_batch builds fresh clients, then pings the shared main cluster
+    primaries until it is quiescent. Purely synchronous so pytest-anyio
     scoping rules never apply."""
     yield
     try:
+        _drain_all_pooled_sync_clients()
         _await_shared_cluster_stabilization_sync()
     except Exception:
         pass

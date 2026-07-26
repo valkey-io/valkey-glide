@@ -64,6 +64,30 @@ _STABILIZATION_TIMEOUT_SEC = 5.0
 _STABILIZATION_INTERVAL_SEC = 0.1
 
 
+async def _drain_all_pooled_clients() -> None:
+    """Force-close every entry in the session-wide async client pool.
+
+    The auth suite constructs several GlideClusterClients on the dedicated
+    auth cluster (management_client, glide_client override, acl_glide_client)
+    while the pool for the shared main cluster already holds one or more
+    long-lived clients from earlier test modules. Their tokio tasks
+    (slot refresh, reconnect, push demux) share the process-wide FFI pipe
+    reader and the process-wide glide-core tokio runtime; cross-cluster
+    interleaving is what triggers the retry storm that races the atomic
+    pipeline aggregator. Draining the pool at end-of-auth-suite makes
+    subsequent modules build fresh clients whose tokio state is not
+    entangled with anything that ran during auth.
+    """
+    import contextlib
+
+    with _client_pool_lock:
+        clients = list(_client_pool.values())
+        _client_pool.clear()
+    for client in clients:
+        with contextlib.suppress(Exception):
+            await client.close()
+
+
 async def _await_shared_cluster_stabilization() -> None:
     """Ping every primary on the shared main cluster until quiescent or timeout.
 
@@ -112,15 +136,23 @@ async def _await_shared_cluster_stabilization() -> None:
         await anyio.sleep(_STABILIZATION_INTERVAL_SEC)
 
 
+async def _post_auth_isolation() -> None:
+    """Drain the pool then wait for the shared main cluster to settle."""
+    await _drain_all_pooled_clients()
+    await _await_shared_cluster_stabilization()
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _stabilize_shared_cluster_after_auth():
-    """Module-scoped teardown that waits for the shared main cluster to settle
-    after this suite's CLIENT KILL fan-out. Sync outer fixture drives anyio.run
-    internally so it does not depend on the function-scoped anyio_backend
-    fixture (which would raise ScopeMismatch)."""
+    """Module-scoped teardown that isolates the auth suite from subsequent
+    modules. Drains the session-wide async client pool so test_batch builds
+    fresh clients, then pings the shared main cluster's primaries until it
+    is quiescent. Sync outer fixture drives anyio.run internally so it does
+    not depend on the function-scoped anyio_backend fixture (which would
+    raise ScopeMismatch)."""
     yield
     try:
-        anyio.run(_await_shared_cluster_stabilization)
+        anyio.run(_post_auth_isolation)
     except Exception:
         pass
 
