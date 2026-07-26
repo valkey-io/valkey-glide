@@ -637,18 +637,33 @@ describe("IAM Auth: Mock Credentials", () => {
         let lastError: Error | undefined;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let partialCluster: ValkeyCluster | undefined;
+
             try {
-                return await ValkeyCluster.createCluster(
+                partialCluster = await ValkeyCluster.createCluster(
                     clusterMode,
                     shardCount,
                     replicaCount,
                     getServerVersion,
                 );
+                return partialCluster;
             } catch (error) {
                 lastError = error as Error;
                 console.warn(
                     `Cluster creation attempt ${attempt}/${maxRetries} failed: ${lastError.message}`,
                 );
+
+                // Clean up any partial cluster state (e.g., servers started
+                // but CLUSTER MEET failed) to free ports before retrying.
+                if (partialCluster) {
+                    try {
+                        await partialCluster.close();
+                    } catch (closeError) {
+                        console.warn(
+                            `Failed to close partial cluster: ${(closeError as Error).message}`,
+                        );
+                    }
+                }
 
                 if (attempt < maxRetries) {
                     // Wait before retrying with exponential backoff
@@ -692,8 +707,10 @@ describe("IAM Auth: Mock Credentials", () => {
     }, 120000);
 
     afterAll(async () => {
-        await iamCluster?.close();
-        await iamStandalone?.close();
+        await Promise.allSettled([
+            iamCluster?.close(),
+            iamStandalone?.close(),
+        ]);
     });
 
     it(
@@ -716,16 +733,18 @@ describe("IAM Auth: Mock Credentials", () => {
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            const client = await GlideClusterClient.createClient({
-                addresses: addresses,
-                credentials: {
-                    username: username,
-                    iamConfig: iamConfig,
-                },
-                useTLS: global.TLS, // Use TLS setting from test configuration
-            });
+            let client: GlideClusterClient | undefined;
 
             try {
+                client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
                 // Basic ping test to verify connection
                 await assertConnected(client);
 
@@ -742,7 +761,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 const value2 = await client.get("iam_test_key2");
                 expect(value2).toBe("iam_test_value2");
             } finally {
-                client.close();
+                client?.close();
             }
         },
         TIMEOUT,
@@ -768,16 +787,18 @@ describe("IAM Auth: Mock Credentials", () => {
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            const client = await GlideClusterClient.createClient({
-                addresses: addresses,
-                credentials: {
-                    username: username,
-                    iamConfig: iamConfig,
-                },
-                useTLS: global.TLS, // Use TLS setting from test configuration
-            });
+            let client: GlideClusterClient | undefined;
 
             try {
+                client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
                 // Verify initial connection
                 await assertConnected(client);
 
@@ -792,7 +813,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
             } finally {
-                client.close();
+                client?.close();
             }
         },
         TIMEOUT,
@@ -818,16 +839,18 @@ describe("IAM Auth: Mock Credentials", () => {
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            const client = await GlideClient.createClient({
-                addresses: addresses,
-                credentials: {
-                    username: username,
-                    iamConfig: iamConfig,
-                },
-                useTLS: global.TLS, // Use TLS setting from test configuration
-            });
+            let client: GlideClient | undefined;
 
             try {
+                client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
                 // Basic ping test to verify connection
                 await assertConnected(client);
 
@@ -844,7 +867,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 const value2 = await client.get("iam_test_key2");
                 expect(value2).toBe("iam_test_value2");
             } finally {
-                client.close();
+                client?.close();
             }
         },
         TIMEOUT,
@@ -870,16 +893,18 @@ describe("IAM Auth: Mock Credentials", () => {
                 .getAddresses()
                 .map(([host, port]) => ({ host, port }));
 
-            const client = await GlideClient.createClient({
-                addresses: addresses,
-                credentials: {
-                    username: username,
-                    iamConfig: iamConfig,
-                },
-                useTLS: global.TLS, // Use TLS setting from test configuration
-            });
+            let client: GlideClient | undefined;
 
             try {
+                client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
                 // Verify initial connection
                 await assertConnected(client);
 
@@ -894,7 +919,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
             } finally {
-                client.close();
+                client?.close();
             }
         },
         TIMEOUT,
