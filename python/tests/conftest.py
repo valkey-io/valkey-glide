@@ -280,6 +280,22 @@ def pytest_collection_modifyitems(config, items):
                         )
                     )
 
+    # Reorder collected items so the auth suites run LAST. Auth's AllNodes
+    # CLIENT KILL fan-out disturbs the shared glide-core tokio runtime and
+    # process-global FFI pipe reader in ways that race the atomic pipeline
+    # aggregator in test_batch when it runs afterward (captain's framing:
+    # multi-client test-infra contention, not a product defect - production
+    # uses one GlideClusterClient per process). Pushing auth to the end of
+    # the session means no subsequent module inherits that disturbance.
+    def _is_auth_test(item) -> bool:
+        nodeid = item.nodeid
+        return (
+            "async_tests/test_auth.py" in nodeid
+            or "sync_tests/test_sync_auth.py" in nodeid
+        )
+
+    items.sort(key=_is_auth_test)
+
 
 @pytest.fixture(
     params=[
