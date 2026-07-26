@@ -51,21 +51,6 @@ from tests.utils.utils import (
     get_version,
 )
 
-_RESP3_CLUSTER_ATOMIC_SKIP_REASON = (
-    "Skipped on RESP3+cluster+atomic: multi-client test-infra contention "
-    "artifact, not a product defect. Production consumers use a single "
-    "GlideClusterClient per process due to its multiplexing design; the "
-    "test suite instantiates several concurrently (management/glide/ACL "
-    "in test_auth plus the pooled client for test_batch) which competes "
-    "on the shared FFI pipe and tokio runtime and races the atomic "
-    "pipeline aggregator on this axis only."
-)
-
-
-def _skip_if_resp3_cluster_atomic(protocol, cluster_mode: bool) -> None:
-    if cluster_mode and protocol == ProtocolVersion.RESP3:
-        pytest.skip(_RESP3_CLUSTER_ATOMIC_SKIP_REASON)
-
 
 async def exec_batch(
     glide_client: TGlideClient,
@@ -135,10 +120,7 @@ class TestBatch:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_custom_command(
-        self, glide_client: TGlideClient, cluster_mode: bool, protocol
-    ):
-        _skip_if_resp3_cluster_atomic(protocol, cluster_mode)
+    async def test_transaction_custom_command(self, glide_client: TGlideClient):
         key = get_random_string(10)
         transaction = (
             Batch(is_atomic=True)
@@ -381,10 +363,7 @@ class TestBatch:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_chaining_calls(
-        self, glide_client: TGlideClient, cluster_mode: bool, protocol
-    ):
-        _skip_if_resp3_cluster_atomic(protocol, cluster_mode)
+    async def test_transaction_chaining_calls(self, glide_client: TGlideClient):
         key = get_random_string(3)
 
         transaction = (
@@ -450,7 +429,6 @@ class TestBatch:
     async def test_transaction_xinfo_stream(
         self, glide_client: TGlideClient, cluster_mode: bool, protocol
     ):
-        _skip_if_resp3_cluster_atomic(protocol, cluster_mode)
         key = get_random_string(10)
         stream_id1_0 = "1-0"
         transaction = (
