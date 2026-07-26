@@ -51,6 +51,77 @@ from tests.utils.utils import (
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
+# Post-suite stabilization window for the SHARED main cluster. Trace evidence
+# from workflow run 30183779084 shows that after this suite's AllNodes CLIENT
+# KILL fan-out, the shared main-cluster client's multiplexer sees a topology
+# disturbance that triggers a retry storm exactly when the next atomic RESP3
+# ClusterBatch is in flight, and that batch's aggregator surfaces None. Waiting
+# here for every primary on pytest.valkey_cluster to answer PING lets glide-core
+# background slot-refresh finish before the next module runs. A fresh
+# short-lived client is used so the shared pool is not contaminated.
+_STABILIZATION_TIMEOUT_SEC = 5.0
+_STABILIZATION_INTERVAL_SEC = 0.1
+
+
+def _await_shared_cluster_stabilization_sync() -> None:
+    """Ping every primary on the shared main cluster until quiescent or timeout.
+
+    Best-effort: exceptions are swallowed so a still-recovering cluster does
+    not fail the suite; the goal is a bounded settle window, not correctness.
+    """
+    import contextlib
+
+    from glide_shared.config import (
+        AdvancedGlideClusterClientConfiguration,
+        GlideClusterClientConfiguration,
+        NodeAddress,
+    )
+    from glide_sync import GlideClusterClient as SyncGlideClusterClient
+
+    valkey_cluster = getattr(pytest, "valkey_cluster", None)
+    if valkey_cluster is None:
+        return
+
+    nodes: list[NodeAddress] = list(valkey_cluster.nodes_addr)
+    if not nodes:
+        return
+
+    deadline = time.monotonic() + _STABILIZATION_TIMEOUT_SEC
+    while time.monotonic() < deadline:
+        client = None
+        try:
+            config = GlideClusterClientConfiguration(
+                addresses=nodes,
+                request_timeout=1000,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    connection_timeout=2000,
+                ),
+            )
+            client = SyncGlideClusterClient.create(config)
+            reply = client.custom_command(["PING"])
+            if reply is not None:
+                return
+        except Exception:
+            pass
+        finally:
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    client.close()
+        time.sleep(_STABILIZATION_INTERVAL_SEC)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _stabilize_shared_cluster_after_sync_auth():
+    """Module-scoped teardown that waits for the shared main cluster to settle
+    after this suite's CLIENT KILL fan-out. Purely synchronous so pytest-anyio
+    scoping rules never apply."""
+    yield
+    try:
+        _await_shared_cluster_stabilization_sync()
+    except Exception:
+        pass
+
+
 # Test-local reconnect backoff for the auth suite. Shorter than the library
 # default so the disconnect-and-recover flow finishes within test tolerance
 # under CI contention.

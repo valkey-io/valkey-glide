@@ -51,6 +51,80 @@ from tests.utils.utils import (
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
+# Post-suite stabilization window for the SHARED main cluster. Trace evidence
+# from workflow run 30183779084 shows that after test_auth's AllNodes CLIENT
+# KILL fan-out, the shared main-cluster client's multiplexer sees a topology
+# disturbance that triggers a retry storm (~10 try_pipeline_request calls +
+# RuntimeRefresh slot rebuild) exactly when the next atomic RESP3 ClusterBatch
+# is in flight, and that batch's aggregator surfaces Value::Nil to the caller.
+# Waiting here for every primary on pytest.valkey_cluster to answer PING lets
+# glide-core's background slot-refresh finish before test_batch runs. A fresh
+# short-lived client is used so the shared pool is not contaminated.
+_STABILIZATION_TIMEOUT_SEC = 5.0
+_STABILIZATION_INTERVAL_SEC = 0.1
+
+
+async def _await_shared_cluster_stabilization() -> None:
+    """Ping every primary on the shared main cluster until quiescent or timeout.
+
+    Only runs after test_auth is fully torn down. Best-effort: swallows
+    exceptions so a still-recovering cluster does not fail the suite; the
+    goal is to add a bounded settle window, not to gate correctness.
+    """
+    import contextlib
+
+    from glide.glide_client import GlideClusterClient
+    from glide_shared.config import (
+        AdvancedGlideClusterClientConfiguration,
+        GlideClusterClientConfiguration,
+        NodeAddress,
+    )
+
+    valkey_cluster = getattr(pytest, "valkey_cluster", None)
+    if valkey_cluster is None:
+        return
+
+    nodes: list[NodeAddress] = list(valkey_cluster.nodes_addr)
+    if not nodes:
+        return
+
+    deadline = anyio.current_time() + _STABILIZATION_TIMEOUT_SEC
+    while anyio.current_time() < deadline:
+        client = None
+        try:
+            config = GlideClusterClientConfiguration(
+                addresses=nodes,
+                request_timeout=1000,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    connection_timeout=2000,
+                ),
+            )
+            client = await GlideClusterClient.create(config)
+            reply = await client.custom_command(["PING"])
+            if reply is not None:
+                return
+        except Exception:
+            pass
+        finally:
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    await client.close()
+        await anyio.sleep(_STABILIZATION_INTERVAL_SEC)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _stabilize_shared_cluster_after_auth():
+    """Module-scoped teardown that waits for the shared main cluster to settle
+    after this suite's CLIENT KILL fan-out. Sync outer fixture drives anyio.run
+    internally so it does not depend on the function-scoped anyio_backend
+    fixture (which would raise ScopeMismatch)."""
+    yield
+    try:
+        anyio.run(_await_shared_cluster_stabilization)
+    except Exception:
+        pass
+
+
 # Test-local reconnect backoff for the auth suite. Shorter than the library
 # default so the disconnect-and-recover flow finishes within test tolerance
 # under CI contention.
