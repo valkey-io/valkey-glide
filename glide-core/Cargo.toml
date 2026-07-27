@@ -10,6 +10,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 bytes = "1"
+dashmap = "5"
 futures = "^0.3"
 redis = { path = "./redis-rs/redis", features = [
     "aio",
