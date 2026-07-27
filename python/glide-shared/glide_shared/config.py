@@ -561,6 +561,7 @@ class TlsAdvancedConfiguration:
         root_pem_cacerts: Optional[bytes] = None,
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
+        *,
         client_cert_path: Optional[Union[str, os.PathLike[str]]] = None,
         client_key_path: Optional[Union[str, os.PathLike[str]]] = None,
         cert_reload_interval_seconds: Optional[int] = None,
