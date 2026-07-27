@@ -719,9 +719,7 @@ def test_tcp_nodelay_in_protobuf_request():
 def test_recovery_requests_queue_size_in_proto():
     """Verify recovery_requests_queue_size is accepted and mapped to the proto request."""
     # Default: not set — field should be absent (HasField returns False)
-    config = GlideClusterClientConfiguration(
-        [NodeAddress("localhost", 6379)]
-    )
+    config = GlideClusterClientConfiguration([NodeAddress("localhost", 6379)])
     request = config._create_a_protobuf_conn_request(cluster_mode=True)
     assert not request.HasField("recovery_requests_queue_size")
 
