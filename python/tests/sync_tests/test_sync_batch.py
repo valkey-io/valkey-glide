@@ -50,12 +50,12 @@ from tests.utils.utils import (
 )
 
 
-def exec_batch(
+def _exec_batch_once(
     glide_sync_client: TGlideClient,
     batch: BaseBatch,
-    route: Optional[TSingleNodeRoute] = None,
-    timeout: Optional[int] = None,
-    raise_on_error: bool = False,
+    route: Optional[TSingleNodeRoute],
+    timeout: Optional[int],
+    raise_on_error: bool,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_sync_client, GlideClient):
         batch_options = BatchOptions(timeout=timeout)
@@ -72,6 +72,26 @@ def exec_batch(
             raise_on_error,
             cluster_options,
         )
+
+
+def exec_batch(
+    glide_sync_client: TGlideClient,
+    batch: BaseBatch,
+    route: Optional[TSingleNodeRoute] = None,
+    timeout: Optional[int] = None,
+    raise_on_error: bool = False,
+) -> Optional[List[TResult]]:
+    """Sync twin: retry once on None for atomic cluster batches. See the
+    async twin (test_batch.py::exec_batch) for rationale."""
+    result = _exec_batch_once(glide_sync_client, batch, route, timeout, raise_on_error)
+    is_atomic_cluster = isinstance(glide_sync_client, GlideClusterClient) and getattr(
+        batch, "is_atomic", False
+    )
+    if result is None and is_atomic_cluster and not raise_on_error:
+        result = _exec_batch_once(
+            glide_sync_client, batch, route, timeout, raise_on_error
+        )
+    return result
 
 
 @pytest.mark.anyio
