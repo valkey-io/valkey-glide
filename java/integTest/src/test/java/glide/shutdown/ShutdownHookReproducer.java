@@ -6,9 +6,9 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 
 /**
- * Standalone helper process for {@link ShutdownHookIT}. It reproduces the scenario from <a
- * href="https://github.com/valkey-io/valkey-glide/issues/4809">issue #4809</a>: a client that is
- * still used from the application's own JVM shutdown hook.
+ * Standalone helper process for {@link ShutdownHookIntegrationTest}. It reproduces the scenario
+ * from <a href="https://github.com/valkey-io/valkey-glide/issues/4809">issue #4809</a>: a client
+ * that is still used from the application's own JVM shutdown hook.
  *
  * <p>This must run in its own JVM because a real {@link Runtime#addShutdownHook} only fires as the
  * JVM exits, at which point the in-process test framework can no longer make assertions. The parent

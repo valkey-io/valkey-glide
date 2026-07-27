@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Timeout;
  *
  * <pre>{@code
  * # Run this test only:
- * ./gradlew :integTest:test --tests 'glide.shutdown.ShutdownHookIT' -DRUN_SHUTDOWN_HOOK_IT=true
+ * ./gradlew :integTest:test --tests 'glide.shutdown.ShutdownHookIntegrationTest' -DRUN_SHUTDOWN_HOOK_IT=true
  *
  * # Run the full integTest suite with this test included:
  * ./gradlew :integTest:test -DRUN_SHUTDOWN_HOOK_IT=true
@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Timeout;
  * this test would be a good candidate to move onto that mechanism (nightly-only) instead of the
  * manual opt-in flag.
  */
-public class ShutdownHookIT {
+public class ShutdownHookIntegrationTest {
 
     @Test
     @Timeout(60)
