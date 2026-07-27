@@ -248,7 +248,6 @@ def _evict_pooled_sync_client(request) -> None:
         pass
 
 
-@pytest.mark.auth_suite
 class TestSyncAuthCommands:
     """Test cases for password authentication and management"""
 
