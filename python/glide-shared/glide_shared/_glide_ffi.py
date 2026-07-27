@@ -450,7 +450,8 @@ class _GlideFFI:
                 size_t connection_request_len,
                 uint32_t min_idle
             );
-            """)
+            """
+        )
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))

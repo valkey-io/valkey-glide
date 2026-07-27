@@ -3583,7 +3583,8 @@ where
     fn buffer_pending_requests_to_recovery_queue(&mut self) {
         let cap = self
             .inner
-            .get_cluster_param(|p| p.recovery_requests_queue_size).unwrap_or(1000) as usize;
+            .get_cluster_param(|p| p.recovery_requests_queue_size)
+            .unwrap_or(1000) as usize;
 
         let mut rx_guard = self
             .inner

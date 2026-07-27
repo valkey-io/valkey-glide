@@ -7208,7 +7208,7 @@ mod cluster_async {
         const CONCURRENCY: usize = 20;
         const PIPELINE_ITERATIONS: usize = 5;
         const PIPELINE_SIZE: usize = 10; // SET commands per pipeline
-        // After MOVED fires, delay each SET response by this many ms to widen recovery window
+                                         // After MOVED fires, delay each SET response by this many ms to widen recovery window
         const DELAY_AFTER_MOVED_MS: u64 = 5;
         // Delay CLUSTER SLOTS response to keep the recovery JoinHandle in Poll::Pending longer.
         // This is the primary mechanism for widening the recovery window: by slowing the
@@ -7321,9 +7321,7 @@ mod cluster_async {
                                 match conn.req_packed_command(&cmd).await {
                                     Ok(_) => cmd_successes += 1,
                                     Err(e) => {
-                                        println!(
-                                            "[T{task_id}][iter {iter}][k {k}] cmd error: {e}"
-                                        );
+                                        println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
                                         cmd_errors += 1;
                                     }
                                 }
@@ -7361,12 +7359,10 @@ mod cluster_async {
         );
 
         assert_eq!(
-            total_cmd_errors,
-            0,
+            total_cmd_errors, 0,
             "Expected zero command errors after recovery queue fix. \
              {} commands failed (total SETs to mock: {})",
-            total_cmd_errors,
-            total_sets,
+            total_cmd_errors, total_sets,
         );
 
         println!(

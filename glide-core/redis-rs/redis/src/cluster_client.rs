@@ -238,7 +238,7 @@ impl ClusterParams {
             cache: None,
             server_assisted_cache: false,
             address_resolver: None,
-            recovery_requests_queue_size: None,  // will use default of 1000 in buffer_pending_requests
+            recovery_requests_queue_size: None, // will use default of 1000 in buffer_pending_requests
         }
     }
 }
