@@ -687,7 +687,7 @@ export class GlideClusterClient extends BaseClient {
 
         this.configurePubsub(options, configuration);
 
-        if (options.recoveryRequestsQueueSize !== undefined) {
+        if (options.recoveryRequestsQueueSize) {
             configuration.recoveryRequestsQueueSize =
                 options.recoveryRequestsQueueSize;
         }

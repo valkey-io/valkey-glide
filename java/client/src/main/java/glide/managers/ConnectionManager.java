@@ -269,12 +269,12 @@ public class ConnectionManager {
                                 }
                             }
 
-                            // Set recovery requests queue size (0 means use core default of 1000)
-                            int recoveryQueueSize =
-                                    clusterConfig.getRecoveryRequestsQueueSize() != null
-                                            ? clusterConfig.getRecoveryRequestsQueueSize()
-                                            : 0;
-                            requestBuilder.setRecoveryRequestsQueueSize(recoveryQueueSize);
+                            // Set recovery requests queue size only when explicitly
+                            // configured; the core applies its own default otherwise.
+                            if (clusterConfig.getRecoveryRequestsQueueSize() != null) {
+                                requestBuilder.setRecoveryRequestsQueueSize(
+                                        clusterConfig.getRecoveryRequestsQueueSize());
+                            }
                         }
 
                         // Set timeouts

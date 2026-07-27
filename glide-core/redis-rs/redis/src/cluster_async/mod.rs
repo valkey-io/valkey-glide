@@ -639,7 +639,9 @@ pub(crate) struct ClusterConnInner<C> {
     connections_validation_handler: Option<JoinHandle<()>>,
     /// Requests buffered during a reconnect/recovery window.
     /// Drained to `in_flight_requests` once recovery completes.
-    /// Bounded by a hard cap of 1000 to prevent unbounded memory growth.
+    /// Requests buffered during a reconnect/recovery window.
+    /// Drained to `in_flight_requests` once recovery completes.
+    /// Bounded by `recovery_requests_queue_size` cluster param (default 1000).
     recovery_queue: std::collections::VecDeque<PendingRequest<C>>,
 }
 
@@ -3572,6 +3574,14 @@ where
 
         let mut overflow = Vec::new();
         while let Ok(request) = rx_guard.try_recv() {
+            if request.sender.is_closed() {
+                continue; // caller already gave up (e.g. client-side timeout)
+            }
+            if self.recovery_queue.len() >= cap {
+                // Reclaim slots held by requests whose callers have since given up.
+                self.recovery_queue
+                    .retain(|queued| !queued.sender.is_closed());
+            }
             if self.recovery_queue.len() < cap {
                 self.recovery_queue.push_back(request);
             } else {
