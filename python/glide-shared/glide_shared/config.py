@@ -756,8 +756,7 @@ def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> N
         )
     if interval <= 0:
         raise ConfigurationError(
-            "cert_reload_interval_seconds must be positive; "
-            f"got {interval}"
+            f"cert_reload_interval_seconds must be positive; got {interval}"
         )
     if interval > 2**32 - 1:
         raise ConfigurationError(
