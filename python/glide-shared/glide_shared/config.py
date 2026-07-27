@@ -438,7 +438,42 @@ class PeriodicChecksStatus(Enum):
 
 class TlsAdvancedConfiguration:
     """
-    Represents advanced TLS configuration settings.
+    Advanced TLS configuration for standalone and cluster clients.
+
+    Mutual TLS (mTLS) is configured through the two classmethod factories
+    below rather than by setting individual cert/key fields on the plain
+    constructor. This keeps invalid combinations (mixing byte- and
+    path-based mTLS, or asking for reload without paths) unrepresentable
+    through the public API:
+
+    - :meth:`with_mtls_pem(cert_pem, key_pem)` for static mTLS with
+      in-memory PEM buffers loaded once. Certificates are not reloaded.
+    - :meth:`with_mtls_reload(cert_path, key_path)` for path-based mTLS
+      with automatic reload. The GLIDE core re-reads both files on a
+      cadence so a rotated certificate is picked up on the next
+      reconnect.
+
+    Paths accept ``str`` or any :class:`os.PathLike` (including
+    :class:`pathlib.Path`); the value is normalized to ``str``.
+    Configuration errors are reported through
+    :class:`~glide_shared.exceptions.ConfigurationError`; missing files
+    surface as :class:`FileNotFoundError`.
+
+    Reload semantics:
+
+    - Both files are re-read at ``cert_reload_interval_seconds``. When
+      omitted, the GLIDE core uses its default cadence, currently 300
+      seconds (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
+      ``glide-core/src/tls_reload/mod.rs``).
+    - **A successful reload is adopted on the next reconnect. Existing
+      open connections keep their current material.**
+    - On read failure the core keeps the last-known-good material; no
+      exception is raised in application code.
+
+    The plain constructor is retained for byte-based mTLS callers that
+    predate the factories; the three path-based parameters
+    (``client_cert_path``, ``client_key_path``,
+    ``cert_reload_interval_seconds``) are keyword-only.
 
     Attributes:
         use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
@@ -521,34 +556,39 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with client_cert_pem.
 
-        client_cert_path (Optional[Union[str, pathlib.Path]]): Path to the PEM-encoded
-            client certificate for mutual TLS.
+        client_cert_path (Optional[Union[str, os.PathLike[str]]]): Path to the
+            PEM-encoded client certificate for mutual TLS. Must be paired with
+            ``client_key_path`` and cannot be combined with byte-based mTLS
+            (``client_cert_pem`` / ``client_key_pem``). The file must exist and
+            be non-empty at construction time; otherwise `FileNotFoundError` or
+            `ConfigurationError` is raised. Prefer :meth:`with_mtls_reload`.
 
-            - Requires ``client_key_path`` to be set; the pair enables path-based mTLS
-              and the client reloads both files on a cadence so a rotated certificate
-              is picked up on the next reconnect.
+        client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the
+            PEM-encoded client private key. Same rules as ``client_cert_path``;
+            must be paired with it.
 
-            - Cannot be combined with byte-based mTLS (``client_cert_pem`` / ``client_key_pem``).
-
-            - The file must exist and be non-empty when this configuration is
-              constructed; otherwise `FileNotFoundError` or `ConfigurationError`
-              is raised.
-
-            - Accepts ``str`` or ``pathlib.Path``; stored as ``str``.
-
-        client_key_path (Optional[Union[str, pathlib.Path]]): Path to the PEM-encoded
-            client private key. Same rules as ``client_cert_path``; must be paired with it.
-
-        cert_reload_interval_seconds (Optional[int]): Override for the reload cadence
-            in seconds. Positive integer up to 4294967295. Only meaningful with
-            path-based mTLS; ``None`` leaves the cadence at the core default.
+        cert_reload_interval_seconds (Optional[int]): Override for the reload
+            cadence, in seconds. Positive integer up to 4294967295. Only
+            meaningful with path-based mTLS. When ``None``, the GLIDE core uses
+            its default cadence (currently 300 seconds).
 
     Example::
 
         from pathlib import Path
-        from glide_shared.config import TlsAdvancedConfiguration
+        from glide_shared.config import (
+            TlsAdvancedConfiguration,
+            load_client_certificate_and_key_from_file,
+        )
 
-        tls_config = TlsAdvancedConfiguration.with_client_paths(
+        # Static byte-based mTLS.
+        cert, key = load_client_certificate_and_key_from_file(
+            "/etc/mtls/client-cert.pem",
+            "/etc/mtls/client-key.pem",
+        )
+        tls_config = TlsAdvancedConfiguration.with_mtls_pem(cert, key)
+
+        # Path-based mTLS with automatic reload every 5 minutes.
+        tls_config = TlsAdvancedConfiguration.with_mtls_reload(
             Path("/etc/mtls/client-cert.pem"),
             Path("/etc/mtls/client-key.pem"),
             cert_reload_interval_seconds=300,
@@ -625,7 +665,7 @@ class TlsAdvancedConfiguration:
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
 
     @classmethod
-    def with_client_pem(
+    def with_mtls_pem(
         cls,
         client_cert_pem: bytes,
         client_key_pem: bytes,
@@ -638,7 +678,7 @@ class TlsAdvancedConfiguration:
 
         Both PEM buffers are required and are used verbatim; the client
         presents them on connect and does not reload them. For automatic
-        reload from disk, use :meth:`with_client_paths` instead.
+        reload from disk, use :meth:`with_mtls_reload` instead.
 
         Args:
             client_cert_pem: Client certificate bytes in PEM format.
@@ -659,7 +699,7 @@ class TlsAdvancedConfiguration:
         )
 
     @classmethod
-    def with_client_paths(
+    def with_mtls_reload(
         cls,
         client_cert_path: Union[str, os.PathLike[str]],
         client_key_path: Union[str, os.PathLike[str]],
@@ -673,15 +713,16 @@ class TlsAdvancedConfiguration:
         automatic client certificate/key reload.
 
         Both paths are required. The GLIDE core reads the certificate and
-        key from disk and, because reload is enabled implicitly, re-reads
-        them on a cadence so a rotated certificate is picked up on the
-        next reconnect. To customize the cadence, pass
-        `cert_reload_interval_seconds`; otherwise the core default is
-        used.
+        key from disk at connect time and periodically re-reads them so
+        a rotated certificate is adopted on the **next reconnect**;
+        existing open connections keep their current material. When
+        ``cert_reload_interval_seconds`` is omitted, the cadence is the
+        GLIDE core default (currently 300 seconds).
 
         Args:
             client_cert_path: Path to the client certificate PEM file
-                (``str`` or ``pathlib.Path``).
+                (``str`` or :class:`os.PathLike`, including
+                :class:`pathlib.Path`).
             client_key_path: Path to the client private key PEM file.
             cert_reload_interval_seconds: Optional override for the
                 reload cadence, in seconds.
@@ -1829,7 +1870,7 @@ def load_client_certificate_and_key_from_file(
     Convenience wrapper around
     :func:`load_client_certificate_from_file` and
     :func:`load_client_key_from_file`. The certificate is read first;
-    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_client_paths`
+    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_mtls_reload`
     for automatic reload from disk; use this helper when static, byte-based
     mTLS is desired.
 
@@ -1855,7 +1896,7 @@ def load_client_certificate_and_key_from_file(
             "/etc/mtls/client-cert.pem",
             "/etc/mtls/client-key.pem",
         )
-        tls_config = TlsAdvancedConfiguration.with_client_pem(cert, key)
+        tls_config = TlsAdvancedConfiguration.with_mtls_pem(cert, key)
     """
     cert = load_client_certificate_from_file(os.fspath(cert_path))
     key = load_client_key_from_file(os.fspath(key_path))
