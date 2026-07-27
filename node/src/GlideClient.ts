@@ -256,15 +256,15 @@ export class GlideClient extends BaseClient {
     /**
      * @internal
      */
-    protected async createClientRequest(
+    protected createClientRequest(
         options: GlideClientConfiguration,
-    ): Promise<connection_request.IConnectionRequest> {
-        const configuration = await super.createClientRequest(options);
+    ): connection_request.IConnectionRequest {
+        const configuration = super.createClientRequest(options);
 
         this.configurePubsub(options, configuration);
 
         if (options.advancedConfiguration) {
-            await this.configureAdvancedConfigurationBase(
+            this.configureAdvancedConfigurationBase(
                 options.advancedConfiguration,
                 configuration,
             );

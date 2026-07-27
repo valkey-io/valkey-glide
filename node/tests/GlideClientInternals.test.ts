@@ -337,10 +337,7 @@ class TlsConfigProbe extends BaseClient {
         tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
     ): Promise<connection_request.IConnectionRequest> {
         const request: connection_request.IConnectionRequest = { tlsMode };
-        await this.configureAdvancedConfigurationBase(
-            advancedConfiguration,
-            request,
-        );
+        this.configureAdvancedConfigurationBase(advancedConfiguration, request);
         return request;
     }
 }
@@ -356,8 +353,9 @@ const expectConfigurationError = async (
     build: () => Promise<unknown>,
     messageSubstring: string,
 ): Promise<void> => {
-    await expect(build()).rejects.toBeInstanceOf(ConfigurationError);
-    await expect(build()).rejects.toThrow(messageSubstring);
+    const err = await build().catch((e) => e);
+    expect(err).toBeInstanceOf(ConfigurationError);
+    expect((err as Error).message).toContain(messageSubstring);
 };
 
 describe('mutualTls kind: "bytes"', () => {
@@ -430,6 +428,25 @@ describe('mutualTls kind: "bytes"', () => {
                     },
                 }),
             "mutualTls.key cannot be empty",
+        );
+    });
+
+    // Runtime-only check. The MutualTls union types cert as Buffer | string,
+    // so an untyped JS caller passing null is the realistic path in. The cast
+    // is deliberate.
+    it("rejects a null cert with a ConfigurationError, not a raw TypeError", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            cert: null as unknown as Buffer,
+                            key: CLIENT_KEY_PEM,
+                        },
+                    },
+                }),
+            "mutualTls.cert must be a Buffer or non-empty string",
         );
     });
 
@@ -515,6 +532,7 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         ["non-integer", 12.5],
         ["NaN", Number.NaN],
         ["Infinity", Number.POSITIVE_INFINITY],
+        ["exceeds uint32", 2 ** 32],
     ];
 
     it.each(invalidIntervals)(
@@ -566,96 +584,6 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
                     },
                 }),
             "mutualTls.keyPath must be a non-empty string",
-        );
-    });
-
-    it("rejects a missing cert file at connect time", async () => {
-        const missing = join(tmpDir, "does-not-exist.crt");
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath: missing,
-                            keyPath,
-                        },
-                    },
-                }),
-            `mutualTls.certPath references a file that does not exist: ${missing}`,
-        );
-    });
-
-    it("rejects an empty cert file at connect time", async () => {
-        const empty = join(tmpDir, "empty.crt");
-        writeFileSync(empty, "");
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath: empty,
-                            keyPath,
-                        },
-                    },
-                }),
-            `mutualTls.certPath references an empty file: ${empty}`,
-        );
-    });
-
-    it("rejects a missing key file at connect time", async () => {
-        const missing = join(tmpDir, "missing-key.crt");
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                            keyPath: missing,
-                        },
-                    },
-                }),
-            `mutualTls.keyPath references a file that does not exist: ${missing}`,
-        );
-    });
-
-    it("rejects an empty key file at connect time", async () => {
-        const empty = join(tmpDir, "empty.key");
-        writeFileSync(empty, "");
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                            keyPath: empty,
-                        },
-                    },
-                }),
-            `mutualTls.keyPath references an empty file: ${empty}`,
-        );
-    });
-
-    it("reports certPath first when both files are bad", async () => {
-        // Serialized stat ordering: the cert is checked before the key, so a
-        // missing-cert + missing-key config surfaces certPath as the error.
-        const missingCert = join(tmpDir, "gone.crt");
-        const missingKey = join(tmpDir, "gone.key");
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath: missingCert,
-                            keyPath: missingKey,
-                        },
-                    },
-                }),
-            `mutualTls.certPath references a file that does not exist: ${missingCert}`,
         );
     });
 

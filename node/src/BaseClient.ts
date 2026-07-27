@@ -7,7 +7,7 @@
  * to suppress unused import errors for types referenced only in JSDoc.
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import Long from "long";
 import { Buffer } from "protobufjs/minimal";
 import {
@@ -346,8 +346,10 @@ export type GlideString = string | Buffer;
  * The core reads them at connect time and re-reads them on a schedule so
  * a rotated cert is picked up on the next reconnect. If the reload fails
  * (missing file, key does not match cert, unreadable), the last known good
- * material is kept. Reload cadence defaults to the core's, or takes
- * `reloadIntervalSeconds` when set.
+ * material is kept. Reload cadence defaults to 300 seconds (5 minutes) when
+ * `reloadIntervalSeconds` is omitted. Intervals above 3600 seconds (1 hour)
+ * are discouraged; the core logs a warning because a rotated certificate may
+ * then be adopted late.
  *
  * Reload is on iff `kind === "path"`. There is no separate toggle.
  *
@@ -384,6 +386,16 @@ export type MutualTls =
           readonly keyPath: string;
           readonly reloadIntervalSeconds?: number;
       };
+
+/**
+ * Upper bound for {@link MutualTls.reloadIntervalSeconds}. The wire field is a
+ * protobuf `uint32`; values above this silently truncate on encode, so they
+ * are rejected up front. Matches the cap enforced by the other language
+ * clients.
+ *
+ * @internal
+ */
+const MAX_RELOAD_INTERVAL_SECONDS = 4_294_967_295;
 
 /**
  * Reads a PEM file for TLS configuration. Shared by
@@ -474,16 +486,19 @@ export async function loadClientCertificateAndKeyFromFile(
  *
  * @internal
  */
-function requireNonEmptyPem(
-    value: Buffer | string,
-    fieldName: string,
-): Uint8Array {
+function requireNonEmptyPem(value: unknown, fieldName: string): Uint8Array {
+    if (!Buffer.isBuffer(value) && typeof value !== "string") {
+        throw new ConfigurationError(
+            `${fieldName} must be a Buffer or non-empty string.`,
+        );
+    }
+
     const buffer =
         typeof value === "string" ? Buffer.from(value, "utf-8") : value;
 
     if (buffer.length === 0) {
         throw new ConfigurationError(
-            `${fieldName} cannot be empty; omit ${fieldName} if not configuring mTLS.`,
+            `${fieldName} cannot be empty; omit tlsAdvancedConfiguration.mutualTls if you do not want mTLS.`,
         );
     }
 
@@ -506,46 +521,6 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
 }
 
 /**
- * Confirms that a path is a regular non-empty file. Any fs error is wrapped
- * in a {@link ConfigurationError} with the original error kept as `cause`.
- *
- * @internal
- */
-async function requireRegularNonEmptyFile(
-    path: string,
-    fieldName: string,
-): Promise<void> {
-    let stats;
-
-    try {
-        stats = await stat(path);
-    } catch (error) {
-        const fsError = error as NodeJS.ErrnoException;
-        const message =
-            fsError.code === "ENOENT"
-                ? `${fieldName} references a file that does not exist: ${path}`
-                : `Failed to stat ${fieldName} (${path}): ${
-                      error instanceof Error ? error.message : String(error)
-                  }`;
-        const wrapped = new ConfigurationError(message);
-        (wrapped as Error).cause = error;
-        throw wrapped;
-    }
-
-    if (!stats.isFile()) {
-        throw new ConfigurationError(
-            `${fieldName} must reference a regular file: ${path}`,
-        );
-    }
-
-    if (stats.size === 0) {
-        throw new ConfigurationError(
-            `${fieldName} references an empty file: ${path}`,
-        );
-    }
-}
-
-/**
  * Validates a {@link MutualTls} value and writes it into the connection
  * request. Wire fields: `client_cert`/`client_key` (proto 22/23) for the
  * byte-based variant; `client_cert_path`/`client_key_path`/`cert_reload`
@@ -553,56 +528,65 @@ async function requireRegularNonEmptyFile(
  *
  * @internal
  */
-async function applyMutualTls(
+function applyMutualTls(
     mtls: MutualTls,
     request: connection_request.IConnectionRequest,
-): Promise<void> {
-    if (mtls.kind === "bytes") {
-        request.clientCert = requireNonEmptyPem(mtls.cert, "mutualTls.cert");
-        request.clientKey = requireNonEmptyPem(mtls.key, "mutualTls.key");
-        return;
-    }
-
-    if (mtls.kind === "path") {
-        const certPath = requireNonEmptyString(
-            mtls.certPath,
-            "mutualTls.certPath",
-        );
-        const keyPath = requireNonEmptyString(
-            mtls.keyPath,
-            "mutualTls.keyPath",
-        );
-
-        const interval = mtls.reloadIntervalSeconds;
-
-        if (
-            interval !== undefined &&
-            (typeof interval !== "number" ||
-                !Number.isInteger(interval) ||
-                interval <= 0)
-        ) {
-            throw new ConfigurationError(
-                "mutualTls.reloadIntervalSeconds must be a positive integer.",
+): void {
+    switch (mtls.kind) {
+        case "bytes": {
+            request.clientCert = requireNonEmptyPem(
+                mtls.cert,
+                "mutualTls.cert",
             );
+            request.clientKey = requireNonEmptyPem(mtls.key, "mutualTls.key");
+            return;
         }
 
-        await requireRegularNonEmptyFile(certPath, "mutualTls.certPath");
-        await requireRegularNonEmptyFile(keyPath, "mutualTls.keyPath");
+        case "path": {
+            const certPath = requireNonEmptyString(
+                mtls.certPath,
+                "mutualTls.certPath",
+            );
+            const keyPath = requireNonEmptyString(
+                mtls.keyPath,
+                "mutualTls.keyPath",
+            );
 
-        request.clientCertPath = certPath;
-        request.clientKeyPath = keyPath;
-        request.certReload = {
-            enabled: true,
-            intervalSeconds: interval ?? null,
-        };
-        return;
+            const interval = mtls.reloadIntervalSeconds;
+
+            if (
+                interval !== undefined &&
+                (typeof interval !== "number" ||
+                    !Number.isInteger(interval) ||
+                    interval <= 0 ||
+                    interval > MAX_RELOAD_INTERVAL_SECONDS)
+            ) {
+                throw new ConfigurationError(
+                    `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_RELOAD_INTERVAL_SECONDS}.`,
+                );
+            }
+
+            request.clientCertPath = certPath;
+            request.clientKeyPath = keyPath;
+            request.certReload = {
+                enabled: true,
+                intervalSeconds: interval ?? null,
+            };
+            return;
+        }
+
+        default: {
+            // Exhaustiveness guard: adding a new MutualTls variant without a
+            // matching case fails to compile here. The runtime throw defends
+            // untyped JS callers passing an unknown discriminant.
+            const _exhaustive: never = mtls;
+            throw new ConfigurationError(
+                `Unsupported mutualTls variant: kind=${String(
+                    (_exhaustive as { kind?: unknown }).kind,
+                )}`,
+            );
+        }
     }
-
-    throw new ConfigurationError(
-        `Unsupported mutualTls variant: kind=${String(
-            (mtls as { kind?: unknown }).kind,
-        )}`,
-    );
 }
 
 /**
@@ -1336,7 +1320,9 @@ export interface AdvancedBaseClientConfiguration {
          * Mutual TLS (mTLS) client authentication material. See
          * {@link MutualTls} for the two variants: `kind: "bytes"` for static
          * material and `kind: "path"` for material the core reloads from
-         * disk. Reload is on iff `kind === "path"`.
+         * disk. Reload is on iff `kind === "path"`, with a cadence that
+         * defaults to 300 seconds (5 minutes) when `reloadIntervalSeconds`
+         * is omitted.
          *
          * Requires `useTLS: true` on the base client configuration. Setting
          * `mutualTls` when TLS is disabled raises a {@link ConfigurationError}.
@@ -9856,9 +9842,9 @@ export class BaseClient {
     /**
      * @internal
      */
-    protected async createClientRequest(
+    protected createClientRequest(
         options: BaseClientConfiguration,
-    ): Promise<connection_request.IConnectionRequest> {
+    ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : connection_request.ReadFrom.Primary;
@@ -10015,10 +10001,10 @@ export class BaseClient {
     /**
      * @internal
      */
-    protected async configureAdvancedConfigurationBase(
+    protected configureAdvancedConfigurationBase(
         options: AdvancedBaseClientConfiguration,
         request: connection_request.IConnectionRequest,
-    ): Promise<void> {
+    ): void {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
@@ -10061,7 +10047,7 @@ export class BaseClient {
         }
 
         if (tls.mutualTls !== undefined) {
-            await applyMutualTls(tls.mutualTls, request);
+            applyMutualTls(tls.mutualTls, request);
         }
     }
 
@@ -10072,7 +10058,7 @@ export class BaseClient {
     protected async connectToServer(
         options: BaseClientConfiguration,
     ): Promise<void> {
-        const request = await this.createClientRequest(options);
+        const request = this.createClientRequest(options);
 
         if (options.addressResolver) {
             this.addressResolverKey = registerAddressResolver(
