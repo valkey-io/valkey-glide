@@ -614,10 +614,9 @@ class TlsAdvancedConfiguration:
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
 
-        path_based = has_cert_path and has_key_path
-
+        # After the symmetry check above, has_cert_path == has_key_path.
         _validate_reload_interval(
-            self.cert_reload_interval_seconds, path_based=path_based
+            self.cert_reload_interval_seconds, path_based=has_cert_path
         )
 
         if self.client_cert_path is not None and self.client_key_path is not None:
@@ -710,13 +709,18 @@ def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> N
         return
     if isinstance(interval, bool) or not isinstance(interval, int):
         raise ConfigurationError(
-            "cert_reload_interval_seconds must be a positive integer "
-            f"between 1 and 4294967295 seconds; got {interval!r}"
+            "cert_reload_interval_seconds must be an integer; "
+            f"got {type(interval).__name__} ({interval!r})"
         )
-    if interval <= 0 or interval > 2**32 - 1:
+    if interval <= 0:
         raise ConfigurationError(
-            "cert_reload_interval_seconds must be a positive integer "
-            f"between 1 and 4294967295 seconds; got {interval}"
+            "cert_reload_interval_seconds must be positive; "
+            f"got {interval}"
+        )
+    if interval > 2**32 - 1:
+        raise ConfigurationError(
+            "cert_reload_interval_seconds must fit in an unsigned 32-bit "
+            f"integer (max 4294967295); got {interval}"
         )
     if not path_based:
         raise ConfigurationError(
@@ -889,23 +893,12 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Handle client certificate for mutual TLS
-        client_cert = tls_config.client_cert_pem
-        if client_cert is not None:
-            if len(client_cert) == 0:
-                raise ConfigurationError(
-                    "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
-                )
-            request.client_cert = client_cert
-
-        # Handle client key for mutual TLS
-        client_key = tls_config.client_key_pem
-        if client_key is not None:
-            if len(client_key) == 0:
-                raise ConfigurationError(
-                    "client_key_pem cannot be an empty bytes object; use None if not providing client key"
-                )
-            request.client_key = client_key
+        # Byte-mode mTLS. Emptiness and cert/key pairing are enforced
+        # at construction time in `_validate_mtls`; here we just emit.
+        if tls_config.client_cert_pem is not None:
+            request.client_cert = tls_config.client_cert_pem
+        if tls_config.client_key_pem is not None:
+            request.client_key = tls_config.client_key_pem
 
         # Path-based mTLS with automatic reload; the byte and path
         # branches never both apply (enforced in `_validate_mtls`).
@@ -1735,6 +1728,28 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
+def _load_pem_file(path: str, label: str) -> bytes:
+    """Read a PEM file and return its contents.
+
+    ``label`` is embedded verbatim in error messages ("Certificate",
+    "Client certificate", "Client key") so callers can report which
+    file failed. Missing files raise :class:`FileNotFoundError`;
+    empty or unreadable files raise :class:`ConfigurationError`.
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{label} file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read {label.lower()} file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"{label} file is empty: {path}")
+
+    return data
+
+
 def load_root_certificates_from_file(path: str) -> bytes:
     """
     Load PEM-encoded root certificates from a file.
@@ -1756,24 +1771,10 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
         from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
 
-        # Load certificates from file
         certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
-
-        # Use in TLS configuration
         tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Certificate")
 
 
 def load_client_certificate_from_file(path: str) -> bytes:
@@ -1792,37 +1793,8 @@ def load_client_certificate_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the certificate file does not exist.
         ConfigurationError: If the certificate file is empty.
-
-    Example usage::
-
-        from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
-        )
-
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
-        tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
-        )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Client certificate")
 
 
 def load_client_key_from_file(path: str) -> bytes:
@@ -1841,37 +1813,8 @@ def load_client_key_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the key file does not exist.
         ConfigurationError: If the key file is empty.
-
-    Example usage::
-
-        from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
-        )
-
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
-        tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
-        )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client key file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client key file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client key file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Client key")
 
 
 def load_client_certificate_and_key_from_file(

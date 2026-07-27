@@ -804,7 +804,7 @@ def test_tls_cert_reload_interval_rejects_values_exceeding_uint32(tmp_path):
                 client_key_path=str(key_path),
                 cert_reload_interval_seconds=bad,
             )
-        assert "between 1 and 4294967295 seconds" in str(exc_info.value)
+        assert "unsigned 32-bit" in str(exc_info.value)
 
     # 2**32 - 1 is the maximum valid uint32 value and must be accepted.
     tls_config = TlsAdvancedConfiguration(
@@ -1067,7 +1067,7 @@ def test_tls_with_client_paths_factory_float_interval_rejected(tmp_path):
 
 def test_tls_with_client_paths_factory_uint32_overflow_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="between 1 and 4294967295"):
+    with pytest.raises(ConfigurationError, match="unsigned 32-bit"):
         TlsAdvancedConfiguration.with_client_paths(
             cert_path,
             key_path,
