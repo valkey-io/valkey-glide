@@ -78,6 +78,48 @@ async def exec_batch(
 
 @pytest.mark.anyio
 class TestBatch:
+    @pytest.fixture(autouse=True)
+    async def _evict_pooled_client_before_test(self, request):
+        """Evict the shared pooled GlideClusterClient for the RESP3+cluster
+        parametrize axis before every TestBatch test.
+
+        Batch tests reuse a session-wide pooled client keyed by
+        (worker, cluster_mode, protocol). On the RESP3+cluster axis some
+        earlier test in the run (auth suite, or an intra-file abort like
+        test_transaction_with_different_slots's CrossSlot raise) leaves
+        that pooled client's atomic-pipeline aggregator wedged so the very
+        next .exec() returns None. Rebuilding the client per test is what
+        production consumers effectively do (one client per process) and
+        makes these tests robust without changing their assertions.
+
+        Only evicts the RESP3+cluster pool entry; other axes still reuse
+        the pool for speed.
+        """
+        try:
+            protocol = request.getfixturevalue("protocol")
+            cluster_mode = request.getfixturevalue("cluster_mode")
+        except Exception:
+            yield
+            return
+
+        should_evict = cluster_mode is True and protocol == ProtocolVersion.RESP3
+        if should_evict:
+            import contextlib
+
+            from tests.async_tests.conftest import (
+                _client_pool,
+                _client_pool_lock,
+                _get_worker_id,
+            )
+
+            cache_key = (_get_worker_id(), True, protocol)
+            with _client_pool_lock:
+                evicted = _client_pool.pop(cache_key, None)
+            if evicted is not None:
+                with contextlib.suppress(Exception):
+                    await evicted.close()
+        yield
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_batch_set_with_bytearray_and_memoryview(
@@ -110,34 +152,13 @@ class TestBatch:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(
-        self, glide_client: GlideClusterClient, request
+        self, glide_client: GlideClusterClient
     ):
         transaction = ClusterBatch(is_atomic=True)
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
             await glide_client.exec(transaction, raise_on_error=True)
-
-        # Aborting an atomic ClusterBatch with raise_on_error leaves the
-        # pooled client's atomic-pipeline aggregator wedged on RESP3+cluster
-        # for the next test that reuses this pool entry: its .exec() returns
-        # None instead of the expected reply. Evict the pool entry so the
-        # next glide_client build is a fresh client. Only closes the pooled
-        # handle; a subsequent test rebuilds via create_client.
-        import contextlib
-
-        from tests.async_tests.conftest import (
-            _client_pool,
-            _client_pool_lock,
-            _get_worker_id,
-        )
-
-        cache_key = (_get_worker_id(), True, request.getfixturevalue("protocol"))
-        with _client_pool_lock:
-            evicted = _client_pool.pop(cache_key, None)
-        if evicted is not None:
-            with contextlib.suppress(Exception):
-                await evicted.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

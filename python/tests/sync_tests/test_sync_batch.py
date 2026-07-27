@@ -76,6 +76,37 @@ def exec_batch(
 
 @pytest.mark.anyio
 class TestSyncBatch:
+    @pytest.fixture(autouse=True)
+    def _evict_pooled_sync_client_before_test(self, request):
+        """Sync twin: evict the shared pooled GlideClusterClient for the
+        RESP3+cluster axis before every TestSyncBatch test. See the async
+        twin (test_batch.py::TestBatch._evict_pooled_client_before_test)
+        for rationale."""
+        try:
+            protocol = request.getfixturevalue("protocol")
+            cluster_mode = request.getfixturevalue("cluster_mode")
+        except Exception:
+            yield
+            return
+
+        should_evict = cluster_mode is True and protocol == ProtocolVersion.RESP3
+        if should_evict:
+            import contextlib
+
+            from tests.sync_tests.conftest import (
+                _get_worker_id,
+                _sync_client_pool,
+                _sync_client_pool_lock,
+            )
+
+            cache_key = (_get_worker_id(), True, protocol)
+            with _sync_client_pool_lock:
+                evicted = _sync_client_pool.pop(cache_key, None)
+            if evicted is not None:
+                with contextlib.suppress(Exception):
+                    evicted.close()
+        yield
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_batch_set_with_bytearray_and_memoryview(
@@ -108,32 +139,13 @@ class TestSyncBatch:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_transaction_with_different_slots(
-        self, glide_sync_client: GlideClusterClient, request
+        self, glide_sync_client: GlideClusterClient
     ):
         transaction = ClusterBatch(is_atomic=True)
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
             glide_sync_client.exec(transaction, raise_on_error=True)
-
-        # Aborting an atomic ClusterBatch with raise_on_error leaves the
-        # pooled client's atomic-pipeline aggregator wedged on RESP3+cluster
-        # for the next test that reuses this pool entry; evict so the next
-        # glide_sync_client build is a fresh client.
-        import contextlib
-
-        from tests.sync_tests.conftest import (
-            _get_worker_id,
-            _sync_client_pool,
-            _sync_client_pool_lock,
-        )
-
-        cache_key = (_get_worker_id(), True, request.getfixturevalue("protocol"))
-        with _sync_client_pool_lock:
-            evicted = _sync_client_pool.pop(cache_key, None)
-        if evicted is not None:
-            with contextlib.suppress(Exception):
-                evicted.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
