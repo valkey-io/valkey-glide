@@ -80,10 +80,14 @@ def exec_batch(
     route: Optional[TSingleNodeRoute] = None,
     timeout: Optional[int] = None,
     raise_on_error: bool = False,
+    allow_null_result: bool = False,
 ) -> Optional[List[TResult]]:
-    """Sync twin: retry once on None for atomic cluster batches. See the
-    async twin (test_batch.py::exec_batch) for rationale."""
+    """Sync twin: retry once on None for atomic cluster batches. Tests that
+    legitimately expect None (WATCH-abort transactions) must pass
+    allow_null_result=True to opt out of the retry."""
     result = _exec_batch_once(glide_sync_client, batch, route, timeout, raise_on_error)
+    if allow_null_result:
+        return result
     is_atomic_cluster = isinstance(glide_sync_client, GlideClusterClient) and getattr(
         batch, "is_atomic", False
     )
@@ -290,7 +294,7 @@ class TestSyncBatch:
         result2 = client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = exec_batch(glide_sync_client, transaction)
+        result3 = exec_batch(glide_sync_client, transaction, allow_null_result=True)
         assert result3 is None
 
         client2.close()

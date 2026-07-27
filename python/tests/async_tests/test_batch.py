@@ -82,13 +82,19 @@ async def exec_batch(
     route: Optional[TSingleNodeRoute] = None,
     timeout: Optional[int] = None,
     raise_on_error: bool = False,
+    allow_null_result: bool = False,
 ) -> Optional[List[TResult]]:
-    """Execute a batch. For atomic batches on cluster clients, retry once if
-    the aggregator surfaces None - this is a known transient artifact of
-    running multiple clients concurrently in one Python process during
-    tests. Production consumers hit exec once and get their result; the
-    retry mirrors what a real caller would do."""
+    """Execute a batch. For atomic batches on cluster clients where None is
+    NOT an expected outcome, retry once if the aggregator surfaces None -
+    a known transient artifact of running multiple clients concurrently in
+    one Python process during tests. Production consumers hit exec once and
+    get their result; the retry mirrors what a real caller would do.
+
+    Tests that legitimately expect None (e.g. WATCH-abort transactions)
+    must pass allow_null_result=True to opt out of the retry."""
     result = await _exec_batch_once(glide_client, batch, route, timeout, raise_on_error)
+    if allow_null_result:
+        return result
     is_atomic_cluster = isinstance(glide_client, GlideClusterClient) and getattr(
         batch, "is_atomic", False
     )
@@ -306,7 +312,7 @@ class TestBatch:
         result2 = await client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = await exec_batch(glide_client, transaction)
+        result3 = await exec_batch(glide_client, transaction, allow_null_result=True)
         assert result3 is None
 
         await client2.close()
