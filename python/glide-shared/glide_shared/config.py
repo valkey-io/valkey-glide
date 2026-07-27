@@ -440,11 +440,13 @@ class TlsAdvancedConfiguration:
     """
     Advanced TLS configuration for standalone and cluster clients.
 
-    Mutual TLS (mTLS) is configured through the two classmethod factories
-    below rather than by setting individual cert/key fields on the plain
-    constructor. This keeps invalid combinations (mixing byte- and
-    path-based mTLS, or asking for reload without paths) unrepresentable
-    through the public API:
+    Mutual TLS (mTLS) is normally configured through the two classmethod
+    factories below, which pair the certificate with its key and select
+    the reload mode. The plain constructor accepts the same fields and
+    rejects invalid combinations (mixing byte- and path-based mTLS, or
+    asking for reload without paths) with
+    :class:`~glide_shared.exceptions.ConfigurationError` at construction
+    time:
 
     - :meth:`with_mtls_pem(cert_pem, key_pem)` for static mTLS with
       in-memory PEM buffers loaded once. Certificates are not reloaded.
