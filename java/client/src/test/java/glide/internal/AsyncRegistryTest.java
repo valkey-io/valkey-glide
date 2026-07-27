@@ -228,6 +228,10 @@ public class AsyncRegistryTest {
         assertFalse(f.isDone());
         assertEquals(1, AsyncRegistry.getActiveFutureCount());
         assertEquals(1, AsyncRegistry.getPendingTimeoutCount());
+
+        // Clean up: cancel the abandoned future so its 60s timeout task is cancelled and doesn't
+        // outlive this test and invoke GlideNativeBridge.markTimedOut in the test JVM.
+        f.cancel(true);
     }
 
     private static void assertClosingException(CompletableFuture<?> future, String expectedMessage) {
