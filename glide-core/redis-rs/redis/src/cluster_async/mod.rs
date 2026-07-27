@@ -3558,9 +3558,11 @@ where
     /// Fail all pending requests immediately with ClientError.
     /// Buffer incoming requests into the recovery queue while reconnect is in progress.
     /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
-    /// The cap is hard-coded at 1000 to prevent unbounded memory growth during recovery.
+    /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
     fn buffer_pending_requests_to_recovery_queue(&mut self) {
-        const CAP: usize = 1000;
+        let cap = self
+            .inner
+            .get_cluster_param(|p| p.recovery_requests_queue_size).unwrap_or(1000) as usize;
 
         let mut rx_guard = self
             .inner
@@ -3570,7 +3572,7 @@ where
 
         let mut overflow = Vec::new();
         while let Ok(request) = rx_guard.try_recv() {
-            if self.recovery_queue.len() < CAP {
+            if self.recovery_queue.len() < cap {
                 self.recovery_queue.push_back(request);
             } else {
                 overflow.push(request);
@@ -3585,7 +3587,7 @@ where
                 format!(
                     "buffer_pending_requests_to_recovery_queue: recovery queue full (cap={}), \
                      failing {} overflow requests",
-                    CAP,
+                    cap,
                     overflow.len()
                 )
             );
