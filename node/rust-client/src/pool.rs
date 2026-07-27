@@ -44,6 +44,11 @@ pub struct PoolConfigNapi {
     pub min_idle: u32,
     pub idle_timeout_ms: u32,
     pub request_timeout_ms: u32,
+    /// Maximum inactivity time for a borrowed client before the pool reclaims it (ms).
+    /// The timer resets on every command sent.
+    /// The abandon monitor skips clients executing blocking commands (BLPOP, XREAD BLOCK, etc.).
+    /// Set to 0 to disable abandon detection. Default: 300000 (5 minutes).
+    pub abandon_timeout_ms: u32,
 }
 
 #[napi(object)]
@@ -89,12 +94,16 @@ pub fn create_pool(
         connection_request: conn_req_bytes.clone(),
         is_async: true,
         configured_database_id,
+        abandon_timeout: Duration::from_millis(pool_config.abandon_timeout_ms as u64),
     };
 
     let pool = ClientPool::new(config)
         .map_err(|e| Error::new(Status::InvalidArg, format!("Invalid pool config: {e}")))?;
 
     let pool_id = pool::register_pool(pool) as i64;
+
+    // Start abandon monitor
+    pool::start_abandon_monitor(pool_id as u64, get_pool_runtime().handle());
 
     // Background warmup
     let min_idle = pool_config.min_idle;

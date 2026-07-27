@@ -414,6 +414,7 @@ class _GlideFFI:
                 uint32_t min_idle,
                 uint64_t idle_timeout_ms,
                 uint64_t request_timeout_ms,
+                uint64_t abandon_timeout_ms,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
                 const ClientType* client_type

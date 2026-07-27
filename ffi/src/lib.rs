@@ -3549,9 +3549,39 @@ unsafe fn execute_command(
     // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let mut client = client_adapter.core.client.clone();
 
+    // Abandon monitor integration: if this is a pool-borrowed client executing a
+    // blocking command, mark it so the abandon monitor skips it during the block.
+    // Also refresh borrowed_at to keep the client alive while actively in use.
+    let blocking_flag = if glide_core::client::is_blocking_command(&cmd) {
+        let ptr = client_adapter_ptr as usize;
+        if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&ptr) {
+            let (pool_id, client_id) = *entry.value();
+            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+            Some((pool_id, client_id))
+        } else {
+            None
+        }
+    } else {
+        // Non-blocking command on a pool client: refresh borrowed_at so the
+        // abandon monitor only fires after inactivity, not total borrow duration.
+        let ptr = client_adapter_ptr as usize;
+        if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&ptr) {
+            let (pool_id, client_id) = *entry.value();
+            glide_core::pool::refresh_client_activity(pool_id, client_id);
+        }
+        None
+    };
+
     client_adapter.execute_request_with_buffer(
         request_id,
-        async move { client.send_command(&mut cmd, routing_info).await },
+        async move {
+            let result = client.send_command(&mut cmd, routing_info).await;
+            // Unmark blocking after command completes
+            if let Some((pool_id, client_id)) = blocking_flag {
+                glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+            }
+            result
+        },
         response_buffer,
     )
 }

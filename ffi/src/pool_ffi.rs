@@ -26,6 +26,12 @@ static POOL_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::O
 static POOL_CLIENTS: std::sync::OnceLock<dashmap::DashMap<u64, PoolClientEntry>> =
     std::sync::OnceLock::new();
 
+/// Reverse lookup: adapter_ptr → (pool_id, client_id).
+/// Populated at client creation, used by command dispatch to detect pool-borrowed clients
+/// and mark them as blocking when executing blocking commands.
+static POOL_ADAPTER_MAP: std::sync::OnceLock<dashmap::DashMap<usize, (u64, u64)>> =
+    std::sync::OnceLock::new();
+
 #[allow(dead_code)]
 struct PoolClientEntry {
     adapter_ptr: usize, // *const ClientAdapter as usize (for command dispatch)
@@ -46,6 +52,10 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
 
 fn get_pool_clients() -> &'static dashmap::DashMap<u64, PoolClientEntry> {
     POOL_CLIENTS.get_or_init(dashmap::DashMap::new)
+}
+
+pub(crate) fn get_pool_adapter_map() -> &'static dashmap::DashMap<usize, (u64, u64)> {
+    POOL_ADAPTER_MAP.get_or_init(dashmap::DashMap::new)
 }
 
 /// Maps pool_id → ClientType for background client creation.
@@ -108,6 +118,7 @@ pub unsafe extern "C" fn glide_pool_create(
     min_idle: u32,
     idle_timeout_ms: u64,
     request_timeout_ms: u64,
+    abandon_timeout_ms: u64,
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
@@ -163,6 +174,7 @@ pub unsafe extern "C" fn glide_pool_create(
         connection_request: connection_request.clone(),
         is_async,
         configured_database_id,
+        abandon_timeout: std::time::Duration::from_millis(abandon_timeout_ms),
     };
 
     let pool = match ClientPool::new(config) {
@@ -171,6 +183,10 @@ pub unsafe extern "C" fn glide_pool_create(
     };
 
     let pool_id = pool::register_pool(pool);
+
+    // Start abandon monitor
+    let rt = get_pool_runtime();
+    pool::start_abandon_monitor(pool_id, rt.handle());
 
     // Store the ClientType for background creation
     get_pool_client_types().insert(pool_id, ct.clone());
@@ -203,6 +219,9 @@ pub unsafe extern "C" fn glide_pool_create(
                                 last_idle_at: std::time::Instant::now(),
                                 borrowed_at: None,
                                 state: ClientState::Idle,
+                                is_blocking: std::sync::Arc::new(
+                                    std::sync::atomic::AtomicBool::new(false),
+                                ),
                             };
                             pool.idle.push_back(entry);
                             pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
@@ -215,6 +234,7 @@ pub unsafe extern "C" fn glide_pool_create(
                                     created_at: std::time::Instant::now(),
                                 },
                             );
+                            get_pool_adapter_map().insert(adapter_ptr, (pool_id, client_id));
                         });
                     }
                     Err(e) => {
@@ -279,6 +299,9 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                     last_idle_at: std::time::Instant::now(),
                                     borrowed_at: None,
                                     state: ClientState::Idle,
+                                    is_blocking: std::sync::Arc::new(
+                                        std::sync::atomic::AtomicBool::new(false),
+                                    ),
                                 };
                                 pool.idle.push_back(entry);
                                 get_pool_clients().insert(
@@ -289,6 +312,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                         created_at: std::time::Instant::now(),
                                     },
                                 );
+                                get_pool_adapter_map().insert(adapter_ptr, (pool_id, client_id));
                             });
                         }
                         Err(e) => {
@@ -378,6 +402,9 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                         last_idle_at: std::time::Instant::now(),
                                         borrowed_at: None,
                                         state: ClientState::Idle,
+                                        is_blocking: std::sync::Arc::new(
+                                            std::sync::atomic::AtomicBool::new(false),
+                                        ),
                                     };
                                     p.idle.push_back(entry);
                                     get_pool_clients().insert(
@@ -388,6 +415,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                             created_at: std::time::Instant::now(),
                                         },
                                     );
+                                    get_pool_adapter_map().insert(adapter_ptr, (pool_id, cid));
                                     // Notify waiters that a new client is available
                                     let (_, cv) = &*p.release_notify;
                                     cv.notify_one();
@@ -456,7 +484,9 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             .chain(pool.in_use.iter().map(|e| *e.key()))
             .collect();
         for cid in client_ids {
-            get_pool_clients().remove(&cid);
+            if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+                get_pool_adapter_map().remove(&entry.adapter_ptr);
+            }
         }
         pool.destroy();
     }

@@ -31,6 +31,11 @@ type PoolConfig struct {
 	RequestTimeout time.Duration
 	// Maximum time to wait when pool is exhausted. Default: 5 seconds.
 	AcquireTimeout time.Duration
+	// Maximum inactivity time for a borrowed client before the pool reclaims it.
+	// The timer resets on every command sent. The abandon monitor skips clients
+	// executing blocking commands (BLPOP, XREAD BLOCK, etc.).
+	// Set to 0 to disable abandon detection. Default: 5 minutes.
+	AbandonTimeout time.Duration
 }
 
 // DefaultPoolConfig returns a PoolConfig with sensible defaults.
@@ -41,6 +46,7 @@ func DefaultPoolConfig() PoolConfig {
 		IdleTimeout:    5 * time.Minute,
 		RequestTimeout: 5 * time.Second,
 		AcquireTimeout: 5 * time.Second,
+		AbandonTimeout: 5 * time.Minute,
 	}
 }
 
@@ -129,6 +135,7 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		C.uint32_t(poolConfig.MinIdle),
 		C.uint64_t(poolConfig.IdleTimeout.Milliseconds()),
 		C.uint64_t(poolConfig.RequestTimeout.Milliseconds()),
+		C.uint64_t(poolConfig.AbandonTimeout.Milliseconds()),
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
@@ -337,6 +344,7 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		C.uint32_t(poolConfig.MinIdle),
 		C.uint64_t(poolConfig.IdleTimeout.Milliseconds()),
 		C.uint64_t(poolConfig.RequestTimeout.Milliseconds()),
+		C.uint64_t(poolConfig.AbandonTimeout.Milliseconds()),
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,

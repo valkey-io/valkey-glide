@@ -477,7 +477,9 @@ fn get_timeout_from_cmd_arg(
 
 /// Returns true for commands with user-specified blocking timeouts that
 /// should be excluded from latency tracking (they distort p99).
-fn is_blocking_command(cmd: &Cmd) -> bool {
+/// Also used by the pool abandon monitor to skip clients executing blocking commands.
+/// Keep in sync with BLOCKING_COMMANDS in node/src/ClientPool.ts.
+pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
     match command.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"

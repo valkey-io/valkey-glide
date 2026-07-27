@@ -1802,7 +1802,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     ))
                 })?;
 
-                client.send_command(&mut cmd, routing).await
+                // Abandon monitor integration: mark blocking / refresh activity
+                let blocking_flag = if glide_core::client::is_blocking_command(&cmd) {
+                    if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
+                        let pool_id = *entry.value();
+                        glide_core::pool::mark_client_blocking(pool_id, handle_id, true);
+                        Some(pool_id)
+                    } else {
+                        None
+                    }
+                } else {
+                    if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
+                        let pool_id = *entry.value();
+                        glide_core::pool::refresh_client_activity(pool_id, handle_id);
+                    }
+                    None
+                };
+
+                let result = client.send_command(&mut cmd, routing).await;
+
+                // Unmark blocking after command completes
+                if let Some(pool_id) = blocking_flag {
+                    glide_core::pool::mark_client_blocking(pool_id, handle_id, false);
+                }
+
+                result
             }
             .await;
 

@@ -296,6 +296,68 @@ class TestAsyncClientPool:
         finally:
             pool.close()
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_detection(self, cluster_mode):
+        """Watchdog reclaims abandoned clients after abandon_timeout expires."""
+        config = _get_pool_client_config(cluster_mode)
+        # Create pool with 2-second abandon timeout for fast test
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=2000),
+        )
+        await _wait_for_pool_ready(pool, 1)
+
+        try:
+            # Acquire the only client — do NOT release it
+            client_id = await pool.acquire()
+            assert pool.active_count == 1
+            assert pool.idle_count == 0
+
+            # Wait for the abandon monitor to reclaim it (scan interval = timeout/2 = 1s,
+            # so it should be reclaimed within ~3 seconds)
+            deadline = asyncio.get_event_loop().time() + 5
+            while pool.idle_count == 0 and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(0.2)
+
+            # The abandon monitor should have force-released the client back to idle
+            assert pool.idle_count == 1, (
+                f"Expected abandon monitor to reclaim abandoned client within 5s. "
+                f"idle={pool.idle_count}, active={pool.active_count}"
+            )
+
+            # Verify the reclaimed client is usable by a new borrower
+            new_client_id = await pool.acquire(timeout=2)
+            assert new_client_id == client_id  # Same client (LIFO)
+            pool.release(new_client_id)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_detection_disabled(self, cluster_mode):
+        """Setting abandon_timeout_ms=0 disables the abandon monitor."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=0),
+        )
+        await _wait_for_pool_ready(pool, 1)
+
+        try:
+            # Acquire and hold without releasing
+            client_id = await pool.acquire()
+            assert pool.active_count == 1
+
+            # Wait 3 seconds — no monitor should reclaim it
+            await asyncio.sleep(3)
+            assert pool.idle_count == 0, "Client should NOT be reclaimed when disabled"
+            assert pool.active_count == 1
+
+            # Manually release
+            pool.release(client_id)
+            assert pool.idle_count == 1
+        finally:
+            pool.close()
+
 
 class TestPoolPubsubRejection:
     """Pool creation should reject configs with pubsub subscriptions."""
