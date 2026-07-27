@@ -19,6 +19,10 @@ on:
                 description: "Use self-hosted runners for Linux x64"
                 type: boolean
                 default: false
+            enable-core-tracing:
+                description: "Enable Rust core trace logging (RUST_LOG=debug,redis=trace) for diagnostic runs"
+                type: boolean
+                default: false
 
 concurrency:
     group: fmt-python-${{ github.ref }}
@@ -31,5 +35,6 @@ jobs:
         with:
             run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
+            enable-core-tracing: ${{ inputs.enable-core-tracing || false }}
         name: FMT - Python
         secrets: inherit

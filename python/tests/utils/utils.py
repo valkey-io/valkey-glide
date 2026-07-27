@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
@@ -104,8 +105,15 @@ from tests.utils.cluster import ValkeyCluster
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
 T = TypeVar("T")
-DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
-DEFAULT_SYNC_TEST_LOG_LEVEL = SyncLogLevel.OFF
+# RUST_LOG opt-in path (see .github/workflows/python.yml enable-core-tracing):
+# when the env var is present, run the async/sync test sessions at TRACE so
+# glide-core tracing_subscriber layers surface diagnostics. Unset keeps OFF,
+# the historical default that suppresses per-test log spam.
+_RUST_LOG_ENABLED = bool(os.environ.get("RUST_LOG"))
+DEFAULT_TEST_LOG_LEVEL = logLevel.TRACE if _RUST_LOG_ENABLED else logLevel.OFF
+DEFAULT_SYNC_TEST_LOG_LEVEL = (
+    SyncLogLevel.TRACE if _RUST_LOG_ENABLED else SyncLogLevel.OFF
+)
 USERNAME = "username"
 INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"

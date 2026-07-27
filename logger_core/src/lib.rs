@@ -163,9 +163,20 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
     let level = minimal_level.unwrap_or(Level::Warn);
     let level_filter = level.to_filter();
     let reloads = INITIATE_ONCE.init_once.get_or_init(|| {
+        // Seed the stdout layer from RUST_LOG so operators can enable core trace output
+        // without threading a level through log_init(). RUST_LOG unset keeps stdout OFF
+        // (unchanged for existing consumers); when set, mirror the target-filter fallback
+        // below so directives like "debug,redis=trace" still route through as TRACE.
+        let stdout_initial_filter = match std::env::var("RUST_LOG") {
+            Ok(v) => {
+                LevelFilter::from(tracing::Level::from_str(&v).unwrap_or(tracing::Level::TRACE))
+            }
+            Err(_) => LevelFilter::OFF,
+        };
+
         let stdout_fmt = tracing_subscriber::fmt::layer()
             .with_ansi(true)
-            .with_filter(LevelFilter::OFF);
+            .with_filter(stdout_initial_filter);
 
         let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
 
