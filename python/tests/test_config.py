@@ -855,6 +855,20 @@ def test_tls_path_based_mtls_nonexistent_path_raises_file_not_found(tmp_path):
     assert str(missing_cert) in str(exc_info.value)
 
 
+def test_tls_path_based_mtls_directory_as_path_rejected(tmp_path):
+    """Passing an existing directory raises `not a regular file`,
+    distinct from the missing-file `FileNotFoundError`."""
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    dir_as_cert = tmp_path / "certs"
+    dir_as_cert.mkdir()
+    with pytest.raises(ConfigurationError, match="not a regular file"):
+        TlsAdvancedConfiguration(
+            client_cert_path=str(dir_as_cert),
+            client_key_path=str(key_path),
+        )
+
+
 def test_tls_path_based_mtls_empty_string_path_rejected(tmp_path):
     cert_path, _ = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError):
@@ -989,6 +1003,40 @@ def test_tls_byte_based_still_emits_no_reload_config():
     assert not request.HasField("cert_reload")
     assert request.client_cert_path == ""
     assert request.client_key_path == ""
+
+
+# -------- wire-time revalidation guards against post-construction mutation --------
+
+
+def test_tls_wire_time_revalidation_rejects_empty_cert_after_mutation():
+    """Mutating client_cert_pem to empty bytes after construction is
+    caught at wire-emit time; the request is not built with a silent
+    "no mTLS" downgrade."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    tls_config.client_cert_pem = b""
+
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_cert_pem must not be empty"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_wire_time_revalidation_rejects_mixed_after_mutation(tmp_path):
+    """Mutating a byte-based config to add paths after construction is
+    caught at wire-emit time."""
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    tls_config.client_cert_path = str(cert_path)
+    tls_config.client_key_path = str(key_path)
+
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="mutually exclusive"):
+        config._create_a_protobuf_conn_request()
 
 
 # -------- with_mtls_pem factory: negative cases + forwarding --------

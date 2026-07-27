@@ -791,9 +791,17 @@ def _normalize_optional_path(
 
 
 def _validate_readable_nonempty_file(path: str, field_name: str) -> None:
-    """Reject a missing, unreadable, or empty file at construction time."""
-    if not os.path.isfile(path):
+    """Reject a missing, unreadable, or empty file at construction time.
+
+    This is an early sanity check, not a guarantee the material is
+    still valid at connect time. With ``lazy_connect=True`` the real
+    read happens later, and path-based mTLS reloads on a cadence, so
+    the file can change between this check and every subsequent read.
+    """
+    if not os.path.exists(path):
         raise FileNotFoundError(f"{field_name} file not found: {path}")
+    if not os.path.isfile(path):
+        raise ConfigurationError(f"{field_name} is not a regular file: {path}")
     try:
         with open(path, "rb") as f:
             first_byte = f.read(1)
@@ -916,6 +924,11 @@ class AdvancedBaseClientConfiguration:
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
+        # Re-validate mTLS invariants at wire-emit time. Protects against
+        # attribute mutation after construction (empty cert bytes would
+        # otherwise emit as "no mTLS", a silent security downgrade).
+        tls_config._validate_mtls()
+
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
             # Validate that TLS is enabled before allowing insecure mode
@@ -1784,8 +1797,14 @@ def _load_pem_file(path: str, label: str) -> bytes:
             data = f.read()
     except FileNotFoundError:
         raise FileNotFoundError(f"{label} file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read {label.lower()} file: {e}")
+    except PermissionError as exc:
+        raise ConfigurationError(
+            f"{label} file is not readable ({path}): {exc}"
+        ) from exc
+    except OSError as exc:
+        raise ConfigurationError(
+            f"Failed to read {label.lower()} file {path}: {exc}"
+        ) from exc
 
     if len(data) == 0:
         raise ConfigurationError(f"{label} file is empty: {path}")
