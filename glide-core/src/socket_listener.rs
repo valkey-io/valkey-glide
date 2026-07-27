@@ -54,6 +54,13 @@ use uuid::Uuid;
 const SOCKET_FILE_NAME: &str = "glide-socket";
 const UNIX_SOCKER_DIR: &str = "/tmp";
 
+/// callback_idx for responses to the initial ConnectionRequest.
+/// The request has no callback_idx field, so the response is by convention
+/// always 0. Both the success and connection-error paths must agree on this
+/// value; otherwise wrappers observe a garbage callback slot on failure and
+/// tests that expect 0 trip against `u32::MAX`.
+const CONNECTION_RESPONSE_CALLBACK_IDX: u32 = 0;
+
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
 pub const MAX_REQUEST_ARGS_LENGTH: usize = 2_i32.pow(12) as usize; // TODO: find the right number
@@ -925,7 +932,13 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Okay), 0, writer, None).await?;
+    write_result(
+        Ok(Value::Okay),
+        CONNECTION_RESPONSE_CALLBACK_IDX,
+        writer,
+        None,
+    )
+    .await?;
     Ok(client)
 }
 
@@ -1028,7 +1041,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             let err_message = format!("Socket listener closed due to {reason:?}");
             let _res = write_closing_error(
                 ClosingError { err_message },
-                u32::MAX,
+                CONNECTION_RESPONSE_CALLBACK_IDX,
                 &writer,
                 "client creation",
             )
@@ -1042,7 +1055,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             log_error("client creation", &err_message);
             let _res = write_closing_error(
                 ClosingError { err_message },
-                u32::MAX,
+                CONNECTION_RESPONSE_CALLBACK_IDX,
                 &writer,
                 "client creation",
             )
