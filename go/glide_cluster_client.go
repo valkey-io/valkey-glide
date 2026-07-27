@@ -34,6 +34,7 @@ var _ interfaces.GlideClusterClientCommands = (*ClusterClient)(nil)
 // [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#cluster
 type ClusterClient struct {
 	baseClient
+	clientConfig *config.ClusterClientConfiguration // stored for scoped_connection
 }
 
 // Creates a new [ClusterClient] instance and establishes a connection to a Valkey Cluster.
@@ -75,7 +76,7 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
-	return &ClusterClient{*client}, nil
+	return &ClusterClient{baseClient: *client, clientConfig: config}, nil
 }
 
 // Executes a batch by processing the queued commands.

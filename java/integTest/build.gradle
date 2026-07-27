@@ -379,6 +379,13 @@ tasks.register('modulesTest', Test) {
     }
 }
 
+tasks.register('scopeTest', Test) {
+    filter {
+        includeTestsMatching 'glide.scope.*'
+    }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
 // Configure Java 8 testing if enabled
 if (project.hasProperty('testJava8') && project.testJava8 == 'true') {
     tasks.named('test', Test).configure {

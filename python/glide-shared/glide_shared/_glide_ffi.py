@@ -407,8 +407,50 @@ class _GlideFFI:
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
-            """
-        )
+
+            // ============== CLIENT-INSTANCE POOL ==============
+            int64_t glide_pool_create(
+                uint32_t max_size,
+                uint32_t min_idle,
+                uint64_t idle_timeout_ms,
+                uint64_t request_timeout_ms,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len,
+                const ClientType* client_type
+            );
+            int64_t glide_pool_try_acquire(uint64_t pool_id);
+            int64_t glide_pool_acquire_blocking(uint64_t pool_id, uint64_t timeout_ms);
+            int32_t glide_pool_release(uint64_t pool_id, uint64_t client_id);
+            int32_t glide_pool_destroy(uint64_t pool_id);
+            size_t glide_pool_get_client_ptr(uint64_t client_id);
+            int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
+            int32_t glide_pool_metrics(
+                uint64_t pool_id,
+                uint32_t* idle_out,
+                uint32_t* active_out,
+                uint32_t* total_out
+            );
+
+            // ============== ISOLATED EXECUTION SCOPES ==============
+            int64_t glide_scope_try_acquire(
+                uint64_t client_id,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len,
+                uint16_t routing_slot
+            );
+            int32_t glide_scope_release(uint64_t scope_id, uint64_t client_id);
+            CommandResult* glide_scope_execute(
+                uint64_t scope_id,
+                const uint8_t* command_ptr,
+                size_t command_len
+            );
+            void glide_scope_prewarm(
+                uint64_t client_id,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len,
+                uint32_t min_idle
+            );
+            """)
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
