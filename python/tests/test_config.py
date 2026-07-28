@@ -891,8 +891,8 @@ def test_tls_path_based_mtls_empty_file_rejected(tmp_path):
     assert "empty" in str(exc_info.value)
 
 
-def test_tls_with_mtls_pem_factory_ok():
-    tls_config = TlsAdvancedConfiguration.with_mtls_pem(
+def test_tls_with_mutual_tls_factory_ok():
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls(
         TEST_CLIENT_CERT_DATA,
         TEST_CLIENT_KEY_DATA,
         root_pem_cacerts=TEST_CERT_DATA_1,
@@ -911,9 +911,9 @@ def test_tls_with_mtls_pem_factory_ok():
     assert not request.HasField("cert_reload")
 
 
-def test_tls_with_mtls_reload_factory_ok(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_ok(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration.with_mtls_reload(
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(
         cert_path,
         key_path,
         cert_reload_interval_seconds=90,
@@ -934,9 +934,9 @@ def test_tls_with_mtls_reload_factory_ok(tmp_path):
     assert request.cert_reload.interval_seconds == 90
 
 
-def test_tls_with_mtls_reload_defaults_to_core_reload(tmp_path):
+def test_tls_with_mutual_tls_reload_defaults_to_core_reload(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration.with_mtls_reload(cert_path, key_path)
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(cert_path, key_path)
     assert tls_config.cert_reload_interval_seconds is None
 
     request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
@@ -944,12 +944,12 @@ def test_tls_with_mtls_reload_defaults_to_core_reload(tmp_path):
     assert not request.cert_reload.HasField("interval_seconds")
 
 
-def test_tls_with_mtls_reload_missing_file(tmp_path):
+def test_tls_with_mutual_tls_reload_missing_file(tmp_path):
     key_path = tmp_path / "client-key.pem"
     key_path.write_bytes(TEST_CLIENT_KEY_DATA)
     missing_cert = tmp_path / "does-not-exist.pem"
     with pytest.raises(FileNotFoundError):
-        TlsAdvancedConfiguration.with_mtls_reload(missing_cert, key_path)
+        TlsAdvancedConfiguration.with_mutual_tls_reload(missing_cert, key_path)
 
 
 def test_load_client_certificate_and_key_from_file_success(tmp_path):
@@ -1039,21 +1039,21 @@ def test_tls_wire_time_revalidation_rejects_mixed_after_mutation(tmp_path):
         config._create_a_protobuf_conn_request()
 
 
-# -------- with_mtls_pem factory: negative cases + forwarding --------
+# -------- with_mutual_tls factory: negative cases + forwarding --------
 
 
-def test_tls_with_mtls_pem_factory_empty_cert():
+def test_tls_with_mutual_tls_factory_empty_cert():
     with pytest.raises(ConfigurationError, match="client_cert_pem"):
-        TlsAdvancedConfiguration.with_mtls_pem(b"", TEST_CLIENT_KEY_DATA)
+        TlsAdvancedConfiguration.with_mutual_tls(b"", TEST_CLIENT_KEY_DATA)
 
 
-def test_tls_with_mtls_pem_factory_empty_key():
+def test_tls_with_mutual_tls_factory_empty_key():
     with pytest.raises(ConfigurationError, match="client_key_pem"):
-        TlsAdvancedConfiguration.with_mtls_pem(TEST_CLIENT_CERT_DATA, b"")
+        TlsAdvancedConfiguration.with_mutual_tls(TEST_CLIENT_CERT_DATA, b"")
 
 
-def test_tls_with_mtls_pem_factory_forwards_use_insecure_tls():
-    tls_config = TlsAdvancedConfiguration.with_mtls_pem(
+def test_tls_with_mutual_tls_factory_forwards_use_insecure_tls():
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls(
         TEST_CLIENT_CERT_DATA,
         TEST_CLIENT_KEY_DATA,
         use_insecure_tls=True,
@@ -1066,80 +1066,80 @@ def test_tls_with_mtls_pem_factory_forwards_use_insecure_tls():
     assert request.client_key == TEST_CLIENT_KEY_DATA
 
 
-# -------- with_mtls_reload factory: negative cases + forwarding --------
+# -------- with_mutual_tls_reload factory: negative cases + forwarding --------
 
 
-def test_tls_with_mtls_reload_factory_zero_interval_rejected(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_zero_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
     with pytest.raises(
         ConfigurationError, match="cert_reload_interval_seconds.*positive"
     ):
-        TlsAdvancedConfiguration.with_mtls_reload(
+        TlsAdvancedConfiguration.with_mutual_tls_reload(
             cert_path,
             key_path,
             cert_reload_interval_seconds=0,
         )
 
 
-def test_tls_with_mtls_reload_factory_negative_interval_rejected(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_negative_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
     with pytest.raises(
         ConfigurationError, match="cert_reload_interval_seconds.*positive"
     ):
-        TlsAdvancedConfiguration.with_mtls_reload(
+        TlsAdvancedConfiguration.with_mutual_tls_reload(
             cert_path,
             key_path,
             cert_reload_interval_seconds=-1,
         )
 
 
-def test_tls_with_mtls_reload_factory_bool_interval_rejected(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_bool_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
-        TlsAdvancedConfiguration.with_mtls_reload(
+        TlsAdvancedConfiguration.with_mutual_tls_reload(
             cert_path,
             key_path,
             cert_reload_interval_seconds=True,
         )
 
 
-def test_tls_with_mtls_reload_factory_float_interval_rejected(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_float_interval_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
-        TlsAdvancedConfiguration.with_mtls_reload(
+        TlsAdvancedConfiguration.with_mutual_tls_reload(
             cert_path,
             key_path,
             cert_reload_interval_seconds=1.5,
         )
 
 
-def test_tls_with_mtls_reload_factory_uint32_overflow_rejected(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_uint32_overflow_rejected(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError, match="unsigned 32-bit"):
-        TlsAdvancedConfiguration.with_mtls_reload(
+        TlsAdvancedConfiguration.with_mutual_tls_reload(
             cert_path,
             key_path,
             cert_reload_interval_seconds=2**32,
         )
 
 
-def test_tls_with_mtls_reload_factory_empty_cert_path(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_empty_cert_path(tmp_path):
     _, key_path = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError, match="client_cert_path"):
-        TlsAdvancedConfiguration.with_mtls_reload("", key_path)
+        TlsAdvancedConfiguration.with_mutual_tls_reload("", key_path)
 
 
-def test_tls_with_mtls_reload_factory_empty_key_path(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_empty_key_path(tmp_path):
     cert_path, _ = _write_cert_key(tmp_path)
     with pytest.raises(ConfigurationError, match="client_key_path"):
-        TlsAdvancedConfiguration.with_mtls_reload(cert_path, "")
+        TlsAdvancedConfiguration.with_mutual_tls_reload(cert_path, "")
 
 
-def test_tls_with_mtls_reload_factory_accepts_pathlib_path(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_accepts_pathlib_path(tmp_path):
     from pathlib import Path
 
     cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration.with_mtls_reload(
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(
         Path(cert_path), Path(key_path)
     )
     assert isinstance(tls_config.client_cert_path, str)
@@ -1153,9 +1153,9 @@ def test_tls_with_mtls_reload_factory_accepts_pathlib_path(tmp_path):
     assert request.cert_reload.enabled is True
 
 
-def test_tls_with_mtls_reload_factory_forwards_root_pem_cacerts(tmp_path):
+def test_tls_with_mutual_tls_reload_factory_forwards_root_pem_cacerts(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration.with_mtls_reload(
+    tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(
         cert_path,
         key_path,
         root_pem_cacerts=TEST_CERT_DATA_1,

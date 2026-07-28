@@ -448,9 +448,9 @@ class TlsAdvancedConfiguration:
     :class:`~glide_shared.exceptions.ConfigurationError` at construction
     time:
 
-    - :meth:`with_mtls_pem(cert_pem, key_pem)` for static mTLS with
+    - :meth:`with_mutual_tls(cert_pem, key_pem)` for static mTLS with
       in-memory PEM buffers loaded once. Certificates are not reloaded.
-    - :meth:`with_mtls_reload(cert_path, key_path)` for path-based mTLS
+    - :meth:`with_mutual_tls_reload(cert_path, key_path)` for path-based mTLS
       with automatic reload. The GLIDE core re-reads both files on a
       cadence so a rotated certificate is picked up on the next
       reconnect.
@@ -563,7 +563,7 @@ class TlsAdvancedConfiguration:
             ``client_key_path`` and cannot be combined with byte-based mTLS
             (``client_cert_pem`` / ``client_key_pem``). The file must exist and
             be non-empty at construction time; otherwise `FileNotFoundError` or
-            `ConfigurationError` is raised. Prefer :meth:`with_mtls_reload`.
+            `ConfigurationError` is raised. Prefer :meth:`with_mutual_tls_reload`.
 
         client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the
             PEM-encoded client private key. Same rules as ``client_cert_path``;
@@ -587,10 +587,10 @@ class TlsAdvancedConfiguration:
             "/etc/mtls/client-cert.pem",
             "/etc/mtls/client-key.pem",
         )
-        tls_config = TlsAdvancedConfiguration.with_mtls_pem(cert, key)
+        tls_config = TlsAdvancedConfiguration.with_mutual_tls(cert, key)
 
         # Path-based mTLS with automatic reload every 5 minutes.
-        tls_config = TlsAdvancedConfiguration.with_mtls_reload(
+        tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(
             Path("/etc/mtls/client-cert.pem"),
             Path("/etc/mtls/client-key.pem"),
             cert_reload_interval_seconds=300,
@@ -667,7 +667,7 @@ class TlsAdvancedConfiguration:
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
 
     @classmethod
-    def with_mtls_pem(
+    def with_mutual_tls(
         cls,
         client_cert_pem: bytes,
         client_key_pem: bytes,
@@ -680,7 +680,7 @@ class TlsAdvancedConfiguration:
 
         Both PEM buffers are required and are used verbatim; the client
         presents them on connect and does not reload them. For automatic
-        reload from disk, use :meth:`with_mtls_reload` instead.
+        reload from disk, use :meth:`with_mutual_tls_reload` instead.
 
         Args:
             client_cert_pem: Client certificate bytes in PEM format.
@@ -701,7 +701,7 @@ class TlsAdvancedConfiguration:
         )
 
     @classmethod
-    def with_mtls_reload(
+    def with_mutual_tls_reload(
         cls,
         client_cert_path: Union[str, os.PathLike[str]],
         client_key_path: Union[str, os.PathLike[str]],
@@ -1890,7 +1890,7 @@ def load_client_certificate_and_key_from_file(
     Convenience wrapper around
     :func:`load_client_certificate_from_file` and
     :func:`load_client_key_from_file`. The certificate is read first;
-    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_mtls_reload`
+    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_mutual_tls_reload`
     for automatic reload from disk; use this helper when static, byte-based
     mTLS is desired.
 
@@ -1916,7 +1916,7 @@ def load_client_certificate_and_key_from_file(
             "/etc/mtls/client-cert.pem",
             "/etc/mtls/client-key.pem",
         )
-        tls_config = TlsAdvancedConfiguration.with_mtls_pem(cert, key)
+        tls_config = TlsAdvancedConfiguration.with_mutual_tls(cert, key)
     """
     cert = load_client_certificate_from_file(os.fspath(cert_path))
     key = load_client_key_from_file(os.fspath(key_path))
