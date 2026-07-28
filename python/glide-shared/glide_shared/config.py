@@ -453,10 +453,10 @@ class TlsAdvancedConfiguration:
     The constructor rejects invalid combinations (mixing byte- and
     path-based mTLS, supplying only one of a pair, or a reload interval
     without paths) with
-    :class:`~glide_shared.exceptions.ConfigurationError` at construction
-    time. Paths accept ``str`` or any :class:`os.PathLike` (including
-    :class:`pathlib.Path`) and are normalized to ``str``; missing files
-    surface as :class:`FileNotFoundError`.
+    ``ConfigurationError`` at construction
+    time. Paths accept ``str`` or any ``os.PathLike`` (including
+    ``pathlib.Path``) and are normalized to ``str``; missing files
+    surface as ``FileNotFoundError``.
 
     For path-based mTLS the reload cadence comes from
     ``cert_reload_interval_seconds``, or the GLIDE core default
@@ -1677,8 +1677,8 @@ def _load_pem_file(path: str, label: str) -> bytes:
 
     ``label`` is embedded verbatim in error messages ("Certificate",
     "Client certificate", "Client key") so callers can report which
-    file failed. Missing files raise :class:`FileNotFoundError`;
-    empty or unreadable files raise :class:`ConfigurationError`.
+    file failed. Missing files raise ``FileNotFoundError``;
+    empty or unreadable files raise ``ConfigurationError``.
     """
     try:
         with open(path, "rb") as f:
@@ -1776,12 +1776,12 @@ def load_client_certificate_and_key_from_file(
     for byte-based mutual TLS (mTLS).
 
     Convenience wrapper around
-    :func:`load_client_certificate_from_file` and
-    :func:`load_client_key_from_file`. The certificate is read first;
+    ``load_client_certificate_from_file`` and
+    ``load_client_key_from_file``. The certificate is read first;
     both paths must exist and be non-empty. Use this helper when static,
     byte-based mTLS is desired; for automatic reload from disk, pass
     ``client_cert_path`` / ``client_key_path`` to
-    :class:`TlsAdvancedConfiguration` instead.
+    ``TlsAdvancedConfiguration`` instead.
 
     Args:
         cert_path: Path to the PEM-encoded client certificate file.
