@@ -335,46 +335,23 @@ export type GlideString = string | Buffer;
 /**
  * Mutual TLS (mTLS) client authentication material.
  *
- * The `kind` field picks one of two ways to supply the client certificate
- * and private key. The two variants are mutually exclusive.
+ * The `kind` field selects one of two mutually exclusive ways to supply the
+ * client certificate and private key.
  *
- * With `kind: "bytes"`, `cert` and `key` are PEM material passed inline.
- * The core reads it once at connect time. Both fields must be non-empty.
- * A `string` value is encoded as UTF-8 before it goes on the wire.
+ * With `kind: "bytes"`, `cert` and `key` are PEM material passed inline and
+ * read once at connect time. Both must be non-empty; a `string` value is
+ * encoded as UTF-8.
  *
- * With `kind: "path"`, `certPath` and `keyPath` point at files on disk.
- * The core reads them at connect time and re-reads them on a schedule so
- * a rotated cert is picked up on the next reconnect. If the reload fails
- * (missing file, key does not match cert, unreadable), the last known good
- * material is kept. When `reloadIntervalSeconds` is omitted, the reload
- * cadence defaults to the GLIDE core default (see
- * `DEFAULT_RELOAD_INTERVAL_SECONDS` in glide-core's `tls_reload` module).
- * Intervals above 3600 seconds (1 hour)
- * are discouraged; the core logs a warning because a rotated certificate may
- * then be adopted late.
+ * With `kind: "path"`, `certPath` and `keyPath` point at files on disk. The
+ * core reads them at connect time and re-reads them on a schedule, so a
+ * rotated cert is adopted on the next reconnect while open connections keep
+ * their current material. If a reload fails (missing file, mismatched key,
+ * unreadable), the last known good material is kept. When
+ * `reloadIntervalSeconds` is omitted, the cadence defaults to the GLIDE core
+ * default (`DEFAULT_RELOAD_INTERVAL_SECONDS` in glide-core's `tls_reload`
+ * module); very long intervals may adopt a rotated cert late.
  *
  * Reload is on iff `kind === "path"`. There is no separate toggle.
- *
- * @example
- * ```typescript
- * // Static byte-based mTLS. No reload.
- * const { cert, key } = await loadClientCertificateAndKeyFromFile(
- *     "/etc/ssl/client.crt",
- *     "/etc/ssl/client.key",
- * );
- * const staticMtls: MutualTls = { kind: "bytes", cert, key };
- * ```
- *
- * @example
- * ```typescript
- * // Path-based mTLS with reload every 60 seconds.
- * const reloadingMtls: MutualTls = {
- *     kind: "path",
- *     certPath: "/etc/ssl/client.crt",
- *     keyPath: "/etc/ssl/client.key",
- *     reloadIntervalSeconds: 60,
- * };
- * ```
  */
 export type MutualTls =
     | {
@@ -443,11 +420,6 @@ async function loadTlsPemFile(path: string, label: string): Promise<Buffer> {
  * @param path - Path to a PEM root certificate or bundle.
  * @returns The certificate bytes.
  * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
- *
- * @example
- * ```typescript
- * const rootCertificates = await loadRootCertificatesFromFile("/etc/ssl/ca.pem");
- * ```
  */
 export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
     return loadTlsPemFile(path, "Root certificate");
@@ -464,15 +436,6 @@ export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
  * @param keyPath - Path to a PEM client private key.
  * @returns `{ cert, key }` as Buffers.
  * @throws {@link ConfigurationError} If either file is missing, unreadable, or empty.
- *
- * @example
- * ```typescript
- * const { cert, key } = await loadClientCertificateAndKeyFromFile(
- *     "/etc/ssl/client.crt",
- *     "/etc/ssl/client.key",
- * );
- * const mtls: MutualTls = { kind: "bytes", cert, key };
- * ```
  */
 export async function loadClientCertificateAndKeyFromFile(
     certPath: string,
@@ -1343,35 +1306,6 @@ export interface AdvancedBaseClientConfiguration {
          *
          * Requires `useTLS: true` on the base client configuration. Setting
          * `mutualTls` when TLS is disabled raises a {@link ConfigurationError}.
-         *
-         * @example
-         * ```typescript
-         * // Path-based mTLS with reload every 60 seconds.
-         * const config: AdvancedBaseClientConfiguration = {
-         *     tlsAdvancedConfiguration: {
-         *         mutualTls: {
-         *             kind: "path",
-         *             certPath: "/etc/ssl/client.crt",
-         *             keyPath: "/etc/ssl/client.key",
-         *             reloadIntervalSeconds: 60,
-         *         },
-         *     },
-         * };
-         * ```
-         *
-         * @example
-         * ```typescript
-         * // Static byte-based mTLS.
-         * const { cert, key } = await loadClientCertificateAndKeyFromFile(
-         *     "/etc/ssl/client.crt",
-         *     "/etc/ssl/client.key",
-         * );
-         * const config: AdvancedBaseClientConfiguration = {
-         *     tlsAdvancedConfiguration: {
-         *         mutualTls: { kind: "bytes", cert, key },
-         *     },
-         * };
-         * ```
          */
         readonly mutualTls?: MutualTls;
     };
