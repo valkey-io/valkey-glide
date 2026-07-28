@@ -920,6 +920,8 @@ func (config *ClusterClientConfiguration) WithInflightRequestsLimit(limit uint32
 // recovery queue when a cluster reconnect is in progress. Buffered requests are retried
 // transparently after reconnection. Requests beyond this limit are failed immediately.
 // If not set, a default value of 1000 will be used.
+// Note: in Go, 0 uses the server default of 1000 due to Go's zero-value semantics.
+// The minimum useful value is 1. To disable the recovery queue, use a different language binding.
 func (config *ClusterClientConfiguration) WithRecoveryRequestsQueueSize(size uint32) *ClusterClientConfiguration {
 	config.recoveryRequestsQueueSize = size
 	return config

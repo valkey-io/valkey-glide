@@ -48,7 +48,7 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
      * The maximum number of requests to buffer in the recovery queue when a cluster reconnect is in
      * progress. Buffered requests are retried transparently after reconnection. Requests beyond this
      * limit are failed immediately to provide bounded memory usage. If not set, a default value of
-     * 1000 will be used.
+     * 1000 will be used. Set to 0 to disable the recovery queue and restore fail-fast behaviour.
      */
     private final Integer recoveryRequestsQueueSize;
 }

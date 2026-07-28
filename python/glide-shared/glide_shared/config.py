@@ -1343,6 +1343,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             recovery queue when a cluster reconnect is in progress. Buffered requests are retried
             transparently after reconnection. Requests beyond this limit are failed immediately to
             provide bounded memory usage.
+            Set to 0 to disable the recovery queue and use fail-fast behavior.
             If not set, a default value of 1000 will be used.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
@@ -1500,8 +1501,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
 
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
-        # 0 is treated as "not set" — the core normalizes 0 to the default (1000).
-        if self.recovery_requests_queue_size:
+        if self.recovery_requests_queue_size is not None:
             request.recovery_requests_queue_size = self.recovery_requests_queue_size
         return request
 

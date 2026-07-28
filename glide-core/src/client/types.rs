@@ -372,7 +372,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         }
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
-        let recovery_requests_queue_size = value.recovery_requests_queue_size.filter(|&v| v != 0);
+        let recovery_requests_queue_size = value.recovery_requests_queue_size;
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
         let root_certs = value

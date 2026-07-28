@@ -285,6 +285,7 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * reconnect is in progress. Buffered requests are retried transparently after
      * reconnection. Requests beyond this limit are failed immediately to provide
      * bounded memory usage. If not set, a default value of 1000 will be used.
+     * Set to 0 to disable the recovery queue and use fail-fast behavior.
      */
     recoveryRequestsQueueSize?: number;
 
@@ -687,8 +688,7 @@ export class GlideClusterClient extends BaseClient {
 
         this.configurePubsub(options, configuration);
 
-        if (options.recoveryRequestsQueueSize) {
-            // 0 is treated as "not set" — the core normalizes 0 to the default (1000).
+        if (options.recoveryRequestsQueueSize !== undefined) {
             configuration.recoveryRequestsQueueSize =
                 options.recoveryRequestsQueueSize;
         }
