@@ -10,6 +10,8 @@ import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     ConfigurationError,
+    GlideClient,
+    GlideClientConfiguration,
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
@@ -325,10 +327,13 @@ describe("createMigrate (multi-key) validation", () => {
 
 const { TlsMode } = connection_request;
 
-// Test subclass that opens configureAdvancedConfigurationBase so the built
-// connection request can be inspected without a live client.
-class TlsConfigProbe extends BaseClient {
+// Standalone-client probe: builds the connection request through the real
+// GlideClient.createClientRequest path (which invokes
+// configureAdvancedConfigurationBase), so the tests exercise the same wiring a
+// live standalone client hits, without opening a socket.
+class TlsConfigProbe extends GlideClient {
     public constructor() {
+        // No options => no connection; createClientRequest is a pure builder.
         super();
     }
 
@@ -336,9 +341,16 @@ class TlsConfigProbe extends BaseClient {
         advancedConfiguration: AdvancedBaseClientConfiguration,
         tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
     ): Promise<connection_request.IConnectionRequest> {
-        const request: connection_request.IConnectionRequest = { tlsMode };
-        this.configureAdvancedConfigurationBase(advancedConfiguration, request);
-        return request;
+        // Translate the probe's (advancedConfiguration, tlsMode) inputs into a
+        // minimal standalone config so the real builder derives tlsMode itself:
+        // NoTls => useTLS false; otherwise useTLS true, and InsecureTls is
+        // reached via tlsAdvancedConfiguration.insecure rather than being forced.
+        const options: GlideClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            useTLS: tlsMode !== TlsMode.NoTls,
+            advancedConfiguration,
+        };
+        return this.createClientRequest(options);
     }
 }
 
@@ -379,6 +391,8 @@ describe('mutualTls kind: "bytes"', () => {
         expect(request.certReload).toBeFalsy();
         expect(request.clientCertPath).toBeFalsy();
         expect(request.clientKeyPath).toBeFalsy();
+        // Confirms the request came through the standalone builder.
+        expect(request.clusterModeEnabled).toBeFalsy();
     });
 
     it("populates clientCert and clientKey from Buffer PEM inputs", async () => {
