@@ -3600,7 +3600,7 @@ where
                 .retain(|queued| !queued.sender.is_closed());
         }
 
-        let mut overflow = Vec::new();
+        let mut overflow_count = 0usize;
         while let Ok(request) = rx_guard.try_recv() {
             if request.sender.is_closed() {
                 continue; // caller already gave up (e.g. client-side timeout)
@@ -3608,28 +3608,26 @@ where
             if self.recovery_queue.len() < cap {
                 self.recovery_queue.push_back(request);
             } else {
-                overflow.push(request);
+                // Fail inline to avoid accumulating an unbounded overflow Vec.
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection in recovery",
+                ))));
+                overflow_count += 1;
             }
         }
         drop(rx_guard);
 
-        if !overflow.is_empty() {
+        if overflow_count > 0 {
             log_warn_rate_limited!(
                 "cluster",
                 5,
                 format!(
                     "buffer_pending_requests_to_recovery_queue: recovery queue full (cap={}), \
-                     failing {} overflow requests",
-                    cap,
-                    overflow.len()
+                     failed {} overflow requests",
+                    cap, overflow_count
                 )
             );
-            for request in overflow {
-                let _ = request.sender.send(Err(RedisError::from((
-                    ErrorKind::ClientError,
-                    "Connection in recovery",
-                ))));
-            }
         }
     }
 
