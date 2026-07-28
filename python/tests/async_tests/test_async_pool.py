@@ -309,25 +309,26 @@ class TestAsyncClientPool:
 
         try:
             # Acquire the only client — do NOT release it
-            client_id = await pool.acquire()
+            await pool.acquire()
             assert pool.active_count == 1
             assert pool.idle_count == 0
 
             # Wait for the abandon monitor to reclaim it (scan interval = timeout/2 = 1s,
             # so it should be reclaimed within ~3 seconds)
             deadline = asyncio.get_event_loop().time() + 5
-            while pool.idle_count == 0 and asyncio.get_event_loop().time() < deadline:
+            while pool.active_count > 0 and asyncio.get_event_loop().time() < deadline:
                 await asyncio.sleep(0.2)
 
-            # The abandon monitor should have force-released the client back to idle
-            assert pool.idle_count == 1, (
-                f"Expected abandon monitor to reclaim abandoned client within 5s. "
+            # The abandon monitor discards the abandoned client (safety: prevents
+            # stale release from corrupting another borrower's connection)
+            assert pool.active_count == 0, (
+                f"Expected abandon monitor to discard abandoned client within 5s. "
                 f"idle={pool.idle_count}, active={pool.active_count}"
             )
 
-            # Verify the reclaimed client is usable by a new borrower
-            new_client_id = await pool.acquire(timeout=2)
-            assert new_client_id == client_id  # Same client (LIFO)
+            # Verify the pool can still serve new requests (creates a fresh client)
+            new_client_id = await pool.acquire(timeout=5)
+            assert new_client_id is not None
             pool.release(new_client_id)
         finally:
             pool.close()
