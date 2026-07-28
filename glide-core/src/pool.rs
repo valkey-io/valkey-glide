@@ -76,8 +76,8 @@ pub struct PoolConfig {
     pub configured_database_id: u32,
     /// Maximum inactivity time for a borrowed client. The timer resets on every
     /// command sent. When a borrowed client has no command activity for this duration,
-    /// the monitor logs a warning and force-releases it (state reset + return
-    /// to idle). Set to Duration::ZERO to disable abandon detection.
+    /// the monitor logs a warning and discards the connection (the pool creates a
+    /// fresh one on the next acquire). Set to Duration::ZERO to disable abandon detection.
     /// Default: 300 seconds (5 minutes).
     pub abandon_timeout: Duration,
 }

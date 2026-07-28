@@ -533,31 +533,14 @@ export class ClientPool {
         for (const entry of abandoned) {
             console.warn(
                 `[valkey-glide pool] Abandon detection: client ${entry.id} exceeded ` +
-                    `inactivity timeout (${this.abandonTimeoutMs}ms) — force-releasing`,
+                    `inactivity timeout (${this.abandonTimeoutMs}ms) — discarding connection`,
             );
             this.active.delete(entry.id);
             this.lastActivity.delete(entry.id);
 
-            // Async release (state reset + return to idle)
-            this.resetClientState(entry.client)
-                .then(() => {
-                    if (this.closed) {
-                        entry.client.close();
-                        return;
-                    }
-
-                    // Hand to waiter or return to idle
-                    if (this.waiters.length > 0) {
-                        const waiter = this.waiters.shift()!;
-                        waiter.resolve(entry);
-                    } else {
-                        this.idle.push(entry);
-                    }
-                })
-                .catch(() => {
-                    // Reset failed — discard the client
-                    entry.client.close();
-                });
+            // Discard rather than return-to-idle for consistency with Rust core:
+            // guarantees a stale release from the original borrower cannot interfere.
+            entry.client.close();
         }
     }
 }

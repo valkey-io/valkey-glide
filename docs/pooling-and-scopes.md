@@ -164,7 +164,7 @@ Scoped commands go through the same pipeline as regular GlideClient commands:
 | `min_idle` | Pre-warmed idle clients at startup | 0 |
 | `idle_timeout` | Evict idle clients after this duration | Required |
 | `request_timeout` | Per-command timeout (also used for cleanup: 2×) | Required |
-| `abandon_timeout` | Max borrow duration before abandon monitor reclaims the client | 300s (5 min) |
+| `abandon_timeout` | Max inactivity time before abandon monitor reclaims the client | 300s (5 min) |
 | `configured_database_id` | Database for SELECT reset on release | Parsed from connection request |
 
 ### Abandon Detection
@@ -174,18 +174,20 @@ borrowed clients and force-releases any that have been **inactive** (no commands
 the timeout:
 
 1. Logs a warning identifying the abandoned client_id and elapsed inactivity.
-2. Performs the standard release cleanup (DISCARD + SELECT).
-3. Returns the client to the idle pool for reuse.
+2. Discards the connection (guarantees a stale release from the original borrower cannot
+   corrupt another borrower's transaction).
 
-Every command sent on a pool-borrowed client refreshes its activity timestamp, so only truly
-idle borrows (forgotten release, lost reference) are reclaimed. Clients actively sending commands
-— even infrequently — remain safe indefinitely.
+The pool replaces the discarded connection on the next acquire. Every command sent on a
+pool-borrowed client refreshes its activity timestamp, so only truly idle borrows (forgotten
+release, lost reference) are reclaimed. Clients actively sending commands — even infrequently —
+remain safe indefinitely.
 
 The monitor **skips** clients currently executing blocking commands (BLPOP, BRPOP, XREAD BLOCK,
 etc.) via an internal `is_blocking` flag set automatically by the command dispatch path.
 
-Set `abandon_timeout` to **0** to disable the monitor entirely. This is appropriate for
-applications that intentionally hold connections for extended periods without sending commands.
+Set `abandon_timeout` to **0** to disable the monitor entirely (in Go, use a negative value
+since zero normalizes to the 5-minute default). This is appropriate for applications that
+intentionally hold connections for extended periods without sending commands.
 
 ### Scope Pool Config
 
