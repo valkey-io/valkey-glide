@@ -692,7 +692,7 @@ func (config *ClientConfiguration) GetSubscription() *StandaloneSubscriptionConf
 type ClusterClientConfiguration struct {
 	baseClientConfiguration
 	subscriptionConfig        *ClusterSubscriptionConfig
-	recoveryRequestsQueueSize uint32
+	recoveryRequestsQueueSize *uint32
 	AdvancedClusterClientConfiguration
 }
 
@@ -760,9 +760,8 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		}
 	}
 
-	if config.recoveryRequestsQueueSize != 0 {
-		size := config.recoveryRequestsQueueSize
-		request.RecoveryRequestsQueueSize = &size
+	if config.recoveryRequestsQueueSize != nil {
+		request.RecoveryRequestsQueueSize = config.recoveryRequestsQueueSize
 	}
 
 	return request, nil
@@ -919,11 +918,10 @@ func (config *ClusterClientConfiguration) WithInflightRequestsLimit(limit uint32
 // WithRecoveryRequestsQueueSize sets the maximum number of requests to buffer in the
 // recovery queue when a cluster reconnect is in progress. Buffered requests are retried
 // transparently after reconnection. Requests beyond this limit are failed immediately.
+// Set to 0 to disable the recovery queue and use fail-fast behavior.
 // If not set, a default value of 1000 will be used.
-// Note: in Go, 0 uses the server default of 1000 due to Go's zero-value semantics.
-// The minimum useful value is 1. To disable the recovery queue, use a different language binding.
 func (config *ClusterClientConfiguration) WithRecoveryRequestsQueueSize(size uint32) *ClusterClientConfiguration {
-	config.recoveryRequestsQueueSize = size
+	config.recoveryRequestsQueueSize = &size
 	return config
 }
 
