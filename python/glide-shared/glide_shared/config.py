@@ -464,9 +464,9 @@ class TlsAdvancedConfiguration:
     Reload semantics:
 
     - Both files are re-read at ``cert_reload_interval_seconds``. When
-      omitted, the GLIDE core uses its default cadence, currently 300
-      seconds (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
-      ``glide-core/src/tls_reload/mod.rs``).
+      omitted, the GLIDE core applies its default reload cadence (see
+      ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
+      module for the authoritative value).
     - **A successful reload is adopted on the next reconnect. Existing
       open connections keep their current material.**
     - On read failure the core keeps the last-known-good material; no
@@ -571,8 +571,10 @@ class TlsAdvancedConfiguration:
 
         cert_reload_interval_seconds (Optional[int]): Override for the reload
             cadence, in seconds. Positive integer up to 4294967295. Only
-            meaningful with path-based mTLS. When ``None``, the GLIDE core uses
-            its default cadence (currently 300 seconds).
+            meaningful with path-based mTLS. When ``None``, the GLIDE core
+            applies its default reload cadence (see
+            ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
+            module for the authoritative value).
 
     Example::
 
@@ -719,7 +721,8 @@ class TlsAdvancedConfiguration:
         a rotated certificate is adopted on the **next reconnect**;
         existing open connections keep their current material. When
         ``cert_reload_interval_seconds`` is omitted, the cadence is the
-        GLIDE core default (currently 300 seconds).
+        GLIDE core default (see ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in
+        glide-core's ``tls_reload`` module for the authoritative value).
 
         Args:
             client_cert_path: Path to the client certificate PEM file
