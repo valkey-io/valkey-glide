@@ -441,30 +441,9 @@ class TlsAdvancedConfiguration:
     Advanced TLS configuration for standalone and cluster clients.
 
     Mutual TLS (mTLS) is configured through the keyword-only constructor
-    parameters, in one of two mutually-exclusive modes:
-
-    - Static bytes: ``client_cert_pem`` + ``client_key_pem``, loaded once
-      and never reloaded.
-    - Path-based with reload: ``client_cert_path`` + ``client_key_path``
-      (optionally ``cert_reload_interval_seconds``). The GLIDE core
-      re-reads both files on a cadence so a rotated certificate is adopted
-      on the next reconnect.
-
-    The constructor rejects invalid combinations (mixing byte- and
-    path-based mTLS, supplying only one of a pair, or a reload interval
-    without paths) with
-    ``ConfigurationError`` at construction
-    time. Paths accept ``str`` or any ``os.PathLike`` (including
-    ``pathlib.Path``) and are normalized to ``str``; missing files
-    surface as ``FileNotFoundError``.
-
-    For path-based mTLS the reload cadence comes from
-    ``cert_reload_interval_seconds``, or the GLIDE core default
-    (``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
-    module) when omitted. A successful reload is adopted on the next
-    reconnect; existing open connections keep their current material. A
-    read failure keeps the last-known-good material with no
-    application-level exception.
+    parameters in one of two mutually-exclusive modes: static bytes
+    (``client_cert_pem`` + ``client_key_pem``) or path-based with automatic
+    reload (``client_cert_path`` + ``client_key_path``).
 
     Attributes:
         use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
@@ -547,23 +526,48 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with client_cert_pem.
 
-        client_cert_path (Optional[Union[str, os.PathLike[str]]]): Path to the
-            PEM-encoded client certificate for mutual TLS. Must be paired with
-            ``client_key_path`` and cannot be combined with byte-based mTLS
-            (``client_cert_pem`` / ``client_key_pem``). The file must exist and
-            be non-empty at construction time; otherwise `FileNotFoundError` or
-            `ConfigurationError` is raised. Enables automatic reload.
+        client_cert_path (Optional[Union[str, os.PathLike[str]]]): Path to the PEM-encoded client certificate for mutual TLS authentication.
 
-        client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the
-            PEM-encoded client private key. Same rules as ``client_cert_path``;
-            must be paired with it.
+            - When provided along with ``client_key_path``, enables path-based mutual TLS (mTLS)
+              with automatic reload: the GLIDE core re-reads both files on a cadence, so a rotated
+              certificate is adopted on the next reconnect while existing open connections keep
+              their current material. A read failure keeps the last-known-good material with no
+              application-level exception.
 
-        cert_reload_interval_seconds (Optional[int]): Override for the reload
-            cadence, in seconds. Positive integer up to 4294967295. Only
-            meaningful with path-based mTLS. When ``None``, the GLIDE core
-            applies its default reload cadence (see
-            ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
-            module for the authoritative value).
+            - Must be used together with ``client_key_path``, and cannot be combined with
+              byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
+              raise ``ConfigurationError`` at construction time.
+
+            - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``) and is
+              normalized to ``str``. The file must exist and be non-empty at construction time:
+              a missing file raises ``FileNotFoundError``, and an empty, non-regular, or
+              unreadable file raises ``ConfigurationError``.
+
+            - If None (default), no path-based client certificate is used.
+
+        client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the PEM-encoded client private key for mutual TLS authentication.
+
+            - When provided along with ``client_cert_path``, completes the path-based mTLS pair
+              and participates in the same automatic reload described above.
+
+            - Same rules as ``client_cert_path``: must be paired with it, cannot be combined with
+              byte-based mTLS, accepts a ``str`` or any ``os.PathLike`` normalized to ``str``, and
+              must point to an existing non-empty file (``FileNotFoundError`` if missing,
+              ``ConfigurationError`` if empty, non-regular, or unreadable).
+
+            - If None (default), no path-based client key is used.
+
+        cert_reload_interval_seconds (Optional[int]): Override for the path-based mTLS reload cadence, in seconds.
+
+            - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
+              and ``client_key_path`` raises ``ConfigurationError`` at construction time.
+
+            - Must be a positive integer that fits in an unsigned 32-bit integer (up to
+              4294967295); other values raise ``ConfigurationError``.
+
+            - If None (default), the GLIDE core applies its default reload cadence (see
+              ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
+              authoritative value).
     """
 
     def __init__(
