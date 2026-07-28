@@ -464,6 +464,39 @@ describe('mutualTls kind: "bytes"', () => {
         );
     });
 
+    // Runtime-only checks. The MutualTls union requires both cert and key at
+    // compile time, so an untyped JS caller omitting one is the realistic path
+    // in. The most-specific field name must survive.
+    it("rejects a bytes variant that omits key", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            cert: CLIENT_CERT_PEM,
+                        } as unknown as MutualTls,
+                    },
+                }),
+            "mutualTls.key must be a Buffer or non-empty string",
+        );
+    });
+
+    it("rejects a bytes variant that omits cert", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            key: CLIENT_KEY_PEM,
+                        } as unknown as MutualTls,
+                    },
+                }),
+            "mutualTls.cert must be a Buffer or non-empty string",
+        );
+    });
+
     it("rejects mutualTls when TLS is disabled on the base connection", async () => {
         await expectConfigurationError(
             () =>
@@ -540,6 +573,28 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         });
     });
 
+    // 2**32 - 1 is the largest value the protobuf uint32 wire field holds.
+    // Accepting it (and rejecting 2**32 below) proves the bound is inclusive
+    // and closes the silent-truncation hole exactly at the edge.
+    it("accepts reloadIntervalSeconds at the uint32 maximum", async () => {
+        const maxUint32 = 2 ** 32 - 1;
+        const request = await new TlsConfigProbe().buildTlsRequest({
+            tlsAdvancedConfiguration: {
+                mutualTls: {
+                    kind: "path",
+                    certPath,
+                    keyPath,
+                    reloadIntervalSeconds: maxUint32,
+                },
+            },
+        });
+
+        expect(request.certReload).toEqual({
+            enabled: true,
+            intervalSeconds: maxUint32,
+        });
+    });
+
     const invalidIntervals: [string, number][] = [
         ["zero", 0],
         ["negative", -10],
@@ -568,6 +623,23 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
             );
         },
     );
+
+    it("names the uint32 maximum when reloadIntervalSeconds is too large", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "path",
+                            certPath,
+                            keyPath,
+                            reloadIntervalSeconds: 2 ** 32,
+                        },
+                    },
+                }),
+            "no greater than 4294967295",
+        );
+    });
 
     it("rejects an empty certPath", async () => {
         await expectConfigurationError(

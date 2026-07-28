@@ -523,6 +523,32 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
 }
 
 /**
+ * Validates the optional reload interval. Returns `null` when unset so the
+ * core applies its default cadence; throws if the value cannot fit the
+ * protobuf `uint32` wire field as a positive integer.
+ *
+ * @internal
+ */
+function normalizeReloadInterval(value: number | undefined): number | null {
+    if (value === undefined) {
+        return null;
+    }
+
+    if (
+        typeof value !== "number" ||
+        !Number.isInteger(value) ||
+        value <= 0 ||
+        value > MAX_RELOAD_INTERVAL_SECONDS
+    ) {
+        throw new ConfigurationError(
+            `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_RELOAD_INTERVAL_SECONDS}.`,
+        );
+    }
+
+    return value;
+}
+
+/**
  * Validates a {@link MutualTls} value and writes it into the connection
  * request. Wire fields: `client_cert`/`client_key` (proto 22/23) for the
  * byte-based variant; `client_cert_path`/`client_key_path`/`cert_reload`
@@ -554,25 +580,13 @@ function applyMutualTls(
                 "mutualTls.keyPath",
             );
 
-            const interval = mtls.reloadIntervalSeconds;
-
-            if (
-                interval !== undefined &&
-                (typeof interval !== "number" ||
-                    !Number.isInteger(interval) ||
-                    interval <= 0 ||
-                    interval > MAX_RELOAD_INTERVAL_SECONDS)
-            ) {
-                throw new ConfigurationError(
-                    `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_RELOAD_INTERVAL_SECONDS}.`,
-                );
-            }
-
             request.clientCertPath = certPath;
             request.clientKeyPath = keyPath;
             request.certReload = {
                 enabled: true,
-                intervalSeconds: interval ?? null,
+                intervalSeconds: normalizeReloadInterval(
+                    mtls.reloadIntervalSeconds,
+                ),
             };
             return;
         }
