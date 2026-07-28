@@ -440,42 +440,31 @@ class TlsAdvancedConfiguration:
     """
     Advanced TLS configuration for standalone and cluster clients.
 
-    Mutual TLS (mTLS) is normally configured through the two classmethod
-    factories below, which pair the certificate with its key and select
-    the reload mode. The plain constructor accepts the same fields and
-    rejects invalid combinations (mixing byte- and path-based mTLS, or
-    asking for reload without paths) with
+    Mutual TLS (mTLS) is configured through the keyword-only constructor
+    parameters, in one of two mutually-exclusive modes:
+
+    - Static bytes: ``client_cert_pem`` + ``client_key_pem``, loaded once
+      and never reloaded.
+    - Path-based with reload: ``client_cert_path`` + ``client_key_path``
+      (optionally ``cert_reload_interval_seconds``). The GLIDE core
+      re-reads both files on a cadence so a rotated certificate is adopted
+      on the next reconnect.
+
+    The constructor rejects invalid combinations (mixing byte- and
+    path-based mTLS, supplying only one of a pair, or a reload interval
+    without paths) with
     :class:`~glide_shared.exceptions.ConfigurationError` at construction
-    time:
-
-    - :meth:`with_mutual_tls(cert_pem, key_pem)` for static mTLS with
-      in-memory PEM buffers loaded once. Certificates are not reloaded.
-    - :meth:`with_mutual_tls_reload(cert_path, key_path)` for path-based mTLS
-      with automatic reload. The GLIDE core re-reads both files on a
-      cadence so a rotated certificate is picked up on the next
-      reconnect.
-
-    Paths accept ``str`` or any :class:`os.PathLike` (including
-    :class:`pathlib.Path`); the value is normalized to ``str``.
-    Configuration errors are reported through
-    :class:`~glide_shared.exceptions.ConfigurationError`; missing files
+    time. Paths accept ``str`` or any :class:`os.PathLike` (including
+    :class:`pathlib.Path`) and are normalized to ``str``; missing files
     surface as :class:`FileNotFoundError`.
 
-    Reload semantics:
-
-    - Both files are re-read at ``cert_reload_interval_seconds``. When
-      omitted, the GLIDE core applies its default reload cadence (see
-      ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
-      module for the authoritative value).
-    - **A successful reload is adopted on the next reconnect. Existing
-      open connections keep their current material.**
-    - On read failure the core keeps the last-known-good material; no
-      exception is raised in application code.
-
-    The plain constructor is retained for byte-based mTLS callers that
-    predate the factories; the three path-based parameters
-    (``client_cert_path``, ``client_key_path``,
-    ``cert_reload_interval_seconds``) are keyword-only.
+    For path-based mTLS the reload cadence comes from
+    ``cert_reload_interval_seconds``, or the GLIDE core default
+    (``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
+    module) when omitted. A successful reload is adopted on the next
+    reconnect; existing open connections keep their current material. A
+    read failure keeps the last-known-good material with no
+    application-level exception.
 
     Attributes:
         use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
@@ -563,7 +552,7 @@ class TlsAdvancedConfiguration:
             ``client_key_path`` and cannot be combined with byte-based mTLS
             (``client_cert_pem`` / ``client_key_pem``). The file must exist and
             be non-empty at construction time; otherwise `FileNotFoundError` or
-            `ConfigurationError` is raised. Prefer :meth:`with_mutual_tls_reload`.
+            `ConfigurationError` is raised. Enables automatic reload.
 
         client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the
             PEM-encoded client private key. Same rules as ``client_cert_path``;
@@ -575,28 +564,6 @@ class TlsAdvancedConfiguration:
             applies its default reload cadence (see
             ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload``
             module for the authoritative value).
-
-    Example::
-
-        from pathlib import Path
-        from glide_shared.config import (
-            TlsAdvancedConfiguration,
-            load_client_certificate_and_key_from_file,
-        )
-
-        # Static byte-based mTLS.
-        cert, key = load_client_certificate_and_key_from_file(
-            "/etc/mtls/client-cert.pem",
-            "/etc/mtls/client-key.pem",
-        )
-        tls_config = TlsAdvancedConfiguration.with_mutual_tls(cert, key)
-
-        # Path-based mTLS with automatic reload every 5 minutes.
-        tls_config = TlsAdvancedConfiguration.with_mutual_tls_reload(
-            Path("/etc/mtls/client-cert.pem"),
-            Path("/etc/mtls/client-key.pem"),
-            cert_reload_interval_seconds=300,
-        )
     """
 
     def __init__(
@@ -667,88 +634,6 @@ class TlsAdvancedConfiguration:
         if self.client_cert_path is not None and self.client_key_path is not None:
             _validate_readable_nonempty_file(self.client_cert_path, "client_cert_path")
             _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
-
-    @classmethod
-    def with_mutual_tls(
-        cls,
-        client_cert_pem: bytes,
-        client_key_pem: bytes,
-        *,
-        root_pem_cacerts: Optional[bytes] = None,
-        use_insecure_tls: Optional[bool] = None,
-    ) -> "TlsAdvancedConfiguration":
-        """
-        Build a `TlsAdvancedConfiguration` for byte-based mutual TLS.
-
-        Both PEM buffers are required and are used verbatim; the client
-        presents them on connect and does not reload them. For automatic
-        reload from disk, use :meth:`with_mutual_tls_reload` instead.
-
-        Args:
-            client_cert_pem: Client certificate bytes in PEM format.
-            client_key_pem: Client private key bytes in PEM format.
-            root_pem_cacerts: Optional custom root CA bundle for the
-                connection's server verification.
-            use_insecure_tls: When True, skip server certificate
-                verification. Discouraged in production.
-
-        Raises:
-            ConfigurationError: If either PEM buffer is empty.
-        """
-        return cls(
-            use_insecure_tls=use_insecure_tls,
-            root_pem_cacerts=root_pem_cacerts,
-            client_cert_pem=client_cert_pem,
-            client_key_pem=client_key_pem,
-        )
-
-    @classmethod
-    def with_mutual_tls_reload(
-        cls,
-        client_cert_path: Union[str, os.PathLike[str]],
-        client_key_path: Union[str, os.PathLike[str]],
-        *,
-        cert_reload_interval_seconds: Optional[int] = None,
-        root_pem_cacerts: Optional[bytes] = None,
-        use_insecure_tls: Optional[bool] = None,
-    ) -> "TlsAdvancedConfiguration":
-        """
-        Build a `TlsAdvancedConfiguration` for path-based mutual TLS with
-        automatic client certificate/key reload.
-
-        Both paths are required. The GLIDE core reads the certificate and
-        key from disk at connect time and periodically re-reads them so
-        a rotated certificate is adopted on the **next reconnect**;
-        existing open connections keep their current material. When
-        ``cert_reload_interval_seconds`` is omitted, the cadence is the
-        GLIDE core default (see ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in
-        glide-core's ``tls_reload`` module for the authoritative value).
-
-        Args:
-            client_cert_path: Path to the client certificate PEM file
-                (``str`` or :class:`os.PathLike`, including
-                :class:`pathlib.Path`).
-            client_key_path: Path to the client private key PEM file.
-            cert_reload_interval_seconds: Optional override for the
-                reload cadence, in seconds.
-            root_pem_cacerts: Optional custom root CA bundle for the
-                connection's server verification.
-            use_insecure_tls: When True, skip server certificate
-                verification. Discouraged in production.
-
-        Raises:
-            ConfigurationError: If a path is empty, or the reload
-                interval is not a positive int within uint32 range.
-            FileNotFoundError: If either path does not exist at
-                construction time.
-        """
-        return cls(
-            use_insecure_tls=use_insecure_tls,
-            root_pem_cacerts=root_pem_cacerts,
-            client_cert_path=client_cert_path,
-            client_key_path=client_key_path,
-            cert_reload_interval_seconds=cert_reload_interval_seconds,
-        )
 
 
 def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> None:
@@ -1893,9 +1778,10 @@ def load_client_certificate_and_key_from_file(
     Convenience wrapper around
     :func:`load_client_certificate_from_file` and
     :func:`load_client_key_from_file`. The certificate is read first;
-    both paths must exist and be non-empty. Prefer :meth:`TlsAdvancedConfiguration.with_mutual_tls_reload`
-    for automatic reload from disk; use this helper when static, byte-based
-    mTLS is desired.
+    both paths must exist and be non-empty. Use this helper when static,
+    byte-based mTLS is desired; for automatic reload from disk, pass
+    ``client_cert_path`` / ``client_key_path`` to
+    :class:`TlsAdvancedConfiguration` instead.
 
     Args:
         cert_path: Path to the PEM-encoded client certificate file.
@@ -1919,7 +1805,10 @@ def load_client_certificate_and_key_from_file(
             "/etc/mtls/client-cert.pem",
             "/etc/mtls/client-key.pem",
         )
-        tls_config = TlsAdvancedConfiguration.with_mutual_tls(cert, key)
+        tls_config = TlsAdvancedConfiguration(
+            client_cert_pem=cert,
+            client_key_pem=key,
+        )
     """
     cert = load_client_certificate_from_file(os.fspath(cert_path))
     key = load_client_key_from_file(os.fspath(key_path))
