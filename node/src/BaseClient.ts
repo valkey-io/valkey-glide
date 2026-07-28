@@ -346,8 +346,10 @@ export type GlideString = string | Buffer;
  * The core reads them at connect time and re-reads them on a schedule so
  * a rotated cert is picked up on the next reconnect. If the reload fails
  * (missing file, key does not match cert, unreadable), the last known good
- * material is kept. Reload cadence defaults to 300 seconds (5 minutes) when
- * `reloadIntervalSeconds` is omitted. Intervals above 3600 seconds (1 hour)
+ * material is kept. When `reloadIntervalSeconds` is omitted, the reload
+ * cadence defaults to the GLIDE core default (see
+ * `DEFAULT_RELOAD_INTERVAL_SECONDS` in glide-core's `tls_reload` module).
+ * Intervals above 3600 seconds (1 hour)
  * are discouraged; the core logs a warning because a rotated certificate may
  * then be adopted late.
  *
@@ -1320,9 +1322,10 @@ export interface AdvancedBaseClientConfiguration {
          * Mutual TLS (mTLS) client authentication material. See
          * {@link MutualTls} for the two variants: `kind: "bytes"` for static
          * material and `kind: "path"` for material the core reloads from
-         * disk. Reload is on iff `kind === "path"`, with a cadence that
-         * defaults to 300 seconds (5 minutes) when `reloadIntervalSeconds`
-         * is omitted.
+         * disk. Reload is on iff `kind === "path"`. When
+         * `reloadIntervalSeconds` is omitted, the reload cadence defaults to
+         * the GLIDE core default (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
+         * glide-core's `tls_reload` module).
          *
          * Requires `useTLS: true` on the base client configuration. Setting
          * `mutualTls` when TLS is disabled raises a {@link ConfigurationError}.
