@@ -3660,6 +3660,38 @@ where
         }
     }
 
+    /// Fail all pending requests immediately with ClientError.
+    /// Called when entering recovery to prevent requests from waiting for slow
+    /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
+    fn fail_pending_requests(inner: &Core<C>) {
+        let mut rx_guard = inner
+            .pending_requests_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut requests = Vec::new();
+        while let Ok(request) = rx_guard.try_recv() {
+            requests.push(request);
+        }
+        drop(rx_guard);
+        let count = requests.len();
+        if count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "fail_pending_requests: failing {} pending requests (Connection in recovery)",
+                    count
+                )
+            );
+        }
+        for request in requests {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Connection in recovery",
+            ))));
+        }
+    }
+
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         log_trace_lazy!("cluster", "entered poll_recover");
 
@@ -4049,12 +4081,28 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Buffer any requests queued while in recovery to retry after reconnect
-                self.buffer_pending_requests_to_recovery_queue();
+                // Only buffer during fast reconnects (circular MOVED path).
+                // For ReconnectToInitialNodes and RefreshingSlots, fail fast to preserve throughput.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                ) {
+                    self.buffer_pending_requests_to_recovery_queue();
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
+                }
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
-                self.buffer_pending_requests_to_recovery_queue();
+                // Same: only buffer during fast Reconnect path.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                ) {
+                    self.buffer_pending_requests_to_recovery_queue();
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
+                }
                 self.refresh_error = Some(err);
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
