@@ -185,6 +185,9 @@ where
     false
 }
 
+/// Default maximum number of requests to buffer during a cluster reconnect window.
+pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -656,8 +659,6 @@ pub(crate) struct ClusterConnInner<C> {
     periodic_checks_handler: Option<JoinHandle<()>>,
     // Handler of fast connection validation task
     connections_validation_handler: Option<JoinHandle<()>>,
-    /// Requests buffered during a reconnect/recovery window.
-    /// Drained to `in_flight_requests` once recovery completes.
     /// Requests buffered during a reconnect/recovery window.
     /// Drained to `in_flight_requests` once recovery completes.
     /// Bounded by `recovery_requests_queue_size` cluster param (default 1000).
@@ -3584,7 +3585,7 @@ where
         let cap = self
             .inner
             .get_cluster_param(|p| p.recovery_requests_queue_size)
-            .unwrap_or(1000) as usize;
+            .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE) as usize;
 
         let mut rx_guard = self
             .inner
@@ -3592,15 +3593,17 @@ where
             .lock()
             .unwrap_or_else(|e| e.into_inner());
 
+        // Pre-emptively reclaim slots held by requests whose callers have already
+        // given up (e.g. timed out), freeing space before we try to enqueue new ones.
+        if self.recovery_queue.len() >= cap {
+            self.recovery_queue
+                .retain(|queued| !queued.sender.is_closed());
+        }
+
         let mut overflow = Vec::new();
         while let Ok(request) = rx_guard.try_recv() {
             if request.sender.is_closed() {
                 continue; // caller already gave up (e.g. client-side timeout)
-            }
-            if self.recovery_queue.len() >= cap {
-                // Reclaim slots held by requests whose callers have since given up.
-                self.recovery_queue
-                    .retain(|queued| !queued.sender.is_closed());
             }
             if self.recovery_queue.len() < cap {
                 self.recovery_queue.push_back(request);

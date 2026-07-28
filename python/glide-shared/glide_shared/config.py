@@ -1500,6 +1500,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
 
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
+        # 0 is treated as "not set" — the core normalizes 0 to the default (1000).
         if self.recovery_requests_queue_size:
             request.recovery_requests_queue_size = self.recovery_requests_queue_size
         return request

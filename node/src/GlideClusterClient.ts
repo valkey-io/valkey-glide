@@ -688,6 +688,7 @@ export class GlideClusterClient extends BaseClient {
         this.configurePubsub(options, configuration);
 
         if (options.recoveryRequestsQueueSize) {
+            // 0 is treated as "not set" — the core normalizes 0 to the default (1000).
             configuration.recoveryRequestsQueueSize =
                 options.recoveryRequestsQueueSize;
         }
