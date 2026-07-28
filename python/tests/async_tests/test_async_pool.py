@@ -354,6 +354,8 @@ class TestAsyncClientPool:
 
             # Manually release
             pool.release(client_id)
+            # Wait for async state reset to complete
+            await asyncio.sleep(0.5)
             assert pool.idle_count == 1
         finally:
             pool.close()

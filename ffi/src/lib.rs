@@ -3549,37 +3549,35 @@ unsafe fn execute_command(
     // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let mut client = client_adapter.core.client.clone();
 
-    // Abandon monitor integration: if this is a pool-borrowed client executing a
-    // blocking command, mark it so the abandon monitor skips it during the block.
-    // Also refresh borrowed_at to keep the client alive while actively in use.
-    let blocking_flag = if glide_core::client::is_blocking_command(&cmd) {
-        let ptr = client_adapter_ptr as usize;
-        if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&ptr) {
-            let (pool_id, client_id) = *entry.value();
-            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
-            Some((pool_id, client_id))
-        } else {
-            None
-        }
-    } else {
-        // Non-blocking command on a pool client: refresh borrowed_at so the
-        // abandon monitor only fires after inactivity, not total borrow duration.
-        let ptr = client_adapter_ptr as usize;
-        if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&ptr) {
-            let (pool_id, client_id) = *entry.value();
+    // Abandon monitor integration: for pool-borrowed clients refresh the inactivity
+    // timer on every command, and mark blocking commands so the monitor skips them
+    // while they are in flight. Non-pooled clients skip this entirely (no map lookup cost).
+    #[cfg(feature = "pool-support")]
+    let blocking_flag = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_adapter_ptr as usize))
+        .map(|entry| *entry.value())
+        .and_then(|(pool_id, client_id)| {
             glide_core::pool::refresh_client_activity(pool_id, client_id);
-        }
-        None
-    };
+            if glide_core::client::is_blocking_command(&cmd) {
+                glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+                Some((pool_id, client_id))
+            } else {
+                None
+            }
+        });
+    #[cfg(not(feature = "pool-support"))]
+    let blocking_flag: Option<(u64, u64)> = None;
 
     client_adapter.execute_request_with_buffer(
         request_id,
         async move {
             let result = client.send_command(&mut cmd, routing_info).await;
             // Unmark blocking after command completes
+            #[cfg(feature = "pool-support")]
             if let Some((pool_id, client_id)) = blocking_flag {
                 glide_core::pool::mark_client_blocking(pool_id, client_id, false);
             }
+            let _ = blocking_flag; // suppress unused warning when pool-support disabled
             result
         },
         response_buffer,

@@ -95,6 +95,8 @@ export class ClientPool {
     private lastActivity = new Map<number, number>();
     /** Tracks entries currently executing a blocking command. */
     private blockingEntries = new Set<number>();
+    /** Maps proxy client → entry id for release lookup. */
+    private proxyToEntryId = new WeakMap<object, number>();
     /** Abandon monitor interval handle. */
     private abandonMonitor: ReturnType<typeof setInterval> | null = null;
 
@@ -119,6 +121,7 @@ export class ClientPool {
                 () => this.scanForAbandoned(),
                 abandonTimeoutMs / 2,
             );
+
             // Unref so it doesn't prevent Node.js from exiting
             if (this.abandonMonitor.unref) {
                 this.abandonMonitor.unref();
@@ -241,14 +244,24 @@ export class ClientPool {
      * GlideClient connection before making it idle again.
      */
     async release(client: BaseClient): Promise<void> {
-        // Find entry by client reference
+        // Find entry by client reference or proxy mapping
         let entry: PoolEntry | undefined;
+        const entryId = this.proxyToEntryId.get(client);
 
-        for (const [id, e] of this.active) {
-            if (e.client === client) {
-                entry = e;
-                this.active.delete(id);
-                break;
+        if (entryId !== undefined) {
+            entry = this.active.get(entryId);
+
+            if (entry) {
+                this.active.delete(entryId);
+                this.proxyToEntryId.delete(client);
+            }
+        } else {
+            for (const [id, e] of this.active) {
+                if (e.client === client) {
+                    entry = e;
+                    this.active.delete(id);
+                    break;
+                }
             }
         }
 
@@ -377,10 +390,8 @@ export class ClientPool {
      * and marks blocking commands so the abandon monitor skips them.
      */
     private wrapClient(entry: PoolEntry): BaseClient {
-        const pool = this;
-
-        return new Proxy(entry.client, {
-            get(target, prop, receiver) {
+        const proxy = new Proxy(entry.client, {
+            get: (target, prop, receiver) => {
                 const value = Reflect.get(target, prop, receiver);
 
                 if (typeof value !== "function" || typeof prop !== "string") {
@@ -389,35 +400,42 @@ export class ClientPool {
 
                 // Return a wrapper that refreshes activity and tracks blocking
                 return (...args: unknown[]) => {
-                    pool.lastActivity.set(entry.id, Date.now());
+                    this.lastActivity.set(entry.id, Date.now());
 
-                    const isBlocking =
-                        ClientPool.BLOCKING_COMMANDS.has(prop.toLowerCase());
+                    const isBlocking = ClientPool.BLOCKING_COMMANDS.has(
+                        prop.toLowerCase(),
+                    );
 
                     if (isBlocking) {
-                        pool.blockingEntries.add(entry.id);
+                        this.blockingEntries.add(entry.id);
                     }
 
-                    const result = (value as Function).apply(target, args);
+                    const result = (
+                        value as (...a: unknown[]) => unknown
+                    ).apply(target, args);
 
                     // If result is a Promise, unmark blocking when it resolves
                     if (
                         isBlocking &&
                         result &&
-                        typeof result.then === "function"
+                        typeof (result as { then?: unknown }).then ===
+                            "function"
                     ) {
-                        result.then(
-                            () => pool.blockingEntries.delete(entry.id),
-                            () => pool.blockingEntries.delete(entry.id),
+                        (result as Promise<unknown>).then(
+                            () => this.blockingEntries.delete(entry.id),
+                            () => this.blockingEntries.delete(entry.id),
                         );
                     } else if (isBlocking) {
-                        pool.blockingEntries.delete(entry.id);
+                        this.blockingEntries.delete(entry.id);
                     }
 
                     return result;
                 };
             },
         });
+
+        this.proxyToEntryId.set(proxy, entry.id);
+        return proxy as BaseClient;
     }
 
     private async createEntry(): Promise<PoolEntry> {
@@ -479,6 +497,13 @@ export class ClientPool {
      * Call this from application code if using raw acquire() with long-held clients.
      */
     notifyActivity(client: BaseClient): void {
+        const entryId = this.proxyToEntryId.get(client);
+
+        if (entryId !== undefined) {
+            this.lastActivity.set(entryId, Date.now());
+            return;
+        }
+
         for (const [id, entry] of this.active) {
             if (entry.client === client) {
                 this.lastActivity.set(id, Date.now());

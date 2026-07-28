@@ -27,10 +27,9 @@ public class ClientPoolConfig {
     @Builder.Default private final Duration requestTimeout = Duration.ofSeconds(5);
 
     /**
-     * Maximum inactivity time for a borrowed client before the pool reclaims it. The timer resets
-     * on every command sent. The abandon monitor skips clients executing blocking commands
-     * (BLPOP, XREAD BLOCK, etc.). Set to Duration.ZERO to disable abandon detection.
-     * Default: 5 minutes.
+     * Maximum inactivity time for a borrowed client before the pool reclaims it. The timer resets on
+     * every command sent. The abandon monitor skips clients executing blocking commands (BLPOP, XREAD
+     * BLOCK, etc.). Set to Duration.ZERO to disable abandon detection. Default: 5 minutes.
      */
     @Builder.Default private final Duration abandonTimeout = Duration.ofSeconds(300);
 

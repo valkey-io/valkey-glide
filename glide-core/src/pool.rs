@@ -110,6 +110,10 @@ pub struct PooledClient {
     /// True while the client is executing a blocking command (BLPOP, XREAD BLOCK, etc.).
     /// The abandon monitor skips clients with this flag set.
     pub is_blocking: Arc<AtomicBool>,
+    /// Monotonically increasing generation counter. Bumped on each acquire (including
+    /// force-release by the abandon monitor). Stale releases with a mismatched generation
+    /// are silently dropped, preventing a late release from corrupting another borrower.
+    pub borrow_generation: u64,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -188,6 +192,7 @@ impl ClientPool {
             let client_id = entry.client_id;
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
+            entry.borrow_generation += 1;
             self.in_use.insert(client_id, entry);
             return client_id as i64;
         }
@@ -213,6 +218,7 @@ impl ClientPool {
             borrowed_at: None,
             state: ClientState::Idle,
             is_blocking: Arc::new(AtomicBool::new(false)),
+            borrow_generation: 0,
         };
         self.idle.push_back(entry);
         self.total_count.fetch_add(1, Ordering::AcqRel);
@@ -232,6 +238,7 @@ impl ClientPool {
             borrowed_at: None,
             state: ClientState::Idle,
             is_blocking: Arc::new(AtomicBool::new(false)),
+            borrow_generation: 0,
         };
         self.idle.push_back(entry);
         client_id
@@ -478,12 +485,18 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 logger_core::log_warn(
                     "pool",
                     format!(
-                        "Abandon detection: client {} exceeded borrow timeout ({:?}) — \
-                         force-releasing back to pool",
+                        "Abandon detection: client {} exceeded inactivity timeout ({:?}) — \
+                         discarding connection (stale release safety)",
                         client_id, abandon_timeout
                     ),
                 );
-                release_client_async(pool_arc_monitor.clone(), client_id).await;
+                // Discard rather than return-to-idle: a force-released client may still
+                // have a stale release pending from the original borrower. Discarding
+                // guarantees two borrowers never share a connection.
+                let mut pool = pool_arc_monitor.lock().await;
+                if pool.in_use.remove(&client_id).is_some() {
+                    pool.discard_client();
+                }
             }
         }
     });

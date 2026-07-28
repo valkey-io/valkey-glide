@@ -123,6 +123,9 @@ EXCLUDED_TESTS = {
         "acl_glide_sync_client",
         "glide_sync_client",
         "management_sync_client",
+        # Abandon detection tests — async-only (monitor runs on tokio runtime)
+        "test_pool_abandon_detection",
+        "test_pool_abandon_detection_disabled",
     ],
 }
 

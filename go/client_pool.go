@@ -34,7 +34,8 @@ type PoolConfig struct {
 	// Maximum inactivity time for a borrowed client before the pool reclaims it.
 	// The timer resets on every command sent. The abandon monitor skips clients
 	// executing blocking commands (BLPOP, XREAD BLOCK, etc.).
-	// Set to 0 to disable abandon detection. Default: 5 minutes.
+	// Set to a negative value to disable abandon detection. Default: 5 minutes.
+	// Zero is treated as "use default" (5 minutes).
 	AbandonTimeout time.Duration
 }
 
@@ -101,6 +102,11 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 	}
 	if poolConfig.AcquireTimeout <= 0 {
 		poolConfig.AcquireTimeout = 5 * time.Second
+	}
+	if poolConfig.AbandonTimeout == 0 {
+		poolConfig.AbandonTimeout = 5 * time.Minute
+	} else if poolConfig.AbandonTimeout < 0 {
+		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
 	}
 
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
@@ -310,6 +316,12 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 	}
 	if poolConfig.AcquireTimeout <= 0 {
 		poolConfig.AcquireTimeout = 5 * time.Second
+	}
+
+	if poolConfig.AbandonTimeout == 0 {
+		poolConfig.AbandonTimeout = 5 * time.Minute
+	} else if poolConfig.AbandonTimeout < 0 {
+		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
 	}
 
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
