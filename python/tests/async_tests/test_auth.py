@@ -67,14 +67,15 @@ def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
     Standalone tests keep the shared standalone cluster; there is no
     dedicated standalone auth cluster because the isolation problem only
     materializes with CLIENT KILL fan-out over cluster nodes.
+
+    Under --cluster-endpoints (externally-provided cluster) the dedicated
+    auth twins are never provisioned by conftest, so fall back to None and
+    let create_client_config route to the shared cluster.
     """
     if not cluster_mode:
         return None
-    return (
-        pytest.valkey_auth_tls_cluster  # type: ignore[attr-defined]
-        if use_tls
-        else pytest.valkey_auth_cluster  # type: ignore[attr-defined]
-    )
+    attr = "valkey_auth_tls_cluster" if use_tls else "valkey_auth_cluster"
+    return getattr(pytest, attr, None)
 
 
 @pytest.fixture(scope="function")
