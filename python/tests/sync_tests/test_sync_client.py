@@ -11367,6 +11367,20 @@ def script_kill_tests(
 
 
 class TestSyncScripts:
+    @pytest.fixture(autouse=True)
+    def _flush_pending_script_finalizers(self):
+        """Sync twin: force gc.collect() before/after every TestSyncScripts
+        case so pending Script finalizers from prior parametrizations
+        drain BEFORE the current parametrization touches the
+        process-global scripts_container. See the async twin
+        (test_async_client.py::TestScripts._flush_pending_script_finalizers)
+        for rationale."""
+        import gc
+
+        gc.collect()
+        yield
+        gc.collect()
+
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
