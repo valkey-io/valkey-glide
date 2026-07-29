@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
@@ -9,6 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Un
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
+from glide_shared.protobuf.connection_request_pb2 import (
+    ClientCertReloadConfig as ProtobufClientCertReloadConfig,
+)
 from glide_shared.protobuf.connection_request_pb2 import (
     CompressionBackend as ProtobufCompressionBackend,
 )
@@ -28,6 +32,10 @@ from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufRea
 from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
 )
+
+# A filesystem path argument: a plain ``str`` or any ``os.PathLike[str]``
+# (for example ``pathlib.Path``).
+StrPath = Union[str, os.PathLike[str]]
 
 
 class NodeAddress:
@@ -434,7 +442,12 @@ class PeriodicChecksStatus(Enum):
 
 class TlsAdvancedConfiguration:
     """
-    Represents advanced TLS configuration settings.
+    Advanced TLS configuration for standalone and cluster clients.
+
+    Mutual TLS (mTLS) is configured through the keyword-only constructor
+    parameters in one of two mutually-exclusive modes: static bytes
+    (``client_cert_pem`` + ``client_key_pem``) or path-based with automatic
+    reload (``client_cert_path`` + ``client_key_path``).
 
     Attributes:
         use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
@@ -516,6 +529,47 @@ class TlsAdvancedConfiguration:
             - The key data should be in PEM format as a bytes object.
 
             - Must be used together with client_cert_pem.
+
+        client_cert_path (Optional[StrPath]): Path to the PEM-encoded client certificate for mutual TLS authentication.
+
+            - When provided along with ``client_key_path``, enables path-based mutual TLS (mTLS)
+              with automatic reload: the GLIDE core re-reads both files on a cadence, so a rotated
+              certificate is adopted on the next reconnect while existing open connections keep
+              their current material. A read failure keeps the last-known-good material with no
+              application-level exception.
+
+            - Must be used together with ``client_key_path``, and cannot be combined with
+              byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
+              raise ``ConfigurationError`` at construction time.
+
+            - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
+              read and validated by the GLIDE core when the connection is established; a missing,
+              empty, or unreadable file surfaces as a connection error at that point.
+
+            - If None (default), no path-based client certificate is used.
+
+        client_key_path (Optional[StrPath]): Path to the PEM-encoded client private key for mutual TLS authentication.
+
+            - When provided along with ``client_cert_path``, completes the path-based mTLS pair
+              and participates in the same automatic reload described above.
+
+            - Same rules as ``client_cert_path``: must be paired with it, cannot be combined with
+              byte-based mTLS, and accepts a ``str`` or any ``os.PathLike``. The file is read and
+              validated by the GLIDE core at connection time.
+
+            - If None (default), no path-based client key is used.
+
+        cert_reload_interval_seconds (Optional[int]): Override for the path-based mTLS reload cadence, in seconds.
+
+            - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
+              and ``client_key_path`` raises ``ConfigurationError`` at construction time.
+
+            - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
+              effective cadence.
+
+            - If None (default), the GLIDE core applies its default reload cadence (see
+              ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
+              authoritative value).
     """
 
     def __init__(
@@ -524,11 +578,20 @@ class TlsAdvancedConfiguration:
         root_pem_cacerts: Optional[bytes] = None,
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
+        *,
+        client_cert_path: Optional[StrPath] = None,
+        client_key_path: Optional[StrPath] = None,
+        cert_reload_interval_seconds: Optional[int] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
         self.client_key_pem = client_key_pem
+        # Store the paths as provided; normalization to ``str`` is deferred to
+        # protobuf creation so these public attributes reflect the user's input.
+        self.client_cert_path = client_cert_path
+        self.client_key_path = client_key_path
+        self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
 
 class ClientCircuitBreakerConfiguration:
@@ -635,9 +698,56 @@ class AdvancedBaseClientConfiguration:
 
         return request
 
+    def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
+
+        Only the minimal presence/pairing rules that give an immediate, clear
+        error for an obviously-malformed config are enforced here, matching the
+        other clients. File contents, path readability, and the reload interval
+        value are validated by the GLIDE core at connection time.
+        """
+        has_cert_path = tls_config.client_cert_path is not None
+        has_key_path = tls_config.client_key_path is not None
+        has_cert_pem = tls_config.client_cert_pem is not None
+        has_key_pem = tls_config.client_key_pem is not None
+
+        if has_cert_path != has_key_path:
+            raise ConfigurationError(
+                "client_cert_path and client_key_path must be provided together; "
+                "provide both to enable path-based mTLS or neither."
+            )
+
+        if has_cert_pem != has_key_pem:
+            raise ConfigurationError(
+                "client_cert_pem and client_key_pem must be provided together; "
+                "provide both to enable byte-based mTLS or neither."
+            )
+
+        if has_cert_path and has_cert_pem:
+            raise ConfigurationError(
+                "path-based and byte-based mTLS are mutually exclusive; choose one."
+            )
+
+        if has_cert_pem:
+            if not tls_config.client_cert_pem:
+                raise ConfigurationError(
+                    "client_cert_pem must not be empty; got zero-length bytes."
+                )
+            if not tls_config.client_key_pem:
+                raise ConfigurationError(
+                    "client_key_pem must not be empty; got zero-length bytes."
+                )
+        elif not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds may only be set when path-based mTLS is "
+                "configured (both client_cert_path and client_key_path)."
+            )
+
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
+        self._validate_mtls_config(tls_config)
+
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
             # Validate that TLS is enabled before allowing insecure mode
@@ -658,36 +768,30 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Handle client certificate for mutual TLS
-        client_cert = tls_config.client_cert_pem
-        if client_cert is not None:
-            if len(client_cert) == 0:
-                raise ConfigurationError(
-                    "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
-                )
-            request.client_cert = client_cert
+        # Byte-mode mTLS. Pairing is enforced by `_validate_mtls_config` above.
+        # We emit each byte field under its own presence check so an unset value
+        # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
+        # being coerced to `None`, which would raise `TypeError` at assignment.
+        if tls_config.client_cert_pem is not None:
+            request.client_cert = tls_config.client_cert_pem
+        if tls_config.client_key_pem is not None:
+            request.client_key = tls_config.client_key_pem
 
-        # Handle client key for mutual TLS
-        client_key = tls_config.client_key_pem
-        if client_key is not None:
-            if len(client_key) == 0:
-                raise ConfigurationError(
-                    "client_key_pem cannot be an empty bytes object; use None if not providing client key"
-                )
-            request.client_key = client_key
-
-        # Ensure client cert and client key are both provided or not provided
-        self._validate_client_auth_tls()
-
-    def _validate_client_auth_tls(self):
-        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
-            raise ConfigurationError(
-                "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
-            )
-        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
-            raise ConfigurationError(
-                "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
-            )
+        # Path-based mTLS with automatic reload; the byte and path branches
+        # never both apply (enforced by `_validate_mtls_config` above). The two paths are
+        # validated as a pair, so they are either both set or both unset. Paths
+        # are normalized to `str` here (deferred from construction) so the
+        # public attributes keep the user's original input.
+        cert_path = tls_config.client_cert_path
+        key_path = tls_config.client_key_path
+        if cert_path is not None and key_path is not None:
+            request.client_cert_path = os.fspath(cert_path)
+            request.client_key_path = os.fspath(key_path)
+            reload_config = ProtobufClientCertReloadConfig()
+            reload_config.enabled = True
+            if tls_config.cert_reload_interval_seconds is not None:
+                reload_config.interval_seconds = tls_config.cert_reload_interval_seconds
+            request.cert_reload.CopyFrom(reload_config)
 
 
 class BaseClientConfiguration:
@@ -1513,6 +1617,34 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
+def _load_pem_file(path: str, label: str) -> bytes:
+    """Read a PEM file and return its contents.
+
+    ``label`` is embedded verbatim in error messages ("Certificate",
+    "Client certificate", "Client key") so callers can report which
+    file failed. Missing files raise ``FileNotFoundError``;
+    empty or unreadable files raise ``ConfigurationError``.
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{label} file not found: {path}")
+    except PermissionError as exc:
+        raise ConfigurationError(
+            f"{label} file is not readable ({path}): {exc}"
+        ) from exc
+    except OSError as exc:
+        raise ConfigurationError(
+            f"Failed to read {label.lower()} file {path}: {exc}"
+        ) from exc
+
+    if len(data) == 0:
+        raise ConfigurationError(f"{label} file is empty: {path}")
+
+    return data
+
+
 def load_root_certificates_from_file(path: str) -> bytes:
     """
     Load PEM-encoded root certificates from a file.
@@ -1534,24 +1666,10 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
         from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
 
-        # Load certificates from file
         certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
-
-        # Use in TLS configuration
         tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Certificate")
 
 
 def load_client_certificate_from_file(path: str) -> bytes:
@@ -1570,37 +1688,8 @@ def load_client_certificate_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the certificate file does not exist.
         ConfigurationError: If the certificate file is empty.
-
-    Example usage::
-
-        from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
-        )
-
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
-        tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
-        )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Client certificate")
 
 
 def load_client_key_from_file(path: str) -> bytes:
@@ -1619,34 +1708,50 @@ def load_client_key_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the key file does not exist.
         ConfigurationError: If the key file is empty.
+    """
+    return _load_pem_file(path, "Client key")
 
-    Example usage::
+
+def load_client_certificate_and_key_from_file(
+    cert_path: StrPath,
+    key_path: StrPath,
+) -> Tuple[bytes, bytes]:
+    """
+    Load a PEM-encoded client certificate and its private key from disk
+    for byte-based mutual TLS (mTLS).
+
+    Both paths must exist and be non-empty. Use this helper when static,
+    byte-based mTLS is desired; for automatic reload from disk, pass
+    ``client_cert_path`` / ``client_key_path`` to
+    ``TlsAdvancedConfiguration`` instead.
+
+    Args:
+        cert_path: Path to the PEM-encoded client certificate file.
+        key_path: Path to the PEM-encoded client private key file.
+
+    Returns:
+        Tuple of ``(cert_bytes, key_bytes)`` in PEM format.
+
+    Raises:
+        FileNotFoundError: If either file does not exist.
+        ConfigurationError: If either file is empty or unreadable.
+
+    Example::
 
         from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
+            TlsAdvancedConfiguration,
+            load_client_certificate_and_key_from_file,
         )
 
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
+        cert, key = load_client_certificate_and_key_from_file(
+            "/etc/mtls/client-cert.pem",
+            "/etc/mtls/client-key.pem",
+        )
         tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
+            client_cert_pem=cert,
+            client_key_pem=key,
         )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client key file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client key file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client key file is empty: {path}")
-
-    return data
+    cert = load_client_certificate_from_file(os.fspath(cert_path))
+    key = load_client_key_from_file(os.fspath(key_path))
+    return cert, key
