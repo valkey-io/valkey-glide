@@ -564,7 +564,7 @@ class TlsAdvancedConfiguration:
             - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
               and ``client_key_path`` raises ``ConfigurationError`` at construction time.
 
-            - Interpreted as an unsigned 32-bit integer on the wire; the GLIDE core validates the
+            - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
               effective cadence.
 
             - If None (default), the GLIDE core applies its default reload cadence (see
@@ -594,7 +594,7 @@ class TlsAdvancedConfiguration:
         self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
     def _validate_mtls(self) -> None:
-        """Validate the both-or-neither pairing and mode exclusivity for mTLS at wire-emit time.
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS when the request is built.
 
         Only the minimal presence/pairing rules that give an immediate, clear
         error for an obviously-malformed config are enforced here, matching the
@@ -768,7 +768,7 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Byte-mode mTLS. Pairing is enforced at wire-time by `_validate_mtls` above.
+        # Byte-mode mTLS. Pairing is enforced by `_validate_mtls` above.
         # We emit each byte field under its own presence check so an unset value
         # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
         # being coerced to `None`, which would raise `TypeError` at assignment.
@@ -778,7 +778,7 @@ class AdvancedBaseClientConfiguration:
             request.client_key = tls_config.client_key_pem
 
         # Path-based mTLS with automatic reload; the byte and path branches
-        # never both apply (enforced at wire-time by `_validate_mtls` above). The two paths are
+        # never both apply (enforced by `_validate_mtls` above). The two paths are
         # validated as a pair, so they are either both set or both unset. Paths
         # are normalized to `str` here (deferred from construction) so the
         # public attributes keep the user's original input.

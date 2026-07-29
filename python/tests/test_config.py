@@ -746,7 +746,7 @@ def test_tls_path_based_mtls_accepts_pathlib_and_preserves_input(tmp_path):
     assert tls_config.client_cert_path == Path(cert_path)
     assert tls_config.client_key_path == Path(key_path)
 
-    # The wire request normalizes the paths to `str`.
+    # The built request normalizes the paths to `str`.
     request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
     assert request.client_cert_path == str(cert_path)
     assert request.client_key_path == str(key_path)
@@ -1026,7 +1026,7 @@ def test_load_client_certificate_and_key_from_file_unreadable_key(tmp_path):
 
 
 def test_tls_client_cert_pem_empty_bytes_rejected():
-    """Empty client_cert_pem bytes must be rejected at wire-emit time."""
+    """Empty client_cert_pem bytes must be rejected when the request is built."""
     tls_config = TlsAdvancedConfiguration(
         client_cert_pem=b"",
         client_key_pem=TEST_CLIENT_KEY_DATA,
@@ -1037,7 +1037,7 @@ def test_tls_client_cert_pem_empty_bytes_rejected():
 
 
 def test_tls_client_key_pem_empty_bytes_rejected():
-    """Empty client_key_pem bytes must be rejected at wire-emit time."""
+    """Empty client_key_pem bytes must be rejected when the request is built."""
     tls_config = TlsAdvancedConfiguration(
         client_cert_pem=TEST_CLIENT_CERT_DATA,
         client_key_pem=b"",
@@ -1047,8 +1047,8 @@ def test_tls_client_key_pem_empty_bytes_rejected():
         config._create_a_protobuf_conn_request()
 
 
-def test_tls_mutation_after_construction_rejected_at_wire_time(tmp_path):
-    """Validation runs at wire-emit time so post-construction mutation is caught."""
+def test_tls_mutation_after_construction_rejected(tmp_path):
+    """Post-construction mutation is caught the next time the request is built."""
     tls_config = TlsAdvancedConfiguration(
         client_cert_pem=TEST_CLIENT_CERT_DATA,
         client_key_pem=TEST_CLIENT_KEY_DATA,
@@ -1060,8 +1060,8 @@ def test_tls_mutation_after_construction_rejected_at_wire_time(tmp_path):
         config._create_a_protobuf_conn_request()
 
 
-def test_tls_mixed_mode_after_construction_rejected_at_wire_time(tmp_path):
-    """Post-construction mutation into a mixed byte/path config is caught at wire-time."""
+def test_tls_mixed_mode_after_construction_rejected(tmp_path):
+    """Post-construction mutation into a mixed byte/path config is caught the next time the request is built."""
     cert_path, key_path = _write_cert_key(tmp_path)
     tls_config = TlsAdvancedConfiguration(
         client_cert_pem=TEST_CLIENT_CERT_DATA,
