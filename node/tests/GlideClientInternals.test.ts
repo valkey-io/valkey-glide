@@ -376,8 +376,8 @@ describe('mutualTls kind: "bytes"', () => {
             tlsAdvancedConfiguration: {
                 mutualTls: {
                     kind: "bytes",
-                    cert: CLIENT_CERT_PEM,
-                    key: CLIENT_KEY_PEM,
+                    certBytes: CLIENT_CERT_PEM,
+                    keyBytes: CLIENT_KEY_PEM,
                 },
             },
         });
@@ -403,98 +403,14 @@ describe('mutualTls kind: "bytes"', () => {
             tlsAdvancedConfiguration: {
                 mutualTls: {
                     kind: "bytes",
-                    cert: certBuffer,
-                    key: keyBuffer,
+                    certBytes: certBuffer,
+                    keyBytes: keyBuffer,
                 },
             },
         });
 
         expect(request.clientCert).toEqual(new Uint8Array(certBuffer));
         expect(request.clientKey).toEqual(new Uint8Array(keyBuffer));
-    });
-
-    it("rejects an empty cert (string)", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            cert: "",
-                            key: CLIENT_KEY_PEM,
-                        },
-                    },
-                }),
-            "mutualTls.cert cannot be empty",
-        );
-    });
-
-    it("rejects an empty key (Buffer)", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            cert: CLIENT_CERT_PEM,
-                            key: Buffer.alloc(0),
-                        },
-                    },
-                }),
-            "mutualTls.key cannot be empty",
-        );
-    });
-
-    // Runtime-only check. The MutualTls union types cert as Buffer | string,
-    // so an untyped JS caller passing null is the realistic path in. The cast
-    // is deliberate.
-    it("rejects a null cert with a ConfigurationError, not a raw TypeError", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            cert: null as unknown as Buffer,
-                            key: CLIENT_KEY_PEM,
-                        },
-                    },
-                }),
-            "mutualTls.cert must be a Buffer or non-empty string",
-        );
-    });
-
-    // Runtime-only checks. The MutualTls union requires both cert and key at
-    // compile time, so an untyped JS caller omitting one is the realistic path
-    // in. The most-specific field name must survive.
-    it("rejects a bytes variant that omits key", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            cert: CLIENT_CERT_PEM,
-                        } as unknown as MutualTls,
-                    },
-                }),
-            "mutualTls.key must be a Buffer or non-empty string",
-        );
-    });
-
-    it("rejects a bytes variant that omits cert", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            key: CLIENT_KEY_PEM,
-                        } as unknown as MutualTls,
-                    },
-                }),
-            "mutualTls.cert must be a Buffer or non-empty string",
-        );
     });
 
     it("rejects mutualTls when TLS is disabled on the base connection", async () => {
@@ -505,8 +421,8 @@ describe('mutualTls kind: "bytes"', () => {
                         tlsAdvancedConfiguration: {
                             mutualTls: {
                                 kind: "bytes",
-                                cert: CLIENT_CERT_PEM,
-                                key: CLIENT_KEY_PEM,
+                                certBytes: CLIENT_CERT_PEM,
+                                keyBytes: CLIENT_KEY_PEM,
                             },
                         },
                     },
@@ -547,10 +463,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
 
         expect(request.clientCertPath).toBe(certPath);
         expect(request.clientKeyPath).toBe(keyPath);
-        expect(request.certReload).toEqual({
-            enabled: true,
-            intervalSeconds: null,
-        });
+        expect(request.certReload?.enabled).toBe(true);
+        expect(request.certReload?.intervalSeconds).toBeUndefined();
         expect(request.clientCert).toBeFalsy();
         expect(request.clientKey).toBeFalsy();
     });
@@ -640,96 +554,14 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
             "no greater than 4294967295",
         );
     });
-
-    it("rejects an empty certPath", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath: "",
-                            keyPath,
-                        },
-                    },
-                }),
-            "mutualTls.certPath must be a non-empty string",
-        );
-    });
-
-    it("rejects an empty keyPath", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                            keyPath: "",
-                        },
-                    },
-                }),
-            "mutualTls.keyPath must be a non-empty string",
-        );
-    });
-
-    // Runtime-only checks. The MutualTls discriminated union rejects these at
-    // compile time, so untyped JS callers are the realistic path in. The cast
-    // is deliberate.
-    it("rejects a path variant that omits keyPath", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                        } as unknown as MutualTls,
-                    },
-                }),
-            "mutualTls.keyPath must be a non-empty string",
-        );
-    });
-
-    it("rejects a path variant that omits certPath", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            keyPath,
-                        } as unknown as MutualTls,
-                    },
-                }),
-            "mutualTls.certPath must be a non-empty string",
-        );
-    });
-
-    it("rejects a reloadIntervalSeconds that is not a number", async () => {
-        await expectConfigurationError(
-            () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                            keyPath,
-                            reloadIntervalSeconds: "60" as unknown as number,
-                        },
-                    },
-                }),
-            "mutualTls.reloadIntervalSeconds must be a positive integer",
-        );
-    });
 });
 
 describe("mutualTls unsupported variant fallthrough", () => {
     it("rejects an unknown kind and reports the discriminant only", async () => {
         const bogus = {
             kind: "future" as const,
-            cert: "SENSITIVE-PEM-BYTES",
-            key: "SENSITIVE-KEY-BYTES",
+            certBytes: "SENSITIVE-PEM-BYTES",
+            keyBytes: "SENSITIVE-KEY-BYTES",
         } as unknown as MutualTls;
 
         const probe = new TlsConfigProbe();
@@ -774,8 +606,8 @@ describe("mutualTls interaction with existing TLS knobs", () => {
                 insecure: true,
                 mutualTls: {
                     kind: "bytes",
-                    cert: CLIENT_CERT_PEM,
-                    key: CLIENT_KEY_PEM,
+                    certBytes: CLIENT_CERT_PEM,
+                    keyBytes: CLIENT_KEY_PEM,
                 },
             },
         });

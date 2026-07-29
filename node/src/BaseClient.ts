@@ -336,11 +336,14 @@ export type GlideString = string | Buffer;
  * Mutual TLS (mTLS) client authentication material.
  *
  * The `kind` field selects one of two mutually exclusive ways to supply the
- * client certificate and private key.
+ * client certificate and private key. The bytes variant uses `certBytes` and
+ * `keyBytes`; the path variant uses `certPath` and `keyPath`. Pairing each
+ * variant's fields under a shared discriminant lets the compiler reject
+ * mixed configurations (for example a `certBytes` alongside `keyPath`, or a
+ * `reloadIntervalSeconds` on the bytes variant).
  *
- * With `kind: "bytes"`, `cert` and `key` are PEM material passed inline and
- * read once at connect time. Both must be non-empty; a `string` value is
- * encoded as UTF-8.
+ * With `kind: "bytes"`, `certBytes` and `keyBytes` are PEM material passed
+ * inline and read once at connect time. A `string` value is encoded as UTF-8.
  *
  * With `kind: "path"`, `certPath` and `keyPath` point at files on disk. The
  * core reads them at connect time and re-reads them on a schedule, so a
@@ -356,8 +359,8 @@ export type GlideString = string | Buffer;
 export type MutualTls =
     | {
           readonly kind: "bytes";
-          readonly cert: Buffer | string;
-          readonly key: Buffer | string;
+          readonly certBytes: Buffer | string;
+          readonly keyBytes: Buffer | string;
       }
     | {
           readonly kind: "path";
@@ -368,13 +371,14 @@ export type MutualTls =
 
 /**
  * Upper bound for {@link MutualTls.reloadIntervalSeconds}. The wire field is a
- * protobuf `uint32`; values above this silently truncate on encode, so they
- * are rejected up front. Matches the cap enforced by the other language
- * clients.
+ * protobuf `uint32`; values above this silently truncate on encode (protobufjs
+ * casts through `value >>> 0`), so an out-of-range value would be lost before
+ * the core ever sees it. Rejecting up front keeps the misconfiguration visible
+ * instead of quietly changing the user's requested cadence.
  *
  * @internal
  */
-const MAX_RELOAD_INTERVAL_SECONDS = 4_294_967_295;
+const MAX_RELOAD_INTERVAL_SECONDS = 2 ** 32 - 1;
 
 /**
  * Reads a PEM file for TLS configuration. Shared by
@@ -447,58 +451,32 @@ export async function loadClientCertificateAndKeyFromFile(
 }
 
 /**
- * Turns a PEM cert or key input into non-empty bytes for the wire.
+ * Encodes PEM input for the wire. String values are UTF-8 encoded; Buffer
+ * values pass through. Emptiness and structural validity of the PEM material
+ * are the core's responsibility.
  *
  * @internal
  */
-function requireNonEmptyPem(value: unknown, fieldName: string): Uint8Array {
-    if (!Buffer.isBuffer(value) && typeof value !== "string") {
-        throw new ConfigurationError(
-            `${fieldName} must be a Buffer or non-empty string.`,
-        );
-    }
-
+function encodePem(value: Buffer | string): Uint8Array {
     const buffer =
         typeof value === "string" ? Buffer.from(value, "utf-8") : value;
-
-    if (buffer.length === 0) {
-        throw new ConfigurationError(
-            `${fieldName} cannot be empty; omit tlsAdvancedConfiguration.mutualTls if you do not want mTLS.`,
-        );
-    }
-
     return new Uint8Array(buffer);
 }
 
 /**
- * Type-guards a named mTLS path field as a non-empty string.
+ * Validates the optional reload interval. protobufjs encodes uint32 via
+ * `value >>> 0`, so an out-of-range or non-integer value would silently
+ * truncate before reaching the core. The core cannot validate what it never
+ * receives, so the check stays on the client side.
  *
  * @internal
  */
-function requireNonEmptyString(value: unknown, fieldName: string): string {
-    if (typeof value !== "string" || value.length === 0) {
-        throw new ConfigurationError(
-            `${fieldName} must be a non-empty string.`,
-        );
-    }
-
-    return value;
-}
-
-/**
- * Validates the optional reload interval. Returns `null` when unset so the
- * core applies its default cadence; throws if the value cannot fit the
- * protobuf `uint32` wire field as a positive integer.
- *
- * @internal
- */
-function normalizeReloadInterval(value: number | undefined): number | null {
+function validateReloadInterval(value: number | undefined): void {
     if (value === undefined) {
-        return null;
+        return;
     }
 
     if (
-        typeof value !== "number" ||
         !Number.isInteger(value) ||
         value <= 0 ||
         value > MAX_RELOAD_INTERVAL_SECONDS
@@ -507,15 +485,13 @@ function normalizeReloadInterval(value: number | undefined): number | null {
             `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_RELOAD_INTERVAL_SECONDS}.`,
         );
     }
-
-    return value;
 }
 
 /**
- * Validates a {@link MutualTls} value and writes it into the connection
- * request. Wire fields: `client_cert`/`client_key` (proto 22/23) for the
- * byte-based variant; `client_cert_path`/`client_key_path`/`cert_reload`
- * (proto 31/32/33) for the path-based variant.
+ * Writes a {@link MutualTls} value into the connection request. Wire fields:
+ * `client_cert`/`client_key` (proto 22/23) for the byte-based variant;
+ * `client_cert_path`/`client_key_path`/`cert_reload` (proto 31/32/33) for the
+ * path-based variant.
  *
  * @internal
  */
@@ -525,43 +501,34 @@ function applyMutualTls(
 ): void {
     switch (mtls.kind) {
         case "bytes": {
-            request.clientCert = requireNonEmptyPem(
-                mtls.cert,
-                "mutualTls.cert",
-            );
-            request.clientKey = requireNonEmptyPem(mtls.key, "mutualTls.key");
+            request.clientCert = encodePem(mtls.certBytes);
+            request.clientKey = encodePem(mtls.keyBytes);
             return;
         }
 
         case "path": {
-            const certPath = requireNonEmptyString(
-                mtls.certPath,
-                "mutualTls.certPath",
-            );
-            const keyPath = requireNonEmptyString(
-                mtls.keyPath,
-                "mutualTls.keyPath",
-            );
-
-            request.clientCertPath = certPath;
-            request.clientKeyPath = keyPath;
+            validateReloadInterval(mtls.reloadIntervalSeconds);
+            request.clientCertPath = mtls.certPath;
+            request.clientKeyPath = mtls.keyPath;
             request.certReload = {
                 enabled: true,
-                intervalSeconds: normalizeReloadInterval(
-                    mtls.reloadIntervalSeconds,
-                ),
+                intervalSeconds: mtls.reloadIntervalSeconds,
             };
             return;
         }
 
         default: {
             // Exhaustiveness guard: adding a new MutualTls variant without a
-            // matching case fails to compile here. The runtime throw defends
-            // untyped JS callers passing an unknown discriminant.
+            // matching case makes `mtls` non-`never` and fails to compile
+            // here. The cast in the throw exists because TS has narrowed
+            // `mtls` to `never` at this point, so `mtls.kind` is not a
+            // legal expression; the runtime throw defends untyped JS callers
+            // that pass an unknown discriminant.
             const _exhaustive: never = mtls;
+            void _exhaustive;
             throw new ConfigurationError(
                 `Unsupported mutualTls variant: kind=${String(
-                    (_exhaustive as { kind?: unknown }).kind,
+                    (mtls as { kind?: unknown }).kind,
                 )}`,
             );
         }
@@ -9971,20 +9938,29 @@ export class BaseClient {
                 options.pubsubReconciliationIntervalMs;
         }
 
-        if (!options.tlsAdvancedConfiguration) {
-            return;
+        if (options.tlsAdvancedConfiguration) {
+            this.applyTlsAdvancedConfiguration(
+                options.tlsAdvancedConfiguration,
+                request,
+            );
         }
+    }
 
-        const tls = options.tlsAdvancedConfiguration;
-
-        // request.tlsMode is either SecureTls or InsecureTls here
+    /**
+     * @internal
+     */
+    private applyTlsAdvancedConfiguration(
+        tls: NonNullable<
+            AdvancedBaseClientConfiguration["tlsAdvancedConfiguration"]
+        >,
+        request: connection_request.IConnectionRequest,
+    ): void {
         if (request.tlsMode === connection_request.TlsMode.NoTls) {
             throw new ConfigurationError(
                 "TLS advanced configuration cannot be set when useTLS is disabled.",
             );
         }
 
-        // If tls.insecure is true then use InsecureTls mode
         if (tls.insecure) {
             request.tlsMode = connection_request.TlsMode.InsecureTls;
         }
