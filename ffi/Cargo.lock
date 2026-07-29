@@ -1065,6 +1065,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "logger_core",
+ "percent-encoding",
  "protobuf",
  "redis",
  "rstest",
