@@ -593,10 +593,8 @@ class TlsAdvancedConfiguration:
         self.client_key_path = client_key_path
         self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
-        self._validate_mtls()
-
     def _validate_mtls(self) -> None:
-        """Validate the both-or-neither pairing and mode exclusivity for mTLS.
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS at wire-emit time.
 
         Only the minimal presence/pairing rules that give an immediate, clear
         error for an obviously-malformed config are enforced here, matching the
@@ -748,6 +746,8 @@ class AdvancedBaseClientConfiguration:
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
+        tls_config._validate_mtls()
+
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
             # Validate that TLS is enabled before allowing insecure mode
@@ -768,7 +768,7 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Byte-mode mTLS. Pairing is enforced at construction in `_validate_mtls`.
+        # Byte-mode mTLS. Pairing is enforced at wire-time by `_validate_mtls` above.
         # We emit each byte field under its own presence check so an unset value
         # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
         # being coerced to `None`, which would raise `TypeError` at assignment.
@@ -778,7 +778,7 @@ class AdvancedBaseClientConfiguration:
             request.client_key = tls_config.client_key_pem
 
         # Path-based mTLS with automatic reload; the byte and path branches
-        # never both apply (enforced in `_validate_mtls`). The two paths are
+        # never both apply (enforced at wire-time by `_validate_mtls` above). The two paths are
         # validated as a pair, so they are either both set or both unset. Paths
         # are normalized to `str` here (deferred from construction) so the
         # public attributes keep the user's original input.

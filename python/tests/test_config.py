@@ -661,14 +661,22 @@ def test_tls_configuration_client_cert_key_consistency():
     # No cert/key: construction succeeds.
     AdvancedBaseClientConfiguration(tls_config=TlsAdvancedConfiguration())
 
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"nonempty", client_key_pem=None
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(client_cert_pem=b"nonempty", client_key_pem=None)
+        config._create_a_protobuf_conn_request()
     assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
 
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=None, client_key_pem=b"nonempty"
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(client_cert_pem=None, client_key_pem=b"nonempty")
+        config._create_a_protobuf_conn_request()
     assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
@@ -746,33 +754,41 @@ def test_tls_path_based_mtls_accepts_pathlib_and_preserves_input(tmp_path):
 
 def test_tls_path_based_mtls_missing_key_path(tmp_path):
     cert_path, _ = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(client_cert_path=str(cert_path))
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(client_cert_path=str(cert_path))
+        config._create_a_protobuf_conn_request()
     assert "must be provided together" in str(exc_info.value)
 
 
 def test_tls_path_based_mtls_missing_cert_path(tmp_path):
     _, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(client_key_path=str(key_path))
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(client_key_path=str(key_path))
+        config._create_a_protobuf_conn_request()
     assert "must be provided together" in str(exc_info.value)
 
 
 def test_tls_path_based_and_byte_based_mutually_exclusive(tmp_path):
     cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(
-            client_cert_pem=TEST_CLIENT_CERT_DATA,
-            client_key_pem=TEST_CLIENT_KEY_DATA,
-            client_cert_path=str(cert_path),
-            client_key_path=str(key_path),
-        )
+        config._create_a_protobuf_conn_request()
     assert "mutually exclusive" in str(exc_info.value)
 
 
 def test_tls_cert_reload_interval_requires_paths():
+    tls_config = TlsAdvancedConfiguration(cert_reload_interval_seconds=60)
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(cert_reload_interval_seconds=60)
+        config._create_a_protobuf_conn_request()
     assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
 
 
@@ -907,19 +923,23 @@ def test_tls_byte_based_still_emits_no_reload_config():
 
 
 def test_tls_byte_based_mtls_empty_cert():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"",
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError, match="client_cert_pem"):
-        TlsAdvancedConfiguration(
-            client_cert_pem=b"",
-            client_key_pem=TEST_CLIENT_KEY_DATA,
-        )
+        config._create_a_protobuf_conn_request()
 
 
 def test_tls_byte_based_mtls_empty_key():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=b"",
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError, match="client_key_pem"):
-        TlsAdvancedConfiguration(
-            client_cert_pem=TEST_CLIENT_CERT_DATA,
-            client_key_pem=b"",
-        )
+        config._create_a_protobuf_conn_request()
 
 
 def test_tls_byte_based_mtls_forwards_use_insecure_tls():
@@ -1006,21 +1026,52 @@ def test_load_client_certificate_and_key_from_file_unreadable_key(tmp_path):
 
 
 def test_tls_client_cert_pem_empty_bytes_rejected():
-    """Empty client_cert_pem bytes must be rejected at construction."""
+    """Empty client_cert_pem bytes must be rejected at wire-emit time."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"",
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError, match="client_cert_pem must not be empty"):
-        TlsAdvancedConfiguration(
-            client_cert_pem=b"",
-            client_key_pem=TEST_CLIENT_KEY_DATA,
-        )
+        config._create_a_protobuf_conn_request()
 
 
 def test_tls_client_key_pem_empty_bytes_rejected():
-    """Empty client_key_pem bytes must be rejected at construction."""
+    """Empty client_key_pem bytes must be rejected at wire-emit time."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=b"",
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError, match="client_key_pem must not be empty"):
-        TlsAdvancedConfiguration(
-            client_cert_pem=TEST_CLIENT_CERT_DATA,
-            client_key_pem=b"",
-        )
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_mutation_after_construction_rejected_at_wire_time(tmp_path):
+    """Validation runs at wire-emit time so post-construction mutation is caught."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    # Break the pairing invariant after construction.
+    tls_config.client_key_pem = None
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_cert_pem and client_key_pem"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_mixed_mode_after_construction_rejected_at_wire_time(tmp_path):
+    """Post-construction mutation into a mixed byte/path config is caught at wire-time."""
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    tls_config.client_cert_path = str(cert_path)
+    tls_config.client_key_path = str(key_path)
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="mutually exclusive"):
+        config._create_a_protobuf_conn_request()
 
 
 def test_tcp_nodelay_default_value():
