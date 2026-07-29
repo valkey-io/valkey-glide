@@ -593,51 +593,6 @@ class TlsAdvancedConfiguration:
         self.client_key_path = client_key_path
         self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
-    def _validate_mtls(self) -> None:
-        """Validate the both-or-neither pairing and mode exclusivity for mTLS when the request is built.
-
-        Only the minimal presence/pairing rules that give an immediate, clear
-        error for an obviously-malformed config are enforced here, matching the
-        other clients. File contents, path readability, and the reload interval
-        value are validated by the GLIDE core at connection time.
-        """
-        has_cert_path = self.client_cert_path is not None
-        has_key_path = self.client_key_path is not None
-        has_cert_pem = self.client_cert_pem is not None
-        has_key_pem = self.client_key_pem is not None
-
-        if has_cert_path != has_key_path:
-            raise ConfigurationError(
-                "client_cert_path and client_key_path must be provided together; "
-                "provide both to enable path-based mTLS or neither."
-            )
-
-        if has_cert_pem != has_key_pem:
-            raise ConfigurationError(
-                "client_cert_pem and client_key_pem must be provided together; "
-                "provide both to enable byte-based mTLS or neither."
-            )
-
-        if has_cert_path and has_cert_pem:
-            raise ConfigurationError(
-                "path-based and byte-based mTLS are mutually exclusive; choose one."
-            )
-
-        if has_cert_pem:
-            if not self.client_cert_pem:
-                raise ConfigurationError(
-                    "client_cert_pem must not be empty; got zero-length bytes."
-                )
-            if not self.client_key_pem:
-                raise ConfigurationError(
-                    "client_key_pem must not be empty; got zero-length bytes."
-                )
-        elif not has_cert_path and self.cert_reload_interval_seconds is not None:
-            raise ConfigurationError(
-                "cert_reload_interval_seconds may only be set when path-based mTLS is "
-                "configured (both client_cert_path and client_key_path)."
-            )
-
 
 class ClientCircuitBreakerConfiguration:
     """
@@ -743,10 +698,55 @@ class AdvancedBaseClientConfiguration:
 
         return request
 
+    def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
+
+        Only the minimal presence/pairing rules that give an immediate, clear
+        error for an obviously-malformed config are enforced here, matching the
+        other clients. File contents, path readability, and the reload interval
+        value are validated by the GLIDE core at connection time.
+        """
+        has_cert_path = tls_config.client_cert_path is not None
+        has_key_path = tls_config.client_key_path is not None
+        has_cert_pem = tls_config.client_cert_pem is not None
+        has_key_pem = tls_config.client_key_pem is not None
+
+        if has_cert_path != has_key_path:
+            raise ConfigurationError(
+                "client_cert_path and client_key_path must be provided together; "
+                "provide both to enable path-based mTLS or neither."
+            )
+
+        if has_cert_pem != has_key_pem:
+            raise ConfigurationError(
+                "client_cert_pem and client_key_pem must be provided together; "
+                "provide both to enable byte-based mTLS or neither."
+            )
+
+        if has_cert_path and has_cert_pem:
+            raise ConfigurationError(
+                "path-based and byte-based mTLS are mutually exclusive; choose one."
+            )
+
+        if has_cert_pem:
+            if not tls_config.client_cert_pem:
+                raise ConfigurationError(
+                    "client_cert_pem must not be empty; got zero-length bytes."
+                )
+            if not tls_config.client_key_pem:
+                raise ConfigurationError(
+                    "client_key_pem must not be empty; got zero-length bytes."
+                )
+        elif not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds may only be set when path-based mTLS is "
+                "configured (both client_cert_path and client_key_path)."
+            )
+
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
-        tls_config._validate_mtls()
+        self._validate_mtls_config(tls_config)
 
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
@@ -768,7 +768,7 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Byte-mode mTLS. Pairing is enforced by `_validate_mtls` above.
+        # Byte-mode mTLS. Pairing is enforced by `_validate_mtls_config` above.
         # We emit each byte field under its own presence check so an unset value
         # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
         # being coerced to `None`, which would raise `TypeError` at assignment.
@@ -778,7 +778,7 @@ class AdvancedBaseClientConfiguration:
             request.client_key = tls_config.client_key_pem
 
         # Path-based mTLS with automatic reload; the byte and path branches
-        # never both apply (enforced by `_validate_mtls` above). The two paths are
+        # never both apply (enforced by `_validate_mtls_config` above). The two paths are
         # validated as a pair, so they are either both set or both unset. Paths
         # are normalized to `str` here (deferred from construction) so the
         # public attributes keep the user's original input.
