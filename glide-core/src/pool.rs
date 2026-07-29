@@ -135,6 +135,9 @@ pub struct ClientPool {
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
     /// Handle to the abandon monitor task (None if disabled).
     pub abandon_monitor_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Client IDs discarded by the abandon monitor. The FFI layer drains this
+    /// on acquire/destroy to clean up adapter mappings and close connections.
+    pub discarded_ids: Vec<u64>,
 }
 
 impl ClientPool {
@@ -160,6 +163,7 @@ impl ClientPool {
             state: AtomicU8::new(POOL_RUNNING),
             release_notify: Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
             abandon_monitor_handle: None,
+            discarded_ids: Vec::new(),
         })
     }
 
@@ -314,6 +318,12 @@ impl ClientPool {
     /// Get idle count.
     pub fn idle_count(&self) -> u32 {
         self.idle.len() as u32
+    }
+
+    /// Drain client IDs discarded by the abandon monitor.
+    /// The FFI layer calls this to clean up adapter mappings and close connections.
+    pub fn drain_discarded_ids(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.discarded_ids)
     }
 
     /// Get active (in-use) count.
@@ -496,6 +506,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 let mut pool = pool_arc_monitor.lock().await;
                 if pool.in_use.remove(&client_id).is_some() {
                     pool.discard_client();
+                    pool.discarded_ids.push(client_id);
                 }
             }
         }
@@ -523,6 +534,13 @@ pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) {
     if let Ok(pool) = pool_arc.try_lock() {
         if let Some(entry) = pool.in_use.get(&client_id) {
             entry.value().is_blocking.store(blocking, Ordering::Release);
+        }
+        // When unmarking (command completed), refresh borrowed_at so the client
+        // isn't instantly reclaimable after a long-running blocking command.
+        if !blocking {
+            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                entry.value_mut().borrowed_at = Some(Instant::now());
+            }
         }
     }
 }

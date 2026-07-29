@@ -184,6 +184,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
     runtime.spawn(async move {
         let mut pool = pool_arc.lock().await;
         // Clean up JNI handle table entries for all pooled clients
+        // (includes discarded clients from the abandon monitor)
+        let discarded = pool.drain_discarded_ids();
         for entry in pool.idle.iter() {
             handle_table.remove(&entry.client_id);
             glide_core::scope::unregister_client(entry.client_id);
@@ -193,6 +195,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
             handle_table.remove(entry.key());
             glide_core::scope::unregister_client(*entry.key());
             get_pool_client_map().remove(entry.key());
+        }
+        for cid in discarded {
+            handle_table.remove(&cid);
+            glide_core::scope::unregister_client(cid);
+            get_pool_client_map().remove(&cid);
         }
         pool.destroy();
     });

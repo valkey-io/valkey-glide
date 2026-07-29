@@ -262,6 +262,14 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
+            // Clean up any clients discarded by the abandon monitor
+            let discarded = pool.drain_discarded_ids();
+            for cid in discarded {
+                if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+                    get_pool_adapter_map().remove(&entry.adapter_ptr);
+                }
+            }
+
             let result = pool.try_acquire();
 
             // Record OTel metrics for pool hit/miss
@@ -478,13 +486,17 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         Some(arc) => arc,
         None => return -1,
     };
-    if let Ok(mut pool) = pool_arc.try_lock() {
+    {
+        let mut pool = pool_arc.blocking_lock();
         // Clean up POOL_CLIENTS entries for all clients owned by this pool
+        // (includes discarded clients that the abandon monitor removed from in_use)
+        let discarded = pool.drain_discarded_ids();
         let client_ids: Vec<u64> = pool
             .idle
             .iter()
             .map(|e| e.client_id)
             .chain(pool.in_use.iter().map(|e| *e.key()))
+            .chain(discarded)
             .collect();
         for cid in client_ids {
             if let Some((_, entry)) = get_pool_clients().remove(&cid) {
