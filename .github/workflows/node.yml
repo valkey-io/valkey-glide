@@ -238,7 +238,10 @@ jobs:
               id: install-yarn
               shell: bash
               run: |
-                  curl -o- -L https://yarnpkg.com/install.sh | bash
+                  curl -fsSL https://yarnpkg.com/install.sh -o /tmp/yarn-install.sh
+                  chmod +x /tmp/yarn-install.sh
+                  bash /tmp/yarn-install.sh
+                  rm /tmp/yarn-install.sh
 
             - name: Add Yarn to PATH
               id: add-yarn-to-path
