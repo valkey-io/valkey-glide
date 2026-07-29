@@ -9,5 +9,6 @@ exclude =
     .denv
     .env_main
     glide-shared/glide_shared/protobuf
+    glide-async/python/glide_shared/protobuf
     build
 extend-ignore = E203

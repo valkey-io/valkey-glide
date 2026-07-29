@@ -282,6 +282,15 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     periodicChecks?: PeriodicChecks;
 
     /**
+     * The maximum number of requests to buffer in the recovery queue when a cluster
+     * reconnect is in progress. Buffered requests are retried transparently after
+     * reconnection. Requests beyond this limit are failed immediately to provide
+     * bounded memory usage. If not set, a default value of 1000 will be used.
+     * Set to 0 to disable the recovery queue and use fail-fast behavior.
+     */
+    recoveryRequestsQueueSize?: number;
+
+    /**
      * PubSub subscriptions to be used for the client.
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
@@ -679,6 +688,11 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
+
+        if (options.recoveryRequestsQueueSize !== undefined) {
+            configuration.recoveryRequestsQueueSize =
+                options.recoveryRequestsQueueSize;
+        }
 
         if (options.advancedConfiguration) {
             this.configureAdvancedConfigurationBase(
