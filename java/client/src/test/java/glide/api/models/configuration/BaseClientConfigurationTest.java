@@ -161,4 +161,26 @@ public class BaseClientConfigurationTest {
         ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).build();
         assertFalse(cacheDefault.isServerAssisted());
     }
+
+    @Test
+    public void testRecoveryRequestsQueueSizeDefault() {
+        // recoveryRequestsQueueSize should default to null when not specified
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(7000).build())
+                        .build();
+        assertNull(config.getRecoveryRequestsQueueSize());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 100, 500, 1000, 5000})
+    public void testRecoveryRequestsQueueSizeSetValue(int queueSize) {
+        // recoveryRequestsQueueSize should be stored on the cluster config
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(7000).build())
+                        .recoveryRequestsQueueSize(queueSize)
+                        .build();
+        assertEquals(queueSize, config.getRecoveryRequestsQueueSize());
+    }
 }

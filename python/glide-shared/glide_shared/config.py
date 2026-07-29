@@ -1339,6 +1339,12 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
             stuck in case of a queue backlog.
             If not set, a default value will be used.
+        recovery_requests_queue_size (Optional[int]): The maximum number of requests to buffer in the
+            recovery queue when a cluster reconnect is in progress. Buffered requests are retried
+            transparently after reconnection. Requests beyond this limit are failed immediately to
+            provide bounded memory usage.
+            Set to 0 to disable the recovery queue and use fail-fast behavior.
+            If not set, a default value of 1000 will be used.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -1425,6 +1431,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
+        recovery_requests_queue_size: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
@@ -1456,6 +1463,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
+        self.recovery_requests_queue_size = recovery_requests_queue_size
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -1493,6 +1501,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
 
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
+        if self.recovery_requests_queue_size is not None:
+            request.recovery_requests_queue_size = self.recovery_requests_queue_size
         return request
 
     def _get_pubsub_callback_and_context(
