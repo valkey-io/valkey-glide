@@ -147,6 +147,7 @@ message ConnectionRequest {
     optional string client_cert_path = 31;
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
+    optional uint32 recovery_requests_queue_size = 34;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

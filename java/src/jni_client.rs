@@ -80,6 +80,8 @@ pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
 static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 
 // Defaults for runtime and callback workers
+// NOTE: minimum 2 worker threads required for MultiplexedConnection (scope feature).
+// The connection's internal reader task must run concurrently with command sends.
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 
@@ -207,6 +209,9 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
 
         let client = create_glide_client(cfg, Some(tx)).await?;
         table.insert(handle_id, client.clone());
+
+        // Register in the glide-core scope registry for scope command execution
+        glide_core::scope::register_client(handle_id, client.clone());
 
         // Always spawn push notification handler
         let jvm_arc = JVM.get().cloned();

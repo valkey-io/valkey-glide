@@ -3,6 +3,7 @@ package glide.api.models;
 
 import glide.utils.Java8Utils;
 import glide.utils.Utf8Validator;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -78,6 +79,11 @@ public class GlideString implements Comparable<GlideString> {
     /** Returns a copy of the underlying byte array to preserve immutability of the stored value. */
     public byte[] getBytes() {
         return bytes.clone();
+    }
+
+    /** Returns a read-only, zero-copy view of the underlying bytes. */
+    public ByteBuffer asReadOnlyByteBuffer() {
+        return ByteBuffer.wrap(bytes).asReadOnlyBuffer();
     }
 
     /** Converts stored data to a human-friendly {@link String} if it is possible. */

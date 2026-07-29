@@ -52,6 +52,9 @@ public class ConnectionManager {
     private ServerCredentials credentials;
     private volatile boolean isClosed = false;
 
+    /** Serialized protobuf ConnectionRequest bytes (stored for scope pool creation). */
+    private volatile byte[] connectionRequestBytes;
+
     /**
      * Connect to Valkey using the native bridge.
      *
@@ -267,6 +270,13 @@ public class ConnectionManager {
                                                     .setDurationInSec(manualInterval.getDurationInSec())
                                                     .build());
                                 }
+                            }
+
+                            // Set recovery requests queue size only when explicitly
+                            // configured; the core applies its own default otherwise.
+                            if (clusterConfig.getRecoveryRequestsQueueSize() != null) {
+                                requestBuilder.setRecoveryRequestsQueueSize(
+                                        clusterConfig.getRecoveryRequestsQueueSize());
                             }
                         }
 
@@ -516,6 +526,7 @@ public class ConnectionManager {
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
+                        this.connectionRequestBytes = requestBytes;
 
                         // Get the address resolver (may be null if not configured)
                         // The resolver is passed directly to native code which stores it as a global reference
@@ -601,6 +612,11 @@ public class ConnectionManager {
     /** Get request timeout setting. */
     public int getRequestTimeoutMs() {
         return requestTimeoutMs;
+    }
+
+    /** Get the serialized ConnectionRequest bytes for scope pool creation. */
+    public byte[] getConnectionRequestBytes() {
+        return connectionRequestBytes;
     }
 
     /** Check if the connection is closed. */
