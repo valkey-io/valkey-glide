@@ -36,6 +36,7 @@ pub struct ConnectionRequest {
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
+    pub recovery_requests_queue_size: Option<u32>,
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
     pub root_certs: Vec<Vec<u8>>,
@@ -353,6 +354,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         }
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
+        let recovery_requests_queue_size = value.recovery_requests_queue_size;
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
         let root_certs = value
@@ -447,6 +449,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             periodic_checks,
             pubsub_subscriptions,
             inflight_requests_limit,
+            recovery_requests_queue_size,
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,

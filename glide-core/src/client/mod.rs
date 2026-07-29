@@ -67,6 +67,12 @@ pub const FINISHED_SCAN_CURSOR: &str = "finished";
 /// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
+/// Default recovery queue size: maximum requests buffered during cluster reconnect.
+/// Buffered requests are retried transparently after reconnection. Requests beyond
+/// this limit are failed immediately to provide bounded memory usage.
+/// See `recovery_requests_queue_size` in `ConnectionRequest`.
+pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
+
 /// The connection check interval is currently not exposed to the user via ConnectionRequest,
 /// as improper configuration could negatively impact performance or pub/sub resiliency.
 /// A 3-second interval provides a reasonable balance between connection validation
@@ -2106,6 +2112,11 @@ async fn create_cluster_client(
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
+    let recovery_requests_queue_size = request
+        .recovery_requests_queue_size
+        .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE);
+    builder = builder.recovery_requests_queue_size(recovery_requests_queue_size);
+
     let client = builder.build()?;
     let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
         .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
@@ -2298,6 +2309,11 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let recovery_requests_queue_size = format_optional_value(
+        "\nRecovery requests queue size: {}",
+        request.recovery_requests_queue_size,
+    );
+
     let node_discovery_mode = match request.node_discovery_mode {
         NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
         NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
@@ -2305,7 +2321,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     };
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}",
     )
 }
 

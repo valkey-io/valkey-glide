@@ -1,5 +1,10 @@
 # Changelog
 
+## Pending 2.5.x
+
+### Fixes
+
+* Core/All: Buffer pending cluster requests during reconnect instead of failing immediately. When a circular MOVED redirect triggers a reconnect, requests arriving during the recovery window are now queued and retried transparently once reconnection completes. A new `recovery_requests_queue_size` option (default: 1000) controls the queue depth. ([#6640](https://github.com/valkey-io/valkey-glide/pull/6640))
 ## 2.5
 
 ### Fixes
