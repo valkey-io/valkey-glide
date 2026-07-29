@@ -1482,3 +1482,33 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	cache.WithServerAssisted(false)
 	assert.False(t, cache.ServerAssisted)
 }
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithRecoveryRequestsQueueSize(2000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(2000), result.GetRecoveryRequestsQueueSize())
+}
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_notSet(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379})
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.RecoveryRequestsQueueSize) // nil when not set
+}
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_zero_disables_queue(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithRecoveryRequestsQueueSize(0)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.RecoveryRequestsQueueSize)
+	assert.Equal(t, uint32(0), *result.RecoveryRequestsQueueSize) // 0 = disabled
+}

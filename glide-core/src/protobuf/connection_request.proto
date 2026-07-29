@@ -139,6 +139,7 @@ message ConnectionRequest {
     NodeDiscoveryMode node_discovery_mode = 28;
     optional string address_resolver_key = 29;
     optional ClientCircuitBreakerConfig client_circuit_breaker = 30;
+    optional uint32 recovery_requests_queue_size = 34;
 }
 
 message ClientCircuitBreakerConfig {

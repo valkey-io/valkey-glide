@@ -7136,6 +7136,237 @@ mod cluster_async {
         );
     }
 
+    /// Mirrors the Python stress-test script that exposed the "Connection in recovery" bug.
+    ///
+    /// ## Scenario
+    ///
+    /// 20 concurrent tasks each send PIPELINE_ITERATIONS × PIPELINE_SIZE individual SET
+    /// commands. The mock triggers a circular MOVED on the **30th SET command globally**,
+    /// so several commands complete successfully before the disruption. After the MOVED
+    /// triggers, all subsequent SETs are delayed by 5ms and return OK.
+    ///
+    /// The circular MOVED on an individual command causes the cluster client to enter a
+    /// reconnect/recovery cycle (via `Next::Reconnect` → `PollFlushAction::Reconnect` →
+    /// `RecoverFuture::Reconnect`). Any commands that arrive at `pending_requests_tx`
+    /// while the connection is in recovery must be **buffered** (not failed) and succeed
+    /// once recovery completes.
+    ///
+    /// ## Why individual commands (not pipelines)
+    ///
+    /// Pipeline MOVED errors are handled inline within `handle_non_atomic_pipeline_request`
+    /// via `handle_reconnect_logic`, which bypasses the Sink's state machine entirely.
+    /// Only individual commands go through `Next::Reconnect` → `PollFlushAction::Reconnect`
+    /// → Sink's `Recover` state, which is the path where `buffer_pending_requests_to_recovery_queue`
+    /// is exercised.
+    ///
+    /// ## Why this requires a multi-threaded runtime
+    ///
+    /// On a single-threaded (current_thread) runtime, the reconnect's outer JoinHandle
+    /// always completes before the background connection task's next `poll_flush`, so
+    /// `poll_recover` always returns `Poll::Ready` and no requests see the recovery window.
+    ///
+    /// On a multi-threaded runtime the background task and the reconnect task can run on
+    /// different OS threads simultaneously; `poll_recover` may return `Poll::Pending` with
+    /// requests already queued, exercising the buffering path.
+    ///
+    /// ## SET delay after MOVED
+    ///
+    /// Once the circular MOVED fires, the mock handler inserts a 5 ms
+    /// `std::thread::sleep` before returning OK for every subsequent SET command.
+    /// This simulates realistic server latency and keeps tasks slow to complete,
+    /// ensuring they are in-flight (queued in `pending_requests_tx`) during the recovery
+    /// window.
+    ///
+    /// ## PING delay
+    ///
+    /// The PING handler (part of the reconnect handshake) sleeps 10 ms to widen the
+    /// recovery window. This keeps the reconnect JoinHandle in `Poll::Pending` long enough
+    /// for concurrent tasks to queue commands in `pending_requests_tx`.
+    ///
+    /// ## Test flow
+    ///
+    /// 1. Use a multi-threaded Tokio runtime with 4 worker threads.
+    /// 2. Register mock behaviour for a synthetic cluster name.
+    /// 3. 20 tasks start together behind a barrier; each sends PIPELINE_ITERATIONS × PIPELINE_SIZE
+    ///    individual SET commands.
+    /// 4. On the 30th SET globally the mock returns a circular MOVED → Sink enters Recover state.
+    /// 5. After MOVED fires, every SET response is delayed 5ms to keep tasks in-flight.
+    /// 6. PING is delayed 10ms to keep the reconnect JoinHandle pending.
+    /// 7. Commands arriving during recovery must be buffered and succeed after recovery.
+    /// 8. Assert zero command errors across all tasks.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_concurrent_requests_during_circular_moved_reconnect() {
+        let name = "test_concurrent_circular_moved";
+        // Trigger circular MOVED on the Nth SET to let several pipelines succeed before disruption
+        const MOVED_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10; // SET commands per pipeline
+                                         // After MOVED fires, delay each SET response by this many ms to widen recovery window
+        const DELAY_AFTER_MOVED_MS: u64 = 5;
+        // Delay CLUSTER SLOTS response to keep the recovery JoinHandle in Poll::Pending longer.
+        // This is the primary mechanism for widening the recovery window: by slowing the
+        // slots-refresh task, concurrent pipeline tasks accumulate in pending_requests_tx.
+        const CLUSTER_SLOTS_DELAY_MS: u64 = 30;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let moved_fired = Arc::new(atomic::AtomicBool::new(false));
+        let moved_fired_clone = moved_fired.clone();
+        let moved_fired_cluster = moved_fired.clone();
+        let name_handler = name.to_string();
+
+        // Register the mock handler globally so it is available to the multi-threaded
+        // runtime's background connection task.
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    // Delay PING to keep the reconnect JoinHandle in Poll::Pending while
+                    // concurrent tasks queue commands in pending_requests_tx.
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    // After MOVED fires, delay the CLUSTER SLOTS response to keep the
+                    // recovery JoinHandle in Poll::Pending while pipeline tasks queue up.
+                    if moved_fired_cluster.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            CLUSTER_SLOTS_DELAY_MS,
+                        ));
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == MOVED_ON_SET_N {
+                        // Trigger circular MOVED mid-run to exercise the recovery window
+                        moved_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        return Err(parse_redis_value(
+                            format!("-MOVED 5000 {name}:{port}\r\n").as_bytes(),
+                        ));
+                    }
+                    // After MOVED has fired, delay to keep pipelines in-flight during recovery
+                    if moved_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"GET") {
+                    return Err(Ok(Value::BulkString(b"value".to_vec().into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        // Use a multi-threaded runtime so that the background connection task and the
+        // reconnect task can run on different OS threads simultaneously.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(4)
+            .build()
+            .expect("failed to build multi-thread runtime");
+
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        // Each task sends PIPELINE_ITERATIONS × PIPELINE_SIZE individual SET commands.
+        // All tasks start simultaneously via a barrier.
+        // The circular MOVED fires mid-run (on SET #{MOVED_ON_SET_N} globally); commands
+        // arriving while the Sink is in recovery must be buffered and succeed, not fail.
+        let results = runtime.block_on(async move {
+            let barrier = Arc::new(tokio::sync::Barrier::new(CONCURRENCY));
+            let tasks: Vec<_> = (0..CONCURRENCY)
+                .map(|task_id| {
+                    let mut conn = connection.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        let mut cmd_errors = 0usize;
+                        let mut cmd_successes = 0usize;
+                        for iter in 0..PIPELINE_ITERATIONS {
+                            for k in 0..PIPELINE_SIZE {
+                                let cmd = redis::Cmd::new()
+                                    .arg("SET")
+                                    .arg(format!("t{task_id}_key{k}"))
+                                    .arg("value")
+                                    .clone();
+                                match conn.req_packed_command(&cmd).await {
+                                    Ok(_) => cmd_successes += 1,
+                                    Err(e) => {
+                                        println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
+                                        cmd_errors += 1;
+                                    }
+                                }
+                            }
+                        }
+                        (task_id, cmd_successes, cmd_errors)
+                    })
+                })
+                .collect();
+            futures::future::join_all(tasks).await
+        });
+
+        let total_cmd_successes: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, s, _)| s)
+            .sum();
+        let total_cmd_errors: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, _, e)| e)
+            .sum();
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+        let expected_cmds = CONCURRENCY * PIPELINE_ITERATIONS * PIPELINE_SIZE;
+
+        println!(
+            "Results: {} tasks, {}/{} SET commands succeeded, {} cmd errors, \
+             {} SET commands reached mock (MOVED triggered on SET #{})",
+            CONCURRENCY,
+            total_cmd_successes,
+            expected_cmds,
+            total_cmd_errors,
+            total_sets,
+            MOVED_ON_SET_N,
+        );
+
+        assert_eq!(
+            total_cmd_errors, 0,
+            "Expected zero command errors after recovery queue fix. \
+             {} commands failed (total SETs to mock: {})",
+            total_cmd_errors, total_sets,
+        );
+
+        println!(
+            "PASS: all {}/{} SET commands succeeded with zero errors during/after circular MOVED reconnect",
+            total_cmd_successes,
+            expected_cmds,
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
