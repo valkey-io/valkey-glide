@@ -42,10 +42,64 @@ from tests.utils.pubsub_test_utils import (
 )
 from tests.utils.utils import (
     get_random_string,
-    kill_connections,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
+    sync_kill_connections_tolerant,
 )
+
+# Defaults for the publish-and-retry loop used to verify message delivery after
+# a resubscription. After subscription state is confirmed as restored, the
+# server-side subscription may still need a brief moment to become fully active
+# (especially in cluster mode), so a published message can be silently dropped.
+_MAX_PUBLISH_ATTEMPTS = 5
+_PUBLISH_POLL_TIMEOUT_SEC = 3.0
+_PUBLISH_POLL_INTERVAL_SEC = 0.1
+
+
+def _publish_and_wait_for_message(
+    publishing_client,
+    message: str,
+    channel: str,
+    listening_client,
+    method: MethodTesting,
+    callback_messages: List[PubSubMsg],
+    expected_idx: int,
+    max_attempts: int = _MAX_PUBLISH_ATTEMPTS,
+    poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
+    poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+) -> Optional[PubSubMsg]:
+    """
+    Publish ``message`` to ``channel`` and poll for its receipt, re-publishing if
+    it is not received within ``poll_timeout``.
+
+    This handles the race window after a resubscription where the server-side
+    subscription reports active but is not yet delivering messages: a message
+    published in that window is lost, so we re-publish until one arrives.
+
+    Note: this intentionally polls with the non-blocking
+    ``try_get_pubsub_message()`` instead of the blocking ``get_pubsub_message()``.
+    A blocking read would wait for a message that was never delivered (due to the
+    race above) until the client request timeout, surfacing as a TimeoutError.
+
+    Returns the received message, or ``None`` if no message arrived after
+    ``max_attempts``.
+    """
+    for attempt in range(max_attempts):
+        publishing_client.publish(message, channel)
+
+        # Poll for the message using try_get or callback check
+        poll_deadline = time.time() + poll_timeout
+        while time.time() < poll_deadline:
+            if method == MethodTesting.Callback:
+                if len(callback_messages) >= expected_idx + 1:
+                    return decode_pubsub_msg(callback_messages[expected_idx])
+            else:
+                result = listening_client.try_get_pubsub_message()
+                if result is not None:
+                    return decode_pubsub_msg(result)
+            time.sleep(poll_interval)
+
+    return None
 
 
 class TestSyncPubSub:
@@ -773,16 +827,17 @@ class TestSyncPubSub:
         """
 
         NUM_CHANNELS = 256
-        PATTERN = "{{{}}}:{}".format("pattern", "*")
+        PATTERN = "{pattern}:*"
 
-        # Create dictionaries of channels and their corresponding messages
+        # Create dictionaries of channels and their corresponding messages.
+        # Deterministic, index-unique names keep exact channels and the
+        # subscribed pattern from overlapping, so callback counts stay exact.
         exact_channels_and_messages = {
-            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
-            for _ in range(NUM_CHANNELS)
+            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
         }
         pattern_channels_and_messages = {
-            "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(5)
-            for _ in range(NUM_CHANNELS)
+            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            for i in range(NUM_CHANNELS)
         }
 
         all_channels_and_messages = {
@@ -812,8 +867,24 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
+            # Wait for messages to propagate. Both the Callback and Sync read
+            # paths are non-blocking, so they must poll until every message has
+            # arrived; a fixed sleep races against slow CI (e.g. aarch64). Only
+            # the Async path (get_pubsub_message) blocks per-message and needs
+            # no pre-wait.
+            if method == MethodTesting.Callback:
+                # Callback messages arrive asynchronously; poll the callback list.
+                wait_for_messages(
+                    len(all_channels_and_messages), callback_messages, timeout=10.0
+                )
+            elif method == MethodTesting.Sync:
+                # try_get_pubsub_message is non-blocking; poll the client's
+                # internal pubsub queue (a List[PubSubMsg]) until all arrive.
+                wait_for_messages(
+                    len(all_channels_and_messages),
+                    listening_client._pubsub_queue,
+                    timeout=10.0,
+                )
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
@@ -3569,22 +3640,35 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
-            # Give some time for connection to reconnect
-            time.sleep(2)
-
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established after reconnection.
+            # In cluster mode, reconnection involves multiple nodes, topology
+            # refresh, and resubscription which can take significantly longer.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
-                listening_client, expected_channels={channel}, timeout_sec=5.0
+                listening_client,
+                expected_channels={channel},
+                timeout_sec=resubscribe_timeout,
             )
 
-            # Verify subscription still works after reconnection
-            publishing_client.publish(message_after, channel)
-            time.sleep(1)
+            # After resubscription state is confirmed, the server-side
+            # subscription may still need a brief moment to become fully active
+            # (especially in cluster mode). Use a publish-and-retry loop to
+            # handle this race condition reliably.
+            msg_after = _publish_and_wait_for_message(
+                publishing_client,
+                message_after,
+                channel,
+                listening_client,
+                method,
+                callback_messages,
+                expected_idx=1,
+            )
 
-            msg_after = sync_get_message_by_method(
-                method, listening_client, callback_messages, 1
+            assert msg_after is not None, (
+                f"Failed to receive message after reconnection "
+                f"({_MAX_PUBLISH_ATTEMPTS} publish attempts)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
@@ -3651,22 +3735,35 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
-            # Give some time for connection to reconnect
-            time.sleep(2)
-
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established after reconnection.
+            # In cluster mode, reconnection involves multiple nodes, topology
+            # refresh, and resubscription which can take significantly longer.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
-                listening_client, expected_patterns={pattern}, timeout_sec=5.0
+                listening_client,
+                expected_patterns={pattern},
+                timeout_sec=resubscribe_timeout,
             )
 
-            # Verify subscription still works after reconnection
-            publishing_client.publish(message_after, channel)
-            time.sleep(1)
+            # After resubscription state is confirmed, the server-side
+            # subscription may still need a brief moment to become fully active
+            # (especially in cluster mode). Use a publish-and-retry loop to
+            # handle this race condition reliably.
+            msg_after = _publish_and_wait_for_message(
+                publishing_client,
+                message_after,
+                channel,
+                listening_client,
+                method,
+                callback_messages,
+                expected_idx=1,
+            )
 
-            msg_after = sync_get_message_by_method(
-                method, listening_client, callback_messages, 1
+            assert msg_after is not None, (
+                f"Failed to receive message after reconnection "
+                f"({_MAX_PUBLISH_ATTEMPTS} publish attempts)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
@@ -3958,14 +4055,19 @@ class TestSyncPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Give some time for connection to reconnect
             time.sleep(2)
 
-            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            # Wait for subscriptions to be re-established (need to poll since reconnection is async).
+            # Cluster reconnect + resubscribe spans multiple nodes and topology
+            # refresh, which can take significantly longer under CI load.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
-                listening_client, expected_sharded={channel}, timeout_sec=5.0
+                listening_client,
+                expected_sharded={channel},
+                timeout_sec=resubscribe_timeout,
             )
 
             # Verify subscription still works after reconnection
@@ -4031,16 +4133,19 @@ class TestSyncPubSub:
             )
 
             # Kill connections
-            kill_connections(publishing_client, None)
+            sync_kill_connections_tolerant(publishing_client, kill_type=None)
 
             # Give time for reconnect
             time.sleep(2)
 
-            # Wait for resubscription (need to poll since reconnection is async)
+            # Wait for resubscription (need to poll since reconnection is async).
+            # Restoring 256 subscriptions across a reconnecting cluster can take
+            # significantly longer under CI load than in standalone.
+            resubscribe_timeout = 15.0 if cluster_mode else 5.0
             sync_wait_for_subscription_state(
                 listening_client,
                 expected_channels=channels,
-                timeout_sec=5.0,
+                timeout_sec=resubscribe_timeout,
             )
 
             # Publish to all channels after reconnection

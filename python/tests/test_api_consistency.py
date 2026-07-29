@@ -13,38 +13,8 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 
 EXCLUDED_API_FUNCTIONS = {
-    "async_only": [
-        # _CompatFuture
-        "done",
-        "result",
-        "set_exception",
-        "set_result",
-        # opentelemetry
-        "create_otel_span",
-        "drop_otel_span",
-        "get_endpoint",
-        "get_metrics",
-        "get_traces",
-        "init_opentelemetry",
-        "set_traces",
-        # Logger
-        "is_lower",
-        "py_init",
-        "py_log",
-        # others
-        "init_callback",
-        "create_leaked_bytes_vec",
-        "create_leaked_value",
-        "start_socket_listener_external",
-        "value_from_pointer",
-        "aclose",
-        # cache metrics sync path (PyO3 only, sync client uses FFI)
-        "get_cache_metric_from_registry",
-        # address resolver registry (PyO3 only, sync client passes callback via FFI)
-        "register_address_resolver",
-        "remove_address_resolver",
-    ],
-    "sync_only": [],
+    "async_only": ["aclose", "done", "result", "set_exception", "set_result"],
+    "sync_only": ["get_min_compressed_size"],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -60,6 +30,23 @@ EXCLUDED_TESTS = {
         "test_client_usable_after_cancelled_commands",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
+        "test_aclose_alias",
+        "test_async_context_manager",
+        "test_client_recreation_after_close",
+        "test_mixed_async_sync_client_lib_names",
+        # Free-threading tests — async-only (tests async thread pool dispatch)
+        "test_concurrent_commands_single_client",
+        "test_high_concurrency_pipeline",
+        "test_multiple_clients_concurrent",
+        "client_worker",
+        "get_and_store",
+        "get_standalone_config",
+        # Pool metrics (async has individual properties as tests)
+        "test_pool_metrics",
+        # Pool helper functions (async-only patterns)
+        "blocking",
+        # Scope DB test with different naming
+        "test_scope_inherits_runtime_select",
         # Dynamic PubSub tests helper functions
         "unsubscribe_by_method",
         "psubscribe_by_method",
@@ -74,18 +61,49 @@ EXCLUDED_TESTS = {
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
+        # Async-only lifecycle tests (pipe/event-loop specific)
+        "test_concurrent_commands_from_multiple_clients",
+        "test_response_after_client_close_is_managed",
+        "test_large_response_does_not_block_other_clients",
+        "test_rapid_create_close_cycles",
+        "test_inflight_commands_get_closing_error_on_close",
+        "test_pubsub_callback_with_closed_client_no_crash",
+        "test_client_death_mid_command",
+        # Nested helper functions in lifecycle tests
+        "client_workload",
+        "blocking_cmd",
+        "close_after_delay",
+        "get_large",
+        "get_small",
+        "close_after_dispatch",
+        "kill_after_delay",
+        "cb",
+        # Async-only pubsub pointer-mode test
+        "test_pubsub_large_message_does_not_block_other_clients",
     ],
     "sync_only": [
         "test_sync_fork",
         "sync_poll_for_timestamp_change",
+        "get_min_compressed_size",
         # get() with buffer — sync-only FFI path, no async equivalent
         "test_sync_get_into_buffer",
         "test_sync_get_into_buffer_nonexistent_key",
         "test_sync_get_into_buffer_larger_buffer",
         "test_sync_get_into_buffer_readonly_raises",
         "test_sync_get_into_buffer_too_small_raises",
-        # Script invocation span — async tracked in #5601
-        "test_sync_span_script_invocation",
+        "test_sync_get_into_buffer_non_byte_format",
+        # mget() with buffers - sync-only FFI path, no async equivalent
+        "test_sync_mget_into_buffers",
+        "test_sync_mget_into_buffers_missing_key",
+        "test_sync_mget_into_buffers_larger_buffer",
+        "test_sync_mget_into_buffers_readonly_raises",
+        "test_sync_mget_into_buffers_too_small_raises",
+        "test_sync_mget_buffers_length_mismatch_raises",
+        "test_sync_mget_into_buffers_non_byte_format",
+        "test_sync_mget_into_buffers_cross_slot",
+        # Pool blocking test nested helper functions (sync-only threading pattern)
+        "blocking_worker",
+        "fast_worker",
     ],
 }
 
@@ -93,9 +111,11 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
+        "test_async_freethreading.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
+        "test_sync_freethreading.py",
     ],
 }
 

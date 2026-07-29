@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -136,6 +137,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -198,15 +200,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public void cleanup() {
-        // Flush all databases to ensure clean state between tests
+        // Flush all databases in parallel to reduce teardown time
+        List<CompletableFuture<String>> futures = new ArrayList<>();
         for (Arguments client : clients) {
             BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
             if (baseClient instanceof GlideClient) {
-                ((GlideClient) baseClient).flushall().get();
+                futures.add(((GlideClient) baseClient).flushall());
             } else if (baseClient instanceof GlideClusterClient) {
-                ((GlideClusterClient) baseClient).flushall().get();
+                futures.add(((GlideClusterClient) baseClient).flushall());
             }
         }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
     }
 
     @SneakyThrows
@@ -18727,5 +18731,33 @@ public class SharedCommandTests {
             // If it's a different error, rethrow it
             throw e;
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo_cache_off(BaseClient client) {
+
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
+
+        assertClientTrackingInfo(info, false);
+    }
+
+    @ParameterizedTest(autoCloseArguments = true)
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
+    @SneakyThrows
+    public void clientTrackingInfo_cache_on(BaseClient client) {
+
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
+
+        assertClientTrackingInfo(info, true);
     }
 }

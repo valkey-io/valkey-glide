@@ -15,10 +15,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -29,10 +29,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -50,15 +50,27 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
     workflow_call:
         inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
                 default: false
             windows-only:
                 description: "Run Windows tests only."
@@ -81,14 +93,15 @@ jobs:
             host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
             # Filter hosts based on `windows-only` input
             - id: filter-hosts
               shell: bash
@@ -103,9 +116,19 @@ jobs:
                   fi
                   echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> $GITHUB_OUTPUT
 
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
+
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
@@ -118,7 +141,7 @@ jobs:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -142,7 +165,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -232,7 +255,8 @@ jobs:
 
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -243,7 +267,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -265,7 +289,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -332,7 +356,7 @@ jobs:
         timeout-minutes: 30
         runs-on: ubuntu-24.04-arm
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Set up JDK 11
               uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -341,7 +365,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
@@ -393,7 +417,7 @@ jobs:
         timeout-minutes: 30
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Set up JDK 21
               uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -402,7 +426,7 @@ jobs:
                   java-version: 21
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: x86_64-unknown-linux-gnu
@@ -426,24 +450,26 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+        if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: java
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 60
         strategy:
             fail-fast: false
@@ -489,12 +515,12 @@ jobs:
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   submodules: recursive
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -576,7 +602,7 @@ jobs:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - uses: ./.github/workflows/lint-rust
               with:

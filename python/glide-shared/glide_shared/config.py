@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
@@ -9,6 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Un
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
+from glide_shared.protobuf.connection_request_pb2 import (
+    ClientCertReloadConfig as ProtobufClientCertReloadConfig,
+)
 from glide_shared.protobuf.connection_request_pb2 import (
     CompressionBackend as ProtobufCompressionBackend,
 )
@@ -28,6 +32,10 @@ from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufRea
 from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
 )
+
+# A filesystem path argument: a plain ``str`` or any ``os.PathLike[str]``
+# (for example ``pathlib.Path``).
+StrPath = Union[str, os.PathLike[str]]
 
 
 class NodeAddress:
@@ -175,31 +183,10 @@ class NodeDiscoveryMode(Enum):
 
 
 def _get_min_compressed_size() -> int:
-    """
-    Get the minimum compressed size from the Rust core.
-    This ensures Python validation stays in sync with Rust implementation.
-    """
-    try:
-        # Try async module first
-        from glide import get_min_compressed_size
+    """Get the minimum compressed size from the Rust core via FFI."""
+    from glide_shared._glide_ffi import GlideFFI
 
-        return get_min_compressed_size()
-    except ImportError:
-        pass
-
-    try:
-        # Try sync module
-        from glide_sync import get_min_compressed_size
-
-        return get_min_compressed_size()
-    except ImportError:
-        pass
-
-    # If neither module is available, fail fast
-    raise ImportError(
-        "Cannot import get_min_compressed_size from either 'glide' or 'glide_sync'. "
-        "Ensure the native module is built and available."
-    )
+    return GlideFFI.lib.get_min_compressed_size()
 
 
 # Lazy cache for minimum compression size to avoid circular import issues
@@ -455,7 +442,12 @@ class PeriodicChecksStatus(Enum):
 
 class TlsAdvancedConfiguration:
     """
-    Represents advanced TLS configuration settings.
+    Advanced TLS configuration for standalone and cluster clients.
+
+    Mutual TLS (mTLS) is configured through the keyword-only constructor
+    parameters in one of two mutually-exclusive modes: static bytes
+    (``client_cert_pem`` + ``client_key_pem``) or path-based with automatic
+    reload (``client_cert_path`` + ``client_key_path``).
 
     Attributes:
         use_insecure_tls (Optional[bool]): Whether to bypass TLS certificate verification.
@@ -537,6 +529,47 @@ class TlsAdvancedConfiguration:
             - The key data should be in PEM format as a bytes object.
 
             - Must be used together with client_cert_pem.
+
+        client_cert_path (Optional[StrPath]): Path to the PEM-encoded client certificate for mutual TLS authentication.
+
+            - When provided along with ``client_key_path``, enables path-based mutual TLS (mTLS)
+              with automatic reload: the GLIDE core re-reads both files on a cadence, so a rotated
+              certificate is adopted on the next reconnect while existing open connections keep
+              their current material. A read failure keeps the last-known-good material with no
+              application-level exception.
+
+            - Must be used together with ``client_key_path``, and cannot be combined with
+              byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
+              raise ``ConfigurationError`` at construction time.
+
+            - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
+              read and validated by the GLIDE core when the connection is established; a missing,
+              empty, or unreadable file surfaces as a connection error at that point.
+
+            - If None (default), no path-based client certificate is used.
+
+        client_key_path (Optional[StrPath]): Path to the PEM-encoded client private key for mutual TLS authentication.
+
+            - When provided along with ``client_cert_path``, completes the path-based mTLS pair
+              and participates in the same automatic reload described above.
+
+            - Same rules as ``client_cert_path``: must be paired with it, cannot be combined with
+              byte-based mTLS, and accepts a ``str`` or any ``os.PathLike``. The file is read and
+              validated by the GLIDE core at connection time.
+
+            - If None (default), no path-based client key is used.
+
+        cert_reload_interval_seconds (Optional[int]): Override for the path-based mTLS reload cadence, in seconds.
+
+            - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
+              and ``client_key_path`` raises ``ConfigurationError`` at construction time.
+
+            - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
+              effective cadence.
+
+            - If None (default), the GLIDE core applies its default reload cadence (see
+              ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
+              authoritative value).
     """
 
     def __init__(
@@ -545,11 +578,20 @@ class TlsAdvancedConfiguration:
         root_pem_cacerts: Optional[bytes] = None,
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
+        *,
+        client_cert_path: Optional[StrPath] = None,
+        client_key_path: Optional[StrPath] = None,
+        cert_reload_interval_seconds: Optional[int] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
         self.client_key_pem = client_key_pem
+        # Store the paths as provided; normalization to ``str`` is deferred to
+        # protobuf creation so these public attributes reflect the user's input.
+        self.client_cert_path = client_cert_path
+        self.client_key_path = client_key_path
+        self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
 
 class ClientCircuitBreakerConfiguration:
@@ -656,9 +698,56 @@ class AdvancedBaseClientConfiguration:
 
         return request
 
+    def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
+
+        Only the minimal presence/pairing rules that give an immediate, clear
+        error for an obviously-malformed config are enforced here, matching the
+        other clients. File contents, path readability, and the reload interval
+        value are validated by the GLIDE core at connection time.
+        """
+        has_cert_path = tls_config.client_cert_path is not None
+        has_key_path = tls_config.client_key_path is not None
+        has_cert_pem = tls_config.client_cert_pem is not None
+        has_key_pem = tls_config.client_key_pem is not None
+
+        if has_cert_path != has_key_path:
+            raise ConfigurationError(
+                "client_cert_path and client_key_path must be provided together; "
+                "provide both to enable path-based mTLS or neither."
+            )
+
+        if has_cert_pem != has_key_pem:
+            raise ConfigurationError(
+                "client_cert_pem and client_key_pem must be provided together; "
+                "provide both to enable byte-based mTLS or neither."
+            )
+
+        if has_cert_path and has_cert_pem:
+            raise ConfigurationError(
+                "path-based and byte-based mTLS are mutually exclusive; choose one."
+            )
+
+        if has_cert_pem:
+            if not tls_config.client_cert_pem:
+                raise ConfigurationError(
+                    "client_cert_pem must not be empty; got zero-length bytes."
+                )
+            if not tls_config.client_key_pem:
+                raise ConfigurationError(
+                    "client_key_pem must not be empty; got zero-length bytes."
+                )
+        elif not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds may only be set when path-based mTLS is "
+                "configured (both client_cert_path and client_key_path)."
+            )
+
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
+        self._validate_mtls_config(tls_config)
+
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
             # Validate that TLS is enabled before allowing insecure mode
@@ -679,36 +768,30 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Handle client certificate for mutual TLS
-        client_cert = tls_config.client_cert_pem
-        if client_cert is not None:
-            if len(client_cert) == 0:
-                raise ConfigurationError(
-                    "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
-                )
-            request.client_cert = client_cert
+        # Byte-mode mTLS. Pairing is enforced by `_validate_mtls_config` above.
+        # We emit each byte field under its own presence check so an unset value
+        # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
+        # being coerced to `None`, which would raise `TypeError` at assignment.
+        if tls_config.client_cert_pem is not None:
+            request.client_cert = tls_config.client_cert_pem
+        if tls_config.client_key_pem is not None:
+            request.client_key = tls_config.client_key_pem
 
-        # Handle client key for mutual TLS
-        client_key = tls_config.client_key_pem
-        if client_key is not None:
-            if len(client_key) == 0:
-                raise ConfigurationError(
-                    "client_key_pem cannot be an empty bytes object; use None if not providing client key"
-                )
-            request.client_key = client_key
-
-        # Ensure client cert and client key are both provided or not provided
-        self._validate_client_auth_tls()
-
-    def _validate_client_auth_tls(self):
-        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
-            raise ConfigurationError(
-                "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
-            )
-        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
-            raise ConfigurationError(
-                "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
-            )
+        # Path-based mTLS with automatic reload; the byte and path branches
+        # never both apply (enforced by `_validate_mtls_config` above). The two paths are
+        # validated as a pair, so they are either both set or both unset. Paths
+        # are normalized to `str` here (deferred from construction) so the
+        # public attributes keep the user's original input.
+        cert_path = tls_config.client_cert_path
+        key_path = tls_config.client_key_path
+        if cert_path is not None and key_path is not None:
+            request.client_cert_path = os.fspath(cert_path)
+            request.client_key_path = os.fspath(key_path)
+            reload_config = ProtobufClientCertReloadConfig()
+            reload_config.enabled = True
+            if tls_config.cert_reload_interval_seconds is not None:
+                reload_config.interval_seconds = tls_config.cert_reload_interval_seconds
+            request.cert_reload.CopyFrom(reload_config)
 
 
 class BaseClientConfiguration:
@@ -747,6 +830,14 @@ class BaseClientConfiguration:
             Must be a non-negative integer.If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
+            command during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default (e.g. ``GlidePy`` for the
+            async client, ``GlidePySync`` for the sync client) is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -832,6 +923,8 @@ class BaseClientConfiguration:
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
@@ -850,6 +943,8 @@ class BaseClientConfiguration:
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
         self.client_name = client_name
+        self.lib_name = lib_name
+        self.client_info_tag = client_info_tag
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
@@ -859,6 +954,9 @@ class BaseClientConfiguration:
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
+
+        if client_info_tag is not None and any(c.isspace() for c in client_info_tag):
+            raise ValueError("client_info_tag must not contain whitespace characters")
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -942,15 +1040,17 @@ class BaseClientConfiguration:
         if not self.client_side_cache:
             return
 
-        request.client_side_cache.cache_id = self.client_side_cache.cache_id
-        request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
+        cache_config = self.client_side_cache
+        cache_request = request.client_side_cache
 
-        request.client_side_cache.entry_ttl_ms = self.client_side_cache.entry_ttl_ms
-        request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
-        if self.client_side_cache.eviction_policy:
-            request.client_side_cache.eviction_policy = (
-                self.client_side_cache.eviction_policy.value
-            )
+        cache_request.cache_id = cache_config.cache_id
+        cache_request.max_cache_kb = cache_config.max_cache_kb
+        cache_request.entry_ttl_ms = cache_config.entry_ttl_ms
+        cache_request.enable_metrics = cache_config.enable_metrics
+        cache_request.server_assisted = cache_config.server_assisted
+
+        if cache_config.eviction_policy:
+            cache_request.eviction_policy = cache_config.eviction_policy.value
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -983,6 +1083,8 @@ class BaseClientConfiguration:
 
         if self.client_name:
             request.client_name = self.client_name
+        if self.lib_name:
+            request.lib_name = self.lib_name
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_circuit_breaker:
@@ -1063,6 +1165,13 @@ class GlideClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1157,6 +1266,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
@@ -1179,6 +1290,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
@@ -1310,6 +1423,13 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Must not contain whitespace.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -1323,6 +1443,12 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
             stuck in case of a queue backlog.
             If not set, a default value will be used.
+        recovery_requests_queue_size (Optional[int]): The maximum number of requests to buffer in the
+            recovery queue when a cluster reconnect is in progress. Buffered requests are retried
+            transparently after reconnection. Requests beyond this limit are failed immediately to
+            provide bounded memory usage.
+            Set to 0 to disable the recovery queue and use fail-fast behavior.
+            If not set, a default value of 1000 will be used.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -1401,12 +1527,15 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
+        recovery_requests_queue_size: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
@@ -1424,6 +1553,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
@@ -1436,6 +1567,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
+        self.recovery_requests_queue_size = recovery_requests_queue_size
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -1473,6 +1605,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
 
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
+        if self.recovery_requests_queue_size is not None:
+            request.recovery_requests_queue_size = self.recovery_requests_queue_size
         return request
 
     def _get_pubsub_callback_and_context(
@@ -1481,6 +1615,34 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.pubsub_subscriptions:
             return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
         return None, None
+
+
+def _load_pem_file(path: str, label: str) -> bytes:
+    """Read a PEM file and return its contents.
+
+    ``label`` is embedded verbatim in error messages ("Certificate",
+    "Client certificate", "Client key") so callers can report which
+    file failed. Missing files raise ``FileNotFoundError``;
+    empty or unreadable files raise ``ConfigurationError``.
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{label} file not found: {path}")
+    except PermissionError as exc:
+        raise ConfigurationError(
+            f"{label} file is not readable ({path}): {exc}"
+        ) from exc
+    except OSError as exc:
+        raise ConfigurationError(
+            f"Failed to read {label.lower()} file {path}: {exc}"
+        ) from exc
+
+    if len(data) == 0:
+        raise ConfigurationError(f"{label} file is empty: {path}")
+
+    return data
 
 
 def load_root_certificates_from_file(path: str) -> bytes:
@@ -1504,24 +1666,10 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
         from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
 
-        # Load certificates from file
         certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
-
-        # Use in TLS configuration
         tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Certificate")
 
 
 def load_client_certificate_from_file(path: str) -> bytes:
@@ -1540,37 +1688,8 @@ def load_client_certificate_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the certificate file does not exist.
         ConfigurationError: If the certificate file is empty.
-
-    Example usage::
-
-        from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
-        )
-
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
-        tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
-        )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client certificate file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client certificate file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client certificate file is empty: {path}")
-
-    return data
+    return _load_pem_file(path, "Client certificate")
 
 
 def load_client_key_from_file(path: str) -> bytes:
@@ -1589,34 +1708,50 @@ def load_client_key_from_file(path: str) -> bytes:
     Raises:
         FileNotFoundError: If the key file does not exist.
         ConfigurationError: If the key file is empty.
+    """
+    return _load_pem_file(path, "Client key")
 
-    Example usage::
+
+def load_client_certificate_and_key_from_file(
+    cert_path: StrPath,
+    key_path: StrPath,
+) -> Tuple[bytes, bytes]:
+    """
+    Load a PEM-encoded client certificate and its private key from disk
+    for byte-based mutual TLS (mTLS).
+
+    Both paths must exist and be non-empty. Use this helper when static,
+    byte-based mTLS is desired; for automatic reload from disk, pass
+    ``client_cert_path`` / ``client_key_path`` to
+    ``TlsAdvancedConfiguration`` instead.
+
+    Args:
+        cert_path: Path to the PEM-encoded client certificate file.
+        key_path: Path to the PEM-encoded client private key file.
+
+    Returns:
+        Tuple of ``(cert_bytes, key_bytes)`` in PEM format.
+
+    Raises:
+        FileNotFoundError: If either file does not exist.
+        ConfigurationError: If either file is empty or unreadable.
+
+    Example::
 
         from glide_shared.config import (
-            load_client_certificate_from_file,
-            load_client_key_from_file,
-            TlsAdvancedConfiguration
+            TlsAdvancedConfiguration,
+            load_client_certificate_and_key_from_file,
         )
 
-        # Load client certificate and key from files
-        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
-        client_key = load_client_key_from_file('/path/to/client-key.pem')
-
-        # Use in TLS configuration
+        cert, key = load_client_certificate_and_key_from_file(
+            "/etc/mtls/client-cert.pem",
+            "/etc/mtls/client-key.pem",
+        )
         tls_config = TlsAdvancedConfiguration(
-            client_cert_pem=client_cert,
-            client_key_pem=client_key
+            client_cert_pem=cert,
+            client_key_pem=key,
         )
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Client key file not found: {path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to read client key file: {e}")
-
-    if len(data) == 0:
-        raise ConfigurationError(f"Client key file is empty: {path}")
-
-    return data
+    cert = load_client_certificate_from_file(os.fspath(cert_path))
+    key = load_client_key_from_file(os.fspath(key_path))
+    return cert, key

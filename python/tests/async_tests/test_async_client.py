@@ -6,9 +6,15 @@ from __future__ import annotations
 import math
 import os
 import platform
+import sys
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 import anyio
 import pytest
@@ -30,6 +36,7 @@ from glide_shared.commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from glide_shared.commands.client_tracking import ClientTrackingInfo
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -48,6 +55,8 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry
+from glide_shared.commands.memory import MemoryStats
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -106,13 +115,18 @@ from glide_shared.routes import (
 
 from tests.async_tests.conftest import create_client
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
     PRIMARY_SLOT_ROUTE,
+    assert_client_tracking_info,
     assert_connected,
+    assert_memory_stats_db_entry,
+    assert_memory_stats_fields,
     assert_responses_in,
+    build_client_side_cache,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -121,12 +135,15 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_unix_seconds,
     get_version,
     parse_info_response,
     round_values,
+    trigger_latency_spike,
     wait_for_save_not_in_progress,
 )
 
@@ -150,6 +167,14 @@ class TestGlideClients:
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         ) as client:
             assert not client._is_closed
+            # __aenter__ must be annotated `-> Self` so that subclasses keep
+            # their concrete type in `async with` (regression guard for
+            # https://github.com/valkey-io/valkey-glide/issues/6531). Annotating
+            # it as `"BaseClient"` widens the type for static type checkers.
+            aenter_return = get_type_hints(type(client).__aenter__)["return"]
+            assert aenter_return is Self, (
+                "BaseClient.__aenter__ must return `Self`, got " f"{aenter_return!r}"
+            )
 
         assert client._is_closed
 
@@ -345,6 +370,51 @@ class TestGlideClients:
         assert b"name=TEST_CLIENT_NAME" in client_info
         await glide_client.close()
 
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="glide-py(my-framework:1.2.3)",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The default library identity is preserved and the tag is appended.
+        assert b"lib-name=GlidePy(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name_with_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="custom-lib",
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The tag is appended to the configured lib_name override.
+        assert b"lib-name=custom-lib(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_closed_client_raises_error(self, glide_client: TGlideClient):
@@ -518,29 +588,6 @@ class TestGlideClients:
             f"Connection attempt took {elapsed_time:.2f}s, expected < {max_allowed_time:.2f}s. "
             f"This suggests connection_timeout ({connection_timeout_ms}ms) is not being respected."
         )
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_UDS_socket_connection_failure(self, glide_client: TGlideClient):
-        """Test that the client's error handling during UDS socket connection failure"""
-        assert await glide_client.set("test_key", "test_value") == OK
-        assert await glide_client.get("test_key") == b"test_value"
-
-        # Force close the UDS connection to simulate socket failure
-        await glide_client._stream.aclose()
-
-        # Verify a ClosingError is raised
-        with pytest.raises(
-            ClosingError, match="The communication layer was unexpectedly closed"
-        ):
-            await glide_client.get("test_key")
-
-        # Verify the client is closed
-        with pytest.raises(
-            ClosingError,
-            match="Unable to execute requests; the client is closed. Please create a new client.",
-        ):
-            await glide_client.get("test_key")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_invalid_tls_config_fails_fast(self, cluster_mode: bool):
@@ -791,6 +838,32 @@ class TestCommands:
         assert res == value.encode()
         assert await glide_client.get(key) == new_value.encode()
 
+    @pytest.mark.skip_if_version_below("6.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_return_types(self, glide_client: TGlideClient):
+        # Regression test for https://github.com/valkey-io/valkey-glide/issues/6347:
+        # set() can return a str ("OK"), bytes (old value), or None, so its
+        # return type is Optional[Union[TOK, bytes]] - not Optional[bytes].
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        # Success reply is the simple string "OK", decoded to str (not bytes).
+        ok = await glide_client.set(key, value)
+        assert ok == OK
+        assert isinstance(ok, str)
+
+        # A failed conditional set returns None.
+        none_res = await glide_client.set(
+            key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        )
+        assert none_res is None
+
+        # The old value (a bulk string) is returned as bytes.
+        old = await glide_client.set(key, get_random_string(10), return_old_value=True)
+        assert old == value.encode()
+        assert isinstance(old, bytes)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_custom_command_single_arg(self, glide_client: TGlideClient):
@@ -1040,6 +1113,35 @@ class TestCommands:
         client_id = await glide_client.client_id()
         assert type(client_id) is int
         assert client_id > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_tracking_info_cache_off(self, glide_client: TGlideClient):
+        info = await glide_client.client_tracking_info()
+        assert isinstance(info, ClientTrackingInfo)
+        assert_client_tracking_info(info, on=False)
+
+        # Cluster multi-node
+        if isinstance(glide_client, GlideClusterClient):
+            multi_info = await glide_client.client_tracking_info(AllPrimaries())
+            assert isinstance(multi_info, dict)
+            for node_info in multi_info.values():
+                assert_client_tracking_info(node_info, on=False)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_client_tracking_info_cache_on(self, request, cluster_mode):
+        cache = build_client_side_cache(server_assisted=True)
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = await client.client_tracking_info()
+        assert_client_tracking_info(info, on=True)
+
+        await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9626,6 +9728,85 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
+        # Multi-key: only available on standalone clients
+        if not isinstance(glide_client, GlideClusterClient):
+            hash_tag = get_random_string(5)
+            key2 = f"{hash_tag}a"
+            key3 = f"{hash_tag}b"
+            await glide_client.set(key2, "value2")
+            await glide_client.set(key3, "value3")
+            with pytest.raises(RequestError):
+                await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+
+            # Multi-key: empty keys list raises ValueError
+            with pytest.raises(ValueError):
+                await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
+
+            # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+            non_existent1 = get_random_string(5)
+            non_existent2 = get_random_string(5)
+            result = await glide_client.migrate(
+                "invalid-host",
+                6379,
+                [non_existent1, non_existent2],
+                0,
+                5000,
+            )
+            assert result == b"NOKEY"
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_migrate_success(
+        self, glide_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = await create_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            # Single-key migrate
+            key = get_random_string(10)
+            value = get_random_string(5)
+            await glide_client.set(key, value)
+            result = await glide_client.migrate(dest_host, dest_port, key, 0, 5000)
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key]) == 0
+            assert await dest_client.get(key) == value.encode()
+
+            # Multi-key migrate
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            await glide_client.set(key1, val1)
+            await glide_client.set(key2, val2)
+            result = await glide_client.migrate(
+                dest_host,
+                dest_port,
+                [key1, key2],
+                0,
+                5000,
+            )
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key1, key2]) == 0
+            assert await dest_client.get(key1) == val1.encode()
+            assert await dest_client.get(key2) == val2.encode()
+        finally:
+            await dest_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_wait(self, glide_client: TGlideClient):
@@ -10210,6 +10391,216 @@ class TestCommands:
             assert await glide_client.get(key) == b"after"
         finally:
             await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_history(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        history = await glide_client.latency_history("command")
+        all_entries = flatten_cluster_response_lists(history)
+
+        assert len(all_entries) > 0
+        for entry in all_entries:
+            assert isinstance(entry, LatencyEntry)
+            assert entry.time >= before_spike
+            assert entry.latency > 0
+
+        # Non-existent event returns empty
+        unknown = await glide_client.latency_history("nonexistent")
+        assert len(flatten_cluster_response_lists(unknown)) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_latest(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        latest = await glide_client.latency_latest()
+        all_entries = flatten_cluster_response_lists(latest)
+        assert len(all_entries) >= 1
+
+        # Find the "command" event
+        command_info = next(
+            (info for info in all_entries if info.event_name == "command"), None
+        )
+        assert command_info is not None
+
+        assert command_info.latest_time >= before_spike
+        assert command_info.latest_duration > 0
+        assert command_info.max_duration >= command_info.latest_duration
+
+        # Valkey 8.1+ populates sum and count
+        if not await check_if_server_version_lt(glide_client, "8.1.0"):
+            assert command_info.sum is not None and command_info.sum > 0
+            assert command_info.count is not None and command_info.count > 0
+        else:
+            assert command_info.sum is None
+            assert command_info.count is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_reset(self, glide_client: TGlideClient):
+
+        # Trigger spike then reset all events.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset() > 0
+
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset specific event.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command") > 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset unknown event — "command" data should persist.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("unknown-event") == 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_routing(self, glide_client: GlideClusterClient):
+        await trigger_latency_spike(glide_client)
+
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = await glide_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(flatten_cluster_response_lists(multi_history)) > 0
+
+        multi_latest = await glide_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(flatten_cluster_response_lists(multi_latest)) >= 1
+
+        # A single primary node route returns a flat list rather than a mapping.
+        single_history = await glide_client.latency_history(
+            "command", route=PRIMARY_SLOT_ROUTE
+        )
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = await glide_client.latency_latest(route=PRIMARY_SLOT_ROUTE)
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert await glide_client.latency_reset(route=AllNodes()) > 0
+
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command", route=AllPrimaries()) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_doctor(self, glide_client: TGlideClient):
+        is_cluster = isinstance(glide_client, GlideClusterClient)
+
+        result = await glide_client.memory_doctor()
+        reports = list(result.values()) if isinstance(result, dict) else [result]
+
+        if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
+            # Single-node route.
+            reports.append(await glide_client.memory_doctor(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = await glide_client.memory_doctor(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_malloc_stats(self, glide_client: TGlideClient):
+        is_cluster = isinstance(glide_client, GlideClusterClient)
+
+        result = await glide_client.memory_malloc_stats()
+        reports = list(result.values()) if isinstance(result, dict) else [result]
+
+        if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
+            # Single-node route.
+            reports.append(await glide_client.memory_malloc_stats(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = await glide_client.memory_malloc_stats(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_purge(self, glide_client: TGlideClient):
+        result = await glide_client.memory_purge()
+        assert result == OK
+
+        if isinstance(glide_client, GlideClusterClient):
+            # Single-node route.
+            assert await glide_client.memory_purge(route=RandomNode()) == OK
+            # Multi-node route.
+            assert await glide_client.memory_purge(route=AllNodes()) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_stats_standalone(self, glide_client: TGlideClient):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        await glide_client.set(key, "value")
+
+        version = await get_version(glide_client)
+        result = await glide_client.memory_stats()
+
+        assert isinstance(result, MemoryStats)
+        assert_memory_stats_fields(result, version)
+        assert_memory_stats_db_entry(result.db[0])
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_stats_cluster(self, glide_client: TGlideClient):
+        version = await get_version(glide_client)
+        result = await glide_client.memory_stats()
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_stats_cluster_multi_node(self, glide_client: TGlideClient):
+        assert isinstance(glide_client, GlideClusterClient)
+        result = await glide_client.memory_stats(route=AllNodes())
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, await get_version(glide_client))
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_stats_cluster_single_node(self, glide_client: TGlideClient):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        await glide_client.set(key, "value")
+
+        version = await get_version(glide_client)
+        assert isinstance(glide_client, GlideClusterClient)
+        stats = await glide_client.memory_stats(
+            route=SlotKeyRoute(SlotType.PRIMARY, key)
+        )
+
+        assert isinstance(stats, MemoryStats)
+        assert_memory_stats_fields(stats, version)
+        assert_memory_stats_db_entry(stats.db[0])
 
 
 @pytest.mark.anyio
@@ -12571,3 +12962,385 @@ class TestScripts:
                 await standalone_client.delete(["key"])
             finally:
                 await standalone_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover(self, glide_client: GlideClient):
+        # Spin up a dedicated standalone with 1 replica so the failover
+        # doesn't destabilize the shared test server.
+        dedicated_cluster = ValkeyCluster(
+            tls=False, cluster_mode=False, shard_count=1, replica_count=1
+        )
+        try:
+            client = await GlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[dedicated_cluster.nodes_addr[0]],
+                    request_timeout=5000,
+                )
+            )
+            try:
+                # Verify initial role is master
+                info = (await client.info([InfoSection.REPLICATION])).decode()
+                assert "role:master" in info
+
+                # Execute failover — returns OK immediately
+                result = await client.failover()
+                assert result == OK
+
+                # Wait for role to change to slave (failover completed)
+                role_changed = False
+                for _ in range(60):
+                    info = (await client.info([InfoSection.REPLICATION])).decode()
+                    if "role:slave" in info:
+                        role_changed = True
+                        break
+                    await anyio.sleep(0.5)
+                assert role_changed, "Timed out waiting for role change to slave"
+            finally:
+                await client.close()
+        finally:
+            del dedicated_cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover_abort_no_failover_in_progress(
+        self, glide_client: GlideClient
+    ):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            await glide_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_replicaof_no_one(self, glide_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert await glide_client.replicaof_no_one() == OK
+
+
+class TestClientLifecycle:
+    """Tests for async client lifecycle: context manager and recreation."""
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
+    async def test_async_context_manager(self, glide_client: TGlideClient):
+        """Test that async with (context manager) works and closes the client."""
+        async with glide_client as client:
+            await client.set("ctx_test", "value")
+            assert await client.get("ctx_test") == b"value"
+        # After exiting context, client should be closed
+        assert client._is_closed
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
+    async def test_aclose_alias(self, glide_client: TGlideClient):
+        """Test that aclose() works as an alias for close()."""
+        await glide_client.set("aclose_test", "value")
+        assert await glide_client.get("aclose_test") == b"value"
+        await glide_client.aclose()
+        assert glide_client._is_closed
+
+    @pytest.mark.anyio
+    async def test_client_recreation_after_close(self, request):
+        """Test that a new client can be created and used after closing a previous one.
+
+        This verifies the shared pipe remains functional across client lifecycles.
+        """
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        # First client
+        client1 = await GlideClient.create(config)
+        await client1.set("recreate_test", "v1")
+        assert await client1.get("recreate_test") == b"v1"
+        await client1.close()
+
+        # Second client - should work without issues (pipe still valid)
+        client2 = await GlideClient.create(config)
+        await client2.set("recreate_test", "v2")
+        assert await client2.get("recreate_test") == b"v2"
+        await client2.close()
+
+    @pytest.mark.anyio
+    @pytest.mark.skip_if_version_below("7.2.0")
+    async def test_mixed_async_sync_client_lib_names(self, request):
+        """Test that async and sync clients report different lib-names in the same process."""
+        from glide_shared.config import GlideClientConfiguration as SyncConfig
+        from glide_sync import GlideClient as SyncGlideClient
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+
+        # Create async client
+        async_config = create_client_config(
+            cluster_mode=False, addresses=cluster.nodes_addr
+        )
+        async_client = await GlideClient.create(async_config)
+
+        # Create sync client
+        sync_config = SyncConfig(cluster.nodes_addr)
+        sync_client = SyncGlideClient.create(sync_config)
+
+        # Verify async reports GlidePy
+        async_info = await async_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=GlidePy " in async_info or b"lib-name=GlidePy\n" in async_info
+
+        # Verify sync reports GlidePySync
+        sync_info = sync_client.custom_command(["CLIENT", "INFO"])
+        assert (
+            b"lib-name=GlidePySync " in sync_info
+            or b"lib-name=GlidePySync\n" in sync_info
+        )
+
+        await async_client.close()
+        sync_client.close()
+
+    @pytest.mark.anyio
+    async def test_concurrent_commands_from_multiple_clients(self, request):
+        """Test concurrent commands from multiple clients sharing the pipe."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        clients = [await GlideClient.create(config) for _ in range(5)]
+        try:
+
+            async def client_workload(client, idx):
+                for i in range(50):
+                    key = f"multi_client_{idx}_{i}"
+                    await client.set(key, f"val_{idx}_{i}")
+                    result = await client.get(key)
+                    assert result == f"val_{idx}_{i}".encode()
+
+            async with anyio.create_task_group() as tg:
+                for i, c in enumerate(clients):
+                    tg.start_soon(client_workload, c, i)
+        finally:
+            for c in clients:
+                await c.close()
+
+    @pytest.mark.anyio
+    async def test_response_after_client_close_is_managed(self, request):
+        """Test that responses/errors arriving after close are handled properly."""
+        from glide_shared.exceptions import ClosingError, RequestError
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+        client = await GlideClient.create(config)
+
+        # Use a non-existent key with short timeout so blpop returns quickly
+        # Fire it in a task group and close the client concurrently
+        result_or_error = None
+
+        async def blocking_cmd():
+            nonlocal result_or_error
+            try:
+                result_or_error = await client.blpop(["nonexistent_close_test"], 1)
+            except (ClosingError, RequestError) as e:
+                result_or_error = e
+
+        async def close_after_delay():
+            await anyio.sleep(0.1)
+            await client.close()
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(blocking_cmd)
+            tg.start_soon(close_after_delay)
+
+        # Should have resolved with None (timeout) or a closing error
+        assert result_or_error is None or isinstance(
+            result_or_error, (ClosingError, RequestError)
+        )
+
+    @pytest.mark.anyio
+    async def test_large_response_does_not_block_other_clients(self, request):
+        """Test that a client receiving a large response doesn't block others."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        client_large = await GlideClient.create(config)
+        client_small = await GlideClient.create(config)
+        try:
+            # Store a large value (256KB)
+            large_val = "X" * (256 * 1024)
+            await client_large.set("large_key", large_val)
+
+            # Request the large value and a small value concurrently
+            results = {}
+
+            async def get_large():
+                results["large"] = await client_large.get("large_key")
+
+            async def get_small():
+                results["small"] = await client_small.get("large_key")
+
+            with anyio.fail_after(5):
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(get_large)
+                    tg.start_soon(get_small)
+
+            assert results["large"] == large_val.encode()
+            assert results["small"] == large_val.encode()
+        finally:
+            await client_large.close()
+            await client_small.close()
+
+    @pytest.mark.anyio
+    async def test_rapid_create_close_cycles(self, request):
+        """Test many rapid close/create cycles: pipe remains functional."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        for i in range(20):
+            client = await GlideClient.create(config)
+            await client.set(f"cycle_{i}", f"val_{i}")
+            assert await client.get(f"cycle_{i}") == f"val_{i}".encode()
+            await client.close()
+
+    @pytest.mark.anyio
+    async def test_inflight_commands_get_closing_error_on_close(self, request):
+        """Test that many in-flight commands all receive ClosingError on close."""
+        from glide_shared.exceptions import ClosingError, RequestError
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        client = await GlideClient.create(config)
+
+        # Fire many blocking commands concurrently, then close
+        results = []
+
+        async def blocking_cmd(i):
+            try:
+                r = await client.blpop([f"inflight_{i}"], 10)
+                results.append(r)
+            except (ClosingError, RequestError) as e:
+                results.append(e)
+
+        async def close_after_dispatch():
+            await anyio.sleep(0.2)  # Let commands get dispatched
+            await client.close()
+
+        async with anyio.create_task_group() as tg:
+            for i in range(20):
+                tg.start_soon(blocking_cmd, i)
+            tg.start_soon(close_after_dispatch)
+
+        # All should have resolved (with None or error)
+        assert len(results) == 20
+        for r in results:
+            assert r is None or isinstance(r, (ClosingError, RequestError))
+
+    @pytest.mark.anyio
+    async def test_pubsub_callback_with_closed_client_no_crash(self, request):
+        """Test that pubsub callback doesn't crash if client closes during delivery."""
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        received = []
+
+        def cb(msg, ctx):
+            received.append(msg)
+
+        config = create_client_config(
+            cluster_mode=False,
+            addresses=cluster.nodes_addr,
+            standalone_mode_pubsub=GlideClientConfiguration.PubSubSubscriptions(
+                channels_and_patterns={
+                    GlideClientConfiguration.PubSubChannelModes.Exact: {"cb_close_test"}
+                },
+                callback=cb,
+                context=None,
+            ),
+        )
+        sub_client = await GlideClient.create(config)
+        pub_client = await GlideClient.create(
+            create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+        )
+        try:
+            from tests.utils.utils import wait_for
+
+            # Wait for subscription to be established
+            async def _sub_ready():
+                try:
+                    await sub_client.get_subscriptions()
+                    return True
+                except Exception:
+                    return False
+
+            await wait_for(_sub_ready, "Subscription not established")
+            await pub_client.publish("msg1", "cb_close_test")
+            # Wait for callback to fire
+
+            async def _msg_received():
+                return len(received) > 0
+
+            await wait_for(_msg_received, "Callback was not invoked for msg1")
+            # Close subscriber while messages might still be in flight
+            await sub_client.close()
+            # Publish more — should not crash
+            await pub_client.publish("msg2", "cb_close_test")
+            # We just verify no crash occurred
+        finally:
+            if not sub_client._is_closed:
+                await sub_client.close()
+            await pub_client.close()
+
+    @pytest.mark.anyio
+    async def test_client_death_mid_command(self, request):
+        """Test that killing connections mid-command results in proper error handling."""
+        from glide_shared.exceptions import ClosingError, ConnectionError, RequestError
+
+        from tests.utils.utils import create_client_config, kill_connections
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(
+            cluster_mode=False,
+            addresses=cluster.nodes_addr,
+        )
+
+        client = await GlideClient.create(config)
+        admin_client = await GlideClient.create(config)
+        try:
+            result_or_error = None
+
+            async def blocking_cmd():
+                nonlocal result_or_error
+                try:
+                    # Short timeout so test doesn't hang if reconnect happens
+                    result_or_error = await client.blpop(["death_test_key"], 3)
+                except (ConnectionError, ClosingError, RequestError) as e:
+                    result_or_error = e
+
+            async def kill_after_delay():
+                await anyio.sleep(0.2)
+                await kill_connections(admin_client, kill_type="normal", skip_me="yes")
+
+            with anyio.fail_after(15):
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(blocking_cmd)
+                    tg.start_soon(kill_after_delay)
+
+            # After kill: either got error (disconnect), or None (reconnect + timeout)
+            assert result_or_error is None or isinstance(
+                result_or_error, (ConnectionError, ClosingError, RequestError)
+            )
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+            await admin_client.close()

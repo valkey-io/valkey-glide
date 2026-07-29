@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
@@ -30,6 +31,7 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 // [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#standalone
 type Client struct {
 	baseClient
+	clientConfig *config.ClientConfiguration // stored for scoped_connection
 }
 
 // Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
@@ -67,7 +69,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
-	return &Client{*client}, nil
+	return &Client{baseClient: *client, clientConfig: config}, nil
 }
 
 // Executes a batch by processing the queued commands.
@@ -681,8 +683,29 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Provides memory usage diagnosis report.
-// The command returns a detailed analysis of memory consumption patterns in the server.
+// Returns the latency spike time series for the specified event.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyHistoryResponse(response)
+}
+
+// Reports the latest latency events logged by the server.
 //
 // See [valkey.io] for details.
 //
@@ -692,7 +715,51 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A string containing the memory usage analysis report.
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyLatestResponse(response)
+}
+
+// Resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Returns a report about memory problems detected by the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The memory diagnostic report.
 //
 // [valkey.io]: https://valkey.io/commands/memory-doctor/
 func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
@@ -703,8 +770,7 @@ func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
 	return handleStringResponse(response)
 }
 
-// Returns memory allocator internal statistics.
-// The output of this command is specific to the allocator being used.
+// Returns the internal statistics of the memory allocator.
 //
 // See [valkey.io] for details.
 //
@@ -714,7 +780,7 @@ func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A string containing the memory allocator statistics.
+//	The memory allocator statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
 func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
@@ -725,8 +791,7 @@ func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
 	return handleStringResponse(response)
 }
 
-// Attempts to purge dirty pages for reclamation by the allocator.
-// This command can help reduce memory fragmentation.
+// Asks the server to reclaim memory from the allocator back to the operating system.
 //
 // See [valkey.io] for details.
 //
@@ -736,7 +801,7 @@ func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	OK to confirm that the purge operation was executed.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/memory-purge/
 func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
@@ -747,7 +812,7 @@ func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Returns memory usage statistics for the server.
+// Returns detailed memory consumption statistics of the server.
 //
 // See [valkey.io] for details.
 //
@@ -757,15 +822,19 @@ func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A map containing memory usage statistics with metric names as keys and values as their corresponding data.
+//	A [models.MemoryStats] containing detailed memory usage statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-stats/
-func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
+func (client *Client) MemoryStats(ctx context.Context) (models.MemoryStats, error) {
 	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
 	if err != nil {
-		return nil, err
+		return models.MemoryStats{}, err
 	}
-	return handleStringToAnyMapResponse(response)
+	rawMap, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	return internal.ConvertMemoryStats(rawMap)
 }
 
 // Gets the name of the current connection.
@@ -882,6 +951,30 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// TODO #6144: Move to base class
+
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The tracking info for the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {
+	response, err := client.executeCommand(ctx, C.ClientTrackingInfo, []string{})
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	return handleClientTrackingInfoResponse(response)
 }
 
 // Iterates incrementally over a database for matching keys.
@@ -1224,6 +1317,93 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Failover starts a coordinated failover from the connected primary to one of its replicas.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) Failover(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// FailoverWithOptions starts a coordinated failover with the specified options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - The failover options.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, opts.ToArgs())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOf makes the server a replica of the specified primary.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	host - The host of the primary to replicate.
+//	port - The port of the primary to replicate.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOf(ctx context.Context, host string, port int) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{host, utils.IntToString(int64(port))})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOfNoOne promotes the current server to a primary by stopping replication.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOfNoOne(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{"NO", "ONE"})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

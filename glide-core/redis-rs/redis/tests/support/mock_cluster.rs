@@ -242,7 +242,7 @@ pub fn respond_startup(name: &str, cmd: &[u8]) -> Result<(), RedisResult<Value>>
             Value::Int(0),
             Value::Int(16383),
             Value::Array(vec![
-                Value::BulkString(name.as_bytes().to_vec()),
+                Value::BulkString(name.as_bytes().to_vec().into()),
                 Value::Int(6379),
             ]),
         ])])))
@@ -276,13 +276,13 @@ pub fn create_topology_from_config(name: &str, slots_config: Vec<MockSlotRange>)
                 Value::Int(slot_config.slot_range.start as i64),
                 Value::Int(slot_config.slot_range.end as i64),
                 Value::Array(vec![
-                    Value::BulkString(name.as_bytes().to_vec()),
+                    Value::BulkString(name.as_bytes().to_vec().into()),
                     Value::Int(slot_config.primary_port as i64),
                 ]),
             ];
             config.extend(slot_config.replica_ports.into_iter().map(|replica_port| {
                 Value::Array(vec![
-                    Value::BulkString(name.as_bytes().to_vec()),
+                    Value::BulkString(name.as_bytes().to_vec().into()),
                     Value::Int(replica_port as i64),
                 ])
             }));

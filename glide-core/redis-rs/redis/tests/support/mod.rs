@@ -723,6 +723,91 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
     }
 }
 
+/// Generate a fresh client certificate and private key, signed by the CA that
+/// [`build_keys_and_certs_for_tls`] created, and write them to `dest_crt` and
+/// `dest_key`.
+///
+/// This is the on-disk cert-rotation primitive used by the mTLS reload
+/// integration test: it re-signs a brand-new leaf key with the *same* CA
+/// (`ca.crt` / `ca.key`, siblings of `tls_paths.ca_crt`) so the rotated material
+/// still authenticates against the already-running TLS cluster. The new leaf
+/// carries the same subject and `127.0.0.1` SAN as the original so it is
+/// interchangeable with it from the server's point of view.
+///
+/// Writing directly to the paths the client is watching mirrors how cert-manager
+/// / Kubernetes secret projection rotates credentials in production.
+pub fn rotate_client_cert_and_key(tls_paths: &TlsFilePaths, dest_crt: &Path, dest_key: &Path) {
+    let ca_crt = &tls_paths.ca_crt;
+    let ca_key = ca_crt.with_file_name("ca.key");
+    let ca_serial = ca_crt.with_file_name("ca.txt");
+    let ext_file = ca_crt.with_file_name("rotate_openssl.cnf");
+
+    // Fresh 2048-bit leaf key.
+    process::Command::new("openssl")
+        .arg("genrsa")
+        .arg("-out")
+        .arg(dest_key)
+        .arg("2048")
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create rotated client key");
+
+    // x509v3 extensions file (matches build_keys_and_certs_for_tls).
+    fs::write(
+        &ext_file,
+        b"keyUsage = digitalSignature, keyEncipherment\n\
+        subjectAltName = @alt_names\n\
+        [alt_names]\n\
+        IP.1 = 127.0.0.1\n",
+    )
+    .expect("failed to create x509v3 extensions file");
+
+    // CSR from the new key.
+    let mut csr_cmd = process::Command::new("openssl")
+        .arg("req")
+        .arg("-new")
+        .arg("-sha256")
+        .arg("-subj")
+        .arg("/O=Redis Test/CN=Generic-cert")
+        .arg("-key")
+        .arg(dest_key)
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl");
+
+    // Sign the CSR with the existing CA to produce the rotated leaf cert.
+    process::Command::new("openssl")
+        .arg("x509")
+        .arg("-req")
+        .arg("-sha256")
+        .arg("-CA")
+        .arg(ca_crt)
+        .arg("-CAkey")
+        .arg(&ca_key)
+        .arg("-CAserial")
+        .arg(&ca_serial)
+        .arg("-CAcreateserial")
+        .arg("-days")
+        .arg("365")
+        .arg("-extfile")
+        .arg(&ext_file)
+        .arg("-out")
+        .arg(dest_crt)
+        .stdin(csr_cmd.stdout.take().expect("should have stdout"))
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create rotated client cert");
+
+    csr_cmd.wait().expect("failed to create rotated client CSR");
+}
+
 pub type Version = (u16, u16, u16);
 
 fn get_version(conn: &mut impl redis::ConnectionLike) -> Version {

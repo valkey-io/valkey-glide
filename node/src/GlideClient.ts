@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import * as net from "net";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
@@ -21,9 +20,11 @@ import { Batch } from "./Batch";
 import {
     BatchOptions,
     ClientPauseMode,
+    ClientTrackingInfo,
     createClientGetName,
     createClientId,
     createClientPause,
+    createClientTrackingInfo,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -45,7 +46,15 @@ import {
     createGetSubscriptions,
     createInfo,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
+    createMigrate,
+    createMemoryDoctor,
+    createMemoryMallocStats,
+    createMemoryPurge,
+    createMemoryStats,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -56,16 +65,28 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createFailover,
+    createReplicaOf,
+    createReplicaOfNoOne,
     createTime,
     createUnWatch,
+    FailoverOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
     InfoOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     LolwutOptions,
+    MigrateOptions,
+    MemoryStats,
+    parseClientTrackingInfoResponse,
     ScanOptions,
+    parseLatencyHistoryResponse,
+    parseLatencyLatestResponse,
+    parseMemoryStatsResponse,
 } from "./Commands";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
@@ -318,21 +339,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration) =>
-                new GlideClient(socket, options),
-        );
-    }
-    /**
-     * @internal
-     */
-    static async __createClient(
-        options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-    ): Promise<GlideClient> {
-        return this.__createClientInternal(
-            options,
-            connectedSocket,
-            (socket, options) => new GlideClient(socket, options),
+            (options?: GlideClientConfiguration) => new GlideClient(options),
         );
     }
 
@@ -557,6 +564,32 @@ export class GlideClient extends BaseClient {
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
+    }
+
+    /**
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @returns The tracking info for the client.
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo();
+     * console.log(info.flags); // Set { "off" }
+     * console.log(info.redirect); // -1
+     * console.log(info.prefixes); // Set {}
+     * ```
+     */
+    public async clientTrackingInfo(): Promise<ClientTrackingInfo> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createClientTrackingInfo(),
+        ).then((res) =>
+            parseClientTrackingInfoResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 
     /**
@@ -1006,6 +1039,68 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     * @returns An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * const history = await client.latencyHistory("command");
+     * for (const entry of history) {
+     *     console.log(`Time: ${entry.time}, Latency: ${entry.latency}`);
+     * }
+     * ```
+     */
+    public async latencyHistory(event: GlideString): Promise<LatencyEntry[]> {
+        return this.createWritePromise<unknown[]>(
+            createLatencyHistory(event),
+        ).then((res) => parseLatencyHistoryResponse(res));
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * @returns An array of {@link LatencyEventInfo} for the latest latency events.
+     *
+     * @example
+     * ```typescript
+     * const latest = await client.latencyLatest();
+     * for (const info of latest) {
+     *     console.log(`Event: ${info.eventName}, Latest: ${info.latestDuration}`);
+     * }
+     * ```
+     */
+    public async latencyLatest(): Promise<LatencyEventInfo[]> {
+        return this.createWritePromise<unknown[]>(createLatencyLatest()).then(
+            (res) => parseLatencyLatestResponse(res),
+        );
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     * @returns The number of event time series that were reset.
+     *
+     * @example
+     * ```typescript
+     * await client.latencyReset(); // Resets all events
+     * await client.latencyReset(["command"]); // Resets only "command"
+     * ```
+     */
+    public async latencyReset(events?: GlideString[]): Promise<number> {
+        return this.createWritePromise(createLatencyReset(events));
+    }
+
+    /**
      * Synchronously saves the dataset to disk.
      *
      * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
@@ -1119,6 +1214,50 @@ export class GlideClient extends BaseClient {
         options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), options);
+    }
+
+    /**
+     * Atomically transfers a key or multiple keys from the current Valkey instance
+     * to a destination Valkey instance.
+     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate, or an array of keys to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, `"NOKEY"` if the key(s) do not exist.
+     *
+     * @example Single-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     * @example Single-key with copy and replace:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // "OK"
+     * ```
+     * @example Multi-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
     }
 
     /**
@@ -1320,5 +1459,149 @@ export class GlideClient extends BaseClient {
      */
     public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
         return this.createWritePromise(createClientUnpause(), options);
+    }
+
+    /**
+     * Starts a coordinated failover from the connected primary to one of its replicas.
+     * This is the standalone equivalent of `CLUSTER FAILOVER`.
+     *
+     * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+     *
+     * @param options - (Optional) Failover options. See {@link FailoverOptions}.
+     * @returns `"OK"` if the failover was successfully initiated.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.failover();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async failover(options?: FailoverOptions): Promise<"OK"> {
+        return this.createWritePromise(createFailover(options), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @param host - The host of the primary to replicate.
+     * @param port - The port of the primary to replicate.
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaof("localhost", 6379);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaof(host: string, port: number): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOf(host, port), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaofNoOne();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaofNoOne(): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOfNoOne(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    // TODO #6166: move to shared base
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
+     *
+     * @returns The memory diagnostic report.
+     *
+     * @example
+     * ```typescript
+     * const report = await client.memoryDoctor();
+     * console.log(report); // Output: "Sam, I have no memory problems"
+     * ```
+     */
+    public async memoryDoctor(): Promise<string> {
+        return this.createWritePromise(createMemoryDoctor(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
+     *
+     * @returns The memory allocator statistics.
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryMallocStats();
+     * console.log(stats);
+     * ```
+     */
+    public async memoryMallocStats(): Promise<string> {
+        return this.createWritePromise(createMemoryMallocStats(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
+     *
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.memoryPurge();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async memoryPurge(): Promise<"OK"> {
+        return this.createWritePromise(createMemoryPurge(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
+     *
+     * @returns A {@link MemoryStats} object containing detailed memory usage statistics.
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryStats();
+     * console.log(stats.peakAllocated); // Peak memory in bytes
+     * console.log(stats.totalAllocated); // Total allocated memory in bytes
+     * ```
+     */
+    public async memoryStats(): Promise<MemoryStats> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createMemoryStats(),
+        ).then((res) =>
+            parseMemoryStatsResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 }

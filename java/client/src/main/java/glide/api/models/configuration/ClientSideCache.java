@@ -59,6 +59,15 @@ public class ClientSideCache {
     @Builder.Default private final boolean enableMetrics = false;
 
     /**
+     * Whether to enable server-assisted client-side caching.
+     *
+     * <p>When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup and the server
+     * sends invalidation messages when tracked keys are modified. Requires RESP3 protocol. Defaults
+     * to false.
+     */
+    @Builder.Default private final boolean serverAssisted = false;
+
+    /**
      * Creates a ClientSideCache with auto-generated cache ID and default settings.
      *
      * @param maxCacheKb Maximum memory limit for the cache in kilobytes.
@@ -97,7 +106,8 @@ public class ClientSideCache {
             long maxCacheKb,
             long entryTtlMs,
             EvictionPolicy evictionPolicy,
-            boolean enableMetrics) {
+            boolean enableMetrics,
+            boolean serverAssisted) {
         if (maxCacheKb <= 0) {
             throw new IllegalArgumentException("maxCacheKb must be positive");
         }
@@ -109,5 +119,6 @@ public class ClientSideCache {
         this.entryTtlMs = entryTtlMs;
         this.evictionPolicy = evictionPolicy;
         this.enableMetrics = enableMetrics;
+        this.serverAssisted = serverAssisted;
     }
 }

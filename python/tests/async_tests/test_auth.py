@@ -11,9 +11,14 @@ from glide_shared.config import (
     ServiceType,
 )
 from glide_shared.constants import OK
-from glide_shared.exceptions import RequestError
+from glide_shared.exceptions import ClosingError, RequestError
 
-from tests.async_tests.conftest import create_client
+from tests.async_tests.conftest import (
+    _client_pool,
+    _client_pool_lock,
+    _get_worker_id,
+    create_client,
+)
 from tests.constants import (
     IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
@@ -28,9 +33,18 @@ from tests.utils.utils import (
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
-    kill_connections,
+    kill_connections_tolerant,
     set_new_acl_username_with_password,
+    wait_for,
 )
+
+# Reconnect budget for the disconnect-and-recover flow in
+# test_update_connection_password. In cluster mode a CLIENT KILL is fanned out
+# over AllNodes and, under heavy full-matrix CI contention, the full-cluster
+# reconnect + re-auth can take considerably longer than on an unloaded host,
+# so cluster mode gets a wider tolerance.
+_CLUSTER_RECONNECT_TIMEOUT_SEC = 90
+_STANDALONE_RECONNECT_TIMEOUT_SEC = 30
 
 
 async def create_iam_client(
@@ -58,6 +72,62 @@ async def create_iam_client(
     )
 
 
+async def _run_cleanup_ops(management_client: TGlideClient):
+    """Run auth-fixture cleanup ops; return the first failure description or None."""
+    failed_op = None
+
+    try:
+        await auth_client(management_client, NEW_PASSWORD)
+    except (RequestError, TimeoutError, ClosingError) as e:
+        failed_op = f"auth_client: {e}"
+
+    try:
+        await config_set_new_password(management_client, "")
+    except (RequestError, TimeoutError, ClosingError) as e:
+        failed_op = failed_op or f"config_set_new_password(''): {e}"
+
+    try:
+        await management_client.update_connection_password(None)
+    except (RequestError, TimeoutError, ClosingError) as e:
+        failed_op = failed_op or f"update_connection_password(None): {e}"
+
+    try:
+        await delete_acl_username_and_password(management_client, USERNAME)
+    except (RequestError, TimeoutError, ClosingError) as e:
+        failed_op = failed_op or f"delete_acl_username_and_password: {e}"
+
+    return failed_op
+
+
+async def _probe_cluster_wedge(management_client: TGlideClient) -> bool:
+    """Return True if the management client cannot reach the cluster within 5s."""
+
+    async def _probe():
+        try:
+            await management_client.get("__auth_cleanup_probe__")
+            return True
+        except Exception:
+            return False
+
+    try:
+        await wait_for(_probe, "cluster probe failed after auth cleanup", timeout=5)
+        return False
+    except (TimeoutError, RequestError, ClosingError):
+        return True
+
+
+def _evict_pooled_async_client(request) -> None:
+    """Evict the pooled glide_client so subsequent tests get a fresh one."""
+    try:
+        cluster_mode = request.getfixturevalue("cluster_mode")
+        protocol = request.getfixturevalue("protocol")
+        cache_key = (_get_worker_id(), cluster_mode, protocol)
+        with _client_pool_lock:
+            _client_pool.pop(cache_key, None)
+    except Exception:
+        pass
+
+
 @pytest.mark.anyio
 class TestAuthCommands:
     """Test cases for password authentication and management"""
@@ -65,83 +135,188 @@ class TestAuthCommands:
     @pytest.fixture(autouse=True, scope="function")
     async def cleanup(self, request, management_client: TGlideClient):
         """
-        Ensure password is reset for default user and USERNAME user is deleted after each test, regardless of test outcome.
-        This fixture runs after each test.
+        Ensure password is reset for default user and USERNAME user is deleted
+        after each test. Per-op typed excepts so a wedge at any single step is
+        attributed rather than swallowed; a wedge probe at the end evicts the
+        pooled client and fails loudly so subsequent tests don't inherit a
+        poisoned auth cluster.
         """
         yield
-        try:
-            # reset password for default user
-            await auth_client(management_client, NEW_PASSWORD)
-            await config_set_new_password(management_client, "")
-            await management_client.update_connection_password(None)
 
-            # delete USERNAME user
-            await delete_acl_username_and_password(management_client, USERNAME)
-        except RequestError:
-            pass
+        failed_op = await _run_cleanup_ops(management_client)
+        wedge_detected = await _probe_cluster_wedge(management_client)
+
+        if failed_op is not None or wedge_detected:
+            _evict_pooled_async_client(request)
+            pytest.fail(
+                f"auth cleanup left cluster wedged: failed_op={failed_op!r}, "
+                f"wedge_probe_timed_out={wedge_detected}. Requirepass state unknown; "
+                f"subsequent tests may inherit poisoned cluster."
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_update_connection_password(
-        self, glide_client: TGlideClient, management_client: TGlideClient
+    async def test_update_connection_password_accepts_new_password(
+        self,
+        glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
-        Test replacing the connection password without immediate re-authentication.
-        Verifies that:
-        1. The client can update its internal password
-        2. The client remains connected with current auth
-        3. The client can reconnect using the new password after server password change
-        This test is only for cluster mode, as standalone mode does not have a connection available handler
+        Property: update_connection_password(new, immediate_auth=False) is a
+        pure client-side state change. The client accepts the new stored
+        password without disturbing the current session (which is still
+        authenticated with the old server-side password).
+
+        Verifies:
+          1. Return value is OK.
+          2. The still-live session accepts a subsequent SET.
+          3. The still-live session accepts a subsequent GET.
+
+        No CLIENT KILL, no server-side password change. Fast, deterministic,
+        no reconnect exposure. Applies in both cluster and standalone modes.
         """
-        result = await glide_client.update_connection_password(
+        assert (
+            await glide_client.update_connection_password(
+                NEW_PASSWORD, immediate_auth=False
+            )
+            == OK
+        )
+        assert await glide_client.set("test_key", "test_value") == OK
+        assert await glide_client.get("test_key") == b"test_value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_update_connection_password_survives_reconnect(
+        self,
+        glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
+    ):
+        """
+        Property: after a password rotation, if the connection is dropped and
+        the server now requires the new password, the client recovers
+        automatically using its stored new password.
+
+        Verifies:
+          - update_connection_password(new, immediate_auth=False)
+          - server-side rotate: CONFIG SET requirepass new
+          - server-side disconnect: CLIENT KILL (one kill only)
+          - client recovers: eventual GET returns the pre-kill value
+
+        Applies in both cluster and standalone modes; cluster mode uses a
+        wider reconnect budget to absorb topology refresh.
+        """
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        assert await glide_client.set("test_key", "test_value") == OK
+        await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )
-        assert result == OK
-        # Verify that the client is still authenticated
-        assert await glide_client.set("test_key", "test_value") == OK
-        value = await glide_client.get("test_key")
-        assert value == b"test_value"
         await config_set_new_password(glide_client, NEW_PASSWORD)
-        await kill_connections(management_client)
-        # Add a short delay to allow the server to apply the new password
-        # without this delay, command may or may not time out while the client reconnect
-        # ending up with a flaky test
-        await anyio.sleep(2)
-        # Verify that the client is able to reconnect with the new password,
-        value = await glide_client.get("test_key")
-        assert value == b"test_value"
-        await kill_connections(management_client)
-        await anyio.sleep(2)
-        # Verify that the client is able to immediateAuth with the new password after client is killed
-        result = await glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        await kill_connections_tolerant(management_client)
+
+        async def _reconnected():
+            try:
+                return await glide_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
+
+        await wait_for(
+            _reconnected,
+            "Client did not recover with stored new password after reconnect",
+            timeout=reconnect_timeout,
         )
-        assert result == OK
-        # Verify that the client is still authenticated
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_update_connection_password_immediate_auth_survives_reconnect(
+        self,
+        glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
+    ):
+        """
+        Property: after a password rotation and a disconnect, calling
+        update_connection_password(new, immediate_auth=True) succeeds against
+        the reconnected client, and the client continues to accept traffic
+        with the new password.
+
+        Verifies:
+          - update_connection_password(new, immediate_auth=False)
+          - server-side rotate: CONFIG SET requirepass new
+          - server-side disconnect: CLIENT KILL (one kill only)
+          - update_connection_password(new, immediate_auth=True) returns OK
+          - subsequent SET succeeds
+
+        Applies in both cluster and standalone modes.
+        """
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        await glide_client.update_connection_password(
+            NEW_PASSWORD, immediate_auth=False
+        )
+        await config_set_new_password(glide_client, NEW_PASSWORD)
+        await kill_connections_tolerant(management_client)
+
+        async def _immediate_auth_after_reconnect():
+            try:
+                return (
+                    await glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        await wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
+        )
         assert await glide_client.set("test_key", "test_value") == OK
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_connection_lost_before_password_update(
-        self, glide_client: TGlideClient, management_client: TGlideClient
+        self, management_client: TGlideClient, request, cluster_mode, protocol
     ):
         """
         Test changing server password when connection is lost before password update.
         Verifies that the client will not be able to reach the inner core and return an error
         on immediate re-authentication, but will succeed with non-immediate re-auth
         """
-        await glide_client.set("test_key", "test_value")
-        await config_set_new_password(glide_client, NEW_PASSWORD)
-        await kill_connections(management_client)
-        await anyio.sleep(2)
-        result = await glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=False
+        # Use a fresh client (not pooled) since this test kills and expects it to stay dead
+        test_client = await create_client(
+            request, cluster_mode, protocol=protocol, request_timeout=5000
         )
-        assert result == OK
-        with pytest.raises(RequestError):
-            await glide_client.update_connection_password(
-                NEW_PASSWORD, immediate_auth=True
+        try:
+            await test_client.set("test_key", "test_value")
+            await config_set_new_password(test_client, NEW_PASSWORD)
+            await kill_connections_tolerant(management_client)
+            # Wait for glide-core to detect dead connection and fail reconnect
+            # (reconnects with old/empty password, which server now rejects)
+            await anyio.sleep(2)
+            result = await test_client.update_connection_password(
+                NEW_PASSWORD, immediate_auth=False
             )
+            assert result == OK
+            with pytest.raises(RequestError):
+                await test_client.update_connection_password(
+                    NEW_PASSWORD, immediate_auth=True
+                )
+        finally:
+            try:
+                await test_client.close()
+            except Exception:
+                pass
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

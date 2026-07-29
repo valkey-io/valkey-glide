@@ -5,6 +5,7 @@ use once_cell::sync::OnceCell;
 use std::{
     path::{Path, PathBuf},
     sync::RwLock,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use tracing::{self, event};
 use tracing_appender::rolling::{RollingFileAppender, RollingWriter, Rotation};
@@ -53,6 +54,27 @@ pub struct InitiateOnce {
 pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
     init_once: OnceCell::new(),
 };
+
+/// Cheap, cached effective max log verbosity (0=Off,1=Error,2=Warn,3=Info,4=Debug,5=Trace).
+/// Read on every lazy-log macro invocation to short-circuit the (expensive, RwLock-guarded)
+/// reload-subscriber `enabled` check when the level is disabled — the common hot-path case
+/// (e.g. per-command trace/debug logs while running at the default Warn level). Updated by
+/// `init` whenever the effective level changes; set as an UPPER BOUND on the true effective
+/// level so it can never suppress a log that should be emitted.
+pub static CURRENT_MAX_VERBOSITY: AtomicUsize = AtomicUsize::new(0);
+
+/// Maps `tracing::Level` to the verbosity ordering used by `CURRENT_MAX_VERBOSITY`.
+#[inline]
+pub fn level_may_be_enabled(level: tracing::Level) -> bool {
+    let needed = match level {
+        tracing::Level::ERROR => 1,
+        tracing::Level::WARN => 2,
+        tracing::Level::INFO => 3,
+        tracing::Level::DEBUG => 4,
+        tracing::Level::TRACE => 5,
+    };
+    CURRENT_MAX_VERBOSITY.load(Ordering::Relaxed) >= needed
+}
 
 const FILE_DIRECTORY: &str = "glide-logs";
 const ENV_GLIDE_LOG_DIR: &str = "GLIDE_LOG_DIR";
@@ -228,6 +250,18 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 .modify(|layer| *layer.filter_mut() = LevelFilter::OFF);
         }
     };
+    // Publish the effective max verbosity for the cheap lazy-macro gate.
+    CURRENT_MAX_VERBOSITY.store(
+        match level {
+            Level::Off => 0,
+            Level::Error => 1,
+            Level::Warn => 2,
+            Level::Info => 3,
+            Level::Debug => 4,
+            Level::Trace => 5,
+        },
+        Ordering::Relaxed,
+    );
     level
 }
 
@@ -267,7 +301,9 @@ create_log!(log_error, ERROR);
 #[macro_export]
 macro_rules! log_trace_lazy {
     ($identifier:expr, $message:expr) => {
-        if tracing::event_enabled!(tracing::Level::TRACE) {
+        if $crate::level_may_be_enabled(tracing::Level::TRACE)
+            && tracing::event_enabled!(tracing::Level::TRACE)
+        {
             $crate::log_trace($identifier, $message);
         }
     };
@@ -276,7 +312,9 @@ macro_rules! log_trace_lazy {
 #[macro_export]
 macro_rules! log_debug_lazy {
     ($identifier:expr, $message:expr) => {
-        if tracing::event_enabled!(tracing::Level::DEBUG) {
+        if $crate::level_may_be_enabled(tracing::Level::DEBUG)
+            && tracing::event_enabled!(tracing::Level::DEBUG)
+        {
             $crate::log_debug($identifier, $message);
         }
     };
@@ -285,7 +323,9 @@ macro_rules! log_debug_lazy {
 #[macro_export]
 macro_rules! log_info_lazy {
     ($identifier:expr, $message:expr) => {
-        if tracing::event_enabled!(tracing::Level::INFO) {
+        if $crate::level_may_be_enabled(tracing::Level::INFO)
+            && tracing::event_enabled!(tracing::Level::INFO)
+        {
             $crate::log_info($identifier, $message);
         }
     };

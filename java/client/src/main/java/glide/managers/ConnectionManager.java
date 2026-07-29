@@ -24,9 +24,7 @@ import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
@@ -53,6 +51,9 @@ public class ConnectionManager {
     private int requestTimeoutMs = 5000;
     private ServerCredentials credentials;
     private volatile boolean isClosed = false;
+
+    /** Serialized protobuf ConnectionRequest bytes (stored for scope pool creation). */
+    private volatile byte[] connectionRequestBytes;
 
     /**
      * Connect to Valkey using the native bridge.
@@ -270,6 +271,13 @@ public class ConnectionManager {
                                                     .build());
                                 }
                             }
+
+                            // Set recovery requests queue size only when explicitly
+                            // configured; the core applies its own default otherwise.
+                            if (clusterConfig.getRecoveryRequestsQueueSize() != null) {
+                                requestBuilder.setRecoveryRequestsQueueSize(
+                                        clusterConfig.getRecoveryRequestsQueueSize());
+                            }
                         }
 
                         // Set timeouts
@@ -368,6 +376,30 @@ public class ConnectionManager {
                         byte[] rootCerts = extractRootCertificates(configuration);
                         if (rootCerts != null) {
                             requestBuilder.addRootCerts(com.google.protobuf.ByteString.copyFrom(rootCerts));
+                        }
+
+                        // Set client certificate and key for mutual TLS (mTLS) if provided
+                        byte[] clientCert = extractClientCertificate(configuration);
+                        if (clientCert != null) {
+                            requestBuilder.setClientCert(com.google.protobuf.ByteString.copyFrom(clientCert));
+                        }
+                        byte[] clientKey = extractClientKey(configuration);
+                        if (clientKey != null) {
+                            requestBuilder.setClientKey(com.google.protobuf.ByteString.copyFrom(clientKey));
+                        }
+
+                        // Set path-based mTLS client certificate/key and optional reload config. The
+                        // core reads the material from disk and, when reload is enabled, periodically
+                        // re-reads it so a rotated certificate is adopted on the next reconnect.
+                        String clientCertPath = extractClientCertPath(configuration);
+                        String clientKeyPath = extractClientKeyPath(configuration);
+                        ClientCertReloadConfig certReloadConfig = buildCertReloadConfig(configuration);
+                        if (clientCertPath != null && clientKeyPath != null) {
+                            requestBuilder.setClientCertPath(clientCertPath);
+                            requestBuilder.setClientKeyPath(clientKeyPath);
+                            if (certReloadConfig != null) {
+                                requestBuilder.setCertReload(certReloadConfig);
+                            }
                         }
 
                         // Set pubsub subscriptions
@@ -469,6 +501,7 @@ public class ConnectionManager {
                             cacheBuilder.setCacheId(clientSideCache.getCacheId());
                             cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+                            cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
 
                             // Set TTL (0 = no expiration)
                             cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
@@ -493,6 +526,7 @@ public class ConnectionManager {
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
+                        this.connectionRequestBytes = requestBytes;
 
                         // Get the address resolver (may be null if not configured)
                         // The resolver is passed directly to native code which stores it as a global reference
@@ -580,6 +614,11 @@ public class ConnectionManager {
         return requestTimeoutMs;
     }
 
+    /** Get the serialized ConnectionRequest bytes for scope pool creation. */
+    public byte[] getConnectionRequestBytes() {
+        return connectionRequestBytes;
+    }
+
     /** Check if the connection is closed. */
     public boolean isClosed() {
         return isClosed;
@@ -631,30 +670,31 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return false;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-            if (!configuration.isUseTLS()) {
-                throw new ConfigurationError(
-                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-            }
-            return true;
-        }
-        return false;
+        return TlsConfigHelper.resolveInsecureTls(configuration);
     }
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return null;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig == null) {
-            return null;
-        }
-        return tlsConfig.getRootCertificates();
+        return TlsConfigHelper.extractRootCertificates(configuration);
+    }
+
+    private static byte[] extractClientCertificate(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientCertificate(configuration);
+    }
+
+    private static byte[] extractClientKey(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientKey(configuration);
+    }
+
+    private static String extractClientCertPath(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientCertPath(configuration);
+    }
+
+    private static String extractClientKeyPath(BaseClientConfiguration configuration) {
+        return TlsConfigHelper.extractClientKeyPath(configuration);
+    }
+
+    private static ClientCertReloadConfig buildCertReloadConfig(
+            BaseClientConfiguration configuration) {
+        return TlsConfigHelper.buildCertReloadConfig(configuration);
     }
 }

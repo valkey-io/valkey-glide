@@ -1077,4 +1077,270 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Returns the latency spike time series for the specified event.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command").get();
+     * for (Map.Entry<String, Object[][]> node : history.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " entries");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(@NonNull String event);
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command", RANDOM).get();
+     * for (Object[] entry : history.getSingleValue()) {
+     *     System.out.println("Time: " + entry[0] + ", Latency: " + entry[1]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(
+            @NonNull String event, @NonNull Route route);
+
+    /**
+     * Reports the latest latency events logged by the server.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return A cluster value containing array(s) of arrays representing latency event info.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest().get();
+     * for (Map.Entry<String, Object[][]> node : latest.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " events");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest();
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of arrays representing latency event info.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest(RANDOM).get();
+     * for (Object[] info : latest.getSingleValue()) {
+     *     System.out.println("Event: " + info[0] + ", Latest duration: " + info[2]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset().get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset();
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}).get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events);
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}, ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events, @NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns a report about memory problems detected by the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor().get();
+     * for (Map.Entry<String, String> entry : report.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor();
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor(RANDOM).get();
+     * String singleReport = report.getSingleValue();
+     * System.out.println("Memory report: " + singleReport);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns the internal statistics of the memory allocator.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return A cluster value containing the memory allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats().get();
+     * for (Map.Entry<String, String> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats();
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the memory allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats(RANDOM).get();
+     * String singleStats = stats.getSingleValue();
+     * System.out.println("Allocator stats: " + singleStats);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge();
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge(ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns detailed memory consumption statistics of the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats().get();
+     * for (Map.Entry<String, Map<String, Object>> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: total.allocated=" + entry.getValue().get("total.allocated"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats();
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats(RANDOM).get();
+     * Map<String, Object> singleStats = stats.getSingleValue();
+     * System.out.println("Total allocated: " + singleStats.get("total.allocated"));
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route);
 }

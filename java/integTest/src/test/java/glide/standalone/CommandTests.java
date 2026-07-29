@@ -6,6 +6,8 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.assertMemoryStatsDbEntry;
+import static glide.TestUtilities.assertMemoryStatsFields;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
@@ -16,6 +18,7 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
+import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitFor;
@@ -47,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -532,6 +536,103 @@ public class CommandTests {
         long result = regularClient.lastsave().get();
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyHistory(GlideClient client) {
+        long beforeSpike = getUnixSeconds(client);
+        triggerLatencySpike(client);
+
+        Object[][] history = client.latencyHistory("command").get();
+        assertTrue(history.length > 0);
+
+        for (Object[] entry : history) {
+            assertTrue((Long) entry[0] >= beforeSpike);
+            assertTrue((Long) entry[1] > 0);
+        }
+
+        Object[][] unknown = client.latencyHistory("nonexistent").get();
+        assertEquals(0, unknown.length);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyLatest(GlideClient client) {
+        long beforeSpike = getUnixSeconds(client);
+        triggerLatencySpike(client);
+
+        Object[][] latest = client.latencyLatest().get();
+        assertTrue(latest.length >= 1);
+
+        // Find the "command" event
+        Object[] commandInfo = null;
+        for (Object[] info : latest) {
+            if ("command".equals(info[0])) {
+                commandInfo = info;
+                break;
+            }
+        }
+        assertNotNull(commandInfo);
+
+        assertTrue((Long) commandInfo[1] >= beforeSpike);
+        assertTrue((Long) commandInfo[2] > 0);
+        assertTrue((Long) commandInfo[3] >= (Long) commandInfo[2]);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            assertTrue(commandInfo.length > 4);
+            assertTrue((Long) commandInfo[4] > 0);
+            assertTrue((Long) commandInfo[5] > 0);
+        } else {
+            assertEquals(4, commandInfo.length);
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyReset(GlideClient client) {
+
+        // Trigger spike then reset all events.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertTrue(client.latencyReset().get() > 0);
+        assertEquals(0, client.latencyHistory("command").get().length);
+
+        // Trigger spike then reset "command" event.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertTrue(client.latencyReset(new String[] {"command"}).get() > 0);
+        assertEquals(0, client.latencyHistory("command").get().length);
+
+        // Trigger spike then reset unknown event.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertEquals(0, client.latencyReset(new String[] {"unknown-event"}).get());
+        assertTrue(client.latencyHistory("command").get().length > 0);
+    }
+
+    /** Triggers a latency spike for the "command" event. */
+    @SneakyThrows
+    private static void triggerLatencySpike(GlideClient client) {
+
+        // Reset any existing latency data first so the spike is recorded against a clean baseline,
+        // then enable the server-side latency monitor, trigger a latency spike for the "command"
+        // event, and finally restore the original threshold.
+        client.latencyReset().get();
+
+        Map<String, String> prev = client.configGet(new String[] {"latency-monitor-threshold"}).get();
+        String prevThreshold = prev.getOrDefault("latency-monitor-threshold", "0");
+
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", "1")).get();
+        client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}).get();
+
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", prevThreshold)).get();
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -2268,5 +2369,44 @@ public class CommandTests {
                 () -> client.info(new Section[] {Section.REPLICATION}).get().contains("role:" + role),
                 "Timed out waiting for role change to " + role + " to complete.");
         return true;
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor(GlideClient client) {
+        String result = client.memoryDoctor().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats(GlideClient client) {
+        String result = client.memoryMallocStats().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge(GlideClient client) {
+        String result = client.memoryPurge().get();
+        assertEquals(OK, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats(GlideClient client) {
+        // Write a key to ensure at least one db entry exists
+        client.set("memoryStats_test_key", "value").get();
+
+        Map<String, Object> stats = client.memoryStats().get();
+        assertMemoryStatsFields(stats);
+        assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
     }
 }

@@ -5854,17 +5854,31 @@ describe("PubSub", () => {
                 // Dynamically subscribe to channel (non-blocking)
                 await client.subscribeLazy([channel]);
 
-                // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                // Get updated statistics
-                const statsAfter = (await client.getStatistics()) as Record<
-                    string,
-                    string
-                >;
-                const timestampAfter = parseInt(
-                    statsAfter["subscription_last_sync_timestamp"],
+                // Wait for the lazy subscription reconciliation to complete.
+                await waitForSubscriptionState(
+                    client,
+                    new Set([channel as string]),
+                    undefined,
+                    undefined,
                 );
+
+                let timestampAfter = timestampBefore;
+
+                for (let attempt = 0; attempt < 20; attempt++) {
+                    const statsAfter = (await client.getStatistics()) as Record<
+                        string,
+                        string
+                    >;
+                    timestampAfter = parseInt(
+                        statsAfter["subscription_last_sync_timestamp"],
+                    );
+
+                    if (timestampAfter > timestampBefore) {
+                        break;
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
 
                 // Verify timestamp was updated
                 expect(timestampAfter).toBeGreaterThan(timestampBefore);

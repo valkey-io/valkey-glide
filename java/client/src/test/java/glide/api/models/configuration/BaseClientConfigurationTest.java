@@ -2,8 +2,10 @@
 package glide.api.models.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -149,5 +151,36 @@ public class BaseClientConfigurationTest {
                         .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
                         .build();
         assertEquals(NodeDiscoveryMode.DISCOVER_ALL, config.getNodeDiscoveryMode());
+    }
+
+    @Test
+    void testServerAssistedCacheConfig() {
+        ClientSideCache cache = ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).build();
+        assertTrue(cache.isServerAssisted());
+
+        ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).build();
+        assertFalse(cacheDefault.isServerAssisted());
+    }
+
+    @Test
+    public void testRecoveryRequestsQueueSizeDefault() {
+        // recoveryRequestsQueueSize should default to null when not specified
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(7000).build())
+                        .build();
+        assertNull(config.getRecoveryRequestsQueueSize());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 100, 500, 1000, 5000})
+    public void testRecoveryRequestsQueueSizeSetValue(int queueSize) {
+        // recoveryRequestsQueueSize should be stored on the cluster config
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(7000).build())
+                        .recoveryRequestsQueueSize(queueSize)
+                        .build();
+        assertEquals(queueSize, config.getRecoveryRequestsQueueSize());
     }
 }

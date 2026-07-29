@@ -87,6 +87,10 @@ struct BreakerState {
     opened_at: Option<Instant>,
     /// Consecutive successful probes in HalfOpen state.
     consecutive_success_count: u32,
+    /// Number of straggler failures forgiven in current HalfOpen period.
+    stragglers_forgiven: u32,
+    /// Inflight count when the breaker tripped (for drain comparison).
+    inflight_at_trip: u32,
     /// Error type counts since last trip/reset. For diagnostic logging.
     error_counts: HashMap<String, u32>,
 }
@@ -110,6 +114,8 @@ impl ClientCircuitBreaker {
                 error_count: 0,
                 opened_at: None,
                 consecutive_success_count: 0,
+                stragglers_forgiven: 0,
+                inflight_at_trip: 0,
                 error_counts: HashMap::new(),
             }),
             healthy: AtomicBool::new(true),
@@ -146,6 +152,7 @@ impl ClientCircuitBreaker {
         if now.duration_since(opened_at) >= self.config.open_timeout {
             state.phase = CircuitState::HalfOpen;
             state.consecutive_success_count = 0;
+            state.stragglers_forgiven = 0;
             self.healthy.store(true, Ordering::Release);
             true
         } else {
@@ -165,7 +172,8 @@ impl ClientCircuitBreaker {
     /// Report a command result. Called after each command completes.
     /// `is_error` should be true only for transport-level errors.
     /// `error_kind` is the error type string for diagnostic logging (only used when is_error=true).
-    pub fn on_result(&self, is_error: bool, error_kind: Option<&str>) {
+    /// `current_inflight` is the number of inflight requests at reporting time.
+    pub fn on_result(&self, is_error: bool, error_kind: Option<&str>, current_inflight: u32) {
         let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
 
@@ -226,21 +234,31 @@ impl ClientCircuitBreaker {
                 if errors >= self.config.min_errors {
                     let rate = errors as f32 / total as f32;
                     if rate >= self.config.failure_rate_threshold {
-                        self.trip(&mut state, now, errors, total);
+                        self.trip(&mut state, now, errors, total, current_inflight);
                     }
                 }
             }
             CircuitState::HalfOpen => {
                 if is_error {
-                    // Probe failed, reopen
-                    state.phase = CircuitState::Open;
-                    state.opened_at = Some(now);
-                    state.consecutive_success_count = 0;
-                    self.healthy.store(false, Ordering::Release);
-                    log_warn(
-                        "circuit_breaker",
-                        "Probe failed. Client circuit breaker remains open",
-                    );
+                    if current_inflight < state.inflight_at_trip && state.stragglers_forgiven < 2 {
+                        // Inflight is below the level at trip time: system is draining
+                        state.consecutive_success_count = 0;
+                        state.stragglers_forgiven += 1;
+                        log_warn(
+                            "circuit_breaker",
+                            "HalfOpen failure with draining inflight, treating as straggler",
+                        );
+                    } else {
+                        // Genuine failure, reopen
+                        state.phase = CircuitState::Open;
+                        state.opened_at = Some(now);
+                        state.consecutive_success_count = 0;
+                        self.healthy.store(false, Ordering::Release);
+                        log_warn(
+                            "circuit_breaker",
+                            "Probe failed. Client circuit breaker remains open",
+                        );
+                    }
                 } else {
                     state.consecutive_success_count += 1;
                     if state.consecutive_success_count >= self.config.consecutive_successes {
@@ -273,12 +291,20 @@ impl ClientCircuitBreaker {
         }
     }
 
-    fn trip(&self, state: &mut BreakerState, now: Instant, errors: u32, total: u32) {
+    fn trip(
+        &self,
+        state: &mut BreakerState,
+        now: Instant,
+        errors: u32,
+        total: u32,
+        current_inflight: u32,
+    ) {
         state.phase = CircuitState::Open;
         state.opened_at = Some(now);
         state.records.clear();
         state.error_count = 0;
         state.consecutive_success_count = 0;
+        state.inflight_at_trip = current_inflight;
         self.healthy.store(false, Ordering::Release);
         self.trip_count.fetch_add(1, Ordering::Relaxed);
 
@@ -355,10 +381,10 @@ mod tests {
 
         // 4 errors, 6 successes = 40% < 50% threshold
         for _ in 0..6 {
-            cb.on_result(false, None);
+            cb.on_result(false, None, 0);
         }
         for _ in 0..4 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         assert!(cb.is_healthy());
@@ -371,10 +397,10 @@ mod tests {
 
         // 6 errors, 4 successes = 60% > 50% threshold, 6 >= min_errors(5)
         for _ in 0..4 {
-            cb.on_result(false, None);
+            cb.on_result(false, None, 0);
         }
         for _ in 0..6 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         assert!(!cb.is_healthy());
@@ -388,7 +414,7 @@ mod tests {
 
         // 4 errors, 0 successes = 100% rate but only 4 < min_errors(5)
         for _ in 0..4 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         assert!(cb.is_healthy());
@@ -401,7 +427,7 @@ mod tests {
 
         // Trip it
         for _ in 0..10 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
         assert!(!cb.is_healthy());
         assert_eq!(cb.rejection_count(), 1); // is_healthy() increments when rejecting
@@ -413,7 +439,7 @@ mod tests {
 
         // Trip it
         for _ in 0..10 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         // Wait for open_timeout
@@ -430,7 +456,7 @@ mod tests {
 
         // Trip it
         for _ in 0..10 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         // Wait for open_timeout
@@ -440,10 +466,10 @@ mod tests {
         assert!(cb.is_healthy());
 
         // Probe 1 succeeds
-        cb.on_result(false, None);
+        cb.on_result(false, None, 0);
 
         // Probe 2 succeeds (consecutive_successes = 2)
-        cb.on_result(false, None);
+        cb.on_result(false, None, 0);
 
         assert_eq!(cb.state(), CircuitState::Closed);
         assert!(cb.is_healthy());
@@ -455,7 +481,7 @@ mod tests {
 
         // Trip it
         for _ in 0..10 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         // Wait for open_timeout
@@ -465,7 +491,7 @@ mod tests {
         assert!(cb.is_healthy());
 
         // Probe fails
-        cb.on_result(true, Some("IoError"));
+        cb.on_result(true, Some("IoError"), 0);
 
         assert_eq!(cb.state(), CircuitState::Open);
         assert!(!cb.is_healthy());
@@ -482,14 +508,14 @@ mod tests {
 
         // Add 3 errors (below min_errors threshold of 5)
         for _ in 0..3 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         // Wait for window to expire
         std::thread::sleep(Duration::from_millis(60));
 
         // Add 1 success after window expires
-        cb.on_result(false, None);
+        cb.on_result(false, None, 0);
 
         assert!(cb.is_healthy());
         assert_eq!(cb.state(), CircuitState::Closed);
@@ -505,7 +531,7 @@ mod tests {
 
         // Trip the breaker
         for _ in 0..10 {
-            cb.on_result(true, Some("IoError"));
+            cb.on_result(true, Some("IoError"), 0);
         }
 
         // Wait for open_timeout to elapse
@@ -525,5 +551,27 @@ mod tests {
         // All should get true (HalfOpen allows traffic), but only one transition should occur
         assert!(allowed > 0);
         assert_eq!(cb.state(), CircuitState::HalfOpen);
+    }
+
+    #[test]
+    fn draining_inflight_forgives_halfopen_failure() {
+        let cb = ClientCircuitBreaker::new(default_config());
+
+        // Trip it with high inflight (simulates saturated state)
+        for _ in 0..10 {
+            cb.on_result(true, Some("IoError"), 500);
+        }
+
+        // Wait for open_timeout
+        std::thread::sleep(Duration::from_millis(110));
+        assert!(cb.is_healthy()); // HalfOpen
+
+        // Failure with lower inflight than at trip: draining, should stay HalfOpen
+        cb.on_result(true, Some("IoError"), 100);
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+
+        // Failure with same inflight as trip: not draining, should reopen
+        cb.on_result(true, Some("IoError"), 500);
+        assert_eq!(cb.state(), CircuitState::Open);
     }
 }

@@ -1273,6 +1273,44 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOff_Cluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	ctx := context.Background()
+
+	// Single-node (default route)
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(t, err)
+	assertClientTrackingInfo(t, info, false)
+
+	// Multi-node route
+	route := config.Route(config.AllPrimaries)
+	opts := options.RouteOption{Route: route}
+	multiResponse, err := client.ClientTrackingInfoWithOptions(ctx, opts)
+	assert.NoError(t, err)
+	assert.True(t, multiResponse.IsMultiValue())
+	for _, nodeInfo := range multiResponse.MultiValue() {
+		assertClientTrackingInfo(t, nodeInfo, false)
+	}
+}
+
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOn_Cluster() {
+	t := suite.T()
+	ctx := context.Background()
+
+	cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
+	require.NoError(t, err)
+	cache.WithServerAssisted(true)
+
+	clientConfig := suite.defaultClusterClientConfig().WithClientSideCache(cache)
+	client, err := suite.clusterClient(clientConfig)
+	require.NoError(t, err)
+
+	info, err := client.ClientTrackingInfo(ctx)
+	assert.NoError(t, err)
+	assertClientTrackingInfo(t, info, true)
+}
+
 func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -2745,32 +2783,27 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
-	// Kill in a goroutine - polls until the script is running, matching testFunctionKillNoWrite pattern
-	var killErr error
-	var result string
+	// Start InvokeScript in a goroutine so it begins executing immediately
+	var invokeErr error
+	invokeDone := make(chan struct{})
 	go func() {
-		timeout := time.After(8 * time.Second)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timeout:
-				return
-			case <-ticker.C:
-				result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
-				if killErr == nil {
-					return
-				}
-			}
-		}
+		defer close(invokeDone)
+		_, invokeErr = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
 	}()
 
-	// Block until script is killed (returns error) - guarantees script is running on server
-	_, err = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
-	assert.Error(suite.T(), err)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+	// Poll ScriptKill on the main goroutine until the script is running and killed
+	var killErr error
+	var result string
+	require.Eventually(suite.T(), func() bool {
+		result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
+		return killErr == nil
+	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
 
+	// Wait for invoke to complete after kill
+	<-invokeDone
+
+	require.Error(suite.T(), invokeErr)
+	assert.Contains(suite.T(), strings.ToLower(invokeErr.Error()), "script killed")
 	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
@@ -3372,4 +3405,40 @@ func (suite *GlideTestSuite) TestClusterLinks() {
 	clusterResult, err := client.ClusterLinksWithRoute(context.Background(), routeOption)
 	assert.NoError(t, err)
 	assert.NotNil(t, clusterResult.SingleValue())
+}
+
+func (suite *GlideTestSuite) TestClusterMigrateMultiKeyRejected() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	key1 := "{migrate}" + uuid.New().String()
+	key2 := "{migrate}" + uuid.New().String()
+
+	// Multi-key Migrate should be rejected in cluster mode
+	_, err := client.Migrate(
+		ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000,
+	)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// Multi-key MigrateWithOptions should also be rejected
+	migrateOpts := options.NewMigrateOptions().SetReplace()
+	_, err = client.MigrateWithOptions(
+		ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts,
+	)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// ClusterBatch should also reject multi-key Migrate
+	batch := pipeline.NewClusterBatch(false)
+	batch.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	_, err = client.Exec(ctx, *batch, true)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// ClusterBatch MigrateWithOptions should also reject multi-key
+	batch2 := pipeline.NewClusterBatch(false)
+	batch2.MigrateWithOptions("nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
+	_, err = client.Exec(ctx, *batch2, true)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
 }

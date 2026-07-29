@@ -14,17 +14,27 @@ on:
             - glide-core/redis-rs/redis/**
             - utils/cluster_manager.py
             - deny.toml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/redis-rs.yml
     pull_request:
         paths:
             - glide-core/redis-rs/redis/**
             - utils/cluster_manager.py
             - deny.toml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/redis-rs.yml
     workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
     workflow_call:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
 
 concurrency:
     group: redis-rs-${{ github.head_ref || github.ref }}
@@ -34,15 +44,25 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    redis-rs-CI:
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
+
+    redis-rs-CI:
+        needs: [approve-self-hosted]
+        if: always() && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
+        runs-on: ${{ (inputs.use-self-hosted-linux || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')) && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
@@ -65,7 +85,7 @@ jobs:
                   cargo fmt --all -- --check
                   cargo clippy -- -D warnings
                   cargo install --locked cargo-deny
-                  cargo deny check all --config ${GITHUB_WORKSPACE}/deny.toml --exclude-dev all
+                  cargo deny --config ${GITHUB_WORKSPACE}/deny.toml --exclude-dev check all
               working-directory: ./glide-core/redis-rs/redis
 
             - name: Test
