@@ -33,6 +33,10 @@ from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
 )
 
+# A filesystem path argument: a plain ``str`` or any ``os.PathLike[str]``
+# (for example ``pathlib.Path``).
+StrPath = Union[str, os.PathLike[str]]
+
 
 class NodeAddress:
     """
@@ -526,7 +530,7 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with client_cert_pem.
 
-        client_cert_path (Optional[Union[str, os.PathLike[str]]]): Path to the PEM-encoded client certificate for mutual TLS authentication.
+        client_cert_path (Optional[StrPath]): Path to the PEM-encoded client certificate for mutual TLS authentication.
 
             - When provided along with ``client_key_path``, enables path-based mutual TLS (mTLS)
               with automatic reload: the GLIDE core re-reads both files on a cadence, so a rotated
@@ -538,22 +542,20 @@ class TlsAdvancedConfiguration:
               byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
               raise ``ConfigurationError`` at construction time.
 
-            - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``) and is
-              normalized to ``str``. The file must exist and be non-empty at construction time:
-              a missing file raises ``FileNotFoundError``, and an empty, non-regular, or
-              unreadable file raises ``ConfigurationError``.
+            - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
+              read and validated by the GLIDE core when the connection is established; a missing,
+              empty, or unreadable file surfaces as a connection error at that point.
 
             - If None (default), no path-based client certificate is used.
 
-        client_key_path (Optional[Union[str, os.PathLike[str]]]): Path to the PEM-encoded client private key for mutual TLS authentication.
+        client_key_path (Optional[StrPath]): Path to the PEM-encoded client private key for mutual TLS authentication.
 
             - When provided along with ``client_cert_path``, completes the path-based mTLS pair
               and participates in the same automatic reload described above.
 
             - Same rules as ``client_cert_path``: must be paired with it, cannot be combined with
-              byte-based mTLS, accepts a ``str`` or any ``os.PathLike`` normalized to ``str``, and
-              must point to an existing non-empty file (``FileNotFoundError`` if missing,
-              ``ConfigurationError`` if empty, non-regular, or unreadable).
+              byte-based mTLS, and accepts a ``str`` or any ``os.PathLike``. The file is read and
+              validated by the GLIDE core at connection time.
 
             - If None (default), no path-based client key is used.
 
@@ -562,8 +564,8 @@ class TlsAdvancedConfiguration:
             - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
               and ``client_key_path`` raises ``ConfigurationError`` at construction time.
 
-            - Must be a positive integer that fits in an unsigned 32-bit integer (up to
-              4294967295); other values raise ``ConfigurationError``.
+            - Interpreted as an unsigned 32-bit integer on the wire; the GLIDE core validates the
+              effective cadence.
 
             - If None (default), the GLIDE core applies its default reload cadence (see
               ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
@@ -577,34 +579,34 @@ class TlsAdvancedConfiguration:
         client_cert_pem: Optional[bytes] = None,
         client_key_pem: Optional[bytes] = None,
         *,
-        client_cert_path: Optional[Union[str, os.PathLike[str]]] = None,
-        client_key_path: Optional[Union[str, os.PathLike[str]]] = None,
+        client_cert_path: Optional[StrPath] = None,
+        client_key_path: Optional[StrPath] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
         self.client_key_pem = client_key_pem
-        self.client_cert_path = _normalize_optional_path(
-            client_cert_path, "client_cert_path"
-        )
-        self.client_key_path = _normalize_optional_path(
-            client_key_path, "client_key_path"
-        )
+        # Store the paths as provided; normalization to ``str`` is deferred to
+        # protobuf creation so these public attributes reflect the user's input.
+        self.client_cert_path = client_cert_path
+        self.client_key_path = client_key_path
         self.cert_reload_interval_seconds = cert_reload_interval_seconds
 
         self._validate_mtls()
 
     def _validate_mtls(self) -> None:
+        """Validate the both-or-neither pairing and mode exclusivity for mTLS.
+
+        Only the minimal presence/pairing rules that give an immediate, clear
+        error for an obviously-malformed config are enforced here, matching the
+        other clients. File contents, path readability, and the reload interval
+        value are validated by the GLIDE core at connection time.
+        """
         has_cert_path = self.client_cert_path is not None
         has_key_path = self.client_key_path is not None
         has_cert_pem = self.client_cert_pem is not None
         has_key_pem = self.client_key_pem is not None
-
-        if (has_cert_path or has_key_path) and (has_cert_pem or has_key_pem):
-            raise ConfigurationError(
-                "path-based and byte-based mTLS are mutually exclusive; choose one."
-            )
 
         if has_cert_path != has_key_path:
             raise ConfigurationError(
@@ -613,100 +615,30 @@ class TlsAdvancedConfiguration:
             )
 
         if has_cert_pem != has_key_pem:
-            missing = "client_key_pem" if has_cert_pem else "client_cert_pem"
-            provided = "client_cert_pem" if has_cert_pem else "client_key_pem"
             raise ConfigurationError(
-                f"{provided} is provided but {missing} is not provided. "
-                "mTLS requires both."
+                "client_cert_pem and client_key_pem must be provided together; "
+                "provide both to enable byte-based mTLS or neither."
             )
 
-        if self.client_cert_pem is not None and self.client_key_pem is not None:
-            if len(self.client_cert_pem) == 0:
+        if has_cert_path and has_cert_pem:
+            raise ConfigurationError(
+                "path-based and byte-based mTLS are mutually exclusive; choose one."
+            )
+
+        if has_cert_pem:
+            if not self.client_cert_pem:
                 raise ConfigurationError(
                     "client_cert_pem must not be empty; got zero-length bytes."
                 )
-            if len(self.client_key_pem) == 0:
+            if not self.client_key_pem:
                 raise ConfigurationError(
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
-
-        # After the symmetry check above, has_cert_path == has_key_path.
-        _validate_reload_interval(
-            self.cert_reload_interval_seconds, path_based=has_cert_path
-        )
-
-        if self.client_cert_path is not None and self.client_key_path is not None:
-            _validate_readable_nonempty_file(self.client_cert_path, "client_cert_path")
-            _validate_readable_nonempty_file(self.client_key_path, "client_key_path")
-
-
-def _validate_reload_interval(interval: Optional[int], *, path_based: bool) -> None:
-    if interval is None:
-        return
-    if isinstance(interval, bool) or not isinstance(interval, int):
-        raise ConfigurationError(
-            "cert_reload_interval_seconds must be an integer; "
-            f"got {type(interval).__name__} ({interval!r})"
-        )
-    if interval <= 0:
-        raise ConfigurationError(
-            f"cert_reload_interval_seconds must be positive; got {interval}"
-        )
-    if interval > 2**32 - 1:
-        raise ConfigurationError(
-            "cert_reload_interval_seconds must fit in an unsigned 32-bit "
-            f"integer (max 4294967295); got {interval}"
-        )
-    if not path_based:
-        raise ConfigurationError(
-            "cert_reload_interval_seconds may only be set when path-based mTLS is "
-            "configured (both client_cert_path and client_key_path)."
-        )
-
-
-def _normalize_optional_path(
-    value: Optional[Union[str, os.PathLike[str]]], field_name: str
-) -> Optional[str]:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        text = value
-    elif isinstance(value, os.PathLike):
-        text = os.fspath(value)
-    else:
-        raise ConfigurationError(
-            f"{field_name} must be a str or pathlib.Path; got {type(value).__name__}"
-        )
-    if text == "":
-        raise ConfigurationError(f"{field_name} cannot be an empty string")
-    return text
-
-
-def _validate_readable_nonempty_file(path: str, field_name: str) -> None:
-    """Reject a missing, unreadable, or empty file at construction time.
-
-    This is an early sanity check, not a guarantee the material is
-    still valid at connect time. With ``lazy_connect=True`` the real
-    read happens later, and path-based mTLS reloads on a cadence, so
-    the file can change between this check and every subsequent read.
-    """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"{field_name} file not found: {path}")
-    if not os.path.isfile(path):
-        raise ConfigurationError(f"{field_name} is not a regular file: {path}")
-    try:
-        with open(path, "rb") as f:
-            first_byte = f.read(1)
-    except PermissionError as exc:
-        raise ConfigurationError(
-            f"{field_name} file is not readable ({path}): {exc}"
-        ) from exc
-    except OSError as exc:
-        raise ConfigurationError(
-            f"Failed to read {field_name} file {path}: {exc}"
-        ) from exc
-    if not first_byte:
-        raise ConfigurationError(f"{field_name} file is empty: {path}")
+        elif not has_cert_path and self.cert_reload_interval_seconds is not None:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds may only be set when path-based mTLS is "
+                "configured (both client_cert_path and client_key_path)."
+            )
 
 
 class ClientCircuitBreakerConfiguration:
@@ -816,11 +748,6 @@ class AdvancedBaseClientConfiguration:
     def _apply_tls_config(
         self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
     ) -> None:
-        # Re-validate mTLS invariants at wire-emit time. Protects against
-        # attribute mutation after construction (empty cert bytes would
-        # otherwise emit as "no mTLS", a silent security downgrade).
-        tls_config._validate_mtls()
-
         # Validate and handle insecure TLS
         if tls_config.use_insecure_tls:
             # Validate that TLS is enabled before allowing insecure mode
@@ -841,21 +768,25 @@ class AdvancedBaseClientConfiguration:
                 )
             request.root_certs.append(root_certs)
 
-        # Byte-mode mTLS. Emptiness and cert/key pairing are enforced
-        # at construction time in `_validate_mtls`; here we just emit.
+        # Byte-mode mTLS. Pairing is enforced at construction in `_validate_mtls`.
+        # We emit each byte field under its own presence check so an unset value
+        # stays at protobuf's default `b""` (proto3 scalar bytes) rather than
+        # being coerced to `None`, which would raise `TypeError` at assignment.
         if tls_config.client_cert_pem is not None:
             request.client_cert = tls_config.client_cert_pem
         if tls_config.client_key_pem is not None:
             request.client_key = tls_config.client_key_pem
 
-        # Path-based mTLS with automatic reload; the byte and path
-        # branches never both apply (enforced in `_validate_mtls`).
-        if (
-            tls_config.client_cert_path is not None
-            and tls_config.client_key_path is not None
-        ):
-            request.client_cert_path = tls_config.client_cert_path
-            request.client_key_path = tls_config.client_key_path
+        # Path-based mTLS with automatic reload; the byte and path branches
+        # never both apply (enforced in `_validate_mtls`). The two paths are
+        # validated as a pair, so they are either both set or both unset. Paths
+        # are normalized to `str` here (deferred from construction) so the
+        # public attributes keep the user's original input.
+        cert_path = tls_config.client_cert_path
+        key_path = tls_config.client_key_path
+        if cert_path is not None and key_path is not None:
+            request.client_cert_path = os.fspath(cert_path)
+            request.client_key_path = os.fspath(key_path)
             reload_config = ProtobufClientCertReloadConfig()
             reload_config.enabled = True
             if tls_config.cert_reload_interval_seconds is not None:
@@ -1772,17 +1703,14 @@ def load_client_key_from_file(path: str) -> bytes:
 
 
 def load_client_certificate_and_key_from_file(
-    cert_path: Union[str, os.PathLike[str]],
-    key_path: Union[str, os.PathLike[str]],
+    cert_path: StrPath,
+    key_path: StrPath,
 ) -> Tuple[bytes, bytes]:
     """
     Load a PEM-encoded client certificate and its private key from disk
     for byte-based mutual TLS (mTLS).
 
-    Convenience wrapper around
-    ``load_client_certificate_from_file`` and
-    ``load_client_key_from_file``. The certificate is read first;
-    both paths must exist and be non-empty. Use this helper when static,
+    Both paths must exist and be non-empty. Use this helper when static,
     byte-based mTLS is desired; for automatic reload from disk, pass
     ``client_cert_path`` / ``client_key_path`` to
     ``TlsAdvancedConfiguration`` instead.

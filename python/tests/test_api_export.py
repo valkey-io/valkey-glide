@@ -91,6 +91,7 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/config.py
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    "StrPath",  # Assignment (type alias used in TlsAdvancedConfiguration + loader signatures)
     "load_root_certificates_from_file",  # FunctionDef
     "load_client_certificate_from_file",  # FunctionDef
     "load_client_key_from_file",  # FunctionDef

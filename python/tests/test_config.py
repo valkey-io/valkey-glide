@@ -663,13 +663,13 @@ def test_tls_configuration_client_cert_key_consistency():
 
     with pytest.raises(ConfigurationError) as exc_info:
         TlsAdvancedConfiguration(client_cert_pem=b"nonempty", client_key_pem=None)
-    assert "client_cert_pem is provided but client_key_pem is not provided" in str(
+    assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
         TlsAdvancedConfiguration(client_cert_pem=None, client_key_pem=b"nonempty")
-    assert "client_key_pem is provided but client_cert_pem is not provided" in str(
+    assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
 
@@ -725,7 +725,7 @@ def test_tls_path_based_mtls_with_explicit_interval(tmp_path):
     assert request.cert_reload.interval_seconds == 120
 
 
-def test_tls_path_based_mtls_accepts_pathlib_and_stores_str(tmp_path):
+def test_tls_path_based_mtls_accepts_pathlib_and_preserves_input(tmp_path):
     from pathlib import Path
 
     cert_path, key_path = _write_cert_key(tmp_path)
@@ -733,10 +733,15 @@ def test_tls_path_based_mtls_accepts_pathlib_and_stores_str(tmp_path):
         client_cert_path=Path(cert_path),
         client_key_path=Path(key_path),
     )
-    assert isinstance(tls_config.client_cert_path, str)
-    assert isinstance(tls_config.client_key_path, str)
-    assert tls_config.client_cert_path == str(cert_path)
-    assert tls_config.client_key_path == str(key_path)
+    # Normalization is deferred to protobuf creation, so the public attributes
+    # reflect exactly what the user passed in.
+    assert tls_config.client_cert_path == Path(cert_path)
+    assert tls_config.client_key_path == Path(key_path)
+
+    # The wire request normalizes the paths to `str`.
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.client_cert_path == str(cert_path)
+    assert request.client_key_path == str(key_path)
 
 
 def test_tls_path_based_mtls_missing_key_path(tmp_path):
@@ -771,42 +776,10 @@ def test_tls_cert_reload_interval_requires_paths():
     assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
 
 
-def test_tls_cert_reload_interval_rejects_zero_and_negative(tmp_path):
+def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
+    # The interval value is validated by the GLIDE core, not the client; the
+    # client only forwards it. The maximum uint32 value is emitted verbatim.
     cert_path, key_path = _write_cert_key(tmp_path)
-    for bad in (0, -1, -100):
-        with pytest.raises(ConfigurationError):
-            TlsAdvancedConfiguration(
-                client_cert_path=str(cert_path),
-                client_key_path=str(key_path),
-                cert_reload_interval_seconds=bad,
-            )
-
-
-def test_tls_cert_reload_interval_rejects_bool_and_float(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    for bad in (True, False, 1.0, 30.5):
-        with pytest.raises(ConfigurationError):
-            TlsAdvancedConfiguration(
-                client_cert_path=str(cert_path),
-                client_key_path=str(key_path),
-                cert_reload_interval_seconds=bad,
-            )
-
-
-def test_tls_cert_reload_interval_rejects_values_exceeding_uint32(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    # 2**32 is exactly one past the uint32 max and must be rejected;
-    # 2**63 - 1 is grossly too large and must also be rejected.
-    for bad in (2**32, 2**63 - 1):
-        with pytest.raises(ConfigurationError) as exc_info:
-            TlsAdvancedConfiguration(
-                client_cert_path=str(cert_path),
-                client_key_path=str(key_path),
-                cert_reload_interval_seconds=bad,
-            )
-        assert "unsigned 32-bit" in str(exc_info.value)
-
-    # 2**32 - 1 is the maximum valid uint32 value and must be accepted.
     tls_config = TlsAdvancedConfiguration(
         client_cert_path=str(cert_path),
         client_key_path=str(key_path),
@@ -818,77 +791,6 @@ def test_tls_cert_reload_interval_rejects_values_exceeding_uint32(tmp_path):
     assert request.cert_reload.enabled is True
     assert request.cert_reload.HasField("interval_seconds")
     assert request.cert_reload.interval_seconds == 2**32 - 1
-
-
-@pytest.mark.skipif(
-    os.name == "nt" or os.geteuid() == 0,
-    reason="chmod 0o000 does not restrict root or Windows",
-)
-def test_tls_path_based_mtls_unreadable_file_rejected(tmp_path):
-    cert_path = tmp_path / "client-cert.pem"
-    key_path = tmp_path / "client-key.pem"
-    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
-    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
-    os.chmod(cert_path, 0o000)
-    try:
-        with pytest.raises(ConfigurationError) as exc_info:
-            TlsAdvancedConfiguration(
-                client_cert_path=str(cert_path),
-                client_key_path=str(key_path),
-            )
-        assert "not readable" in str(exc_info.value) or "PermissionError" in str(
-            exc_info.value
-        )
-    finally:
-        os.chmod(cert_path, 0o600)
-
-
-def test_tls_path_based_mtls_nonexistent_path_raises_file_not_found(tmp_path):
-    key_path = tmp_path / "client-key.pem"
-    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
-    missing_cert = tmp_path / "does-not-exist.pem"
-    with pytest.raises(FileNotFoundError) as exc_info:
-        TlsAdvancedConfiguration(
-            client_cert_path=str(missing_cert),
-            client_key_path=str(key_path),
-        )
-    assert str(missing_cert) in str(exc_info.value)
-
-
-def test_tls_path_based_mtls_directory_as_path_rejected(tmp_path):
-    """Passing an existing directory raises `not a regular file`,
-    distinct from the missing-file `FileNotFoundError`."""
-    key_path = tmp_path / "client-key.pem"
-    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
-    dir_as_cert = tmp_path / "certs"
-    dir_as_cert.mkdir()
-    with pytest.raises(ConfigurationError, match="not a regular file"):
-        TlsAdvancedConfiguration(
-            client_cert_path=str(dir_as_cert),
-            client_key_path=str(key_path),
-        )
-
-
-def test_tls_path_based_mtls_empty_string_path_rejected(tmp_path):
-    cert_path, _ = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError):
-        TlsAdvancedConfiguration(
-            client_cert_path=str(cert_path),
-            client_key_path="",
-        )
-
-
-def test_tls_path_based_mtls_empty_file_rejected(tmp_path):
-    cert_path = tmp_path / "client-cert.pem"
-    cert_path.write_bytes(b"")
-    key_path = tmp_path / "client-key.pem"
-    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
-    with pytest.raises(ConfigurationError) as exc_info:
-        TlsAdvancedConfiguration(
-            client_cert_path=str(cert_path),
-            client_key_path=str(key_path),
-        )
-    assert "empty" in str(exc_info.value)
 
 
 def test_tls_byte_based_mtls_ok():
@@ -919,8 +821,9 @@ def test_tls_path_based_mtls_reload_ok(tmp_path):
         cert_reload_interval_seconds=90,
         root_pem_cacerts=TEST_CERT_DATA_1,
     )
-    assert tls_config.client_cert_path == str(cert_path)
-    assert tls_config.client_key_path == str(key_path)
+    # Deferred normalization: the public attributes preserve the user's input.
+    assert tls_config.client_cert_path == cert_path
+    assert tls_config.client_key_path == key_path
     assert tls_config.cert_reload_interval_seconds == 90
     assert tls_config.root_pem_cacerts == TEST_CERT_DATA_1
     assert tls_config.client_cert_pem is None
@@ -945,17 +848,6 @@ def test_tls_path_based_mtls_omitted_interval_defaults_to_core_reload(tmp_path):
     request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
     assert request.cert_reload.enabled is True
     assert not request.cert_reload.HasField("interval_seconds")
-
-
-def test_tls_path_based_mtls_missing_file(tmp_path):
-    key_path = tmp_path / "client-key.pem"
-    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
-    missing_cert = tmp_path / "does-not-exist.pem"
-    with pytest.raises(FileNotFoundError):
-        TlsAdvancedConfiguration(
-            client_cert_path=missing_cert,
-            client_key_path=key_path,
-        )
 
 
 def test_load_client_certificate_and_key_from_file_success(tmp_path):
@@ -1011,40 +903,6 @@ def test_tls_byte_based_still_emits_no_reload_config():
     assert request.client_key_path == ""
 
 
-# -------- wire-time revalidation guards against post-construction mutation --------
-
-
-def test_tls_wire_time_revalidation_rejects_empty_cert_after_mutation():
-    """Mutating client_cert_pem to empty bytes after construction is
-    caught at wire-emit time; the request is not built with a silent
-    "no mTLS" downgrade."""
-    tls_config = TlsAdvancedConfiguration(
-        client_cert_pem=TEST_CLIENT_CERT_DATA,
-        client_key_pem=TEST_CLIENT_KEY_DATA,
-    )
-    tls_config.client_cert_pem = b""
-
-    config = _build_standalone_config(tls_config)
-    with pytest.raises(ConfigurationError, match="client_cert_pem must not be empty"):
-        config._create_a_protobuf_conn_request()
-
-
-def test_tls_wire_time_revalidation_rejects_mixed_after_mutation(tmp_path):
-    """Mutating a byte-based config to add paths after construction is
-    caught at wire-emit time."""
-    cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration(
-        client_cert_pem=TEST_CLIENT_CERT_DATA,
-        client_key_pem=TEST_CLIENT_KEY_DATA,
-    )
-    tls_config.client_cert_path = str(cert_path)
-    tls_config.client_key_path = str(key_path)
-
-    config = _build_standalone_config(tls_config)
-    with pytest.raises(ConfigurationError, match="mutually exclusive"):
-        config._create_a_protobuf_conn_request()
-
-
 # -------- byte-based mTLS: negative cases + forwarding --------
 
 
@@ -1079,97 +937,6 @@ def test_tls_byte_based_mtls_forwards_use_insecure_tls():
 
 
 # -------- path-based mTLS reload: negative cases + forwarding --------
-
-
-def test_tls_path_based_mtls_zero_interval_rejected(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(
-        ConfigurationError, match="cert_reload_interval_seconds.*positive"
-    ):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path=key_path,
-            cert_reload_interval_seconds=0,
-        )
-
-
-def test_tls_path_based_mtls_negative_interval_rejected(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(
-        ConfigurationError, match="cert_reload_interval_seconds.*positive"
-    ):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path=key_path,
-            cert_reload_interval_seconds=-1,
-        )
-
-
-def test_tls_path_based_mtls_bool_interval_rejected(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path=key_path,
-            cert_reload_interval_seconds=True,
-        )
-
-
-def test_tls_path_based_mtls_float_interval_rejected(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="cert_reload_interval_seconds"):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path=key_path,
-            cert_reload_interval_seconds=1.5,
-        )
-
-
-def test_tls_path_based_mtls_uint32_overflow_rejected(tmp_path):
-    cert_path, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="unsigned 32-bit"):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path=key_path,
-            cert_reload_interval_seconds=2**32,
-        )
-
-
-def test_tls_path_based_mtls_empty_cert_path(tmp_path):
-    _, key_path = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="client_cert_path"):
-        TlsAdvancedConfiguration(
-            client_cert_path="",
-            client_key_path=key_path,
-        )
-
-
-def test_tls_path_based_mtls_empty_key_path(tmp_path):
-    cert_path, _ = _write_cert_key(tmp_path)
-    with pytest.raises(ConfigurationError, match="client_key_path"):
-        TlsAdvancedConfiguration(
-            client_cert_path=cert_path,
-            client_key_path="",
-        )
-
-
-def test_tls_path_based_mtls_accepts_pathlib_path(tmp_path):
-    from pathlib import Path
-
-    cert_path, key_path = _write_cert_key(tmp_path)
-    tls_config = TlsAdvancedConfiguration(
-        client_cert_path=Path(cert_path),
-        client_key_path=Path(key_path),
-    )
-    assert isinstance(tls_config.client_cert_path, str)
-    assert isinstance(tls_config.client_key_path, str)
-    assert tls_config.client_cert_path == str(cert_path)
-    assert tls_config.client_key_path == str(key_path)
-
-    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
-    assert request.client_cert_path == str(cert_path)
-    assert request.client_key_path == str(key_path)
-    assert request.cert_reload.enabled is True
 
 
 def test_tls_path_based_mtls_forwards_root_pem_cacerts(tmp_path):
