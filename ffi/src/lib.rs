@@ -1925,6 +1925,21 @@ mod tests_create_client_from_uri_internal {
             "unexpected error: {err}"
         );
     }
+
+    #[test]
+    fn invalid_utf8_in_username_returns_error() {
+        // Symmetric to invalid_utf8_in_password_returns_error: the username
+        // decode branch must surface the same clear UTF-8 error rather than
+        // silently corrupt bytes. Password is valid so parsing reaches the
+        // username check.
+        let c_uri = CString::new("redis://%C3%28:pw@127.0.0.1:6379").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected UTF-8 error");
+        assert!(
+            err.contains("Username in URI is not valid UTF-8"),
+            "unexpected error: {err}"
+        );
+    }
 }
 
 fn is_known_connection_options_json_key(key: &str) -> bool {
