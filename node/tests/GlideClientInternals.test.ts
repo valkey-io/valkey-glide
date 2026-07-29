@@ -107,6 +107,23 @@ describe("GlideClusterClientConfiguration", () => {
             config.advancedConfiguration?.refreshTopologyFromInitialNodes,
         ).toBeUndefined();
     });
+
+    it("should set recoveryRequestsQueueSize", () => {
+        const config: GlideClusterClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            recoveryRequestsQueueSize: 500,
+        };
+
+        expect(config.recoveryRequestsQueueSize).toBe(500);
+    });
+
+    it("should default recoveryRequestsQueueSize to undefined when not specified", () => {
+        const config: GlideClusterClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+        };
+
+        expect(config.recoveryRequestsQueueSize).toBeUndefined();
+    });
 });
 
 describe("BaseClient response handling", () => {
