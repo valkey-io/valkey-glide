@@ -3607,12 +3607,12 @@ where
                 continue; // caller gave up
             }
             let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
-            self.in_flight_requests.push(Request {
+            self.in_flight_requests.push(Box::pin(Request {
                 retry_params: retry_params.clone(),
                 request: Some(request),
                 core: self.inner.clone(),
                 future: RequestState::Future { future },
-            });
+            }));
         }
     }
 
