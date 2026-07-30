@@ -513,10 +513,7 @@ function applyMutualTls(
                 mtls.certBytes,
                 "mutualTls.certBytes",
             );
-            request.clientKey = encodePem(
-                mtls.keyBytes,
-                "mutualTls.keyBytes",
-            );
+            request.clientKey = encodePem(mtls.keyBytes, "mutualTls.keyBytes");
             return;
         }
 
