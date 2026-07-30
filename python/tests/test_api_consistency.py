@@ -67,6 +67,12 @@ EXCLUDED_TESTS = {
         "cb",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
+        # Module-scoped fixture overrides declared in test_auth.py; the sync
+        # twins are named *_sync_client in test_sync_auth.py and cannot share
+        # a name because async fixtures need an async generator body.
+        "acl_glide_client",
+        "glide_client",
+        "management_client",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -81,6 +87,24 @@ EXCLUDED_TESTS = {
         "test_sync_get_into_buffer_non_byte_format",
         # Script invocation span — async tracked in #5601
         "test_sync_span_script_invocation",
+        # mget() with buffers - sync-only FFI path, no async equivalent
+        "test_sync_mget_into_buffers",
+        "test_sync_mget_into_buffers_missing_key",
+        "test_sync_mget_into_buffers_larger_buffer",
+        "test_sync_mget_into_buffers_readonly_raises",
+        "test_sync_mget_into_buffers_too_small_raises",
+        "test_sync_mget_buffers_length_mismatch_raises",
+        "test_sync_mget_into_buffers_non_byte_format",
+        "test_sync_mget_into_buffers_cross_slot",
+        # Pool blocking test nested helper functions (sync-only threading pattern)
+        "blocking_worker",
+        "fast_worker",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 

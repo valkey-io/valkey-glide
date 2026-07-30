@@ -1,10 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+from typing import AsyncGenerator
+
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
 from glide_shared.config import (
+    BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
     ServerCredentials,
@@ -13,7 +16,13 @@ from glide_shared.config import (
 from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
-from tests.async_tests.conftest import create_client
+from tests.async_tests import conftest as _async_conftest
+from tests.async_tests.conftest import (
+    _client_pool,
+    _client_pool_lock,
+    _get_worker_id,
+    create_client,
+)
 from tests.constants import (
     IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
@@ -21,6 +30,7 @@ from tests.constants import (
     IAM_USERNAME,
 )
 from tests.utils.utils import (
+    INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
@@ -31,6 +41,130 @@ from tests.utils.utils import (
     kill_connections,
     set_new_acl_username_with_password,
 )
+
+# Reconnect budget for the disconnect-and-recover flow in
+# test_update_connection_password. In cluster mode a CLIENT KILL is fanned out
+# over AllNodes and, under heavy full-matrix CI contention, the full-cluster
+# reconnect + re-auth can take considerably longer than on an unloaded host,
+# so cluster mode gets a wider tolerance.
+_CLUSTER_RECONNECT_TIMEOUT_SEC = 90
+_STANDALONE_RECONNECT_TIMEOUT_SEC = 30
+
+# Test-local reconnect backoff for the auth suite. Shorter than the library
+# default so the disconnect-and-recover flow finishes within test tolerance
+# under CI contention.
+_AUTH_RECONNECT_STRATEGY = BackoffStrategy(
+    num_of_retries=5,
+    factor=25,
+    exponent_base=2,
+)
+
+
+def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
+    """Route auth-test clients to the dedicated auth cluster in cluster mode.
+
+    Standalone tests keep the shared standalone cluster; there is no
+    dedicated standalone auth cluster because the isolation problem only
+    materializes with CLIENT KILL fan-out over cluster nodes.
+
+    Under --cluster-endpoints (externally-provided cluster) the dedicated
+    auth twins are never provisioned by conftest, so fall back to None and
+    let create_client_config route to the shared cluster.
+    """
+    if not cluster_mode:
+        return None
+    attr = "valkey_auth_tls_cluster" if use_tls else "valkey_auth_cluster"
+    return getattr(pytest, attr, None)
+
+
+@pytest.fixture(scope="function")
+async def management_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> AsyncGenerator[TGlideClient, None]:
+    """Override: management client for the auth suite. Routes cluster-mode
+    clients to the dedicated auth cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        await client.close()
+        await _async_conftest.test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
+
+
+@pytest.fixture(scope="function")
+async def glide_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> AsyncGenerator[TGlideClient, None]:
+    """Override: primary client under test for the auth suite. Bypasses the
+    session-wide pool because auth tests routinely kill connections and
+    rotate passwords, routes cluster-mode clients to the dedicated auth
+    cluster, and applies the tightened _AUTH_RECONNECT_STRATEGY."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest.fixture(scope="function")
+async def acl_glide_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    management_client: TGlideClient,
+) -> AsyncGenerator[TGlideClient, None]:
+    """Override: ACL-user client for the auth suite. Routes cluster-mode
+    clients to the dedicated auth cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
+    await set_new_acl_username_with_password(
+        management_client, USERNAME, INITIAL_PASSWORD
+    )
+
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        await client.close()
+        await _async_conftest.test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
 
 
 async def create_iam_client(
