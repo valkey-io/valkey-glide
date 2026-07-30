@@ -1790,14 +1790,27 @@ fn create_client_from_uri_internal(
     node_address.port = port;
     request.addresses.push(node_address);
 
-    // Extract authentication
+    // Extract authentication. `url::Url::password()` / `::username()` return the
+    // *percent-encoded* substring per RFC 3986 §3.2.1; the caller is expected
+    // to decode. Forwarding the encoded form as-is causes AUTH to fail whenever
+    // the password contains reserved characters (@, :, /, ?, #, %, +, space,
+    // non-ASCII) — see valkey-glide/issues/6659. This mirrors the decode step
+    // redis-rs itself performs at glide-core/redis-rs/redis/src/connection.rs:370,379.
     if let Some(password) = url.password() {
         let mut auth_info = connection_request::AuthenticationInfo::new();
-        auth_info.password = password.to_string().into();
+        auth_info.password = percent_encoding::percent_decode(password.as_bytes())
+            .decode_utf8()
+            .map_err(|_| "Password in URI is not valid UTF-8".to_string())?
+            .into_owned()
+            .into();
 
         // Handle username if present
         if !url.username().is_empty() {
-            auth_info.username = url.username().to_string().into();
+            auth_info.username = percent_encoding::percent_decode(url.username().as_bytes())
+                .decode_utf8()
+                .map_err(|_| "Username in URI is not valid UTF-8".to_string())?
+                .into_owned()
+                .into();
         }
 
         request.authentication_info = ::protobuf::MessageField::some(auth_info);
@@ -1836,6 +1849,97 @@ fn create_client_from_uri_internal(
     }
 
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests_create_client_from_uri_internal {
+    //! Direct unit tests for `create_client_from_uri_internal`. The wider
+    //! integration suite in `ffi/tests/test_create_client_from_uri.rs` only
+    //! exercises the FFI entry point end-to-end (which requires a live server
+    //! and can't cheaply assert on the protobuf shape). These tests call the
+    //! internal function directly so we can assert that reserved characters
+    //! in userinfo round-trip into `AuthenticationInfo` as raw bytes — the
+    //! regression this file was written to prevent (issue #6659).
+    use super::*;
+    use std::ffi::CString;
+
+    fn parse_uri(uri: &str) -> connection_request::ConnectionRequest {
+        let c_uri = CString::new(uri).unwrap();
+        create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .unwrap_or_else(|e| panic!("failed to parse {uri}: {e}"))
+    }
+
+    #[test]
+    fn reserved_char_password_is_percent_decoded() {
+        let req = parse_uri("redis://:p%40ss@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.password, "p@ss");
+        assert_eq!(&*auth.username, "");
+    }
+
+    #[test]
+    fn reserved_char_username_is_percent_decoded() {
+        let req = parse_uri("redis://us%3Aer:p%40ss@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "us:er");
+        assert_eq!(&*auth.password, "p@ss");
+    }
+
+    #[test]
+    fn ascii_alphanumeric_credentials_are_unchanged() {
+        // Percent-decoding is a no-op on already-safe inputs — the pre-existing
+        // integration tests use these shapes; keep them working verbatim.
+        let req = parse_uri("redis://user:pass@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.username, "user");
+        assert_eq!(&*auth.password, "pass");
+    }
+
+    #[test]
+    fn space_and_plus_in_password_are_percent_decoded() {
+        // '+' is NOT decoded to space in URI userinfo (that's application/x-www-form-urlencoded);
+        // "%20" decodes to space, "+" stays as "+".
+        let req = parse_uri("redis://:hello%20world+plus@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.password, "hello world+plus");
+    }
+
+    #[test]
+    fn non_ascii_utf8_password_is_percent_decoded() {
+        // 'é' -> UTF-8 bytes 0xC3 0xA9 -> "%C3%A9"
+        let req = parse_uri("redis://:caf%C3%A9@127.0.0.1:6379");
+        let auth = req.authentication_info.as_ref().expect("auth info missing");
+        assert_eq!(&*auth.password, "café");
+    }
+
+    #[test]
+    fn invalid_utf8_in_password_returns_error() {
+        // "%C3%28" is an invalid UTF-8 sequence (0xC3 0x28 — 0xC3 expects a
+        // continuation byte in [0x80, 0xBF]). Decoding must surface a clear
+        // error rather than silently corrupt bytes.
+        let c_uri = CString::new("redis://:%C3%28@127.0.0.1:6379").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected UTF-8 error");
+        assert!(
+            err.contains("Password in URI is not valid UTF-8"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_in_username_returns_error() {
+        // Symmetric to invalid_utf8_in_password_returns_error: the username
+        // decode branch must surface the same clear UTF-8 error rather than
+        // silently corrupt bytes. Password is valid so parsing reaches the
+        // username check.
+        let c_uri = CString::new("redis://%C3%28:pw@127.0.0.1:6379").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected UTF-8 error");
+        assert!(
+            err.contains("Username in URI is not valid UTF-8"),
+            "unexpected error: {err}"
+        );
+    }
 }
 
 fn is_known_connection_options_json_key(key: &str) -> bool {
