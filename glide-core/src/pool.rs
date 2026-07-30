@@ -133,8 +133,6 @@ pub struct ClientPool {
     pub state: AtomicU8,
     /// Condvar notified when a client is returned to idle (for blocking acquire).
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
-    /// Handle to the abandon monitor task (None if disabled).
-    pub abandon_monitor_handle: Option<tokio::task::JoinHandle<()>>,
     /// Client IDs discarded by the abandon monitor. The FFI layer drains this
     /// on acquire/destroy to clean up adapter mappings and close connections.
     pub discarded_ids: Vec<u64>,
@@ -162,7 +160,6 @@ impl ClientPool {
             total_count: AtomicU32::new(0),
             state: AtomicU8::new(POOL_RUNNING),
             release_notify: Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
-            abandon_monitor_handle: None,
             discarded_ids: Vec::new(),
         })
     }
@@ -290,11 +287,6 @@ impl ClientPool {
 
     /// Destroy the pool — drop all clients.
     pub fn destroy(&mut self) {
-        // Abort the abandon monitor if running
-        if let Some(handle) = self.abandon_monitor_handle.take() {
-            handle.abort();
-        }
-
         // Warn if any clients are still borrowed (likely leak)
         let in_use_count = self.in_use.len();
         if in_use_count > 0 {
@@ -408,6 +400,13 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
 /// Global pool registry: pool_id → Pool instance.
 static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<TokioMutex<ClientPool>>>> = OnceLock::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
+/// Abandon monitor task handles, keyed by pool_id. Stored outside the pool
+/// mutex to allow abort on destroy without locking.
+static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = OnceLock::new();
+
+fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
+    MONITOR_HANDLES.get_or_init(DashMap::new)
+}
 /// Global client_id allocator — ensures uniqueness across all pools.
 static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -440,7 +439,16 @@ pub fn register_pool(pool: ClientPool) -> u64 {
 pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Handle) {
     let pool_arc = match get_pool(pool_id) {
         Some(arc) => arc,
-        None => return,
+        None => {
+            logger_core::log_debug(
+                "pool",
+                format!(
+                    "start_abandon_monitor: pool {} not found (already destroyed?)",
+                    pool_id
+                ),
+            );
+            return;
+        }
     };
 
     let abandon_timeout = {
@@ -512,11 +520,8 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
         }
     });
 
-    // Store the handle so destroy() can abort it
-    runtime_handle.block_on(async {
-        let mut pool = pool_arc.lock().await;
-        pool.abandon_monitor_handle = Some(handle);
-    });
+    // Store handle outside the pool mutex so destroy() can abort without locking.
+    get_monitor_handles().insert(pool_id, handle);
 }
 
 /// Mark a borrowed client as currently executing a blocking command.
@@ -534,15 +539,17 @@ pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) -> boo
     if let Ok(pool) = pool_arc.try_lock() {
         if let Some(entry) = pool.in_use.get(&client_id) {
             entry.value().is_blocking.store(blocking, Ordering::Release);
-            // When unmarking (command completed), refresh borrowed_at so the client
-            // isn't instantly reclaimable after a long-running blocking command.
-            if !blocking {
-                if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
-                    entry.value_mut().borrowed_at = Some(Instant::now());
-                }
-            }
-            return true;
+        } else {
+            return false;
         }
+        // When unmarking (command completed), refresh borrowed_at so the client
+        // isn't instantly reclaimable after a long-running blocking command.
+        if !blocking {
+            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                entry.value_mut().borrowed_at = Some(Instant::now());
+            }
+        }
+        return true;
     }
     false
 }
@@ -584,6 +591,10 @@ pub fn get_pool(pool_id: u64) -> Option<Arc<TokioMutex<ClientPool>>> {
 
 /// Remove a pool from the registry.
 pub fn unregister_pool(pool_id: u64) -> Option<Arc<TokioMutex<ClientPool>>> {
+    // Abort the abandon monitor before removing the pool
+    if let Some((_, handle)) = get_monitor_handles().remove(&pool_id) {
+        handle.abort();
+    }
     get_pool_registry().remove(&pool_id).map(|(_, v)| v)
 }
 

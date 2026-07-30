@@ -487,23 +487,28 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         None => return -1,
     };
     {
-        let mut pool = pool_arc.blocking_lock();
-        // Clean up POOL_CLIENTS entries for all clients owned by this pool
-        // (includes discarded clients that the abandon monitor removed from in_use)
-        let discarded = pool.drain_discarded_ids();
-        let client_ids: Vec<u64> = pool
-            .idle
-            .iter()
-            .map(|e| e.client_id)
-            .chain(pool.in_use.iter().map(|e| *e.key()))
-            .chain(discarded)
-            .collect();
-        for cid in client_ids {
-            if let Some((_, entry)) = get_pool_clients().remove(&cid) {
-                get_pool_adapter_map().remove(&entry.adapter_ptr);
+        // try_lock rather than blocking_lock: the abandon monitor may hold the
+        // lock briefly during a scan. Using blocking_lock here can deadlock if
+        // the monitor's async sleep is pending on the same runtime. The pool was
+        // already unregistered above, so the monitor will exit on its next iteration.
+        if let Ok(mut pool) = pool_arc.try_lock() {
+            // Clean up POOL_CLIENTS entries for all clients owned by this pool
+            // (includes discarded clients that the abandon monitor removed from in_use)
+            let discarded = pool.drain_discarded_ids();
+            let client_ids: Vec<u64> = pool
+                .idle
+                .iter()
+                .map(|e| e.client_id)
+                .chain(pool.in_use.iter().map(|e| *e.key()))
+                .chain(discarded)
+                .collect();
+            for cid in client_ids {
+                if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+                    get_pool_adapter_map().remove(&entry.adapter_ptr);
+                }
             }
+            pool.destroy();
         }
-        pool.destroy();
     }
     // Clean up stored ClientType for this pool
     get_pool_client_types().remove(&pool_id);
