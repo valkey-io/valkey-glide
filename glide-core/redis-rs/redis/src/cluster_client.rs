@@ -53,6 +53,7 @@ struct BuilderParams {
     cache: Option<Arc<dyn GlideCache>>,
     server_assisted_cache: bool,
     address_resolver: Option<Arc<dyn AddressResolver>>,
+    recovery_requests_queue_size: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -160,6 +161,7 @@ pub struct ClusterParams {
     pub(crate) server_assisted_cache: bool,
     /// Optional callback for resolving addresses before connection.
     pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
+    pub(crate) recovery_requests_queue_size: Option<u32>,
 }
 
 impl ClusterParams {
@@ -202,6 +204,7 @@ impl ClusterParams {
             cache: value.cache,
             server_assisted_cache: value.server_assisted_cache,
             address_resolver: value.address_resolver,
+            recovery_requests_queue_size: value.recovery_requests_queue_size,
         })
     }
 }
@@ -235,6 +238,7 @@ impl ClusterParams {
             cache: None,
             server_assisted_cache: false,
             address_resolver: None,
+            recovery_requests_queue_size: None, // will use default of 1000 in buffer_pending_requests
         }
     }
 }
@@ -625,6 +629,15 @@ impl ClusterClientBuilder {
     /// Sets whether server-assisted client-side caching (CLIENT TRACKING) is enabled.
     pub fn server_assisted_cache(mut self, enabled: bool) -> ClusterClientBuilder {
         self.builder_params.server_assisted_cache = enabled;
+        self
+    }
+
+    /// Sets the maximum number of requests to buffer in the recovery queue when a cluster
+    /// reconnect is in progress. Buffered requests are retried transparently after
+    /// reconnection. Requests beyond this limit are failed immediately to provide bounded
+    /// memory usage. Defaults to 1000 if not set.
+    pub fn recovery_requests_queue_size(mut self, size: u32) -> ClusterClientBuilder {
+        self.builder_params.recovery_requests_queue_size = Some(size);
         self
     }
 

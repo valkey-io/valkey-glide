@@ -691,7 +691,8 @@ func (config *ClientConfiguration) GetSubscription() *StandaloneSubscriptionConf
 // used.
 type ClusterClientConfiguration struct {
 	baseClientConfiguration
-	subscriptionConfig *ClusterSubscriptionConfig
+	subscriptionConfig        *ClusterSubscriptionConfig
+	recoveryRequestsQueueSize *uint32
 	AdvancedClusterClientConfiguration
 }
 
@@ -757,6 +758,10 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		if err := applyTlsConfig(config.AdvancedClusterClientConfiguration.tlsConfig, request); err != nil {
 			return nil, err
 		}
+	}
+
+	if config.recoveryRequestsQueueSize != nil {
+		request.RecoveryRequestsQueueSize = config.recoveryRequestsQueueSize
 	}
 
 	return request, nil
@@ -907,6 +912,16 @@ func (config *ClusterClientConfiguration) WithClientCircuitBreaker(
 // stuck in case of a queue backlog. If not set, a default value of 1000 will be used.
 func (config *ClusterClientConfiguration) WithInflightRequestsLimit(limit uint32) *ClusterClientConfiguration {
 	config.inflightRequestsLimit = limit
+	return config
+}
+
+// WithRecoveryRequestsQueueSize sets the maximum number of requests to buffer in the
+// recovery queue when a cluster reconnect is in progress. Buffered requests are retried
+// transparently after reconnection. Requests beyond this limit are failed immediately.
+// Set to 0 to disable the recovery queue and use fail-fast behavior.
+// If not set, a default value of 1000 will be used.
+func (config *ClusterClientConfiguration) WithRecoveryRequestsQueueSize(size uint32) *ClusterClientConfiguration {
+	config.recoveryRequestsQueueSize = &size
 	return config
 }
 
