@@ -22,48 +22,52 @@ jobs:
             - name: Fetch relevant branches
               id: get-branches
               run: |
-                  git fetch --tags --quiet
-
                   # Start with main (always included)
                   branches="main"
+                  skipped=""
 
-                  # Get all release-* branches and filter out fully released ones
-                  for branch in $(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-/ {print $NF}'); do
+                  # Only match release-X.Y branches (not release-2.3-update, etc.)
+                  # KEEP IN SYNC: branch pattern must match the release train naming convention
+                  for branch in $(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-[0-9]+\.[0-9]+$/ {print $NF}'); do
                     # Extract version number from branch name (e.g., release-2.5 -> 2.5)
                     version=${branch#release-}
 
-                    # Check if a final (non-RC) tag exists for this branch (e.g., v2.5.0, v2.5.1)
-                    latest_final_tag=$(git tag -l "v${version}.*" | grep -v "\-rc" | sort -V | tail -1)
+                    # Check if a final (non-RC, non-suffixed) tag exists for this branch
+                    # Only match plain semver tags (e.g., v2.5.0) not v2.2.9-java etc.
+                    latest_final_tag=$(git tag -l "v${version}.*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
 
                     if [ -z "$latest_final_tag" ]; then
-                      # No final release tag yet - branch is still active
+                      # No final release tag yet - branch is still active (pre-release)
                       branches="$branches $branch"
                       continue
                     fi
 
                     # Check if there are commits on the branch after the latest final tag
                     tag_commit=$(git rev-list -n 1 "$latest_final_tag")
-                    branch_head=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+                    branch_head=$(git rev-parse "origin/$branch")
 
                     if [ "$tag_commit" = "$branch_head" ]; then
-                      echo "Skipping $branch: already released ($latest_final_tag) with no new commits"
+                      skipped="$skipped $branch($latest_final_tag:no-new-commits)"
                       continue
                     fi
 
                     # Check if commits after the tag are only ORT attribution updates
-                    # If all post-tag commits are from ort-bot, the branch is effectively dormant
-                    non_ort_commits=$(git log --format="%ae %s" "$latest_final_tag".."origin/$branch" 2>/dev/null \
-                      | grep -v "valkey-glide@lists.valkey.io" \
-                      | grep -v "Updated attribution files" || true)
+                    # If all post-tag commits are automated ORT updates, the branch is effectively dormant
+                    # KEEP IN SYNC WITH ort.yml commit-message (currently "Updated attribution files")
+                    non_ort_commits=$(git log --format="%s" "$latest_final_tag".."origin/$branch" \
+                      | grep -Ev '^Updated attribution files for commit [0-9a-f]' || true)
 
                     if [ -z "$non_ort_commits" ]; then
-                      echo "Skipping $branch: only ORT commits after $latest_final_tag"
+                      skipped="$skipped $branch($latest_final_tag:ort-only)"
                     else
                       branches="$branches $branch"
                     fi
                   done
 
                   echo "Active branches for ORT check: $branches"
+                  if [ -n "$skipped" ]; then
+                    echo "Skipped branches:$skipped"
+                  fi
                   echo "branches=$branches" >> $GITHUB_OUTPUT
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
