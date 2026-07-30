@@ -767,14 +767,14 @@ impl GlideOpenTelemetry {
     ///
     /// [`leak_span`]: GlideOpenTelemetry::leak_span
     /// [`is_span_pointer_valid`]: GlideOpenTelemetry::is_span_pointer_valid
-    pub unsafe fn drop_span_ptr(span_ptr: u64) -> Result<(), TraceError> {
+    pub unsafe fn drop_span_ptr(span_ptr: u64) -> Result<(), GlideOTELError> {
         // A null pointer means "no span was created" (e.g. sampling skipped it); not an error.
         if span_ptr == 0 {
             return Ok(());
         }
 
         if !unsafe { Self::is_span_pointer_valid(span_ptr) } {
-            return Err(TraceError::from(format!(
+            return Err(GlideOTELError::TraceError(format!(
                 "Invalid span pointer: 0x{span_ptr:x} failed validation checks"
             )));
         }
@@ -785,7 +785,7 @@ impl GlideOpenTelemetry {
         });
 
         result.map_err(|_| {
-            TraceError::from(format!(
+            GlideOTELError::TraceError(format!(
                 "Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer"
             ))
         })
