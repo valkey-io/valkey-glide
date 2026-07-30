@@ -463,9 +463,11 @@ export async function loadClientCertificateAndKeyFromFile(
 function encodePem(value: Buffer | string, fieldName: string): Uint8Array {
     const buffer =
         typeof value === "string" ? Buffer.from(value, "utf-8") : value;
+
     if (buffer.length === 0) {
         throw new ConfigurationError(`${fieldName} must not be empty.`);
     }
+
     return new Uint8Array(buffer);
 }
 
