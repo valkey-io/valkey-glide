@@ -452,15 +452,20 @@ export async function loadClientCertificateAndKeyFromFile(
 }
 
 /**
- * Encodes PEM input for the connection request. String values are UTF-8
- * encoded; Buffer values pass through. Empty and malformed PEM material are
- * the core's responsibility to report.
+ * Encodes PEM input for the connection request and rejects empty material.
+ * String values are UTF-8 encoded; Buffer values pass through. Empty content
+ * has to be caught here: proto3 `bytes` treats empty as unset, so a request
+ * with both `certBytes` and `keyBytes` empty would silently downgrade to
+ * server-auth-only TLS instead of surfacing a mTLS configuration error.
  *
  * @internal
  */
-function encodePem(value: Buffer | string): Uint8Array {
+function encodePem(value: Buffer | string, fieldName: string): Uint8Array {
     const buffer =
         typeof value === "string" ? Buffer.from(value, "utf-8") : value;
+    if (buffer.length === 0) {
+        throw new ConfigurationError(`${fieldName} must not be empty.`);
+    }
     return new Uint8Array(buffer);
 }
 
@@ -502,8 +507,14 @@ function applyMutualTls(
 ): void {
     switch (mtls.kind) {
         case "bytes": {
-            request.clientCert = encodePem(mtls.certBytes);
-            request.clientKey = encodePem(mtls.keyBytes);
+            request.clientCert = encodePem(
+                mtls.certBytes,
+                "mutualTls.certBytes",
+            );
+            request.clientKey = encodePem(
+                mtls.keyBytes,
+                "mutualTls.keyBytes",
+            );
             return;
         }
 

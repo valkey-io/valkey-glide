@@ -448,6 +448,57 @@ describe('mutualTls kind: "bytes"', () => {
             "TLS advanced configuration cannot be set",
         );
     });
+
+    // Regression guard. proto3 `bytes` treats an empty value as unset, so if
+    // both cert and key were sent empty the core would see no mTLS material
+    // and quietly fall back to server-auth-only TLS instead of erroring.
+    it("rejects both certBytes and keyBytes empty", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            certBytes: "",
+                            keyBytes: Buffer.alloc(0),
+                        },
+                    },
+                }),
+            "mutualTls.certBytes must not be empty",
+        );
+    });
+
+    it("rejects an empty certBytes", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            certBytes: "",
+                            keyBytes: CLIENT_KEY_PEM,
+                        },
+                    },
+                }),
+            "mutualTls.certBytes must not be empty",
+        );
+    });
+
+    it("rejects an empty keyBytes", async () => {
+        await expectConfigurationError(
+            () =>
+                new TlsConfigProbe().buildTlsRequest({
+                    tlsAdvancedConfiguration: {
+                        mutualTls: {
+                            kind: "bytes",
+                            certBytes: CLIENT_CERT_PEM,
+                            keyBytes: Buffer.alloc(0),
+                        },
+                    },
+                }),
+            "mutualTls.keyBytes must not be empty",
+        );
+    });
 });
 
 describe('mutualTls kind: "path" (implicit reload)', () => {
