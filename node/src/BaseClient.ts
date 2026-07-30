@@ -9804,12 +9804,8 @@ export class BaseClient {
 
     /**
      * @internal
-     *
-     * TODO(#6669): only the TLS portion of this transformation is tested. It is
-     * `protected` and composed with `super` in the subclasses, so there is no
-     * seam to assert on the produced request. Hoisting the builder to module
-     * level would make the remaining fields testable without a mock client.
      */
+    // TODO #6669: move to module level so the request is testable
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
