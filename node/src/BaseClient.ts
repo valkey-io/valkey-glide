@@ -370,11 +370,12 @@ export type MutualTls =
       };
 
 /**
- * Upper bound for {@link MutualTls.reloadIntervalSeconds}. The wire field is a
- * protobuf `uint32`; values above this silently truncate on encode (protobufjs
- * casts through `value >>> 0`), so an out-of-range value would be lost before
- * the core ever sees it. Rejecting up front keeps the misconfiguration visible
- * instead of quietly changing the user's requested cadence.
+ * Maximum allowed value for {@link MutualTls.reloadIntervalSeconds}:
+ * `4_294_967_295` (`2 ** 32 - 1`), the largest `uint32`. The corresponding
+ * protobuf field is `uint32`, and protobufjs casts through `value >>> 0`
+ * when the request is built, so a larger value would silently truncate
+ * before reaching the core. Rejecting up front keeps the user's requested
+ * cadence visible instead of quietly changing it.
  *
  * @internal
  */
@@ -451,9 +452,9 @@ export async function loadClientCertificateAndKeyFromFile(
 }
 
 /**
- * Encodes PEM input for the wire. String values are UTF-8 encoded; Buffer
- * values pass through. Emptiness and structural validity of the PEM material
- * are the core's responsibility.
+ * Encodes PEM input for the connection request. String values are UTF-8
+ * encoded; Buffer values pass through. Empty and malformed PEM material are
+ * the core's responsibility to report.
  *
  * @internal
  */
@@ -464,10 +465,10 @@ function encodePem(value: Buffer | string): Uint8Array {
 }
 
 /**
- * Validates the optional reload interval. protobufjs encodes uint32 via
- * `value >>> 0`, so an out-of-range or non-integer value would silently
- * truncate before reaching the core. The core cannot validate what it never
- * receives, so the check stays on the client side.
+ * Validates the optional reload interval. protobufjs casts `uint32` through
+ * `value >>> 0` when the request is built, so an out-of-range or non-integer
+ * value would silently truncate before reaching the core. The core cannot
+ * validate what it never receives, so this check has to stay client-side.
  *
  * @internal
  */
@@ -488,10 +489,10 @@ function validateReloadInterval(value: number | undefined): void {
 }
 
 /**
- * Writes a {@link MutualTls} value into the connection request. Wire fields:
- * `client_cert`/`client_key` (proto 22/23) for the byte-based variant;
- * `client_cert_path`/`client_key_path`/`cert_reload` (proto 31/32/33) for the
- * path-based variant.
+ * Writes a {@link MutualTls} value into the connection request. The byte
+ * variant sets `client_cert` / `client_key` (proto fields 22/23); the path
+ * variant sets `client_cert_path` / `client_key_path` / `cert_reload`
+ * (proto fields 31/32/33).
  *
  * @internal
  */
@@ -518,12 +519,10 @@ function applyMutualTls(
         }
 
         default: {
-            // Exhaustiveness guard: adding a new MutualTls variant without a
-            // matching case makes `mtls` non-`never` and fails to compile
-            // here. The cast in the throw exists because TS has narrowed
-            // `mtls` to `never` at this point, so `mtls.kind` is not a
-            // legal expression; the runtime throw defends untyped JS callers
-            // that pass an unknown discriminant.
+            // Compile-time: assigning `mtls` to `never` fails to build if a
+            // new variant is added without a case. Runtime: the throw only
+            // fires for an untyped JS caller supplying an unknown `kind`,
+            // and the cast is needed because `mtls` is narrowed to `never`.
             const _exhaustive: never = mtls;
             void _exhaustive;
             throw new ConfigurationError(

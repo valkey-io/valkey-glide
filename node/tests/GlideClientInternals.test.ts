@@ -487,9 +487,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         });
     });
 
-    // 2**32 - 1 is the largest value the protobuf uint32 wire field holds.
-    // Accepting it (and rejecting 2**32 below) proves the bound is inclusive
-    // and closes the silent-truncation hole exactly at the edge.
+    // 2**32 - 1 is the largest value the protobuf uint32 field holds.
+    // Accepting it (and rejecting 2**32 below) proves the bound is inclusive.
     it("accepts reloadIntervalSeconds at the uint32 maximum", async () => {
         const maxUint32 = 2 ** 32 - 1;
         const request = await new TlsConfigProbe().buildTlsRequest({
