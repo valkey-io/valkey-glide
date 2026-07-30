@@ -81,6 +81,9 @@ describe("NAPI valueFromSplitPointer", () => {
     });
 });
 
+// TODO(#6669): these tests read back a field they just set on a config
+// literal, so the request builder is never invoked. Replace them with
+// assertions on the created ConnectionRequest.
 describe("GlideClusterClientConfiguration", () => {
     it("should set refreshTopologyFromInitialNodes to true", () => {
         const config: GlideClusterClientConfiguration = {
@@ -345,6 +348,10 @@ const { TlsMode } = connection_request;
 // Runs the TLS advanced-configuration block against a bare request object
 // pre-seeded with `tlsMode`. Mirrors how `configureAdvancedConfigurationBase`
 // invokes it on a real client, minus the connection setup.
+//
+// TODO(#6669): because `tlsMode` is seeded here rather than derived from
+// `useTLS`, these tests cannot confirm the client actually reaches this code.
+// Covered once config-to-request tests build a full request.
 const buildTlsRequest = (
     tls: Parameters<typeof applyTlsAdvancedConfiguration>[0],
     tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
