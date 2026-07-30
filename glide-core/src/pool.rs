@@ -522,10 +522,10 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 /// Mark a borrowed client as currently executing a blocking command.
 /// The abandon monitor will skip this client until unmarked.
 /// This is a no-op if the client is not found in any pool's `in_use` map.
-pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) {
+pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) -> bool {
     let pool_arc = match get_pool(pool_id) {
         Some(arc) => arc,
-        None => return,
+        None => return false,
     };
     // Use try_lock to avoid blocking the command dispatch path.
     // If the pool is locked (e.g., during release), skip — the client
@@ -534,15 +534,17 @@ pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) {
     if let Ok(pool) = pool_arc.try_lock() {
         if let Some(entry) = pool.in_use.get(&client_id) {
             entry.value().is_blocking.store(blocking, Ordering::Release);
-        }
-        // When unmarking (command completed), refresh borrowed_at so the client
-        // isn't instantly reclaimable after a long-running blocking command.
-        if !blocking {
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
-                entry.value_mut().borrowed_at = Some(Instant::now());
+            // When unmarking (command completed), refresh borrowed_at so the client
+            // isn't instantly reclaimable after a long-running blocking command.
+            if !blocking {
+                if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+                    entry.value_mut().borrowed_at = Some(Instant::now());
+                }
             }
+            return true;
         }
     }
+    false
 }
 
 /// Get the `is_blocking` flag Arc for a client (for use by the command dispatch path).

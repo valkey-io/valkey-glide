@@ -3558,8 +3558,9 @@ unsafe fn execute_command(
         .map(|entry| *entry.value())
         .and_then(|(pool_id, client_id)| {
             glide_core::pool::refresh_client_activity(pool_id, client_id);
-            if glide_core::client::is_blocking_command(&cmd) {
-                glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+            if glide_core::client::is_blocking_command(&cmd)
+                && glide_core::pool::mark_client_blocking(pool_id, client_id, true)
+            {
                 Some((pool_id, client_id))
             } else {
                 None

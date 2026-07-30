@@ -1810,8 +1810,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     .map(|entry| *entry.value())
                     .and_then(|pool_id| {
                         glide_core::pool::refresh_client_activity(pool_id, handle_id);
-                        if glide_core::client::is_blocking_command(&cmd) {
-                            glide_core::pool::mark_client_blocking(pool_id, handle_id, true);
+                        if glide_core::client::is_blocking_command(&cmd)
+                            && glide_core::pool::mark_client_blocking(pool_id, handle_id, true)
+                        {
                             Some(pool_id)
                         } else {
                             None
