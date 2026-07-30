@@ -7,14 +7,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-    AdvancedBaseClientConfiguration,
     BaseClient,
     ConfigurationError,
-    GlideClient,
-    GlideClientConfiguration,
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
+    applyTlsAdvancedConfiguration,
     loadClientCertificateAndKeyFromFile,
     loadRootCertificatesFromFile,
     MutualTls,
@@ -344,32 +342,17 @@ describe("createMigrate (multi-key) validation", () => {
 
 const { TlsMode } = connection_request;
 
-// Standalone-client probe: builds the connection request through the real
-// GlideClient.createClientRequest path (which invokes
-// configureAdvancedConfigurationBase), so the tests exercise the same wiring a
-// live standalone client hits, without opening a socket.
-class TlsConfigProbe extends GlideClient {
-    public constructor() {
-        // No options => no connection; createClientRequest is a pure builder.
-        super();
-    }
-
-    public async buildTlsRequest(
-        advancedConfiguration: AdvancedBaseClientConfiguration,
-        tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
-    ): Promise<connection_request.IConnectionRequest> {
-        // Translate the probe's (advancedConfiguration, tlsMode) inputs into a
-        // minimal standalone config so the real builder derives tlsMode itself:
-        // NoTls => useTLS false; otherwise useTLS true, and InsecureTls is
-        // reached via tlsAdvancedConfiguration.insecure rather than being forced.
-        const options: GlideClientConfiguration = {
-            addresses: [{ host: "localhost", port: 6379 }],
-            useTLS: tlsMode !== TlsMode.NoTls,
-            advancedConfiguration,
-        };
-        return this.createClientRequest(options);
-    }
-}
+// Runs the TLS advanced-configuration block against a bare request object
+// pre-seeded with `tlsMode`. Mirrors how `configureAdvancedConfigurationBase`
+// invokes it on a real client, minus the connection setup.
+const buildTlsRequest = (
+    tls: Parameters<typeof applyTlsAdvancedConfiguration>[0],
+    tlsMode: connection_request.TlsMode = TlsMode.SecureTls,
+): connection_request.IConnectionRequest => {
+    const request: connection_request.IConnectionRequest = { tlsMode };
+    applyTlsAdvancedConfiguration(tls, request);
+    return request;
+};
 
 const CLIENT_CERT_PEM =
     "-----BEGIN CERTIFICATE-----\nMIICLIENTCERT\n-----END CERTIFICATE-----";
@@ -378,24 +361,29 @@ const CLIENT_KEY_PEM =
 const ROOT_CERT_PEM =
     "-----BEGIN CERTIFICATE-----\nMIICROOTCERT\n-----END CERTIFICATE-----";
 
-const expectConfigurationError = async (
-    build: () => Promise<unknown>,
+const expectConfigurationError = (
+    build: () => unknown,
     messageSubstring: string,
-): Promise<void> => {
-    const err = await build().catch((e) => e);
+): void => {
+    let err: unknown;
+
+    try {
+        build();
+    } catch (e) {
+        err = e;
+    }
+
     expect(err).toBeInstanceOf(ConfigurationError);
     expect((err as Error).message).toContain(messageSubstring);
 };
 
 describe('mutualTls kind: "bytes"', () => {
-    it("populates clientCert and clientKey from string PEM inputs", async () => {
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                mutualTls: {
-                    kind: "bytes",
-                    certBytes: CLIENT_CERT_PEM,
-                    keyBytes: CLIENT_KEY_PEM,
-                },
+    it("populates clientCert and clientKey from string PEM inputs", () => {
+        const request = buildTlsRequest({
+            mutualTls: {
+                kind: "bytes",
+                certBytes: CLIENT_CERT_PEM,
+                keyBytes: CLIENT_KEY_PEM,
             },
         });
 
@@ -408,21 +396,17 @@ describe('mutualTls kind: "bytes"', () => {
         expect(request.certReload).toBeFalsy();
         expect(request.clientCertPath).toBeFalsy();
         expect(request.clientKeyPath).toBeFalsy();
-        // Confirms the request came through the standalone builder.
-        expect(request.clusterModeEnabled).toBeFalsy();
     });
 
-    it("populates clientCert and clientKey from Buffer PEM inputs", async () => {
+    it("populates clientCert and clientKey from Buffer PEM inputs", () => {
         const certBuffer = Buffer.from(CLIENT_CERT_PEM, "utf-8");
         const keyBuffer = Buffer.from(CLIENT_KEY_PEM, "utf-8");
 
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                mutualTls: {
-                    kind: "bytes",
-                    certBytes: certBuffer,
-                    keyBytes: keyBuffer,
-                },
+        const request = buildTlsRequest({
+            mutualTls: {
+                kind: "bytes",
+                certBytes: certBuffer,
+                keyBytes: keyBuffer,
             },
         });
 
@@ -430,17 +414,15 @@ describe('mutualTls kind: "bytes"', () => {
         expect(request.clientKey).toEqual(new Uint8Array(keyBuffer));
     });
 
-    it("rejects mutualTls when TLS is disabled on the base connection", async () => {
-        await expectConfigurationError(
+    it("rejects mutualTls when TLS is disabled on the base connection", () => {
+        expectConfigurationError(
             () =>
-                new TlsConfigProbe().buildTlsRequest(
+                buildTlsRequest(
                     {
-                        tlsAdvancedConfiguration: {
-                            mutualTls: {
-                                kind: "bytes",
-                                certBytes: CLIENT_CERT_PEM,
-                                keyBytes: CLIENT_KEY_PEM,
-                            },
+                        mutualTls: {
+                            kind: "bytes",
+                            certBytes: CLIENT_CERT_PEM,
+                            keyBytes: CLIENT_KEY_PEM,
                         },
                     },
                     TlsMode.NoTls,
@@ -452,48 +434,42 @@ describe('mutualTls kind: "bytes"', () => {
     // Regression guard. proto3 `bytes` treats an empty value as unset, so if
     // both cert and key were sent empty the core would see no mTLS material
     // and quietly fall back to server-auth-only TLS instead of erroring.
-    it("rejects both certBytes and keyBytes empty", async () => {
-        await expectConfigurationError(
+    it("rejects both certBytes and keyBytes empty", () => {
+        expectConfigurationError(
             () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            certBytes: "",
-                            keyBytes: Buffer.alloc(0),
-                        },
+                buildTlsRequest({
+                    mutualTls: {
+                        kind: "bytes",
+                        certBytes: "",
+                        keyBytes: Buffer.alloc(0),
                     },
                 }),
             "mutualTls.certBytes must not be empty",
         );
     });
 
-    it("rejects an empty certBytes", async () => {
-        await expectConfigurationError(
+    it("rejects an empty certBytes", () => {
+        expectConfigurationError(
             () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            certBytes: "",
-                            keyBytes: CLIENT_KEY_PEM,
-                        },
+                buildTlsRequest({
+                    mutualTls: {
+                        kind: "bytes",
+                        certBytes: "",
+                        keyBytes: CLIENT_KEY_PEM,
                     },
                 }),
             "mutualTls.certBytes must not be empty",
         );
     });
 
-    it("rejects an empty keyBytes", async () => {
-        await expectConfigurationError(
+    it("rejects an empty keyBytes", () => {
+        expectConfigurationError(
             () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "bytes",
-                            certBytes: CLIENT_CERT_PEM,
-                            keyBytes: Buffer.alloc(0),
-                        },
+                buildTlsRequest({
+                    mutualTls: {
+                        kind: "bytes",
+                        certBytes: CLIENT_CERT_PEM,
+                        keyBytes: Buffer.alloc(0),
                     },
                 }),
             "mutualTls.keyBytes must not be empty",
@@ -518,14 +494,12 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it("sets the path fields and enables reload with default cadence", async () => {
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                mutualTls: {
-                    kind: "path",
-                    certPath,
-                    keyPath,
-                },
+    it("sets the path fields and enables reload with default cadence", () => {
+        const request = buildTlsRequest({
+            mutualTls: {
+                kind: "path",
+                certPath,
+                keyPath,
             },
         });
 
@@ -537,15 +511,13 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         expect(request.clientKey).toBeFalsy();
     });
 
-    it("propagates a custom reloadIntervalSeconds", async () => {
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                mutualTls: {
-                    kind: "path",
-                    certPath,
-                    keyPath,
-                    reloadIntervalSeconds: 120,
-                },
+    it("propagates a custom reloadIntervalSeconds", () => {
+        const request = buildTlsRequest({
+            mutualTls: {
+                kind: "path",
+                certPath,
+                keyPath,
+                reloadIntervalSeconds: 120,
             },
         });
 
@@ -557,16 +529,14 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
 
     // 2**32 - 1 is the largest value the protobuf uint32 field holds.
     // Accepting it (and rejecting 2**32 below) proves the bound is inclusive.
-    it("accepts reloadIntervalSeconds at the uint32 maximum", async () => {
+    it("accepts reloadIntervalSeconds at the uint32 maximum", () => {
         const maxUint32 = 2 ** 32 - 1;
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                mutualTls: {
-                    kind: "path",
-                    certPath,
-                    keyPath,
-                    reloadIntervalSeconds: maxUint32,
-                },
+        const request = buildTlsRequest({
+            mutualTls: {
+                kind: "path",
+                certPath,
+                keyPath,
+                reloadIntervalSeconds: maxUint32,
             },
         });
 
@@ -587,17 +557,15 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
 
     it.each(invalidIntervals)(
         "rejects reloadIntervalSeconds when %s",
-        async (_label, value) => {
-            await expectConfigurationError(
+        (_label, value) => {
+            expectConfigurationError(
                 () =>
-                    new TlsConfigProbe().buildTlsRequest({
-                        tlsAdvancedConfiguration: {
-                            mutualTls: {
-                                kind: "path",
-                                certPath,
-                                keyPath,
-                                reloadIntervalSeconds: value,
-                            },
+                    buildTlsRequest({
+                        mutualTls: {
+                            kind: "path",
+                            certPath,
+                            keyPath,
+                            reloadIntervalSeconds: value,
                         },
                     }),
                 "mutualTls.reloadIntervalSeconds must be a positive integer",
@@ -605,17 +573,15 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         },
     );
 
-    it("names the uint32 maximum when reloadIntervalSeconds is too large", async () => {
-        await expectConfigurationError(
+    it("names the uint32 maximum when reloadIntervalSeconds is too large", () => {
+        expectConfigurationError(
             () =>
-                new TlsConfigProbe().buildTlsRequest({
-                    tlsAdvancedConfiguration: {
-                        mutualTls: {
-                            kind: "path",
-                            certPath,
-                            keyPath,
-                            reloadIntervalSeconds: 2 ** 32,
-                        },
+                buildTlsRequest({
+                    mutualTls: {
+                        kind: "path",
+                        certPath,
+                        keyPath,
+                        reloadIntervalSeconds: 2 ** 32,
                     },
                 }),
             "no greater than 4294967295",
@@ -624,20 +590,17 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
 });
 
 describe("mutualTls unsupported variant fallthrough", () => {
-    it("rejects an unknown kind and reports the discriminant only", async () => {
+    it("rejects an unknown kind and reports the discriminant only", () => {
         const bogus = {
             kind: "future" as const,
             certBytes: "SENSITIVE-PEM-BYTES",
             keyBytes: "SENSITIVE-KEY-BYTES",
         } as unknown as MutualTls;
 
-        const probe = new TlsConfigProbe();
         let thrown: unknown;
 
         try {
-            await probe.buildTlsRequest({
-                tlsAdvancedConfiguration: { mutualTls: bogus },
-            });
+            buildTlsRequest({ mutualTls: bogus });
         } catch (e) {
             thrown = e;
         }
@@ -652,11 +615,9 @@ describe("mutualTls unsupported variant fallthrough", () => {
 });
 
 describe("mutualTls interaction with existing TLS knobs", () => {
-    it("leaves rootCertificates handling unchanged when mutualTls is absent", async () => {
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                rootCertificates: ROOT_CERT_PEM,
-            },
+    it("leaves rootCertificates handling unchanged when mutualTls is absent", () => {
+        const request = buildTlsRequest({
+            rootCertificates: ROOT_CERT_PEM,
         });
 
         expect(request.rootCerts).toEqual([
@@ -667,15 +628,13 @@ describe("mutualTls interaction with existing TLS knobs", () => {
         expect(request.certReload).toBeFalsy();
     });
 
-    it("flips to InsecureTls when insecure is true, without touching mTLS fields", async () => {
-        const request = await new TlsConfigProbe().buildTlsRequest({
-            tlsAdvancedConfiguration: {
-                insecure: true,
-                mutualTls: {
-                    kind: "bytes",
-                    certBytes: CLIENT_CERT_PEM,
-                    keyBytes: CLIENT_KEY_PEM,
-                },
+    it("flips to InsecureTls when insecure is true, without touching mTLS fields", () => {
+        const request = buildTlsRequest({
+            insecure: true,
+            mutualTls: {
+                kind: "bytes",
+                certBytes: CLIENT_CERT_PEM,
+                keyBytes: CLIENT_KEY_PEM,
             },
         });
 

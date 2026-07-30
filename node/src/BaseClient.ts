@@ -545,6 +545,42 @@ function applyMutualTls(
 }
 
 /**
+ * Applies the `tlsAdvancedConfiguration` block onto the connection request:
+ * the `useTLS`-off guard, the `insecure` flag, `rootCertificates`, and the
+ * mTLS dispatch.
+ *
+ * @internal
+ */
+export function applyTlsAdvancedConfiguration(
+    tls: NonNullable<
+        AdvancedBaseClientConfiguration["tlsAdvancedConfiguration"]
+    >,
+    request: connection_request.IConnectionRequest,
+): void {
+    if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        throw new ConfigurationError(
+            "TLS advanced configuration cannot be set when useTLS is disabled.",
+        );
+    }
+
+    if (tls.insecure) {
+        request.tlsMode = connection_request.TlsMode.InsecureTls;
+    }
+
+    if (tls.rootCertificates) {
+        const certData =
+            typeof tls.rootCertificates === "string"
+                ? Buffer.from(tls.rootCertificates, "utf-8")
+                : tls.rootCertificates;
+        request.rootCerts = [new Uint8Array(certData)];
+    }
+
+    if (tls.mutualTls !== undefined) {
+        applyMutualTls(tls.mutualTls, request);
+    }
+}
+
+/**
  * Enum representing the different types of decoders.
  */
 export enum Decoder {
@@ -9948,42 +9984,10 @@ export class BaseClient {
         }
 
         if (options.tlsAdvancedConfiguration) {
-            this.applyTlsAdvancedConfiguration(
+            applyTlsAdvancedConfiguration(
                 options.tlsAdvancedConfiguration,
                 request,
             );
-        }
-    }
-
-    /**
-     * @internal
-     */
-    private applyTlsAdvancedConfiguration(
-        tls: NonNullable<
-            AdvancedBaseClientConfiguration["tlsAdvancedConfiguration"]
-        >,
-        request: connection_request.IConnectionRequest,
-    ): void {
-        if (request.tlsMode === connection_request.TlsMode.NoTls) {
-            throw new ConfigurationError(
-                "TLS advanced configuration cannot be set when useTLS is disabled.",
-            );
-        }
-
-        if (tls.insecure) {
-            request.tlsMode = connection_request.TlsMode.InsecureTls;
-        }
-
-        if (tls.rootCertificates) {
-            const certData =
-                typeof tls.rootCertificates === "string"
-                    ? Buffer.from(tls.rootCertificates, "utf-8")
-                    : tls.rootCertificates;
-            request.rootCerts = [new Uint8Array(certData)];
-        }
-
-        if (tls.mutualTls !== undefined) {
-            applyMutualTls(tls.mutualTls, request);
         }
     }
 
