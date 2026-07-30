@@ -10045,6 +10045,14 @@ export class BaseClient {
     };
 
     /**
+     * Returns the internal client ID used by the Rust core for scope/pool registration.
+     * @internal
+     */
+    public getClientId(): number {
+        return this.clientHandle?.clientId ?? -1;
+    }
+
+    /**
      *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.

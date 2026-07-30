@@ -538,25 +538,42 @@ jobs:
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
               run: |
+                  # Install the exact version this workflow just published, NOT the dist-tag
+                  # (latest/next). The dist-tag pointer itself propagates across npm edges with lag,
+                  # so installing by tag can resolve the previous release and pass without ever
+                  # exercising the newly published package.
+                  #
                   # The platform-specific optional dependency (e.g. @valkey/valkey-glide-linux-x64-gnu)
-                  # can lag behind the base package on the npm registry for a short window right after
-                  # publish. When that happens npm silently skips the optional dependency and the test
-                  # fails with "Cannot find module". Retry the install until the native module resolves.
-                  NPM_TAG="${{ needs.get-build-parameters.outputs.npm_tag }}"
+                  # can also lag behind the base package on the npm registry for a short window right
+                  # after publish. When that happens npm silently skips the optional dependency and the
+                  # test fails with "Cannot find module". Retry the install until the native module
+                  # resolves, and assert the installed version matches the published version.
+                  RELEASE_VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
                   MAX_ATTEMPTS=5
                   DELAY=15
                   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
                       rm -rf node_modules package-lock.json
-                      npm install "@valkey/valkey-glide@${NPM_TAG}" --save
-                      if node -e "require('@valkey/valkey-glide')"; then
-                          echo "Native module resolved on attempt ${attempt}."
-                          break
+                      # The install itself is what waits on registry propagation: when the exact
+                      # version is not visible on an npm edge yet, `npm install` exits non-zero
+                      # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
+                      # a transient miss is retried instead of aborting the step on the first attempt.
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                          # Read the version from the installed package.json on disk. The package's
+                          # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
+                          # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
+                          INSTALLED_VERSION=$(jq -r .version node_modules/@valkey/valkey-glide/package.json 2>/dev/null || true)
+                          if [ "${INSTALLED_VERSION}" = "${RELEASE_VERSION}" ] && node -e "require('@valkey/valkey-glide')"; then
+                              echo "Version ${RELEASE_VERSION} installed and native module resolved on attempt ${attempt}."
+                              break
+                          fi
+                      else
+                          INSTALLED_VERSION=""
                       fi
                       if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
-                          echo "::error::@valkey/valkey-glide native module still unresolved after ${MAX_ATTEMPTS} attempts."
+                          echo "::error::@valkey/valkey-glide@${RELEASE_VERSION} not fully installable after ${MAX_ATTEMPTS} attempts (installed version: '${INSTALLED_VERSION:-none}')."
                           exit 1
                       fi
-                      echo "Attempt ${attempt}/${MAX_ATTEMPTS}: native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
+                      echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
                   npm run build:utils

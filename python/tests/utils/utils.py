@@ -2215,3 +2215,32 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
         assert stats.db_dict_rehashing_count is None
         assert stats.overhead_db_hashtable_lut is None
         assert stats.overhead_db_hashtable_rehashing is None
+
+
+def get_standalone_address() -> NodeAddress:
+    """Get the standalone server address from conftest (CI) or fallback to localhost.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        addr = cluster.nodes_addr[0]
+        return NodeAddress(addr.host, addr.port)
+    except (AttributeError, IndexError):
+        return NodeAddress("localhost", 6379)
+
+
+def get_cluster_addresses() -> list:
+    """Get the cluster server addresses from conftest (CI) or fallback to localhost:7000.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        return [NodeAddress(addr.host, addr.port) for addr in cluster.nodes_addr]
+    except (AttributeError, IndexError):
+        return [NodeAddress("localhost", 7000)]

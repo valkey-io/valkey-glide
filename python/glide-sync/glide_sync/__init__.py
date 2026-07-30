@@ -175,7 +175,9 @@ from glide_shared import (
     json_batch,
 )
 
+from .client_pool import ClientPool, PoolConfig
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from .isolated_scope import IsolatedScope
 from .logger import Level as LogLevel
 from .logger import Logger
 from .monitor_client import MonitorClient
@@ -193,6 +195,11 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Pool
+    "ClientPool",
+    "PoolConfig",
+    # Scope
+    "IsolatedScope",
     # Internal utilities
     "get_min_compressed_size",
     "Batch",

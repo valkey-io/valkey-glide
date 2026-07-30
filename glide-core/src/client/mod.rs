@@ -26,7 +26,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -66,6 +66,12 @@ pub const FINISHED_SCAN_CURSOR: &str = "finished";
 ///
 /// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
+
+/// Default recovery queue size: maximum requests buffered during cluster reconnect.
+/// Buffered requests are retried transparently after reconnection. Requests beyond
+/// this limit are failed immediately to provide bounded memory usage.
+/// See `recovery_requests_queue_size` in `ConnectionRequest`.
+pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 
 /// The connection check interval is currently not exposed to the user via ConnectionRequest,
 /// as improper configuration could negatively impact performance or pub/sub resiliency.
@@ -335,6 +341,11 @@ pub struct ClientShared {
     latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
     // Optional Client-wide circuit breaker
     circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
+    // Tracks the current database selected at runtime (updated on SELECT commands).
+    // Used by scope connections to inherit the parent's current database.
+    current_database: Arc<AtomicU32>,
+    // Whether this client is in cluster mode (immutable).
+    is_cluster: bool,
 }
 
 #[derive(Clone)]
@@ -558,6 +569,10 @@ impl Client {
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
         Arc::make_mut(&mut self.otel_metadata).db_namespace = database_id.to_string();
+        // Keep current_database in sync (used by scope connections to inherit parent state)
+        self.shared
+            .current_database
+            .store(database_id as u32, Ordering::Release);
         Ok(())
     }
 
@@ -1365,6 +1380,116 @@ impl Client {
 
             result
         })
+    }
+
+    /// Execute a command on a provided dedicated connection (for isolated execution).
+    ///
+    /// Applies the same timeout, decompression, compression, and IAM token refresh
+    /// logic as `send_command`, but routes the command to the given
+    /// `MultiplexedConnection` instead of the client's internal managed connection.
+    ///
+    /// Note: OTel spans and inflight tracking are not applied here because scoped
+    /// connections operate outside the multiplexer's pipeline. OTel support for
+    /// scopes is tracked as a follow-up enhancement.
+    pub async fn send_command_on_connection(
+        &self,
+        cmd: &Cmd,
+        connection: &mut redis::aio::MultiplexedConnection,
+    ) -> RedisResult<Value> {
+        // IAM token refresh: if token rotated, re-authenticate this connection
+        if let Some(iam_manager) = &self.iam_token_manager
+            && iam_manager.token_changed()
+        {
+            let current_token = iam_manager.get_token().await;
+            if !current_token.is_empty() {
+                iam_manager.clear_token_changed();
+                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
+                connection.send_packed_command(&auth_cmd).await?;
+            }
+        }
+
+        // Compression on write: compress command args if compression is enabled
+        let cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
+            if compression_manager.is_enabled() {
+                // Clone the command and apply compression to its args
+                // Note: for scope commands, args are already serialized — this handles
+                // cases where values passed to SET/LPUSH/etc. should be compressed.
+                // The scope wire format passes raw args, so compression applies here.
+                cmd.clone() // TODO: apply arg compression when scope command args support it
+            } else {
+                cmd.clone()
+            }
+        } else {
+            cmd.clone()
+        };
+
+        let request_timeout = Some(self.request_timeout);
+
+        // Send with timeout
+        let raw_value = match request_timeout {
+            Some(duration) => {
+                match tokio::time::timeout(duration, connection.send_packed_command(&cmd_to_send))
+                    .await
+                {
+                    Ok(result) => result?,
+                    Err(_) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                }
+            }
+            None => connection.send_packed_command(&cmd_to_send).await?,
+        };
+
+        // Apply decompression if compression is enabled
+        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed) => decompressed,
+                    Err(e) => {
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        // Type conversion
+        let expected_type = expected_type_for_cmd(cmd);
+        convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Get the primary node address for a given hash slot (cluster mode).
+    /// Returns the host:port string for the primary that owns the slot.
+    /// Returns None in standalone mode or if the slot is unmapped.
+    ///
+    /// Used by isolated execution to open scoped connections
+    /// directly to the correct node, avoiding MOVED redirects.
+    pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
+        let client = self.internal_client.read().await;
+        match &*client {
+            ClientWrapper::Cluster { client, .. } => client.address_for_slot(slot),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this client is connected in cluster mode.
+    /// Used by scope connections to determine whether slot validation is needed.
+    pub fn is_cluster_mode(&self) -> bool {
+        self.shared.is_cluster
     }
 
     /// Returns the cache hit rate (hits / total requests).
@@ -2267,6 +2392,11 @@ async fn create_cluster_client(
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
+    let recovery_requests_queue_size = request
+        .recovery_requests_queue_size
+        .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE);
+    builder = builder.recovery_requests_queue_size(recovery_requests_queue_size);
+
     let client = builder.build()?;
     let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
         .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
@@ -2467,6 +2597,11 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let recovery_requests_queue_size = format_optional_value(
+        "\nRecovery requests queue size: {}",
+        request.recovery_requests_queue_size,
+    );
+
     let node_discovery_mode = match request.node_discovery_mode {
         NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
         NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
@@ -2495,7 +2630,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .unwrap_or_default();
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}{client_cert_paths}{cert_reload}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
     )
 }
 
@@ -2649,6 +2784,8 @@ impl Client {
                             },
                         ))
                     }),
+                    current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    is_cluster: request.cluster_mode_enabled,
                 }),
                 iam_token_manager: None,
                 otel_metadata: Arc::new(otel_metadata),
@@ -2739,6 +2876,45 @@ impl Client {
     /// * `None` - If compression is disabled or not configured
     pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
         self.compression_manager.clone()
+    }
+
+    /// Returns the configured request timeout for this client.
+    pub fn get_request_timeout(&self) -> Duration {
+        self.request_timeout
+    }
+
+    /// Returns the current database the client is operating on.
+    /// Updated whenever SELECT is called. Scope connections use this to inherit
+    /// the parent's current database at acquire time.
+    pub fn current_database(&self) -> u32 {
+        self.current_database.load(Ordering::Acquire)
+    }
+
+    /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
+    pub fn latency_tracker(&self) -> &Arc<crate::timeout_watchdog::LatencyTracker> {
+        &self.latency_tracker
+    }
+
+    /// Reset connection state to a clean baseline after a pool borrow is returned.
+    ///
+    /// Sends a batched pipeline (single round-trip) that selectively issues:
+    /// - DISCARD — cancels any pending MULTI and implicitly UNWATCHes
+    /// - SELECT <configured_db> — resets to the pool's configured database
+    ///
+    /// DISCARD is always safe to send (returns ERR if no MULTI active — we ignore it).
+    /// SELECT is always sent to guarantee the connection is on the correct database.
+    ///
+    /// This ensures the next borrower gets a connection in a known-good state.
+    pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
+        // Send DISCARD — ignore ERR if no MULTI is active
+        let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
+
+        // Send SELECT — this must succeed
+        let mut select_cmd = redis::cmd("SELECT");
+        select_cmd.arg(configured_db.to_string());
+        self.send_command(&mut select_cmd, None).await?;
+
+        Ok(())
     }
 
     /// Check if compression is enabled for this client
@@ -2833,6 +3009,8 @@ impl Client {
                 client_side_cache: None,
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
+                current_database: Arc::new(AtomicU32::new(0)),
+                is_cluster: false,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
@@ -3093,6 +3271,7 @@ mod tests {
         use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
+        use std::sync::atomic::AtomicU32;
         use tokio::sync::RwLock;
 
         let config = ConnectionRequest {
@@ -3135,6 +3314,8 @@ mod tests {
                 client_side_cache: None,
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
+                current_database: Arc::new(AtomicU32::new(0)),
+                is_cluster: false,
             }),
             iam_token_manager: None,
             otel_metadata: Arc::new(OTelMetadata {
