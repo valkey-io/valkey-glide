@@ -2,9 +2,11 @@
 
 
 import time
+from typing import Generator
 
 import pytest
 from glide_shared.config import (
+    BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
     ServerCredentials,
@@ -20,6 +22,7 @@ from tests.constants import (
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
 )
+from tests.sync_tests import conftest as _sync_conftest
 from tests.sync_tests.conftest import (
     _get_worker_id,
     _sync_client_pool,
@@ -27,6 +30,7 @@ from tests.sync_tests.conftest import (
     create_sync_client,
 )
 from tests.utils.utils import (
+    INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
@@ -46,6 +50,122 @@ from tests.utils.utils import (
 # so cluster mode gets a wider tolerance.
 _CLUSTER_RECONNECT_TIMEOUT_SEC = 90
 _STANDALONE_RECONNECT_TIMEOUT_SEC = 30
+
+# Test-local reconnect backoff for the auth suite. Shorter than the library
+# default so the disconnect-and-recover flow finishes within test tolerance
+# under CI contention.
+_AUTH_RECONNECT_STRATEGY = BackoffStrategy(
+    num_of_retries=5,
+    factor=25,
+    exponent_base=2,
+)
+
+
+def _auth_cluster_for(cluster_mode: bool, use_tls: bool):
+    """Route auth-test clients to the dedicated auth cluster in cluster mode.
+
+    Standalone tests keep the shared standalone cluster; there is no
+    dedicated standalone auth cluster because the isolation problem only
+    materializes with CLIENT KILL fan-out over cluster nodes.
+
+    Under --cluster-endpoints (externally-provided cluster) the dedicated
+    auth twins are never provisioned by conftest, so fall back to None and
+    let create_sync_client_config route to the shared cluster.
+    """
+    if not cluster_mode:
+        return None
+    attr = "valkey_auth_tls_cluster" if use_tls else "valkey_auth_cluster"
+    return getattr(pytest, attr, None)
+
+
+@pytest.fixture(scope="function")
+def management_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> Generator[TGlideClient, None, None]:
+    """Override: management client for the sync auth suite. Routes cluster-mode
+    clients to the dedicated auth cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+        _sync_conftest.sync_test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
+
+
+@pytest.fixture(scope="function")
+def glide_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> Generator[TGlideClient, None, None]:
+    """Override: primary client under test for the sync auth suite. Bypasses
+    the session-wide pool because auth tests routinely kill connections and
+    rotate passwords, routes cluster-mode clients to the dedicated auth
+    cluster, and applies the tightened _AUTH_RECONNECT_STRATEGY."""
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+@pytest.fixture(scope="function")
+def acl_glide_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    management_sync_client: TGlideClient,
+) -> Generator[TGlideClient, None, None]:
+    """Override: ACL-user client for the sync auth suite. Routes cluster-mode
+    clients to the dedicated auth cluster and applies the tightened
+    _AUTH_RECONNECT_STRATEGY."""
+    set_new_acl_username_with_password(
+        management_sync_client, USERNAME, INITIAL_PASSWORD
+    )
+
+    use_tls = request.config.getoption("--tls")
+    valkey_cluster = _auth_cluster_for(cluster_mode, use_tls)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
+        lazy_connect=False,
+        reconnect_strategy=_AUTH_RECONNECT_STRATEGY,
+        valkey_cluster=valkey_cluster,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+        _sync_conftest.sync_test_teardown(
+            request, cluster_mode, protocol, valkey_cluster=valkey_cluster
+        )
 
 
 def create_iam_client(

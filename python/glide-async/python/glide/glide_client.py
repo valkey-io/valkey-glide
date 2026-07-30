@@ -172,7 +172,13 @@ _async_pipe_registered: bool = False
 _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
     None  # loop that owns the reader
 )
-_trio_pipe_active: bool = False  # True while trio system task is running
+# Identity of the trio.run() that owns the reader system task.  A given
+# reader lives for exactly one trio.run(); the token is set eagerly (under
+# _async_pipe_lock, before the spawned task starts) so registration is
+# idempotent within a run and re-registers cleanly across runs.  This is
+# what guarantees at most one _trio_pipe_reader ever waits on the shared fd:
+# trio raises BusyResourceError if two tasks wait on the same fd at once.
+_trio_pipe_token: Optional[object] = None
 _async_pipe_lock = threading.Lock()
 _client_registry: dict = {}
 _pipe_remainder: bytes = b""
@@ -433,12 +439,17 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
         _pipe_remainder = data[offset:]
 
 
-async def _trio_pipe_reader(pipe_fd: int) -> None:
-    """Background trio task that reads from the shared pipe."""
+async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
+    """Background trio task that reads from the shared pipe.
+
+    ``token`` identifies the trio.run() this reader was spawned for.  On exit
+    it clears the shared registration only if it still owns that token, so a
+    reader that is cancelled while a newer trio.run() has already registered
+    its own reader cannot wipe the newer run's state.
+    """
     import trio
 
-    global _trio_pipe_active, _async_pipe_registered
-    _trio_pipe_active = True
+    global _trio_pipe_token, _async_pipe_registered
     try:
         while True:
             await trio.lowlevel.wait_readable(pipe_fd)
@@ -449,8 +460,10 @@ async def _trio_pipe_reader(pipe_fd: int) -> None:
             except Exception as e:
                 ClientLogger.log(LogLevel.ERROR, "trio_pipe", f"Pipe read error: {e}")
     finally:
-        _trio_pipe_active = False
-        _async_pipe_registered = False
+        with _async_pipe_lock:
+            if _trio_pipe_token is token:
+                _trio_pipe_token = None
+                _async_pipe_registered = False
 
 
 class BaseClient(CoreCommands):
@@ -575,7 +588,16 @@ class BaseClient(CoreCommands):
     def _setup_pipe(self) -> None:
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder
+        global _pipe_remainder, _trio_pipe_token
+        # Identify the current trio.run() up front (outside the lock).  The
+        # token uniquely names this run, so it both makes registration
+        # idempotent within a run and tells a fresh run that a prior run's
+        # registration is stale.
+        trio_token = None
+        if not self._is_asyncio:
+            import trio
+
+            trio_token = trio.lowlevel.current_trio_token()
         with _async_pipe_lock:
             if _async_pipe_read_fd < 0:
                 try:
@@ -594,13 +616,21 @@ class BaseClient(CoreCommands):
                     _async_pipe_loop = None
                     _pipe_remainder = b""
                     _drain_stale_pipe_frames()
+            # Trio: registration belongs to exactly one trio.run().  If the
+            # recorded token differs from this run's, the previous run's reader
+            # is gone (trio.run() cancels its system tasks before returning), so
+            # re-register for this run.  Keying on the token instead of a
+            # lazily-set liveness flag prevents a second client in the same run
+            # from spawning a duplicate reader on the shared fd, which is what
+            # triggered BusyResourceError.
             if (
-                _async_pipe_registered
-                and not _trio_pipe_active
+                not self._is_asyncio
+                and _async_pipe_registered
                 and _async_pipe_loop is None
+                and _trio_pipe_token is not trio_token
             ):
-                # Trio task exited (back-to-back trio.run)
                 _async_pipe_registered = False
+                _trio_pipe_token = None
                 _pipe_remainder = b""
                 _drain_stale_pipe_frames()
             if _async_pipe_read_fd >= 0 and self._pipe_client_id:
@@ -613,11 +643,16 @@ class BaseClient(CoreCommands):
                         )
                         _async_pipe_loop = self._loop
                     else:
-                        # For trio: spawn a background task that polls the pipe
+                        # For trio: spawn a background task that polls the pipe.
+                        # Record the token before spawning (still under the
+                        # lock) so a concurrent _setup_pipe in this same run
+                        # sees us as registered and does not spawn a second
+                        # reader on the same fd.
                         import trio
 
+                        _trio_pipe_token = trio_token
                         trio.lowlevel.spawn_system_task(
-                            _trio_pipe_reader, _async_pipe_read_fd
+                            _trio_pipe_reader, _async_pipe_read_fd, trio_token
                         )
                     _async_pipe_registered = True
 

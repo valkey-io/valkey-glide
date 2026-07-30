@@ -80,6 +80,12 @@ EXCLUDED_TESTS = {
         "cb",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
+        # Module-scoped fixture overrides declared in test_auth.py; the sync
+        # twins are named *_sync_client in test_sync_auth.py and cannot share
+        # a name because async fixtures need an async generator body.
+        "acl_glide_client",
+        "glide_client",
+        "management_client",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -104,6 +110,12 @@ EXCLUDED_TESTS = {
         # Pool blocking test nested helper functions (sync-only threading pattern)
         "blocking_worker",
         "fast_worker",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 
