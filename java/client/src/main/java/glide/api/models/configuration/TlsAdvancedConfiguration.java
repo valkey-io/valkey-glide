@@ -212,8 +212,6 @@ public class TlsAdvancedConfiguration {
                             + " key.");
         }
 
-        // Only path-based mTLS reloads. In-memory PEM material is read once and is
-        // static, so a cadence has nothing to re-read and would be silently ignored.
         if (!hasCertPath && certReloadIntervalSeconds != null) {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` may only be set with path-based mTLS; use a"
