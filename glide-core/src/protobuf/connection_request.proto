@@ -13,6 +13,7 @@ enum ReadFrom {
     AZAffinity = 3;
     AZAffinityReplicasAndPrimary = 4;
     AllNodes = 5;
+    AZAffinityAllNodes = 6;
 }
 
 enum TlsMode {
