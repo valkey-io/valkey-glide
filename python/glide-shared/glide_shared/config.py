@@ -566,6 +566,10 @@ class TlsAdvancedConfiguration:
               and ``client_key_path`` raises ``ConfigurationError`` when the connection request
               is built.
 
+            - Must be positive. A non-positive value raises ``ConfigurationError`` when the
+              connection request is built, because the GLIDE core treats a zero interval as
+              "unset" and would silently substitute its own default cadence.
+
             - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
               effective cadence.
 
@@ -746,6 +750,19 @@ class AdvancedBaseClientConfiguration:
             raise ConfigurationError(
                 "cert_reload_interval_seconds may only be set when path-based mTLS is "
                 "configured (both client_cert_path and client_key_path)."
+            )
+
+        # The core maps a zero interval back to its own default cadence, and a
+        # negative one cannot reach the uint32 wire field at all, so reject both
+        # here rather than let the requested cadence be changed out from under
+        # the caller. Omit the interval to ask for the core's default.
+        if (
+            tls_config.cert_reload_interval_seconds is not None
+            and tls_config.cert_reload_interval_seconds <= 0
+        ):
+            raise ConfigurationError(
+                "cert_reload_interval_seconds must be positive; omit it to defer to "
+                "the GLIDE core's default reload cadence."
             )
 
     def _apply_tls_config(
