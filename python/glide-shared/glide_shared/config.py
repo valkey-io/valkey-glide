@@ -310,7 +310,7 @@ class BackoffStrategy:
         exponent_base (int): The exponent base configured for the strategy. A value of 0 means the
             default (2) is used.
         jitter_percent (Optional[int]): The Jitter percent on the calculated duration, between 0 and 100.
-            Values above 100 are clamped to 100. If not set, a default value will be used.
+            A value above 100 is rejected when the client is created. If not set, a default value will be used.
     """
 
     def __init__(

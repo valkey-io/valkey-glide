@@ -260,20 +260,34 @@ func TestBackoffStrategy_negativeValues(t *testing.T) {
 	})
 }
 
-// TestBackoffStrategy_jitterAboveMaxIsClamped pins the jitter contract to the core's, which clamps
-// to 100 rather than rejecting, so all four bindings accept the same input.
-func TestBackoffStrategy_jitterAboveMaxIsClamped(t *testing.T) {
-	for _, jitter := range []int{101, 1000, maxUint32AsInt(t)} {
-		t.Run(strconv.Itoa(jitter), func(t *testing.T) {
-			strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(jitter)
+// TestBackoffStrategy_jitterAboveMax pins the jitter contract to the core's, which rejects a value
+// above 100 rather than capping it, so all four bindings reject the same input.
+func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
+	runOutOfRangeCases(t, []outOfRangeCase{
+		{
+			"jitter just above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(101), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(maxUint32AsInt(t)),
+			"jitterPercent", func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+	})
+}
 
-			result, err := strategy.toProtobuf()
-			require.NoError(t, err)
+// TestBackoffStrategy_maxJitterIsAccepted covers the boundary: 100 is full jitter and valid.
+func TestBackoffStrategy_maxJitterIsAccepted(t *testing.T) {
+	strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(int(maxJitterPercent))
 
-			clamped := uint32(maxJitterPercent)
-			assert.Equal(t, &clamped, result.JitterPercent)
-		})
-	}
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	expected := uint32(maxJitterPercent)
+	assert.Equal(t, &expected, result.JitterPercent)
 }
 
 // TestBackoffStrategy_correctedValueClearsError covers a setter called again with a valid value: the

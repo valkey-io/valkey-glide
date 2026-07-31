@@ -336,9 +336,9 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
 //
-// The retry count, factor and exponent base must be between 0 and 2^32 - 1. A value outside that
-// range leads to an invalid configuration, reported as an error when the client is created. The
-// jitter percent must not be negative, and a value above 100 is clamped to 100.
+// The retry count, factor and exponent base must be between 0 and 2^32 - 1, and the jitter percent
+// must be between 0 and 100. A value outside its range leads to an invalid configuration, reported
+// as an error when the client is created.
 //
 // A factor or exponent base of 0 is not used verbatim: the core substitutes its own default
 // (factor 100, exponent base 2). A retry count of 0 is honored as-is.
@@ -352,8 +352,7 @@ type BackoffStrategy struct {
 	factor uint32
 	// The exponent base configured for the strategy. A value of 0 means the core default (2) is used.
 	exponentBase uint32
-	// The Jitter percent on the calculated duration, between 0 and 100. A value above 100 is clamped
-	// to 100. If not set, a default value will be used.
+	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
 	jitterPercent *uint32
 	// Out-of-range values seen by the setters, keyed by field name.
 	invalid map[string]error
@@ -363,9 +362,9 @@ const (
 	// maxBackoffValue is the largest retry count, factor and exponent base the core accepts, which
 	// it represents as a uint32.
 	maxBackoffValue = int64(math.MaxUint32)
-	// maxJitterPercent is the largest jitter the core applies: it derives the jitter bounds as
-	// 1 ± jitterPercent/100, so 100 is full jitter. The core clamps anything above it.
-	maxJitterPercent = 100
+	// maxJitterPercent is the largest jitter the core accepts: it derives the jitter bounds as
+	// 1 ± jitterPercent/100, so anything above 100 makes the lower bound negative.
+	maxJitterPercent = int64(100)
 )
 
 // backoffFields lists the settable fields in report order, so a configuration error names them
@@ -378,34 +377,27 @@ var backoffFields = []string{"numOfRetries", "factor", "exponentBase", "jitterPe
 // invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
 	strategy := &BackoffStrategy{}
-	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries)
-	strategy.factor = strategy.toUint32("factor", factor)
-	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase)
+	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries, maxBackoffValue)
+	strategy.factor = strategy.toUint32("factor", factor, maxBackoffValue)
+	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase, maxBackoffValue)
 	return strategy
 }
 
 // WithJitterPercent sets the jitter percent.
 //
-// A value above 100 is clamped to 100, since 100 is already full jitter: the core derives the jitter
-// bounds as 1 ± jitterPercent/100. A negative value has no representation in the core and leads to an
-// invalid configuration, reported as an error when the client is created.
+// The jitter must be between 0 and 100. Using a value outside that range leads to an invalid
+// configuration, reported as an error when the client is created.
 func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	var jitterPercent uint32
-	if jitter < 0 {
-		strategy.record("jitterPercent", fmt.Errorf("jitterPercent must not be negative, got %d", jitter))
-	} else {
-		strategy.record("jitterPercent", nil)
-		jitterPercent = uint32(min(jitter, maxJitterPercent))
-	}
+	jitterPercent := strategy.toUint32("jitterPercent", jitter, maxJitterPercent)
 	strategy.jitterPercent = &jitterPercent
 	return strategy
 }
 
 // toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
 // instead of being wrapped around silently, because the setters cannot report it themselves.
-func (strategy *BackoffStrategy) toUint32(name string, value int) uint32 {
-	if value < 0 || int64(value) > maxBackoffValue {
-		strategy.record(name, fmt.Errorf("%s must be between 0 and %d, got %d", name, maxBackoffValue, value))
+func (strategy *BackoffStrategy) toUint32(name string, value int, maxValue int64) uint32 {
+	if value < 0 || int64(value) > maxValue {
+		strategy.record(name, fmt.Errorf("%s must be between 0 and %d, got %d", name, maxValue, value))
 		return 0
 	}
 	strategy.record(name, nil)
