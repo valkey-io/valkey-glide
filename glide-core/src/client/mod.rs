@@ -2336,6 +2336,7 @@ async fn create_cluster_client(
         }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
         ReadFrom::AllNodes => ReadFromReplicaStrategy::AllNodes,
+        ReadFrom::AZAffinityAllNodes(az) => ReadFromReplicaStrategy::AZAffinityAllNodes(az),
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
     if let Some(interval_duration) = periodic_topology_checks {
@@ -2554,6 +2555,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::AZAffinityReplicasAndPrimary(_) =>
                         "Prefer replica and primary in user's availability zone",
                     ReadFrom::AllNodes => "All nodes (primary and replicas)",
+                    ReadFrom::AZAffinityAllNodes(_) =>
+                        "All nodes (primary and replicas) in user's availability zone",
                 }
             )
         })
