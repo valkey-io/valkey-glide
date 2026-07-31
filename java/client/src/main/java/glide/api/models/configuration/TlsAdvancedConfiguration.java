@@ -212,6 +212,15 @@ public class TlsAdvancedConfiguration {
                             + " key.");
         }
 
+        // Only path-based mTLS reloads. In-memory PEM material is read once and is
+        // static, so a cadence has nothing to re-read and would be silently ignored.
+        if (!hasCertPath && certReloadIntervalSeconds != null) {
+            throw new ConfigurationError(
+                    "`certReloadIntervalSeconds` may only be set with path-based mTLS; use a"
+                            + " `useMutualTlsWithReload` overload, which supplies the certificate and key"
+                            + " paths that are reloaded.");
+        }
+
         // Enablement and interval are separate. When path-based reloading is enabled (a cert path is
         // set), a supplied interval must be positive; a non-positive value is rejected because static
         // (no-reload) mTLS is expressed by the byte-based useMutualTls overload, not by passing 0

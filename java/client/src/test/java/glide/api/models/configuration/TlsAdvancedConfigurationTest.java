@@ -309,4 +309,31 @@ public class TlsAdvancedConfigurationTest {
                                         .build());
         assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
+
+    // An interval without cert paths has nothing to reload. The public builder cannot
+    // express this, so the constructor is used to reach the backstop validation.
+    @Test
+    void testIntervalWithoutCertPathsThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> new TlsAdvancedConfiguration(false, null, null, null, null, null, 60));
+        assertTrue(
+                error.getMessage()
+                        .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
+    }
+
+    @Test
+    void testIntervalWithByteBasedMutualTlsThrows() {
+        byte[] cert = "cert".getBytes(StandardCharsets.UTF_8);
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> new TlsAdvancedConfiguration(false, null, cert, key, null, null, 60));
+        assertTrue(
+                error.getMessage()
+                        .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
+    }
 }
