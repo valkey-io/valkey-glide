@@ -85,6 +85,17 @@ where
         crate::parser::parse_redis_value_async(&mut self.decoder, &mut self.con).await
     }
 
+    /// Removes and returns whatever the decoder has read past the last parsed response.
+    ///
+    /// Ownership moves to the caller, so these bytes are parsed exactly once. `combine`'s
+    /// decoder exposes no in-place clear, so resetting it means replacing it, which is
+    /// also how it is built in the first place.
+    fn take_decoder_buffer(&mut self) -> bytes::BytesMut {
+        let leftover = bytes::BytesMut::from(self.decoder.buffer());
+        self.decoder = combine::stream::Decoder::new();
+        leftover
+    }
+
     /// Brings [`Connection`] out of `PubSub` mode.
     ///
     /// This will unsubscribe this [`Connection`] from all subscriptions.
@@ -371,13 +382,15 @@ where
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
     pub fn on_message<'a, T: FromRedisValue + 'a>(&'a mut self) -> impl Stream<Item = T> + 'a {
-        let leftover = bytes::BytesMut::from(self.0.decoder.buffer());
+        // Hand the buffered bytes over rather than copying them: the stream now owns
+        // them, so leaving them behind would replay delivered lines on the next call.
+        let leftover = self.0.take_decoder_buffer();
         monitor_stream(&mut self.0.con, leftover)
     }
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
-    pub fn into_on_message<T: FromRedisValue>(self) -> impl Stream<Item = T> {
-        let leftover = bytes::BytesMut::from(self.0.decoder.buffer());
+    pub fn into_on_message<T: FromRedisValue>(mut self) -> impl Stream<Item = T> {
+        let leftover = self.0.take_decoder_buffer();
         monitor_stream(self.0.con, leftover)
     }
 }
@@ -389,10 +402,11 @@ where
 /// from the socket in chunks. Under load the server can pack the first monitor
 /// line(s) into the same TCP segment as the `+OK` handshake reply, leaving those
 /// bytes buffered inside the decoder. Building the stream's codec over the bare
-/// socket would discard that buffer, resume parsing mid-frame, hit a parse error,
-/// and terminate the stream before delivering a single line. Seeding the read
-/// buffer with the leftover bytes ensures no already-received monitor line is lost,
-/// including a line that was only partially buffered.
+/// socket would discard that buffer, and the damage differs by how much was
+/// buffered: a complete line is silently lost, while a partial line leaves the
+/// new codec resuming mid-frame, which fails to parse and terminates the stream
+/// before it delivers anything. Seeding the read buffer with the leftover bytes
+/// avoids both.
 fn monitor_stream<C, T>(con: C, leftover: bytes::BytesMut) -> impl Stream<Item = T>
 where
     C: AsyncRead + AsyncWrite + Unpin,
@@ -548,6 +562,14 @@ mod monitor_tests {
         let mut monitor = monitor_over(client);
         monitor.monitor().await.unwrap();
 
+        // Prove the precondition rather than assuming it: the handshake read must have
+        // pulled the whole monitor line into the decoder, so the socket holds nothing more.
+        assert_eq!(
+            monitor.0.decoder.buffer(),
+            MONITOR_LINE.as_bytes(),
+            "handshake did not buffer the monitor line, so the test would not exercise the handoff"
+        );
+
         // Keep the server end alive so a buffer-discarding stream would block on the
         // socket rather than see EOF, making the timeout a genuine failure signal.
         let (_stop_tx, stop_rx) = oneshot::channel::<()>();
@@ -580,6 +602,14 @@ mod monitor_tests {
         let mut monitor = monitor_over(client);
         monitor.monitor().await.unwrap();
 
+        // Prove the precondition: the prefix must be sitting in the decoder, mid-frame,
+        // which is what makes discarding it resume parsing at the wrong offset.
+        assert_eq!(
+            monitor.0.decoder.buffer(),
+            &MONITOR_LINE.as_bytes()[..split],
+            "handshake did not buffer the partial monitor line prefix"
+        );
+
         // Deliver the remainder only after the handshake read has buffered the prefix.
         let rest = MONITOR_LINE[split..].to_string();
         let _server_task = tokio::spawn(async move {
@@ -594,5 +624,43 @@ mod monitor_tests {
             .expect("borrowed on_message terminated on the partially buffered line")
             .expect("stream ended before delivering the partially buffered line");
         assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+    }
+
+    // The borrowed path hands the decoder's bytes to the stream, so it must also take
+    // them out of the decoder. Otherwise dropping one stream and building another
+    // replays lines the first stream already delivered.
+    #[tokio::test]
+    async fn on_message_does_not_replay_buffered_line_across_streams() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = String::from("+OK\r\n");
+        handshake.push_str(MONITOR_LINE);
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut monitor = monitor_over(client);
+        monitor.monitor().await.unwrap();
+        assert_eq!(monitor.0.decoder.buffer(), MONITOR_LINE.as_bytes());
+
+        {
+            let mut first = monitor.on_message::<String>();
+            let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), first.next())
+                .await
+                .expect("first borrowed stream did not deliver the buffered line")
+                .expect("first borrowed stream ended early");
+            assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+        }
+
+        // The line was consumed by the first stream, so a second stream must not see it
+        // again. Only the server's next write should ever surface here.
+        let mut second = monitor.on_message::<String>();
+        let replayed =
+            ::tokio::time::timeout(std::time::Duration::from_millis(200), second.next()).await;
+        assert!(
+            replayed.is_err(),
+            "second borrowed stream replayed an already-delivered line: {replayed:?}"
+        );
+
+        drop(second);
+        drop(server);
     }
 }
