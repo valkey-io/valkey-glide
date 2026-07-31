@@ -464,6 +464,56 @@ where
         self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, true)
     }
 
+    /// Returns a connection to a node (primary or replica) in the same availability zone
+    /// as `client_az`, rotating equally among all in-AZ nodes in a round robin manner.
+    /// Falls back to a round robin across all nodes if no in-AZ node is available.
+    pub(crate) fn round_robin_read_from_all_nodes_with_az_awareness(
+        &self,
+        slot_map_value: &SlotMapValue,
+        client_az: String,
+    ) -> Option<ConnectionAndAddress<Connection>> {
+        let addrs = &slot_map_value.addrs;
+        let total_nodes = addrs.replicas().len() + 1; // primary + replicas, index 0 = primary
+                                                      // `last_used_replica` is shared with the replica-only rotations, as in the AllNodes strategy.
+        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let mut check_count = 0;
+
+        loop {
+            check_count += 1;
+
+            // Looped through all nodes; no connected node found in the same availability zone.
+            if check_count > total_nodes {
+                break;
+            }
+
+            let index = (initial_index + check_count) % total_nodes;
+            let node_address = if index == 0 {
+                addrs.primary()
+            } else {
+                addrs.replicas()[index - 1].clone()
+            };
+
+            // Check if this node's availability zone matches the user's availability zone.
+            if let Some((address, connection_details)) =
+                self.connection_details_for_address(node_address.as_str())
+            {
+                if self.az_for_address(&address) == Some(client_az.clone()) {
+                    // Attempt to update `last_used_replica` with the index of this node.
+                    let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                        initial_index,
+                        index,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    );
+                    return Some((address, connection_details.conn));
+                }
+            }
+        }
+
+        // Fall back to any available node (primary or replica) using round-robin.
+        self.round_robin_read_from_all_nodes(slot_map_value)
+    }
+
     fn get_connection_by_az_affinity_strategy(
         &self,
         slot_map_value: &SlotMapValue,
@@ -549,6 +599,11 @@ where
                         slot_map_value,
                         az.to_string(),
                     ),
+                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => self
+                    .round_robin_read_from_all_nodes_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
             },
             // when the user strategy per command is replica_preffered
             SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
@@ -559,6 +614,13 @@ where
                     ),
                 ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az) => self
                     .round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
+                // Explicit replica routes stay in the replica rotation for this strategy:
+                // in-AZ replicas first, then any replica, primary only if no replica is connected.
+                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => self
+                    .round_robin_read_from_replica_with_az_awareness(
                         slot_map_value,
                         az.to_string(),
                     ),

@@ -44,6 +44,10 @@ pub enum ReadFromReplicaStrategy {
     AZAffinityReplicasAndPrimary(String),
     /// Spread the read requests between all nodes (primary and replicas) in a round robin manner.
     AllNodes,
+    /// Spread the read requests equally among all nodes (primary and replicas) within the client's
+    /// Availability Zone (AZ) in a round robin manner, falling back to a round robin across all
+    /// nodes if no node in the client's AZ is available.
+    AZAffinityAllNodes(String),
 }
 
 #[derive(Debug, Default)]
@@ -91,6 +95,7 @@ fn get_address_from_slot(
         // behavior of these strategies when no local node is known.
         ReadFromReplicaStrategy::AZAffinity(_az) => round_robin_replica(),
         ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => round_robin_all_nodes(),
+        ReadFromReplicaStrategy::AZAffinityAllNodes(_az) => round_robin_all_nodes(),
     }
 }
 

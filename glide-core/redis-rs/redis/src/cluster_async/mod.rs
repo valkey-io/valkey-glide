@@ -1564,6 +1564,7 @@ where
             cluster_params.read_from_replicas,
             crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
                 | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
+                | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(_)
         );
 
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
