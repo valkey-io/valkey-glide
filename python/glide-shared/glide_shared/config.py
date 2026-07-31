@@ -540,7 +540,8 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with ``client_key_path``, and cannot be combined with
               byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
-              raise ``ConfigurationError`` at construction time.
+              raise ``ConfigurationError`` when the connection request is built, so that a
+              config mutated after construction is validated too.
 
             - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
               read and validated by the GLIDE core when the connection is established; a missing,
@@ -562,7 +563,8 @@ class TlsAdvancedConfiguration:
         cert_reload_interval_seconds (Optional[int]): Override for the path-based mTLS reload cadence, in seconds.
 
             - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
-              and ``client_key_path`` raises ``ConfigurationError`` at construction time.
+              and ``client_key_path`` raises ``ConfigurationError`` when the connection request
+              is built.
 
             - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
               effective cadence.
@@ -737,7 +739,10 @@ class AdvancedBaseClientConfiguration:
                 raise ConfigurationError(
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
-        elif not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+
+        # Only the path-based branch emits `cert_reload`, so an interval set in any
+        # other mode would be silently dropped rather than take effect.
+        if not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
             raise ConfigurationError(
                 "cert_reload_interval_seconds may only be set when path-based mTLS is "
                 "configured (both client_cert_path and client_key_path)."

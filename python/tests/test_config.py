@@ -792,6 +792,20 @@ def test_tls_cert_reload_interval_requires_paths():
     assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
 
 
+def test_tls_cert_reload_interval_rejected_with_byte_based_mtls():
+    # Byte-based mTLS never reloads, so the interval must be rejected rather
+    # than silently dropped from the request.
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        cert_reload_interval_seconds=60,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
+
+
 def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
     # The interval value is validated by the GLIDE core, not the client; the
     # client only forwards it. The maximum uint32 value is emitted verbatim.
