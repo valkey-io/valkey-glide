@@ -44,11 +44,13 @@ public class BackoffStrategy {
 
     /**
      * The multiplier that will be applied to the waiting time between each retry. This value is
-     * specified in milliseconds.
+     * specified in milliseconds. A value of 0 means the default (100) is used.
      */
     @NonNull private final Integer factor;
 
-    /** The exponent base configured for the strategy. */
+    /**
+     * The exponent base configured for the strategy. A value of 0 means the default (2) is used.
+     */
     @NonNull private final Integer exponentBase;
 
     /**

@@ -925,9 +925,9 @@ export enum NodeDiscoveryMode {
  * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
  *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
  *     - After this limit is reached, the retry interval becomes constant.
- *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay).
- *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
- *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
+ *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay). A value of `0` means the default (`100`) is used.
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry). A value of `0` means the default (`2`) is used.
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay, between `0` and `100` (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay). Values above `100` are clamped to `100`.
  *
  * @example
  * ```typescript
@@ -1087,12 +1087,12 @@ export interface BaseClientConfiguration {
         /**
          * The multiplier that will be applied to the waiting time between each retry.
          * This value is specified in milliseconds.
-         * Value must be an integer.
+         * Value must be an integer. A value of 0 means the default (100) is used.
          */
         factor: number;
         /**
          * The exponent base configured for the strategy.
-         * Value must be an integer.
+         * Value must be an integer. A value of 0 means the default (2) is used.
          */
         exponentBase: number;
         /** The Jitter percent on the calculated duration, between 0 and 100.
