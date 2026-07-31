@@ -587,18 +587,21 @@ struct SharedPipeWriter {
     #[allow(dead_code)]
     pipe_fd: i32,
 }
-/// The process-wide async pipe state. Uses a Mutex<Option<...>> instead of OnceLock
-/// so that it can be reinitialized after fork() — the flush thread does not survive
-/// fork, so child processes must create a fresh pipe and flush thread.
-static ASYNC_PIPE: std::sync::Mutex<Option<&'static SharedPipeWriter>> =
-    std::sync::Mutex::new(None);
+/// The process-wide async pipe state. Uses an atomic pointer so the read path
+/// is lock-free and cannot be inherited in a locked state after fork().
+static ASYNC_PIPE: std::sync::atomic::AtomicPtr<SharedPipeWriter> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
-/// Helper to get the current pipe writer reference (fast path: no lock contention
-/// when the pointer is already set and we just read it).
+/// Returns the current pipe writer, if one is installed. Lock-free read.
 #[inline]
 fn get_async_pipe() -> Option<&'static SharedPipeWriter> {
-    // Safety: We only ever store valid 'static references or None.
-    *ASYNC_PIPE.lock().unwrap()
+    let p = ASYNC_PIPE.load(std::sync::atomic::Ordering::Acquire);
+    if p.is_null() {
+        None
+    } else {
+        // Safety: only leaked &'static SharedPipeWriter values are ever stored.
+        Some(unsafe { &*p })
+    }
 }
 impl SharedPipeWriter {
     fn push_success(&self, cid: u64, rid: usize, rp: usize, ap: usize) {
@@ -738,12 +741,20 @@ pub unsafe extern "C" fn free_pipe_error_string(ptr: *mut c_char) {
 /// * `pipe_write_fd` must be a valid writable pipe file descriptor.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn init_async_pipe(pipe_write_fd: i32) {
-    let mut guard = ASYNC_PIPE.lock().unwrap();
-    if guard.is_some() {
-        // Already initialized in this process — no-op.
-        return;
+    let w = create_pipe_writer(pipe_write_fd);
+    let ptr = w as *const SharedPipeWriter as *mut SharedPipeWriter;
+    // First-call-wins: only install if currently null.
+    if ASYNC_PIPE
+        .compare_exchange(
+            std::ptr::null_mut(),
+            ptr,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        )
+        .is_err()
+    {
+        // Another call already initialized — the leaked alloc is harmless.
     }
-    *guard = Some(create_pipe_writer(pipe_write_fd));
 }
 
 /// Reinitialize the async pipe after `fork()`.
@@ -762,11 +773,11 @@ pub unsafe extern "C" fn init_async_pipe(pipe_write_fd: i32) {
 /// * Must only be called once per child process, before any commands are issued.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
-    let mut guard = ASYNC_PIPE.lock().unwrap();
-    // Intentionally leak the old writer — its mutex/condvar are in undefined
-    // state after fork and the flush thread is dead. The memory cost is
-    // negligible (one 64-byte struct per fork in the process lifetime).
-    *guard = Some(create_pipe_writer(pipe_write_fd));
+    let w = create_pipe_writer(pipe_write_fd);
+    let ptr = w as *const SharedPipeWriter as *mut SharedPipeWriter;
+    // Replace the stale writer. The old one is intentionally leaked —
+    // its mutex/condvar are in undefined state post-fork.
+    ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
 }
 
 /// Create a new `SharedPipeWriter` and spawn its flush thread.

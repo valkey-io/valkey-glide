@@ -12,16 +12,19 @@ These tests verify that:
 1. Forked child processes can create and use glide clients
 2. Commands in forked children complete (don't hang)
 3. The parent process remains functional after children complete
+4. Reusing a parent's client in a child raises ClosingError
 """
 
 import asyncio
 import multiprocessing
 import os
+import queue
 from typing import Any, List, Tuple
 
 import pytest
 from glide import GlideClusterClient
 from glide_shared.config import GlideClusterClientConfiguration, NodeAddress
+from glide_shared.exceptions import ClosingError
 
 from tests.async_tests.conftest import create_client
 from tests.utils.cluster import ValkeyCluster
@@ -55,7 +58,39 @@ def _child_cluster_worker(
 
             await client.close()
             result_queue.put(("OK", pid))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            result_queue.put(("ERROR", f"{type(e).__name__}: {e}"))
+
+    asyncio.run(run())
+
+
+def _child_stale_client_worker(client_pid: int, result_queue: multiprocessing.Queue):
+    """Worker that tries to use a parent's client object — should raise."""
+
+    async def run():
+        # Simulate having a reference to a client created in the parent.
+        # We can't pass the actual client across fork (pickle), but we can
+        # check that _check_same_process fires by creating a client and
+        # then changing its _create_pid to simulate the parent's.
+        from glide_shared.config import GlideClusterClientConfiguration, NodeAddress
+
+        # Create a client in the child (this works fine)
+        config = GlideClusterClientConfiguration(
+            addresses=[NodeAddress("localhost", 7379)],
+            request_timeout=5000,
+        )
+        try:
+            client = await GlideClusterClient.create(config)
+            # Fake it as if it was created in the parent
+            client._create_pid = client_pid
+            await client.set("stale_test", "should_fail")
+            result_queue.put(("UNEXPECTED_SUCCESS", None))
+        except ClosingError as e:
+            if "fork" in str(e).lower():
+                result_queue.put(("OK_REJECTED", str(e)))
+            else:
+                result_queue.put(("WRONG_ERROR", str(e)))
+        except Exception as e:  # noqa: BLE001
             result_queue.put(("ERROR", f"{type(e).__name__}: {e}"))
 
     asyncio.run(run())
@@ -108,8 +143,11 @@ class TestForkSafety:
 
         # Collect results
         results = []
-        while not result_queue.empty():
-            results.append(result_queue.get_nowait())
+        for _ in range(num_workers):
+            try:
+                results.append(result_queue.get(timeout=5.0))
+            except queue.Empty:
+                break
 
         ok_count = sum(1 for r in results if r[0] == "OK")
         error_results = [r for r in results if r[0] == "ERROR"]
@@ -182,5 +220,35 @@ class TestForkSafety:
                 p.join()
                 pytest.fail(f"Worker hung in cycle {cycle}")
 
-            result = result_queue.get_nowait()
+            result = result_queue.get(timeout=5.0)
             assert result[0] == "OK", f"Cycle {cycle} failed: {result}"
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_stale_client_raises_in_child(self, request: Any, cluster_mode: bool):
+        """
+        Using a parent's client object in a forked child must raise
+        ClosingError instead of silently hanging.
+        """
+        # Create client in parent
+        parent_client = await create_client(request, cluster_mode)
+        await parent_client.set("stale_test_init", "ok")
+        parent_pid = os.getpid()
+        await parent_client.close()
+
+        # Fork a child that simulates using a stale client
+        ctx = multiprocessing.get_context("fork")
+        result_queue = ctx.Queue()
+        p = ctx.Process(
+            target=_child_stale_client_worker, args=(parent_pid, result_queue)
+        )
+        p.start()
+        p.join(timeout=15.0)
+        if p.is_alive():
+            p.kill()
+            p.join()
+            pytest.fail("Child hung — stale client check not working")
+
+        result = result_queue.get(timeout=5.0)
+        assert (
+            result[0] == "OK_REJECTED"
+        ), f"Expected ClosingError for stale client, got: {result}"

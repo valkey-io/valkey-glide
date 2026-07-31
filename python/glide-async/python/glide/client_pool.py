@@ -128,28 +128,8 @@ class AsyncClientPool:
         import glide.glide_client as _gc
 
         with _async_pipe_lock:
-            # Detect fork: if PID changed, the flush thread is dead.
+            _gc._detect_fork_and_reset()
             current_pid = os.getpid()
-            if (
-                _gc._async_pipe_read_fd >= 0
-                and _gc._async_pipe_init_pid > 0
-                and current_pid != _gc._async_pipe_init_pid
-            ):
-                try:
-                    os.close(_gc._async_pipe_read_fd)
-                except OSError:
-                    pass
-                if _gc._async_pipe_write_fd >= 0:
-                    try:
-                        os.close(_gc._async_pipe_write_fd)
-                    except OSError:
-                        pass
-                _gc._async_pipe_read_fd = -1
-                _gc._async_pipe_write_fd = -1
-                _gc._async_pipe_registered = False
-                _gc._async_pipe_loop = None
-                _gc._pipe_remainder = b""
-                _gc._client_registry.clear()
 
             if _gc._async_pipe_read_fd < 0:
                 try:
