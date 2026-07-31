@@ -281,7 +281,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	}
 
 	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+		retryStrategyPb, err := config.reconnectStrategy.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid reconnect strategy: %w", err)
+		}
+		request.ConnectionRetryStrategy = retryStrategyPb
 	}
 
 	if config.lazyConnect {
@@ -331,48 +335,76 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 // a successful connection is established. The client retries indefinitely.
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
+//
+// Every value must be between 0 and 2^32 - 1. A value outside that range leads to an invalid
+// configuration, reported as an error when the client is created.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
 	// constant until a reconnect attempt is successful.
-	numOfRetries int
+	numOfRetries uint32
 	// The multiplier that will be applied to the waiting time between each retry.
 	// This value is specified in milliseconds.
-	factor int
+	factor uint32
 	// The exponent base configured for the strategy.
-	exponentBase int
+	exponentBase uint32
 	// The Jitter percent on the calculated duration. If not set, a default value will be used.
-	jitterPercent *int
+	jitterPercent *uint32
+	// The first out-of-range value seen by a setter, if any.
+	err error
 }
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
+//
+// Each parameter must be between 0 and 2^32 - 1. Using a value outside that range leads to an
+// invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
-	return &BackoffStrategy{
-		numOfRetries: numOfRetries,
-		factor:       factor,
-		exponentBase: exponentBase,
-	}
-}
-
-// WithJitterPercent sets the jitter percent.
-func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	strategy.jitterPercent = &jitter
+	strategy := &BackoffStrategy{}
+	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries)
+	strategy.factor = strategy.toUint32("factor", factor)
+	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase)
 	return strategy
 }
 
-func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
+// WithJitterPercent sets the jitter percent.
+//
+// The jitter must be between 0 and 2^32 - 1. Using a value outside that range leads to an invalid
+// configuration, reported as an error when the client is created.
+func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
+	jitterPercent := strategy.toUint32("jitterPercent", jitter)
+	strategy.jitterPercent = &jitterPercent
+	return strategy
+}
+
+// toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
+// instead of being wrapped around silently, because the setters cannot report it themselves.
+func (strategy *BackoffStrategy) toUint32(name string, value int) uint32 {
+	if value < 0 || int64(value) > math.MaxUint32 {
+		if strategy.err == nil {
+			strategy.err = fmt.Errorf("%s must be between 0 and %d, got %d", name, uint32(math.MaxUint32), value)
+		}
+		return 0
+	}
+	return uint32(value)
+}
+
+func (strategy *BackoffStrategy) toProtobuf() (*protobuf.ConnectionRetryStrategy, error) {
+	if strategy.err != nil {
+		return nil, strategy.err
+	}
+
 	protoStrategy := &protobuf.ConnectionRetryStrategy{
-		NumberOfRetries: uint32(strategy.numOfRetries),
-		Factor:          uint32(strategy.factor),
-		ExponentBase:    uint32(strategy.exponentBase),
+		NumberOfRetries: strategy.numOfRetries,
+		Factor:          strategy.factor,
+		ExponentBase:    strategy.exponentBase,
 	}
 
 	if strategy.jitterPercent != nil {
-		jitter := uint32(*strategy.jitterPercent)
+		jitter := *strategy.jitterPercent
 		protoStrategy.JitterPercent = &jitter
 	}
 
-	return protoStrategy
+	return protoStrategy, nil
 }
 
 // ClientConfiguration represents the configuration settings for a Standalone client.

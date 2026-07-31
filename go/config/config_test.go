@@ -4,8 +4,10 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -170,6 +172,113 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, result)
+}
+
+func TestBackoffStrategy_zeroValues(t *testing.T) {
+	strategy := NewBackoffStrategy(0, 0, 0).WithJitterPercent(0)
+
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	zero := uint32(0)
+	assert.Equal(t, &protobuf.ConnectionRetryStrategy{
+		NumberOfRetries: 0,
+		Factor:          0,
+		ExponentBase:    0,
+		JitterPercent:   &zero,
+	}, result)
+}
+
+// maxUint32AsInt is computed from a variable rather than a constant so that this file still compiles
+// on platforms where int is 32 bits and cannot hold math.MaxUint32.
+func maxUint32AsInt(t *testing.T) int {
+	t.Helper()
+	if strconv.IntSize < 64 {
+		t.Skip("int is too narrow to hold math.MaxUint32")
+	}
+	var value uint64 = math.MaxUint32
+	return int(value)
+}
+
+func TestBackoffStrategy_maxValues(t *testing.T) {
+	max := maxUint32AsInt(t)
+	strategy := NewBackoffStrategy(max, max, max).WithJitterPercent(max)
+
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	maxUint32 := uint32(math.MaxUint32)
+	assert.Equal(t, &protobuf.ConnectionRetryStrategy{
+		NumberOfRetries: maxUint32,
+		Factor:          maxUint32,
+		ExponentBase:    maxUint32,
+		JitterPercent:   &maxUint32,
+	}, result)
+}
+
+func TestBackoffStrategy_outOfRangeValues(t *testing.T) {
+	aboveMax := maxUint32AsInt(t) + 1
+
+	tests := []struct {
+		name     string
+		strategy *BackoffStrategy
+		field    string
+		// stored is the value the rejected field ends up holding; it must never be a wrapped number.
+		stored func(*BackoffStrategy) uint32
+	}{
+		{
+			"negative retries", NewBackoffStrategy(-1, 10, 50), "numOfRetries",
+			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
+		},
+		{
+			"negative factor", NewBackoffStrategy(5, -10, 50), "factor",
+			func(s *BackoffStrategy) uint32 { return s.factor },
+		},
+		{
+			"negative exponent base", NewBackoffStrategy(5, 10, -50), "exponentBase",
+			func(s *BackoffStrategy) uint32 { return s.exponentBase },
+		},
+		{
+			"negative jitter", NewBackoffStrategy(5, 10, 50).WithJitterPercent(-25), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"retries above max", NewBackoffStrategy(aboveMax, 10, 50), "numOfRetries",
+			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
+		},
+		{
+			"jitter above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(aboveMax), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.strategy.toProtobuf()
+			require.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), test.field)
+			assert.Zero(t, test.stored(test.strategy))
+		})
+	}
+}
+
+func TestBackoffStrategy_outOfRangeValueFailsClientConfig(t *testing.T) {
+	standalone := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithReconnectStrategy(NewBackoffStrategy(-1, 10, 50))
+
+	result, err := standalone.ToProtobuf()
+	require.ErrorContains(t, err, "invalid reconnect strategy")
+	assert.Nil(t, result)
+
+	cluster := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithReconnectStrategy(NewBackoffStrategy(5, 10, 50).WithJitterPercent(-1))
+
+	result, err = cluster.ToProtobuf()
+	require.ErrorContains(t, err, "invalid reconnect strategy")
+	assert.Nil(t, result)
 }
 
 func TestNodeAddress(t *testing.T) {
