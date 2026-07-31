@@ -1809,8 +1809,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             {
                 span.end();
                 // Reclaim via the shared helper (pointer already validated above).
-                let _ =
-                    unsafe { glide_core::GlideOpenTelemetry::drop_span_ptr(span_ptr as u64) };
+                let _ = unsafe { glide_core::GlideOpenTelemetry::drop_span_ptr(span_ptr as u64) };
             }
 
             complete_callback(jvm, callback_id, result, !expect_utf8_bool);
