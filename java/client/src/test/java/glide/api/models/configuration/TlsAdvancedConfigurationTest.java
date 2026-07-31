@@ -319,7 +319,8 @@ public class TlsAdvancedConfigurationTest {
                         ConfigurationError.class,
                         () -> new TlsAdvancedConfiguration(false, null, null, null, null, null, 60));
         assertTrue(
-                error.getMessage()
+                error
+                        .getMessage()
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
 
@@ -333,7 +334,8 @@ public class TlsAdvancedConfigurationTest {
                         ConfigurationError.class,
                         () -> new TlsAdvancedConfiguration(false, null, cert, key, null, null, 60));
         assertTrue(
-                error.getMessage()
+                error
+                        .getMessage()
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
 }
