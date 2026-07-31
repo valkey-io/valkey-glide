@@ -260,17 +260,46 @@ func TestBackoffStrategy_negativeValues(t *testing.T) {
 	})
 }
 
-func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
-	runOutOfRangeCases(t, []outOfRangeCase{
-		{
-			"jitter just above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(101), "jitterPercent",
-			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
-		},
-		{
-			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
-			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
-		},
-	})
+// TestBackoffStrategy_jitterAboveMaxIsClamped pins the jitter contract to the core's, which clamps
+// to 100 rather than rejecting, so all four bindings accept the same input.
+func TestBackoffStrategy_jitterAboveMaxIsClamped(t *testing.T) {
+	for _, jitter := range []int{101, 1000, maxUint32AsInt(t)} {
+		t.Run(strconv.Itoa(jitter), func(t *testing.T) {
+			strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(jitter)
+
+			result, err := strategy.toProtobuf()
+			require.NoError(t, err)
+
+			clamped := uint32(maxJitterPercent)
+			assert.Equal(t, &clamped, result.JitterPercent)
+		})
+	}
+}
+
+// TestBackoffStrategy_correctedValueClearsError covers a setter called again with a valid value: the
+// reported error describes the current state, not the discarded one.
+func TestBackoffStrategy_correctedValueClearsError(t *testing.T) {
+	strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(-1)
+	require.Error(t, strategy.validationError())
+
+	result, err := strategy.WithJitterPercent(30).toProtobuf()
+	require.NoError(t, err)
+
+	expected := uint32(30)
+	assert.Equal(t, &expected, result.JitterPercent)
+}
+
+// TestBackoffStrategy_reportsEveryInvalidField covers several bad values at once: the caller sees
+// them all instead of fixing them one per client-creation attempt.
+func TestBackoffStrategy_reportsEveryInvalidField(t *testing.T) {
+	strategy := NewBackoffStrategy(-1, -2, -3).WithJitterPercent(-4)
+
+	result, err := strategy.toProtobuf()
+	require.Error(t, err)
+	assert.Nil(t, result)
+	for _, field := range backoffFields {
+		assert.Contains(t, err.Error(), field)
+	}
 }
 
 func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
