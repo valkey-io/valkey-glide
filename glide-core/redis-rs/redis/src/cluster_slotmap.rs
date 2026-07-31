@@ -933,6 +933,33 @@ mod tests_cluster_slotmap {
     }
 
     #[test]
+    fn test_slot_map_az_affinity_all_nodes_falls_back_to_all_nodes() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityAllNodes(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec![
+                "node3:6379",
+                "replica4:6379",
+                "replica5:6379",
+                "replica6:6379"
+            ]
+            .into_iter()
+            .map(|s| Arc::new(s.to_string()))
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_get_slots_of_node() {
         let slot_map = get_slot_map(ReadFromReplicaStrategy::AlwaysFromPrimary);
         assert_eq!(

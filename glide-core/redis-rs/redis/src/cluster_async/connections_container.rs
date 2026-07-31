@@ -1389,6 +1389,129 @@ mod tests {
     }
 
     #[test]
+    fn get_connection_for_az_affinity_all_nodes_route_round_robin() {
+        // Create a container with AZAffinityAllNodes strategy
+        let container: ConnectionsContainer<usize> = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinityAllNodes(
+                "use-1a".to_string(),
+            )),
+        );
+
+        // Set the primary of the slot to the client's AZ
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1a".to_string());
+
+        // The primary and the two in-AZ replicas should be rotated equally
+        let mut addresses: Vec<usize> = (0..6)
+            .map(|_| {
+                container
+                    .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                    .unwrap()
+                    .1
+            })
+            .collect();
+        addresses.sort();
+        assert_eq!(addresses, vec![3, 3, 31, 31, 33, 33]);
+    }
+
+    #[test]
+    fn get_connection_for_az_affinity_all_nodes_route() {
+        // Create a container with AZAffinityAllNodes strategy
+        let container: ConnectionsContainer<usize> = create_container_with_az_strategy(
+            false,
+            Some(ReadFromReplicaStrategy::AZAffinityAllNodes(
+                "use-1a".to_string(),
+            )),
+        );
+
+        // Set the primary of the slot to the client's AZ
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1a".to_string());
+
+        // Slot number does not exist (slot 1001 wasn't assigned to any primary)
+        assert!(container
+            .connection_for_route(&Route::new(1001, SlotAddr::ReplicaOptional))
+            .is_none());
+
+        // Get one of the in-AZ nodes (primary or replica) for slot 2001
+        assert!(one_of(
+            container.connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional)),
+            &[3, 31, 33],
+        ));
+
+        // Explicitly replica-routed commands must not be served by the in-AZ primary
+        let mut addresses: Vec<usize> = (0..4)
+            .map(|_| {
+                container
+                    .connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired))
+                    .unwrap()
+                    .1
+            })
+            .collect();
+        addresses.sort();
+        assert_eq!(addresses, vec![31, 31, 33, 33]);
+
+        // Remove the in-AZ replicas; the in-AZ primary should now get all reads
+        remove_nodes(&container, &["replica3-1", "replica3-3"]);
+        for _ in 0..3 {
+            assert_eq!(
+                3,
+                container
+                    .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                    .unwrap()
+                    .1
+            );
+        }
+
+        // Move the primary out of the client's AZ; with no in-AZ node left,
+        // fall back to a round robin across all remaining nodes
+        container
+            .connection_map
+            .get_mut("primary3")
+            .unwrap()
+            .user_connection
+            .az = Some("use-1b".to_string());
+        let mut addresses: Vec<usize> = (0..4)
+            .map(|_| {
+                container
+                    .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                    .unwrap()
+                    .1
+            })
+            .collect();
+        addresses.sort();
+        assert_eq!(addresses, vec![3, 3, 32, 32]);
+
+        // Write commands should still be routed to the primary
+        assert_eq!(
+            3,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::Master))
+                .unwrap()
+                .1
+        );
+
+        // With no replica connected, an explicit replica route falls back to the primary
+        remove_nodes(&container, &["replica3-2"]);
+        assert_eq!(
+            3,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired))
+                .unwrap()
+                .1
+        );
+    }
+
+    #[test]
     fn get_connection_by_address() {
         let container = create_container();
 
