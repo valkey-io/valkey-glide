@@ -1095,7 +1095,8 @@ export interface BaseClientConfiguration {
          * Value must be an integer.
          */
         exponentBase: number;
-        /** The Jitter percent on the calculated duration.
+        /** The Jitter percent on the calculated duration, between 0 and 100.
+         * Values above 100 are clamped to 100.
          * If not set, a default value will be used.
          * Value is optional, and must be an integer.
          */

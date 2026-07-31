@@ -51,6 +51,9 @@ public class BackoffStrategy {
     /** The exponent base configured for the strategy. */
     @NonNull private final Integer exponentBase;
 
-    /** The Jitter percent on the calculated duration. If not set, a default value will be used. */
+    /**
+     * The Jitter percent on the calculated duration, between 0 and 100. Values above 100 are clamped
+     * to 100. If not set, a default value will be used.
+     */
     private final Integer jitterPercent;
 }

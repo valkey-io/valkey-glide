@@ -339,15 +339,18 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 // The retry count, factor and exponent base must be between 0 and 2^32 - 1, and the jitter percent
 // must be between 0 and 100. A value outside its range leads to an invalid configuration, reported
 // as an error when the client is created.
+//
+// A factor or exponent base of 0 is not used verbatim: the core substitutes its own default
+// (factor 100, exponent base 2). A retry count of 0 is honored as-is.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
 	// constant until a reconnect attempt is successful.
 	numOfRetries uint32
 	// The multiplier that will be applied to the waiting time between each retry.
-	// This value is specified in milliseconds.
+	// This value is specified in milliseconds. A value of 0 means the core default (100) is used.
 	factor uint32
-	// The exponent base configured for the strategy.
+	// The exponent base configured for the strategy. A value of 0 means the core default (2) is used.
 	exponentBase uint32
 	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
 	jitterPercent *uint32

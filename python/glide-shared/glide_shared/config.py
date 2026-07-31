@@ -308,7 +308,8 @@ class BackoffStrategy:
         factor (int): The multiplier that will be applied to the waiting time between each retry.
             This value is specified in milliseconds.
         exponent_base (int): The exponent base configured for the strategy.
-        jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
+        jitter_percent (Optional[int]): The Jitter percent on the calculated duration, between 0 and 100.
+            Values above 100 are clamped to 100. If not set, a default value will be used.
     """
 
     def __init__(
