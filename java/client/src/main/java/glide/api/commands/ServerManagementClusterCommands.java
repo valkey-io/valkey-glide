@@ -8,6 +8,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands for the "Server Management Commands" group for a cluster client.
@@ -106,8 +107,7 @@ public interface ServerManagementClusterCommands {
      * The command will be routed automatically to all nodes.
      *
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     thrown.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();
@@ -122,8 +122,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     thrown.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite(ALL_PRIMARIES).get();
@@ -140,7 +139,7 @@ public interface ServerManagementClusterCommands {
      * The command will be routed automatically to all nodes.
      *
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @return <code>OK</code> to confirm that the statistics were successfully reset.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configResetStat().get();
@@ -157,7 +156,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code> to confirm that the statistics were successfully reset.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configResetStat(ALL_PRIMARIES).get();
@@ -217,8 +216,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
-     *     error.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
@@ -236,8 +234,7 @@ public interface ServerManagementClusterCommands {
      *     respective values to set.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
-     *     error.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB"), ALL_PRIMARIES).get();
@@ -322,11 +319,179 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<Long>> lastsave(Route route);
 
     /**
+     * Synchronously saves the dataset to disk.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/save/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = client.save().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> save();
+
+    /**
+     * Synchronously saves the dataset to disk.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/save/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = client.save(ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> save(@NonNull Route route);
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsave().get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsave();
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsave(ALL_PRIMARIES).get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsave(@NonNull Route route);
+
+    /**
+     * Schedules a background save of the database.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsaveSchedule().get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsaveSchedule();
+
+    /**
+     * Schedules a background save of the database.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsaveSchedule(ALL_PRIMARIES).get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsaveSchedule(@NonNull Route route);
+
+    /**
+     * Aborts all in-progress and scheduled background saves.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Valkey 8.1
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsaveCancel().get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsaveCancel();
+
+    /**
+     * Aborts all in-progress and scheduled background saves.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @since Valkey 8.1
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgsaveCancel(ALL_PRIMARIES).get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background saving");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgsaveCancel(@NonNull Route route);
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgrewriteaof().get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background append only file rewriting");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgrewriteaof();
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.bgrewriteaof(ALL_PRIMARIES).get();
+     * for (String value : response.getMultiValue().values()) {
+     *     assert value.contains("Background append only file rewriting");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> bgrewriteaof(@NonNull Route route);
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushall().get();
@@ -342,7 +507,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushall(ASYNC).get();
@@ -357,7 +522,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -375,7 +540,7 @@ public interface ServerManagementClusterCommands {
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -390,7 +555,7 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushdb().get();
@@ -406,7 +571,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushdb(ASYNC).get();
@@ -421,7 +586,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -439,7 +604,7 @@ public interface ServerManagementClusterCommands {
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -912,4 +1077,270 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Returns the latency spike time series for the specified event.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command").get();
+     * for (Map.Entry<String, Object[][]> node : history.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " entries");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(@NonNull String event);
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command", RANDOM).get();
+     * for (Object[] entry : history.getSingleValue()) {
+     *     System.out.println("Time: " + entry[0] + ", Latency: " + entry[1]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(
+            @NonNull String event, @NonNull Route route);
+
+    /**
+     * Reports the latest latency events logged by the server.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return A cluster value containing array(s) of arrays representing latency event info.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest().get();
+     * for (Map.Entry<String, Object[][]> node : latest.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " events");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest();
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of arrays representing latency event info.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest(RANDOM).get();
+     * for (Object[] info : latest.getSingleValue()) {
+     *     System.out.println("Event: " + info[0] + ", Latest duration: " + info[2]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset().get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset();
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}).get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events);
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}, ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events, @NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns a report about memory problems detected by the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor().get();
+     * for (Map.Entry<String, String> entry : report.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor();
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor(RANDOM).get();
+     * String singleReport = report.getSingleValue();
+     * System.out.println("Memory report: " + singleReport);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns the internal statistics of the memory allocator.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return A cluster value containing the memory allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats().get();
+     * for (Map.Entry<String, String> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats();
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the memory allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats(RANDOM).get();
+     * String singleStats = stats.getSingleValue();
+     * System.out.println("Allocator stats: " + singleStats);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge();
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge(ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns detailed memory consumption statistics of the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats().get();
+     * for (Map.Entry<String, Map<String, Object>> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: total.allocated=" + entry.getValue().get("total.allocated"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats();
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats(RANDOM).get();
+     * Map<String, Object> singleStats = stats.getSingleValue();
+     * System.out.println("Total allocated: " + singleStats.get("total.allocated"));
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route);
 }

@@ -6,6 +6,8 @@ plugins {
 rootProject.name = 'glide'
 
 include 'client'
+include 'jedis-compat-shared'
 include 'jedis-compatibility'
+include 'jedis-4-compatibility'
 include 'integTest'
 include 'benchmarks'

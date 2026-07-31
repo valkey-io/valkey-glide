@@ -133,19 +133,19 @@ mod standalone_client_tests {
         let mut primary_responses = std::collections::HashMap::new();
         primary_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         primary_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
+            Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec().into()),
         );
         primary_responses.insert(
             "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
             Value::Map(vec![
-                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (Value::BulkString(b"proto".to_vec().into()), Value::Int(3)),
                 (
-                    Value::BulkString(b"role".to_vec()),
-                    Value::BulkString(b"master".to_vec()),
+                    Value::BulkString(b"role".to_vec().into()),
+                    Value::BulkString(b"master".to_vec().into()),
                 ),
             ]),
         );
@@ -156,19 +156,19 @@ mod standalone_client_tests {
         let mut replica_responses = std::collections::HashMap::new();
         replica_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         replica_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::BulkString(b"role:slave\r\n".to_vec()),
+            Value::BulkString(b"role:slave\r\n".to_vec().into()),
         );
         replica_responses.insert(
             "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
             Value::Map(vec![
-                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (Value::BulkString(b"proto".to_vec().into()), Value::Int(3)),
                 (
-                    Value::BulkString(b"role".to_vec()),
-                    Value::BulkString(b"replica".to_vec()),
+                    Value::BulkString(b"role".to_vec().into()),
+                    Value::BulkString(b"replica".to_vec().into()),
                 ),
             ]),
         );
@@ -190,7 +190,7 @@ mod standalone_client_tests {
         let mut responses = base;
         responses.insert(
             "*1\r\n$4\r\nINFO\r\n".to_string(),
-            Value::BulkString(format!("availability_zone:{az}\r\n").into_bytes()),
+            Value::BulkString(format!("availability_zone:{az}\r\n").into_bytes().into()),
         );
         responses
     }
@@ -1163,12 +1163,12 @@ mod standalone_client_tests {
         let mut responses = std::collections::HashMap::new();
         responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         // GET command response
         responses.insert(
             "*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n".to_string(),
-            Value::BulkString(b"bar".to_vec()),
+            Value::BulkString(b"bar".to_vec().into()),
         );
         // SET command response (for testing write blocking)
         responses.insert(
@@ -1494,7 +1494,7 @@ mod standalone_client_tests {
             let value = read_result.unwrap();
             assert_eq!(
                 value,
-                Value::BulkString(b"test_value".to_vec()),
+                Value::BulkString(b"test_value".to_vec().into()),
                 "Read value should match written value"
             );
 

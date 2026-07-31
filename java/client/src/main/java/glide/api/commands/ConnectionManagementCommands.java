@@ -2,6 +2,8 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.ClientPauseMode;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -139,6 +141,48 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> select(long index);
 
     /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to suspend clients.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientPause(1000).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout);
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The pause mode to use.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientPause(1000, ClientPauseMode.WRITE).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode);
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientUnpause().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientUnpause();
+
+    /**
      * Resets the connection state.
      *
      * @see <a href="https://valkey.io/commands/reset/">valkey.io</a> for details.
@@ -150,4 +194,37 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> reset();
+
+    // TODO #6144: Move to a shared {@code ConnectionManagementBaseCommands} interface once created
+
+    /**
+     * Returns information about the current client connection's use of the server assisted client
+     * side caching feature.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @return A {@link Map} with the client's tracking state. The map contains:
+     *     <ul>
+     *       <li>{@code flags}: a {@link java.util.Set} of tracking flags. See <a
+     *           href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for the full
+     *           list.
+     *       <li>{@code redirect}: a {@link Long} with the client ID receiving invalidation messages,
+     *           or {@code -1} if not redirecting
+     *       <li>{@code prefixes}: an {@code Object[]} of key prefixes monitored for invalidation
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Tracking off (default):
+     * Map<String, Object> info = client.clientTrackingInfo().get();
+     * Set<String> flags = (Set<String>) info.get("flags");     // e.g. {"off"}
+     * Long redirect = (Long) info.get("redirect");              // e.g. -1L
+     * Object[] prefixes = (Object[]) info.get("prefixes");     // e.g. []
+     * // Tracking on with prefix:
+     * // {"flags": {"on", "noloop"}, "redirect": -1L, "prefixes": ["key:"]}
+     * for (Object prefix : (Object[]) info.get("prefixes")) {
+     *     System.out.println((String) prefix);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> clientTrackingInfo();
 }

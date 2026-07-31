@@ -1,5 +1,5 @@
 //! JNI client management infrastructure extracted from JNI-java implementation
-//! This module provides direct JNI calls to glide-core while preserving protobuf serialization
+//! This module provides direct JNI calls to glide-core
 
 use anyhow::Result;
 use dashmap::DashMap;
@@ -80,6 +80,8 @@ pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
 static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 
 // Defaults for runtime and callback workers
+// NOTE: minimum 2 worker threads required for MultiplexedConnection (scope feature).
+// The connection's internal reader task must run concurrently with command sends.
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 
@@ -208,6 +210,9 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
         let client = create_glide_client(cfg, Some(tx)).await?;
         table.insert(handle_id, client.clone());
 
+        // Register in the glide-core scope registry for scope command execution
+        glide_core::scope::register_client(handle_id, client.clone());
+
         // Always spawn push notification handler
         let jvm_arc = JVM.get().cloned();
         let handle_for_java = handle_id as jlong;
@@ -233,7 +238,7 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
 
     let as_bytes = |v: &Value| -> Option<Vec<u8>> {
         match v {
-            Value::BulkString(b) => Some(b.clone()),
+            Value::BulkString(b) => Some(b.to_vec()),
             _ => None,
         }
     };
@@ -712,7 +717,7 @@ fn create_direct_byte_buffer<'local>(
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            let (id, ptr, len) = register_native_buffer(data);
+            let (id, ptr, len) = register_native_buffer(data.into());
             let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
             // Register Java-side cleaner to free native buffer when GC'd
             let obj: JObject = bb.into();
@@ -1008,7 +1013,12 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
 /// (e.g., inflight limit exceeded) where the Java thread must not park.
 ///
 /// Requires the calling thread to already have a JNIEnv (which JNI entry points always do).
-pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, message: &str) {
+pub fn complete_error_sync(
+    env: &mut JNIEnv,
+    callback_id: jni::sys::jlong,
+    message: &str,
+    error_code: i32,
+) {
     let Ok(method_cache) = get_method_cache(env) else {
         log::error!(
             "complete_error_sync: method cache not initialized for callback_id={}",
@@ -1028,7 +1038,6 @@ pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, messa
     };
 
     // Call AsyncRegistry.completeCallbackWithErrorCode(callbackId, errorCode, errorMessage)
-    // Error code 4 = RequestException (matches the existing inflight error path)
     let result = unsafe {
         env.call_static_method_unchecked(
             &method_cache.async_handle_table_class,
@@ -1036,9 +1045,9 @@ pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, messa
             jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
             &[
                 jni::sys::jvalue { j: callback_id },
-                jni::sys::jvalue { i: 4 }, // RequestException error code
+                jni::sys::jvalue { i: error_code },
                 jni::sys::jvalue {
-                    l: error_msg.into_raw(),
+                    l: error_msg.as_raw(),
                 },
             ],
         )

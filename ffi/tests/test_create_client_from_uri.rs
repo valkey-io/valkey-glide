@@ -14,8 +14,12 @@ struct Server {
 
 impl Server {
     fn new() -> Self {
+        Self::with_requirepass(None)
+    }
+
+    fn with_requirepass(password: Option<&str>) -> Self {
         let port = Self::get_available_port();
-        let process = Self::start_server(port);
+        let process = Self::start_server(port, password);
         Self { process, port }
     }
 
@@ -27,16 +31,19 @@ impl Server {
             .expect("Failed to find an available port")
     }
 
-    fn start_server(port: u16) -> Child {
+    fn start_server(port: u16, requirepass: Option<&str>) -> Child {
         let run_server = |engine_type: &str| {
-            Command::new(engine_type)
-                .arg("--port")
+            let mut cmd = Command::new(engine_type);
+            cmd.arg("--port")
                 .arg(port.to_string())
                 .arg("--save")
                 .arg("")
                 .arg("--appendonly")
-                .arg("no")
-                .spawn()
+                .arg("no");
+            if let Some(pw) = requirepass {
+                cmd.arg("--requirepass").arg(pw);
+            }
+            cmd.spawn()
         };
 
         let child = match run_server("valkey-server") {
@@ -1114,6 +1121,515 @@ fn test_create_client_from_uri_invalid_service_type() {
     assert!(error.contains("Unknown service type") || error.contains("INVALID_SERVICE"));
 
     unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_with_client_side_cache_all_fields() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": 2048,
+            "entry_ttl_ms": 60000,
+            "eviction_policy": "LRU",
+            "enable_metrics": true
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!(
+            "Failed to create client with client_side_cache (all fields): {}",
+            error
+        );
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_with_client_side_cache_required_fields_only() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!(
+            "Failed to create client with client_side_cache (required fields only): {}",
+            error
+        );
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_with_client_side_cache_lfu_policy() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": 512,
+            "entry_ttl_ms": 30000,
+            "eviction_policy": "LFU"
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!(
+            "Failed to create client with client_side_cache (LFU policy): {}",
+            error
+        );
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_invalid_eviction_policy() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 60000,
+            "eviction_policy": "INVALID"
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("Unknown eviction_policy") || error.contains("INVALID"),
+        "expected eviction_policy error, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_missing_max_cache_kb() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "entry_ttl_ms": 60000
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("max_cache_kb is required"),
+        "expected missing max_cache_kb error, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_missing_entry_ttl_ms() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": 1024
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("entry_ttl_ms is required"),
+        "expected missing entry_ttl_ms error, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_invalid_max_cache_kb_type() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{
+        "client_side_cache": {
+            "max_cache_kb": "not_a_number",
+            "entry_ttl_ms": 60000
+        }
+    }"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("max_cache_kb must be a positive integer"),
+        "expected type error for max_cache_kb, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_not_an_object() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(r#"{"client_side_cache": "not_an_object"}"#).unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("client_side_cache must be an object"),
+        "expected object type error, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[rstest]
+#[case("lru")]
+#[case("lfu")]
+#[case("LrU")]
+#[case("lFu")]
+fn test_create_client_from_uri_client_side_cache_case_insensitive_eviction_policy(
+    #[case] eviction_policy: &str,
+) {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(format!(
+        r#"{{"client_side_cache": {{"max_cache_kb": 256, "entry_ttl_ms": 5000, "eviction_policy": "{}"}}}}"#,
+        eviction_policy
+    ))
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Expected success for eviction_policy={eviction_policy:?}, got: {error}");
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_rejects_cache_id() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{"client_side_cache": {"max_cache_kb": 256, "entry_ttl_ms": 5000, "cache_id": "user-supplied-id"}}"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("cache_id"),
+        "Error should mention cache_id, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options =
+        CString::new(r#"{"client_side_cache": {"max_cache_kb": 0, "entry_ttl_ms": 1000}}"#)
+            .unwrap();
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+    assert!(
+        !conn_response.connection_error_message.is_null(),
+        "Expected error for max_cache_kb=0"
+    );
+    assert!(conn_response.conn_ptr.is_null());
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("max_cache_kb"),
+        "Expected max_cache_kb error, got: {error}"
+    );
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+// Live-server end-to-end regression test for issue #6659: a URI with a
+// percent-encoded reserved character in the password must decode before
+// AUTH is issued, otherwise the server rejects the connection.
+//
+// Prior to the fix, `redis://:p%40ss@host` sent `AUTH p%40ss` on the wire.
+// With `requirepass "p@ss"` set on the server side, connection failed.
+// The fix percent-decodes userinfo, so the server now receives `AUTH p@ss`
+// and the connection succeeds.
+#[test]
+fn test_create_client_from_uri_with_reserved_char_password_authenticates() {
+    let password = "p@ss";
+    let server = Server::with_requirepass(Some(password));
+    // "@" is percent-encoded as "%40" in the URI. Without decoding on the FFI
+    // side, the server would see "p%40ss" and reject the AUTH command.
+    let uri = CString::new(format!("redis://:p%40ss@127.0.0.1:{}", server.port)).unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if !conn_response.connection_error_message.is_null() {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!(
+            "expected successful AUTH with percent-encoded password `p%40ss` \
+             (server requirepass = `{password}`), got: {error}"
+        );
+    }
+    assert!(
+        !conn_response.conn_ptr.is_null(),
+        "expected a live connection after successful AUTH"
+    );
+
+    unsafe {
+        close_client(conn_response.conn_ptr);
         free_connection_response(response as *mut ConnectionResponse);
         drop(Box::from_raw(client_type));
     }

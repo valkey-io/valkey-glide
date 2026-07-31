@@ -25,6 +25,7 @@ const (
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 	AuthKeyword       string = "AUTH"       // Valkey API keyword for authentication.
 	Auth2Keyword      string = "AUTH2"      // Valkey API keyword for authentication with username and password.
+	KeysKeyword       string = "KEYS"       // Valkey API keyword for specifying multiple keys in commands like MIGRATE.
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
 	TypeKeyword       string = "TYPE"

@@ -16,6 +16,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -253,12 +255,11 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_VALK
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.protobuf.ByteString;
-import command_request.CommandRequestOuterClass.Command;
-import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
@@ -341,7 +342,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getBatchBuilders")
     public void batch_builds_protobuf_request(BaseBatch<?> batch) {
-        List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
+        List<Pair<RequestType, byte[][]>> results = new LinkedList<>();
 
         batch.get("key");
         results.add(Pair.of(Get, buildArgs("key")));
@@ -700,6 +701,18 @@ public class BatchTests {
 
         batch.clientGetName();
         results.add(Pair.of(ClientGetName, buildArgs()));
+
+        batch.clientPause(1000);
+        results.add(Pair.of(ClientPause, buildArgs("1000")));
+
+        batch.clientPause(500, ClientPauseMode.WRITE);
+        results.add(Pair.of(ClientPause, buildArgs("500", "WRITE")));
+
+        batch.clientPause(500, ClientPauseMode.ALL);
+        results.add(Pair.of(ClientPause, buildArgs("500", "ALL")));
+
+        batch.clientUnpause();
+        results.add(Pair.of(ClientUnpause, buildArgs()));
 
         batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));
@@ -1689,23 +1702,22 @@ public class BatchTests {
         batch.wait(1L, 1000L);
         results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
-        command_request.CommandRequestOuterClass.Batch protobufbatch = batch.getProtobufBatch().build();
+        java.util.List<BatchCommand> batchCommands = batch.getCommands();
 
-        for (int idx = 0; idx < protobufbatch.getCommandsCount(); idx++) {
-            Command protobuf = protobufbatch.getCommands(idx);
+        for (int idx = 0; idx < batchCommands.size(); idx++) {
+            BatchCommand cmd = batchCommands.get(idx);
 
-            assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
-            assertEquals(
-                    results.get(idx).getRight().getArgsCount(), protobuf.getArgsArray().getArgsCount());
-            assertEquals(results.get(idx).getRight(), protobuf.getArgsArray());
+            assertEquals(results.get(idx).getLeft().getNumber(), cmd.getRequestType());
+            byte[][] expectedArgs = results.get(idx).getRight();
+            assertArrayEquals(expectedArgs, cmd.getArgs());
         }
     }
 
-    static ArgsArray buildArgs(String... args) {
-        ArgsArray.Builder builder = ArgsArray.newBuilder();
-        for (String arg : args) {
-            builder.addArgs(ByteString.copyFromUtf8(arg));
+    static byte[][] buildArgs(String... args) {
+        byte[][] result = new byte[args.length][];
+        for (int i = 0; i < args.length; i++) {
+            result[i] = args[i].getBytes(java.nio.charset.StandardCharsets.UTF_8);
         }
-        return builder.build();
+        return result;
     }
 }

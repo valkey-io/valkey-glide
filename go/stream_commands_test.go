@@ -187,7 +187,8 @@ func ExampleClient_XAutoClaim() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -221,7 +222,8 @@ func ExampleClusterClient_XAutoClaim() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -255,7 +257,8 @@ func ExampleClient_XAutoClaimWithOptions() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -289,7 +292,8 @@ func ExampleClusterClient_XAutoClaimWithOptions() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -323,7 +327,8 @@ func ExampleClient_XAutoClaimJustId() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -356,7 +361,8 @@ func ExampleClusterClient_XAutoClaimJustId() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -389,7 +395,8 @@ func ExampleClient_XAutoClaimJustIdWithOptions() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -423,7 +430,8 @@ func ExampleClusterClient_XAutoClaimJustIdWithOptions() {
 		},
 		*options.NewXAddOptions().SetId("0-1"),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 		*options.NewXAddOptions().SetId("0-2"),
@@ -613,7 +621,8 @@ func ExampleClient_XRead() {
 	key := "12345"
 	streamId := "12345-1"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -650,7 +659,8 @@ func ExampleClusterClient_XRead() {
 	key := "12345"
 	streamId := "12345-1"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -689,18 +699,21 @@ func ExampleClient_XReadWithOptions() {
 
 	genStreamId := func(key string, base int, offset int) string { return fmt.Sprintf("%s-%d", key, base+offset) } // helper function to generate stream ids
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
-	response, err := client.XReadWithOptions(context.Background(),
+	response, err := client.XReadWithOptions(
+		context.Background(),
 		map[string]string{key: genStreamId(key, streambase, 0)},
 		*options.NewXReadOptions().SetCount(1),
 	)
@@ -736,18 +749,21 @@ func ExampleClusterClient_XReadWithOptions() {
 
 	genStreamId := func(key string, base int, offset int) string { return fmt.Sprintf("%s-%d", key, base+offset) } // helper function to generate stream ids
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 0)),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(genStreamId(key, streambase, 1)),
 	)
 
-	response, err := client.XReadWithOptions(context.Background(),
+	response, err := client.XReadWithOptions(
+		context.Background(),
 		map[string]string{key: genStreamId(key, streambase, 0)},
 		*options.NewXReadOptions().SetCount(1),
 	)
@@ -780,7 +796,8 @@ func ExampleClient_XDel() {
 	var client *Client = getExampleClient() // example helper function
 	key := "12345"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId("0-1"),
@@ -799,7 +816,8 @@ func ExampleClusterClient_XDel() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "12345"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId("0-1"),
@@ -894,7 +912,8 @@ func ExampleClient_XPendingWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
-	details, err := client.XPendingWithOptions(context.Background(),
+	details, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
@@ -940,7 +959,8 @@ func ExampleClusterClient_XPendingWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
 
-	details, err := client.XPendingWithOptions(context.Background(),
+	details, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer),
@@ -1062,12 +1082,14 @@ func ExampleClient_XGroupSetIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(streamId2),
@@ -1114,12 +1136,14 @@ func ExampleClusterClient_XGroupSetIdWithOptions() {
 
 	client.XGroupCreateWithOptions(context.Background(), key, group, "0", *options.NewXGroupCreateOptions().SetMakeStream())
 	client.XGroupCreateConsumer(context.Background(), key, group, consumer)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId1),
 	)
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field3", Value: "value3"}, {Field: "field4", Value: "value4"}},
 		*options.NewXAddOptions().SetId(streamId2),
@@ -1162,7 +1186,8 @@ func ExampleClient_XGroupCreate() {
 	streamId := "12345-1"
 	group := "g12345"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -1183,7 +1208,8 @@ func ExampleClusterClient_XGroupCreate() {
 	streamId := "12345-1"
 	group := "g12345"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -1317,7 +1343,8 @@ func ExampleClient_XGroupDelConsumer() {
 	consumer := "c12345"
 	streamId := "12345-1"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -1343,7 +1370,8 @@ func ExampleClusterClient_XGroupDelConsumer() {
 	consumer := "c12345"
 	streamId := "12345-1"
 
-	client.XAddWithOptions(context.Background(),
+	client.XAddWithOptions(
+		context.Background(),
 		key,
 		[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field2", Value: "value2"}},
 		*options.NewXAddOptions().SetId(streamId),
@@ -1447,7 +1475,8 @@ func ExampleClient_XClaim() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1503,7 +1532,8 @@ func ExampleClusterClient_XClaim() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1559,7 +1589,8 @@ func ExampleClient_XClaimWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1626,7 +1657,8 @@ func ExampleClusterClient_XClaimWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1693,7 +1725,8 @@ func ExampleClient_XClaimJustId() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1743,7 +1776,8 @@ func ExampleClusterClient_XClaimJustId() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1793,7 +1827,8 @@ func ExampleClient_XClaimJustIdWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -1845,7 +1880,8 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 	)
 	client.XReadGroup(context.Background(), group, consumer1, map[string]string{key: ">"})
 
-	result, err := client.XPendingWithOptions(context.Background(),
+	result, err := client.XPendingWithOptions(
+		context.Background(),
 		key,
 		group,
 		*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),

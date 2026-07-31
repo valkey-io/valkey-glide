@@ -6,12 +6,25 @@ from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
+from glide_shared.commands.client_tracking import (
+    ClientTrackingInfo,
+    _parse_client_tracking_info,
+)
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+    MigrateOptions,
 )
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history,
+    _parse_latency_latest,
+)
+from glide_shared.commands.memory import MemoryStats, _parse_memory_stats
 from glide_shared.constants import (
     TOK,
     TEncodable,
@@ -289,6 +302,30 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             Optional[bytes], self._execute_command(RequestType.ClientGetName, [])
+        )
+
+    def client_tracking_info(self) -> ClientTrackingInfo:
+        """
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
+
+        See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
+
+        Returns:
+            ClientTrackingInfo: The tracking info for the client.
+
+        Examples:
+            >>> info = client.client_tracking_info()
+            >>> print(info.flags)
+                {'off'}
+            >>> print(info.redirect)
+                -1
+        """
+        return _parse_client_tracking_info(
+            cast(
+                Mapping,
+                self._execute_command(RequestType.ClientTrackingInfo, []),
+            ),
         )
 
     def dbsize(self) -> int:
@@ -611,6 +648,99 @@ class StandaloneCommands(CoreCommands):
         return cast(
             int,
             self._execute_command(RequestType.LastSave, []),
+        )
+
+    def save(self) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            self._execute_command(RequestType.Save, []),
+        )
+
+    def bgsave(self) -> str:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> client.bgsave()
+                "Background saving started"
+        """
+        return cast(
+            str,
+            self._execute_command(RequestType.BgSave, []),
+        )
+
+    def bgsave_schedule(self) -> str:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> client.bgsave_schedule()
+                "Background saving scheduled"
+        """
+        return cast(
+            str,
+            self._execute_command(RequestType.BgSave, ["SCHEDULE"]),
+        )
+
+    def bgsave_cancel(self) -> str:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> client.bgsave_cancel()
+                "Background saving cancelled"
+        """
+        return cast(
+            str,
+            self._execute_command(RequestType.BgSave, ["CANCEL"]),
+        )
+
+    def bgrewriteaof(self) -> str:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> client.bgrewriteaof()
+                "Background append only file rewriting started"
+        """
+        return cast(
+            str,
+            self._execute_command(RequestType.BgRewriteAof, []),
         )
 
     def publish(self, message: TEncodable, channel: TEncodable) -> int:
@@ -992,4 +1122,320 @@ class StandaloneCommands(CoreCommands):
         return cast(
             List[Union[bytes, List[bytes]]],
             self._execute_command(RequestType.Scan, args),
+        )
+
+    def client_pause(self, timeout: int, mode: Optional[ClientPauseMode] = None) -> TOK:
+        """
+        Suspends all clients for the specified timeout.
+
+        See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
+
+        Args:
+            timeout (int): The time in milliseconds to pause clients.
+            mode (Optional[ClientPauseMode]): The pause mode to use.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_pause(1000)
+                OK
+            >>> client.client_pause(5000, ClientPauseMode.WRITE)
+                OK
+        """
+        args: List[TEncodable] = [str(timeout)]
+        if mode is not None:
+            args.append(mode.value)
+        return cast(TOK, self._execute_command(RequestType.ClientPause, args))
+
+    def client_unpause(self) -> TOK:
+        """
+        Resumes processing commands on all clients.
+
+        See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_unpause()
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ClientUnpause, []))
+
+    def latency_history(self, event: TEncodable) -> List[LatencyEntry]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+
+        Returns:
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty list
+                if the event doesn't exist.
+
+        Examples:
+            >>> history = client.latency_history("command")
+            >>> for entry in history:
+            ...     print(f"Time: {entry.time}, Latency: {entry.latency}")
+        """
+        return _parse_latency_history(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyHistory, [event]),
+            ),
+        )
+
+    def latency_latest(self) -> List[LatencyEventInfo]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Returns:
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = client.latency_latest()
+            >>> for info in latest:
+            ...     print(f"Event: {info.event_name}, Latest: {info.latest_duration}")
+        """
+        return _parse_latency_latest(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyLatest, []),
+            ),
+        )
+
+    def latency_reset(self, *events: TEncodable) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+
+        Returns:
+            int: The number of event time series that were reset.
+
+        Examples:
+            >>> client.latency_reset()
+                2
+            >>> client.latency_reset("command")
+                1
+        """
+        return cast(
+            int,
+            self._execute_command(RequestType.LatencyReset, list(events)),
+        )
+
+    def failover(
+        self,
+        host: Optional[TEncodable] = None,
+        port: Optional[int] = None,
+        force: bool = False,
+        abort: bool = False,
+        timeout_ms: Optional[int] = None,
+    ) -> TOK:
+        """
+        Starts a coordinated failover from the connected primary to one of its replicas.
+        This is the standalone equivalent of CLUSTER FAILOVER.
+
+        See [valkey.io](https://valkey.io/commands/failover/) for more details.
+
+        Args:
+            host (Optional[TEncodable]): The host of the target replica (requires port).
+            port (Optional[int]): The port of the target replica (requires host).
+            force (bool): If True, forces failover after timeout (requires host, port, and timeout_ms).
+            abort (bool): If True, aborts an ongoing failover.
+            timeout_ms (Optional[int]): Timeout in milliseconds.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.failover()
+                OK
+            >>> client.failover(abort=True)
+                OK
+        """
+        args: List[TEncodable] = []
+        if (host is None) != (port is None):
+            raise ValueError("Both host and port must be provided together")
+        if force and (host is None or port is None):
+            raise ValueError("force requires host and port to be specified")
+        if abort:
+            args.append("ABORT")
+        else:
+            if host is not None and port is not None:
+                args.extend(["TO", host, str(port)])
+                if force:
+                    args.append("FORCE")
+            if timeout_ms is not None:
+                args.extend(["TIMEOUT", str(timeout_ms)])
+        return cast(TOK, self._execute_command(RequestType.FailOver, args))
+
+    def replicaof(self, host: TEncodable, port: int) -> TOK:
+        """
+        Makes the server a replica of the specified primary.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Args:
+            host (TEncodable): The host of the primary to replicate.
+            port (int): The port of the primary to replicate.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.replicaof("localhost", 6379)
+                OK
+        """
+        return cast(
+            TOK, self._execute_command(RequestType.ReplicaOf, [host, str(port)])
+        )
+
+    def replicaof_no_one(self) -> TOK:
+        """
+        Promotes the current server to a primary by stopping replication.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.replicaof_no_one()
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"]))
+
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        keys: Union[TEncodable, List[TEncodable]],
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> str:
+        """
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. On success, the key(s) are deleted from the source instance.
+        Pass a list to migrate multiple keys in one command.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Additional migration options.
+
+        Returns:
+            str: "OK" on success, or "NOKEY" if no keys were found.
+
+        Examples:
+            >>> client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
+            >>> client.migrate("127.0.0.1", 6380, ["key1", "key2"], 0, 5000)
+        """
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
+        return cast(
+            str,
+            self._execute_command(RequestType.Migrate, args),
+        )
+
+    # TODO #6166: move to shared base class
+
+    def memory_doctor(self) -> str:
+        """
+        Returns a report about memory problems detected by the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
+
+        Returns:
+            str: The memory diagnostic report.
+
+        Examples:
+            >>> report = client.memory_doctor()
+            >>> print("Memory report:", report)
+        """
+        response = self._execute_command(RequestType.MemoryDoctor, [])
+        return cast(bytes, response).decode()
+
+    def memory_malloc_stats(self) -> str:
+        """
+        Returns the internal statistics of the memory allocator.
+
+        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
+
+        Returns:
+            str: The memory allocator statistics.
+
+        Examples:
+            >>> report = client.memory_malloc_stats()
+            >>> print("Allocator stats:", report)
+        """
+        response = self._execute_command(RequestType.MemoryMallocStats, [])
+        return cast(bytes, response).decode()
+
+    def memory_purge(self) -> TOK:
+        """
+        Asks the server to reclaim memory from the allocator back to the operating system.
+
+        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.memory_purge()
+                "OK"
+        """
+        return cast(TOK, self._execute_command(RequestType.MemoryPurge, []))
+
+    def memory_stats(self) -> MemoryStats:
+        """
+        Returns detailed memory consumption statistics of the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
+
+        Returns:
+            MemoryStats: A ``MemoryStats`` object containing detailed memory usage
+                statistics.
+
+        Examples:
+            >>> stats = client.memory_stats()
+            >>> print(f"Peak allocated: {stats.peak_allocated}")
+            >>> print(f"Total allocated: {stats.total_allocated}")
+        """
+        return _parse_memory_stats(
+            cast(
+                Mapping,
+                self._execute_command(RequestType.MemoryStats, []),
+            ),
         )

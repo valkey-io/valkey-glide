@@ -15,10 +15,10 @@ on:
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
     pull_request:
@@ -29,10 +29,10 @@ on:
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
     workflow_dispatch:
@@ -49,6 +49,10 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
             rc-version:
                 required: false
                 type: string
@@ -59,9 +63,17 @@ on:
                 description: "(Optional) Test run name"
     workflow_call:
         inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
                 default: false
 
 concurrency:
@@ -84,18 +96,29 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
                   run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
 
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -106,7 +129,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -114,20 +137,20 @@ jobs:
                   echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -181,7 +204,7 @@ jobs:
             - name: Upload logs and reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-report-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
@@ -194,20 +217,20 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ !github.event.inputs.rc-version }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Set up Go
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
 
             - name: Install protoc
-              uses: ./.github/workflows/install-rust-and-protoc
+              uses: ./.github/actions/install-protoc
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -230,24 +253,26 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: go
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-go-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: get-containers
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 25
         strategy:
             fail-fast: false
@@ -273,18 +298,18 @@ jobs:
                   fi
 
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   submodules: recursive
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -300,11 +325,11 @@ jobs:
 
             - name: Install zig
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
-              uses: ./.github/workflows/install-zig
+              uses: ./.github/actions/install-zig
               with:
                   target: ${{ matrix.host.TARGET }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -344,7 +369,7 @@ jobs:
             - name: Upload test reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
@@ -354,7 +379,8 @@ jobs:
 
     test-long-timeout:
         name: Go Long Timeout Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -365,7 +391,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -373,20 +399,20 @@ jobs:
                   echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -421,7 +447,7 @@ jobs:
             - name: Upload logs and reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |

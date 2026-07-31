@@ -30,7 +30,7 @@ configurations {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.1'
+    implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.6'
 
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
@@ -223,10 +223,12 @@ if (System.getenv("UBER_JAR_BUILD") == "true") {
     shadowJar.dependsOn('copyAllNativeLibs')
     compileTestJava.dependsOn('copyAllNativeLibs')
     javadoc.dependsOn('copyAllNativeLibs')
+    checkstyleMain.dependsOn('copyAllNativeLibs')
 } else {
     shadowJar.dependsOn('copyNativeLib')
     compileTestJava.dependsOn('copyNativeLib')
     javadoc.dependsOn('copyNativeLib')
+    checkstyleMain.dependsOn('copyNativeLib')
     copyNativeLib.dependsOn('buildRust')
 }
 

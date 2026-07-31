@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -41,4 +42,24 @@ type ConnectionManagementClusterCommands interface {
 		ctx context.Context,
 		routeOptions options.RouteOption,
 	) (models.ClusterValue[models.Result[string]], error)
+
+	ClientPause(ctx context.Context, timeout time.Duration) (string, error)
+
+	ClientPauseWithOptions(
+		ctx context.Context,
+		timeout time.Duration,
+		options options.ClientPauseClusterOptions,
+	) (string, error)
+
+	ClientUnpause(ctx context.Context) (string, error)
+
+	ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error)
+
+	// TODO #6144: Move to base class
+	ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error)
+
+	ClientTrackingInfoWithOptions(
+		ctx context.Context,
+		routeOptions options.RouteOption,
+	) (models.ClusterValue[models.ClientTrackingInfo], error)
 }

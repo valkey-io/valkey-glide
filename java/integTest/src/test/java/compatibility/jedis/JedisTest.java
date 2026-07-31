@@ -24,7 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
@@ -4033,7 +4035,7 @@ public class JedisTest {
 
         // Test MINID with XTrimParams (exact trimming)
         String key2 = "stream:" + UUID.randomUUID();
-        StreamEntryID firstId = jedis.xadd(key2, createMap("a", "1"));
+        jedis.xadd(key2, createMap("a", "1"));
         jedis.xadd(key2, createMap("b", "2"));
         StreamEntryID thirdId = jedis.xadd(key2, createMap("c", "3"));
 

@@ -257,7 +257,7 @@ pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<
 }
 /// Aggregate array responses into a single map.
 pub fn combine_map_results(values: Vec<Value>) -> RedisResult<Value> {
-    let mut map: HashMap<Vec<u8>, i64> = HashMap::new();
+    let mut map: HashMap<bytes::Bytes, i64> = HashMap::new();
 
     for value in values {
         match value {
@@ -549,7 +549,7 @@ where
                 {
                     // Last key reached; add the path argument index for each route and break
                     let path_idx = curr_arg_idx + 1;
-                    for (_, arg_indices) in routes.iter_mut() {
+                    for arg_indices in routes.values_mut() {
                         arg_indices.push(path_idx);
                     }
                     break;
@@ -595,12 +595,13 @@ impl ResponsePolicy {
 
             b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
-            | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
-            | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
-            | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
-            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
-            | b"UNWATCH" | b"WATCH" | b"RESET" => Some(ResponsePolicy::AllSucceeded),
+            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT PAUSE"
+            | b"CLIENT REPLY" | b"CLIENT SETNAME" | b"CLIENT SETINFO" | b"CLIENT UNPAUSE"
+            | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE" | b"FLUSHALL"
+            | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH" | b"FUNCTION LOAD"
+            | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET" | b"PING"
+            | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET" | b"UNWATCH"
+            | b"WATCH" | b"RESET" | b"SAVE" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
@@ -666,12 +667,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CONFIG REWRITE"
         | b"SCRIPT FLUSH"
         | b"SCRIPT LOAD"
-        | b"LATENCY RESET"
-        | b"LATENCY GRAPH"
-        | b"LATENCY HISTOGRAM"
-        | b"LATENCY HISTORY"
-        | b"LATENCY DOCTOR"
-        | b"LATENCY LATEST"
         | b"PUBSUB NUMPAT"
         | b"PUBSUB CHANNELS"
         | b"PUBSUB NUMSUB"
@@ -682,7 +677,9 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION KILL"
         | b"FUNCTION STATS" => RouteBy::AllNodes,
 
-        b"DBSIZE"
+        b"BGREWRITEAOF"
+        | b"BGSAVE"
+        | b"DBSIZE"
         | b"DEBUG"
         | b"FLUSHALL"
         | b"FLUSHDB"
@@ -694,11 +691,20 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION RESTORE"
         | b"INFO"
         | b"KEYS"
+        | b"LATENCY DOCTOR"
+        | b"LATENCY GRAPH"
+        | b"LATENCY HISTOGRAM"
+        | b"LATENCY HISTORY"
+        | b"LATENCY LATEST"
+        | b"LATENCY RESET"
         | b"MEMORY DOCTOR"
         | b"MEMORY MALLOC-STATS"
         | b"MEMORY PURGE"
         | b"MEMORY STATS"
         | b"PING"
+        | b"CLIENT PAUSE"
+        | b"CLIENT UNPAUSE"
+        | b"SAVE"
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
@@ -752,18 +758,15 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"ACL LOG"
         | b"ACL USERS"
         | b"ACL WHOAMI"
-        | b"BGSAVE"
         | b"CLIENT GETNAME"
         | b"CLIENT GETREDIR"
         | b"CLIENT ID"
         | b"CLIENT INFO"
         | b"CLIENT KILL"
         | b"CLIENT LIST"
-        | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
         | b"CLIENT UNBLOCK"
-        | b"CLIENT UNPAUSE"
         | b"CLUSTER COUNT-FAILURE-REPORTS"
         | b"CLUSTER INFO"
         | b"CLUSTER KEYSLOT"
@@ -790,7 +793,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"MODULE UNLOAD"
         | b"READONLY"
         | b"READWRITE"
-        | b"SAVE"
         | b"SCRIPT SHOW"
         | b"TFCALL"
         | b"TFCALLASYNC"
@@ -1962,8 +1964,8 @@ mod tests_routing {
         // For example `MGET foo bar baz {baz}baz2 {bar}bar2 {foo}foo2`
         let res1 = Value::Array(vec![Value::Nil, Value::Okay]);
         let res2 = Value::Array(vec![
-            Value::BulkString("1".as_bytes().to_vec()),
-            Value::BulkString("4".as_bytes().to_vec()),
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::BulkString("4".as_bytes().to_vec().into()),
         ]);
         let res3 = Value::Array(vec![Value::SimpleString("2".to_string()), Value::Int(3)]);
         let results = super::combine_and_sort_array_results(
@@ -1980,10 +1982,10 @@ mod tests_routing {
             results.unwrap(),
             Value::Array(vec![
                 Value::SimpleString("2".to_string()),
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Nil,
                 Value::Okay,
-                Value::BulkString("4".as_bytes().to_vec()),
+                Value::BulkString("4".as_bytes().to_vec().into()),
                 Value::Int(3),
             ])
         );
@@ -1993,7 +1995,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_key_value_paires() {
         // For example `MSET foo bar foo2 bar2 {foo}foo3 bar3`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2006,7 +2011,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Okay,
                 Value::Nil
             ])
@@ -2017,7 +2022,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_keys_and_path() {
         // For example `JSON.MGET foo bar {foo}foo2 $.a`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2030,7 +2038,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Nil,
                 Value::Okay,
             ])
@@ -2041,7 +2049,10 @@ mod tests_routing {
     fn test_combining_results_into_single_array_key_with_two_arg_triples() {
         // For example `JSON.MSET foo $.a bar foo2 $.f.a bar2 {foo}foo3 $.f bar3`
         let res1 = Value::Array(vec![Value::Okay]);
-        let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
+        let res2 = Value::Array(vec![
+            Value::BulkString("1".as_bytes().to_vec().into()),
+            Value::Nil,
+        ]);
         let results = super::combine_and_sort_array_results(
             vec![res1, res2],
             &[
@@ -2054,7 +2065,7 @@ mod tests_routing {
         assert_eq!(
             results.unwrap(),
             Value::Array(vec![
-                Value::BulkString("1".as_bytes().to_vec()),
+                Value::BulkString("1".as_bytes().to_vec().into()),
                 Value::Okay,
                 Value::Nil
             ])
@@ -2069,23 +2080,23 @@ mod tests_routing {
 
         let input = vec![
             Value::Array(vec![
-                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"key1".to_vec().into()),
                 Value::Int(5),
-                Value::BulkString(b"key2".to_vec()),
+                Value::BulkString(b"key2".to_vec().into()),
                 Value::Int(10),
             ]),
             Value::Array(vec![
-                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"key1".to_vec().into()),
                 Value::Int(3),
-                Value::BulkString(b"key3".to_vec()),
+                Value::BulkString(b"key3".to_vec().into()),
                 Value::Int(15),
             ]),
         ];
         let result = super::combine_map_results(input).unwrap();
         let mut expected = vec![
-            (Value::BulkString(b"key1".to_vec()), Value::Int(8)),
-            (Value::BulkString(b"key2".to_vec()), Value::Int(10)),
-            (Value::BulkString(b"key3".to_vec()), Value::Int(15)),
+            (Value::BulkString(b"key1".to_vec().into()), Value::Int(8)),
+            (Value::BulkString(b"key2".to_vec().into()), Value::Int(10)),
+            (Value::BulkString(b"key3".to_vec().into()), Value::Int(15)),
         ];
         expected.sort_unstable_by(|a, b| match (&a.0, &b.0) {
             (Value::BulkString(a_bytes), Value::BulkString(b_bytes)) => a_bytes.cmp(b_bytes),

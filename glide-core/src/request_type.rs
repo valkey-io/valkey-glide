@@ -835,7 +835,10 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SSubscribeBlocking => RequestType::SSubscribeBlocking,
             ProtobufRequestType::SUnsubscribeBlocking => RequestType::SUnsubscribeBlocking,
             ProtobufRequestType::GetSubscriptions => RequestType::GetSubscriptions,
-            _ => todo!(),
+            ProtobufRequestType::SetEx => RequestType::SetEx,
+            ProtobufRequestType::PSetEx => RequestType::PSetEx,
+            ProtobufRequestType::SetNX => RequestType::SetNX,
+            _ => RequestType::InvalidRequest,
         }
     }
 }
@@ -1418,7 +1421,10 @@ impl RequestType {
             RequestType::SSubscribeBlocking => Some(cmd("SSUBSCRIBE_BLOCKING")),
             RequestType::SUnsubscribeBlocking => Some(cmd("SUNSUBSCRIBE_BLOCKING")),
             RequestType::GetSubscriptions => Some(cmd("GET_SUBSCRIPTIONS")),
-            _ => todo!(),
+            RequestType::SetEx => Some(cmd("SETEX")),
+            RequestType::PSetEx => Some(cmd("PSETEX")),
+            RequestType::SetNX => Some(cmd("SETNX")),
+            _ => None,
         }
     }
 }

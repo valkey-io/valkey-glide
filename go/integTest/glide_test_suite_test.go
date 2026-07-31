@@ -51,6 +51,9 @@ type GlideTestSuite struct {
 	serverVersion   string
 	clients         []interfaces.GlideClientCommands
 	clusterClients  []interfaces.GlideClusterClientCommands
+	// Cached default clients reused across tests (pooled)
+	cachedStandaloneClient *glide.Client
+	cachedClusterClient    *glide.ClusterClient
 }
 
 var (
@@ -303,6 +306,12 @@ func TestGlideTestSuite(t *testing.T) {
 }
 
 func (suite *GlideTestSuite) TearDownSuite() {
+	if suite.cachedStandaloneClient != nil {
+		suite.cachedStandaloneClient.Close()
+	}
+	if suite.cachedClusterClient != nil {
+		suite.cachedClusterClient.Close()
+	}
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
 	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
@@ -318,17 +327,34 @@ func (suite *GlideTestSuite) TearDownTest() {
 		}
 	}
 
+	// Flush cached clients without closing (they're reused across tests)
+	if suite.cachedStandaloneClient != nil {
+		suite.cachedStandaloneClient.FlushDB(context.Background())
+		suite.cachedStandaloneClient.ClientSetName(context.Background(), "")
+	}
+	if suite.cachedClusterClient != nil {
+		suite.cachedClusterClient.FlushDB(context.Background())
+		suite.cachedClusterClient.ClientSetName(context.Background(), "")
+	}
+
+	// Close and flush any ad-hoc clients created during this test
 	for _, client := range suite.clients {
+		if client == interfaces.GlideClientCommands(suite.cachedStandaloneClient) {
+			continue
+		}
 		client.FlushDB(context.Background())
 		client.Close()
 	}
-	suite.clients = nil // Clear the slice
+	suite.clients = nil
 
 	for _, client := range suite.clusterClients {
+		if client == interfaces.GlideClusterClientCommands(suite.cachedClusterClient) {
+			continue
+		}
 		client.FlushDB(context.Background())
 		client.Close()
 	}
-	suite.clusterClients = nil // Clear the slice
+	suite.clusterClients = nil
 
 	// Clear the callback context for the next test
 	callbackCtx.Range(func(key, value any) bool {
@@ -423,9 +449,19 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 }
 
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
+	// Reuse cached client if still alive
+	if suite.cachedStandaloneClient != nil {
+		_, err := suite.cachedStandaloneClient.Ping(context.Background())
+		if err == nil {
+			return suite.cachedStandaloneClient
+		}
+		// Client is dead, recreate
+		suite.cachedStandaloneClient = nil
+	}
 	config := suite.defaultClientConfig()
 	client, err := suite.client(config)
 	require.NoError(suite.T(), err)
+	suite.cachedStandaloneClient = client
 	return client
 }
 
@@ -466,9 +502,19 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientC
 }
 
 func (suite *GlideTestSuite) defaultClusterClient() *glide.ClusterClient {
+	// Reuse cached client if still alive
+	if suite.cachedClusterClient != nil {
+		_, err := suite.cachedClusterClient.Ping(context.Background())
+		if err == nil {
+			return suite.cachedClusterClient
+		}
+		// Client is dead, recreate
+		suite.cachedClusterClient = nil
+	}
 	config := suite.defaultClusterClientConfig()
 	client, err := suite.clusterClient(config)
 	require.NoError(suite.T(), err)
+	suite.cachedClusterClient = client
 	return client
 }
 
@@ -493,7 +539,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
-			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout))
+			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout),
+		)
 	return glide.NewClient(clientConfig)
 }
 
@@ -502,7 +549,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 ) (*glide.ClusterClient, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(
-			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout),
+		).
 		WithRequestTimeout(requestTimeout)
 	return glide.NewClusterClient(clientConfig)
 }
@@ -558,6 +606,71 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 	if suite.serverVersion < version {
 		t.Skipf("This feature is added in version %s", version)
 	}
+}
+
+// Expected valid responses for BGSAVE and BGSAVE SCHEDULE.
+var bgsaveResponses = []string{
+	"Background saving started",
+	"Background saving scheduled",
+}
+
+// Expected valid responses for BGREWRITEAOF.
+var bgrewriteaofResponses = []string{
+	"Background append only file rewriting started",
+	"Background append only file rewriting scheduled",
+}
+
+// Expected server error response for BGSAVE CANCEL when no save is in progress.
+const bgsaveNotCancelledResponse = "Background saving is currently not in progress or scheduled"
+
+// Route option for routing to a single primary node by slot key.
+var primarySlotRouteOption = options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
+// waitFor waits until a condition is met.
+func (suite *GlideTestSuite) waitFor(condition func() bool, failure string) {
+	t := suite.T()
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Fatal(failure)
+}
+
+// waitForSaveNotInProgress waits until no save (RDB save or AOF rewrite) is in progress.
+func (suite *GlideTestSuite) waitForSaveNotInProgress(client interfaces.BaseClientCommands) {
+	t := suite.T()
+	t.Helper()
+	suite.waitFor(func() bool {
+		var info string
+		switch c := client.(type) {
+		case *glide.Client:
+			result, err := c.InfoWithOptions(context.Background(), options.InfoOptions{
+				Sections: []constants.Section{constants.Persistence},
+			})
+			require.NoError(t, err)
+			info = result
+		case *glide.ClusterClient:
+			result, err := c.InfoWithOptions(context.Background(), options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
+			})
+			require.NoError(t, err)
+			if result.IsSingleValue() {
+				info = result.SingleValue()
+			} else {
+				for _, v := range result.MultiValue() {
+					info += v
+				}
+			}
+		}
+		return !strings.Contains(info, "rdb_bgsave_in_progress:1") &&
+			!strings.Contains(info, "aof_rewrite_in_progress:1")
+	}, "Timed out waiting for save to complete")
 }
 
 func (suite *GlideTestSuite) GenerateLargeUuid() string {

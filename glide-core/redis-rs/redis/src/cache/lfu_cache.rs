@@ -220,12 +220,15 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
 
         let result = cache.get(b"key1", CachedKeyType::String);
         assert!(result.is_some());
-        assert_eq!(result.unwrap(), Value::BulkString(b"value1".to_vec()));
+        assert_eq!(
+            result.unwrap(),
+            Value::BulkString(b"value1".to_vec().into())
+        );
     }
 
     #[test]
@@ -243,7 +246,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
 
         // Request with wrong type
@@ -262,16 +265,19 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value2".to_vec()),
+            Value::BulkString(b"value2".to_vec().into()),
         );
 
         let result = cache.get(b"key1", CachedKeyType::String);
-        assert_eq!(result.unwrap(), Value::BulkString(b"value2".to_vec()));
+        assert_eq!(
+            result.unwrap(),
+            Value::BulkString(b"value2".to_vec().into())
+        );
         assert_eq!(cache.entry_count(), 1);
     }
 
@@ -284,7 +290,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
         assert_eq!(cache.entry_count(), 1);
 
@@ -313,7 +319,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
 
         // Should exist before TTL expires
@@ -339,7 +345,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"val1".to_vec()),
+            Value::BulkString(b"val1".to_vec().into()),
         ); // Entry size ~60B
         cache.get(b"key1", CachedKeyType::String); // freq = 2
         cache.get(b"key1", CachedKeyType::String); // freq = 3
@@ -349,14 +355,14 @@ mod tests {
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"val2".to_vec()),
+            Value::BulkString(b"val2".to_vec().into()),
         );
 
         // Insert key3 to trigger eviction
         cache.insert(
             b"key3".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"val3".to_vec()),
+            Value::BulkString(b"val3".to_vec().into()),
         );
 
         // key1 should survive (high frequency)
@@ -377,13 +383,13 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v1".to_vec()),
+            Value::BulkString(b"v1".to_vec().into()),
         ); // Entry size ~60B
         sleep(Duration::from_millis(10)); // Ensure different timestamps
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v2".to_vec()),
+            Value::BulkString(b"v2".to_vec().into()),
         ); // Entry size ~60B
 
         // Both have frequency 1, key1 is older
@@ -392,7 +398,7 @@ mod tests {
         cache.insert(
             b"key3".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v3".to_vec()),
+            Value::BulkString(b"v3".to_vec().into()),
         );
 
         // key2 should survive (newer), key1 should be evicted (older)
@@ -406,7 +412,7 @@ mod tests {
         let cache = new_lfu_cache(make_config(100));
 
         // Try to insert entry larger than max cache size
-        let large_value = Value::BulkString(vec![0u8; 200]);
+        let large_value = Value::BulkString(vec![0u8; 200].into());
         cache.insert(b"large".to_vec(), CachedKeyType::String, large_value);
 
         // Should not be inserted
@@ -423,7 +429,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
 
         // Simulate hits
@@ -445,12 +451,12 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value2".to_vec()),
+            Value::BulkString(b"value2".to_vec().into()),
         );
 
         cache.invalidate(b"key1");
@@ -467,17 +473,17 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v1".to_vec()),
+            Value::BulkString(b"v1".to_vec().into()),
         );
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v2".to_vec()),
+            Value::BulkString(b"v2".to_vec().into()),
         );
         cache.insert(
             b"key3".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v3".to_vec()),
+            Value::BulkString(b"v3".to_vec().into()),
         );
 
         cache.flush_all();
@@ -494,19 +500,19 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         ); // Entry size ~60B
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value2".to_vec()),
+            Value::BulkString(b"value2".to_vec().into()),
         ); // Entry size ~60B
 
         // This insert should trigger eviction
         cache.insert(
             b"key3".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value3".to_vec()),
+            Value::BulkString(b"value3".to_vec().into()),
         );
 
         let metrics = cache.metrics().unwrap();
@@ -588,7 +594,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v1".to_vec()),
+            Value::BulkString(b"v1".to_vec().into()),
         );
 
         // Access multiple times
@@ -613,14 +619,14 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v1".to_vec()),
+            Value::BulkString(b"v1".to_vec().into()),
         );
         assert_eq!(cache.entry_count(), 1);
 
         cache.insert(
             b"key2".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"v2".to_vec()),
+            Value::BulkString(b"v2".to_vec().into()),
         );
         assert_eq!(cache.entry_count(), 2);
 

@@ -34,7 +34,7 @@ from glide_shared.commands.core_options import (
     MigrateOptions,
 )
 from glide_shared.commands.stream import StreamAddOptions
-from glide_shared.config import ProtocolVersion
+from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
 from glide_shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -50,12 +50,12 @@ from tests.utils.utils import (
 )
 
 
-def exec_batch(
+def _exec_batch_once(
     glide_sync_client: TGlideClient,
     batch: BaseBatch,
-    route: Optional[TSingleNodeRoute] = None,
-    timeout: Optional[int] = None,
-    raise_on_error: bool = False,
+    route: Optional[TSingleNodeRoute],
+    timeout: Optional[int],
+    raise_on_error: bool,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_sync_client, GlideClient):
         batch_options = BatchOptions(timeout=timeout)
@@ -74,8 +74,63 @@ def exec_batch(
         )
 
 
+def exec_batch(
+    glide_sync_client: TGlideClient,
+    batch: BaseBatch,
+    route: Optional[TSingleNodeRoute] = None,
+    timeout: Optional[int] = None,
+    raise_on_error: bool = False,
+    allow_null_result: bool = False,
+) -> Optional[List[TResult]]:
+    """Sync twin: retry once on None for atomic cluster batches. Tests that
+    legitimately expect None (WATCH-abort transactions) must pass
+    allow_null_result=True to opt out of the retry."""
+    result = _exec_batch_once(glide_sync_client, batch, route, timeout, raise_on_error)
+    if allow_null_result:
+        return result
+    is_atomic_cluster = isinstance(glide_sync_client, GlideClusterClient) and getattr(
+        batch, "is_atomic", False
+    )
+    if result is None and is_atomic_cluster and not raise_on_error:
+        result = _exec_batch_once(
+            glide_sync_client, batch, route, timeout, raise_on_error
+        )
+    return result
+
+
 @pytest.mark.anyio
 class TestSyncBatch:
+    @pytest.fixture(autouse=True)
+    def _evict_pooled_sync_client_before_test(self, request):
+        """Sync twin: evict the shared pooled GlideClusterClient for the
+        RESP3+cluster axis before every TestSyncBatch test. See the async
+        twin (test_batch.py::TestBatch._evict_pooled_client_before_test)
+        for rationale."""
+        try:
+            protocol = request.getfixturevalue("protocol")
+            cluster_mode = request.getfixturevalue("cluster_mode")
+        except Exception:
+            yield
+            return
+
+        should_evict = cluster_mode is True and protocol == ProtocolVersion.RESP3
+        if should_evict:
+            import contextlib
+
+            from tests.sync_tests.conftest import (
+                _get_worker_id,
+                _sync_client_pool,
+                _sync_client_pool_lock,
+            )
+
+            cache_key = (_get_worker_id(), True, protocol)
+            with _sync_client_pool_lock:
+                evicted = _sync_client_pool.pop(cache_key, None)
+            if evicted is not None:
+                with contextlib.suppress(Exception):
+                    evicted.close()
+        yield
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_batch_set_with_bytearray_and_memoryview(
@@ -239,7 +294,7 @@ class TestSyncBatch:
         result2 = client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = exec_batch(glide_sync_client, transaction)
+        result3 = exec_batch(glide_sync_client, transaction, allow_null_result=True)
         assert result3 is None
 
         client2.close()
@@ -1291,6 +1346,55 @@ class TestSyncBatch:
         assert result is not None
         assert isinstance(result[0], RequestError)
         assert isinstance(result[1], RequestError)
+
+        # Multi-key: empty keys list raises ValueError (standalone Batch only)
+        if not cluster_mode:
+            batch2 = Batch(is_atomic=False)
+            with pytest.raises(ValueError):
+                batch2.migrate("invalid-host", 6379, [], 0, 5000)
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_pipeline_migrate_success(
+        self, glide_sync_client: GlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = create_sync_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            glide_sync_client.set(key1, val1)
+            glide_sync_client.set(key2, val2)
+
+            batch = Batch(is_atomic=False)
+            batch.migrate(dest_host, dest_port, key1, 0, 5000)
+            batch.migrate(dest_host, dest_port, [key2], 0, 5000)
+            result = exec_batch(glide_sync_client, batch, raise_on_error=True)
+            assert result is not None
+            assert result[0] == OK or result[0] == b"OK"
+            assert result[1] == OK or result[1] == b"OK"
+            assert glide_sync_client.exists([key1, key2]) == 0
+            assert dest_client.get(key1) == val1.encode()
+            assert dest_client.get(key2) == val2.encode()
+        finally:
+            dest_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -3,15 +3,19 @@ package glide;
 
 import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -28,6 +32,9 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
@@ -35,14 +42,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -54,6 +65,25 @@ import lombok.experimental.UtilityClass;
 public class TestUtilities {
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
+
+    /** Expected server responses for BGSAVE and BGSAVE SCHEDULE. */
+    public static final Set<String> BGSAVE_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
+    public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
+            "Background saving is currently not in progress or scheduled";
+
+    /** Expected server responses for BGREWRITEAOF. */
+    public static final Set<String> BGREWRITEAOF_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList(
+                            "Background append only file rewriting started",
+                            "Background append only file rewriting scheduled"));
+
+    /** Route for routing to a single primary node by slot key. */
+    public static final SingleNodeRoute PRIMARY_SLOT_ROUTE = new SlotKeyRoute("1", SlotType.PRIMARY);
 
     private static final String REDIS_VERSION_KEY = "redis_version";
 
@@ -116,6 +146,10 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClusterClientConfiguration.builder()
+                                                    .connectionTimeout(10000)
+                                                    .build())
                                     .build())
                     .get();
         } else {
@@ -130,6 +164,8 @@ public class TestUtilities {
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
+                                    .advancedConfiguration(
+                                            AdvancedGlideClientConfiguration.builder().connectionTimeout(10000).build())
                                     .build())
                     .get();
         }
@@ -142,7 +178,7 @@ public class TestUtilities {
                 return Long.parseLong(line.split(":")[1]);
             }
         }
-        fail();
+        fail("Key '" + value + "' not found in INFO output");
         return 0;
     }
 
@@ -255,6 +291,57 @@ public class TestUtilities {
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
         return builder.useTLS(TLS);
+    }
+
+    /** Number of times {@link #createClientWithRetry} attempts the initial connect. */
+    public static final int MAX_CONNECT_ATTEMPTS = 3;
+
+    /** Backoff between {@link #createClientWithRetry} attempts, in milliseconds. */
+    public static final long CONNECT_RETRY_BACKOFF_MILLIS = 1000;
+
+    /**
+     * Creates a client by issuing fresh {@code createClient} attempts, retrying a bounded number of
+     * times when the initial connect fails transiently.
+     *
+     * <p>Under heavy CI load the server may not be accepting connections yet, so the first {@code
+     * createClient} can fail with e.g. "Connection refused" or "Request timed out" and sink an entire
+     * {@code @BeforeAll} setup before a single command runs. This helper retries the whole {@code
+     * createClient} call ({@value #MAX_CONNECT_ATTEMPTS} attempts, {@value
+     * #CONNECT_RETRY_BACKOFF_MILLIS}ms backoff) to survive that window. See issue #5343.
+     *
+     * <p>Glide's native reconnect strategy ({@code reconnectStrategy} / core {@code
+     * connection_retry_strategy}) is intentionally not used for this: it does retry the initial
+     * connect, but the whole retry loop is bounded by {@code connectionTimeout} (default ~2000ms, see
+     * {@code reconnecting_connection.rs} which wraps the loop in {@code timeout(connection_timeout,
+     * ...)}). Once that elapses {@code createClient} rejects, and the "retry forever" background
+     * reconnect only runs on a connection the awaited future has already abandoned. A server that is
+     * slow to accept for several seconds therefore needs fresh {@code createClient} attempts, each
+     * with a new connection-timeout budget, which is exactly what this helper provides. Matching that
+     * with native config would require globally raising {@code connectionTimeout}, slowing every
+     * other path that uses {@link #commonClientConfig()} / {@link #commonClusterClientConfig()}.
+     *
+     * <p>Only {@link ExecutionException} (a failed connect surfaced from {@code
+     * CompletableFuture.get()}) is retried; an {@link InterruptedException} is intentionally not
+     * retried and propagates.
+     *
+     * @param clientFactory supplies a fresh {@code createClient} future on each attempt
+     * @param <T> the client type produced (e.g. {@code GlideClient} or {@code GlideClusterClient})
+     * @return the connected client
+     */
+    @SneakyThrows
+    public static <T> T createClientWithRetry(Supplier<CompletableFuture<T>> clientFactory) {
+        ExecutionException lastException = null;
+        for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+            try {
+                return clientFactory.get().get();
+            } catch (ExecutionException e) {
+                lastException = e;
+                if (attempt < MAX_CONNECT_ATTEMPTS) {
+                    Thread.sleep(CONNECT_RETRY_BACKOFF_MILLIS);
+                }
+            }
+        }
+        throw lastException;
     }
 
     /**
@@ -747,5 +834,175 @@ public class TestUtilities {
                 .region(IAM_TEST_REGION_US_EAST_1)
                 .refreshIntervalSeconds(refreshIntervalSeconds)
                 .build();
+    }
+
+    /**
+     * Waits until no save (RDB save or AOF rewrite) is in progress.
+     *
+     * @param client The client to query.
+     */
+    public static void waitForSaveNotInProgress(@NonNull final BaseClient client) {
+        waitFor(() -> !isSaveInProgress(client), "Timed out waiting for save to complete");
+    }
+
+    /**
+     * Waits until a condition is met.
+     *
+     * @param condition A callable that returns {@code true} when the desired state is reached.
+     * @param failure Message to include in the assertion if the timeout is exceeded.
+     */
+    @SneakyThrows
+    public static void waitFor(Callable<Boolean> condition, String failure) {
+        long sleep = 100;
+        long timeout = 10000;
+
+        while (timeout > 0) {
+            if (condition.call()) {
+                return;
+            }
+
+            Thread.sleep(sleep);
+            timeout -= sleep;
+        }
+
+        fail(failure);
+    }
+
+    /**
+     * Returns {@code true} if a save (RDB save or AOF rewrite) is in progress on any node.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    private static boolean isSaveInProgress(@NonNull final BaseClient client) {
+        List<String> infos;
+        if (client instanceof GlideClient) {
+            infos = Collections.singletonList(((GlideClient) client).info().get());
+        } else {
+            ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
+            infos = new ArrayList<>(clusterInfo.getMultiValue().values());
+        }
+
+        return infos.stream()
+                .anyMatch(
+                        info ->
+                                info.contains("rdb_bgsave_in_progress:1")
+                                        || info.contains("aof_rewrite_in_progress:1"));
+    }
+
+    /** Returns the current server time as a Unix timestamp in seconds. */
+    @SneakyThrows
+    public static long getUnixSeconds(BaseClient client) {
+
+        // TODO #6166: Use a base client method to call time() directly.
+        if (client instanceof GlideClusterClient) {
+            return Long.parseLong(((GlideClusterClient) client).time().get()[0]);
+        }
+
+        return Long.parseLong(((GlideClient) client).time().get()[0]);
+    }
+
+    /** Asserts that a CLIENT TRACKINGINFO response matches expected tracking state. */
+    @SuppressWarnings("unchecked")
+    public static void assertClientTrackingInfo(Map<String, Object> info, boolean on) {
+        assertNotNull(info);
+        assertEquals(3, info.size());
+
+        Set<String> flags = (Set<String>) info.get("flags");
+        Long redirect = (Long) info.get("redirect");
+        Object[] prefixes = (Object[]) info.get("prefixes");
+
+        if (on) {
+            assertTrue(flags.contains("on"));
+            assertTrue(flags.contains("bcast"));
+            assertEquals(0L, redirect);
+            assertEquals(1, prefixes.length);
+            assertEquals("", prefixes[0].toString());
+        } else {
+            assertTrue(flags.contains("off"));
+            assertEquals(-1L, redirect);
+            assertEquals(0, prefixes.length);
+        }
+    }
+
+    /**
+     * Validates that a MEMORY STATS response map contains expected fields with correct types.
+     *
+     * @param stats The memory stats map to validate.
+     */
+    @SuppressWarnings("unchecked")
+    public static void assertMemoryStatsFields(Map<String, Object> stats) {
+        assertNotNull(stats);
+        assertFalse(stats.isEmpty());
+
+        // db.0 is only populated if the node has at least one key. In cluster mode, it will only
+        // be present if that key is stored on that node. Standalone and single-node cluster tests
+        // validate db.0 directly via assertMemoryStatsDbEntry.
+        if (stats.containsKey("db.0")) {
+            assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
+        }
+
+        assertTrue((Long) stats.get("allocator.active") > 0);
+        assertTrue((Long) stats.get("allocator.allocated") > 0);
+        assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
+        assertTrue((Long) stats.get("allocator.resident") > 0);
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
+        assertTrue((Long) stats.get("aof.buffer") >= 0);
+        assertTrue((Long) stats.get("clients.normal") >= 0);
+        assertTrue((Long) stats.get("clients.slaves") >= 0);
+        // dataset.bytes (net data memory after subtracting overhead) can be negative depending on
+        // engine memory accounting, so only assert type/presence rather than a non-negative value.
+        assertInstanceOf(Long.class, stats.get("dataset.bytes"));
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
+        assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
+        assertTrue((Long) stats.get("keys.count") >= 0);
+        assertTrue((Long) stats.get("lua.caches") >= 0);
+        assertTrue((Long) stats.get("overhead.total") > 0);
+        assertTrue((Long) stats.get("peak.allocated") > 0);
+        assertTrue((Long) stats.get("replication.backlog") >= 0);
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
+        assertTrue((Long) stats.get("startup.allocated") > 0);
+        assertTrue((Long) stats.get("total.allocated") > 0);
+
+        assertTrue((Double) stats.get("allocator-fragmentation.ratio") >= 0);
+        assertTrue((Double) stats.get("allocator-rss.ratio") >= 0);
+        assertTrue((Double) stats.get("dataset.percentage") >= 0);
+        assertTrue((Double) stats.get("fragmentation") >= 0);
+        assertTrue((Double) stats.get("peak.percentage") >= 0);
+        assertTrue((Double) stats.get("rss-overhead.ratio") >= 0);
+
+        // Optional Redis 7.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertTrue((Long) stats.get("cluster.links") >= 0);
+            assertTrue((Long) stats.get("functions.caches") >= 0);
+        } else {
+            assertFalse(stats.containsKey("cluster.links"));
+            assertFalse(stats.containsKey("functions.caches"));
+        }
+
+        // Optional Valkey 8.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue((Long) stats.get("allocator.muzzy") >= 0);
+            assertTrue((Long) stats.get("db.dict.rehashing.count") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.lut") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.rehashing") >= 0);
+        } else {
+            assertFalse(stats.containsKey("allocator.muzzy"));
+            assertFalse(stats.containsKey("db.dict.rehashing.count"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.lut"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.rehashing"));
+        }
+    }
+
+    /**
+     * Validates that a MEMORY STATS db entry map has expected fields with correct types and values.
+     *
+     * @param dbMap The db entry map (e.g. from stats.get("db.0")).
+     */
+    public static void assertMemoryStatsDbEntry(Map<String, Object> dbMap) {
+        assertNotNull(dbMap);
+        assertInstanceOf(Map.class, dbMap);
+        assertTrue((Long) dbMap.get("overhead.hashtable.expires") >= 0);
+        assertTrue((Long) dbMap.get("overhead.hashtable.main") >= 0);
     }
 }

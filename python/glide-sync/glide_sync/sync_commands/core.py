@@ -1,5 +1,15 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
+from typing import (
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -68,15 +78,16 @@ from .cluster_scan_cursor import ClusterScanCursor
 class CoreCommands(Protocol):
     def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = ...,
         response_buffer: Optional[memoryview] = ...,
+        response_buffers: Optional[List[memoryview]] = ...,
     ) -> TResult: ...
 
     def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,
@@ -273,7 +284,7 @@ class CoreCommands(Protocol):
         conditional_set: Optional[Union[ConditionalChange, OnlyIfEqual]] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
-    ) -> Optional[bytes]:
+    ) -> Optional[Union[TOK, bytes]]:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
 
@@ -291,7 +302,7 @@ class CoreCommands(Protocol):
                 Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
-            Optional[bytes]: If the value is successfully set, return OK.
+            Optional[Union[TOK, bytes]]: If the value is successfully set, return OK (a `str`).
 
             If value isn't set because of `only_if_exists` or `only_if_does_not_exist` conditions, return `None`.
 
@@ -342,7 +353,10 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return cast(Optional[bytes], self._execute_command(RequestType.Set, args))
+        return cast(
+            Optional[Union[TOK, bytes]],
+            self._execute_command(RequestType.Set, args),
+        )
 
     def get(
         self, key: TEncodable, buffer: Optional[memoryview] = None
@@ -750,7 +764,11 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
-    def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
+    def mget(
+        self,
+        keys: List[TEncodable],
+        buffers: Optional[List[memoryview]] = None,
+    ) -> List[Optional[bytes]]:
         """
         Retrieve the values of multiple keys.
 
@@ -767,19 +785,38 @@ class CoreCommands(Protocol):
 
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
+            buffers (Optional[List[memoryview]]): Optional writable, C-contiguous
+                buffers, one per key, to receive the values without an
+                intermediate allocation (zero-copy). When given, value ``i`` is
+                written into ``buffers[i]`` and the buffer must be large enough to
+                hold it. Must have the same length as ``keys``. When omitted,
+                ``mget`` allocates and returns ``bytes`` as before.
 
         Returns:
-            List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
-            its corresponding value in the list will be None.
+            List[Optional[bytes]]:
+                Without buffers: a list of values corresponding to the provided
+                keys. If a key is not found, its element is None.
+
+                With buffers: each found value is copied into its buffer instead
+                of being allocated, and the corresponding element is the number
+                of bytes written as a byte string (e.g. b'4096'); a missing key
+                is still None. This matches the single-key get(key, buffer=...)
+                convention, so read value i from buffers[i][:int(result[i])].
 
         Examples:
             >>> client.set("key1", "value1")
             >>> client.set("key2", "value2")
             >>> client.mget(["key1", "key2"])
                 [b'value1' , b'value2']
+            >>> bufs = [memoryview(bytearray(64)) for _ in range(2)]
+            >>> client.mget(["key1", "key2"], buffers=bufs)
+                [b'6', b'6']  # 6 bytes written into each buffer; bytes(bufs[0][:6]) == b'value1'
         """
+        if buffers is not None and len(buffers) != len(keys):
+            raise ValueError("buffers must have the same length as keys")
         return cast(
-            List[Optional[bytes]], self._execute_command(RequestType.MGet, keys)
+            List[Optional[bytes]],
+            self._execute_command(RequestType.MGet, keys, response_buffers=buffers),
         )
 
     def decr(self, key: TEncodable) -> int:
@@ -6942,6 +6979,7 @@ class CoreCommands(Protocol):
     ) -> str:
         """
         Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+        On success, the key is deleted from the source instance.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
 
@@ -6951,17 +6989,13 @@ class CoreCommands(Protocol):
             key (TEncodable): The key to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Optional migration options.
+            options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
-            str: "OK" on success, or "NOKEY" if the key does not exist.
+            str: "OK" on success, or "NOKEY" if the key was not found.
 
         Examples:
-            >>> client.set("mykey", "myvalue")
             >>> client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
-                "OK"
-            >>> client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
-                "NOKEY"
         """
         args: List[TEncodable] = [
             host,

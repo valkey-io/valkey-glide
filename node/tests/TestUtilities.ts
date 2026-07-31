@@ -18,6 +18,7 @@ import {
     BitOffsetMultiplier,
     BitmapIndexType,
     BitwiseOperation,
+    ClientTrackingInfo,
     ClusterBatch,
     Decoder,
     FlushMode,
@@ -36,6 +37,8 @@ import {
     JsonBatch,
     ListDirection,
     Logger,
+    MemoryStats,
+    MemoryStatsDb,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -472,6 +475,117 @@ export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
 }
 
 /**
+ * Waits until a condition is met.
+ *
+ * @param condition - Async function that returns true when the condition is met.
+ * @param failure - Error message thrown if the condition is not met within timeout.
+ */
+export async function waitFor(
+    condition: () => Promise<boolean>,
+    failure: string,
+): Promise<void> {
+    const timeout = 10000;
+    const interval = 100;
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        if (await condition()) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    throw new Error(failure);
+}
+
+/**
+ * Waits until no save (RDB save or AOF rewrite) is in progress.
+ */
+export async function waitForSaveNotInProgress(
+    client: GlideClusterClient | GlideClient,
+) {
+    await waitFor(async () => {
+        const info =
+            client instanceof GlideClient
+                ? await client.info([InfoOptions.Persistence])
+                : Object.values(
+                      await client.info({
+                          sections: [InfoOptions.Persistence],
+                      }),
+                  ).join();
+
+        return (
+            !info.includes("rdb_bgsave_in_progress:1") &&
+            !info.includes("aof_rewrite_in_progress:1")
+        );
+    }, "Timed out waiting for save to complete");
+}
+
+/** Route to a single primary node. */
+export const PRIMARY_SLOT_ROUTE_OPTION = {
+    route: { type: "primarySlotKey" as const, key: "1" },
+};
+
+/** Triggers a latency spike for the "command" event. */
+export async function triggerLatencySpike(
+    client: GlideClient | GlideClusterClient,
+): Promise<void> {
+    // Resets any existing latency data first so the spike is recorded against a clean baseline,
+    // then enables the server-side latency monitor, triggers a latency spike for the "command"
+    // event, and finally restores the original threshold.
+    await client.latencyReset();
+
+    // Save the current threshold so we can restore it after the spike.
+    const prev = (await client.configGet([
+        "latency-monitor-threshold",
+    ])) as Record<string, GlideString>;
+    const prevThreshold = prev["latency-monitor-threshold"]?.toString() ?? "0";
+
+    await client.configSet({ "latency-monitor-threshold": "1" });
+
+    const debug_sleep_args = ["DEBUG", "SLEEP", "0.05"];
+
+    if (client instanceof GlideClusterClient) {
+        await client.customCommand(debug_sleep_args, {
+            route: "allNodes",
+        });
+    } else {
+        await client.customCommand(debug_sleep_args);
+    }
+
+    // Restore the original latency-monitor-threshold value.
+    await client.configSet({ "latency-monitor-threshold": prevThreshold });
+}
+
+/** Returns the current server time as a Unix timestamp in seconds. */
+export async function getUnixSeconds(client: BaseClient): Promise<number> {
+    // TODO #6166: Use a base client method to call time() directly.
+    if (client instanceof GlideClusterClient) {
+        const result = (await client.time({
+            route: "randomNode",
+        })) as [string, string];
+        return Number(result[0]);
+    }
+
+    const result = await (client as GlideClient).time();
+    return Number(result[0]);
+}
+
+/**
+ * Flattens a cluster response of arrays.
+ */
+export function flattenClusterResponseArrays<T>(
+    response: T[] | Record<string, T[]>,
+): T[] {
+    if (Array.isArray(response)) {
+        return response;
+    }
+
+    return Object.values(response).flat();
+}
+
+/**
  * Create a lua script which runs an endless loop up to timeout sec.
  * Execution takes at least 5 sec regardless of the timeout
  */
@@ -555,6 +669,20 @@ export const getClientConfigurationOption = (
         ...configOverrides,
     };
 };
+
+/**
+ * Flushes the client's database without closing the connection.
+ * Use this in afterEach to reset state while keeping the client alive.
+ */
+export async function flushClient(client?: BaseClient): Promise<void> {
+    if (!client) return;
+
+    try {
+        await (client as GlideClient | GlideClusterClient).flushall();
+    } catch {
+        // Ignore errors - client may already be disconnected
+    }
+}
 
 export async function flushAndCloseClient(
     cluster_mode: boolean,
@@ -2511,4 +2639,102 @@ export async function assertConnected(
 ): Promise<void> {
     const result = await client.ping();
     expect(result).toBe("PONG");
+}
+
+/**
+ * Asserts that a ClientTrackingInfo reflects the expected tracking state.
+ */
+export function assertClientTrackingInfo(
+    info: ClientTrackingInfo,
+    on: boolean,
+): void {
+    if (on) {
+        expect(info.flags).toContain("on");
+        expect(info.flags).toContain("bcast");
+        expect(info.redirect).toBe(0);
+        expect(info.prefixes.size).toBe(1);
+        expect(info.prefixes).toContain("");
+    } else {
+        expect(info.flags).toContain("off");
+        expect(info.redirect).toBe(-1);
+        expect(info.prefixes.size).toBe(0);
+    }
+}
+
+/**
+ * Validates that a MemoryStats db entry has expected field types and values.
+ * @param dbEntry - The MemoryStatsDb entry to validate.
+ */
+export function assertMemoryStatsDbEntry(dbEntry: MemoryStatsDb): void {
+    expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
+    expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
+}
+
+/**
+ * Validates that a MemoryStats object has expected field types and values.
+ * @param stats - The MemoryStats object to validate.
+ * @param serverVersion - The server version string (e.g. "8.1.0").
+ */
+export function assertMemoryStatsFields(
+    stats: MemoryStats,
+    serverVersion: string,
+): void {
+    expect(stats.db).toBeDefined();
+    expect(typeof stats.db).toBe("object");
+
+    // db entries are only populated if the node has at least one key. In cluster mode, an entry
+    // will only be present if that key is stored on that node. Standalone and single-node cluster
+    // tests validate db entries directly via assertMemoryStatsDbEntry.
+    for (const dbEntry of Object.values(stats.db)) {
+        assertMemoryStatsDbEntry(dbEntry);
+    }
+
+    expect(stats.allocatorActive).toBeGreaterThan(0);
+    expect(stats.allocatorAllocated).toBeGreaterThan(0);
+    expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    expect(stats.allocatorResident).toBeGreaterThan(0);
+    expect(typeof stats.allocatorRssBytes).toBe("number");
+    expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
+    expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
+    expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
+    expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
+    expect(typeof stats.fragmentationBytes).toBe("number");
+    expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
+    expect(stats.keysCount).toBeGreaterThanOrEqual(0);
+    expect(stats.luaCaches).toBeGreaterThanOrEqual(0);
+    expect(stats.overheadTotal).toBeGreaterThan(0);
+    expect(stats.peakAllocated).toBeGreaterThan(0);
+    expect(stats.replicationBacklog).toBeGreaterThanOrEqual(0);
+    expect(typeof stats.rssOverheadBytes).toBe("number");
+    expect(stats.startupAllocated).toBeGreaterThan(0);
+    expect(stats.totalAllocated).toBeGreaterThan(0);
+
+    expect(stats.allocatorFragmentationRatio).toBeGreaterThanOrEqual(0);
+    expect(stats.allocatorRssRatio).toBeGreaterThanOrEqual(0);
+    expect(stats.datasetPercentage).toBeGreaterThanOrEqual(0);
+    expect(stats.fragmentation).toBeGreaterThanOrEqual(0);
+    expect(stats.peakPercentage).toBeGreaterThanOrEqual(0);
+    expect(stats.rssOverheadRatio).toBeGreaterThanOrEqual(0);
+
+    // Optional Redis 7.0+ fields
+    if (serverVersion >= "7.0.0") {
+        expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
+        expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
+    } else {
+        expect(stats.clusterLinks).toBeUndefined();
+        expect(stats.functionsCaches).toBeUndefined();
+    }
+
+    // Optional Valkey 8.0+ fields
+    if (serverVersion >= "8.0.0") {
+        expect(stats.allocatorMuzzy).toBeGreaterThanOrEqual(0);
+        expect(stats.dbDictRehashingCount).toBeGreaterThanOrEqual(0);
+        expect(stats.overheadDbHashtableLut).toBeGreaterThanOrEqual(0);
+        expect(stats.overheadDbHashtableRehashing).toBeGreaterThanOrEqual(0);
+    } else {
+        expect(stats.allocatorMuzzy).toBeUndefined();
+        expect(stats.dbDictRehashingCount).toBeUndefined();
+        expect(stats.overheadDbHashtableLut).toBeUndefined();
+        expect(stats.overheadDbHashtableRehashing).toBeUndefined();
+    }
 }

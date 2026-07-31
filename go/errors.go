@@ -56,6 +56,13 @@ func NewDisconnectError(message string) *DisconnectError {
 
 func (e *DisconnectError) Error() string { return e.msg }
 
+// CircuitBreakerError is thrown when a request is rejected because the client circuit breaker is open.
+type CircuitBreakerError struct {
+	msg string
+}
+
+func (e *CircuitBreakerError) Error() string { return e.msg }
+
 // ClosingError is a client error that indicates that the client has closed and is no longer usable.
 type ClosingError struct {
 	msg string
@@ -107,6 +114,8 @@ func GoError(cErrorType uint32, errorMessage string) error {
 		return &TimeoutError{errorMessage}
 	case C.Disconnect:
 		return &DisconnectError{errorMessage}
+	case C.CircuitBreakerOpen:
+		return &CircuitBreakerError{errorMessage}
 	default:
 		return errors.New(errorMessage)
 	}

@@ -7,8 +7,10 @@ import "C"
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
@@ -29,6 +31,7 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 // [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#standalone
 type Client struct {
 	baseClient
+	clientConfig *config.ClientConfiguration // stored for scoped_connection
 }
 
 // Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
@@ -66,7 +69,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
-	return &Client{*client}, nil
+	return &Client{baseClient: *client, clientConfig: config}, nil
 }
 
 // Executes a batch by processing the queued commands.
@@ -173,7 +176,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 //
 // Return value:
 //
-//	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *Client) ConfigSet(ctx context.Context, parameters map[string]string) (string, error) {
@@ -235,7 +238,7 @@ func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]
 //
 // Return value:
 //
-//	A simple `"OK"` response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *Client) Select(ctx context.Context, index int64) (string, error) {
@@ -552,6 +555,113 @@ func (client *Client) LastSave(ctx context.Context) (int64, error) {
 	return handleIntResponse(response)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *Client) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSave(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveCancel(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *Client) BgRewriteAof(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.
@@ -571,6 +681,160 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
+}
+
+// Returns the latency spike time series for the specified event.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyHistoryResponse(response)
+}
+
+// Reports the latest latency events logged by the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyLatestResponse(response)
+}
+
+// Resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Returns a report about memory problems detected by the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The memory diagnostic report.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryDoctor, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Returns the internal statistics of the memory allocator.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The memory allocator statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryMallocStats, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Asks the server to reclaim memory from the allocator back to the operating system.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryPurge, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Returns detailed memory consumption statistics of the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A [models.MemoryStats] containing detailed memory usage statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *Client) MemoryStats(ctx context.Context) (models.MemoryStats, error) {
+	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	rawMap, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	return internal.ConvertMemoryStats(rawMap)
 }
 
 // Gets the name of the current connection.
@@ -606,7 +870,7 @@ func (client *Client) ClientGetName(ctx context.Context) (models.Result[string],
 //
 // Return value:
 //
-//	OK - when connection name is set
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *Client) ClientSetName(ctx context.Context, connectionName string) (string, error) {
@@ -615,6 +879,102 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(result)
+}
+
+// Suspends all clients for the specified timeout.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the specified timeout.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//	mode - The pause mode to use.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPauseWithMode(
+	ctx context.Context,
+	timeout time.Duration,
+	mode options.ClientPauseMode,
+) (string, error) {
+	args := append([]string{utils.IntToString(timeout.Milliseconds())}, string(mode))
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes processing commands on all clients.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientUnpause, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// TODO #6144: Move to base class
+
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The tracking info for the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {
+	response, err := client.executeCommand(ctx, C.ClientTrackingInfo, []string{})
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	return handleClientTrackingInfoResponse(response)
 }
 
 // Iterates incrementally over a database for matching keys.
@@ -684,7 +1044,7 @@ func (client *Client) ScanWithOptions(
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *Client) ConfigRewrite(ctx context.Context) (string, error) {
@@ -793,7 +1153,7 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
@@ -951,12 +1311,99 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Failover starts a coordinated failover from the connected primary to one of its replicas.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) Failover(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// FailoverWithOptions starts a coordinated failover with the specified options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - The failover options.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, opts.ToArgs())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOf makes the server a replica of the specified primary.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	host - The host of the primary to replicate.
+//	port - The port of the primary to replicate.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOf(ctx context.Context, host string, port int) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{host, utils.IntToString(int64(port))})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOfNoOne promotes the current server to a primary by stopping replication.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOfNoOne(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{"NO", "ONE"})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

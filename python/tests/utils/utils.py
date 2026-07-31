@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import (
     Any,
+    Awaitable,
     Callable,
     Dict,
     List,
@@ -40,6 +41,7 @@ from glide_shared.commands.core_options import (
     InfoSection,
     InsertPosition,
 )
+from glide_shared.commands.memory import MemoryStats, MemoryStatsDb
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -89,7 +91,8 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide_shared.routes import AllNodes
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
+from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -153,6 +156,71 @@ def get_first_result(
     return cast(bytes, res)
 
 
+def flatten_cluster_response_lists(response) -> list:
+    """Flatten a cluster response of lists."""
+    if isinstance(response, dict):
+        return [e for entries in response.values() for e in entries]
+    return response
+
+
+async def get_unix_seconds(glide_client: TGlideClient) -> int:
+    """Returns the current server time as a Unix timestamp in seconds."""
+    # TODO #6166: Use a base client method to call time() directly.
+    return int((await glide_client.time())[0])
+
+
+def get_unix_seconds_sync(glide_client: TSyncGlideClient) -> int:
+    """Returns the current server time as a Unix timestamp in seconds."""
+    # TODO #6166: Use a base client method to call time() directly.
+    return int(glide_client.time()[0])
+
+
+async def trigger_latency_spike(glide_client: TGlideClient) -> None:
+    """Triggers a latency spike for the "command" event."""
+
+    # Resets any existing latency data first so the spike is recorded against a clean baseline,
+    # then enables the server-side latency monitor, triggers a latency spike for the "command"
+    # event, and finally restores the original latency monitoring threshold.
+    await glide_client.latency_reset()
+
+    # Save the current threshold so we can restore it after the spike.
+    prev = await glide_client.config_get(["latency-monitor-threshold"])
+    prev_threshold = prev.get(b"latency-monitor-threshold", b"0").decode()
+
+    await glide_client.config_set({"latency-monitor-threshold": "1"})
+
+    debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
+    if isinstance(glide_client, GlideClusterClient):
+        await glide_client.custom_command(debug_sleep_args, AllNodes())
+    else:
+        await glide_client.custom_command(debug_sleep_args)
+
+    await glide_client.config_set({"latency-monitor-threshold": prev_threshold})
+
+
+def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
+    """Triggers a latency spike for the "command" event."""
+
+    # Resets any existing latency data first so the spike is recorded against a clean baseline,
+    # then enables the server-side latency monitor, triggers a latency spike for the "command"
+    # event, and finally restores the original latency monitoring threshold.
+    glide_client.latency_reset()
+
+    # Save the current threshold so we can restore it after the spike.
+    prev = glide_client.config_get(["latency-monitor-threshold"])
+    prev_threshold = prev.get(b"latency-monitor-threshold", b"0").decode()
+
+    glide_client.config_set({"latency-monitor-threshold": "1"})
+
+    debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
+    if isinstance(glide_client, SyncGlideClusterClient):
+        glide_client.custom_command(debug_sleep_args, AllNodes())
+    else:
+        glide_client.custom_command(debug_sleep_args)
+
+    glide_client.config_set({"latency-monitor-threshold": prev_threshold})
+
+
 def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
     res_first = get_first_result(res)
     res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first
@@ -199,8 +267,132 @@ def sync_get_version(client: TSyncGlideClient) -> str:
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
 
 
+# Expected server responses for BGSAVE/BGSAVE SCHEDULE.
+BGSAVE_RESPONSES = {
+    "Background saving started",
+    "Background saving scheduled",
+}
+
+# Expected server responses for BGREWRITEAOF.
+BGREWRITEAOF_RESPONSES = {
+    "Background append only file rewriting started",
+    "Background append only file rewriting scheduled",
+}
+
+# Expected server error response for BGSAVE CANCEL when no save is in progress.
+BGSAVE_NOT_CANCELLED_RESPONSE = (
+    "Background saving is currently not in progress or scheduled"
+)
+
+# Route for routing to a single primary node by slot key.
+PRIMARY_SLOT_ROUTE = SlotKeyRoute(SlotType.PRIMARY, "1")
+
+# Timeout and interval between retries while waiting for a condition to be met.
+_WAIT_FOR_TIMEOUT_SEC = 10.0
+_WAIT_FOR_INTERVAL_SEC = 0.1
+
+
+async def wait_for(
+    condition: Callable[[], Awaitable[bool]],
+    failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
+) -> None:
+    """Waits until a condition is met.
+
+    Args:
+        condition: Async callable that returns True when the condition is met.
+        failure: Error message raised if the condition is not met within timeout.
+        timeout: Maximum time to wait for the condition to be met, in seconds.
+    Raises:
+        TimeoutError: If the condition is not met within the timeout.
+    """
+    import time as _time
+
+    import anyio
+
+    deadline = _time.monotonic() + timeout
+
+    while _time.monotonic() < deadline:
+        if await condition():
+            return
+        await anyio.sleep(_WAIT_FOR_INTERVAL_SEC)
+
+    raise TimeoutError(failure)
+
+
+def sync_wait_for(
+    condition: Callable[[], bool],
+    failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
+) -> None:
+    """Waits until a condition is met.
+
+    Args:
+        condition: Callable that returns True when the condition is met.
+        failure: Error message raised if the condition is not met within timeout.
+        timeout: Maximum time to wait for the condition to be met, in seconds.
+
+    Raises:
+        TimeoutError: If the condition is not met within the timeout.
+    """
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+
+    while _time.monotonic() < deadline:
+        if condition():
+            return
+        _time.sleep(_WAIT_FOR_INTERVAL_SEC)
+
+    raise TimeoutError(failure)
+
+
+async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
+    """Waits until no save (RDB save or AOF rewrite) is in progress."""
+
+    async def _check() -> bool:
+        return not _is_save_in_progress(await client.info([InfoSection.PERSISTENCE]))
+
+    await wait_for(_check, "Timed out waiting for save to complete")
+
+
+def sync_wait_for_save_not_in_progress(client: TSyncGlideClient) -> None:
+    """Waits until no save (RDB save or AOF rewrite) is in progress."""
+
+    def _check() -> bool:
+        return not _is_save_in_progress(client.info([InfoSection.PERSISTENCE]))
+
+    sync_wait_for(_check, "Timed out waiting for save to complete")
+
+
+def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
+    """Returns True if any node has a save (RDB or AOF rewrite) in progress."""
+    if isinstance(result, dict):
+        infos = [v.decode() if isinstance(v, bytes) else v for v in result.values()]
+    else:
+        infos = [result.decode() if isinstance(result, bytes) else result]
+    return any(
+        "rdb_bgsave_in_progress:1" in info or "aof_rewrite_in_progress:1" in info
+        for info in infos
+    )
+
+
 def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
+
+
+def assert_responses_in(
+    result: Union[str, Dict[bytes, str]],
+    expected: Set[str],
+) -> None:
+    """Asserts that a response contains only expected values."""
+    if isinstance(result, dict):
+        for value in result.values():
+            decoded = value.decode() if isinstance(value, bytes) else value
+            assert decoded in expected, f"Unexpected response: {decoded}"
+    else:
+        decoded = result.decode() if isinstance(result, bytes) else result
+        assert decoded in expected, f"Unexpected response: {decoded}"
 
 
 def compare_maps(
@@ -557,6 +749,8 @@ def create_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -598,6 +792,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -609,6 +805,7 @@ def create_client_config(
                 tls_config=tls_adv_conf,
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
+            reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
             compression=compression_config,
             client_side_cache=cache,
@@ -624,6 +821,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -674,6 +873,8 @@ def create_sync_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -715,6 +916,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -726,6 +929,7 @@ def create_sync_client_config(
                 tls_config=tls_adv_conf,
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
+            reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
             compression=compression_config,
             client_side_cache=cache,
@@ -740,6 +944,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -831,6 +1037,44 @@ def kill_connections(
         return client.custom_command(cmd)
     elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
         return client.custom_command(cmd, route=AllNodes())
+
+
+# Tolerance for the fire-and-forget CLIENT KILL that reconnect tests issue to
+# force a disconnect. Under heavy full-matrix CI contention the kill command can
+# time out even though it reached the server: in cluster mode it is fanned over
+# AllNodes and can sever the caller's own connections to the non-executing nodes
+# before their responses arrive, and even a standalone kill can outlast a loaded
+# runner's request budget. That timeout is a benign outcome - the disconnect is
+# the whole point of the call, and every caller separately verifies that the
+# client recovers afterward - so we tolerate a GLIDE TimeoutError and let any
+# other error propagate as a real failure.
+async def kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+) -> None:
+    """Async: kill connections, tolerating a GLIDE TimeoutError from the kill.
+
+    The CLIENT KILL severs the connections even when the client's own response
+    times out under load, so a ``TimeoutError`` is an acceptable outcome here -
+    the caller's reconnect check is the real gate. Any other error propagates.
+    """
+    try:
+        await kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
+
+
+def sync_kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+) -> None:
+    """Sync counterpart of :func:`kill_connections_tolerant`."""
+    try:
+        kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
@@ -1869,9 +2113,136 @@ async def assert_connected(client: TGlideClient) -> None:
     assert result == b"PONG"
 
 
+def build_client_side_cache(**kwargs) -> ClientSideCache:
+    """
+    Create a ClientSideCache for testing from the given arguments.
+    If required argument(s) are not specified, defaults will be used.
+    """
+
+    kwargs.setdefault("max_cache_kb", 1024)
+    kwargs.setdefault("entry_ttl_ms", 60000)
+    return ClientSideCache.create(**kwargs)
+
+
+# Assert Methods
+# --------------
+
+
+def assert_client_tracking_info(info, on: bool) -> None:
+    """Assert that a ClientTrackingInfo reflects expected tracking state."""
+    if on:
+        assert "on" in info.flags
+        assert "bcast" in info.flags
+        assert info.redirect == 0  # tracking enabled but no redirection
+        assert len(info.prefixes) == 1
+        assert "" in info.prefixes
+    else:
+        assert "off" in info.flags
+        assert info.redirect == -1  # tracking disabled
+        assert len(info.prefixes) == 0
+
+
 def assert_connected_sync(client: TSyncGlideClient) -> None:
-    """
-    Assert that the sync client is connected.
-    """
+    """Assert that the sync client is connected."""
     result = client.ping()
     assert result == b"PONG"
+
+
+def assert_memory_stats_db_entry(db_entry: MemoryStatsDb) -> None:
+    """Validate that a MemoryStatsDb instance has expected field types and values."""
+    assert isinstance(db_entry, MemoryStatsDb)
+    assert db_entry.overhead_hashtable_expires >= 0
+    assert db_entry.overhead_hashtable_main >= 0
+
+
+def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
+    """Validate that a MemoryStats instance has expected field types and values.
+
+    Args:
+        stats: The MemoryStats object to validate.
+        server_version: The server version string (e.g. "8.1.0").
+    """
+    assert isinstance(stats.db, dict)
+    # Db entries are only populated if the node has at least one key. In cluster mode, an entry
+    # will only be present if that key is stored on that node. Standalone and single-node cluster
+    # tests validate db entries directly via assert_memory_stats_db_entry.
+    for db_idx, db_entry in stats.db.items():
+        assert isinstance(db_idx, int)
+        assert_memory_stats_db_entry(db_entry)
+
+    assert stats.allocator_active > 0
+    assert stats.allocator_allocated > 0
+    assert stats.allocator_fragmentation_bytes >= 0
+    assert stats.allocator_resident > 0
+    assert isinstance(stats.allocator_rss_bytes, int)
+    assert stats.aof_buffer >= 0
+    assert stats.clients_normal >= 0
+    assert stats.clients_slaves >= 0
+    assert stats.dataset_bytes >= 0
+    assert isinstance(stats.fragmentation_bytes, int)
+    assert stats.keys_bytes_per_key >= 0
+    assert stats.keys_count >= 0
+    assert stats.lua_caches >= 0
+    assert stats.overhead_total > 0
+    assert stats.peak_allocated > 0
+    assert stats.replication_backlog >= 0
+    assert isinstance(stats.rss_overhead_bytes, int)
+    assert stats.startup_allocated > 0
+    assert stats.total_allocated > 0
+
+    # Required float fields (alphabetical)
+    assert stats.allocator_fragmentation_ratio >= 0
+    assert stats.allocator_rss_ratio >= 0
+    assert stats.dataset_percentage >= 0
+    assert stats.fragmentation >= 0
+    assert stats.peak_percentage >= 0
+    assert stats.rss_overhead_ratio >= 0
+
+    # Optional Redis 7.0+ fields
+    if server_version >= "7.0.0":
+        assert stats.cluster_links is not None and stats.cluster_links >= 0
+        assert stats.functions_caches is not None and stats.functions_caches >= 0
+    else:
+        assert stats.cluster_links is None
+        assert stats.functions_caches is None
+
+    # Optional Valkey 8.0+ fields
+    if server_version >= "8.0.0":
+        assert stats.allocator_muzzy is not None and stats.allocator_muzzy >= 0
+        assert stats.db_dict_rehashing_count is not None
+        assert stats.overhead_db_hashtable_lut is not None
+        assert stats.overhead_db_hashtable_rehashing is not None
+    else:
+        assert stats.allocator_muzzy is None
+        assert stats.db_dict_rehashing_count is None
+        assert stats.overhead_db_hashtable_lut is None
+        assert stats.overhead_db_hashtable_rehashing is None
+
+
+def get_standalone_address() -> NodeAddress:
+    """Get the standalone server address from conftest (CI) or fallback to localhost.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        addr = cluster.nodes_addr[0]
+        return NodeAddress(addr.host, addr.port)
+    except (AttributeError, IndexError):
+        return NodeAddress("localhost", 6379)
+
+
+def get_cluster_addresses() -> list:
+    """Get the cluster server addresses from conftest (CI) or fallback to localhost:7000.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        return [NodeAddress(addr.host, addr.port) for addr in cluster.nodes_addr]
+    except (AttributeError, IndexError):
+        return [NodeAddress("localhost", 7000)]

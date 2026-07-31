@@ -1,7 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from .cache import ClientSideCache, EvictionPolicy
-from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
+from .commands.batch import (
+    Batch,
+    ClusterBatch,
+    ClusterTransaction,
+    TBatch,
+    Transaction,
+)
 from .commands.batch_options import (
     BatchOptions,
     BatchRetryStrategy,
@@ -24,8 +30,10 @@ from .commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from .commands.client_tracking import ClientTrackingInfo
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -38,10 +46,13 @@ from .commands.core_options import (
     InfoSection,
     InsertPosition,
     MigrateOptions,
+    MonitorMsg,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
 )
+from .commands.latency import LatencyEntry, LatencyEventInfo
+from .commands.memory import MemoryStats, MemoryStatsDb
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
@@ -123,6 +134,7 @@ from .config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    ClientCircuitBreakerConfiguration,
     CompressionBackend,
     CompressionConfiguration,
     GlideClientConfiguration,
@@ -161,6 +173,7 @@ from .constants import (
     TXInfoStreamResponse,
 )
 from .exceptions import (
+    CircuitBreakerError,
     ClosingError,
     ConfigurationError,
     ConnectionError,
@@ -201,6 +214,7 @@ __all__ = [
     "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "GlideClientConfiguration",
@@ -250,6 +264,7 @@ __all__ = [
     "SignedEncoding",
     "UnsignedEncoding",
     "ScoreBoundary",
+    "ClientPauseMode",
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
@@ -269,6 +284,10 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "LatencyEntry",
+    "LatencyEventInfo",
+    "MemoryStats",
+    "MemoryStatsDb",
     "MigrateOptions",
     "LexBoundary",
     "Limit",
@@ -299,6 +318,8 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorMsg",
     # Json
     "json_batch",
     "JsonGetOptions",
@@ -315,6 +336,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",
@@ -361,5 +383,6 @@ __all__ = [
     "OpenTelemetryTracesConfig",
     # Cache
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]

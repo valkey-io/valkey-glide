@@ -537,3 +537,26 @@ func ExampleClient_Get_keyIsNil { ... }
 ## Community and Feedback
 
 We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).
+
+## Command Implementation Guidelines
+
+### Commands with key parameters
+
+When implementing commands that accept both single and multiple keys as parameters in Valkey, always use a **slice parameter** (`keys []string`) rather than a single `key string`. Callers pass a single-element slice for single-key usage.
+
+**Rationale:** Go does not support method overloading. Using `[]string` from the start provides a unified API for both single-key and multi-key usage without needing separate methods.
+
+**Pattern:**
+```go
+func (client *baseClient) CommandName(ctx context.Context, keys []string, ...) (ReturnType, error) {
+    if len(keys) == 0 {
+        return defaultVal, errors.New("keys must not be empty")
+    }
+    // build args using keys...
+}
+```
+
+**Commands following this pattern:**
+
+`Del`, `Exists`, `Unlink`, `Touch`, `MGet`, `PfCount`, `Migrate`, `SDiff`, `SInter`, `SUnion`, `ZDiff`, `Watch`
+

@@ -2,6 +2,7 @@
 package glide.internal;
 
 import glide.api.logging.Logger;
+import glide.api.models.exceptions.CircuitBreakerException;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.RequestException;
@@ -90,12 +91,32 @@ public final class AsyncRegistry {
                     });
 
     private static final Thread shutdownHook =
-            new Thread(AsyncRegistry::shutdown, "AsyncRegistry-Shutdown");
+            new Thread(AsyncRegistry::handleJvmShutdown, "AsyncRegistry-Shutdown");
 
     static {
         if (!"false".equalsIgnoreCase(System.getProperty("glide.autoShutdownHook", "true"))) {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
         }
+    }
+
+    /**
+     * Handler invoked by the automatic JVM shutdown hook.
+     *
+     * <p>This is intentionally non-destructive. When the JVM is exiting, all shutdown hooks (this one
+     * and any registered by the user) run concurrently, and the client must remain usable so that a
+     * user's own shutdown hook can still issue commands (e.g. to persist state before exit). Setting
+     * the {@link #isShutdown} gate or cancelling in-flight futures here would abort those legitimate
+     * requests and previously surfaced as {@code ClosingException: Client is shutting down} (see <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/4809">#4809</a>).
+     *
+     * <p>Eager cleanup is unnecessary at JVM exit: all internal GLIDE threads (callback workers,
+     * tokio runtime, timeout scheduler, cleaner) are daemon threads, and native resources are
+     * reclaimed by the OS once the process terminates. Deterministic teardown remains available
+     * through the explicit {@link #shutdown()} method and {@link
+     * glide.internal.GlideCoreClient#close()}.
+     */
+    static void handleJvmShutdown() {
+        // Intentionally a no-op: keep the client usable for concurrent user shutdown hooks.
     }
 
     /** Estimate initial capacity for the active futures map using inflight limit with margin. */
@@ -337,6 +358,9 @@ public final class AsyncRegistry {
             case 1:
                 ex = new ExecAbortException(msg);
                 break;
+            case 4:
+                ex = new CircuitBreakerException(msg);
+                break;
             default:
                 ex = new RequestException(msg);
                 break;
@@ -350,7 +374,14 @@ public final class AsyncRegistry {
         return activeFutures.size();
     }
 
-    /** Shutdown cleanup - cancel all pending operations during client shutdown. */
+    /**
+     * Explicit, destructive shutdown cleanup - cancel all pending operations and stop the timeout
+     * scheduler. Sets the {@link #isShutdown} gate so no new requests are accepted afterward.
+     *
+     * <p>This is <em>not</em> wired to the automatic JVM shutdown hook (that path is intentionally
+     * non-destructive; see {@link #handleJvmShutdown()}). Call this only when you want deterministic
+     * teardown of the registry.
+     */
     public static void shutdown() {
         // Set shutdown flag first to prevent new registrations
         // This must happen before any clearing to avoid race conditions

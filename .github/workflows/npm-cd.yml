@@ -37,6 +37,7 @@ permissions:
 jobs:
     get-build-parameters:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             release_version: ${{ steps.get-params.outputs.release_version }}
             npm_tag: ${{ steps.get-params.outputs.npm_tag }}
@@ -44,7 +45,7 @@ jobs:
             should_publish: ${{ steps.get-params.outputs.should_publish }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   fetch-depth: 0
 
@@ -153,18 +154,18 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
-                          if (.CD_RUNNER != null) 
-                          then .CD_RUNNER 
-                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER 
+                          if (.CD_RUNNER != null)
+                          then .CD_RUNNER
+                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
                           else "ubuntu-latest"
                           end
                       )
                       | .build_type = (
-                          if (.TARGET | contains("musl")) 
-                          then "musl" 
-                          elif (.TARGET | contains("gnu")) 
-                          then "gnu" 
-                          else "mac" 
+                          if (.TARGET | contains("musl"))
+                          then "musl"
+                          elif (.TARGET | contains("gnu"))
+                          then "gnu"
+                          else "mac"
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
@@ -182,17 +183,17 @@ jobs:
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
 
             - name: Cache cargo registry
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.cargo
@@ -205,12 +206,13 @@ jobs:
 
             # You might ask why we don't use the common action for installing Rust, the reason is many targets to install, and caching will be more efficient
             - name: Install Rust with the required target
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
               with:
+                  toolchain: stable
                   targets: ${{ matrix.TARGET }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -229,7 +231,7 @@ jobs:
 
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--zig"
+                    additional_param="--cross-compile"
                   fi
 
                   # Install needed dependencies
@@ -248,7 +250,7 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, we use the zig abi param set in the package.json to 2.17
+                  # For GNU targets, use the NAPI v3 cargo-zigbuild path from package.json.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm run build:release:gnu
 
@@ -271,9 +273,13 @@ jobs:
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
 
+            - name: Smoke test native module
+              working-directory: ./node
+              run: file ${{ matrix.TARGET }}/*.node | grep -qi "shared object\|dynamic\|mach-o"
+
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
@@ -282,7 +288,7 @@ jobs:
 
             # We want to use the native.js and native.d.ts files in the base package, but we don't have the glide dir yet so we upload them as artifacts
             - name: Upload Module js files
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: ${{ matrix.TARGET == 'x86_64-unknown-linux-gnu' }}
               with:
                   name: js-files-${{ github.run_id }}
@@ -301,7 +307,7 @@ jobs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   fetch-depth: 0
             - name: Create Build Directory
@@ -312,20 +318,20 @@ jobs:
 
             # Put the native.js and native.d.ts files in the src directory
             - name: Download Module js files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   name: js-files-${{ github.run_id }}
                   path: ./node/build-ts
 
             # Download all native modules
             - name: Download all native modules
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   path: ./node/artifacts
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -439,7 +445,7 @@ jobs:
               # Delete artifacts if not published
             - name: Delete artifacts
               if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
               with:
                   name: |
                       artifacts-*
@@ -469,7 +475,7 @@ jobs:
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}
-              uses: actions/checkout@v4
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   fetch-depth: 0
 
@@ -489,7 +495,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
 
@@ -499,7 +505,7 @@ jobs:
                   if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       echo "Installing Valkey on GNU/Linux..."
                       sudo apt update
-                      sudo apt install -y valkey || { 
+                      sudo apt install -y valkey || {
                           echo "Valkey not found in default repos, trying alternative source..."
                           curl -fsSL https://packages.redis.io/valkey/setup-valkey | sudo bash -
                           sudo apt install -y valkey || {
@@ -532,7 +538,44 @@ jobs:
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
               run: |
-                  npm install @valkey/valkey-glide@${{ needs.get-build-parameters.outputs.npm_tag }} --save
+                  # Install the exact version this workflow just published, NOT the dist-tag
+                  # (latest/next). The dist-tag pointer itself propagates across npm edges with lag,
+                  # so installing by tag can resolve the previous release and pass without ever
+                  # exercising the newly published package.
+                  #
+                  # The platform-specific optional dependency (e.g. @valkey/valkey-glide-linux-x64-gnu)
+                  # can also lag behind the base package on the npm registry for a short window right
+                  # after publish. When that happens npm silently skips the optional dependency and the
+                  # test fails with "Cannot find module". Retry the install until the native module
+                  # resolves, and assert the installed version matches the published version.
+                  RELEASE_VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
+                  MAX_ATTEMPTS=5
+                  DELAY=15
+                  for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+                      rm -rf node_modules package-lock.json
+                      # The install itself is what waits on registry propagation: when the exact
+                      # version is not visible on an npm edge yet, `npm install` exits non-zero
+                      # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
+                      # a transient miss is retried instead of aborting the step on the first attempt.
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                          # Read the version from the installed package.json on disk. The package's
+                          # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
+                          # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
+                          INSTALLED_VERSION=$(jq -r .version node_modules/@valkey/valkey-glide/package.json 2>/dev/null || true)
+                          if [ "${INSTALLED_VERSION}" = "${RELEASE_VERSION}" ] && node -e "require('@valkey/valkey-glide')"; then
+                              echo "Version ${RELEASE_VERSION} installed and native module resolved on attempt ${attempt}."
+                              break
+                          fi
+                      else
+                          INSTALLED_VERSION=""
+                      fi
+                      if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
+                          echo "::error::@valkey/valkey-glide@${RELEASE_VERSION} not fully installable after ${MAX_ATTEMPTS} attempts (installed version: '${INSTALLED_VERSION:-none}')."
+                          exit 1
+                      fi
+                      echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
+                      sleep "${DELAY}"
+                  done
                   npm run build:utils
                   npm test
 
@@ -542,7 +585,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Delete artifacts
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
               with:
                   name: |
                       bindings-*
@@ -555,7 +598,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -621,7 +664,7 @@ jobs:
                       elif [[ "$build_type" == "gnu" ]]; then
                         additional_suffix="-gnu"
                       fi
-                      
+
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
                       attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
                     else

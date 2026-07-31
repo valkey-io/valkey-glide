@@ -366,7 +366,7 @@ mod cluster_async {
 
             let expected = vec![Value::Array(vec![
                 Value::Int(5),
-                Value::BulkString(b"5".to_vec()),
+                Value::BulkString(b"5".to_vec().into()),
             ])];
             let result = result.expect("Pipeline execution failed");
             assert_eq!(
@@ -453,7 +453,7 @@ mod cluster_async {
             let expected = vec![
                 Value::Int(5),
                 Value::Okay,
-                Value::BulkString(b"value".to_vec()),
+                Value::BulkString(b"value".to_vec().into()),
             ];
             assert_eq!(
                 result, expected,
@@ -955,7 +955,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1058,7 +1058,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1163,7 +1163,7 @@ mod cluster_async {
             )
             .build()
             .unwrap()
-            .get_async_connection(None, None, None)
+            .get_async_connection(None, None, None, None)
             .await
             .unwrap();
 
@@ -1341,7 +1341,7 @@ mod cluster_async {
             let client = ClusterClient::builder(cluster_addresses.clone())
                 .read_from_replicas()
                 .build()?;
-            let mut connection = client.get_async_connection(None, None, None).await?;
+            let mut connection = client.get_async_connection(None, None, None, None).await?;
 
             let route_to_all_nodes = redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes;
             let routing = RoutingInfo::MultiNode((route_to_all_nodes, None));
@@ -1413,12 +1413,12 @@ mod cluster_async {
                 result,
                 Value::Map(vec![
                     (
-                        Value::BulkString("foo".as_bytes().to_vec()),
-                        Value::BulkString("baz".as_bytes().to_vec())
+                        Value::BulkString("foo".as_bytes().to_vec().into()),
+                        Value::BulkString("baz".as_bytes().to_vec().into())
                     ),
                     (
-                        Value::BulkString("bar".as_bytes().to_vec()),
-                        Value::BulkString("foobar".as_bytes().to_vec())
+                        Value::BulkString("bar".as_bytes().to_vec().into()),
+                        Value::BulkString("foobar".as_bytes().to_vec().into())
                     )
                 ])
             );
@@ -1704,7 +1704,7 @@ mod cluster_async {
                     Value::Int(0),
                     Value::Int(16383),
                     Value::Array(vec![
-                        Value::BulkString("".as_bytes().to_vec()),
+                        Value::BulkString("".as_bytes().to_vec().into()),
                         Value::Int(6379),
                     ]),
                 ])])))
@@ -1767,7 +1767,7 @@ mod cluster_async {
                     Value::Int(0),
                     Value::Int(16383),
                     Value::Array(vec![
-                        Value::BulkString("?".as_bytes().to_vec()),
+                        Value::BulkString("?".as_bytes().to_vec().into()),
                         Value::Int(6379),
                     ]),
                 ])])))
@@ -1805,7 +1805,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(7000),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(6379),
                         ]),
                     ]),
@@ -1813,7 +1813,7 @@ mod cluster_async {
                         Value::Int(7001),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString("?".as_bytes().to_vec()),
+                            Value::BulkString("?".as_bytes().to_vec().into()),
                             Value::Int(6380),
                         ]),
                     ]),
@@ -1851,7 +1851,7 @@ mod cluster_async {
 
                 match requests.fetch_add(1, atomic::Ordering::SeqCst) {
                     0..=4 => Err(parse_redis_value(b"-TRYAGAIN mock\r\n")),
-                    _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                 }
             },
         );
@@ -1953,7 +1953,7 @@ mod cluster_async {
             let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
 
             let is_get_cmd = contains_slice(cmd, b"GET");
-            let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
+            let get_response = Err(Ok(Value::BulkString(b"123".to_vec().into())));
             match i {
                 // Respond that the key exists on a node that does not yet have a connection:
                 0 => Err(parse_redis_value(
@@ -1972,7 +1972,7 @@ mod cluster_async {
                                 Value::Int(0),
                                 Value::Int(1),
                                 Value::Array(vec![
-                                    Value::BulkString(name.as_bytes().to_vec()),
+                                    Value::BulkString(name.as_bytes().to_vec().into()),
                                     Value::Int(6379),
                                 ]),
                             ]),
@@ -1980,7 +1980,7 @@ mod cluster_async {
                                 Value::Int(2),
                                 Value::Int(16383),
                                 Value::Array(vec![
-                                    Value::BulkString(name.as_bytes().to_vec()),
+                                    Value::BulkString(name.as_bytes().to_vec().into()),
                                     Value::Int(6380),
                                 ]),
                             ]),
@@ -2040,7 +2040,7 @@ mod cluster_async {
 
                 let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
                 let is_get_cmd = contains_slice(cmd, b"GET");
-                let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
+                let get_response = Err(Ok(Value::BulkString(b"123".to_vec().into())));
                 let moved_node = ports[0];
                 match i {
                     // Respond that the key exists on a node that does not yet have a connection:
@@ -2145,7 +2145,7 @@ mod cluster_async {
 
                 let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
                 let is_get_cmd = contains_slice(cmd, b"GET");
-                let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
+                let get_response = Err(Ok(Value::BulkString(b"123".to_vec().into())));
                 let moved_node = ports[0];
                 match i {
                     // The first request calls are the starting calls for each GET command where we want to respond with MOVED error
@@ -2243,7 +2243,7 @@ mod cluster_async {
                 }
 
                 let is_get_cmd = contains_slice(cmd, b"GET");
-                let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
+                let get_response = Err(Ok(Value::BulkString(b"123".to_vec().into())));
                 {
                     assert!(is_get_cmd, "{:?}", std::str::from_utf8(cmd));
                     get_response
@@ -2378,7 +2378,10 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None, None, None).await.unwrap();
+                let mut conn = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -2484,7 +2487,9 @@ mod cluster_async {
                     assert!(
                         res.iter().any(|(k, _)| k
                             == &Value::BulkString(
-                                format!("{}:{}", node_0_host, node_0_port).into_bytes()
+                                format!("{}:{}", node_0_host, node_0_port)
+                                    .into_bytes()
+                                    .into()
                             )),
                         "Expected to see node 0 only"
                     );
@@ -2858,7 +2863,7 @@ mod cluster_async {
                     if new_shard_replica_port == port {
                         // Simulate replica response for GET after slot migration
                         replica_requests.fetch_add(1, Ordering::Relaxed);
-                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
                     } else {
                         panic!("unexpected port for GET command: {port:?}, Expected: {new_shard_replica_port:?}");
                     }
@@ -3075,7 +3080,7 @@ mod cluster_async {
                 } else if contains_slice(cmd, b"GET") {
                     if moved_to_port == port {
                         // Simulate primary response for GET
-                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
                     } else {
                         panic!(
                             "unexpected port for GET command: {port:?}, Expected: {moved_to_port}"
@@ -3195,7 +3200,7 @@ mod cluster_async {
                 } else if contains_slice(cmd, b"GET") {
                     if port == primary_shard2 {
                         // Simulate second shard primary response for GET
-                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
                     } else {
                         panic!("unexpected port for GET command: {port:?}, Expected: {primary_shard2:?}");
                     }
@@ -3363,7 +3368,7 @@ mod cluster_async {
                     if should_reconnect.swap(false, Ordering::SeqCst) {
                         Err(Err(broken_pipe_error()))
                     } else {
-                        Err(Ok(Value::BulkString(b"PONG".to_vec())))
+                        Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
                     }
                 } else {
                     panic!("unexpected command {cmd:?}")
@@ -3406,7 +3411,7 @@ mod cluster_async {
             }),
         ));
 
-        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec())));
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
         // `expected_init_calls` plus another PING for a new user connection created from refresh_connections
         assert_eq!(
             connection_count_clone.load(Ordering::Relaxed),
@@ -3467,7 +3472,7 @@ mod cluster_async {
                             }
                             2 => {
                                 assert!(contains_slice(cmd, b"GET"));
-                                Err(Ok(Value::BulkString(b"123".to_vec())))
+                                Err(Ok(Value::BulkString(b"123".to_vec().into())))
                             }
                             _ => panic!("Node should not be called now"),
                         },
@@ -3553,7 +3558,7 @@ mod cluster_async {
                 // accept the next request
                 (6379, 1) => {
                     assert!(contains_slice(cmd, b"GET"));
-                    Err(Ok(Value::BulkString(b"123".to_vec())))
+                    Err(Ok(Value::BulkString(b"123".to_vec().into())))
                 }
                 _ => panic!("Wrong node. port: {port}, received count: {count}"),
             }
@@ -3658,7 +3663,7 @@ mod cluster_async {
                 2 => {
                     assert_eq!(port, 6380);
                     assert!(contains_slice(cmd, b"GET"));
-                    Err(Ok(Value::BulkString(b"123".to_vec())))
+                    Err(Ok(Value::BulkString(b"123".to_vec().into())))
                 }
                 _ => {
                     panic!("Unexpected request: {cmd:?}");
@@ -3694,7 +3699,7 @@ mod cluster_async {
             move |cmd: &[u8], port| {
                 respond_startup_with_replica(name, cmd)?;
                 match port {
-                    6380 => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    6380 => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Wrong node"),
                 }
             },
@@ -4142,7 +4147,7 @@ mod cluster_async {
                 let slots_config_vec = generate_topology_view(&ports, 1000, true);
                 respond_startup_with_config(name, received_cmd, Some(slots_config_vec), false)?;
                 if port == 6380 {
-                    return Err(Ok(Value::BulkString("foo".as_bytes().to_vec())));
+                    return Err(Ok(Value::BulkString("foo".as_bytes().to_vec().into())));
                 } else if port == 6381 {
                     return Err(Err(RedisError::from((
                         redis::ErrorKind::ResponseError,
@@ -4226,7 +4231,7 @@ mod cluster_async {
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
         let name = "foo";
         let mut cmd = Cmd::new();
-        cmd.arg("LATENCY").arg("LATEST");
+        cmd.arg("FUNCTION").arg("STATS");
         let MockEnv {
             runtime,
             async_connection: mut connection,
@@ -4240,7 +4245,7 @@ mod cluster_async {
             move |received_cmd: &[u8], port| {
                 respond_startup_with_replica_using_config(name, received_cmd, None)?;
                 Err(Ok(Value::BulkString(
-                    format!("latency: {port}").into_bytes(),
+                    format!("latency: {port}").into_bytes().into(),
                 )))
             },
         );
@@ -4280,7 +4285,7 @@ mod cluster_async {
             move |received_cmd: &[u8], port| {
                 respond_startup_with_replica_using_config(name, received_cmd, None)?;
                 Err(Ok(Value::Array(vec![Value::BulkString(
-                    format!("key:{port}").into_bytes(),
+                    format!("key:{port}").into_bytes().into(),
                 )])))
             },
         );
@@ -4320,7 +4325,7 @@ mod cluster_async {
                     .filter_map(|expected_key| {
                         if cmd_str.contains(expected_key) {
                             Some(Value::BulkString(
-                                format!("{expected_key}-{port}").into_bytes(),
+                                format!("{expected_key}-{port}").into_bytes().into(),
                             ))
                         } else {
                             None
@@ -4369,7 +4374,7 @@ mod cluster_async {
                     .filter_map(|expected_key| {
                         if cmd_str.contains(expected_key) {
                             Some(Value::BulkString(
-                                format!("{expected_key}-{port}").into_bytes(),
+                                format!("{expected_key}-{port}").into_bytes().into(),
                             ))
                         } else {
                             None
@@ -4404,7 +4409,7 @@ mod cluster_async {
                 Err(Err((ErrorKind::IoError, "error").into()))
             } else {
                 Err(Ok(Value::Array(vec![Value::BulkString(
-                    format!("{port}").into_bytes(),
+                    format!("{port}").into_bytes().into(),
                 )])))
             }
         });
@@ -4436,7 +4441,7 @@ mod cluster_async {
                 }]),
             )?;
             Err(Ok(Value::Array(vec![Value::BulkString(
-                format!("{port}").into_bytes(),
+                format!("{port}").into_bytes().into(),
             )])))
         });
 
@@ -4506,7 +4511,7 @@ mod cluster_async {
                             ErrorKind::FatalSendError,
                             "mock-io-error",
                         )))),
-                        _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     },
                 }
             },
@@ -4583,7 +4588,7 @@ mod cluster_async {
                         )
                             .into())),
                         // After slot refresh, retry succeeds
-                        _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     }
                 }
             },
@@ -4984,7 +4989,7 @@ mod cluster_async {
                         // RESP2
                         Value::BulkString(client_info) => {
                             // ensure 4 connections - 2 for each client, its save to unwrap here
-                            String::from_utf8(client_info).unwrap()
+                            String::from_utf8(client_info.to_vec()).unwrap()
                         }
                         // RESP3
                         Value::VerbatimString { format: _, text } => text,
@@ -5367,7 +5372,7 @@ mod cluster_async {
                         load_errors_clone.lock().unwrap().push(port);
                         Err(parse_redis_value(b"-LOADING\r\n"))
                     }
-                    6379 => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    6379 => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Wrong node"),
                 }
             },
@@ -5422,7 +5427,7 @@ mod cluster_async {
                     6379 => {
                         let attempts = load_errors_clone.fetch_add(1, Ordering::Relaxed) + 1;
                         if attempts % RETRIES == 0 {
-                            Err(Ok(Value::BulkString(b"123".to_vec())))
+                            Err(Ok(Value::BulkString(b"123".to_vec().into())))
                         } else {
                             Err(parse_redis_value(b"-LOADING\r\n"))
                         }
@@ -5687,7 +5692,7 @@ mod cluster_async {
                             "mock-io-error",
                         ))))
                     } else {
-                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
                     }
                 }
             },
@@ -6496,7 +6501,7 @@ mod cluster_async {
                 .unwrap();
 
             let mut connection = test_user_client
-                .get_async_connection(None, None, None)
+                .get_async_connection(None, None, None, None)
                 .await
                 .unwrap();
 
@@ -6769,7 +6774,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(port as i64),
                         ]),
                     ])])));
@@ -6796,7 +6801,7 @@ mod cluster_async {
                             // Record ping count at retry GET
                             ping_at_get_1_clone.store(current_pings, atomic::Ordering::SeqCst);
                             // Return success
-                            Err(Ok(Value::BulkString(b"success".to_vec())))
+                            Err(Ok(Value::BulkString(b"success".to_vec().into())))
                         }
                     }
                 } else {
@@ -6901,7 +6906,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(port as i64),
                         ]),
                     ])])));
@@ -7012,7 +7017,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(port as i64),
                         ]),
                     ])])));
@@ -7136,11 +7141,475 @@ mod cluster_async {
         );
     }
 
+    /// Mirrors the Python stress-test script that exposed the "Connection in recovery" bug.
+    ///
+    /// ## Scenario
+    ///
+    /// 20 concurrent tasks each send PIPELINE_ITERATIONS × PIPELINE_SIZE individual SET
+    /// commands. The mock triggers a circular MOVED on the **30th SET command globally**,
+    /// so several commands complete successfully before the disruption. After the MOVED
+    /// triggers, all subsequent SETs are delayed by 5ms and return OK.
+    ///
+    /// The circular MOVED on an individual command causes the cluster client to enter a
+    /// reconnect/recovery cycle (via `Next::Reconnect` → `PollFlushAction::Reconnect` →
+    /// `RecoverFuture::Reconnect`). Any commands that arrive at `pending_requests_tx`
+    /// while the connection is in recovery must be **buffered** (not failed) and succeed
+    /// once recovery completes.
+    ///
+    /// ## Why individual commands (not pipelines)
+    ///
+    /// Pipeline MOVED errors are handled inline within `handle_non_atomic_pipeline_request`
+    /// via `handle_reconnect_logic`, which bypasses the Sink's state machine entirely.
+    /// Only individual commands go through `Next::Reconnect` → `PollFlushAction::Reconnect`
+    /// → Sink's `Recover` state, which is the path where `buffer_pending_requests_to_recovery_queue`
+    /// is exercised.
+    ///
+    /// ## Why this requires a multi-threaded runtime
+    ///
+    /// On a single-threaded (current_thread) runtime, the reconnect's outer JoinHandle
+    /// always completes before the background connection task's next `poll_flush`, so
+    /// `poll_recover` always returns `Poll::Ready` and no requests see the recovery window.
+    ///
+    /// On a multi-threaded runtime the background task and the reconnect task can run on
+    /// different OS threads simultaneously; `poll_recover` may return `Poll::Pending` with
+    /// requests already queued, exercising the buffering path.
+    ///
+    /// ## SET delay after MOVED
+    ///
+    /// Once the circular MOVED fires, the mock handler inserts a 5 ms
+    /// `std::thread::sleep` before returning OK for every subsequent SET command.
+    /// This simulates realistic server latency and keeps tasks slow to complete,
+    /// ensuring they are in-flight (queued in `pending_requests_tx`) during the recovery
+    /// window.
+    ///
+    /// ## PING delay
+    ///
+    /// The PING handler (part of the reconnect handshake) sleeps 10 ms to widen the
+    /// recovery window. This keeps the reconnect JoinHandle in `Poll::Pending` long enough
+    /// for concurrent tasks to queue commands in `pending_requests_tx`.
+    ///
+    /// ## Test flow
+    ///
+    /// 1. Use a multi-threaded Tokio runtime with 4 worker threads.
+    /// 2. Register mock behaviour for a synthetic cluster name.
+    /// 3. 20 tasks start together behind a barrier; each sends PIPELINE_ITERATIONS × PIPELINE_SIZE
+    ///    individual SET commands.
+    /// 4. On the 30th SET globally the mock returns a circular MOVED → Sink enters Recover state.
+    /// 5. After MOVED fires, every SET response is delayed 5ms to keep tasks in-flight.
+    /// 6. PING is delayed 10ms to keep the reconnect JoinHandle pending.
+    /// 7. Commands arriving during recovery must be buffered and succeed after recovery.
+    /// 8. Assert zero command errors across all tasks.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_concurrent_requests_during_circular_moved_reconnect() {
+        let name = "test_concurrent_circular_moved";
+        // Trigger circular MOVED on the Nth SET to let several pipelines succeed before disruption
+        const MOVED_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10; // SET commands per pipeline
+                                         // After MOVED fires, delay each SET response by this many ms to widen recovery window
+        const DELAY_AFTER_MOVED_MS: u64 = 5;
+        // Delay CLUSTER SLOTS response to keep the recovery JoinHandle in Poll::Pending longer.
+        // This is the primary mechanism for widening the recovery window: by slowing the
+        // slots-refresh task, concurrent pipeline tasks accumulate in pending_requests_tx.
+        const CLUSTER_SLOTS_DELAY_MS: u64 = 30;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let moved_fired = Arc::new(atomic::AtomicBool::new(false));
+        let moved_fired_clone = moved_fired.clone();
+        let moved_fired_cluster = moved_fired.clone();
+        let name_handler = name.to_string();
+
+        // Register the mock handler globally so it is available to the multi-threaded
+        // runtime's background connection task.
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    // Delay PING to keep the reconnect JoinHandle in Poll::Pending while
+                    // concurrent tasks queue commands in pending_requests_tx.
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    // After MOVED fires, delay the CLUSTER SLOTS response to keep the
+                    // recovery JoinHandle in Poll::Pending while pipeline tasks queue up.
+                    if moved_fired_cluster.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            CLUSTER_SLOTS_DELAY_MS,
+                        ));
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == MOVED_ON_SET_N {
+                        // Trigger circular MOVED mid-run to exercise the recovery window
+                        moved_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        return Err(parse_redis_value(
+                            format!("-MOVED 5000 {name}:{port}\r\n").as_bytes(),
+                        ));
+                    }
+                    // After MOVED has fired, delay to keep pipelines in-flight during recovery
+                    if moved_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"GET") {
+                    return Err(Ok(Value::BulkString(b"value".to_vec().into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        // Use a multi-threaded runtime so that the background connection task and the
+        // reconnect task can run on different OS threads simultaneously.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(4)
+            .build()
+            .expect("failed to build multi-thread runtime");
+
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        // Each task sends PIPELINE_ITERATIONS × PIPELINE_SIZE individual SET commands.
+        // All tasks start simultaneously via a barrier.
+        // The circular MOVED fires mid-run (on SET #{MOVED_ON_SET_N} globally); commands
+        // arriving while the Sink is in recovery must be buffered and succeed, not fail.
+        let results = runtime.block_on(async move {
+            let barrier = Arc::new(tokio::sync::Barrier::new(CONCURRENCY));
+            let tasks: Vec<_> = (0..CONCURRENCY)
+                .map(|task_id| {
+                    let mut conn = connection.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        let mut cmd_errors = 0usize;
+                        let mut cmd_successes = 0usize;
+                        for iter in 0..PIPELINE_ITERATIONS {
+                            for k in 0..PIPELINE_SIZE {
+                                let cmd = redis::Cmd::new()
+                                    .arg("SET")
+                                    .arg(format!("t{task_id}_key{k}"))
+                                    .arg("value")
+                                    .clone();
+                                match conn.req_packed_command(&cmd).await {
+                                    Ok(_) => cmd_successes += 1,
+                                    Err(e) => {
+                                        println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
+                                        cmd_errors += 1;
+                                    }
+                                }
+                            }
+                        }
+                        (task_id, cmd_successes, cmd_errors)
+                    })
+                })
+                .collect();
+            futures::future::join_all(tasks).await
+        });
+
+        let total_cmd_successes: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, s, _)| s)
+            .sum();
+        let total_cmd_errors: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, _, e)| e)
+            .sum();
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+        let expected_cmds = CONCURRENCY * PIPELINE_ITERATIONS * PIPELINE_SIZE;
+
+        println!(
+            "Results: {} tasks, {}/{} SET commands succeeded, {} cmd errors, \
+             {} SET commands reached mock (MOVED triggered on SET #{})",
+            CONCURRENCY,
+            total_cmd_successes,
+            expected_cmds,
+            total_cmd_errors,
+            total_sets,
+            MOVED_ON_SET_N,
+        );
+
+        assert_eq!(
+            total_cmd_errors, 0,
+            "Expected zero command errors after recovery queue fix. \
+             {} commands failed (total SETs to mock: {})",
+            total_cmd_errors, total_sets,
+        );
+
+        println!(
+            "PASS: all {}/{} SET commands succeeded with zero errors during/after circular MOVED reconnect",
+            total_cmd_successes,
+            expected_cmds,
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
 
         use super::*;
+
+        /// A path-based [`redis::CertParamsProvider`] that re-reads the client
+        /// certificate and key from disk on every call.
+        ///
+        /// This mirrors what glide-core's `CertReloadManager` vends to the
+        /// reconnection loop in production: the manager re-reads the watched
+        /// `client_cert_path` / `client_key_path` on a background interval and
+        /// caches the last-known-good [`redis::TlsConnParams`]; the reconnect
+        /// path then calls `current_tls_params` before each connection attempt.
+        /// Re-reading directly here lets the test drive rotation deterministically
+        /// (write new files, then force a reconnect) instead of waiting on a timer.
+        struct PathReloadingCertProvider {
+            cert_path: PathBuf,
+            key_path: PathBuf,
+            root_cert: Vec<u8>,
+        }
+
+        impl PathReloadingCertProvider {
+            /// Read + parse the currently-on-disk material, returning `None` if the
+            /// files are missing or unparseable (matching the manager's
+            /// keep-last-known-good discipline, which simply skips a bad read).
+            fn load(&self) -> Option<redis::TlsConnParams> {
+                let client_cert = std::fs::read(&self.cert_path).ok()?;
+                let client_key = std::fs::read(&self.key_path).ok()?;
+                let certificates = redis::TlsCertificates {
+                    client_tls: Some(redis::ClientTlsConfig {
+                        client_cert,
+                        client_key,
+                    }),
+                    root_cert: Some(self.root_cert.clone()),
+                };
+                redis::retrieve_tls_certificates(certificates).ok()
+            }
+
+            /// DER of the leaf certificate chain currently on disk, owned so it can
+            /// be compared across a rotation (never contains key material).
+            fn current_cert_chain_der(&self) -> Vec<Vec<u8>> {
+                match self.load() {
+                    Some(params) => params
+                        .client_cert_chain_der()
+                        .into_iter()
+                        .map(|der| der.to_vec())
+                        .collect(),
+                    None => Vec::new(),
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl redis::CertParamsProvider for PathReloadingCertProvider {
+            async fn current_tls_params(&self) -> Option<redis::TlsConnParams> {
+                self.load()
+            }
+        }
+
+        /// End-to-end mTLS certificate rotation + reconnect test requested on
+        /// PR #6386. It exercises the complete scenario the reload unit test
+        /// (`tls_reload::reconnect_reads_rotated_then_retains_last_known_good`)
+        /// deliberately does not cover:
+        ///
+        /// 1. Stand up a TLS-enabled cluster (`new_with_mtls`).
+        /// 2. Connect with a path-based cert/key provider (reload enabled),
+        ///    mirroring the `client_cert_path` / `client_key_path` config.
+        /// 3. Rotate the cert and key files on disk (new CA-signed leaf material
+        ///    written to the same paths the provider watches).
+        /// 4. Force a reconnect by killing the connection (the established
+        ///    reconnection-test pattern, see
+        ///    `test_client.rs::test_username_persistence_after_reconnection`).
+        /// 5. Assert re-authentication succeeds: the reconnected client executes a
+        ///    SET/GET round-trip, and the material the reconnect path adopts is the
+        ///    rotated certificate (its DER differs from the pre-rotation cert).
+        #[test]
+        #[serial_test::serial]
+        fn test_async_cluster_mtls_cert_rotation_reconnect() {
+            let cluster = TestClusterContext::new_with_mtls(3, 0);
+
+            // mTLS reload can only be exercised against a real TLS cluster. When the
+            // suite is run without `REDISRS_SERVER_TYPE=tcp+tls` there are no cert
+            // files to rotate, so skip (CI provides the TLS cluster). This mirrors
+            // how the neighboring mTLS tests degrade on a non-TLS server.
+            let Some(tls_paths) = cluster.cluster.tls_paths.clone() else {
+                eprintln!(
+                    "Skipping test_async_cluster_mtls_cert_rotation_reconnect: \
+                     cluster is not TLS-enabled (set REDISRS_SERVER_TYPE=tcp+tls)."
+                );
+                return;
+            };
+
+            block_on_all(async move {
+                // The watched cert/key files live in the CA's tempdir (alive for the
+                // cluster's lifetime). Seed them with valid CA-signed material so the
+                // provider is consistent with the server before any rotation.
+                let watch_dir = tls_paths.ca_crt.parent().unwrap().to_path_buf();
+                let watched_cert = watch_dir.join("reload_client.crt");
+                let watched_key = watch_dir.join("reload_client.key");
+                rotate_client_cert_and_key(&tls_paths, &watched_cert, &watched_key);
+                let root_cert = std::fs::read(&tls_paths.ca_crt).unwrap();
+
+                let provider = Arc::new(PathReloadingCertProvider {
+                    cert_path: watched_cert.clone(),
+                    key_path: watched_key.clone(),
+                    root_cert,
+                });
+
+                // Capture the pre-rotation certificate the provider would serve.
+                let cert_before = provider.current_cert_chain_der();
+                assert!(
+                    !cert_before.is_empty(),
+                    "expected a client certificate chain before rotation"
+                );
+
+                // Connect with mTLS. The initial connection authenticates with the
+                // client cert built into the cluster client; the provider supplies
+                // rotated material to the reconnect path.
+                let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
+                let mut connection = client
+                    .get_async_connection(
+                        None,
+                        None,
+                        None,
+                        Some(provider.clone() as Arc<dyn redis::CertParamsProvider>),
+                    )
+                    .await
+                    .unwrap();
+
+                // Sanity: authenticated round-trip works before rotation.
+                cmd("SET")
+                    .arg("mtls_rotation_key")
+                    .arg("before")
+                    .query_async::<_, ()>(&mut connection)
+                    .await?;
+                let res: String = cmd("GET")
+                    .arg("mtls_rotation_key")
+                    .query_async(&mut connection)
+                    .await?;
+                assert_eq!(res, "before");
+
+                // Record the server-side connection id on a specific node so we can
+                // prove a fresh mTLS handshake (a *new* connection) happens on
+                // reconnect, rather than reuse of the pre-rotation connection.
+                let node_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(0, SlotAddr::Master),
+                ));
+                let client_id_before = match connection
+                    .route_command(cmd("CLIENT").arg("ID"), node_routing.clone())
+                    .await?
+                {
+                    Value::Int(id) => id,
+                    other => panic!("Unexpected CLIENT ID response: {other:?}"),
+                };
+
+                // Rotate: write brand-new CA-signed client cert/key to the watched
+                // paths. This is what cert-manager / secret projection does on disk.
+                rotate_client_cert_and_key(&tls_paths, &watched_cert, &watched_key);
+                let cert_after = provider.current_cert_chain_der();
+                assert!(
+                    !cert_after.is_empty(),
+                    "expected a client certificate chain after rotation"
+                );
+                assert_ne!(
+                    cert_before, cert_after,
+                    "rotation must change the on-disk client certificate that the \
+                     reconnect path will adopt"
+                );
+
+                // Force a reconnect by killing the user connections on all nodes,
+                // following the established reconnection-test pattern
+                // (`CLIENT KILL SKIPME NO`). The kill may drop the response on the
+                // issuing connection, so tolerate an error here.
+                let kill_routing = RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
+                ));
+                let mut kill_cmd = cmd("CLIENT");
+                kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+                let _ = connection.route_command(&kill_cmd, kill_routing).await;
+
+                // Give the connections a moment to fully drop before probing.
+                let _ = sleep(futures_time::time::Duration::from_millis(100)).await;
+
+                // Re-authentication must succeed with the rotated material: the next
+                // command triggers reconnection, which reads the provider (rotated
+                // cert) before reconnecting. Retry until the round-trip succeeds.
+                let max_requests = 10;
+                let mut last_err = None;
+                for _ in 0..max_requests {
+                    let set_res = cmd("SET")
+                        .arg("mtls_rotation_key")
+                        .arg("after")
+                        .query_async::<_, ()>(&mut connection)
+                        .await;
+                    match set_res {
+                        Ok(()) => {
+                            let value: String = cmd("GET")
+                                .arg("mtls_rotation_key")
+                                .query_async(&mut connection)
+                                .await?;
+                            assert_eq!(
+                                value, "after",
+                                "reconnected client must read/write with the rotated cert"
+                            );
+
+                            // Confirm a genuine reconnect (new server-side
+                            // connection) occurred on the probed node: a fresh mTLS
+                            // handshake using the rotated material established a new
+                            // connection with a different client id.
+                            let client_id_after = match connection
+                                .route_command(cmd("CLIENT").arg("ID"), node_routing.clone())
+                                .await?
+                            {
+                                Value::Int(id) => id,
+                                other => panic!("Unexpected CLIENT ID response: {other:?}"),
+                            };
+                            assert_ne!(
+                                client_id_before, client_id_after,
+                                "reconnect after cert rotation should establish a new \
+                                 server-side connection (new client id)"
+                            );
+                            return Ok::<_, RedisError>(());
+                        }
+                        Err(err) => {
+                            last_err = Some(err);
+                            let _ = sleep(futures_time::time::Duration::from_millis(200)).await;
+                        }
+                    }
+                }
+                panic!(
+                    "Re-authentication after cert rotation + reconnect failed. \
+                     Last error: {last_err:?}"
+                );
+            })
+            .unwrap();
+        }
 
         #[test]
         #[serial_test::serial]
@@ -7148,7 +7617,10 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+                let mut connection = client
+                    .get_async_connection(None, None, None, None)
+                    .await
+                    .unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
@@ -7171,7 +7643,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
             let client = create_cluster_client_from_cluster(&cluster, false).unwrap();
-            let connection = client.get_async_connection(None, None, None).await;
+            let connection = client.get_async_connection(None, None, None, None).await;
             match cluster.cluster.servers.first().unwrap().connection_info() {
                 ConnectionInfo {
                     addr: redis::ConnectionAddr::TcpTls { .. },

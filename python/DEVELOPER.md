@@ -2,7 +2,7 @@
 
 This document describes how to set up your development environment to build and test the Valkey GLIDE Python wrapper.
 
-The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [CFFI](https://cffi.readthedocs.io/) for command dispatch and [PyO3](https://github.com/PyO3/pyo3) for response parsing, and the Python packages are built using [maturin](https://github.com/PyO3/maturin) and setuptools. The async client communicates with Rust via an anonymous pipe for response delivery; the sync client uses direct FFI return values.
 
 ## 📁 Python Project Structure
 
@@ -13,8 +13,9 @@ The `python/` directory contains three separate components:
 #### 🔹 glide-async/
 
 - Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
-- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
-- Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+- Rust bindings: via CFFI (command dispatch) and a compiled Rust response parser (`_fast_response`).
+- Communication Layer: Commands sent via direct FFI calls to Rust. Responses delivered through an anonymous pipe from Rust worker threads to the Python event loop, parsed by the Rust `_fast_response` module.
+- Async frameworks: asyncio, uvloop, trio (via anyio)
 - Import path: `import glide`
 - PyPI package name: `valkey-glide`
 - Build backend: Maturin (Rust-based)
@@ -374,7 +375,8 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
     We use `maturin build` from the `glide-async` directory to create a Python wheel that includes the compiled Rust extension and all Python code.
 
 4. **Multiplatform packaging for PyPI**
-    To publish wheels to PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+    To build wheels for PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+    The built wheels and sdist are then uploaded to PyPI with the `pypa/gh-action-pypi-publish` action via Trusted Publishing (OIDC) with PEP 740 attestations, rather than an API token.
 
 5. **Local testing**
     You can test building a wheel and installing it locally using:

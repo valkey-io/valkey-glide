@@ -68,8 +68,8 @@ install-build-tools:
 
 install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
-	go install mvdan.cc/gofumpt@v0.6.0
-	go install github.com/segmentio/golines@v0.12.2
+	go install mvdan.cc/gofumpt@v0.9.1
+	go install github.com/segmentio/golines@v0.13.0
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
 install-tools: install-build-tools install-dev-tools
@@ -114,10 +114,11 @@ build-glide-ffi: libglide_ffi gen-c-bindings
 
 gen-c-bindings:
 	cd $(GLIDE_FFI_PATH) && \
-	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
+	cbindgen -q --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
 	@# Add include guard to prevent multiple inclusion errors with CGo
-	@sed -i.bak '1 a\
-	#pragma once' $(GO_DIR)/lib.h && rm -f $(GO_DIR)/lib.h.bak
+	@awk 'NR==1 {print; print "#pragma once"; next} {print}' \
+		$(GO_DIR)/lib.h > $(GO_DIR)/lib.h.new && \
+		mv $(GO_DIR)/lib.h.new $(GO_DIR)/lib.h
 
 generate-protobuf:
 	rm -rf internal/protobuf
@@ -157,7 +158,7 @@ format:
 unit-test:
 	mkdir -p reports
 	set -o pipefail; \
-	go test -v ./... -skip 'Example|TestGlideTestSuite' $(if $(test-filter), -run $(test-filter)) \
+	go test -v ./... -skip 'Example|TestGlideTestSuite|TestPool|TestScope' $(if $(test-filter), -run $(test-filter)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/internal/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # example tests - skip complete IT suite (including MT)

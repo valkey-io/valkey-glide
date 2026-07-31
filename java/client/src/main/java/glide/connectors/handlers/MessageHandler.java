@@ -222,5 +222,10 @@ public class MessageHandler {
         public PubSubMessage popSync() {
             return messageQueue.poll();
         }
+
+        /** Return the number of messages currently buffered in the queue. */
+        public int size() {
+            return messageQueue.size();
+        }
     }
 }

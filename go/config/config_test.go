@@ -4,10 +4,13 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 )
@@ -827,6 +830,446 @@ func TestTlsConfiguration_InsecureTLSDefaultValue(t *testing.T) {
 	assert.Equal(t, protobuf.TlsMode_SecureTls, request.TlsMode)
 }
 
+// ============================================================================
+// Mutual TLS (mTLS) Client Certificate / Key Tests
+// ============================================================================
+
+const (
+	testClientCertData = "-----BEGIN CERTIFICATE-----\nMIICclient...\n-----END CERTIFICATE-----"
+	testClientKeyData  = "-----BEGIN PRIVATE KEY-----\nMIIEvkey...\n-----END PRIVATE KEY-----"
+	testClientCertPath = "/etc/glide/tls/client-cert.pem"
+	testClientKeyPath  = "/etc/glide/tls/client-key.pem"
+)
+
+// TestTlsConfiguration_WithMutualTLS_TableDriven covers WithMutualTLS (bytes
+// mode) and WithMutualTLSFromFiles (path mode, with optional WithReloadInterval)
+// across happy paths and every validation error. New failure modes go in as
+// a new table row.
+func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
+	type kind int
+	const (
+		kindBytes kind = iota
+		kindFiles
+	)
+
+	type row struct {
+		name          string
+		kind          kind
+		certBytes     []byte
+		keyBytes      []byte
+		certPath      string
+		keyPath       string
+		opts          []MutualTLSOption
+		wantErrSubstr string // empty means expect success
+	}
+
+	rows := []row{
+		{
+			name:      "bytes/happy",
+			kind:      kindBytes,
+			certBytes: []byte(testClientCertData),
+			keyBytes:  []byte(testClientKeyData),
+		},
+		{
+			name:          "bytes/nil-cert",
+			kind:          kindBytes,
+			certBytes:     nil,
+			keyBytes:      []byte(testClientKeyData),
+			wantErrSubstr: "WithMutualTLS: clientCert must be non-empty",
+		},
+		{
+			name:          "bytes/nil-key",
+			kind:          kindBytes,
+			certBytes:     []byte(testClientCertData),
+			keyBytes:      nil,
+			wantErrSubstr: "WithMutualTLS: clientKey must be non-empty",
+		},
+		{
+			name:          "bytes/empty-cert",
+			kind:          kindBytes,
+			certBytes:     []byte{},
+			keyBytes:      []byte(testClientKeyData),
+			wantErrSubstr: "WithMutualTLS: clientCert must be non-empty",
+		},
+		{
+			name:          "bytes/empty-key",
+			kind:          kindBytes,
+			certBytes:     []byte(testClientCertData),
+			keyBytes:      []byte{},
+			wantErrSubstr: "WithMutualTLS: clientKey must be non-empty",
+		},
+		{
+			name:     "files/happy-default-interval",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+		},
+		{
+			name:     "files/happy-explicit-interval",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts:     []MutualTLSOption{WithReloadInterval(60 * time.Second)},
+		},
+		{
+			name:          "files/empty-cert-path",
+			kind:          kindFiles,
+			certPath:      "",
+			keyPath:       testClientKeyPath,
+			wantErrSubstr: "WithMutualTLSFromFiles: certPath must be non-empty",
+		},
+		{
+			name:          "files/empty-key-path",
+			kind:          kindFiles,
+			certPath:      testClientCertPath,
+			keyPath:       "",
+			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
+		},
+		{
+			// Sub-second values are accepted; they round to zero on the wire,
+			// which is the same as not passing the option (core default cadence).
+			name:     "files/sub-second-interval-accepted",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts:     []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
+		},
+		{
+			name:          "files/zero-interval-rejected",
+			kind:          kindFiles,
+			certPath:      testClientCertPath,
+			keyPath:       testClientKeyPath,
+			opts:          []MutualTLSOption{WithReloadInterval(0)},
+			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
+		},
+		{
+			name:          "files/negative-interval-rejected",
+			kind:          kindFiles,
+			certPath:      testClientCertPath,
+			keyPath:       testClientKeyPath,
+			opts:          []MutualTLSOption{WithReloadInterval(-1 * time.Second)},
+			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
+		},
+	}
+
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			base := NewTlsConfiguration()
+			var (
+				got *TlsConfiguration
+				err error
+			)
+			switch tc.kind {
+			case kindBytes:
+				got, err = base.WithMutualTLS(tc.certBytes, tc.keyBytes)
+			case kindFiles:
+				got, err = base.WithMutualTLSFromFiles(tc.certPath, tc.keyPath, tc.opts...)
+			}
+
+			if tc.wantErrSubstr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrSubstr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			switch tc.kind {
+			case kindBytes:
+				assert.Equal(t, tc.certBytes, got.clientCertificate)
+				assert.Equal(t, tc.keyBytes, got.clientKey)
+				assert.Empty(t, got.clientCertPath)
+				assert.Empty(t, got.clientKeyPath)
+				assert.Equal(t, time.Duration(0), got.certReloadInterval)
+			case kindFiles:
+				assert.Nil(t, got.clientCertificate)
+				assert.Nil(t, got.clientKey)
+				assert.Equal(t, tc.certPath, got.clientCertPath)
+				assert.Equal(t, tc.keyPath, got.clientKeyPath)
+			}
+		})
+	}
+}
+
+// TestTlsConfiguration_WithMutualTLS_ModeReplacement checks that calling one
+// mTLS builder clears whatever the other left behind. Bytes to paths must
+// clear the byte fields and enable cert reload; paths to bytes must clear
+// the path fields and drop the reload block. Both the in-memory state and
+// the ToProtobuf wire output are checked.
+func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
+	byteCert := []byte(testClientCertData)
+	byteKey := []byte(testClientKeyData)
+
+	t.Run("bytes-to-files", func(t *testing.T) {
+		tls, err := NewTlsConfiguration().WithMutualTLS(byteCert, byteKey)
+		require.NoError(t, err)
+		tls, err = tls.WithMutualTLSFromFiles(testClientCertPath, testClientKeyPath)
+		require.NoError(t, err)
+
+		assert.Nil(t, tls.clientCertificate)
+		assert.Nil(t, tls.clientKey)
+		assert.Equal(t, testClientCertPath, tls.clientCertPath)
+		assert.Equal(t, testClientKeyPath, tls.clientKeyPath)
+
+		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+		require.NoError(t, err)
+		assert.Nil(t, req.ClientCert)
+		assert.Nil(t, req.ClientKey)
+		assert.Equal(t, testClientCertPath, req.GetClientCertPath())
+		assert.Equal(t, testClientKeyPath, req.GetClientKeyPath())
+		require.NotNil(t, req.CertReload)
+		assert.True(t, req.CertReload.GetEnabled())
+	})
+
+	t.Run("files-to-bytes", func(t *testing.T) {
+		tls, err := NewTlsConfiguration().WithMutualTLSFromFiles(
+			testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
+		require.NoError(t, err)
+		tls, err = tls.WithMutualTLS(byteCert, byteKey)
+		require.NoError(t, err)
+
+		assert.Equal(t, byteCert, tls.clientCertificate)
+		assert.Equal(t, byteKey, tls.clientKey)
+		assert.Empty(t, tls.clientCertPath)
+		assert.Empty(t, tls.clientKeyPath)
+		assert.Equal(t, time.Duration(0), tls.certReloadInterval)
+
+		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+		require.NoError(t, err)
+		assert.Equal(t, byteCert, req.ClientCert)
+		assert.Equal(t, byteKey, req.ClientKey)
+		assert.Nil(t, req.ClientCertPath)
+		assert.Nil(t, req.ClientKeyPath)
+		assert.Nil(t, req.CertReload)
+	})
+}
+
+// TestTlsConfiguration_WireSnapshot_TableDriven checks that ToProtobuf emits
+// the right wire fields for every mTLS mode, run against both standalone and
+// cluster. The two topologies share the same cases so any divergence shows
+// up as one row failing on cluster only.
+func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
+	type buildFn func() *TlsConfiguration
+	mustBytes := func(cert, key []byte) buildFn {
+		return func() *TlsConfiguration {
+			tls, err := NewTlsConfiguration().WithMutualTLS(cert, key)
+			require.NoError(t, err)
+			return tls
+		}
+	}
+	mustFromFiles := func(certPath, keyPath string, opts ...MutualTLSOption) buildFn {
+		return func() *TlsConfiguration {
+			tls, err := NewTlsConfiguration().WithMutualTLSFromFiles(certPath, keyPath, opts...)
+			require.NoError(t, err)
+			return tls
+		}
+	}
+	rootOnly := func() *TlsConfiguration {
+		return NewTlsConfiguration().WithRootCertificates([]byte(testCertData1))
+	}
+	fresh := NewTlsConfiguration // no mTLS
+
+	type wantWire struct {
+		clientCert          []byte
+		clientKey           []byte
+		clientCertPath      string
+		clientKeyPath       string
+		certReloadEnabled   bool
+		certReloadHasIntSec bool
+		certReloadIntSec    uint32
+		certReloadNil       bool // true if req.CertReload should be nil
+	}
+
+	byteCert := []byte(testClientCertData)
+	byteKey := []byte(testClientKeyData)
+
+	rows := []struct {
+		name  string
+		build buildFn
+		want  wantWire
+	}{
+		{
+			name:  "no-mtls",
+			build: func() *TlsConfiguration { return fresh() },
+			want:  wantWire{certReloadNil: true},
+		},
+		{
+			name:  "no-mtls-with-root-certs",
+			build: rootOnly,
+			want:  wantWire{certReloadNil: true},
+		},
+		{
+			name:  "bytes",
+			build: mustBytes(byteCert, byteKey),
+			want: wantWire{
+				clientCert:    byteCert,
+				clientKey:     byteKey,
+				certReloadNil: true,
+			},
+		},
+		{
+			name:  "paths-default-interval",
+			build: mustFromFiles(testClientCertPath, testClientKeyPath),
+			want: wantWire{
+				clientCertPath:    testClientCertPath,
+				clientKeyPath:     testClientKeyPath,
+				certReloadEnabled: true,
+			},
+		},
+		{
+			name:  "paths-explicit-interval",
+			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second)),
+			want: wantWire{
+				clientCertPath:      testClientCertPath,
+				clientKeyPath:       testClientKeyPath,
+				certReloadEnabled:   true,
+				certReloadHasIntSec: true,
+				certReloadIntSec:    60,
+			},
+		},
+		{
+			// Sub-second intervals round to zero on the wire, so the interval
+			// field is omitted and the core uses its default cadence, same as
+			// not passing the option.
+			name:  "paths-sub-second-interval-rounds-to-no-wire-interval",
+			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
+			want: wantWire{
+				clientCertPath:    testClientCertPath,
+				clientKeyPath:     testClientKeyPath,
+				certReloadEnabled: true,
+			},
+		},
+	}
+
+	topologies := []struct {
+		name  string
+		toReq func(tls *TlsConfiguration) (*protobuf.ConnectionRequest, error)
+	}{
+		{
+			name: "standalone",
+			toReq: func(tls *TlsConfiguration) (*protobuf.ConnectionRequest, error) {
+				adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+				return NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+			},
+		},
+		{
+			name: "cluster",
+			toReq: func(tls *TlsConfiguration) (*protobuf.ConnectionRequest, error) {
+				adv := NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tls)
+				return NewClusterClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
+			},
+		},
+	}
+
+	for _, tc := range rows {
+		for _, topo := range topologies {
+			t.Run(tc.name+"/"+topo.name, func(t *testing.T) {
+				req, err := topo.toReq(tc.build())
+				require.NoError(t, err)
+
+				if len(tc.want.clientCert) == 0 {
+					assert.Nil(t, req.ClientCert)
+				} else {
+					assert.Equal(t, tc.want.clientCert, req.ClientCert)
+				}
+				if len(tc.want.clientKey) == 0 {
+					assert.Nil(t, req.ClientKey)
+				} else {
+					assert.Equal(t, tc.want.clientKey, req.ClientKey)
+				}
+				if tc.want.clientCertPath == "" {
+					assert.Nil(t, req.ClientCertPath)
+				} else {
+					assert.Equal(t, tc.want.clientCertPath, req.GetClientCertPath())
+				}
+				if tc.want.clientKeyPath == "" {
+					assert.Nil(t, req.ClientKeyPath)
+				} else {
+					assert.Equal(t, tc.want.clientKeyPath, req.GetClientKeyPath())
+				}
+
+				if tc.want.certReloadNil {
+					assert.Nil(t, req.CertReload)
+					return
+				}
+				require.NotNil(t, req.CertReload)
+				assert.Equal(t, tc.want.certReloadEnabled, req.CertReload.GetEnabled())
+				if tc.want.certReloadHasIntSec {
+					require.NotNil(t, req.CertReload.IntervalSeconds)
+					assert.Equal(t, tc.want.certReloadIntSec, req.CertReload.GetIntervalSeconds())
+				} else {
+					assert.Nil(t, req.CertReload.IntervalSeconds)
+				}
+			})
+		}
+	}
+}
+
+// TestLoadClientCertificateAndKeyFromFile_TableDriven covers the loader's
+// happy path and every failure mode (missing/empty for each of cert and key).
+func TestLoadClientCertificateAndKeyFromFile_TableDriven(t *testing.T) {
+	type fileState int
+	const (
+		fileOK fileState = iota
+		fileMissing
+		fileEmpty
+	)
+
+	rows := []struct {
+		name          string
+		certState     fileState
+		keyState      fileState
+		wantErrSubstr string
+	}{
+		{name: "happy", certState: fileOK, keyState: fileOK},
+		{
+			name:          "missing-cert",
+			certState:     fileMissing,
+			keyState:      fileOK,
+			wantErrSubstr: "failed to read client certificate file",
+		},
+		{name: "missing-key", certState: fileOK, keyState: fileMissing, wantErrSubstr: "failed to read client key file"},
+		{name: "empty-cert", certState: fileEmpty, keyState: fileOK, wantErrSubstr: "client certificate file is empty"},
+		{name: "empty-key", certState: fileOK, keyState: fileEmpty, wantErrSubstr: "client key file is empty"},
+	}
+
+	makePath := func(t *testing.T, dir, name string, state fileState, data []byte) string {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		switch state {
+		case fileOK:
+			require.NoError(t, os.WriteFile(p, data, 0o600))
+		case fileEmpty:
+			require.NoError(t, os.WriteFile(p, []byte{}, 0o600))
+		case fileMissing:
+			// leave path unwritten
+		}
+		return p
+	}
+
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			certPath := makePath(t, dir, "cert.pem", tc.certState, []byte(testClientCertData))
+			keyPath := makePath(t, dir, "key.pem", tc.keyState, []byte(testClientKeyData))
+
+			cert, key, err := LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+			if tc.wantErrSubstr != "" {
+				require.Error(t, err)
+				assert.Nil(t, cert)
+				assert.Nil(t, key)
+				assert.Contains(t, err.Error(), tc.wantErrSubstr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, []byte(testClientCertData), cert)
+			assert.Equal(t, []byte(testClientKeyData), key)
+		})
+	}
+}
+
 func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
 	// Test TCP_NODELAY enabled
 	tcpNoDelayTrue := true
@@ -1461,4 +1904,83 @@ func TestClusterConfig_PeriodicChecks_ManualInterval(t *testing.T) {
 	manual, ok := result.PeriodicChecks.(*protobuf.ConnectionRequest_PeriodicChecksManualInterval)
 	assert.True(t, ok, "expected PeriodicChecksManualInterval protobuf type")
 	assert.Equal(t, uint32(30), manual.PeriodicChecksManualInterval.DurationInSec)
+}
+
+func TestNewClientSideCache_ServerAssistedDefault(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	assert.False(t, cache.ServerAssisted)
+}
+
+func TestNewClientSideCache_ServerAssistedEnabled(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(true)
+	assert.True(t, cache.ServerAssisted)
+}
+
+func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(false)
+	assert.False(t, cache.ServerAssisted)
+}
+
+func TestClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithInflightRequestsLimit(5000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(5000), result.InflightRequestsLimit)
+}
+
+func TestClientConfiguration_WithInflightRequestsLimit_notSet(t *testing.T) {
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379})
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), result.InflightRequestsLimit)
+}
+
+func TestClusterClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithInflightRequestsLimit(2000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(2000), result.InflightRequestsLimit)
+}
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithRecoveryRequestsQueueSize(2000)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(2000), result.GetRecoveryRequestsQueueSize())
+}
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_notSet(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379})
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.RecoveryRequestsQueueSize) // nil when not set
+}
+
+func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_zero_disables_queue(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithRecoveryRequestsQueueSize(0)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.RecoveryRequestsQueueSize)
+	assert.Equal(t, uint32(0), *result.RecoveryRequestsQueueSize) // 0 = disabled
 }

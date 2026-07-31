@@ -33,6 +33,15 @@ export interface ClientSideCacheConfig {
      * Defaults to false if not specified.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to enable server-assisted client-side caching.
+     *
+     * When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
+     * and the server sends invalidation messages when tracked keys are modified.
+     * Requires RESP3 protocol. Defaults to false if not specified.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -48,6 +57,11 @@ export interface ClientSideCacheOptions {
      * Whether to enable metrics collection for this cache.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to enable server-assisted client-side caching.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -100,6 +114,11 @@ export class ClientSideCache {
     readonly enableMetrics: boolean;
 
     /**
+     * Whether server-assisted client-side caching is enabled.
+     */
+    readonly serverAssisted: boolean;
+
+    /**
      * Creates a new ClientSideCache instance.
      *
      * @param config - Configuration options for the cache
@@ -122,6 +141,7 @@ export class ClientSideCache {
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? false;
+        this.serverAssisted = config.serverAssisted ?? false;
     }
 
     /**
@@ -156,6 +176,7 @@ export class ClientSideCache {
             entryTtlMs,
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
+            serverAssisted: options?.serverAssisted,
         });
     }
 }
