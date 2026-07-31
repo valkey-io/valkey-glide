@@ -81,17 +81,14 @@ impl RetryStrategy {
         let (lower, upper) = self.jitter_bounds();
         let jitter_fn = jitter_range(lower, upper);
 
-        let last_attempt = (self.number_of_retries as usize).saturating_sub(1);
-        let last_duration =
-            base_backoff
-                .clone()
-                .nth(last_attempt)
-                .unwrap_or(Duration::from_millis(
-                    (self.factor as u64).saturating_mul(
-                        (self.exponent_base as u64)
-                            .saturating_pow(last_attempt.try_into().unwrap_or(u32::MAX)),
-                    ),
-                ));
+        // `ExponentialBackoff` yields `factor * exponent_base^(k+1)` at index `k`, so the last
+        // bounded delay is derived arithmetically. Walking the iterator to reach it would cost one
+        // step per retry, stalling the shared runtime thread for a retry count in the billions.
+        let last_exponent = self.number_of_retries.max(1);
+        let last_duration = Duration::from_millis(
+            (self.factor as u64)
+                .saturating_mul((self.exponent_base as u64).saturating_pow(last_exponent)),
+        );
 
         let bounded = base_backoff
             .map(jitter_fn)
@@ -184,6 +181,42 @@ mod tests {
         for _ in 0..5 {
             assert_eq!(infinite.next().unwrap(), first);
         }
+    }
+
+    #[test]
+    fn test_huge_retry_count_returns_promptly() {
+        let strategy = RetryStrategy::new(2, 100, u32::MAX, Some(20));
+
+        // The infinite iterator derives its tail delay arithmetically. Walking the backoff to the
+        // last attempt instead would take billions of steps on the reconnect path.
+        let start = std::time::Instant::now();
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..10 {
+            let _ = infinite.next().unwrap();
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "building the iterator took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn test_infinite_tail_matches_last_bounded_delay() {
+        let base = 2;
+        let factor = 100;
+        let retries = 4;
+        let strategy = RetryStrategy::new(base, factor, retries, Some(0));
+
+        let bounded: Vec<_> = strategy.get_bounded_backoff_dur_iterator().collect();
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..retries {
+            let _ = infinite.next().unwrap();
+        }
+
+        // The tail repeats the last bounded delay, `factor * base^retries`.
+        assert_eq!(*bounded.last().unwrap(), Duration::from_millis(1600));
+        assert_eq!(infinite.next().unwrap(), Duration::from_millis(1600));
     }
 
     #[test]
