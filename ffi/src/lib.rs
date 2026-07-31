@@ -4634,9 +4634,8 @@ unsafe fn required_c_str<'a>(ptr: *const c_char, field_name: &str) -> Result<&'a
 }
 
 fn span_to_ffi_pointer(span: GlideSpan) -> u64 {
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    ptr as u64
+    // Shared create path with every other binding; see glide_core::GlideOpenTelemetry::leak_span.
+    GlideOpenTelemetry::leak_span(span)
 }
 
 unsafe fn create_span_with_remote_context(
