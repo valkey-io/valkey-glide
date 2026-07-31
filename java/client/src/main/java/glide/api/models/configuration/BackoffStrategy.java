@@ -48,9 +48,7 @@ public class BackoffStrategy {
      */
     @NonNull private final Integer factor;
 
-    /**
-     * The exponent base configured for the strategy. A value of 0 means the default (2) is used.
-     */
+    /** The exponent base configured for the strategy. A value of 0 means the default (2) is used. */
     @NonNull private final Integer exponentBase;
 
     /**
