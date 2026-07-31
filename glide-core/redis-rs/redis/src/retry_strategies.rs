@@ -82,15 +82,16 @@ impl RetryStrategy {
         let jitter_fn = jitter_range(lower, upper);
 
         let last_attempt = (self.number_of_retries as usize).saturating_sub(1);
-        let last_duration = base_backoff
-            .clone()
-            .nth(last_attempt)
-            .unwrap_or(Duration::from_millis(
-                (self.factor as u64).saturating_mul(
-                    (self.exponent_base as u64)
-                        .saturating_pow(last_attempt.try_into().unwrap_or(u32::MAX)),
-                ),
-            ));
+        let last_duration =
+            base_backoff
+                .clone()
+                .nth(last_attempt)
+                .unwrap_or(Duration::from_millis(
+                    (self.factor as u64).saturating_mul(
+                        (self.exponent_base as u64)
+                            .saturating_pow(last_attempt.try_into().unwrap_or(u32::MAX)),
+                    ),
+                ));
 
         let bounded = base_backoff
             .map(jitter_fn)
