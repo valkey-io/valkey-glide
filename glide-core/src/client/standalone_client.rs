@@ -210,7 +210,10 @@ impl StandaloneClient {
                 strategy.factor,
                 strategy.number_of_retries,
                 strategy.jitter_percent,
-            ),
+            )
+            .map_err(|err| {
+                StandaloneClientConnectionError::FailedConnection(vec![(None, err)])
+            })?,
             None => RetryStrategy::default(),
         };
 
