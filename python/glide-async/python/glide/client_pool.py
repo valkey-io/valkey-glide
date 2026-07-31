@@ -128,12 +128,43 @@ class AsyncClientPool:
         import glide.glide_client as _gc
 
         with _async_pipe_lock:
+            # Detect fork: if PID changed, the flush thread is dead.
+            current_pid = os.getpid()
+            if (
+                _gc._async_pipe_read_fd >= 0
+                and _gc._async_pipe_init_pid > 0
+                and current_pid != _gc._async_pipe_init_pid
+            ):
+                try:
+                    os.close(_gc._async_pipe_read_fd)
+                except OSError:
+                    pass
+                if _gc._async_pipe_write_fd >= 0:
+                    try:
+                        os.close(_gc._async_pipe_write_fd)
+                    except OSError:
+                        pass
+                _gc._async_pipe_read_fd = -1
+                _gc._async_pipe_write_fd = -1
+                _gc._async_pipe_registered = False
+                _gc._async_pipe_loop = None
+                _gc._pipe_remainder = b""
+                _gc._client_registry.clear()
+
             if _gc._async_pipe_read_fd < 0:
                 try:
                     r, w = os.pipe()
                     os.set_blocking(r, False)
-                    self._lib.init_async_pipe(w)
+                    if (
+                        _gc._async_pipe_init_pid > 0
+                        and current_pid != _gc._async_pipe_init_pid
+                    ):
+                        self._lib.reinit_async_pipe(w)
+                    else:
+                        self._lib.init_async_pipe(w)
                     _gc._async_pipe_read_fd = r
+                    _gc._async_pipe_write_fd = w
+                    _gc._async_pipe_init_pid = current_pid
                 except OSError:
                     pass
 
