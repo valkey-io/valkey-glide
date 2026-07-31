@@ -244,6 +244,7 @@ class AsyncClientPool:
             client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
+            client._create_pid = os.getpid()
 
             # The pool created this client with pipe_client_id = client_id
             # (set in create_client_internal via the pre-assigned ID).

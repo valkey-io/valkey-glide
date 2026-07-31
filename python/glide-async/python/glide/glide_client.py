@@ -994,6 +994,7 @@ class BaseClient(CoreCommands):
     ) -> TResult:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -1023,6 +1024,7 @@ class BaseClient(CoreCommands):
     async def _refresh_iam_token(self) -> TResult:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
