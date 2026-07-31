@@ -566,12 +566,11 @@ class TlsAdvancedConfiguration:
               and ``client_key_path`` raises ``ConfigurationError`` when the connection request
               is built.
 
-            - Must be positive. A non-positive value raises ``ConfigurationError`` when the
-              connection request is built, because the GLIDE core treats a zero interval as
-              "unset" and would silently substitute its own default cadence.
-
-            - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
-              effective cadence.
+            - Must be a positive integer that fits in an unsigned 32-bit integer, the width of
+              the wire field. Values outside that range raise ``ConfigurationError`` when the
+              connection request is built. The client enforces this because the GLIDE core
+              cannot: it reads a zero interval as "unset" and silently substitutes its own
+              default cadence, and it never receives an out-of-range value at all.
 
             - If None (default), the GLIDE core applies its default reload cadence (see
               ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
@@ -707,10 +706,12 @@ class AdvancedBaseClientConfiguration:
     def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
         """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
 
-        Only the minimal presence/pairing rules that give an immediate, clear
-        error for an obviously-malformed config are enforced here, matching the
-        other clients. File contents, path readability, and the reload interval
-        value are validated by the GLIDE core at connection time.
+        Only the minimal rules that give an immediate, clear error for an
+        obviously-malformed config are enforced here: presence and pairing, plus
+        the reload interval's range, which the core cannot check because a zero
+        reads as "unset" and an out-of-range value never reaches it. File
+        contents and path readability are left to the GLIDE core at connection
+        time.
         """
         has_cert_path = tls_config.client_cert_path is not None
         has_key_path = tls_config.client_key_path is not None
@@ -752,17 +753,17 @@ class AdvancedBaseClientConfiguration:
                 "configured (both client_cert_path and client_key_path)."
             )
 
-        # The core maps a zero interval back to its own default cadence, and a
-        # negative one cannot reach the uint32 wire field at all, so reject both
-        # here rather than let the requested cadence be changed out from under
-        # the caller. Omit the interval to ask for the core's default.
-        if (
-            tls_config.cert_reload_interval_seconds is not None
-            and tls_config.cert_reload_interval_seconds <= 0
-        ):
+        # The interval's range is enforced here because the core cannot do it: a
+        # zero reads as "unset" there and is silently replaced by the default
+        # cadence, and a value outside the uint32 wire field never arrives at
+        # all, failing as a raw protobuf range error instead. Omit the interval
+        # to ask for the core's default.
+        interval = tls_config.cert_reload_interval_seconds
+        if interval is not None and not 0 < interval <= 2**32 - 1:
             raise ConfigurationError(
-                "cert_reload_interval_seconds must be positive; omit it to defer to "
-                "the GLIDE core's default reload cadence."
+                "cert_reload_interval_seconds must be a positive integer no greater "
+                f"than {2**32 - 1}; got {interval}. Omit it to defer to the GLIDE "
+                "core's default reload cadence."
             )
 
     def _apply_tls_config(
