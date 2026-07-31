@@ -523,6 +523,7 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
         self._pipe_client_id: int = 0
+        self._create_pid: int = 0
         self._is_asyncio: bool = True
 
     @classmethod
@@ -786,7 +787,7 @@ class BaseClient(CoreCommands):
 
     def _check_same_process(self) -> None:
         """Raise if this client is used from a forked child process."""
-        if getattr(self, "_create_pid", 0) and self._create_pid != os.getpid():
+        if self._create_pid and self._create_pid != os.getpid():
             raise ClosingError(
                 "Cannot use a client created before fork(). "
                 "Create a new client in the child process."
