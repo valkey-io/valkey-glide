@@ -5,6 +5,7 @@
 ### Fixes
 
 * Go: Store `BackoffStrategy` fields as `uint32` to match the core, and reject out-of-range values instead of wrapping them around ([#3929](https://github.com/valkey-io/valkey-glide/issues/3929))
+* Core/All: Harden the reconnect `RetryStrategy` against out-of-range values. A jitter percent above 100 made the lower jitter bound negative and aborted the process on the first reconnect attempt, and a retry count of 0 underflowed the last-delay computation so the reconnect task never produced a delay. The jitter is now clamped to 100 and the retry count no longer underflows ([#3929](https://github.com/valkey-io/valkey-glide/issues/3929))
 * Core/FFI: Percent-decode userinfo in `create_client_from_uri` so credentials containing URI-reserved characters (`@`, `:`, `/`, `?`, `#`, `%`, `+`, space, non-ASCII) authenticate correctly ([#6659](https://github.com/valkey-io/valkey-glide/issues/6659))
 * Core/All: Buffer pending cluster requests during reconnect instead of failing immediately. When a circular MOVED redirect triggers a reconnect, requests arriving during the recovery window are now queued and retried transparently once reconnection completes. A new `recovery_requests_queue_size` option (default: 1000) controls the queue depth. ([#6640](https://github.com/valkey-io/valkey-glide/pull/6640))
 * Python: Fix trio pub/sub BusyResourceError from duplicate shared-pipe reader ([#6605](https://github.com/valkey-io/valkey-glide/pull/6605))

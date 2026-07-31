@@ -200,32 +200,47 @@ func maxUint32AsInt(t *testing.T) int {
 	return int(value)
 }
 
+// outOfRangeCase describes a rejected parameter: the error must name the field, and the field itself
+// must hold 0 rather than a wrapped number.
+type outOfRangeCase struct {
+	name     string
+	strategy *BackoffStrategy
+	field    string
+	stored   func(*BackoffStrategy) uint32
+}
+
+func runOutOfRangeCases(t *testing.T, tests []outOfRangeCase) {
+	t.Helper()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.strategy.toProtobuf()
+			require.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), test.field)
+			assert.Zero(t, test.stored(test.strategy))
+		})
+	}
+}
+
 func TestBackoffStrategy_maxValues(t *testing.T) {
 	max := maxUint32AsInt(t)
-	strategy := NewBackoffStrategy(max, max, max).WithJitterPercent(max)
+	strategy := NewBackoffStrategy(max, max, max).WithJitterPercent(100)
 
 	result, err := strategy.toProtobuf()
 	require.NoError(t, err)
 
 	maxUint32 := uint32(math.MaxUint32)
+	maxJitter := uint32(100)
 	assert.Equal(t, &protobuf.ConnectionRetryStrategy{
 		NumberOfRetries: maxUint32,
 		Factor:          maxUint32,
 		ExponentBase:    maxUint32,
-		JitterPercent:   &maxUint32,
+		JitterPercent:   &maxJitter,
 	}, result)
 }
 
-func TestBackoffStrategy_outOfRangeValues(t *testing.T) {
-	aboveMax := maxUint32AsInt(t) + 1
-
-	tests := []struct {
-		name     string
-		strategy *BackoffStrategy
-		field    string
-		// stored is the value the rejected field ends up holding; it must never be a wrapped number.
-		stored func(*BackoffStrategy) uint32
-	}{
+func TestBackoffStrategy_negativeValues(t *testing.T) {
+	runOutOfRangeCases(t, []outOfRangeCase{
 		{
 			"negative retries", NewBackoffStrategy(-1, 10, 50), "numOfRetries",
 			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
@@ -242,25 +257,39 @@ func TestBackoffStrategy_outOfRangeValues(t *testing.T) {
 			"negative jitter", NewBackoffStrategy(5, 10, 50).WithJitterPercent(-25), "jitterPercent",
 			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
 		},
+	})
+}
+
+func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
+	runOutOfRangeCases(t, []outOfRangeCase{
+		{
+			"jitter just above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(101), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+	})
+}
+
+func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
+	aboveMax := maxUint32AsInt(t) + 1
+
+	runOutOfRangeCases(t, []outOfRangeCase{
 		{
 			"retries above max", NewBackoffStrategy(aboveMax, 10, 50), "numOfRetries",
 			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
 		},
 		{
-			"jitter above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(aboveMax), "jitterPercent",
-			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+			"factor above max", NewBackoffStrategy(5, aboveMax, 50), "factor",
+			func(s *BackoffStrategy) uint32 { return s.factor },
 		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result, err := test.strategy.toProtobuf()
-			require.Error(t, err)
-			assert.Nil(t, result)
-			assert.Contains(t, err.Error(), test.field)
-			assert.Zero(t, test.stored(test.strategy))
-		})
-	}
+		{
+			"exponent base above max", NewBackoffStrategy(5, 10, aboveMax), "exponentBase",
+			func(s *BackoffStrategy) uint32 { return s.exponentBase },
+		},
+	})
 }
 
 func TestBackoffStrategy_outOfRangeValueFailsClientConfig(t *testing.T) {

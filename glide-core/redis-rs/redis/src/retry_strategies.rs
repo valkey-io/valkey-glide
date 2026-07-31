@@ -18,6 +18,8 @@ pub(crate) const EXPONENT_BASE: u32 = 2;
 pub(crate) const FACTOR: u32 = 100;
 pub(crate) const NUMBER_OF_RETRIES: u32 = 5;
 pub(crate) const DEFAULT_JITTER_PERCENT: u32 = 20; // Default jitter ±20%
+/// Largest jitter that keeps the lower jitter bound non-negative, since the bounds are 1 ± jitter/100.
+pub(crate) const MAX_JITTER_PERCENT: u32 = 100;
 
 impl RetryStrategy {
     /// Create RetryStrategy from given parameters
@@ -33,7 +35,9 @@ impl RetryStrategy {
             EXPONENT_BASE
         };
         let factor = if factor > 0 { factor } else { FACTOR };
-        let jitter = jitter_percent.unwrap_or(DEFAULT_JITTER_PERCENT);
+        let jitter = jitter_percent
+            .unwrap_or(DEFAULT_JITTER_PERCENT)
+            .min(MAX_JITTER_PERCENT);
         Self::with_params(exponent_base, factor, number_of_retries, jitter)
     }
 
@@ -77,11 +81,15 @@ impl RetryStrategy {
         let (lower, upper) = self.jitter_bounds();
         let jitter_fn = jitter_range(lower, upper);
 
+        let last_attempt = (self.number_of_retries as usize).saturating_sub(1);
         let last_duration = base_backoff
             .clone()
-            .nth(self.number_of_retries as usize - 1)
+            .nth(last_attempt)
             .unwrap_or(Duration::from_millis(
-                self.factor as u64 * self.exponent_base.pow(self.number_of_retries - 1) as u64,
+                (self.factor as u64).saturating_mul(
+                    (self.exponent_base as u64)
+                        .saturating_pow(last_attempt.try_into().unwrap_or(u32::MAX)),
+                ),
             ));
 
         let bounded = base_backoff
@@ -142,6 +150,39 @@ mod tests {
         }
 
         assert_eq!(counter, retries);
+    }
+
+    #[test]
+    fn test_jitter_percent_above_100_is_clamped() {
+        let strategy = RetryStrategy::new(2, 100, 3, Some(150));
+        let (lower, upper) = strategy.jitter_bounds();
+        assert_eq!(lower, 0.0);
+        assert_eq!(upper, 2.0);
+
+        // Without clamping, the negative lower bound makes `Duration::mul_f64` panic.
+        for duration in strategy.get_bounded_backoff_dur_iterator() {
+            assert!(duration.as_millis() <= 2 * 100 * 2u128.pow(3));
+        }
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..10 {
+            let _ = infinite.next().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_zero_retries_does_not_underflow() {
+        let strategy = RetryStrategy::new(2, 100, 0, Some(20));
+
+        assert_eq!(strategy.get_bounded_backoff_dur_iterator().count(), 0);
+
+        // Without the saturating subtraction this asks the endless backoff for its
+        // `usize::MAX`-th element and never returns.
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        let first = infinite.next().unwrap();
+        assert_eq!(first, Duration::from_millis(200));
+        for _ in 0..5 {
+            assert_eq!(infinite.next().unwrap(), first);
+        }
     }
 
     #[test]

@@ -336,8 +336,9 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
 //
-// Every value must be between 0 and 2^32 - 1. A value outside that range leads to an invalid
-// configuration, reported as an error when the client is created.
+// The retry count, factor and exponent base must be between 0 and 2^32 - 1, and the jitter percent
+// must be between 0 and 100. A value outside its range leads to an invalid configuration, reported
+// as an error when the client is created.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
@@ -348,11 +349,20 @@ type BackoffStrategy struct {
 	factor uint32
 	// The exponent base configured for the strategy.
 	exponentBase uint32
-	// The Jitter percent on the calculated duration. If not set, a default value will be used.
+	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
 	jitterPercent *uint32
 	// The first out-of-range value seen by a setter, if any.
 	err error
 }
+
+const (
+	// maxBackoffValue is the largest retry count, factor and exponent base the core accepts, which
+	// it represents as a uint32.
+	maxBackoffValue = int64(math.MaxUint32)
+	// maxJitterPercent is the largest jitter the core can apply: it derives the jitter bounds as
+	// 1 ± jitterPercent/100, so anything above 100 makes the lower bound negative.
+	maxJitterPercent = int64(100)
+)
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 //
@@ -360,28 +370,28 @@ type BackoffStrategy struct {
 // invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
 	strategy := &BackoffStrategy{}
-	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries)
-	strategy.factor = strategy.toUint32("factor", factor)
-	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase)
+	strategy.numOfRetries = strategy.toUint32("numOfRetries", numOfRetries, maxBackoffValue)
+	strategy.factor = strategy.toUint32("factor", factor, maxBackoffValue)
+	strategy.exponentBase = strategy.toUint32("exponentBase", exponentBase, maxBackoffValue)
 	return strategy
 }
 
 // WithJitterPercent sets the jitter percent.
 //
-// The jitter must be between 0 and 2^32 - 1. Using a value outside that range leads to an invalid
+// The jitter must be between 0 and 100. Using a value outside that range leads to an invalid
 // configuration, reported as an error when the client is created.
 func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	jitterPercent := strategy.toUint32("jitterPercent", jitter)
+	jitterPercent := strategy.toUint32("jitterPercent", jitter, maxJitterPercent)
 	strategy.jitterPercent = &jitterPercent
 	return strategy
 }
 
 // toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
 // instead of being wrapped around silently, because the setters cannot report it themselves.
-func (strategy *BackoffStrategy) toUint32(name string, value int) uint32 {
-	if value < 0 || int64(value) > math.MaxUint32 {
+func (strategy *BackoffStrategy) toUint32(name string, value int, maxValue int64) uint32 {
+	if value < 0 || int64(value) > maxValue {
 		if strategy.err == nil {
-			strategy.err = fmt.Errorf("%s must be between 0 and %d, got %d", name, uint32(math.MaxUint32), value)
+			strategy.err = fmt.Errorf("%s must be between 0 and %d, got %d", name, maxValue, value)
 		}
 		return 0
 	}
