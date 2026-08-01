@@ -462,6 +462,8 @@ class TestSyncScan:
             cursor = cursor_bytes.decode()
             keys_of_1 = cast(List[str], result_of_1[1])
             keys.extend(keys_of_1)
+            if cursor == "0":
+                break
             result_of_100 = glide_sync_client.scan(cursor, count=100)
             cursor_bytes = cast(bytes, result_of_100[0])
             cursor = cursor_bytes.decode()
