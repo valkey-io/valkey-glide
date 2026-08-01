@@ -51,6 +51,9 @@ import lombok.Getter;
                         + " instance")
 public class TlsAdvancedConfiguration {
 
+    /** Width of the cert reload interval wire field (uint32). */
+    public static final long MAX_RELOAD_INTERVAL_SECONDS = 4294967295L;
+
     /**
      * Whether to bypass TLS certificate verification.
      *
@@ -229,6 +232,16 @@ public class TlsAdvancedConfiguration {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` must be positive; omit it (null) to defer to the GLIDE"
                             + " core's default cadence.");
+        }
+
+        // Unreachable while the field is an Integer, whose max is below this bound. It
+        // records the shared cross-client contract in case the type ever widens.
+        if (certReloadIntervalSeconds != null
+                && certReloadIntervalSeconds > MAX_RELOAD_INTERVAL_SECONDS) {
+            throw new ConfigurationError(
+                    "`certReloadIntervalSeconds` must be at most "
+                            + MAX_RELOAD_INTERVAL_SECONDS
+                            + "; omit it (null) to defer to the GLIDE core's default cadence.");
         }
     }
 

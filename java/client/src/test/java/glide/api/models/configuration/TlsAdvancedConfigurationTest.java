@@ -324,6 +324,20 @@ public class TlsAdvancedConfigurationTest {
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
 
+    // certReloadIntervalSeconds is an Integer, whose max is below the uint32 bound, so
+    // the largest expressible interval is accepted and the bound cannot be exceeded.
+    @Test
+    void testMaxExpressibleIntervalAccepted() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .useMutualTlsWithReload(
+                                "/certs/client.pem", "/certs/client.key", Integer.MAX_VALUE)
+                        .build();
+
+        assertEquals(Integer.MAX_VALUE, config.getCertReloadIntervalSeconds());
+        assertTrue(Integer.MAX_VALUE <= TlsAdvancedConfiguration.MAX_RELOAD_INTERVAL_SECONDS);
+    }
+
     @Test
     void testIntervalWithByteBasedMutualTlsThrows() {
         byte[] cert = "cert".getBytes(StandardCharsets.UTF_8);

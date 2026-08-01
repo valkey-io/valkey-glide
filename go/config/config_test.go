@@ -950,6 +950,26 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			opts:          []MutualTLSOption{WithReloadInterval(-1 * time.Second)},
 			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
+		{
+			// The largest interval the uint32 wire field can carry.
+			name:     "files/max-interval-accepted",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts: []MutualTLSOption{
+				WithReloadInterval(MaxReloadIntervalSeconds * time.Second),
+			},
+		},
+		{
+			name:     "files/above-max-interval-rejected",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts: []MutualTLSOption{
+				WithReloadInterval((MaxReloadIntervalSeconds + 1) * time.Second),
+			},
+			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be at most",
+		},
 	}
 
 	for _, tc := range rows {

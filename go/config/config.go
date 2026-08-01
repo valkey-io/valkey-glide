@@ -18,6 +18,9 @@ const (
 	DefaultPort = 6379
 )
 
+// MaxReloadIntervalSeconds is the width of the cert reload interval wire field (uint32).
+const MaxReloadIntervalSeconds = math.MaxUint32
+
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
 	Host string // If not supplied, api.DefaultHost will be used.
@@ -415,11 +418,8 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
-			seconds := uint64(tlsConfig.certReloadInterval / time.Second)
-			if seconds > math.MaxUint32 {
-				seconds = math.MaxUint32
-			}
-			if seconds > 0 {
+			// WithMutualTLSFromFiles rejects anything wider than the uint32 field.
+			if seconds := uint64(tlsConfig.certReloadInterval / time.Second); seconds > 0 {
 				s := uint32(seconds)
 				reload.IntervalSeconds = &s
 			}
@@ -1107,8 +1107,8 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 //
 // The wire field is uint32 seconds, so values round down to whole seconds.
 // A sub-second value rounds to zero, which is the same as not passing the
-// option at all (the core uses its default cadence). Values above roughly
-// 136 years (math.MaxUint32 seconds) clamp to the uint32 max on the wire.
+// option at all (the core uses its default cadence). WithMutualTLSFromFiles
+// rejects a value whose whole seconds exceed [MaxReloadIntervalSeconds].
 func WithReloadInterval(d time.Duration) MutualTLSOption {
 	return reloadIntervalOption{interval: d}
 }
@@ -1189,6 +1189,12 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 			return nil, fmt.Errorf(
 				"WithMutualTLSFromFiles: reload interval must be positive; got %v",
 				*settings.reloadInterval)
+		}
+		// The wire field is uint32 seconds, so a wider value cannot be sent.
+		if uint64(*settings.reloadInterval/time.Second) > MaxReloadIntervalSeconds {
+			return nil, fmt.Errorf(
+				"WithMutualTLSFromFiles: reload interval must be at most %d seconds; got %v",
+				uint64(MaxReloadIntervalSeconds), *settings.reloadInterval)
 		}
 		interval = *settings.reloadInterval
 	}
