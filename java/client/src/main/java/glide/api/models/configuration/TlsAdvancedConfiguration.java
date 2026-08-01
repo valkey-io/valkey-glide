@@ -51,7 +51,7 @@ import lombok.Getter;
                         + " instance")
 public class TlsAdvancedConfiguration {
 
-    /** Width of the cert reload interval wire field (uint32). */
+    /** Largest reload interval that fits in the protobuf uint32 seconds field. */
     public static final long MAX_RELOAD_INTERVAL_SECONDS = 4294967295L;
 
     /**
@@ -234,8 +234,8 @@ public class TlsAdvancedConfiguration {
                             + " core's default cadence.");
         }
 
-        // Unreachable while the field is an Integer, whose max is below this bound. It
-        // records the shared cross-client contract in case the type ever widens.
+        // Cannot fire while the field is an Integer, whose max is below this bound. Kept
+        // so the rule still holds if that type widens.
         if (certReloadIntervalSeconds != null
                 && certReloadIntervalSeconds > MAX_RELOAD_INTERVAL_SECONDS) {
             throw new ConfigurationError(

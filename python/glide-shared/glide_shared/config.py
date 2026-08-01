@@ -37,7 +37,7 @@ from glide_shared.protobuf.connection_request_pb2 import (
 # (for example ``pathlib.Path``).
 StrPath = Union[str, os.PathLike[str]]
 
-# Width of the ``cert_reload.interval_seconds`` wire field (uint32).
+# Largest value that fits in the uint32 ``cert_reload.interval_seconds`` field.
 MAX_RELOAD_INTERVAL_SECONDS = 2**32 - 1
 
 
@@ -543,8 +543,8 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with ``client_key_path``, and cannot be combined with
               byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
-              raise ``ConfigurationError`` when the connection request is built, so that a
-              config mutated after construction is validated too.
+              raise ``ConfigurationError`` when the connection request is built, which
+              also catches a config mutated after construction.
 
             - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
               read and validated by the GLIDE core when the connection is established; a missing,
@@ -707,8 +707,8 @@ class AdvancedBaseClientConfiguration:
     def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
         """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
 
-        Covers presence, pairing, and the reload interval's range. File contents
-        and path readability are left to the GLIDE core at connection time.
+        Covers presence, pairing, and the reload interval's range. The GLIDE core
+        checks file contents and path readability at connection time.
         """
         has_cert_path = tls_config.client_cert_path is not None
         has_key_path = tls_config.client_key_path is not None
@@ -742,16 +742,17 @@ class AdvancedBaseClientConfiguration:
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
 
+        interval = tls_config.cert_reload_interval_seconds
+
         # Only the path-based branch emits `cert_reload`.
-        if not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+        if not has_cert_path and interval is not None:
             raise ConfigurationError(
                 "cert_reload_interval_seconds may only be set when path-based mTLS is "
                 "configured (both client_cert_path and client_key_path)."
             )
 
-        # Client-side because the core reads 0 as unset and never receives an
-        # out-of-range value.
-        interval = tls_config.cert_reload_interval_seconds
+        # The core cannot catch these: it reads 0 as unset and never sees a value
+        # too large for a uint32.
         if interval is not None and (
             interval <= 0 or interval > MAX_RELOAD_INTERVAL_SECONDS
         ):

@@ -310,8 +310,8 @@ public class TlsAdvancedConfigurationTest {
         assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
 
-    // An interval without cert paths has nothing to reload. The public builder cannot
-    // express this, so the constructor is used to reach the backstop validation.
+    // An interval without cert paths has nothing to reload. The builder cannot express
+    // that, so this calls the constructor directly.
     @Test
     void testIntervalWithoutCertPathsThrows() {
         ConfigurationError error =
@@ -324,8 +324,7 @@ public class TlsAdvancedConfigurationTest {
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
 
-    // certReloadIntervalSeconds is an Integer, whose max is below the uint32 bound, so
-    // the largest expressible interval is accepted and the bound cannot be exceeded.
+    // Integer.MAX_VALUE is below the uint32 bound, so no Integer can exceed it.
     @Test
     void testMaxExpressibleIntervalAccepted() {
         TlsAdvancedConfiguration config =

@@ -926,7 +926,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			// Sub-second values are accepted; they round to zero on the wire,
+			// Sub-second values are accepted; they round down to zero seconds,
 			// which is the same as not passing the option (core default cadence).
 			name:     "files/sub-second-interval-accepted",
 			kind:     kindFiles,
@@ -951,7 +951,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
 		{
-			// The largest interval the uint32 wire field can carry.
+			// The largest interval that fits in a uint32.
 			name:     "files/max-interval-accepted",
 			kind:     kindFiles,
 			certPath: testClientCertPath,
@@ -1015,7 +1015,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 // mTLS builder clears whatever the other left behind. Bytes to paths must
 // clear the byte fields and enable cert reload; paths to bytes must clear
 // the path fields and drop the reload block. Both the in-memory state and
-// the ToProtobuf wire output are checked.
+// the ToProtobuf output are checked.
 func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 	byteCert := []byte(testClientCertData)
 	byteKey := []byte(testClientKeyData)
@@ -1067,7 +1067,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 }
 
 // TestTlsConfiguration_WireSnapshot_TableDriven checks that ToProtobuf emits
-// the right wire fields for every mTLS mode, run against both standalone and
+// the right protobuf fields for every mTLS mode, run against both standalone and
 // cluster. The two topologies share the same cases so any divergence shows
 // up as one row failing on cluster only.
 func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
@@ -1150,10 +1150,10 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			// Sub-second intervals round to zero on the wire, so the interval
+			// Sub-second intervals round down to zero seconds, so the interval
 			// field is omitted and the core uses its default cadence, same as
 			// not passing the option.
-			name:  "paths-sub-second-interval-rounds-to-no-wire-interval",
+			name:  "paths-sub-second-interval-rounds-to-no-interval",
 			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
 			want: wantWire{
 				clientCertPath:    testClientCertPath,

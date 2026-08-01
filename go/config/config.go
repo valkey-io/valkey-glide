@@ -18,7 +18,8 @@ const (
 	DefaultPort = 6379
 )
 
-// MaxReloadIntervalSeconds is the width of the cert reload interval wire field (uint32).
+// MaxReloadIntervalSeconds is the largest reload interval that fits in the protobuf
+// uint32 seconds field.
 const MaxReloadIntervalSeconds = math.MaxUint32
 
 // NodeAddress represents the host address and port of a node in the cluster.
@@ -418,7 +419,7 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
-			// WithMutualTLSFromFiles rejects anything wider than the uint32 field.
+			// WithMutualTLSFromFiles already rejected anything too large for a uint32.
 			if seconds := uint64(tlsConfig.certReloadInterval / time.Second); seconds > 0 {
 				s := uint32(seconds)
 				reload.IntervalSeconds = &s
@@ -1105,10 +1106,10 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 // [TlsConfiguration.WithMutualTLSFromFiles]. The interval must be positive;
 // WithMutualTLSFromFiles rejects zero or negative values.
 //
-// The wire field is uint32 seconds, so values round down to whole seconds.
-// A sub-second value rounds to zero, which is the same as not passing the
-// option at all (the core uses its default cadence). WithMutualTLSFromFiles
-// rejects a value whose whole seconds exceed [MaxReloadIntervalSeconds].
+// The interval is sent as uint32 seconds, so values round down to whole seconds.
+// A sub-second value rounds to zero, which behaves like omitting the option: the
+// core uses its default cadence. WithMutualTLSFromFiles rejects a value whose
+// whole seconds exceed [MaxReloadIntervalSeconds].
 func WithReloadInterval(d time.Duration) MutualTLSOption {
 	return reloadIntervalOption{interval: d}
 }
@@ -1158,9 +1159,8 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 //
 // Both certPath and keyPath must be non-empty. A reload interval, if passed,
 // must be positive; a non-positive value returns an error and leaves the
-// receiver unchanged. Sub-second intervals round down to whole seconds on
-// the wire, so a value like 500ms is the same as not passing the option
-// (the core uses its default cadence).
+// receiver unchanged. Sub-second intervals round down to whole seconds, so 500ms
+// behaves like omitting the option and the core uses its default cadence.
 //
 // Calling this after [TlsConfiguration.WithMutualTLS] replaces the byte-based
 // state with the new path-based state.
@@ -1190,7 +1190,7 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 				"WithMutualTLSFromFiles: reload interval must be positive; got %v",
 				*settings.reloadInterval)
 		}
-		// The wire field is uint32 seconds, so a wider value cannot be sent.
+		// A larger value will not fit in the uint32 seconds field.
 		if uint64(*settings.reloadInterval/time.Second) > MaxReloadIntervalSeconds {
 			return nil, fmt.Errorf(
 				"WithMutualTLSFromFiles: reload interval must be at most %d seconds; got %v",

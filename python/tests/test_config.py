@@ -793,8 +793,8 @@ def test_tls_cert_reload_interval_requires_paths():
 
 
 def test_tls_cert_reload_interval_rejected_with_byte_based_mtls():
-    # Byte-based mTLS never reloads, so the interval must be rejected rather
-    # than silently dropped from the request.
+    # Byte-based mTLS never reloads, so an interval here is an error rather than
+    # something to drop silently.
     tls_config = TlsAdvancedConfiguration(
         client_cert_pem=TEST_CLIENT_CERT_DATA,
         client_key_pem=TEST_CLIENT_KEY_DATA,
@@ -808,9 +808,8 @@ def test_tls_cert_reload_interval_rejected_with_byte_based_mtls():
 
 @pytest.mark.parametrize("interval", [0, -1, 2**32])
 def test_tls_cert_reload_interval_out_of_range(tmp_path, interval):
-    # The core cannot reject these itself: a zero reads as "unset" there and is
-    # replaced by the default cadence, and a value wider than the uint32 wire
-    # field never reaches it.
+    # The core cannot catch these: it reads 0 as unset and replaces it with the
+    # default cadence, and a value too large for a uint32 never reaches it.
     cert_path, key_path = _write_cert_key(tmp_path)
     tls_config = TlsAdvancedConfiguration(
         client_cert_path=str(cert_path),
@@ -824,7 +823,7 @@ def test_tls_cert_reload_interval_out_of_range(tmp_path, interval):
 
 
 def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
-    # The largest value the wire field can carry is still forwarded verbatim.
+    # The client still forwards the largest uint32 value unchanged.
     cert_path, key_path = _write_cert_key(tmp_path)
     tls_config = TlsAdvancedConfiguration(
         client_cert_path=str(cert_path),
