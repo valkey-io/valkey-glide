@@ -330,8 +330,7 @@ public class TlsAdvancedConfigurationTest {
     void testMaxExpressibleIntervalAccepted() {
         TlsAdvancedConfiguration config =
                 TlsAdvancedConfiguration.builder()
-                        .useMutualTlsWithReload(
-                                "/certs/client.pem", "/certs/client.key", Integer.MAX_VALUE)
+                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", Integer.MAX_VALUE)
                         .build();
 
         assertEquals(Integer.MAX_VALUE, config.getCertReloadIntervalSeconds());
