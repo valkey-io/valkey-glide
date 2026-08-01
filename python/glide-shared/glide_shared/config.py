@@ -37,6 +37,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
 # (for example ``pathlib.Path``).
 StrPath = Union[str, os.PathLike[str]]
 
+# Width of the ``cert_reload.interval_seconds`` wire field (uint32).
+MAX_RELOAD_INTERVAL_SECONDS = 2**32 - 1
+
 
 class NodeAddress:
     """
@@ -566,11 +569,9 @@ class TlsAdvancedConfiguration:
               and ``client_key_path`` raises ``ConfigurationError`` when the connection request
               is built.
 
-            - Must be a positive integer that fits in an unsigned 32-bit integer, the width of
-              the wire field. Values outside that range raise ``ConfigurationError`` when the
-              connection request is built. The client enforces this because the GLIDE core
-              cannot: it reads a zero interval as "unset" and silently substitutes its own
-              default cadence, and it never receives an out-of-range value at all.
+            - Must be a positive integer no greater than ``MAX_RELOAD_INTERVAL_SECONDS``.
+              Values outside that range raise ``ConfigurationError`` when the connection
+              request is built.
 
             - If None (default), the GLIDE core applies its default reload cadence (see
               ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
@@ -706,12 +707,8 @@ class AdvancedBaseClientConfiguration:
     def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
         """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
 
-        Only the minimal rules that give an immediate, clear error for an
-        obviously-malformed config are enforced here: presence and pairing, plus
-        the reload interval's range, which the core cannot check because a zero
-        reads as "unset" and an out-of-range value never reaches it. File
-        contents and path readability are left to the GLIDE core at connection
-        time.
+        Covers presence, pairing, and the reload interval's range. File contents
+        and path readability are left to the GLIDE core at connection time.
         """
         has_cert_path = tls_config.client_cert_path is not None
         has_key_path = tls_config.client_key_path is not None
@@ -745,25 +742,23 @@ class AdvancedBaseClientConfiguration:
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
 
-        # Only the path-based branch emits `cert_reload`, so an interval set in any
-        # other mode would be silently dropped rather than take effect.
+        # Only the path-based branch emits `cert_reload`.
         if not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
             raise ConfigurationError(
                 "cert_reload_interval_seconds may only be set when path-based mTLS is "
                 "configured (both client_cert_path and client_key_path)."
             )
 
-        # The interval's range is enforced here because the core cannot do it: a
-        # zero reads as "unset" there and is silently replaced by the default
-        # cadence, and a value outside the uint32 wire field never arrives at
-        # all, failing as a raw protobuf range error instead. Omit the interval
-        # to ask for the core's default.
+        # Client-side because the core reads 0 as unset and never receives an
+        # out-of-range value.
         interval = tls_config.cert_reload_interval_seconds
-        if interval is not None and not 0 < interval <= 2**32 - 1:
+        if interval is not None and (
+            interval <= 0 or interval > MAX_RELOAD_INTERVAL_SECONDS
+        ):
             raise ConfigurationError(
                 "cert_reload_interval_seconds must be a positive integer no greater "
-                f"than {2**32 - 1}; got {interval}. Omit it to defer to the GLIDE "
-                "core's default reload cadence."
+                f"than {MAX_RELOAD_INTERVAL_SECONDS}; got {interval}. Omit it to defer "
+                "to the GLIDE core's default reload cadence."
             )
 
     def _apply_tls_config(
