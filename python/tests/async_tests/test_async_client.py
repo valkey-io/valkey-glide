@@ -13364,3 +13364,62 @@ class TestClientLifecycle:
             except Exception:
                 pass
             await admin_client.close()
+
+
+class TestCompatFutureThreadSafety:
+    """`_CompatFuture` must be completable from a non-trio thread.
+
+    Under free-threading the pipe reader dispatches response handling to a
+    thread pool, so completions reach `_CompatFuture` off the trio thread.
+    `anyio.Event` is a `trio.Event` there and is not thread-safe: setting it
+    from a foreign thread marks it set without rescheduling the parked waiter,
+    hanging the awaiting task indefinitely. These tests pin the thread hop that
+    keeps the waiter wakeable whichever thread completes the future.
+    """
+
+    @pytest.mark.anyio
+    async def test_set_result_from_worker_thread_wakes_waiter(self):
+        import threading
+
+        from glide.glide_client import _CompatFuture
+
+        fut = _CompatFuture()
+        # Park first, then complete off-thread: this ordering is what loses the
+        # wakeup when the event is set without hopping to the trio thread.
+        parked = threading.Event()
+
+        def worker():
+            parked.wait(5)
+            fut.set_result("from-thread")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        with anyio.move_on_after(10) as scope:
+            parked.set()
+            assert await fut == "from-thread"
+        assert not scope.cancel_called, (
+            "set_result() from a worker thread did not wake the parked waiter"
+        )
+
+    @pytest.mark.anyio
+    async def test_set_exception_from_worker_thread_wakes_waiter(self):
+        import threading
+
+        from glide.glide_client import _CompatFuture
+
+        fut = _CompatFuture()
+        parked = threading.Event()
+
+        def worker():
+            parked.wait(5)
+            fut.set_exception(ValueError("boom"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        with anyio.move_on_after(10) as scope:
+            parked.set()
+            with pytest.raises(ValueError, match="boom"):
+                await fut
+        assert not scope.cancel_called, (
+            "set_exception() from a worker thread did not wake the parked waiter"
+        )
