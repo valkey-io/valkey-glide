@@ -540,7 +540,10 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
+        # TLS servers take longer to start, especially on ARM64 runners,
+        # so use a longer timeout to avoid false negatives.
+        address_check_timeout = 20 if tls else 10
+        if is_address_already_in_use(server, f"{node_folder}/server.log", address_check_timeout):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -560,7 +563,9 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
+        # TLS handshake adds latency; use a longer timeout for TLS-enabled servers.
+        server_ready_timeout = 20 if tls else 10
+        if not wait_for_server(server, cluster_folder, tls, server_ready_timeout, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -891,6 +896,13 @@ def is_address_already_in_use(
         "Address in use",
         "address in use",
     ]
+    # Detect fatal server startup errors that prevent "Ready" from ever appearing.
+    # This avoids waiting the full timeout when the server has already exited.
+    fatal_startup_errors = [
+        "Failed finding TLS support",
+        "Failed to configure TLS",
+        "Fatal error",
+    ]
     while time.time() < timeout_start + timeout:
         if not os.path.exists(log_file):
             time.sleep(0.1)
@@ -905,10 +917,16 @@ def is_address_already_in_use(
             elif "Ready" in server_log:
                 logging.debug(f"Address is free for server {server}!")
                 return False
+            elif any(err in server_log for err in fatal_startup_errors):
+                logging.error(
+                    f"Server {server} failed to start due to fatal error. "
+                    f"Log content:\n{server_log}"
+                )
+                return False
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(
+    logging.warning(
         f"Timeout exceeded trying to check if address already in use for server {server}!"
     )
     return False
