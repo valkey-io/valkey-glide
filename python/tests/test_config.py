@@ -823,7 +823,7 @@ def test_tls_cert_reload_interval_out_of_range(tmp_path, interval):
 
 
 def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
-    # The client still forwards the largest uint32 value unchanged.
+    # The bound is inclusive: max uint32 is accepted, max+1 is not.
     cert_path, key_path = _write_cert_key(tmp_path)
     tls_config = TlsAdvancedConfiguration(
         client_cert_path=str(cert_path),

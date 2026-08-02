@@ -167,9 +167,6 @@ async def _async_pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> 
         batch.custom_command(["CONFIG", "SET", "timeout", "0"])
         if not cluster_mode:
             batch.custom_command(["SELECT", "0"])
-        # A test that WATCHes without a following EXEC/UNWATCH leaves the watch
-        # armed on this pooled connection. FLUSHALL does not clear it, so the
-        # next test's atomic EXEC aborts and returns None instead of a list.
         batch.custom_command(["UNWATCH"])
         batch.custom_command(["FLUSHALL", "ASYNC"])
         await client.exec(batch, raise_on_error=True)
