@@ -968,7 +968,9 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			opts: []MutualTLSOption{
 				WithReloadInterval((MaxReloadIntervalSeconds + 1) * time.Second),
 			},
-			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be at most",
+			wantErrSubstr: fmt.Sprintf(
+				"WithMutualTLSFromFiles: reload interval must be at most %d seconds",
+				uint64(MaxReloadIntervalSeconds)),
 		},
 	}
 
