@@ -114,6 +114,43 @@ describe("NodeDiscoveryMode", () => {
             await discoveryCluster.close();
         });
 
+        /**
+         * Polls CLIENT LIST on the given probe client until the expected
+         * client name appears, or throws after timeoutMs.
+         */
+        async function waitForClientInList(
+            probe: GlideClient,
+            expectedName: string,
+            timeoutMs: number = 10000,
+        ): Promise<string> {
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < timeoutMs) {
+                const clientList = await probe.customCommand([
+                    "CLIENT",
+                    "LIST",
+                ]);
+                const listStr = clientList?.toString() ?? "";
+
+                if (listStr.includes(expectedName)) {
+                    return listStr;
+                }
+
+                await new Promise((resolve) =>
+                    setTimeout(resolve, 100),
+                );
+            }
+
+            const finalList = await probe.customCommand([
+                "CLIENT",
+                "LIST",
+            ]);
+            throw new Error(
+                `Timed out waiting for client name "${expectedName}" in CLIENT LIST after ${timeoutMs}ms. ` +
+                    `Final CLIENT LIST: ${finalList?.toString()}`,
+            );
+        }
+
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "discover replicas from primary_%p",
             async (protocol) => {
@@ -135,11 +172,7 @@ describe("NodeDiscoveryMode", () => {
                     readOnly: true,
                 });
 
-                const clientList = await probe.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList?.toString()).toContain(uniqueName);
+                await waitForClientInList(probe, uniqueName);
 
                 probe.close();
                 discoveryClient.close();
@@ -173,11 +206,7 @@ describe("NodeDiscoveryMode", () => {
                     readOnly: true,
                 });
 
-                const clientList = await probe.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList?.toString()).toContain(uniqueName);
+                await waitForClientInList(probe, uniqueName);
 
                 probe.close();
                 discoveryClient.close();
@@ -221,17 +250,8 @@ describe("NodeDiscoveryMode", () => {
                     readOnly: true,
                 });
 
-                const clientList1 = await probe1.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList1?.toString()).toContain(uniqueName);
-
-                const clientList2 = await probe2.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList2?.toString()).toContain(uniqueName);
+                await waitForClientInList(probe1, uniqueName);
+                await waitForClientInList(probe2, uniqueName);
 
                 probe1.close();
                 probe2.close();
