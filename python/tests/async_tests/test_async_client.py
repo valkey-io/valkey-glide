@@ -13397,9 +13397,9 @@ class TestCompatFutureThreadSafety:
         with anyio.move_on_after(10) as scope:
             parked.set()
             assert await fut == "from-thread"
-        assert not scope.cancel_called, (
-            "set_result() from a worker thread did not wake the parked waiter"
-        )
+        assert (
+            not scope.cancel_called
+        ), "set_result() from a worker thread did not wake the parked waiter"
 
     @pytest.mark.anyio
     async def test_set_exception_from_worker_thread_wakes_waiter(self):
@@ -13420,6 +13420,6 @@ class TestCompatFutureThreadSafety:
             parked.set()
             with pytest.raises(ValueError, match="boom"):
                 await fut
-        assert not scope.cancel_called, (
-            "set_exception() from a worker thread did not wake the parked waiter"
-        )
+        assert (
+            not scope.cancel_called
+        ), "set_exception() from a worker thread did not wake the parked waiter"

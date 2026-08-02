@@ -69,6 +69,10 @@ EXCLUDED_TESTS = {
         "test_inflight_commands_get_closing_error_on_close",
         "test_pubsub_callback_with_closed_client_no_crash",
         "test_client_death_mid_command",
+        # Async-only: _CompatFuture is the trio/anyio future shim, which has no
+        # sync counterpart (the sync client blocks on FFI calls instead).
+        "test_set_result_from_worker_thread_wakes_waiter",
+        "test_set_exception_from_worker_thread_wakes_waiter",
         # Nested helper functions in lifecycle tests
         "client_workload",
         "blocking_cmd",
