@@ -159,9 +159,17 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        # ARM64 runners may have limited entropy, causing genrsa to block.
-        # Use a generous timeout to avoid flaky failures on slow CI runners.
-        output, err = p.communicate(timeout=60)
+        # genrsa can stall on low-entropy ARM64 runners. Cap the wait at 30s so a
+        # real stall fails here with this function's message (the signature that
+        # identified #6699) rather than tripping the caller's 80s budget in
+        # cluster.py first. Kill the child on timeout so a stalled openssl stops
+        # writing to the shared ca.key, which the next run would otherwise race.
+        try:
+            output, err = p.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.communicate()
+            raise
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
