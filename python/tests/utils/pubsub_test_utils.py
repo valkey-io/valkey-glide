@@ -23,6 +23,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_sync.glide_client import GlideClient as SyncGlideClient
 from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 
@@ -1216,7 +1217,16 @@ def sync_wait_for_subscription_state(
     start_time = time.time()
 
     while time.time() - start_time < timeout_sec:
-        state = client.get_subscriptions()
+        try:
+            state = client.get_subscriptions()
+        except GlideTimeoutError:
+            # Client may still be reconnecting after a connection kill;
+            # get_subscriptions() is a command that can time out while the
+            # underlying connection is being re-established.  Continue
+            # polling until the outer timeout expires.
+            time.sleep(0.1)
+            continue
+
         subs = (
             state.actual_subscriptions if check_actual else state.desired_subscriptions
         )

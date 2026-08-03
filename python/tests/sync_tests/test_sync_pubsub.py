@@ -11,6 +11,7 @@ from glide_shared.constants import OK
 from glide_shared.exceptions import (
     ConfigurationError,
     RequestError,
+    TimeoutError as GlideTimeoutError,
 )
 from glide_shared.routes import AllNodes
 from glide_sync import (
@@ -67,6 +68,7 @@ def _publish_and_wait_for_message(
     max_attempts: int = _MAX_PUBLISH_ATTEMPTS,
     poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
     poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+    sharded: bool = False,
 ) -> Optional[PubSubMsg]:
     """
     Publish ``message`` to ``channel`` and poll for its receipt, re-publishing if
@@ -75,6 +77,10 @@ def _publish_and_wait_for_message(
     This handles the race window after a resubscription where the server-side
     subscription reports active but is not yet delivering messages: a message
     published in that window is lost, so we re-publish until one arrives.
+
+    It also tolerates ``TimeoutError`` on the publish call itself, which can
+    occur when the publishing client is still reconnecting after a connection
+    kill in cluster mode.
 
     Note: this intentionally polls with the non-blocking
     ``try_get_pubsub_message()`` instead of the blocking ``get_pubsub_message()``.
@@ -85,7 +91,18 @@ def _publish_and_wait_for_message(
     ``max_attempts``.
     """
     for attempt in range(max_attempts):
-        publishing_client.publish(message, channel)
+        try:
+            if sharded:
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
+            else:
+                publishing_client.publish(message, channel)
+        except GlideTimeoutError:
+            # Publishing client may still be reconnecting after a connection
+            # kill; tolerate the timeout and retry on the next attempt.
+            time.sleep(poll_interval)
+            continue
 
         # Poll for the message using try_get or callback check
         poll_deadline = time.time() + poll_timeout
@@ -4070,14 +4087,25 @@ class TestSyncPubSub:
                 timeout_sec=resubscribe_timeout,
             )
 
-            # Verify subscription still works after reconnection
-            cast(GlideClusterClient, publishing_client).publish(
-                message_after, channel, sharded=True
+            # Verify subscription still works after reconnection.
+            # After resubscription state is confirmed, the server-side
+            # subscription may still need a brief moment to become fully active
+            # (especially in cluster mode). Use a publish-and-retry loop to
+            # handle this race condition reliably.
+            msg_after = _publish_and_wait_for_message(
+                publishing_client,
+                message_after,
+                channel,
+                listening_client,
+                method,
+                callback_messages,
+                expected_idx=1,
+                sharded=True,
             )
-            time.sleep(1)
 
-            msg_after = sync_get_message_by_method(
-                method, listening_client, callback_messages, 1
+            assert msg_after is not None, (
+                f"Failed to receive message after reconnection "
+                f"({_MAX_PUBLISH_ATTEMPTS} publish attempts)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
@@ -4148,23 +4176,65 @@ class TestSyncPubSub:
                 timeout_sec=resubscribe_timeout,
             )
 
-            # Publish to all channels after reconnection
+            # Publish to all channels after reconnection.
+            # The publishing client may still be reconnecting after the kill;
+            # tolerate TimeoutError and retry failed publishes.
+            publish_failed: set = set()
             for channel in channels:
-                publishing_client.publish(message_after, channel)
+                try:
+                    publishing_client.publish(message_after, channel)
+                except GlideTimeoutError:
+                    publish_failed.add(channel)
 
-            time.sleep(2)
+            # Retry any channels that failed to publish
+            for _retry in range(_MAX_PUBLISH_ATTEMPTS):
+                if not publish_failed:
+                    break
+                time.sleep(0.5)
+                still_failed: set = set()
+                for channel in publish_failed:
+                    try:
+                        publishing_client.publish(message_after, channel)
+                    except GlideTimeoutError:
+                        still_failed.add(channel)
+                publish_failed = still_failed
 
-            # Verify all messages received
+            # Collect all messages using non-blocking polling.
+            # Using try_get_pubsub_message() avoids a blocking get_pubsub_message()
+            # call that would throw TimeoutError if any message was lost during the
+            # race window after resubscription.
             received_channels: set = set()
-            for index in range(NUM_CHANNELS):
-                msg = sync_get_message_by_method(
-                    method, listening_client, callback_messages, index
-                )
-                assert msg.message == message_after
-                assert msg.pattern is None
-                received_channels.add(msg.channel)
+            if method == MethodTesting.Callback:
+                poll_deadline = time.time() + 15.0
+                while (
+                    len(callback_messages) < NUM_CHANNELS
+                    and time.time() < poll_deadline
+                ):
+                    time.sleep(0.1)
+                for index in range(len(callback_messages)):
+                    msg = decode_pubsub_msg(callback_messages[index])
+                    assert msg.message == message_after
+                    assert msg.pattern is None
+                    received_channels.add(msg.channel)
+            else:
+                poll_deadline = time.time() + 15.0
+                while (
+                    len(received_channels) < NUM_CHANNELS
+                    and time.time() < poll_deadline
+                ):
+                    result = listening_client.try_get_pubsub_message()
+                    if result is not None:
+                        msg = decode_pubsub_msg(result)
+                        assert msg.message == message_after
+                        assert msg.pattern is None
+                        received_channels.add(msg.channel)
+                    else:
+                        time.sleep(0.1)
 
-            assert received_channels == channels, "Not all channels received messages"
+            assert received_channels == channels, (
+                f"Not all channels received messages. "
+                f"Got {len(received_channels)}/{NUM_CHANNELS}"
+            )
 
             sync_check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS
