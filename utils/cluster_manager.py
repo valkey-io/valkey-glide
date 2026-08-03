@@ -159,15 +159,19 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        # ARM64 runners take longer to generate TLS certificates, and sometimes fail if the timeout shorter (10 seconds).
-        output, err = p.communicate(timeout=20)
+        # ARM64 runners may have limited entropy, causing genrsa to block.
+        # Use a generous timeout to avoid flaky failures on slow CI runners.
+        output, err = p.communicate(timeout=60)
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
             )
 
     # Build CA key
-    make_key(ca_key, 4096)
+    # Use 2048-bit key for test certificates: adequate for CI/testing purposes
+    # and significantly faster to generate on entropy-constrained environments
+    # (e.g., aarch64 runners).
+    make_key(ca_key, 2048)
 
     # Build server key
     make_key(SERVER_KEY, 2048)
