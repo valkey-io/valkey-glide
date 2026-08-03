@@ -4,8 +4,10 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -170,6 +172,185 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, result)
+}
+
+func TestBackoffStrategy_zeroValues(t *testing.T) {
+	strategy := NewBackoffStrategy(0, 0, 0).WithJitterPercent(0)
+
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	zero := uint32(0)
+	assert.Equal(t, &protobuf.ConnectionRetryStrategy{
+		NumberOfRetries: 0,
+		Factor:          0,
+		ExponentBase:    0,
+		JitterPercent:   &zero,
+	}, result)
+}
+
+// maxUint32AsInt is computed from a variable rather than a constant so that this file still compiles
+// on platforms where int is 32 bits and cannot hold math.MaxUint32.
+func maxUint32AsInt(t *testing.T) int {
+	t.Helper()
+	if strconv.IntSize < 64 {
+		t.Skip("int is too narrow to hold math.MaxUint32")
+	}
+	var value uint64 = math.MaxUint32
+	return int(value)
+}
+
+// outOfRangeCase describes a rejected parameter: the error must name the field, and the field itself
+// must hold 0 rather than a wrapped number.
+type outOfRangeCase struct {
+	name     string
+	strategy *BackoffStrategy
+	field    string
+	stored   func(*BackoffStrategy) uint32
+}
+
+func runOutOfRangeCases(t *testing.T, tests []outOfRangeCase) {
+	t.Helper()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.strategy.toProtobuf()
+			require.Error(t, err)
+			assert.Nil(t, result)
+			assert.Contains(t, err.Error(), test.field)
+			assert.Zero(t, test.stored(test.strategy))
+		})
+	}
+}
+
+func TestBackoffStrategy_maxValues(t *testing.T) {
+	max := maxUint32AsInt(t)
+	strategy := NewBackoffStrategy(max, max, max).WithJitterPercent(100)
+
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	maxUint32 := uint32(math.MaxUint32)
+	maxJitter := uint32(100)
+	assert.Equal(t, &protobuf.ConnectionRetryStrategy{
+		NumberOfRetries: maxUint32,
+		Factor:          maxUint32,
+		ExponentBase:    maxUint32,
+		JitterPercent:   &maxJitter,
+	}, result)
+}
+
+func TestBackoffStrategy_negativeValues(t *testing.T) {
+	runOutOfRangeCases(t, []outOfRangeCase{
+		{
+			"negative retries", NewBackoffStrategy(-1, 10, 50), "numOfRetries",
+			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
+		},
+		{
+			"negative factor", NewBackoffStrategy(5, -10, 50), "factor",
+			func(s *BackoffStrategy) uint32 { return s.factor },
+		},
+		{
+			"negative exponent base", NewBackoffStrategy(5, 10, -50), "exponentBase",
+			func(s *BackoffStrategy) uint32 { return s.exponentBase },
+		},
+		{
+			"negative jitter", NewBackoffStrategy(5, 10, 50).WithJitterPercent(-25), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+	})
+}
+
+// TestBackoffStrategy_jitterAboveMax pins the jitter contract to the core's, which rejects a value
+// above 100 rather than capping it, so all four bindings reject the same input.
+func TestBackoffStrategy_jitterAboveMax(t *testing.T) {
+	runOutOfRangeCases(t, []outOfRangeCase{
+		{
+			"jitter just above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(101), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"jitter far above max", NewBackoffStrategy(5, 10, 50).WithJitterPercent(1000), "jitterPercent",
+			func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+		{
+			"jitter at max uint32", NewBackoffStrategy(5, 10, 50).WithJitterPercent(maxUint32AsInt(t)),
+			"jitterPercent", func(s *BackoffStrategy) uint32 { return *s.jitterPercent },
+		},
+	})
+}
+
+// TestBackoffStrategy_maxJitterIsAccepted covers the boundary: 100 is full jitter and valid.
+func TestBackoffStrategy_maxJitterIsAccepted(t *testing.T) {
+	strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(int(maxJitterPercent))
+
+	result, err := strategy.toProtobuf()
+	require.NoError(t, err)
+
+	expected := uint32(maxJitterPercent)
+	assert.Equal(t, &expected, result.JitterPercent)
+}
+
+// TestBackoffStrategy_correctedValueClearsError covers a setter called again with a valid value: the
+// reported error describes the current state, not the discarded one.
+func TestBackoffStrategy_correctedValueClearsError(t *testing.T) {
+	strategy := NewBackoffStrategy(5, 10, 50).WithJitterPercent(-1)
+	require.Error(t, strategy.validationError())
+
+	result, err := strategy.WithJitterPercent(30).toProtobuf()
+	require.NoError(t, err)
+
+	expected := uint32(30)
+	assert.Equal(t, &expected, result.JitterPercent)
+}
+
+// TestBackoffStrategy_reportsEveryInvalidField covers several bad values at once: the caller sees
+// them all instead of fixing them one per client-creation attempt.
+func TestBackoffStrategy_reportsEveryInvalidField(t *testing.T) {
+	strategy := NewBackoffStrategy(-1, -2, -3).WithJitterPercent(-4)
+
+	result, err := strategy.toProtobuf()
+	require.Error(t, err)
+	assert.Nil(t, result)
+	for _, field := range backoffFields {
+		assert.Contains(t, err.Error(), field)
+	}
+}
+
+func TestBackoffStrategy_valuesAboveMaxUint32(t *testing.T) {
+	aboveMax := maxUint32AsInt(t) + 1
+
+	runOutOfRangeCases(t, []outOfRangeCase{
+		{
+			"retries above max", NewBackoffStrategy(aboveMax, 10, 50), "numOfRetries",
+			func(s *BackoffStrategy) uint32 { return s.numOfRetries },
+		},
+		{
+			"factor above max", NewBackoffStrategy(5, aboveMax, 50), "factor",
+			func(s *BackoffStrategy) uint32 { return s.factor },
+		},
+		{
+			"exponent base above max", NewBackoffStrategy(5, 10, aboveMax), "exponentBase",
+			func(s *BackoffStrategy) uint32 { return s.exponentBase },
+		},
+	})
+}
+
+func TestBackoffStrategy_outOfRangeValueFailsClientConfig(t *testing.T) {
+	standalone := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithReconnectStrategy(NewBackoffStrategy(-1, 10, 50))
+
+	result, err := standalone.ToProtobuf()
+	require.ErrorContains(t, err, "invalid reconnect strategy")
+	assert.Nil(t, result)
+
+	cluster := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithReconnectStrategy(NewBackoffStrategy(5, 10, 50).WithJitterPercent(-1))
+
+	result, err = cluster.ToProtobuf()
+	require.ErrorContains(t, err, "invalid reconnect strategy")
+	assert.Nil(t, result)
 }
 
 func TestNodeAddress(t *testing.T) {

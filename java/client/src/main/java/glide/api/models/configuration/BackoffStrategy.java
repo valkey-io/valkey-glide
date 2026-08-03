@@ -44,13 +44,16 @@ public class BackoffStrategy {
 
     /**
      * The multiplier that will be applied to the waiting time between each retry. This value is
-     * specified in milliseconds.
+     * specified in milliseconds. A value of 0 means the default (100) is used.
      */
     @NonNull private final Integer factor;
 
-    /** The exponent base configured for the strategy. */
+    /** The exponent base configured for the strategy. A value of 0 means the default (2) is used. */
     @NonNull private final Integer exponentBase;
 
-    /** The Jitter percent on the calculated duration. If not set, a default value will be used. */
+    /**
+     * The Jitter percent on the calculated duration, between 0 and 100. A value above 100 is rejected
+     * when the client is created. If not set, a default value will be used.
+     */
     private final Integer jitterPercent;
 }
