@@ -41,7 +41,7 @@ To build and run the suite against free-threaded Python locally (fast iteration 
 python3.14t -m venv python/.env   # dev.py reuses an existing python/.env
 cd python && python3 dev.py build
 python3 dev.py test --args tests/async_tests/test_async_client.py --async-backend=trio -k ""
-# Confirm no-GIL: python -c "import sys; print(sys._is_gil_enabled())"  # -> False
+# Confirm no-GIL: .env/bin/python -c "import sys; print(sys._is_gil_enabled())"  # -> False
 ```
 
 Reproduce a suspected hang with a stack dump: `kill -ABRT <pid>` (faulthandler prints the parked Python stack) since py-spy needs root on macOS.
