@@ -87,7 +87,7 @@ impl RetryStrategy {
 
     /// Return an infinite iterator:
     /// - First number_of_retries attempts with backoff
-    /// - Then repeat the last delay forever
+    /// - Then repeat the last delay forever, re-jittered per attempt when jitter is enabled
     pub fn get_infinite_backoff_dur_iterator(&self) -> impl Iterator<Item = Duration> {
         let base_backoff =
             ExponentialBackoff::from_millis(self.exponent_base as u64).factor(self.factor as u64);
@@ -108,7 +108,20 @@ impl RetryStrategy {
             .map(jitter_fn)
             .take(self.number_of_retries as usize);
 
-        bounded.chain(std::iter::repeat(last_duration))
+        // Re-jitter each tail delay so clients that exhaust the bounded phase do not rejoin in
+        // lockstep, the same retry-storm protection the bounded phase gets. With jitter disabled
+        // the delay is repeated verbatim, since scaling by 1.0 is not exact for large durations.
+        let jitter_percent = self.jitter_percent;
+        let tail_jitter_fn = jitter_range(lower, upper);
+        let tail = std::iter::repeat_with(move || {
+            if jitter_percent == 0 {
+                last_duration
+            } else {
+                tail_jitter_fn(last_duration)
+            }
+        });
+
+        bounded.chain(tail)
     }
 
     /// Internal: Calculate jitter lower/upper bounds from jitter_percent
@@ -195,13 +208,25 @@ mod tests {
 
         assert_eq!(strategy.get_bounded_backoff_dur_iterator().count(), 0);
 
-        // Without the saturating subtraction this asks the endless backoff for its
-        // `usize::MAX`-th element and never returns.
+        // Without the saturating exponent this asks the endless backoff for its `usize::MAX`-th
+        // element and never returns. The tail is jittered, so assert the band around the 200ms
+        // closed-form delay rather than the exact value.
         let mut infinite = strategy.get_infinite_backoff_dur_iterator();
-        let first = infinite.next().unwrap();
-        assert_eq!(first, Duration::from_millis(200));
-        for _ in 0..5 {
-            assert_eq!(infinite.next().unwrap(), first);
+        for _ in 0..6 {
+            let ms = infinite.next().unwrap().as_millis();
+            assert!((160..=240).contains(&ms), "delay {ms}ms out of band");
+        }
+    }
+
+    #[test]
+    fn test_zero_retries_without_jitter_yields_exact_first_delay() {
+        let strategy = RetryStrategy::new(2, 100, 0, Some(0)).unwrap();
+
+        // Pins the closed form itself: `factor * base^max(retries, 1)` = 200ms, no jitter to mask
+        // an off-by-one in the exponent.
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..6 {
+            assert_eq!(infinite.next().unwrap(), Duration::from_millis(200));
         }
     }
 
@@ -221,6 +246,59 @@ mod tests {
             "building the iterator took {:?}",
             start.elapsed()
         );
+    }
+
+    #[test]
+    fn test_infinite_tail_is_rejittered_when_jitter_enabled() {
+        let retries = 3;
+        let strategy = RetryStrategy::new(2, 100, retries, Some(20)).unwrap();
+        let mut iter = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..retries {
+            let _ = iter.next().unwrap();
+        }
+
+        // Successive tail delays must not be byte-identical, or every client that exhausts the
+        // bounded phase reconnects in lockstep. 40 samples make a false failure vanishingly rare.
+        let tail: Vec<_> = (0..40).map(|_| iter.next().unwrap()).collect();
+        let unique = tail.iter().collect::<std::collections::HashSet<_>>().len();
+        assert!(
+            unique > 1,
+            "tail repeated one value {:?} across {} samples",
+            tail[0],
+            tail.len()
+        );
+
+        // Every sample still sits in the jitter band around `factor * base^retries` = 800ms.
+        for duration in tail {
+            let ms = duration.as_millis();
+            assert!((640..=960).contains(&ms), "tail delay {ms}ms out of band");
+        }
+    }
+
+    #[test]
+    fn test_saturated_tail_with_jitter_does_not_panic() {
+        // factor and base at u32::MAX saturate the closed form to u64::MAX millis. Scaling that by
+        // the jitter upper bound must not overflow `Duration::mul_f64`.
+        let strategy = RetryStrategy::new(u32::MAX, u32::MAX, u32::MAX, Some(100)).unwrap();
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..10 {
+            let _ = infinite.next().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_infinite_tail_is_constant_when_jitter_disabled() {
+        let retries = 3;
+        let strategy = RetryStrategy::new(2, 100, retries, Some(0)).unwrap();
+        let mut iter = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..retries {
+            let _ = iter.next().unwrap();
+        }
+
+        // With jitter off the tail repeats the closed-form delay verbatim.
+        for _ in 0..10 {
+            assert_eq!(iter.next().unwrap(), Duration::from_millis(800));
+        }
     }
 
     #[test]
@@ -255,16 +333,15 @@ mod tests {
             let _ = iter.next().unwrap();
         }
 
-        // Now the iterator should yield the same (unjittered) value
-        let repeated = iter.next().unwrap();
-        for _ in 0..5 {
-            let value = iter.next().unwrap();
-            assert_eq!(
-                value,
-                repeated,
-                "Expected infinite tail with constant duration: got {} vs {}",
-                value.as_millis(),
-                repeated.as_millis()
+        // The tail stays within the jitter band around `factor * base^retries`.
+        let expected = factor as u128 * (base as u128).pow(retries);
+        let lower = expected * 80 / 100;
+        let upper = expected * 120 / 100;
+        for _ in 0..10 {
+            let value = iter.next().unwrap().as_millis();
+            assert!(
+                lower <= value && value <= upper,
+                "tail delay {value}ms not in jitter band [{lower}ms, {upper}ms]"
             );
         }
     }
