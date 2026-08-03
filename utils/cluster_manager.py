@@ -160,10 +160,11 @@ def generate_tls_certs():
             text=True,
         )
         # genrsa can stall on low-entropy ARM64 runners. Cap the wait at 30s so a
-        # real stall fails here with this function's message (the signature that
-        # identified #6699) rather than tripping the caller's 80s budget in
-        # cluster.py first. Kill the child on timeout so a stalled openssl stops
-        # writing to the shared ca.key, which the next run would otherwise race.
+        # real stall raises subprocess.TimeoutExpired here, naming the full openssl
+        # argv that identified #6699, rather than tripping the caller's 80s budget
+        # in cluster.py first, where the failure is attributed to the whole cluster
+        # start. Kill the child on timeout so a stalled openssl stops writing to
+        # the shared ca.key, which the next run would otherwise race.
         try:
             output, err = p.communicate(timeout=30)
         except subprocess.TimeoutExpired:
