@@ -16,8 +16,8 @@ use utilities::cluster::{
     ClusterTopology, LONG_CLUSTER_TEST_TIMEOUT, PubSubTestSetup, RedisCluster,
     generate_test_subscriptions_different_slots, migrate_channel_to_different_node,
     migrate_channels_to_different_nodes, subscribe_and_wait, trigger_failover,
-    verify_subscription_addresses_changed, wait_for_node_to_become_primary,
-    wait_for_pubsub_state, wait_for_subscriptions_migrated,
+    verify_subscription_addresses_changed, wait_for_node_to_become_primary, wait_for_pubsub_state,
+    wait_for_subscriptions_migrated,
 };
 
 const LOG_PREFIX: &str = "test_pubsub";
@@ -321,65 +321,33 @@ fn test_all_subscription_types_survive_same_slot_migration() {
             "Should have migrated to a different node"
         );
 
-        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
-        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        let exact_resub = wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Exact,
-            &HashSet::from([exact_channel.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-        let pattern_resub = wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Pattern,
-            &HashSet::from([pattern.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-        let sharded_resub = wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Sharded,
-            &HashSet::from([sharded_channel.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-
-        assert!(exact_resub, "Exact subscription should be re-established");
-        assert!(
-            pattern_resub,
-            "Pattern subscription should be re-established"
-        );
-        assert!(
-            sharded_resub,
-            "Sharded subscription should be re-established"
-        );
-
-        let subs_after = setup.get_subscriptions_by_address();
-
-        let (exact_changed, _, exact_not_found) = verify_subscription_addresses_changed(
+        // Poll until each subscription has moved to its new address. A fixed sleep
+        // can return before the topology refresh clears the old-address entries, so
+        // the assertions below would see a stale or empty snapshot.
+        let (exact_changed, _, exact_not_found) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
-        );
-        let (pattern_changed, _, pattern_not_found) = verify_subscription_addresses_changed(
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        let (pattern_changed, _, pattern_not_found) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
-        );
-        let (sharded_changed, _, sharded_not_found) = verify_subscription_addresses_changed(
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        let (sharded_changed, _, sharded_not_found) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
-        );
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
 
         assert_eq!(exact_not_found, 0, "Exact subscription should be found");
         assert_eq!(pattern_not_found, 0, "Pattern subscription should be found");
@@ -449,55 +417,33 @@ fn test_all_subscription_types_survive_different_slot_migrations() {
             tokio::time::sleep(MIGRATION_DELAY).await;
         }
 
-        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
-        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Exact,
-            &HashSet::from([exact_channel.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-        wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Pattern,
-            &HashSet::from([pattern.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-        wait_for_pubsub_state(
-            &setup.synchronizer,
-            PubSubSubscriptionKind::Sharded,
-            &HashSet::from([sharded_channel.clone()]),
-            true,
-            RESUBSCRIPTION_TIMEOUT,
-        )
-        .await;
-
-        let subs_after = setup.get_subscriptions_by_address();
-
-        let (exact_changed, _, _) = verify_subscription_addresses_changed(
+        // Poll until each subscription has moved to its new address. A fixed sleep
+        // can return before the topology refresh clears the old-address entries, so
+        // the assertions below would see a stale or empty snapshot.
+        let (exact_changed, _, _) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
-        );
-        let (pattern_changed, _, _) = verify_subscription_addresses_changed(
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        let (pattern_changed, _, _) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
-        );
-        let (sharded_changed, _, _) = verify_subscription_addresses_changed(
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        let (sharded_changed, _, _) = wait_for_subscriptions_migrated(
+            &setup,
             &subs_before,
-            &subs_after,
             std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
-        );
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
 
         assert_eq!(
             exact_changed, 1,
