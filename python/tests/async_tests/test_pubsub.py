@@ -4016,9 +4016,8 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # Poll until the sync timestamp advances past the initial value.
-            # The timestamp update may lag slightly behind subscription state
-            # changes, so a one-shot check can race on fast machines.
+            # The timestamp update lags behind the subscription state change, so
+            # a one-shot read can still see the pre-subscribe value.
             timestamp_after_first = initial_timestamp
 
             async def _timestamp_advanced() -> bool:
@@ -4029,11 +4028,16 @@ class TestPubSub:
                 )
                 return timestamp_after_first > initial_timestamp
 
-            await wait_for(
-                _timestamp_advanced,
-                f"Timestamp should increase after subscription: "
-                f"{initial_timestamp} -> {timestamp_after_first}",
-            )
+            try:
+                await wait_for(
+                    _timestamp_advanced,
+                    "Timestamp should increase after subscription",
+                )
+            except TimeoutError:
+                pytest.fail(
+                    "Timestamp should increase after subscription: "
+                    f"{initial_timestamp} -> {timestamp_after_first}"
+                )
 
             # Verify the timestamp is greater than or equal to when we started the subscription
             assert timestamp_after_first >= time_before_first_sub, (
