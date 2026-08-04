@@ -589,6 +589,9 @@ struct SharedPipeWriter {
 }
 /// The process-wide async pipe state. Uses an atomic pointer so the read path
 /// is lock-free and cannot be inherited in a locked state after fork().
+/// Note: the `SharedPipeWriter` itself contains a `Mutex<Vec<u8>>` which is
+/// fork-unsafe; callers must swap in a fresh writer via `reinit_async_pipe`
+/// before any push touches the inherited instance.
 static ASYNC_PIPE: std::sync::atomic::AtomicPtr<SharedPipeWriter> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 

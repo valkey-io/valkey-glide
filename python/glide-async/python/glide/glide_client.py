@@ -978,6 +978,7 @@ class BaseClient(CoreCommands):
         """
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
         if self._core_client == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
@@ -1116,7 +1117,9 @@ class BaseClient(CoreCommands):
 
             _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
 
-            if self._core_client is not None:
+            # Skip FFI call if this client was created in a different process
+            # (the tokio Runtime doesn't survive fork; dropping it would hang).
+            if self._core_client is not None and self._create_pid == os.getpid():
                 self._lib.close_client(self._core_client)
                 self._core_client = None
 
@@ -1270,6 +1273,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
