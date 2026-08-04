@@ -99,6 +99,19 @@ def _child_stale_client_worker(
     asyncio.run(run())
 
 
+def _is_free_threaded() -> bool:
+    """Detect free-threaded (no-GIL) Python builds."""
+    import sys
+
+    if hasattr(sys, "_is_gil_enabled"):
+        return not sys._is_gil_enabled()
+    return False
+
+
+@pytest.mark.skipif(
+    _is_free_threaded(),
+    reason="fork() is unsupported in free-threaded Python builds",
+)
 @pytest.mark.anyio
 class TestForkSafety:
     """Tests for fork() safety of the pipe transport (issue #6673)."""
