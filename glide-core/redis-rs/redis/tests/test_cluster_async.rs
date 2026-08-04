@@ -7367,6 +7367,321 @@ mod cluster_async {
         );
     }
 
+    /// Tests that concurrent commands arriving while the cluster is in
+    /// `RecoverFuture::ReconnectToInitialNodes` recovery are **buffered** and complete
+    /// after recovery, not immediately failed or silently dropped.
+    ///
+    /// ## How ReconnectToInitialNodes is triggered
+    ///
+    /// When a command receives `AllConnectionsUnavailable`, `Request::poll` returns
+    /// `Next::ReconnectToInitialNodes`, which maps to `PollFlushAction::ReconnectFromInitialConnections`,
+    /// which transitions `ConnectionState` to `Recover(RecoverFuture::ReconnectToInitialNodes(handle))`.
+    ///
+    /// ## Recovery window
+    ///
+    /// PING is delayed to widen the recovery window so that concurrent tasks accumulate
+    /// in `pending_requests_tx` while the `ReconnectToInitialNodes` JoinHandle is `Pending`.
+    ///
+    /// ## Assertion
+    ///
+    /// Zero command errors: all commands must succeed after recovery completes.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_concurrent_requests_buffered_during_reconnect_to_initial_nodes() {
+        let name = "test_concurrent_reconnect_initial_nodes";
+        // How many SET commands before AllConnectionsUnavailable fires
+        const FAIL_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10;
+        const DELAY_AFTER_FAIL_MS: u64 = 5;
+        // Delay PING (used in reconnect handshake) to widen the recovery window so that
+        // concurrent tasks accumulate in pending_requests_tx while the JoinHandle is Pending.
+        const PING_DELAY_MS: u64 = 20;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let fail_fired = Arc::new(atomic::AtomicBool::new(false));
+        let fail_fired_clone = fail_fired.clone();
+        let fail_fired_handler = fail_fired.clone();
+        let name_handler = name.to_string();
+
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    if fail_fired_handler.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(PING_DELAY_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == FAIL_ON_SET_N {
+                        fail_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        // AllConnectionsUnavailable triggers Next::ReconnectToInitialNodes
+                        // → PollFlushAction::ReconnectFromInitialConnections
+                        // → RecoverFuture::ReconnectToInitialNodes
+                        return Err(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "all connections unavailable (test-injected)",
+                        ))));
+                    }
+                    if fail_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_FAIL_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"GET") {
+                    return Err(Ok(Value::BulkString(b"value".to_vec().into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(4)
+            .build()
+            .expect("failed to build multi-thread runtime");
+
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let results = runtime.block_on(async move {
+            let barrier = Arc::new(tokio::sync::Barrier::new(CONCURRENCY));
+            let tasks: Vec<_> = (0..CONCURRENCY)
+                .map(|task_id| {
+                    let mut conn = connection.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        let mut cmd_errors = 0usize;
+                        let mut cmd_successes = 0usize;
+                        for iter in 0..PIPELINE_ITERATIONS {
+                            for k in 0..PIPELINE_SIZE {
+                                let cmd = redis::Cmd::new()
+                                    .arg("SET")
+                                    .arg(format!("t{task_id}_key{k}"))
+                                    .arg("value")
+                                    .clone();
+                                match conn.req_packed_command(&cmd).await {
+                                    Ok(_) => cmd_successes += 1,
+                                    Err(e) => {
+                                        println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
+                                        cmd_errors += 1;
+                                    }
+                                }
+                            }
+                        }
+                        (task_id, cmd_successes, cmd_errors)
+                    })
+                })
+                .collect();
+            futures::future::join_all(tasks).await
+        });
+
+        let total_errors: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, _, e)| e)
+            .sum();
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+
+        assert_eq!(
+            total_errors,
+            0,
+            "Expected zero command errors: commands buffered during ReconnectToInitialNodes \
+             recovery must succeed after recovery. Got {} errors (total SETs to mock: {}).",
+            total_errors,
+            total_sets,
+        );
+    }
+
+    /// Tests that concurrent commands arriving while the cluster is in
+    /// `RecoverFuture::RefreshingSlots` recovery are **buffered** and complete after
+    /// recovery, not immediately failed or silently dropped.
+    ///
+    /// ## How RefreshingSlots is triggered
+    ///
+    /// A MOVED to a **different host** (non-circular) causes `Next::RefreshSlots`, which maps
+    /// to `PollFlushAction::RebuildSlots`, which transitions `ConnectionState` to
+    /// `Recover(RecoverFuture::RefreshingSlots(handle))`.
+    ///
+    /// A circular MOVED (same host:port) would take the `Reconnect` fast-path instead,
+    /// so we must use a different hostname in the MOVED response.
+    ///
+    /// ## Recovery window
+    ///
+    /// CLUSTER SLOTS response is delayed after the MOVED fires to keep the
+    /// `RefreshingSlots` JoinHandle in `Poll::Pending` long enough for concurrent tasks
+    /// to accumulate in `pending_requests_tx`.
+    ///
+    /// ## Assertion
+    ///
+    /// Zero command errors: all commands must succeed after the slot refresh completes.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_concurrent_requests_buffered_during_refreshing_slots() {
+        let name = "test_concurrent_refreshing_slots";
+        const MOVED_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10;
+        const DELAY_AFTER_MOVED_MS: u64 = 5;
+        // Delay CLUSTER SLOTS to widen the RefreshingSlots recovery window.
+        const CLUSTER_SLOTS_DELAY_MS: u64 = 30;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let moved_fired = Arc::new(atomic::AtomicBool::new(false));
+        let moved_fired_clone = moved_fired.clone();
+        let moved_fired_cluster = moved_fired.clone();
+        let name_handler = name.to_string();
+
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    // Delay CLUSTER SLOTS after MOVED fires to keep RefreshingSlots Pending
+                    if moved_fired_cluster.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            CLUSTER_SLOTS_DELAY_MS,
+                        ));
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == MOVED_ON_SET_N {
+                        moved_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        // Non-circular MOVED: different hostname triggers RebuildSlots → RefreshingSlots.
+                        // The client will re-fetch CLUSTER SLOTS and re-route to the real node.
+                        // We deliberately use a different hostname so the client does NOT take the
+                        // circular-MOVED Reconnect fast-path; it must go through RefreshingSlots.
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 other_host:6380\r\n").as_bytes(),
+                        ));
+                    }
+                    if moved_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"GET") {
+                    return Err(Ok(Value::BulkString(b"value".to_vec().into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(4)
+            .build()
+            .expect("failed to build multi-thread runtime");
+
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let results = runtime.block_on(async move {
+            let barrier = Arc::new(tokio::sync::Barrier::new(CONCURRENCY));
+            let tasks: Vec<_> = (0..CONCURRENCY)
+                .map(|task_id| {
+                    let mut conn = connection.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        let mut cmd_errors = 0usize;
+                        let mut cmd_successes = 0usize;
+                        for iter in 0..PIPELINE_ITERATIONS {
+                            for k in 0..PIPELINE_SIZE {
+                                let cmd = redis::Cmd::new()
+                                    .arg("SET")
+                                    .arg(format!("t{task_id}_key{k}"))
+                                    .arg("value")
+                                    .clone();
+                                match conn.req_packed_command(&cmd).await {
+                                    Ok(_) => cmd_successes += 1,
+                                    Err(e) => {
+                                        println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
+                                        cmd_errors += 1;
+                                    }
+                                }
+                            }
+                        }
+                        (task_id, cmd_successes, cmd_errors)
+                    })
+                })
+                .collect();
+            futures::future::join_all(tasks).await
+        });
+
+        let total_errors: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, _, e)| e)
+            .sum();
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+
+        assert_eq!(
+            total_errors,
+            0,
+            "Expected zero command errors: commands buffered during RefreshingSlots recovery \
+             must succeed after recovery. Got {} errors (total SETs to mock: {}).",
+            total_errors,
+            total_sets,
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
