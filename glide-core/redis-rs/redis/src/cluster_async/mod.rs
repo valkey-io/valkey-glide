@@ -3726,22 +3726,26 @@ where
             RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
                 match Pin::new(handle).poll(cx) {
                     Poll::Pending => Poll::Pending,
-                    Poll::Ready(Ok(())) => {
-                        log_trace_lazy!("cluster", "Reconnected to initial nodes");
+                    Poll::Ready(Ok(())) | Poll::Ready(Err(_)) => {
+                        // Whether the task succeeded, failed, or panicked, mark recovery complete.
+                        // Then check if we actually have connections: if not, signal failure so
+                        // poll_flush can fail the recovery queue instead of draining it into
+                        // in-flight (which would cause an infinite reconnect loop).
                         self.state = ConnectionState::PollComplete;
-                        Poll::Ready(Ok(()))
-                    }
-                    Poll::Ready(Err(join_err)) => {
-                        if join_err.is_cancelled() {
-                            log_trace_lazy!(
+                        if self.inner.conn_lock.read().is_empty() {
+                            log_warn_rate_limited!(
                                 "cluster",
-                                "Reconnect to initial nodes task was aborted"
+                                5,
+                                "ReconnectToInitialNodes completed but no connections available"
                             );
+                            Poll::Ready(Err(RedisError::from((
+                                ErrorKind::AllConnectionsUnavailable,
+                                "No connections after reconnect to initial nodes",
+                            ))))
                         } else {
-                            log_warn_lazy!("cluster", format!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err));
+                            log_trace_lazy!("cluster", "Reconnected to initial nodes");
+                            Poll::Ready(Ok(()))
                         }
-                        self.state = ConnectionState::PollComplete;
-                        Poll::Ready(Ok(()))
                     }
                 }
             }
@@ -4035,24 +4039,27 @@ where
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
-                // Buffer incoming requests for all recovery paths so they are retried
-                // once recovery completes, instead of being failed immediately.
+                // Special case: ReconnectToInitialNodes completed but no connections are
+                // available. Fail the recovery queue immediately to prevent an infinite
+                // buffer → drain → AllConnectionsUnavailable → reconnect loop.
+                if err.kind() == ErrorKind::AllConnectionsUnavailable {
+                    self.fail_recovery_queue();
+                    // Also buffer any NEW requests that just arrived before failing them
+                    // on the next poll cycle via the same path.
+                    self.buffer_pending_requests_to_recovery_queue();
+                    self.refresh_error = Some(err);
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                }
+                // For all other errors (e.g. slot refresh errors), buffer requests
+                // so they are retried once recovery completes.
                 self.buffer_pending_requests_to_recovery_queue();
                 self.refresh_error = Some(err);
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
             Poll::Ready(Ok(())) => {
-                // Only drain the recovery queue if we actually have connections.
-                // If all connections are still unavailable after recovery (e.g. all nodes dead),
-                // fail the buffered requests immediately rather than dispatching them into
-                // in-flight where they would hit AllConnectionsUnavailable, re-trigger another
-                // ReconnectToInitialNodes, get re-buffered, and loop indefinitely.
-                if self.inner.conn_lock.read().is_empty() {
-                    self.fail_recovery_queue();
-                } else {
-                    self.drain_recovery_queue_to_inflight();
-                }
+                self.drain_recovery_queue_to_inflight();
             }
         }
 
