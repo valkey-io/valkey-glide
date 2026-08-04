@@ -30,7 +30,7 @@ protobuf = { version = "3", features = ["bytes", "with-bytes"] } # Direct dep re
 num-bigint = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }
+tikv-jemallocator = { version = "0.7", features = ["disable_initial_exec_tls"] }
 
 [build-dependencies]
 napi-build = "2"

@@ -43,7 +43,7 @@ import {
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     encodableBatchTest,
-    flushAndCloseClient,
+    flushClient,
     generateLuaLibCode,
     getClientConfigurationOption,
     getRandomKey,
@@ -67,6 +67,9 @@ describe("GlideClient", () => {
     let azCluster: ValkeyCluster;
     let client: GlideClient;
     let azClient: GlideClient;
+    let lastProtocol: ProtocolVersion | undefined;
+    let pooledClient: GlideClient | undefined;
+    let pooledAzClient: GlideClient | undefined;
     beforeAll(async () => {
         const standaloneAddresses: string =
             global.STAND_ALONE_ENDPOINT as string;
@@ -91,13 +94,26 @@ describe("GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster?.getAddresses(), client);
-        // Add small delay between cluster cleanups to prevent socket exhaustion
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        await flushAndCloseClient(false, azCluster?.getAddresses(), azClient);
+        await flushClient(client);
+        await flushClient(azClient);
+
+        // Close clients that were created by standalone tests (not pooled).
+        // Pooled clients are kept alive for reuse in runBaseTests.init().
+        if (client && client !== pooledClient) {
+            client.close();
+            client = undefined!;
+        }
+
+        if (azClient && azClient !== pooledAzClient) {
+            azClient.close();
+            azClient = undefined!;
+        }
     });
 
     afterAll(async () => {
+        client?.close();
+        azClient?.close();
+
         if (testsFailed === 0) {
             await cluster.close();
             // Add small delay between cluster closures to prevent socket contention
@@ -2007,25 +2023,34 @@ describe("GlideClient", () => {
             );
 
             try {
-                // Get initial client count
-                const getClientCount = async (): Promise<number> => {
+                // Identify the lazy client by a unique name rather than by
+                // counting connections. A count-based baseline is racy here:
+                // preceding tests (e.g. the inflight-requests test above) close
+                // their connections asynchronously, so stale entries may linger
+                // in CLIENT LIST when the baseline is taken and then disappear
+                // before the post-command measurement, producing a net-zero
+                // delta. Checking for a unique clientName is deterministic and
+                // immune to concurrent connection churn.
+                const lazyClientName = `lazy_conn_${protocol}_${getRandomKey()}`;
+
+                // Returns true if a connection with the given name is present
+                // in CLIENT LIST.
+                const clientListContains = async (
+                    name: string,
+                ): Promise<boolean> => {
                     const result = await monitoringClient.customCommand([
                         "CLIENT",
                         "LIST",
                     ]);
-                    if (result === null) return 0;
+                    if (result === null) return false;
 
                     const text = Buffer.isBuffer(result)
                         ? result.toString()
                         : String(result);
-                    const lines = text.trim().split("\n");
-                    return lines.filter((line) => line.trim().length > 0)
-                        .length;
+                    return text.includes(`name=${name} `);
                 };
 
-                const clientsBeforeLazyInit = await getClientCount();
-
-                // Create lazy client
+                // Create lazy client with a unique name.
                 const lazyClient = await GlideClient.createClient(
                     getClientConfigurationOption(
                         cluster.getAddresses(),
@@ -2033,26 +2058,25 @@ describe("GlideClient", () => {
                         {
                             lazyConnect: true, // Lazy connection
                             requestTimeout: 3000,
+                            clientName: lazyClientName,
                         },
                     ),
                 );
 
                 try {
-                    // Verify no new connections were established
-                    const clientsAfterLazyInit = await getClientCount();
+                    // Verify the lazy client has not connected yet: its name
+                    // must be absent from CLIENT LIST before the first command.
+                    expect(await clientListContains(lazyClientName)).toBe(
+                        false,
+                    );
 
-                    expect(clientsAfterLazyInit).toEqual(clientsBeforeLazyInit);
-
-                    // Send first command with lazy client
+                    // Send first command with lazy client.
                     const pingResponse = await lazyClient.ping();
                     expect(pingResponse).toEqual("PONG");
 
-                    // Check client count after first command
-                    const clientsAfterFirstCommand = await getClientCount();
-
-                    expect(clientsAfterFirstCommand).toEqual(
-                        clientsBeforeLazyInit + 1,
-                    );
+                    // After the first command the connection is established, so
+                    // its name must now appear in CLIENT LIST.
+                    expect(await clientListContains(lazyClientName)).toBe(true);
                 } finally {
                     await lazyClient.close();
                 }
@@ -2184,7 +2208,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
-            client = await GlideClient.createClient(config);
+
+            // Recreate client if config changed or client is dead
+            if (configOverrides || !client || protocol !== lastProtocol) {
+                client?.close();
+                client = await GlideClient.createClient(config);
+            } else {
+                try {
+                    await client.ping();
+                } catch {
+                    client = await GlideClient.createClient(config);
+                }
+            }
 
             const configNew = getClientConfigurationOption(
                 azCluster.getAddresses(),
@@ -2192,9 +2227,22 @@ describe("GlideClient", () => {
                 configOverrides,
             );
 
+            // Recreate azClient if config changed or client is dead
+            if (configOverrides || !azClient || protocol !== lastProtocol) {
+                azClient?.close();
+                azClient = await GlideClient.createClient(configNew);
+            } else {
+                try {
+                    await azClient.ping();
+                } catch {
+                    azClient = await GlideClient.createClient(configNew);
+                }
+            }
+
+            lastProtocol = protocol;
+            pooledClient = client;
+            pooledAzClient = azClient;
             testsFailed += 1;
-            azClient = await GlideClient.createClient(configNew);
-            client = await GlideClient.createClient(config);
             return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {

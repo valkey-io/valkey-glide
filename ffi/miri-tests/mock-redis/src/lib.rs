@@ -30,6 +30,7 @@ pub use cluster_routing::*;
 pub use cluster_topology::*;
 
 pub use redis::ToRedisArgs;
+pub use redis::SHARED_ARG_INLINE_MAX;
 
 pub struct Cmd {
     command_bytes: Vec<u8>,
@@ -47,6 +48,10 @@ impl Routable for Cmd {}
 
 impl Cmd {
     pub fn arg<T: ToRedisArgs>(&mut self, _arg: T) -> &mut Cmd {
+        self
+    }
+
+    pub fn arg_shared(&mut self, _arg: bytes::Bytes) -> &mut Cmd {
         self
     }
 

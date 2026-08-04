@@ -14,8 +14,12 @@ struct Server {
 
 impl Server {
     fn new() -> Self {
+        Self::with_requirepass(None)
+    }
+
+    fn with_requirepass(password: Option<&str>) -> Self {
         let port = Self::get_available_port();
-        let process = Self::start_server(port);
+        let process = Self::start_server(port, password);
         Self { process, port }
     }
 
@@ -27,16 +31,19 @@ impl Server {
             .expect("Failed to find an available port")
     }
 
-    fn start_server(port: u16) -> Child {
+    fn start_server(port: u16, requirepass: Option<&str>) -> Child {
         let run_server = |engine_type: &str| {
-            Command::new(engine_type)
-                .arg("--port")
+            let mut cmd = Command::new(engine_type);
+            cmd.arg("--port")
                 .arg(port.to_string())
                 .arg("--save")
                 .arg("")
                 .arg("--appendonly")
-                .arg("no")
-                .spawn()
+                .arg("no");
+            if let Some(pw) = requirepass {
+                cmd.arg("--requirepass").arg(pw);
+            }
+            cmd.spawn()
         };
 
         let child = match run_server("valkey-server") {
@@ -1574,6 +1581,55 @@ fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
         "Expected max_cache_kb error, got: {error}"
     );
     unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
+
+// Live-server end-to-end regression test for issue #6659: a URI with a
+// percent-encoded reserved character in the password must decode before
+// AUTH is issued, otherwise the server rejects the connection.
+//
+// Prior to the fix, `redis://:p%40ss@host` sent `AUTH p%40ss` on the wire.
+// With `requirepass "p@ss"` set on the server side, connection failed.
+// The fix percent-decodes userinfo, so the server now receives `AUTH p@ss`
+// and the connection succeeds.
+#[test]
+fn test_create_client_from_uri_with_reserved_char_password_authenticates() {
+    let password = "p@ss";
+    let server = Server::with_requirepass(Some(password));
+    // "@" is percent-encoded as "%40" in the URI. Without decoding on the FFI
+    // side, the server would see "p%40ss" and reject the AUTH command.
+    let uri = CString::new(format!("redis://:p%40ss@127.0.0.1:{}", server.port)).unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if !conn_response.connection_error_message.is_null() {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!(
+            "expected successful AUTH with percent-encoded password `p%40ss` \
+             (server requirepass = `{password}`), got: {error}"
+        );
+    }
+    assert!(
+        !conn_response.conn_ptr.is_null(),
+        "expected a live connection after successful AUTH"
+    );
+
+    unsafe {
+        close_client(conn_response.conn_ptr);
         free_connection_response(response as *mut ConnectionResponse);
         drop(Box::from_raw(client_type));
     }

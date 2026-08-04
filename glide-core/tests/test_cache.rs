@@ -62,7 +62,7 @@ pub(crate) mod test_cache {
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
-                Value::BulkString(b"cache_test_value".to_vec())
+                Value::BulkString(b"cache_test_value".to_vec().into())
             );
 
             // Entry count should be 1
@@ -76,7 +76,7 @@ pub(crate) mod test_cache {
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
-                Value::BulkString(b"cache_test_value".to_vec())
+                Value::BulkString(b"cache_test_value".to_vec().into())
             );
 
             // Third GET - should also come from cache
@@ -86,7 +86,7 @@ pub(crate) mod test_cache {
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
-                Value::BulkString(b"cache_test_value".to_vec())
+                Value::BulkString(b"cache_test_value".to_vec().into())
             );
 
             // Verify only 1 GET hit the server
@@ -340,7 +340,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
+            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec().into()));
 
             // Entry count should be 1
             let entry_count = test_basics.client.cache_entry_count().unwrap();
@@ -352,7 +352,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
+            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec().into()));
 
             // Should have 1 GET so far
             assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
@@ -368,7 +368,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
+            assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec().into()));
 
             // Should now have 2 GETs
             assert_command_count(&mut test_basics.client, "GET", 2, use_cluster).await;
@@ -880,7 +880,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
+            assert_eq!(result, Value::BulkString(b"shared_value".to_vec().into()));
 
             // Entry count should be 1
             let entry_count = test_basics2.client.cache_entry_count().unwrap();
@@ -894,7 +894,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
+            assert_eq!(result, Value::BulkString(b"shared_value".to_vec().into()));
 
             // Only 1 GET should have hit the server (both clients used shared cache)
             assert_command_count(&mut test_basics1.client, "GET", 1, use_cluster).await;
@@ -965,7 +965,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(result, Value::BulkString(b"string_value".to_vec()));
+            assert_eq!(result, Value::BulkString(b"string_value".to_vec().into()));
 
             // Entry count should be 1
             let entry_count = test_basics.client.cache_entry_count().unwrap();
@@ -1046,7 +1046,10 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(result, Value::BulkString(b"cacheable_value".to_vec()));
+            assert_eq!(
+                result,
+                Value::BulkString(b"cacheable_value".to_vec().into())
+            );
 
             // Entry count should be 1
             let entry_count = test_basics.client.cache_entry_count().unwrap();
@@ -1075,8 +1078,8 @@ pub(crate) mod test_cache {
             assert_eq!(
                 hgetall_result,
                 Value::Map(vec![(
-                    Value::BulkString(b"field1".to_vec()),
-                    Value::BulkString(b"value1".to_vec())
+                    Value::BulkString(b"field1".to_vec().into()),
+                    Value::BulkString(b"value1".to_vec().into())
                 )])
             );
 
@@ -1101,7 +1104,7 @@ pub(crate) mod test_cache {
                 .unwrap();
             assert_eq!(
                 smembers_result,
-                Value::Set(vec![Value::BulkString(b"member1".to_vec())])
+                Value::Set(vec![Value::BulkString(b"member1".to_vec().into())])
             );
 
             // Entry count should be 3
@@ -1238,7 +1241,7 @@ pub(crate) mod test_cache {
                 .unwrap();
             assert_eq!(
                 result1,
-                Value::BulkString(value1.as_bytes().to_vec()),
+                Value::BulkString(value1.as_bytes().to_vec().into()),
                 "first GET should return original value"
             );
 
@@ -1252,7 +1255,7 @@ pub(crate) mod test_cache {
                 .unwrap();
             assert_eq!(
                 result2,
-                Value::BulkString(value1.as_bytes().to_vec()),
+                Value::BulkString(value1.as_bytes().to_vec().into()),
                 "second GET should return cached value"
             );
 
@@ -1278,7 +1281,7 @@ pub(crate) mod test_cache {
                 .unwrap();
             assert_eq!(
                 result3,
-                Value::BulkString(value2.as_bytes().to_vec()),
+                Value::BulkString(value2.as_bytes().to_vec().into()),
                 "GET after invalidation should return updated value"
             );
         });

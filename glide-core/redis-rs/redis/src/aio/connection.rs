@@ -23,6 +23,52 @@ use futures_util::{
 };
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
+
+/// Write all segments of a packed command to an async stream using vectored
+/// I/O, so large shared payloads ([`crate::cmd::SegmentedBytes`]) go straight
+/// to the socket without being copied into an intermediate buffer. Handles
+/// partial writes by advancing a `(segment, offset)` cursor (MSRV-compatible,
+/// avoids the 1.81 `IoSlice::advance_slices`).
+async fn write_all_segments_async<W>(
+    con: &mut W,
+    segments: &crate::cmd::SegmentedBytes,
+) -> RedisResult<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    use std::io::IoSlice;
+    const MAX_SLICES: usize = 64;
+    let segs = segments.segments().collect::<Vec<_>>();
+    let mut idx = 0;
+    let mut offset = 0;
+    while idx < segs.len() {
+        let end = std::cmp::min(idx + MAX_SLICES, segs.len());
+        let mut slices: Vec<IoSlice> = Vec::with_capacity(end - idx);
+        slices.push(IoSlice::new(&segs[idx][offset..]));
+        for seg in &segs[idx + 1..end] {
+            slices.push(IoSlice::new(seg));
+        }
+        let mut n = con.write_vectored(&slices).await?;
+        if n == 0 {
+            return Err(RedisError::from(std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "failed to write whole command",
+            )));
+        }
+        while n > 0 {
+            let remaining = segs[idx].len() - offset;
+            if n >= remaining {
+                n -= remaining;
+                idx += 1;
+                offset = 0;
+            } else {
+                offset += n;
+                n = 0;
+            }
+        }
+    }
+    Ok(())
+}
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
 
@@ -179,8 +225,12 @@ where
                 self.exit_pubsub().await?;
             }
             self.buf.clear();
-            cmd.write_packed_command(&mut self.buf);
-            self.con.write_all(&self.buf).await?;
+            if cmd.has_out_of_line_args() {
+                write_all_segments_async(&mut self.con, &cmd.get_packed_segments()).await?;
+            } else {
+                cmd.write_packed_command(&mut self.buf);
+                self.con.write_all(&self.buf).await?;
+            }
             if cmd.is_no_response() {
                 return Ok(Value::Nil);
             }
@@ -207,8 +257,13 @@ where
             }
 
             self.buf.clear();
-            cmd.write_packed_pipeline(&mut self.buf);
-            self.con.write_all(&self.buf).await?;
+            if cmd.commands().iter().any(|c| c.has_out_of_line_args()) {
+                write_all_segments_async(&mut self.con, &cmd.get_packed_pipeline_segments())
+                    .await?;
+            } else {
+                cmd.write_packed_pipeline(&mut self.buf);
+                self.con.write_all(&self.buf).await?;
+            }
 
             let mut first_err = None;
 

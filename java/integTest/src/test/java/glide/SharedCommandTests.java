@@ -137,6 +137,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -199,15 +200,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public void cleanup() {
-        // Flush all databases to ensure clean state between tests
+        // Flush all databases in parallel to reduce teardown time
+        List<CompletableFuture<String>> futures = new ArrayList<>();
         for (Arguments client : clients) {
             BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
             if (baseClient instanceof GlideClient) {
-                ((GlideClient) baseClient).flushall().get();
+                futures.add(((GlideClient) baseClient).flushall());
             } else if (baseClient instanceof GlideClusterClient) {
-                ((GlideClusterClient) baseClient).flushall().get();
+                futures.add(((GlideClusterClient) baseClient).flushall());
             }
         }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
     }
 
     @SneakyThrows

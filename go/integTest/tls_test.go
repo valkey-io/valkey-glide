@@ -229,6 +229,171 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 	assert.Contains(suite.T(), err.Error(), "failed to read certificate file")
 }
 
+// TestTlsLoadClientCertificateAndKeyFromFile covers the mTLS
+// LoadClientCertificateAndKeyFromFile helper.
+func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	// Load a real cert/key pair from disk and check the returned bytes.
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	certData, keyData, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), certData)
+	assert.NotEmpty(suite.T(), keyData)
+	assert.Contains(suite.T(), string(certData), "-----BEGIN CERTIFICATE-----")
+	assert.Contains(suite.T(), string(keyData), "-----BEGIN")
+	assert.Contains(suite.T(), string(keyData), "PRIVATE KEY-----")
+
+	// Test loading non-existent client certificate file
+	_, _, err = config.LoadClientCertificateAndKeyFromFile(
+		"/nonexistent/path/client-cert.pem", "/nonexistent/path/client-key.pem")
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "failed to read client certificate file")
+}
+
+// getClientCertAndKeyPaths returns absolute paths for a client cert/key pair
+// under utils/tls_crts (same convention as getCaCertificate). It resolves the
+// paths but does not stat them; callers use require.NoError so a missing file
+// fails the test at the top instead of silently skipping.
+func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
+	glideHome := os.Getenv("GLIDE_HOME_DIR")
+	if glideHome == "" {
+		glideHome = "../.."
+	}
+	certPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.crt"))
+	if err != nil {
+		return "", "", err
+	}
+	keyPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.key"))
+	if err != nil {
+		return "", "", err
+	}
+	return certPath, keyPath, nil
+}
+
+// TestTlsMutualTLS_Standalone runs byte-based mTLS end-to-end against a real
+// standalone server. Skipped when TLS is disabled in CI; when TLS is enabled,
+// missing cert material fails the test hard rather than skipping.
+func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsMutualTLSWithReload_Standalone runs path-based mTLS with automatic
+// reload against a real standalone server. It only checks the client connects
+// and works; the rotation itself is covered by core tests in
+// glide-core/tests/test_client.rs. Missing cert material under TLS-enabled
+// runs is a hard failure.
+func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLSFromFiles(certPath, keyPath)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsMutualTLS_Cluster mirrors TestTlsMutualTLS_Standalone against a cluster.
+func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsMutualTLSWithReload_Cluster mirrors TestTlsMutualTLSWithReload_Standalone
+// against a cluster. It runs path-based mTLS with automatic reload end-to-end;
+// the rotation itself is covered by core tests in glide-core/tests/test_client.rs.
+// Missing cert material under TLS-enabled runs is a hard failure.
+func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLSFromFiles(certPath, keyPath)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.

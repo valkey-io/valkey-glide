@@ -49,7 +49,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan libatomic tar --allowerasing
 
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"

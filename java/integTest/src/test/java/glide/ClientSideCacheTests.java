@@ -642,11 +642,15 @@ public class ClientSideCacheTests {
         // First GET: cache miss, populates cache
         assertEquals(value, client.get(key).get());
 
-        // Second GET: served from local cache
-        assertEquals(value, client.get(key).get());
-
-        // Verify caching was actually used by checking metrics
-        assertTrue(client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
+        // Poll until a cache hit is observed. With server-assisted caching on cluster
+        // clients, CLIENT TRACKING may not be fully active on all connections immediately,
+        // so the first GET(s) may be misses until tracking is established.
+        waitFor(
+                () -> {
+                    assertEquals(value, client.get(key).get());
+                    return client.getCacheHitRate().get() > 0;
+                },
+                "Expected cache hit rate > 0 after GET");
     }
 
     @ParameterizedTest(autoCloseArguments = true)

@@ -207,7 +207,6 @@ func (suite *GlideTestSuite) TestCompressionMinSizeThreshold() {
 
 func (suite *GlideTestSuite) TestCompressionDisabledByDefault() {
 	client := suite.defaultClient()
-	defer client.Close()
 
 	t := suite.T()
 
@@ -1466,7 +1465,6 @@ func (suite *GlideTestSuite) TestCompressionBitPosIncompatible() {
 
 func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompression() {
 	client := suite.defaultClient()
-	defer client.Close()
 
 	t := suite.T()
 

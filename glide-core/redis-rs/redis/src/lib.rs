@@ -336,11 +336,13 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 #![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 
 // public api
+pub use crate::client::CertParamsProvider;
 pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
 pub use crate::client::IAMTokenProvider;
 pub use crate::cmd::{
-    cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter, PHASE_QUEUED, PHASE_SENT,
+    cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter, SegmentedBytes, PHASE_QUEUED, PHASE_SENT,
+    SHARED_ARG_INLINE_MAX,
 };
 pub use crate::commands::{
     Commands, ControlFlow, Direction, LposOptions, PubSubCommands, SetOptions,
@@ -350,6 +352,11 @@ pub use crate::connection::{
     IntoConnectionInfo, Msg, PubSub, PubSubChannelOrPattern, PubSubSubscriptionInfo,
     PubSubSubscriptionKind, RedisConnectionInfo, TlsMode,
 };
+// Exposed for the codec integration tests (tests/parser.rs); not a supported
+// public API surface.
+#[cfg(feature = "aio")]
+#[doc(hidden)]
+pub use crate::parser::ValueCodec;
 pub use crate::parser::{parse_redis_value, Parser};
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use crate::pubsub_synchronizer::PubSubSynchronizer;
@@ -398,6 +405,8 @@ pub use crate::{
 
 mod macros;
 mod pipeline;
+
+pub(crate) mod buf_pool;
 
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
@@ -452,7 +461,10 @@ pub mod sentinel;
 
 mod tls;
 
-pub use crate::tls::{retrieve_tls_certificates, ClientTlsConfig, TlsCertificates, TlsConnParams};
+pub use crate::tls::{
+    retrieve_tls_certificates, validate_client_tls_params, ClientTlsConfig, TlsCertificates,
+    TlsConnParams,
+};
 
 /// Cache module
 pub mod cache;

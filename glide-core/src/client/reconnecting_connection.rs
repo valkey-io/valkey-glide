@@ -120,6 +120,9 @@ struct ConnectionBackend {
     client_dropped_flagged: AtomicBool,
     /// Optional handle to the IAM token cache for refreshing the password before reconnection.
     iam_token_handle: Option<IAMTokenHandle>,
+    /// Optional handle to the reloaded mTLS certificate cache for refreshing the
+    /// client TLS params before reconnection.
+    cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
 }
 
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
@@ -223,6 +226,7 @@ async fn create_connection(
         tcp_nodelay,
         pubsub_synchronizer,
         iam_token_provider: None,
+        cert_params_provider: None,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -339,6 +343,7 @@ impl ReconnectingConnection {
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
         address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
         iam_token_handle: Option<IAMTokenHandle>,
+        cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -357,6 +362,7 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
             iam_token_handle,
+            cert_material_handle,
         };
         create_connection(
             backend,
@@ -442,12 +448,19 @@ impl ReconnectingConnection {
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
             let has_iam = connection_clone.inner.backend.iam_token_handle.is_some();
+            let has_cert_reload = connection_clone
+                .inner
+                .backend
+                .cert_material_handle
+                .is_some();
 
-            // For non-IAM connections, clone the client once before the loop to preserve
-            // the original reconnection behavior (password is fixed at reconnect start).
-            // For IAM connections, the client is cloned inside the loop so each retry
-            // picks up the freshest token written by the IAM handle.
-            let static_client = if !has_iam {
+            // For connections without dynamic credentials, clone the client once
+            // before the loop to preserve the original reconnection behavior
+            // (password/TLS material is fixed at reconnect start). For IAM or
+            // cert-reload connections, the client is cloned inside the loop so each
+            // retry picks up the freshest token / certificate written into the
+            // stored client below.
+            let static_client = if !has_iam && !has_cert_reload {
                 Some({
                     let guard = connection_clone.inner.backend.get_backend_client();
                     guard.clone()
@@ -490,10 +503,29 @@ impl ReconnectingConnection {
                     );
                 }
 
+                // If mTLS certificate reload is configured, apply the freshest
+                // (last-known-good) client certificate/key before reconnecting so
+                // a rotated certificate is adopted on the next connection attempt.
+                if let Some(handle) = &connection_clone.inner.backend.cert_material_handle {
+                    let params = handle.current_params().await;
+                    let mut client = connection_clone
+                        .inner
+                        .backend
+                        .connection_info
+                        .write()
+                        .expect(WRITE_LOCK_ERR);
+                    client.update_tls_params(Some(params));
+                    log_debug(
+                        "reconnect",
+                        "Updated connection TLS params with reloaded client certificate before reconnection attempt",
+                    );
+                }
+
                 let client = if let Some(ref c) = static_client {
                     c.clone()
                 } else {
-                    // IAM path: re-read from backend to pick up the token update above
+                    // IAM / cert-reload path: re-read from backend to pick up the
+                    // token and/or TLS params update applied above.
                     let guard = connection_clone.inner.backend.get_backend_client();
                     guard.clone()
                 };

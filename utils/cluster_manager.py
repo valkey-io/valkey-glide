@@ -434,6 +434,15 @@ def start_server(
     # Bind server to both IPv4 and IPv6 loopback addresses.
     cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
 
+    # If host is a DNS hostname, set cluster-announce-hostname so
+    # the cluster topology reports DNS names instead of IP addresses.
+    if cluster_mode:
+        try:
+            import ipaddress
+            ipaddress.ip_address(host)
+        except ValueError:
+            cmd_args.extend(["--cluster-announce-hostname", host])
+
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
     # Enable multi-database support in cluster mode for Valkey 9.0+

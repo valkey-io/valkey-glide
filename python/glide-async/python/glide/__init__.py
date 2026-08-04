@@ -184,7 +184,9 @@ from .async_commands import (
     ft,
     glide_json,
 )
+from .client_pool import AsyncClientPool, PoolConfig
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from .isolated_scope import AsyncIsolatedScope
 from .logger import Level as LogLevel
 from .logger import Logger
 from .monitor_client import MonitorClient
@@ -250,6 +252,11 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Pool
+    "AsyncClientPool",
+    "PoolConfig",
+    # Scope
+    "AsyncIsolatedScope",
     # Internal utilities
     "get_min_compressed_size",
     "Batch",

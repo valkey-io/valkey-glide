@@ -26,7 +26,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -66,6 +66,12 @@ pub const FINISHED_SCAN_CURSOR: &str = "finished";
 ///
 /// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
+
+/// Default recovery queue size: maximum requests buffered during cluster reconnect.
+/// Buffered requests are retried transparently after reconnection. Requests beyond
+/// this limit are failed immediately to provide bounded memory usage.
+/// See `recovery_requests_queue_size` in `ConnectionRequest`.
+pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 
 /// The connection check interval is currently not exposed to the user via ConnectionRequest,
 /// as improper configuration could negatively impact performance or pub/sub resiliency.
@@ -295,7 +301,14 @@ pub(super) fn get_connection_info(
 #[derive(Clone)]
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
-    Cluster { client: ClusterConnection },
+    Cluster {
+        client: ClusterConnection,
+        /// Owns the background mTLS certificate reload task for cluster clients, if
+        /// path-based reload is configured. Held so the task lives for the client's
+        /// lifetime; the [`crate::tls_reload::CertReloadHandle`] shared with the reconnect loop keeps
+        /// working as long as this manager is alive.
+        _cert_material_manager: Option<Arc<crate::tls_reload::CertReloadManager>>,
+    },
     Lazy(Box<LazyClient>),
 }
 
@@ -306,25 +319,56 @@ pub struct LazyClient {
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
-#[derive(Clone)]
-pub struct Client {
+/// Immutable shared state of a [`Client`], held behind a single `Arc` so that
+/// cloning a `Client` (which happens on **every command** via `self.clone()`) is
+/// one atomic refcount bump instead of ~8 individual `Arc` bumps plus an
+/// `OTelMetadata` `String` clone. All of these fields are immutable after
+/// construction — the only mutable per-client state lives inside
+/// `internal_client`'s `RwLock` — so sharing them via `Arc` + `Deref` keeps every
+/// existing `self.<field>` access working unchanged.
+pub struct ClientShared {
     internal_client: Arc<RwLock<ClientWrapper>>,
     request_timeout: Duration,
     inflight_requests_allowed: Arc<AtomicIsize>,
     inflight_requests_limit: isize,
     inflight_log_interval: isize,
-    // IAM token manager for automatic credential refresh
-    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
-    otel_metadata: types::OTelMetadata,
     // Optional client-side cache
     client_side_cache: Option<Arc<dyn GlideCache>>,
     // Per-client latency tracker for timeout diagnostics
     latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
     // Optional Client-wide circuit breaker
     circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
+    // Tracks the current database selected at runtime (updated on SELECT commands).
+    // Used by scope connections to inherit the parent's current database.
+    current_database: Arc<AtomicU32>,
+    // Whether this client is in cluster mode (immutable).
+    is_cluster: bool,
+}
+
+#[derive(Clone)]
+pub struct Client {
+    shared: Arc<ClientShared>,
+    // IAM token manager for automatic credential refresh. Assigned once during
+    // construction (the manager is created after the client), so it is kept as a
+    // direct field rather than inside `shared`. It is an `Option<Arc<_>>`, so the
+    // per-command clone is at most a single refcount bump.
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Per-clone diagnostic metadata. `db_namespace` is updated on `&mut self`
+    // (after SELECT) via copy-on-write, so this is an `Arc` — the per-command
+    // `Client::clone` is then a single refcount bump instead of cloning two
+    // `String`s (host + db_namespace) on every command.
+    otel_metadata: Arc<types::OTelMetadata>,
+}
+
+impl std::ops::Deref for Client {
+    type Target = ClientShared;
+    #[inline]
+    fn deref(&self) -> &ClientShared {
+        &self.shared
+    }
 }
 
 async fn run_with_timeout<T>(
@@ -524,7 +568,11 @@ impl Client {
 
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
-        self.otel_metadata.db_namespace = database_id.to_string();
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = database_id.to_string();
+        // Keep current_database in sync (used by scope connections to inherit parent state)
+        self.shared
+            .current_database
+            .store(database_id as u32, Ordering::Release);
         Ok(())
     }
 
@@ -538,7 +586,7 @@ impl Client {
                 client.update_connection_database(database_id).await?;
                 Ok(())
             }
-            ClientWrapper::Cluster { client } => {
+            ClientWrapper::Cluster { client, .. } => {
                 // Update cluster connection database configuration
                 client.update_connection_database(database_id).await?;
                 Ok(())
@@ -591,7 +639,7 @@ impl Client {
                 client.update_connection_client_name(client_name).await?;
                 Ok(())
             }
-            ClientWrapper::Cluster { client } => {
+            ClientWrapper::Cluster { client, .. } => {
                 // Update cluster connection database configuration
                 client.update_connection_client_name(client_name).await?;
                 Ok(())
@@ -661,7 +709,7 @@ impl Client {
                 client.update_connection_username(username).await?;
                 Ok(())
             }
-            ClientWrapper::Cluster { client } => {
+            ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_username(username).await?;
                 Ok(())
             }
@@ -679,7 +727,7 @@ impl Client {
                 client.update_connection_password(password).await?;
                 Ok(())
             }
-            ClientWrapper::Cluster { client } => {
+            ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_password(password).await?;
                 Ok(())
             }
@@ -795,7 +843,7 @@ impl Client {
                 client.update_connection_protocol(protocol).await?;
                 Ok(())
             }
-            ClientWrapper::Cluster { client } => {
+            ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_protocol(protocol).await?;
                 Ok(())
             }
@@ -844,7 +892,7 @@ impl Client {
         self.update_stored_client_name(None).await?;
         self.update_stored_protocol(redis::ProtocolVersion::RESP2)
             .await?;
-        self.otel_metadata.db_namespace = "0".to_string();
+        Arc::make_mut(&mut self.otel_metadata).db_namespace = "0".to_string();
         for kind in [
             redis::PubSubSubscriptionKind::Exact,
             redis::PubSubSubscriptionKind::Pattern,
@@ -887,14 +935,17 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(
+                let (client, cert_material_manager) = create_cluster_client(
                     config,
                     push_sender,
                     iam_manager_ref,
                     self.pubsub_synchronizer.clone(),
                 )
                 .await?;
-                ClientWrapper::Cluster { client }
+                ClientWrapper::Cluster {
+                    client,
+                    _cert_material_manager: cert_material_manager,
+                }
             } else {
                 // Create standalone client
                 let client = StandaloneClient::create_client(
@@ -949,7 +1000,7 @@ impl Client {
     ) -> RedisResult<Value> {
         let raw_value = match client {
             ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
-            ClientWrapper::Cluster { mut client } => {
+            ClientWrapper::Cluster { mut client, .. } => {
                 let final_routing = if let Some(RoutingInfo::SingleNode(
                     SingleNodeRoutingInfo::Random,
                 )) = routing
@@ -1157,10 +1208,12 @@ impl Client {
 
                     let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
                         .register(duration, cmd_start);
-                    let routing_desc = routing
-                        .as_ref()
-                        .map(|r| format!("{:?}", r))
-                        .unwrap_or_else(|| "unknown".to_owned());
+                    // Defer the expensive Debug-format of the route to the (rare)
+                    // timeout path. Cloning the routing is cheap for the common
+                    // single-node case (no heap allocation); previously a String was
+                    // allocated and Debug-formatted on EVERY command just for a
+                    // diagnostic field that is only read when a timeout fires.
+                    let routing_for_diag = routing.clone();
                     let execute = Self::execute_command_owned(
                         self_clone,
                         owned_cmd.clone(),
@@ -1191,7 +1244,10 @@ impl Client {
                                     let actual_elapsed = cmd_start.elapsed();
                                     let (phase, node, retry_count, command) = {
                                         let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
-                                        let n: String = routing_desc.clone();
+                                        let n: String = routing_for_diag
+                                            .as_ref()
+                                            .map(|r| format!("{:?}", r))
+                                            .unwrap_or_else(|| "unknown".to_owned());
                                         let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
                                         let c = owned_cmd.arg_idx(0)
                                             .map(crate::timeout_watchdog::cmd_name_from_bytes)
@@ -1326,6 +1382,116 @@ impl Client {
         })
     }
 
+    /// Execute a command on a provided dedicated connection (for isolated execution).
+    ///
+    /// Applies the same timeout, decompression, compression, and IAM token refresh
+    /// logic as `send_command`, but routes the command to the given
+    /// `MultiplexedConnection` instead of the client's internal managed connection.
+    ///
+    /// Note: OTel spans and inflight tracking are not applied here because scoped
+    /// connections operate outside the multiplexer's pipeline. OTel support for
+    /// scopes is tracked as a follow-up enhancement.
+    pub async fn send_command_on_connection(
+        &self,
+        cmd: &Cmd,
+        connection: &mut redis::aio::MultiplexedConnection,
+    ) -> RedisResult<Value> {
+        // IAM token refresh: if token rotated, re-authenticate this connection
+        if let Some(iam_manager) = &self.iam_token_manager
+            && iam_manager.token_changed()
+        {
+            let current_token = iam_manager.get_token().await;
+            if !current_token.is_empty() {
+                iam_manager.clear_token_changed();
+                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
+                connection.send_packed_command(&auth_cmd).await?;
+            }
+        }
+
+        // Compression on write: compress command args if compression is enabled
+        let cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
+            if compression_manager.is_enabled() {
+                // Clone the command and apply compression to its args
+                // Note: for scope commands, args are already serialized — this handles
+                // cases where values passed to SET/LPUSH/etc. should be compressed.
+                // The scope wire format passes raw args, so compression applies here.
+                cmd.clone() // TODO: apply arg compression when scope command args support it
+            } else {
+                cmd.clone()
+            }
+        } else {
+            cmd.clone()
+        };
+
+        let request_timeout = Some(self.request_timeout);
+
+        // Send with timeout
+        let raw_value = match request_timeout {
+            Some(duration) => {
+                match tokio::time::timeout(duration, connection.send_packed_command(&cmd_to_send))
+                    .await
+                {
+                    Ok(result) => result?,
+                    Err(_) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                }
+            }
+            None => connection.send_packed_command(&cmd_to_send).await?,
+        };
+
+        // Apply decompression if compression is enabled
+        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed) => decompressed,
+                    Err(e) => {
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        // Type conversion
+        let expected_type = expected_type_for_cmd(cmd);
+        convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Get the primary node address for a given hash slot (cluster mode).
+    /// Returns the host:port string for the primary that owns the slot.
+    /// Returns None in standalone mode or if the slot is unmapped.
+    ///
+    /// Used by isolated execution to open scoped connections
+    /// directly to the correct node, avoiding MOVED redirects.
+    pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
+        let client = self.internal_client.read().await;
+        match &*client {
+            ClientWrapper::Cluster { client, .. } => client.address_for_slot(slot),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this client is connected in cluster mode.
+    /// Used by scope connections to determine whether slot validation is needed.
+    pub fn is_cluster_mode(&self) -> bool {
+        self.shared.is_cluster
+    }
+
     /// Returns the cache hit rate (hits / total requests).
     /// Returns an error if caching is not enabled or metrics are disabled.
     pub fn cache_hit_rate(&self) -> RedisResult<Value> {
@@ -1439,7 +1605,7 @@ impl Client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
             }
-            ClientWrapper::Cluster { mut client } => {
+            ClientWrapper::Cluster { mut client, .. } => {
                 let (cursor, keys) = client
                     .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
                     .await?;
@@ -1563,7 +1729,7 @@ impl Client {
                                 raise_on_error,
                             )
                         }
-                        ClientWrapper::Cluster { mut client } => {
+                        ClientWrapper::Cluster { mut client, .. } => {
                             let values = match routing {
                                 Some(RoutingInfo::SingleNode(route)) => {
                                     client
@@ -1634,7 +1800,7 @@ impl Client {
                             client.send_pipeline(pipeline, 0, command_count).await
                         }
 
-                        ClientWrapper::Cluster { mut client } => match routing {
+                        ClientWrapper::Cluster { mut client, .. } => match routing {
                             Some(RoutingInfo::SingleNode(route)) => {
                                 client
                                     .route_pipeline(
@@ -1748,7 +1914,7 @@ impl Client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.update_connection_password(password.clone()).await
                 }
-                ClientWrapper::Cluster { ref mut client } => {
+                ClientWrapper::Cluster { ref mut client, .. } => {
                     client.update_connection_password(password.clone()).await
                 }
                 ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
@@ -1809,7 +1975,7 @@ impl Client {
         let client = self.get_or_initialize_client().await?;
 
         match client {
-            ClientWrapper::Cluster { mut client } => match client.get_username().await {
+            ClientWrapper::Cluster { mut client, .. } => match client.get_username().await {
                 Ok(Value::SimpleString(username)) => Ok(Some(username)),
                 Ok(Value::Nil) => Ok(None),
                 Ok(other) => Err(RedisError::from((
@@ -1920,7 +2086,7 @@ impl PubSubCommandApplier for ClientWrapper {
                     }
                     client.send_command(cmd).await
                 }
-                ClientWrapper::Cluster { client } => {
+                ClientWrapper::Cluster { client, .. } => {
                     let final_routing = routing
                         .map(RoutingInfo::SingleNode)
                         .or_else(|| RoutingInfo::for_routable(cmd))
@@ -1960,12 +2126,116 @@ pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Dur
         .unwrap_or(default)
 }
 
+/// Combine the provided root/CA certificate PEM blobs into a single buffer,
+/// rejecting any empty entry. Returns `Ok(None)` when no root certs are provided.
+///
+/// Shared by the standalone and cluster connection paths so the combining rule and
+/// the empty-entry validation live in one place. Callers run this *before* building
+/// the cert-reload manager, so the manager never sees unvalidated root material.
+/// (Root/CA reload itself is out of scope; see #6529.)
+pub(super) fn combine_root_certs(root_certs: &[Vec<u8>]) -> RedisResult<Option<Vec<u8>>> {
+    if root_certs.is_empty() {
+        return Ok(None);
+    }
+    let mut combined = Vec::new();
+    for cert in root_certs {
+        if cert.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Root certificate cannot be empty byte string",
+            )));
+        }
+        combined.extend_from_slice(cert);
+    }
+    Ok(Some(combined))
+}
+
+/// Validate the combination of byte-based and path-based mTLS client material.
+///
+/// Shared by the standalone and cluster connection paths. The byte-based cert/key
+/// must be provided together, the path-based cert/key must be provided together,
+/// and the two families must not be mixed in the same request (byte-based lands the
+/// static, non-reloading material; path-based lands the reloadable material).
+pub(super) fn validate_client_cert_config(
+    has_client_cert_bytes: bool,
+    has_client_key_bytes: bool,
+    has_cert_path: bool,
+    has_key_path: bool,
+) -> RedisResult<()> {
+    if has_client_cert_bytes != has_client_key_bytes {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+    if has_cert_path != has_key_path {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert_path and client_key_path must both be provided or both be empty",
+        )));
+    }
+    if has_cert_path && has_client_cert_bytes {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client certificate path and client certificate bytes cannot both be provided; use one or the other",
+        )));
+    }
+    Ok(())
+}
+
+/// Build a [`crate::tls_reload::CertReloadManager`] for a cluster client when
+/// path-based mTLS is configured, starting its background reload task if reload is
+/// enabled. Returns `Ok(None)` when no cert paths are configured. `root_cert` is the
+/// already-combined-and-validated root material (see [`combine_root_certs`]).
+async fn build_cluster_cert_material_manager(
+    request: &ConnectionRequest,
+    root_cert: Option<Vec<u8>>,
+) -> RedisResult<Option<Arc<crate::tls_reload::CertReloadManager>>> {
+    let (Some(cert_path), Some(key_path)) = (
+        request.client_cert_path.as_ref(),
+        request.client_key_path.as_ref(),
+    ) else {
+        return Ok(None);
+    };
+
+    let interval_seconds = request
+        .cert_reload
+        .as_ref()
+        .filter(|cfg| cfg.enabled)
+        .map(|cfg| cfg.interval_seconds);
+
+    let mut manager = crate::tls_reload::CertReloadManager::new(
+        cert_path.into(),
+        key_path.into(),
+        root_cert,
+        interval_seconds.flatten(),
+    )
+    .await
+    .map_err(|err| {
+        RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "TLS certificate reload configuration error",
+            err.to_string(),
+        ))
+    })?;
+
+    if interval_seconds.is_some() {
+        manager.start_reload_task();
+    }
+
+    Ok(Some(Arc::new(manager)))
+}
+
+#[allow(clippy::type_complexity)]
 async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
     pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
-) -> RedisResult<redis::cluster_async::ClusterConnection> {
+) -> RedisResult<(
+    redis::cluster_async::ClusterConnection,
+    Option<Arc<crate::tls_reload::CertReloadManager>>,
+)> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
@@ -1973,36 +2243,47 @@ async fn create_cluster_client(
     let has_root_certs = !request.root_certs.is_empty();
     let has_client_cert = !request.client_cert.is_empty();
     let has_client_key = !request.client_key.is_empty();
-    if has_client_cert != has_client_key {
-        return Err(RedisError::from((
-            ErrorKind::InvalidClientConfig,
-            "client_cert and client_key must both be provided or both be empty",
-        )));
-    }
+    let has_cert_path = request.client_cert_path.is_some();
+    let has_key_path = request.client_key_path.is_some();
+    validate_client_cert_config(has_client_cert, has_client_key, has_cert_path, has_key_path)?;
 
-    let (tls_params, tls_certificates) = if has_root_certs || has_client_cert || has_client_key {
+    // Combine + validate the root certs first (fail fast on an empty entry) so the
+    // cert-reload manager, built next, never sees unvalidated root material.
+    let root_cert_bytes = combine_root_certs(&request.root_certs)?;
+
+    // Build the certificate reload manager when path-based mTLS is configured; it
+    // validates the initial material and, if reload is enabled, drives the
+    // background re-read task. The handle is wired into the cluster reconnect loop
+    // so rotated certificates are adopted on reconnect (see
+    // `refresh_cert_params_in_cluster_params`).
+    let cert_material_manager =
+        build_cluster_cert_material_manager(&request, root_cert_bytes.clone()).await?;
+    let cert_material_handle = cert_material_manager.as_ref().map(|m| m.get_handle());
+
+    // `tls_params` seeds the initial nodes and (when present) is handed to the
+    // cluster builder directly. `tls_certificates` carries the raw byte material for
+    // the byte-based case, which the builder re-parses at connect time. For the
+    // path-based case we intentionally leave `tls_certificates` as `None` and pass
+    // the manager's already-validated params instead, so the builder does not
+    // re-read/re-parse the files (which would skip the key-match check and could
+    // observe a torn rotation).
+    let (tls_params, tls_certificates) = if let Some(manager) = &cert_material_manager {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
                 "TLS certificates provided but TLS is disabled",
             )));
         }
-
-        let root_cert = if has_root_certs {
-            let mut combined_certs = Vec::new();
-            for cert in &request.root_certs {
-                if cert.is_empty() {
-                    return Err(RedisError::from((
-                        ErrorKind::InvalidClientConfig,
-                        "Root certificate cannot be empty byte string",
-                    )));
-                }
-                combined_certs.extend_from_slice(cert);
-            }
-            Some(combined_certs)
-        } else {
-            None
-        };
+        // Path-based mTLS: reuse the manager's validated params as the single source
+        // of truth for the initial cluster connection.
+        (Some(manager.get_params().await), None)
+    } else if has_root_certs || has_client_cert || has_client_key {
+        if tls_mode == TlsMode::NoTls {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "TLS certificates provided but TLS is disabled",
+            )));
+        }
 
         let client_tls = if has_client_cert && has_client_key {
             Some(redis::ClientTlsConfig {
@@ -2015,7 +2296,7 @@ async fn create_cluster_client(
 
         let tls_certs = TlsCertificates {
             client_tls,
-            root_cert,
+            root_cert: root_cert_bytes,
         };
         let params = retrieve_tls_certificates(tls_certs.clone())?;
         (Some(params), Some(tls_certs))
@@ -2078,7 +2359,12 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
         if let Some(certs) = tls_certificates {
+            // Byte-based mTLS: the builder re-parses these at connect time.
             builder = builder.certs(certs);
+        } else if let Some(params) = tls_params {
+            // Path-based mTLS: hand the manager's already-validated params to the
+            // builder so it reuses them verbatim instead of re-reading from disk.
+            builder = builder.tls_params(params);
         }
     }
 
@@ -2106,12 +2392,25 @@ async fn create_cluster_client(
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
+    let recovery_requests_queue_size = request
+        .recovery_requests_queue_size
+        .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE);
+    builder = builder.recovery_requests_queue_size(recovery_requests_queue_size);
+
     let client = builder.build()?;
     let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
         .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
 
+    let cert_params_provider: Option<Arc<dyn redis::CertParamsProvider>> =
+        cert_material_handle.map(|handle| Arc::new(handle) as Arc<dyn redis::CertParamsProvider>);
+
     let mut con = client
-        .get_async_connection(push_sender, Some(pubsub_synchronizer), iam_token_provider)
+        .get_async_connection(
+            push_sender,
+            Some(pubsub_synchronizer),
+            iam_token_provider,
+            cert_params_provider,
+        )
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
@@ -2159,7 +2458,7 @@ async fn create_cluster_client(
             }
         }
     }
-    Ok(con)
+    Ok((con, cert_material_manager))
 }
 
 #[derive(thiserror::Error)]
@@ -2298,14 +2597,40 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let recovery_requests_queue_size = format_optional_value(
+        "\nRecovery requests queue size: {}",
+        request.recovery_requests_queue_size,
+    );
+
     let node_discovery_mode = match request.node_discovery_mode {
         NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
         NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
         NodeDiscoveryMode::DiscoverAll => "\nNode discovery mode: DiscoverAll",
     };
 
+    // Log only that path-based mTLS / reload is configured, and its interval —
+    // never the certificate/key material itself.
+    let client_cert_paths = if request.client_cert_path.is_some() {
+        "\nmTLS client certificate: path-based (reloadable)"
+    } else if !request.client_cert.is_empty() {
+        "\nmTLS client certificate: byte-based (static)"
+    } else {
+        ""
+    };
+    let cert_reload = request
+        .cert_reload
+        .as_ref()
+        .filter(|cfg| cfg.enabled)
+        .map(|cfg| {
+            format!(
+                "\nmTLS certificate reload: enabled (interval: {}s)",
+                cfg.interval_seconds.unwrap_or(300)
+            )
+        })
+        .unwrap_or_default();
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
     )
 }
 
@@ -2414,50 +2739,56 @@ impl Client {
             let inflight_limit: isize = inflight_requests_limit.try_into().unwrap();
             let inflight_log_interval = (inflight_limit / 10).max(1);
             let client = Self {
-                internal_client: internal_client_arc.clone(),
-                request_timeout,
-                inflight_requests_allowed,
-                inflight_requests_limit: inflight_limit,
-                inflight_log_interval,
-                compression_manager: compression_manager.clone(),
-                iam_token_manager: None,
-                pubsub_synchronizer: pubsub_synchronizer.clone(),
-                otel_metadata,
-                client_side_cache,
-                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
-                circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
-                    let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
-                    Arc::new(circuit_breaker::ClientCircuitBreaker::new(
-                        circuit_breaker::ClientCircuitBreakerConfig {
-                            window_size: Duration::from_millis(if config.window_size_ms > 0 {
-                                config.window_size_ms as u64
-                            } else {
-                                defaults.window_size.as_millis() as u64
-                            }),
-                            failure_rate_threshold: if config.failure_rate_threshold > 0.0 {
-                                config.failure_rate_threshold
-                            } else {
-                                defaults.failure_rate_threshold
+                shared: Arc::new(ClientShared {
+                    internal_client: internal_client_arc.clone(),
+                    request_timeout,
+                    inflight_requests_allowed,
+                    inflight_requests_limit: inflight_limit,
+                    inflight_log_interval,
+                    compression_manager: compression_manager.clone(),
+                    pubsub_synchronizer: pubsub_synchronizer.clone(),
+                    client_side_cache,
+                    latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
+                    circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
+                        let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
+                        Arc::new(circuit_breaker::ClientCircuitBreaker::new(
+                            circuit_breaker::ClientCircuitBreakerConfig {
+                                window_size: Duration::from_millis(if config.window_size_ms > 0 {
+                                    config.window_size_ms as u64
+                                } else {
+                                    defaults.window_size.as_millis() as u64
+                                }),
+                                failure_rate_threshold: if config.failure_rate_threshold > 0.0 {
+                                    config.failure_rate_threshold
+                                } else {
+                                    defaults.failure_rate_threshold
+                                },
+                                min_errors: if config.min_errors > 0 {
+                                    config.min_errors
+                                } else {
+                                    defaults.min_errors
+                                },
+                                open_timeout: Duration::from_millis(
+                                    if config.open_timeout_ms > 0 {
+                                        config.open_timeout_ms as u64
+                                    } else {
+                                        defaults.open_timeout.as_millis() as u64
+                                    },
+                                ),
+                                count_timeouts: config.count_timeouts,
+                                consecutive_successes: if config.consecutive_successes > 0 {
+                                    config.consecutive_successes
+                                } else {
+                                    defaults.consecutive_successes
+                                },
                             },
-                            min_errors: if config.min_errors > 0 {
-                                config.min_errors
-                            } else {
-                                defaults.min_errors
-                            },
-                            open_timeout: Duration::from_millis(if config.open_timeout_ms > 0 {
-                                config.open_timeout_ms as u64
-                            } else {
-                                defaults.open_timeout.as_millis() as u64
-                            }),
-                            count_timeouts: config.count_timeouts,
-                            consecutive_successes: if config.consecutive_successes > 0 {
-                                config.consecutive_successes
-                            } else {
-                                defaults.consecutive_successes
-                            },
-                        },
-                    ))
+                        ))
+                    }),
+                    current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    is_cluster: request.cluster_mode_enabled,
                 }),
+                iam_token_manager: None,
+                otel_metadata: Arc::new(otel_metadata),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2482,7 +2813,7 @@ impl Client {
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let client = create_cluster_client(
+                let (client, cert_material_manager) = create_cluster_client(
                     request,
                     push_sender,
                     iam_token_manager.as_ref(),
@@ -2490,7 +2821,10 @@ impl Client {
                 )
                 .await
                 .map_err(ConnectionError::Cluster)?;
-                ClientWrapper::Cluster { client }
+                ClientWrapper::Cluster {
+                    client,
+                    _cert_material_manager: cert_material_manager,
+                }
             } else {
                 ClientWrapper::Standalone(
                     StandaloneClient::create_client(
@@ -2542,6 +2876,45 @@ impl Client {
     /// * `None` - If compression is disabled or not configured
     pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
         self.compression_manager.clone()
+    }
+
+    /// Returns the configured request timeout for this client.
+    pub fn get_request_timeout(&self) -> Duration {
+        self.request_timeout
+    }
+
+    /// Returns the current database the client is operating on.
+    /// Updated whenever SELECT is called. Scope connections use this to inherit
+    /// the parent's current database at acquire time.
+    pub fn current_database(&self) -> u32 {
+        self.current_database.load(Ordering::Acquire)
+    }
+
+    /// Returns a reference to the per-client latency tracker (for watchdog diagnostics).
+    pub fn latency_tracker(&self) -> &Arc<crate::timeout_watchdog::LatencyTracker> {
+        &self.latency_tracker
+    }
+
+    /// Reset connection state to a clean baseline after a pool borrow is returned.
+    ///
+    /// Sends a batched pipeline (single round-trip) that selectively issues:
+    /// - DISCARD — cancels any pending MULTI and implicitly UNWATCHes
+    /// - SELECT <configured_db> — resets to the pool's configured database
+    ///
+    /// DISCARD is always safe to send (returns ERR if no MULTI active — we ignore it).
+    /// SELECT is always sent to guarantee the connection is on the correct database.
+    ///
+    /// This ensures the next borrower gets a connection in a known-good state.
+    pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
+        // Send DISCARD — ignore ERR if no MULTI is active
+        let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
+
+        // Send SELECT — this must succeed
+        let mut select_cmd = redis::cmd("SELECT");
+        select_cmd.arg(configured_db.to_string());
+        self.send_command(&mut select_cmd, None).await?;
+
+        Ok(())
     }
 
     /// Check if compression is enabled for this client
@@ -2625,24 +2998,28 @@ impl Client {
     ) -> Self {
         use crate::client::types::{NodeAddress, OTelMetadata};
         Client {
-            internal_client,
-            request_timeout: Duration::from_millis(1000),
-            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
-            inflight_requests_limit: 1000,
-            inflight_log_interval: 100,
+            shared: Arc::new(ClientShared {
+                internal_client,
+                request_timeout: Duration::from_millis(1000),
+                inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+                inflight_requests_limit: 1000,
+                inflight_log_interval: 100,
+                compression_manager: None,
+                pubsub_synchronizer,
+                client_side_cache: None,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+                circuit_breaker: None,
+                current_database: Arc::new(AtomicU32::new(0)),
+                is_cluster: false,
+            }),
             iam_token_manager: None,
-            compression_manager: None,
-            pubsub_synchronizer,
-            otel_metadata: OTelMetadata {
+            otel_metadata: Arc::new(OTelMetadata {
                 address: NodeAddress {
                     host: "localhost".to_string(),
                     port: 6379,
                 },
                 db_namespace: "0".to_string(),
-            },
-            client_side_cache: None,
-            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
-            circuit_breaker: None,
+            }),
         }
     }
 }
@@ -2655,8 +3032,8 @@ mod tests {
 
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
-        BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
-        is_blocking_command,
+        BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
+        get_request_timeout, is_blocking_command,
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
@@ -2894,6 +3271,7 @@ mod tests {
         use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
+        use std::sync::atomic::AtomicU32;
         use tokio::sync::RwLock;
 
         let config = ConnectionRequest {
@@ -2925,24 +3303,28 @@ mod tests {
         ));
 
         Client {
-            internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
-            request_timeout: Duration::from_millis(250),
-            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
-            inflight_requests_limit: 1000,
-            inflight_log_interval: 100,
+            shared: Arc::new(ClientShared {
+                internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
+                request_timeout: Duration::from_millis(250),
+                inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+                inflight_requests_limit: 1000,
+                inflight_log_interval: 100,
+                compression_manager: None,
+                pubsub_synchronizer,
+                client_side_cache: None,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
+                circuit_breaker: None,
+                current_database: Arc::new(AtomicU32::new(0)),
+                is_cluster: false,
+            }),
             iam_token_manager: None,
-            compression_manager: None,
-            pubsub_synchronizer,
-            otel_metadata: OTelMetadata {
+            otel_metadata: Arc::new(OTelMetadata {
                 address: NodeAddress {
                     host: "localhost".to_string(),
                     port: 6379,
                 },
                 db_namespace: "0".to_string(),
-            },
-            client_side_cache: None,
-            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
-            circuit_breaker: None,
+            }),
         }
     }
 

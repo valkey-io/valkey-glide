@@ -696,7 +696,9 @@ where
                 let results = results
                     .into_iter()
                     .map(|result| {
-                        result.map(|(addr, val)| (Value::BulkString(addr.as_bytes().to_vec()), val))
+                        result.map(|(addr, val)| {
+                            (Value::BulkString(addr.as_bytes().to_vec().into()), val)
+                        })
                     })
                     .collect::<RedisResult<Vec<_>>>()?;
                 Ok(Value::Map(results))

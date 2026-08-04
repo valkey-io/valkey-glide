@@ -13,7 +13,9 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 **Key Components:**
 - `client/` - Main Java client library and unit tests
 - `integTest/` - Integration tests and E2E testing
-- `jedis-compatibility/` - Jedis-compatible API layer for drop-in replacement
+- `jedis-compat-shared/` - Shared `redis.clients.jedis.*` types used by both Jedis compatibility artifacts
+- `jedis-compatibility/` - Jedis 5.x–shaped compatible API layer for drop-in replacement
+- `jedis-4-compatibility/` - Jedis 4.x–shaped compatible API layer
 - `benchmark/` - Performance benchmarking tool
 - `src/` - Rust FFI integration code
 
@@ -190,7 +192,9 @@ java/
 │   └── src/test/java/glide/     # Unit tests
 ├── integTest/                   # Integration and E2E tests
 │   └── src/test/java/glide/     # Integration test suites
-├── jedis-compatibility/         # Jedis-compatible API layer
+├── jedis-compat-shared/         # Shared types for Jedis 4.x/5.x compatibility layers
+├── jedis-compatibility/         # Jedis 5.x–shaped compatibility layer
+├── jedis-4-compatibility/       # Jedis 4.x–shaped compatibility layer
 ├── benchmark/                   # Performance benchmarking tool
 ├── src/                        # Rust FFI integration
 ├── build.gradle                # Main Gradle build configuration

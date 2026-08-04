@@ -72,6 +72,7 @@ import {
     getUnixSeconds,
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
+    waitFor,
     waitForSaveNotInProgress,
 } from "./TestUtilities";
 
@@ -9449,8 +9450,10 @@ export function runBaseTests(config: {
         const getResWithExpiryKeep = await client.get(key);
         expect(getResWithExpiryKeep).toEqual(value);
         // wait for the key to expire base on the previous set
-        let sleep = new Promise((resolve) => setTimeout(resolve, 2000));
-        await sleep;
+        await waitFor(
+            async () => (await client.get(key)) === null,
+            "Key did not expire in time",
+        );
         const getResExpire = await client.get(key);
         // key should have expired
         expect(getResExpire).toEqual(null);
@@ -9462,8 +9465,10 @@ export function runBaseTests(config: {
         });
         expect(setResWithExpiryWithUmilli).toEqual("OK");
         // wait for the key to expire
-        sleep = new Promise((resolve) => setTimeout(resolve, 1001));
-        await sleep;
+        await waitFor(
+            async () => (await client.get(key)) === null,
+            "Key did not expire in time",
+        );
         const getResWithExpiryWithUmilli = await client.get(key);
         // key should have expired
         expect(getResWithExpiryWithUmilli).toEqual(null);
@@ -12006,8 +12011,11 @@ export function runBaseTests(config: {
                         ],
                     },
                 });
-                // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                // Poll until idle time is > 0
+                await waitFor(async () => {
+                    const info = await client.xinfoConsumers(key, groupName1);
+                    return info.length > 0 && (info[0].idle as number) > 0;
+                }, "Consumer idle time did not become > 0");
                 let result = await client.xinfoConsumers(key, groupName1);
                 expect(result.length).toEqual(1);
                 expect(result[0].name).toEqual(consumer1);
@@ -12462,8 +12470,20 @@ export function runBaseTests(config: {
                     },
                 });
 
-                // wait to get some minIdleTime
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // wait to get some minIdleTime (test below uses minIdleTime: 42)
+                await waitFor(async () => {
+                    const result = await client.xpendingWithOptions(
+                        Buffer.from(key),
+                        group,
+                        {
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
+                    );
+                    return Array.isArray(result) && result.length > 0;
+                }, "Pending message idle time did not reach 42ms");
 
                 expect(await client.xpending(Buffer.from(key), group)).toEqual([
                     2,
@@ -13751,7 +13771,15 @@ export function runBaseTests(config: {
                         });
                     }
                 }).rejects.toThrow(TimeoutError);
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Wait for server to finish the slow command before retrying
+                await waitFor(async () => {
+                    try {
+                        await client.ping();
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                }, "Server did not become responsive after timeout");
 
                 // Retry with a longer timeout
                 const result = isCluster

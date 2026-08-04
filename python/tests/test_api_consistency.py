@@ -34,6 +34,19 @@ EXCLUDED_TESTS = {
         "test_async_context_manager",
         "test_client_recreation_after_close",
         "test_mixed_async_sync_client_lib_names",
+        # Free-threading tests — async-only (tests async thread pool dispatch)
+        "test_concurrent_commands_single_client",
+        "test_high_concurrency_pipeline",
+        "test_multiple_clients_concurrent",
+        "client_worker",
+        "get_and_store",
+        "get_standalone_config",
+        # Pool metrics (async has individual properties as tests)
+        "test_pool_metrics",
+        # Pool helper functions (async-only patterns)
+        "blocking",
+        # Scope DB test with different naming
+        "test_scope_inherits_runtime_select",
         # Dynamic PubSub tests helper functions
         "unsubscribe_by_method",
         "psubscribe_by_method",
@@ -67,6 +80,12 @@ EXCLUDED_TESTS = {
         "cb",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
+        # Module-scoped fixture overrides declared in test_auth.py; the sync
+        # twins are named *_sync_client in test_sync_auth.py and cannot share
+        # a name because async fixtures need an async generator body.
+        "acl_glide_client",
+        "glide_client",
+        "management_client",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -79,8 +98,24 @@ EXCLUDED_TESTS = {
         "test_sync_get_into_buffer_readonly_raises",
         "test_sync_get_into_buffer_too_small_raises",
         "test_sync_get_into_buffer_non_byte_format",
-        # Script invocation span — async tracked in #5601
-        "test_sync_span_script_invocation",
+        # mget() with buffers - sync-only FFI path, no async equivalent
+        "test_sync_mget_into_buffers",
+        "test_sync_mget_into_buffers_missing_key",
+        "test_sync_mget_into_buffers_larger_buffer",
+        "test_sync_mget_into_buffers_readonly_raises",
+        "test_sync_mget_into_buffers_too_small_raises",
+        "test_sync_mget_buffers_length_mismatch_raises",
+        "test_sync_mget_into_buffers_non_byte_format",
+        "test_sync_mget_into_buffers_cross_slot",
+        # Pool blocking test nested helper functions (sync-only threading pattern)
+        "blocking_worker",
+        "fast_worker",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 
@@ -88,9 +123,11 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
+        "test_async_freethreading.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
+        "test_sync_freethreading.py",
     ],
 }
 

@@ -6,9 +6,15 @@ from __future__ import annotations
 import math
 import os
 import platform
+import sys
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 import anyio
 import pytest
@@ -161,6 +167,14 @@ class TestGlideClients:
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         ) as client:
             assert not client._is_closed
+            # __aenter__ must be annotated `-> Self` so that subclasses keep
+            # their concrete type in `async with` (regression guard for
+            # https://github.com/valkey-io/valkey-glide/issues/6531). Annotating
+            # it as `"BaseClient"` widens the type for static type checkers.
+            aenter_return = get_type_hints(type(client).__aenter__)["return"]
+            assert aenter_return is Self, (
+                "BaseClient.__aenter__ must return `Self`, got " f"{aenter_return!r}"
+            )
 
         assert client._is_closed
 
@@ -354,6 +368,51 @@ class TestGlideClients:
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"name=TEST_CLIENT_NAME" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="glide-py(my-framework:1.2.3)",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The default library identity is preserved and the tag is appended.
+        assert b"lib-name=GlidePy(my-framework:1.2.3)" in client_info
+        await glide_client.close()
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lib_name_with_client_info_tag(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            lib_name="custom-lib",
+            client_info_tag="my-framework:1.2.3",
+        )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        # The tag is appended to the configured lib_name override.
+        assert b"lib-name=custom-lib(my-framework:1.2.3)" in client_info
         await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -11264,6 +11323,26 @@ async def script_kill_tests(
 
 @pytest.mark.anyio
 class TestScripts:
+    @pytest.fixture(autouse=True)
+    def _flush_pending_script_finalizers(self):
+        """Force gc.collect() before every TestScripts case so any pending
+        Script finalizers from prior parametrizations decrement the
+        process-global scripts_container ref count BEFORE the current
+        parametrization adds fresh entries.
+
+        Without this, on the trio backend the last parametrization can
+        observe the container entry it just created being wiped by a
+        delayed finalizer from an earlier iteration, causing
+        invoke_script's NoScript fallback to miss its get_script lookup
+        and surface NoScriptError to the caller (see failing job
+        30298869080 for reference).
+        """
+        import gc
+
+        gc.collect()
+        yield
+        gc.collect()
+
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
