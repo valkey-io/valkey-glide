@@ -336,6 +336,31 @@ def skip_if_version_below(request):
             client.close()
 
 
+@pytest.fixture(scope="session")
+def valkey_mtls_cluster(request) -> ValkeyCluster:
+    """
+    A single TLS standalone node started with ``--tls-auth-clients yes``.
+
+    The session clusters accept a client that sends no certificate, so they
+    cannot show that a client cert was required or checked. Started on first
+    use because only the mTLS tests need it.
+    """
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(
+            reason="mTLS tests require an internally-created cluster with "
+            "client-cert auth enabled"
+        )
+    return ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=0,
+        require_client_cert=True,
+    )
+
+
 @pytest.fixture
 def tls_insecure(request) -> bool:
     # If the test has param'd tls_insecure, use it

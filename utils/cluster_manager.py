@@ -502,6 +502,7 @@ def create_servers(
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
+    require_client_cert: bool = False,
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -527,8 +528,10 @@ def create_servers(
             key_file,
             "--tls-ca-cert-file",
             ca_file,
-            "--tls-auth-clients",  # Make it so client doesn't have to send cert
-            "no",
+            # Off by default so plain-TLS tests need no client cert. The mTLS tests
+            # turn it on so the server verifies the cert the client presents.
+            "--tls-auth-clients",
+            "yes" if require_client_cert else "no",
             "--port",
             "0",
         ]
@@ -1243,6 +1246,15 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--require-client-cert",
+        action="store_true",
+        default=False,
+        help="Require a client certificate on every TLS connection, i.e. "
+        "--tls-auth-clients yes (default: %(default)s)",
+        required=False,
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1330,6 +1342,7 @@ def main():
             getattr(args, 'tls_cert_file', None),
             getattr(args, 'tls_key_file', None),
             getattr(args, 'tls_ca_cert_file', None),
+            getattr(args, 'require_client_cert', False),
         )
         if args.cluster_mode:
             # Create a cluster

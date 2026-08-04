@@ -225,3 +225,41 @@ class TestTls:
 
         await assert_connected(client)
         await client.close()
+
+    async def test_mtls_client_cert_accepted_by_server_requiring_one(
+        self, request, valkey_mtls_cluster
+    ):
+        """
+        The server requires a client certificate here, so reaching PONG means
+        it accepted the one the client sent.
+        """
+        config = create_client_config(
+            request=request,
+            cluster_mode=False,
+            use_tls=True,
+            valkey_cluster=valkey_mtls_cluster,
+            root_pem_cacerts=get_ca_certificate(),
+            client_cert_pem=get_client_certificate(),
+            client_key_pem=get_client_key(),
+        )
+        client = await create_client_with_retry(config)
+
+        await assert_connected(client)
+        await client.close()
+
+    async def test_mtls_missing_client_cert_rejected_by_server_requiring_one(
+        self, request, valkey_mtls_cluster
+    ):
+        """
+        The same server rejects a client that sends no certificate. Without
+        this, the accepting case above would also pass against a server that
+        ignores client certs.
+        """
+        with pytest.raises(Exception):
+            await create_client(
+                request=request,
+                cluster_mode=False,
+                use_tls=True,
+                valkey_cluster=valkey_mtls_cluster,
+                root_pem_cacerts=get_ca_certificate(),
+            )
