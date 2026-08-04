@@ -3616,6 +3616,30 @@ where
         }
     }
 
+    /// Fail all requests in the recovery queue with an `AllConnectionsUnavailable` error.
+    /// Called when recovery completes but no connections are available,
+    /// to prevent buffered requests from looping through reconnect indefinitely.
+    fn fail_recovery_queue(&mut self) {
+        if self.recovery_queue.is_empty() {
+            return;
+        }
+        let count = self.recovery_queue.len();
+        log_warn_rate_limited!(
+            "cluster",
+            5,
+            format!(
+                "fail_recovery_queue: failing {} queued requests - no connections after recovery",
+                count
+            )
+        );
+        while let Some(request) = self.recovery_queue.pop_front() {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::AllConnectionsUnavailable,
+                "No connections available after recovery",
+            ))));
+        }
+    }
+
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         log_trace_lazy!("cluster", "entered poll_recover");
 
@@ -4019,7 +4043,16 @@ where
                 return Poll::Pending;
             }
             Poll::Ready(Ok(())) => {
-                self.drain_recovery_queue_to_inflight();
+                // Only drain the recovery queue if we actually have connections.
+                // If all connections are still unavailable after recovery (e.g. all nodes dead),
+                // fail the buffered requests immediately rather than dispatching them into
+                // in-flight where they would hit AllConnectionsUnavailable, re-trigger another
+                // ReconnectToInitialNodes, get re-buffered, and loop indefinitely.
+                if self.inner.conn_lock.read().is_empty() {
+                    self.fail_recovery_queue();
+                } else {
+                    self.drain_recovery_queue_to_inflight();
+                }
             }
         }
 

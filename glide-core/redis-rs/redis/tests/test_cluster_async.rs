@@ -7513,12 +7513,10 @@ mod cluster_async {
         let total_sets = set_count.load(atomic::Ordering::SeqCst);
 
         assert_eq!(
-            total_errors,
-            0,
+            total_errors, 0,
             "Expected zero command errors: commands buffered during ReconnectToInitialNodes \
              recovery must succeed after recovery. Got {} errors (total SETs to mock: {}).",
-            total_errors,
-            total_sets,
+            total_errors, total_sets,
         );
     }
 
@@ -7673,12 +7671,10 @@ mod cluster_async {
         let total_sets = set_count.load(atomic::Ordering::SeqCst);
 
         assert_eq!(
-            total_errors,
-            0,
+            total_errors, 0,
             "Expected zero command errors: commands buffered during RefreshingSlots recovery \
              must succeed after recovery. Got {} errors (total SETs to mock: {}).",
-            total_errors,
-            total_sets,
+            total_errors, total_sets,
         );
     }
 

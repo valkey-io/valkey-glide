@@ -933,7 +933,10 @@ mod cluster_client_tests {
                         c.route_command(
                             &cmd,
                             redis::cluster_routing::RoutingInfo::SingleNode(
-                                SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
+                                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                                    0,
+                                    SlotAddr::Master,
+                                )),
                             ),
                         ),
                     )
