@@ -1027,7 +1027,7 @@ pub fn verify_subscription_addresses_changed(
 
 /// Wait for subscriptions to migrate to different addresses after slot migration.
 /// Polls until all channels are found at addresses different from their pre-migration locations.
-/// Returns (changed, unchanged, not_found) counts, or times out and returns the last observed state.
+/// Returns (changed, unchanged, not_found) counts, or the last observed state on timeout.
 ///
 /// This replaces the fragile pattern of `sleep(500ms) + wait_for_pubsub_state + verify_addresses`
 /// with a single deterministic polling loop that checks the actual condition we care about:
