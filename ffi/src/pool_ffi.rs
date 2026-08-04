@@ -222,7 +222,6 @@ pub unsafe extern "C" fn glide_pool_create(
                                 is_blocking: std::sync::Arc::new(
                                     std::sync::atomic::AtomicBool::new(false),
                                 ),
-                                borrow_generation: 0,
                             };
                             pool.idle.push_back(entry);
                             pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
@@ -311,7 +310,6 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                     is_blocking: std::sync::Arc::new(
                                         std::sync::atomic::AtomicBool::new(false),
                                     ),
-                                    borrow_generation: 0,
                                 };
                                 pool.idle.push_back(entry);
                                 get_pool_clients().insert(
@@ -415,7 +413,6 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                         is_blocking: std::sync::Arc::new(
                                             std::sync::atomic::AtomicBool::new(false),
                                         ),
-                                        borrow_generation: 0,
                                     };
                                     p.idle.push_back(entry);
                                     get_pool_clients().insert(

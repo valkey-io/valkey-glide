@@ -110,10 +110,6 @@ pub struct PooledClient {
     /// True while the client is executing a blocking command (BLPOP, XREAD BLOCK, etc.).
     /// The abandon monitor skips clients with this flag set.
     pub is_blocking: Arc<AtomicBool>,
-    /// Monotonically increasing generation counter. Bumped on each acquire (including
-    /// force-release by the abandon monitor). Stale releases with a mismatched generation
-    /// are silently dropped, preventing a late release from corrupting another borrower.
-    pub borrow_generation: u64,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -193,7 +189,6 @@ impl ClientPool {
             let client_id = entry.client_id;
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
-            entry.borrow_generation += 1;
             self.in_use.insert(client_id, entry);
             return client_id as i64;
         }
@@ -219,7 +214,6 @@ impl ClientPool {
             borrowed_at: None,
             state: ClientState::Idle,
             is_blocking: Arc::new(AtomicBool::new(false)),
-            borrow_generation: 0,
         };
         self.idle.push_back(entry);
         self.total_count.fetch_add(1, Ordering::AcqRel);
@@ -239,7 +233,6 @@ impl ClientPool {
             borrowed_at: None,
             state: ClientState::Idle,
             is_blocking: Arc::new(AtomicBool::new(false)),
-            borrow_generation: 0,
         };
         self.idle.push_back(entry);
         client_id
