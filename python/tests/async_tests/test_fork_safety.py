@@ -64,7 +64,11 @@ def _child_cluster_worker(
     asyncio.run(run())
 
 
-def _child_stale_client_worker(client_pid: int, result_queue: multiprocessing.Queue):
+def _child_stale_client_worker(
+    addresses_raw: List[Tuple[str, int]],
+    client_pid: int,
+    result_queue: multiprocessing.Queue,
+):
     """Worker that tries to use a parent's client object — should raise."""
 
     async def run():
@@ -74,9 +78,8 @@ def _child_stale_client_worker(client_pid: int, result_queue: multiprocessing.Qu
         # then changing its _create_pid to simulate the parent's.
         from glide_shared.config import GlideClusterClientConfiguration, NodeAddress
 
-        # Create a client in the child (this works fine)
         config = GlideClusterClientConfiguration(
-            addresses=[NodeAddress("localhost", 7379)],
+            addresses=[NodeAddress(host=h, port=p) for h, p in addresses_raw],
             request_timeout=5000,
         )
         try:
@@ -233,13 +236,18 @@ class TestForkSafety:
         parent_client = await create_client(request, cluster_mode)
         await parent_client.set("stale_test_init", "ok")
         parent_pid = os.getpid()
+
+        valkey_cluster: ValkeyCluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        addresses_raw = [(addr.host, addr.port) for addr in valkey_cluster.nodes_addr]
+
         await parent_client.close()
 
         # Fork a child that simulates using a stale client
         ctx = multiprocessing.get_context("fork")
         result_queue = ctx.Queue()
         p = ctx.Process(
-            target=_child_stale_client_worker, args=(parent_pid, result_queue)
+            target=_child_stale_client_worker,
+            args=(addresses_raw, parent_pid, result_queue),
         )
         p.start()
         p.join(timeout=15.0)
