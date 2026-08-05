@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
 * Core/All: Buffer pending cluster requests during reconnect instead of failing immediately. A new `recovery_requests_queue_size` option (default: 1000) controls the queue depth. Set to 0 to disable. ([#6640](https://github.com/valkey-io/valkey-glide/pull/6640))
 * Python: Restore `BaseClient.__aenter__` return type to `Self` (from the widened `"BaseClient"` introduced in 2.5.0). Entering the async context manager (`async with await GlideClusterClient.create(...) as client`) now preserves the concrete subclass for static type checkers, matching `create()`. ([#6531](https://github.com/valkey-io/valkey-glide/issues/6531))
 * Core/FFI: fix(ffi): forward Disconnection push notifications past the malformed-frame guard. PR #6530 inadvertently chained `PushKind::Disconnection` (which carries an empty payload) through `extract_pubsub_data`, causing all disconnect notifications to be silently dropped on the async pipe path. ([#6543](https://github.com/valkey-io/valkey-glide/pull/6543))
