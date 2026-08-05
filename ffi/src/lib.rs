@@ -4356,17 +4356,36 @@ pub unsafe extern "C-unwind" fn invoke_script(
 
     // Refresh pool activity for batch/script dispatch (same as execute_command)
     #[cfg(feature = "pool-support")]
-    if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&(client_adapter_ptr as usize))
-    {
-        let (pool_id, client_id) = *entry.value();
+    let script_pool_ids = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_adapter_ptr as usize))
+        .map(|entry| *entry.value());
+    #[cfg(feature = "pool-support")]
+    if let Some((pool_id, client_id)) = script_pool_ids {
         glide_core::pool::refresh_client_activity(pool_id, client_id);
     }
+    #[cfg(not(feature = "pool-support"))]
+    let script_pool_ids: Option<(u64, u64)> = None;
 
     client_adapter.execute_request(request_id, async move {
+        // Mark as blocking for duration of script execution
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = script_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+        }
+
         let routing_info = get_route(route, None)?;
-        client
+        let result = client
             .invoke_script(hash_str, &keys_vec, &args_vec, routing_info)
-            .await
+            .await;
+
+        // Unmark blocking after script completes
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = script_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        }
+        let _ = script_pool_ids;
+
+        result
     })
 }
 
@@ -4473,10 +4492,15 @@ pub unsafe extern "C" fn batch(
 
     // Refresh pool activity for batch/script dispatch (same as execute_command)
     #[cfg(feature = "pool-support")]
-    if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&(client_ptr as usize)) {
-        let (pool_id, client_id) = *entry.value();
+    let batch_pool_ids = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_ptr as usize))
+        .map(|entry| *entry.value());
+    #[cfg(feature = "pool-support")]
+    if let Some((pool_id, client_id)) = batch_pool_ids {
         glide_core::pool::refresh_client_activity(pool_id, client_id);
     }
+    #[cfg(not(feature = "pool-support"))]
+    let batch_pool_ids: Option<(u64, u64)> = None;
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
@@ -4507,6 +4531,12 @@ pub unsafe extern "C" fn batch(
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client_adapter.execute_request(callback_index, async move {
+        // Mark as blocking for duration of batch execution
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = batch_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+        }
+
         let result = if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -4522,6 +4552,13 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         };
+
+        // Unmark blocking after batch completes
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = batch_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        }
+        let _ = batch_pool_ids;
 
         // Process batch response for decompression if compression is enabled
         match result {
