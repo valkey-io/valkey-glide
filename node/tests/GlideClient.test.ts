@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
@@ -91,7 +91,7 @@ describe("GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         await flushClient(client);
@@ -783,11 +783,14 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate test_%p",
         async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 5000,
+            const client = await GlideClient.createClient({
+                ...getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 10000,
                 }),
-            );
+                advancedConfiguration: {
+                    connectionTimeout: 10000,
+                },
+            });
 
             const key = getRandomKey();
             const [serverHost, serverPort] = cluster.getAddresses()[0];
@@ -868,7 +871,7 @@ describe("GlideClient", () => {
 
             client.close();
         },
-        TIMEOUT,
+        120000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1317,13 +1320,13 @@ describe("GlideClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     await expect(
                         GlideClient.createClient({
+                            ...config,
                             connectionBackoff: {
                                 exponentBase: 2,
                                 factor: 100,
                                 numberOfRetries: 1,
                             },
-                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
-                            ...config, // Include the rest of the config
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout - must come after ...config to override
                         }),
                     ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
@@ -1332,13 +1335,13 @@ describe("GlideClient", () => {
                 const connectWithLargeTimeout = async () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     const longerTimeoutClient = await GlideClient.createClient({
+                        ...config,
                         connectionBackoff: {
                             exponentBase: 2,
                             factor: 100,
                             numberOfRetries: 1,
                         },
-                        advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
-                        ...config, // Include the rest of the config
+                        advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout - must come after ...config to override
                     });
                     expect(await client.set("x", "y")).toEqual("OK");
                     longerTimeoutClient.close(); // Close the client after successful connection
@@ -1392,13 +1395,13 @@ describe("GlideClient", () => {
 
                 await expect(
                     GlideClient.createClient({
+                        ...config,
                         connectionBackoff: {
                             exponentBase: 2,
                             factor: 100,
                             numberOfRetries: 1,
                         },
-                        advancedConfiguration: { connectionTimeout: 3000 },
-                        ...config,
+                        advancedConfiguration: { connectionTimeout: 3000 }, // must come after ...config to override
                     }),
                 ).rejects.toThrowError(/timed?\s*out/i);
 
@@ -2212,7 +2215,10 @@ describe("GlideClient", () => {
             // Recreate client if config changed or client is dead
             if (configOverrides || !client || protocol !== lastProtocol) {
                 client?.close();
-                client = await GlideClient.createClient(config);
+                client = await GlideClient.createClient({
+                    ...config,
+                    advancedConfiguration: { connectionTimeout: 10000 },
+                });
             } else {
                 try {
                     await client.ping();
@@ -2271,7 +2277,7 @@ describe("GlideClient", () => {
             // Test explicit true
             const clientTrue = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: true },
+                advancedConfiguration: { tcpNoDelay: true, connectionTimeout: 10000 },
             });
             expect(await clientTrue.ping()).toBe("PONG");
             expect(await clientTrue.set("key2", "value2")).toBe("OK");
@@ -2281,7 +2287,7 @@ describe("GlideClient", () => {
             // Test explicit false
             const clientFalse = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: false },
+                advancedConfiguration: { tcpNoDelay: false, connectionTimeout: 10000 },
             });
             expect(await clientFalse.ping()).toBe("PONG");
             expect(await clientFalse.set("key3", "value3")).toBe("OK");
@@ -2349,7 +2355,7 @@ describe("GlideClient", () => {
                 let info = await client.info([InfoOptions.Replication]);
                 expect(info).toContain("role:master");
 
-                // Execute failover — returns OK immediately
+                // Execute failover â€” returns OK immediately
                 const result = await client.failover();
                 expect(result).toBe("OK");
 

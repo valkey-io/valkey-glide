@@ -25,12 +25,13 @@ import {
     RequestError,
 } from "../build-ts";
 import {
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
 
-const TIMEOUT = 50000;
+const TIMEOUT = 120000;
 
 function generateCompressibleText(sizeBytes: number): string {
     const pattern = "A".repeat(10) + "B".repeat(10) + "C".repeat(10);
@@ -83,11 +84,14 @@ describe("Compression MaxDecompressedSize", () => {
         clusterMode: boolean,
         compression: CompressionConfiguration,
     ): Promise<GlideClient | GlideClusterClient> {
-        const config: BaseClientConfiguration = getClientConfigurationOption(
-            getAddresses(clusterMode),
-            ProtocolVersion.RESP3,
-            { compression },
-        );
+        const config: BaseClientConfiguration = {
+            ...getClientConfigurationOption(
+                getAddresses(clusterMode),
+                ProtocolVersion.RESP3,
+                { compression },
+            ),
+            ...getAdvancedConfig(),
+        };
 
         if (clusterMode) {
             return await GlideClusterClient.createClient(config);

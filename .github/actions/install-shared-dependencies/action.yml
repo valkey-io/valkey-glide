@@ -60,6 +60,16 @@ runs:
               update: true
               additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
 
+        - name: Configure TCP for Windows (reduce port exhaustion)
+          if: "${{ inputs.os == 'windows' }}"
+          shell: powershell
+          run: |
+              # Reduce TIME_WAIT to minimum (15s) to speed up port recycling
+              Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpTimedWaitDelay" -Value 15 -Type DWord
+              # Expand ephemeral port range to maximize available ports
+              netsh int ipv4 set dynamicport tcp start=10000 num=55535
+              Write-Host "TCP configured: TcpTimedWaitDelay=15s, ports 10000-65534"
+
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
           uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5

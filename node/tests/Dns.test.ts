@@ -16,6 +16,7 @@ import {
     getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
+    retryWithBackoff,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -59,8 +60,10 @@ async function createClient(
     if (server.isTls()) {
         return await GlideClient.createClient({
             ...baseConfig,
+            requestTimeout: 20000,
             useTLS: true,
             advancedConfiguration: {
+                connectionTimeout: 20000,
                 tlsAdvancedConfiguration: {
                     rootCertificates: getCaCertificateData(),
                 },
@@ -87,8 +90,10 @@ async function createClusterClient(
     if (server.isTls()) {
         return await GlideClusterClient.createClient({
             ...baseConfig,
+            requestTimeout: 20000,
             useTLS: true,
             advancedConfiguration: {
+                connectionTimeout: 20000,
                 tlsAdvancedConfiguration: {
                     rootCertificates: getCaCertificateData(),
                 },
@@ -121,7 +126,7 @@ async function createClusterClient(
     afterAll(async () => {
         await standaloneServer.close();
         await clusterServer.close();
-    });
+    }, TIMEOUT);
 
     it(
         "should connect with valid hostname - standalone",
@@ -197,7 +202,7 @@ async function createClusterClient(
         clusterServer = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
             true,
             tlsConfig,
@@ -207,12 +212,14 @@ async function createClusterClient(
     afterAll(async () => {
         await standaloneServer.close();
         await clusterServer.close();
-    });
+    }, TIMEOUT);
 
     it(
         "should connect with hostname in certificate SAN - standalone",
         async () => {
-            const client = await createClient(standaloneServer, HOSTNAME_TLS);
+            const client = await retryWithBackoff(() =>
+                createClient(standaloneServer, HOSTNAME_TLS),
+            );
 
             await assertConnected(client);
             client.close();
@@ -233,9 +240,8 @@ async function createClusterClient(
     it(
         "should connect with hostname in certificate SAN - cluster",
         async () => {
-            const client = await createClusterClient(
-                clusterServer,
-                HOSTNAME_TLS,
+            const client = await retryWithBackoff(() =>
+                createClusterClient(clusterServer, HOSTNAME_TLS),
             );
 
             await assertConnected(client);

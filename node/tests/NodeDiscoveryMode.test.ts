@@ -13,6 +13,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, ProtocolVersion, NodeDiscoveryMode } from "../build-ts";
 import {
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -32,7 +33,7 @@ describe("NodeDiscoveryMode", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         client?.close();
@@ -51,6 +52,8 @@ describe("NodeDiscoveryMode", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
                 nodeDiscoveryMode: NodeDiscoveryMode.Static,
             });
 
@@ -69,6 +72,8 @@ describe("NodeDiscoveryMode", () => {
             const primaryAddress = [cluster.getAddresses()[0]];
             client = await GlideClient.createClient({
                 ...getClientConfigurationOption(primaryAddress, protocol),
+                requestTimeout: 10000,
+                advancedConfiguration: { connectionTimeout: 10000 },
                 nodeDiscoveryMode: NodeDiscoveryMode.Static,
             });
 
@@ -108,7 +113,7 @@ describe("NodeDiscoveryMode", () => {
                 3,
                 getServerVersion,
             );
-        }, 40000);
+        }, 120000);
 
         afterAll(async () => {
             await discoveryCluster.close();
@@ -126,12 +131,15 @@ describe("NodeDiscoveryMode", () => {
                     addresses: [{ host: primaryAddr[0], port: primaryAddr[1] }],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
                 const probe = await GlideClient.createClient({
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -158,6 +166,8 @@ describe("NodeDiscoveryMode", () => {
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -170,6 +180,7 @@ describe("NodeDiscoveryMode", () => {
                 const probe = await GlideClient.createClient({
                     addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -202,6 +213,8 @@ describe("NodeDiscoveryMode", () => {
                     ],
                     protocol,
                     clientName: uniqueName,
+                    requestTimeout: 10000,
+                    advancedConfiguration: { connectionTimeout: 10000 },
                     nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
                 });
 
@@ -210,6 +223,7 @@ describe("NodeDiscoveryMode", () => {
                         { host: replica1Addr[0], port: replica1Addr[1] },
                     ],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 
@@ -218,6 +232,7 @@ describe("NodeDiscoveryMode", () => {
                         { host: replica2Addr[0], port: replica2Addr[1] },
                     ],
                     protocol,
+                    requestTimeout: 10000,
                     readOnly: true,
                 });
 

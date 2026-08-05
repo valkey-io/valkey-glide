@@ -169,7 +169,10 @@ describe("GlideClusterClient", () => {
             // Recreate client if config changed or client is dead
             if (configOverrides || !client || protocol !== lastProtocol) {
                 client?.close();
-                client = await GlideClusterClient.createClient(configCurrent);
+                client = await GlideClusterClient.createClient({
+                    ...configCurrent,
+                    advancedConfiguration: { connectionTimeout: 10000 },
+                });
             } else {
                 try {
                     await client.ping();
@@ -2511,8 +2514,8 @@ describe("GlideClusterClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     await expect(
                         GlideClusterClient.createClient({
-                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
-                            ...config, // Include the rest of the config
+                            ...config,
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout - must come after ...config to override
                         }),
                     ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
@@ -2522,8 +2525,8 @@ describe("GlideClusterClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
                     const longerTimeoutClient =
                         await GlideClusterClient.createClient({
-                            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
-                            ...config, // Include the rest of the config
+                            ...config,
+                            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout - must come after ...config to override
                         });
                     expect(await client.set("x", "y")).toEqual("OK");
                     longerTimeoutClient.close(); // Close the client after successful connection
@@ -2576,8 +2579,8 @@ describe("GlideClusterClient", () => {
 
                 await expect(
                     GlideClusterClient.createClient({
-                        advancedConfiguration: { connectionTimeout: 3000 },
                         ...config,
+                        advancedConfiguration: { connectionTimeout: 3000 }, // must come after ...config to override
                     }),
                 ).rejects.toThrowError(/timed?\s*out/i);
 
@@ -2811,6 +2814,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 20000 },
                             ),
                         );
 
@@ -2827,6 +2831,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2883,6 +2888,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -2904,6 +2910,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 20000 },
                             ),
                         );
 
@@ -2926,6 +2933,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2971,6 +2979,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -2992,6 +3001,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinity",
                                     clientAz: "non-existing-az",
                                 },
@@ -3028,6 +3038,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("AZAffinityReplicasAndPrimary Read Strategy Tests", () => {
@@ -3051,7 +3062,7 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
-                                { requestTimeout: 3000 },
+                                { requestTimeout: 20000 },
                             ),
                         );
                     // Set all nodes for us-east-1b
@@ -3074,7 +3085,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    requestTimeout: 3000,
+                                    requestTimeout: 20000,
                                     readFrom: "AZAffinityReplicasAndPrimary",
                                     clientAz: az,
                                 },
@@ -3136,6 +3147,7 @@ describe("GlideClusterClient", () => {
                     client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -3207,6 +3219,7 @@ describe("GlideClusterClient", () => {
                     client?.close();
                 }
             },
+            TIMEOUT,
         );
     });
 
@@ -3414,7 +3427,7 @@ describe("GlideClusterClient", () => {
             // Test explicit true
             const clientTrue = await GlideClusterClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: true },
+                advancedConfiguration: { tcpNoDelay: true, connectionTimeout: 10000 },
             });
             expect(await clientTrue.ping()).toBe("PONG");
             expect(await clientTrue.set("key2", "value2")).toBe("OK");
@@ -3424,7 +3437,7 @@ describe("GlideClusterClient", () => {
             // Test explicit false
             const clientFalse = await GlideClusterClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: false },
+                advancedConfiguration: { tcpNoDelay: false, connectionTimeout: 10000 },
             });
             expect(await clientFalse.ping()).toBe("PONG");
             expect(await clientFalse.set("key3", "value3")).toBe("OK");

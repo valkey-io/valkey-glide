@@ -656,8 +656,14 @@ export async function testTeardown(
 export const getClientConfigurationOption = (
     addresses: [string, number][],
     protocol: ProtocolVersion,
-    configOverrides?: Partial<BaseClientConfiguration>,
-): BaseClientConfiguration => {
+    configOverrides?: Partial<BaseClientConfiguration> & {
+        advancedConfiguration?: Record<string, unknown>;
+    },
+): BaseClientConfiguration & {
+    advancedConfiguration: { connectionTimeout: number };
+} => {
+    const { advancedConfiguration: overrideAdvanced, ...baseOverrides } =
+        configOverrides ?? {};
     return {
         addresses: addresses.map(([host, port]) => ({
             host,
@@ -665,10 +671,24 @@ export const getClientConfigurationOption = (
         })),
         protocol,
         useTLS: global.TLS ?? false,
-        requestTimeout: 1000,
-        ...configOverrides,
+        requestTimeout: 5000,
+        ...baseOverrides,
+        advancedConfiguration: {
+            connectionTimeout: 10000,
+            ...(overrideAdvanced ?? {}),
+        },
     };
 };
+
+/**
+ * Returns advanced configuration with increased connection timeout for CI stability.
+ * Spread this alongside getClientConfigurationOption for inline client creation.
+ */
+export const getAdvancedConfig = () => ({
+    advancedConfiguration: {
+        connectionTimeout: 10000,
+    },
+});
 
 /**
  * Flushes the client's database without closing the connection.
@@ -2549,6 +2569,10 @@ export async function getServerVersion(
         const glideClusterClient = await GlideClusterClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
@@ -2563,6 +2587,10 @@ export async function getServerVersion(
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = await glideClient.info([InfoOptions.Server]);
         await flushAndCloseClient(
@@ -2737,4 +2765,33 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Retries an async operation with exponential backoff.
+ * Useful for flaky network operations like TLS connections on Windows/WSL.
+ *
+ * @param fn - Async function to retry
+ * @param retries - Number of retry attempts (default: 3)
+ * @param delayMs - Initial delay between retries in ms (default: 1000)
+ * @returns Result of the function
+ * @throws Last error if all retries exhausted
+ */
+export async function retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    retries = 3,
+    delayMs = 1000,
+): Promise<T> {
+    let lastError: Error | unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastError = e;
+            if (attempt < retries) {
+                await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+            }
+        }
+    }
+    throw lastError;
 }

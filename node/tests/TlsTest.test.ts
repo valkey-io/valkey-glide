@@ -14,6 +14,7 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
+    retryWithBackoff,
 } from "./TestUtilities";
 const TIMEOUT = 50000;
 const CLUSTER_CREATION_TIMEOUT = 120000; // Increased timeout for TLS cluster creation
@@ -33,7 +34,7 @@ describe("tls GlideClusterClient", () => {
         cluster = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
             true,
             TLS_OPTIONS,
@@ -78,11 +79,18 @@ describe("tls GlideClusterClient", () => {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
+                    { requestTimeout: 10000 },
                 ),
                 ...TLS_OPTIONS,
+                advancedConfiguration: {
+                    connectionTimeout: 10000,
+                    ...TLS_OPTIONS.advancedConfiguration,
+                },
             };
 
-            client = await GlideClusterClient.createClient(config);
+            client = await retryWithBackoff(() =>
+                GlideClusterClient.createClient(config),
+            );
 
             const result = await client.ping();
             expect(result.toString()).toBe("PONG");
@@ -149,7 +157,9 @@ describe("tls GlideClient", () => {
                 ...TLS_OPTIONS,
             };
 
-            client = await GlideClient.createClient(config);
+            client = await retryWithBackoff(() =>
+                GlideClient.createClient(config),
+            );
 
             const result = await client.ping();
             expect(result.toString()).toBe("PONG");

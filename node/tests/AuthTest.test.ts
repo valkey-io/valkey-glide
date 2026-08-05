@@ -86,11 +86,13 @@ describe("Auth tests", () => {
 
         managementClientCMD = await GlideClient.createClient({
             addresses: formatAddresses(cmdCluster.getAddresses()),
+            advancedConfiguration: { connectionTimeout: 10000 },
         });
         managementClientCME = await GlideClusterClient.createClient({
             addresses: formatAddresses(cmeCluster.getAddresses()),
+            advancedConfiguration: { connectionTimeout: 10000 },
         });
-    }, 40000);
+    }, 120000);
 
     const formatAddresses = (
         addresses: AddressEntry[],
@@ -164,7 +166,9 @@ describe("Auth tests", () => {
         test: (client: BaseClient) => Promise<void>,
         protocol: ProtocolVersion,
         clusterMode: boolean,
-        configOverrides?: Partial<BaseClientConfiguration>,
+        configOverrides?: Partial<BaseClientConfiguration> & {
+            advancedConfiguration?: Record<string, unknown>;
+        },
     ) => {
         const activeCluster = clusterMode ? cmeCluster : cmdCluster;
 
@@ -191,6 +195,9 @@ describe("Auth tests", () => {
             addresses,
             protocol,
             ...configOverrides,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+            },
         });
 
         try {

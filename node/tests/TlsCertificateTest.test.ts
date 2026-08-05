@@ -72,7 +72,7 @@ describe.skip("TLS with custom certificates", () => {
         clusterModeCluster = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
             true,
             startupTlsConfig,

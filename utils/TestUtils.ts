@@ -3,9 +3,77 @@
  */
 
 import { execFile } from "child_process";
+import { createConnection } from "net";
 import { lt } from "semver";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
+
+const isWindows = process.platform === "win32";
+
+function toWslPath(p: string): string {
+    return p
+        .replace(/^([A-Za-z]):/, (_, d) => `/mnt/${d.toLowerCase()}`)
+        .replace(/\\/g, "/");
+}
+
+const wslScriptPath = isWindows ? toWslPath(PY_SCRIPT_PATH) : PY_SCRIPT_PATH;
+
+/**
+ * On Windows/WSL, replica sync can lag after cluster_manager.py exits.
+ * Poll each address: if it reports role:slave, wait until master_link_status:up
+ * and master_sync_in_progress:0 before returning.
+ */
+async function waitForReplicasReady(
+    addresses: [string, number][],
+    timeoutMs = 15000,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
+    async function getInfo(host: string, port: number): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            const sock = createConnection({ host, port }, () => {
+                sock.write("INFO replication\r\n");
+            });
+            let buf = "";
+            const timer = setTimeout(() => {
+                sock.destroy();
+                resolve(buf); // return whatever we got
+            }, 1000);
+            sock.on("data", (d: Buffer) => {
+                buf += d.toString();
+                // Resolve as soon as we have enough to determine sync state
+                if (buf.includes("master_link_status") || buf.includes("role:master")) {
+                    clearTimeout(timer);
+                    sock.destroy();
+                    resolve(buf);
+                }
+            });
+            sock.on("error", (e) => { clearTimeout(timer); reject(e); });
+            sock.on("close", () => { clearTimeout(timer); resolve(buf); });
+        });
+    }
+
+    await Promise.all(
+        addresses.map(async ([host, port]) => {
+            while (Date.now() < deadline) {
+                try {
+                    const info = await getInfo(host, port);
+                    if (!info.includes("role:slave")) return;
+                    if (
+                        info.includes("master_link_status:up") &&
+                        info.includes("master_sync_in_progress:0")
+                    ) {
+                        return;
+                    }
+                } catch {
+                    // node not reachable yet
+                }
+                await new Promise((r) => setTimeout(r, 200));
+            }
+        }),
+    );
+}
+
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -73,7 +141,7 @@ export class ValkeyCluster {
         this.tls = tls;
     }
 
-    public static createCluster(
+    private static startCluster(
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
@@ -115,9 +183,13 @@ export class ValkeyCluster {
                 }
             }
 
+            const [cmd, cmdArgs] = isWindows
+                ? ["wsl", ["python3", wslScriptPath, ...commandArgs]]
+                : ["python3", [PY_SCRIPT_PATH, ...commandArgs]];
+
             execFile(
-                "python3",
-                [PY_SCRIPT_PATH, ...commandArgs],
+                cmd,
+                cmdArgs,
                 (error, stdout) => {
                     if (error) {
                         reject(error);
@@ -129,20 +201,75 @@ export class ValkeyCluster {
                                 addresses,
                                 cluster_mode,
                                 tlsConfig,
-                            ).then(
-                                (ver) =>
-                                    new ValkeyCluster(
-                                        ver,
-                                        addresses,
-                                        tls,
-                                        clusterFolder,
-                                    ),
-                            ),
+                            )
+                                .then(
+                                    (ver) =>
+                                        new ValkeyCluster(
+                                            ver,
+                                            addresses,
+                                            tls,
+                                            clusterFolder,
+                                        ),
+                                )
+                                .then(async (cluster) => {
+                                    if (isWindows && replicaCount > 0) {
+                                        await waitForReplicasReady(
+                                            cluster.getAddresses(),
+                                        );
+                                    }
+                                    return cluster;
+                                }),
                         );
                     }
                 },
             );
         });
+    }
+
+    public static async createCluster(
+        cluster_mode: boolean,
+        shardCount: number,
+        replicaCount: number,
+        getVersionCallback: (
+            addresses: [string, number][],
+            clusterMode: boolean,
+            tlsConfig?: TestTLSConfig,
+        ) => Promise<string>,
+        tls: boolean = false,
+        tlsConfig?: TestTLSConfig,
+        loadModule?: string[],
+        maxRetries = 3,
+    ): Promise<ValkeyCluster> {
+        let lastError: Error | unknown;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let cluster: ValkeyCluster | undefined;
+            try {
+                cluster = await ValkeyCluster.startCluster(
+                    cluster_mode,
+                    shardCount,
+                    replicaCount,
+                    getVersionCallback,
+                    tls,
+                    tlsConfig,
+                    loadModule,
+                );
+                // startCluster already verified connectivity via getVersionCallback
+                // Brief stabilization delay before returning
+                await new Promise((r) => setTimeout(r, 500));
+                return cluster;
+            } catch (e) {
+                lastError = e;
+                if (cluster) await cluster.close().catch(() => void 0);
+                console.warn(
+                    `[createCluster] attempt ${attempt}/${maxRetries} failed: ${e}`,
+                );
+            }
+            if (attempt < maxRetries) {
+                // Fixed 1s delay between retries
+                await new Promise((r) => setTimeout(r, 1000));
+            }
+        }
+        throw lastError ?? new Error(`Failed to create cluster after ${maxRetries} attempts`);
     }
 
     public static async initFromExistingCluster(
@@ -198,7 +325,18 @@ export class ValkeyCluster {
                     commandArgs.push(`--keep-folder`);
                 }
 
-                execFile("python3", commandArgs, (error, _, stderr) => {
+                const [cmd, cmdArgs] = isWindows
+                    ? [
+                          "wsl",
+                          [
+                              "python3",
+                              wslScriptPath,
+                              ...commandArgs.slice(1),
+                          ],
+                      ]
+                    : ["python3", commandArgs];
+
+                execFile(cmd, cmdArgs, (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);

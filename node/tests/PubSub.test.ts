@@ -40,6 +40,7 @@ import {
     subscribeByMethod,
     sunsubscribeByMethod,
     unsubscribeByMethod,
+    waitForMessage,
     waitForSubscriptionState,
     waitForSubscriptionStateIfNeeded,
 } from "./PubSubTestUtilities";
@@ -93,7 +94,7 @@ describe("PubSub", () => {
         ]);
         cmdCluster = _cmdCluster;
         cmeCluster = _cmeCluster;
-    }, 40000);
+    }, 120000);
     afterEach(async () => {
         if (cmdCluster) {
             await flushAndCloseClient(false, cmdCluster.getAddresses());
@@ -494,10 +495,7 @@ describe("PubSub", () => {
                     expect(result).toEqual(1);
                 }
 
-                // Allow the message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                const pubsubMessage = await getMessageByMethod(
+                const pubsubMessage = await waitForMessage(
                     method,
                     listeningClient,
                     context,
@@ -613,10 +611,7 @@ describe("PubSub", () => {
                     expect(result).toEqual(1);
                 }
 
-                // Allow the message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                const pubsubMessage = await getMessageByMethod(
+                const pubsubMessage = await waitForMessage(
                     method,
                     listeningClient,
                     context,
@@ -719,11 +714,15 @@ describe("PubSub", () => {
                     }
                 }
 
-                // Allow the message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
                 const asyncMsg = await listeningClient.getPubSubMessage();
-                const syncMsg = listeningClient.tryGetPubSubMessage()!;
+                // Poll for second message since it may not be buffered yet
+                const syncMsg = await waitForMessage(
+                    MethodTesting.Sync,
+                    listeningClient,
+                    null,
+                    0,
+                    3000,
+                );
                 expect(syncMsg).toBeTruthy();
 
                 expect([message, message2]).toContain(asyncMsg.message);
@@ -1174,10 +1173,7 @@ describe("PubSub", () => {
 
                 expect(result).toEqual(publishResponse);
 
-                // Allow the message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                const pubsubMsg = (await getMessageByMethod(
+                const pubsubMsg = (await waitForMessage(
                     method,
                     listeningClient,
                     context,
@@ -1316,11 +1312,15 @@ describe("PubSub", () => {
                 );
                 expect(result).toEqual(1);
 
-                // Allow the messages to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
                 const asyncMsg = await listeningClient!.getPubSubMessage();
-                const syncMsg = listeningClient!.tryGetPubSubMessage()!;
+                // Poll for second message since it may not be buffered yet
+                const syncMsg = await waitForMessage(
+                    MethodTesting.Sync,
+                    listeningClient!,
+                    null,
+                    0,
+                    3000,
+                );
                 expect(syncMsg).toBeTruthy();
 
                 expect([message, message2]).toContain(asyncMsg.message);
@@ -6012,10 +6012,7 @@ describe("PubSub", () => {
                     expect(publishResult).toBe(1);
                 }
 
-                // Allow the message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                const pubsubMsg = await getMessageByMethod(
+                const pubsubMsg = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6164,9 +6161,8 @@ describe("PubSub", () => {
 
                 // Verify subscription works before kill
                 await publishingClient.publish(messageBefore, channel);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgBefore = await getMessageByMethod(
+                const msgBefore = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6190,9 +6186,8 @@ describe("PubSub", () => {
 
                 // Verify subscription still works after reconnection
                 await publishingClient.publish(messageAfter, channel);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgAfter = await getMessageByMethod(
+                const msgAfter = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6314,9 +6309,8 @@ describe("PubSub", () => {
 
                 // Verify subscription works before kill
                 await publishingClient.publish(messageBefore, channel);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgBefore = await getMessageByMethod(
+                const msgBefore = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6341,9 +6335,8 @@ describe("PubSub", () => {
 
                 // Verify subscription still works after reconnection
                 await publishingClient.publish(messageAfter, channel);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgAfter = await getMessageByMethod(
+                const msgAfter = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6461,9 +6454,8 @@ describe("PubSub", () => {
 
                 // Verify subscription works before kill
                 await publishingClient.publish(messageBefore, channel, true);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgBefore = await getMessageByMethod(
+                const msgBefore = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -6488,9 +6480,8 @@ describe("PubSub", () => {
 
                 // Verify subscription still works after reconnection
                 await publishingClient.publish(messageAfter, channel, true);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const msgAfter = await getMessageByMethod(
+                const msgAfter = await waitForMessage(
                     method,
                     listeningClient,
                     callbackMessages,
@@ -7140,7 +7131,6 @@ describe("PubSub", () => {
 
                 // Verify subscription works by publishing and receiving a message
                 await publishingClient.publish(message, channel1);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
                 const msg = await listeningClient.getPubSubMessage();
                 expect(msg?.message?.toString()).toBe(message);
             } finally {
@@ -8105,9 +8095,6 @@ describe("PubSub", () => {
 
                 // Publish message
                 await publishingClient.publish(message, channel);
-
-                // Allow message to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Verify message received
                 const pubsubMessage = await listeningClient.getPubSubMessage();

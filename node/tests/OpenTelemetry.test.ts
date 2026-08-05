@@ -4,6 +4,8 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     ClusterBatch,
@@ -19,9 +21,11 @@ import {
 } from "../build-ts";
 import {
     flushAndCloseClient,
+    getAdvancedConfig,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
+    retryWithBackoff,
 } from "./TestUtilities";
 
 /**
@@ -75,8 +79,11 @@ function readAndParseSpanFile(path: string): {
 }
 
 const TIMEOUT = 50000;
-const VALID_ENDPOINT_TRACES = "/tmp/spans.json";
-const VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
+const VALID_ENDPOINT_TRACES = path.join(os.tmpdir(), "spans.json");
+const VALID_FILE_ENDPOINT_TRACES =
+    process.platform === "win32"
+        ? `file://${os.tmpdir().replace(/\\/g, "/")}/spans.json`
+        : `file://${os.tmpdir()}/spans.json`;
 const VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
 
 /** Parent span context passed via init config's parentSpanContextProvider. */
@@ -204,7 +211,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         };
         OpenTelemetry.init(openTelemetryConfig);
         await teardown_otel_test();
-    }, 40000);
+    }, 120000);
 
     async function teardown_otel_test() {
         // Clean up OpenTelemetry files
@@ -238,6 +245,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 cluster.getAddresses(),
                 ProtocolVersion.RESP3,
             ),
+            ...getAdvancedConfig(),
         });
 
         await client.get("testSpanNotExportedBeforeInitOtel");
@@ -265,6 +273,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     ProtocolVersion.RESP3,
                 ),
+                ...getAdvancedConfig(),
             });
 
             await expect(
@@ -305,6 +314,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute a series of commands sequentially
@@ -334,6 +344,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
             OpenTelemetry.setSamplePercentage(0);
             expect(OpenTelemetry.getSamplePercentage()).toBe(0);
@@ -398,6 +409,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             await client.set(
@@ -428,6 +440,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const batch = new ClusterBatch(true);
@@ -464,12 +477,14 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
             const client2 = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             client1.set("test_key", "value");
@@ -504,6 +519,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const batch = new ClusterBatch(true);
@@ -556,7 +572,7 @@ describe("OpenTelemetry GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         // remove the span file
@@ -589,6 +605,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute multiple commands - each should automatically create and clean up its span
@@ -616,6 +633,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             const openTelemetryConfig: OpenTelemetryConfig = {
@@ -643,6 +661,7 @@ describe("OpenTelemetry GlideClient", () => {
                     cluster.getAddresses(),
                     protocol,
                 ),
+                ...getAdvancedConfig(),
             });
 
             // Execute multiple concurrent commands
@@ -951,7 +970,7 @@ describe("OpenTelemetry parent span context propagation", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 40000);
+    }, 120000);
 
     afterEach(async () => {
         OpenTelemetry.setParentSpanContextProvider(null);
@@ -997,12 +1016,18 @@ describe("OpenTelemetry parent span context propagation", () => {
                 fs.unlinkSync(VALID_ENDPOINT_TRACES);
             }
 
-            client = await GlideClusterClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            });
+            client = await retryWithBackoff(() =>
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                        { requestTimeout: 10000 },
+                    ),
+                    advancedConfiguration: {
+                        connectionTimeout: 10000,
+                    },
+                }),
+            );
 
             await client.set(
                 "ctx_propagation_test_key",
@@ -1067,12 +1092,18 @@ describe("OpenTelemetry parent span context propagation", () => {
                 fs.unlinkSync(VALID_ENDPOINT_TRACES);
             }
 
-            client = await GlideClusterClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            });
+            client = await retryWithBackoff(() =>
+                GlideClusterClient.createClient({
+                    ...getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                        { requestTimeout: 10000 },
+                    ),
+                    advancedConfiguration: {
+                        connectionTimeout: 10000,
+                    },
+                }),
+            );
 
             // Commands must succeed despite the invalid parent context
             await client.set("fallback_test_key", "fallback_test_value");

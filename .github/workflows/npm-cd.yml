@@ -223,9 +223,30 @@ jobs:
                   # Create a build directory js, and d.ts
                   mkdir -p ./node/build-ts
 
-            - name: Build Native Modules
+            - name: Install Rust (Windows)
+              if: ${{ matrix.OS == 'windows' }}
+              uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+              with:
+                  toolchain: stable
+                  targets: ${{ matrix.TARGET }}
+
+            - name: Build Native Modules (Windows)
+              if: ${{ matrix.OS == 'windows' }}
               working-directory: ./node/rust-client
-              id: build-action
+              id: build-action-windows
+              shell: powershell
+              run: |
+                  npm ci
+                  npx napi build --release --strip --platform --target ${{ matrix.TARGET }} --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide
+                  New-Item -ItemType Directory -Force -Path ../${{ matrix.TARGET }}
+                  Copy-Item *.node ../${{ matrix.TARGET }}/
+                  Write-Host "Built native module for ${{ matrix.TARGET }}:"
+                  Get-ChildItem ../${{ matrix.TARGET }}/
+
+            - name: Build Native Modules
+              if: ${{ matrix.OS != 'windows' }}
+              working-directory: ./node/rust-client
+              id: build-action-unix
               run: |
                   npm ci
 
@@ -274,6 +295,7 @@ jobs:
                   ls -la ../${{ matrix.TARGET }}/
 
             - name: Smoke test native module
+              if: ${{ matrix.OS != 'windows' }}
               working-directory: ./node
               run: file ${{ matrix.TARGET }}/*.node | grep -qi "shared object\|dynamic\|mach-o"
 
