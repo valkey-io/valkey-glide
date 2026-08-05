@@ -29,6 +29,13 @@ try:
 except ImportError:
     HAS_ANYIO = False
 
+try:
+    import trio
+
+    HAS_TRIO = True
+except ImportError:
+    HAS_TRIO = False
+
 from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared._fast_response import parse_response as _c_parse_response
 from glide_shared._glide_ffi import _GlideFFI
@@ -88,7 +95,15 @@ _EVALSHA_SPAN_NAME = _ASYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 
 class _CompatFuture:
-    """anyio shim for asyncio.Future-like functionality (used for trio support)."""
+    """anyio shim for asyncio.Future-like functionality (used for trio support).
+
+    ``_is_done`` is an ``anyio.Event``, which under trio is a ``trio.Event``.
+    trio primitives are not thread-safe: setting one from a foreign thread
+    marks it set but never reschedules the parked waiter, so the awaiting task
+    hangs forever.  ``_token`` captures the owning ``trio.run()`` at creation
+    time so completions arriving on another thread are trampolined back onto
+    the trio thread via ``run_sync_soon``.
+    """
 
     def __init__(self) -> None:
         if not HAS_ANYIO:
@@ -98,14 +113,37 @@ class _CompatFuture:
         self._is_done = anyio.Event()
         self._result: Any = None
         self._exception: Optional[Exception] = None
+        self._token: Optional[Any] = None
+        if HAS_TRIO:
+            try:
+                self._token = trio.lowlevel.current_trio_token()
+            except RuntimeError:
+                # Not running under trio (asyncio also uses _CompatFuture on
+                # some paths).  anyio.Event is then an asyncio primitive and
+                # _resolve_future handles thread affinity on the caller side.
+                pass
+
+    def _mark_done(self) -> None:
+        self._is_done.set()
+
+    def _set_done_threadsafe(self) -> None:
+        """Set the completion event, hopping to the trio thread when needed."""
+        if self._token is None or trio.lowlevel.in_trio_task():
+            self._is_done.set()
+            return
+        try:
+            self._token.run_sync_soon(self._mark_done)
+        except trio.RunFinishedError:
+            # The owning trio.run() already exited; nobody is left to wake.
+            pass
 
     def set_result(self, result: Any) -> None:
         self._result = result
-        self._is_done.set()
+        self._set_done_threadsafe()
 
     def set_exception(self, exception: Exception) -> None:
         self._exception = exception
-        self._is_done.set()
+        self._set_done_threadsafe()
 
     def done(self) -> bool:
         return self._is_done.is_set()
