@@ -112,7 +112,7 @@ def _is_free_threaded() -> bool:
     _is_free_threaded(),
     reason="fork() is unsupported in free-threaded Python builds",
 )
-@pytest.mark.anyio
+@pytest.mark.asyncio
 class TestForkSafety:
     """Tests for fork() safety of the pipe transport (issue #6673)."""
 
