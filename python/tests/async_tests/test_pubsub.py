@@ -4016,32 +4016,30 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # The timestamp update lags behind the subscription state change, so
-            # a one-shot read can still see the pre-subscribe value.
-            timestamp_after_first = initial_timestamp
-
             async def _timestamp_advanced() -> bool:
-                nonlocal timestamp_after_first
-                stats = await listening_client.get_statistics()
-                timestamp_after_first = int(
-                    stats.get("subscription_last_sync_timestamp", "0")
+                return (
+                    int(
+                        (await listening_client.get_statistics()).get(
+                            "subscription_last_sync_timestamp", "0"
+                        )
+                    )
+                    > initial_timestamp
                 )
-                return timestamp_after_first > initial_timestamp
 
-            try:
-                await wait_for(
-                    _timestamp_advanced,
-                    "Timestamp should increase after subscription",
+            await wait_for(
+                _timestamp_advanced,
+                "Timestamp should increase after subscription",
+            )
+
+            timestamp_after_first_sub = int(
+                (await listening_client.get_statistics()).get(
+                    "subscription_last_sync_timestamp", "0"
                 )
-            except TimeoutError:
-                pytest.fail(
-                    "Timestamp should increase after subscription: "
-                    f"{initial_timestamp} -> {timestamp_after_first}"
-                )
+            )
 
             # Verify the timestamp is greater than or equal to when we started the subscription
-            assert timestamp_after_first >= time_before_first_sub, (
-                f"Timestamp {timestamp_after_first} should be >= "
+            assert timestamp_after_first_sub >= time_before_first_sub, (
+                f"Timestamp {timestamp_after_first_sub} should be >= "
                 f"{time_before_first_sub} (time before subscription)"
             )
 
