@@ -773,6 +773,7 @@ class BaseClient(CoreCommands):
     async def get_pubsub_message(self) -> PubSubMsg:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
         if self.config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback."
@@ -786,6 +787,7 @@ class BaseClient(CoreCommands):
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
         if self.config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback."
