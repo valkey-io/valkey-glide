@@ -42,6 +42,9 @@ public class ClientPoolConfig {
     public void validate() {
         if (maxSize < 1) throw new IllegalArgumentException("maxSize must be >= 1");
         if (minIdle > maxSize) throw new IllegalArgumentException("minIdle must be <= maxSize");
+        if (abandonTimeout.isNegative())
+            throw new IllegalArgumentException(
+                    "abandonTimeout must be >= 0 (use Duration.ZERO to disable)");
         if (clientConfig == null) throw new IllegalArgumentException("clientConfig is required");
         if (clientConfig.getSubscriptionConfiguration() != null) {
             throw new IllegalArgumentException(

@@ -374,6 +374,14 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
         // Try to acquire (try_lock is synchronous on TokioMutex — no runtime needed)
         let result = match pool_arc.try_lock() {
             Ok(mut pool) => {
+                // Clean up any clients discarded by the abandon monitor
+                let discarded = pool.drain_discarded_ids();
+                for cid in discarded {
+                    if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+                        get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    }
+                }
+
                 let r = pool.try_acquire();
                 if r >= 0 {
                     let _ = GlideOpenTelemetry::record_pool_hit();
@@ -486,8 +494,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     {
         // try_lock rather than blocking_lock: the abandon monitor may hold the
         // lock briefly during a scan. Using blocking_lock here can deadlock if
-        // the monitor's async sleep is pending on the same runtime. The pool was
-        // already unregistered above, so the monitor will exit on its next iteration.
+        // the monitor's async sleep is pending on the same runtime.
         if let Ok(mut pool) = pool_arc.try_lock() {
             // Clean up POOL_CLIENTS entries for all clients owned by this pool
             // (includes discarded clients that the abandon monitor removed from in_use)
@@ -505,6 +512,26 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 }
             }
             pool.destroy();
+        } else {
+            // Lock contended — schedule async cleanup so resources are eventually freed.
+            let pool_arc_async = pool_arc.clone();
+            get_pool_runtime().spawn(async move {
+                let mut pool = pool_arc_async.lock().await;
+                let discarded = pool.drain_discarded_ids();
+                let client_ids: Vec<u64> = pool
+                    .idle
+                    .iter()
+                    .map(|e| e.client_id)
+                    .chain(pool.in_use.iter().map(|e| *e.key()))
+                    .chain(discarded)
+                    .collect();
+                for cid in client_ids {
+                    if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+                        get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    }
+                }
+                pool.destroy();
+            });
         }
     }
     // Clean up stored ClientType for this pool

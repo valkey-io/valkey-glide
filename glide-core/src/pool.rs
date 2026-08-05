@@ -505,6 +505,18 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 // have a stale release pending from the original borrower. Discarding
                 // guarantees two borrowers never share a connection.
                 let mut pool = pool_arc_monitor.lock().await;
+                // Revalidate under lock: activity may have been refreshed or blocking
+                // flag set between the scan and this removal.
+                if let Some(entry) = pool.in_use.get(&client_id) {
+                    if entry.value().is_blocking.load(Ordering::Acquire) {
+                        continue;
+                    }
+                    if entry.value().borrowed_at.is_some_and(|borrowed_at| {
+                        Instant::now().duration_since(borrowed_at) <= abandon_timeout
+                    }) {
+                        continue;
+                    }
+                }
                 if pool.in_use.remove(&client_id).is_some() {
                     pool.discard_client();
                     pool.discarded_ids.push(client_id);

@@ -179,8 +179,8 @@ the timeout:
 
 The pool replaces the discarded connection on the next acquire. Every command sent on a
 pool-borrowed client refreshes its activity timestamp, so only truly idle borrows (forgotten
-release, lost reference) are reclaimed. Clients actively sending commands — even infrequently —
-remain safe indefinitely.
+release, lost reference) are reclaimed. A client is safe as long as the interval between any
+two consecutive commands is shorter than `abandon_timeout`.
 
 The monitor **skips** clients currently executing blocking commands (BLPOP, BRPOP, XREAD BLOCK,
 etc.) via an internal `is_blocking` flag set automatically by the command dispatch path.

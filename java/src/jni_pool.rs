@@ -116,6 +116,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
+            // Clean up any clients discarded by the abandon monitor
+            let discarded = pool.drain_discarded_ids();
+            for cid in discarded {
+                get_handle_table().remove(&cid);
+                glide_core::scope::unregister_client(cid);
+                get_pool_client_map().remove(&cid);
+            }
+
             let result = pool.try_acquire();
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
