@@ -203,6 +203,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
@@ -213,6 +214,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (async only)
@@ -223,6 +225,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (sync only)
@@ -233,6 +236,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
@@ -299,24 +303,28 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args -k 'pubsub' --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args -k 'pubsub' --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args -k 'pubsub' tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
+                  ulimit -n 65536
                   python3 dev.py test --args -k 'pubsub' tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - name: Detect mock pubsub changes

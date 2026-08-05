@@ -207,6 +207,7 @@ jobs:
               working-directory: java
               shell: bash
               run: |
+                  ulimit -n 65536
                   export AWS_ACCESS_KEY_ID=test_access_key 
                   export AWS_SECRET_ACCESS_KEY=test_secret_key 
                   export AWS_SESSION_TOKEN=test_session_token
@@ -569,6 +570,7 @@ jobs:
               env:
                   GLIDE_CONTAINER_BUILD: true
               run: |
+                  ulimit -n 65536
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then
                           # Use JDK 11 to run Gradle (required by Spotless 7.x / Gradle 8.x)
