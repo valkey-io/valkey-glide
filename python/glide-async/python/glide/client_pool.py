@@ -128,12 +128,23 @@ class AsyncClientPool:
         import glide.glide_client as _gc
 
         with _async_pipe_lock:
+            _gc._detect_fork_and_reset()
+            current_pid = os.getpid()
+
             if _gc._async_pipe_read_fd < 0:
                 try:
                     r, w = os.pipe()
                     os.set_blocking(r, False)
-                    self._lib.init_async_pipe(w)
+                    if (
+                        _gc._async_pipe_init_pid > 0
+                        and current_pid != _gc._async_pipe_init_pid
+                    ):
+                        self._lib.reinit_async_pipe(w)
+                    else:
+                        self._lib.init_async_pipe(w)
                     _gc._async_pipe_read_fd = r
+                    _gc._async_pipe_write_fd = w
+                    _gc._async_pipe_init_pid = current_pid
                 except OSError:
                     pass
 
@@ -233,6 +244,7 @@ class AsyncClientPool:
             client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
+            client._create_pid = os.getpid()
 
             # The pool created this client with pipe_client_id = client_id
             # (set in create_client_internal via the pre-assigned ID).
