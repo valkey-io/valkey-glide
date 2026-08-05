@@ -7392,7 +7392,7 @@ mod cluster_async {
     /// (commands before recovery starts and after recovery completes succeed).
     #[test]
     #[serial_test::serial]
-    fn test_async_cluster_concurrent_requests_buffered_during_reconnect_to_initial_nodes() {
+    fn test_async_cluster_concurrent_requests_fail_fast_during_reconnect_to_initial_nodes() {
         let name = "test_concurrent_reconnect_initial_nodes";
         // How many SET commands before AllConnectionsUnavailable fires
         const FAIL_ON_SET_N: usize = 30;
