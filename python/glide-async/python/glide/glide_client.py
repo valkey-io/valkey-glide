@@ -125,6 +125,8 @@ def _get_new_future_instance() -> "TFuture":
 
 
 _async_pipe_read_fd: int = -1
+_async_pipe_write_fd: int = -1
+_async_pipe_init_pid: int = -1
 _next_client_id = itertools.count(1)
 
 
@@ -311,6 +313,41 @@ def _handle_pubsub_frame(client, response_ptr, arena_or_err, data, offset):
     return offset
 
 
+def _detect_fork_and_reset() -> None:
+    """Detect if we are in a forked child and reset pipe state.
+
+    After fork(), the flush thread is dead (threads don't survive fork) but
+    the pipe fd and Rust OnceLock state are inherited. Reset the Python-side
+    state so _setup_pipe will create a fresh pipe and call reinit_async_pipe.
+    Must be called while holding _async_pipe_lock.
+    """
+    global _async_pipe_read_fd, _async_pipe_write_fd
+    global _async_pipe_registered, _async_pipe_loop
+    global _pipe_remainder, _trio_pipe_active
+    current_pid = os.getpid()
+    if (
+        _async_pipe_read_fd >= 0
+        and _async_pipe_init_pid > 0
+        and current_pid != _async_pipe_init_pid
+    ):
+        try:
+            os.close(_async_pipe_read_fd)
+        except OSError:
+            pass
+        if _async_pipe_write_fd >= 0:
+            try:
+                os.close(_async_pipe_write_fd)
+            except OSError:
+                pass
+        _async_pipe_read_fd = -1
+        _async_pipe_write_fd = -1
+        _async_pipe_registered = False
+        _async_pipe_loop = None
+        _pipe_remainder = b""
+        _trio_pipe_active = False
+        _client_registry.clear()
+
+
 def _drain_stale_pipe_frames():
     """Drain stale frames from the pipe to prevent reading freed pointers."""
     while True:
@@ -401,6 +438,7 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
         self._pipe_client_id: int = 0
+        self._create_pid: int = 0
         self._is_asyncio: bool = True
 
     @classmethod
@@ -516,6 +554,7 @@ class BaseClient(CoreCommands):
         # Set pipe_client_id before create_client so Rust routes responses
         # through the pipe from the very first command — no race window.
         self._pipe_client_id = next(_next_client_id)
+        self._create_pid = os.getpid()
 
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
@@ -553,14 +592,23 @@ class BaseClient(CoreCommands):
 
     def _setup_pipe(self) -> None:
         """Initialize and register the shared response pipe."""
-        global _async_pipe_read_fd, _async_pipe_registered, _async_pipe_loop
-        global _pipe_remainder, _trio_pipe_active
+        global _async_pipe_read_fd, _async_pipe_write_fd
+        global _async_pipe_registered, _async_pipe_loop
+        global _pipe_remainder, _trio_pipe_active, _async_pipe_init_pid
         with _async_pipe_lock:
+            _detect_fork_and_reset()
+            current_pid = os.getpid()
+
             if _async_pipe_read_fd < 0:
                 try:
                     _async_pipe_read_fd, pw = os.pipe()
                     os.set_blocking(_async_pipe_read_fd, False)
-                    self._lib.init_async_pipe(pw)
+                    if _async_pipe_init_pid > 0 and current_pid != _async_pipe_init_pid:
+                        self._lib.reinit_async_pipe(pw)
+                    else:
+                        self._lib.init_async_pipe(pw)
+                    _async_pipe_write_fd = pw
+                    _async_pipe_init_pid = current_pid
                 except OSError:
                     _async_pipe_read_fd = -1
                     self._pipe_client_id = 0
@@ -674,6 +722,14 @@ class BaseClient(CoreCommands):
 
     # ==================== Command Execution ====================
 
+    def _check_same_process(self) -> None:
+        """Raise if this client is used from a forked child process."""
+        if self._create_pid and self._create_pid != os.getpid():
+            raise ClosingError(
+                "Cannot use a client created before fork(). "
+                "Create a new client in the child process."
+            )
+
     async def _execute_command(
         self,
         request_type: int,
@@ -684,6 +740,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -746,6 +803,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -794,6 +852,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -847,6 +906,7 @@ class BaseClient(CoreCommands):
         """
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
         if self._core_client == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
@@ -864,6 +924,7 @@ class BaseClient(CoreCommands):
     ) -> TResult:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -893,6 +954,7 @@ class BaseClient(CoreCommands):
     async def _refresh_iam_token(self) -> TResult:
         if self._is_closed:
             raise ClosingError("Client is closed.")
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
@@ -1007,7 +1069,9 @@ class BaseClient(CoreCommands):
 
             _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
 
-            if self._core_client is not None:
+            # Skip FFI call if this client was created in a different process
+            # (the tokio Runtime doesn't survive fork; dropping it would hang).
+            if self._core_client is not None and self._create_pid == os.getpid():
                 self._lib.close_client(self._core_client)
                 self._core_client = None
 
@@ -1051,6 +1115,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        self._check_same_process()
 
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
