@@ -159,12 +159,9 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        # genrsa can stall on low-entropy ARM64 runners. Cap the wait at 30s so a
-        # real stall raises subprocess.TimeoutExpired here, naming the full openssl
-        # argv that identified #6699, rather than tripping the caller's 80s budget
-        # in cluster.py first, where the failure is attributed to the whole cluster
-        # start. Kill the child on timeout so a stalled openssl stops writing to
-        # the shared ca.key, which the next run would otherwise race.
+        # openssl genrsa can stall on low-entropy aarch64 runners. Time out here
+        # (inside cluster.py's 80s budget) and kill the child so it stops
+        # writing to the shared ca.key.
         try:
             output, err = p.communicate(timeout=30)
         except subprocess.TimeoutExpired:
@@ -177,9 +174,7 @@ def generate_tls_certs():
             )
 
     # Build CA key
-    # Use 2048-bit key for test certificates: adequate for CI/testing purposes
-    # and significantly faster to generate on entropy-constrained environments
-    # (e.g., aarch64 runners).
+    # 2048-bit is enough for test certs and faster on low-entropy runners.
     make_key(ca_key, 2048)
 
     # Build server key
