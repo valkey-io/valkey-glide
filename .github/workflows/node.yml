@@ -170,7 +170,7 @@ jobs:
               shell: bash
               run: |
                   npm run build
-                  ulimit -n 65536
+                  ulimit -n 65536 2>/dev/null || true
                   export AWS_ACCESS_KEY_ID=test_access_key
                   export AWS_SECRET_ACCESS_KEY=test_secret_key
                   export AWS_SESSION_TOKEN=test_session_token
