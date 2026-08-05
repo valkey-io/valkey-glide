@@ -7368,8 +7368,12 @@ mod cluster_async {
     }
 
     /// Tests that concurrent commands arriving while the cluster is in
-    /// `RecoverFuture::ReconnectToInitialNodes` recovery are **buffered** and complete
-    /// after recovery, not immediately failed or silently dropped.
+    /// `RecoverFuture::ReconnectToInitialNodes` recovery are **failed fast** with
+    /// `ClientError("Connection in recovery")`, not silently dropped or hung indefinitely.
+    ///
+    /// `ReconnectToInitialNodes` is a slow recovery path (may block for connection_timeout
+    /// per attempt). Requests are intentionally failed immediately to preserve throughput,
+    /// rather than buffered (which would cause requests to wait for the full reconnect cycle).
     ///
     /// ## How ReconnectToInitialNodes is triggered
     ///
@@ -7384,7 +7388,8 @@ mod cluster_async {
     ///
     /// ## Assertion
     ///
-    /// Zero command errors: all commands must succeed after recovery completes.
+    /// Some command errors are expected (fail-fast), but most commands should succeed
+    /// (commands before recovery starts and after recovery completes succeed).
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_concurrent_requests_buffered_during_reconnect_to_initial_nodes() {
@@ -7510,13 +7515,32 @@ mod cluster_async {
             .filter_map(|r| r.as_ref().ok())
             .map(|(_, _, e)| e)
             .sum();
+        let total_successes: usize = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, s, _)| s)
+            .sum();
         let total_sets = set_count.load(atomic::Ordering::SeqCst);
 
+        // With fail-fast behavior, requests that arrive during ReconnectToInitialNodes recovery
+        // get an immediate ClientError. Only the commands that arrive AFTER recovery completes
+        // (or before it starts) should succeed. Some errors are expected and correct.
+        assert!(
+            total_errors > 0,
+            "Expected some command errors during ReconnectToInitialNodes recovery (fail-fast path), \
+             but got zero. Got {} total SET commands to mock.",
+            total_sets,
+        );
+        // Assert no commands are silently dropped: every command must either succeed or error.
+        let expected_cmds = CONCURRENCY * PIPELINE_ITERATIONS * PIPELINE_SIZE;
         assert_eq!(
-            total_errors, 0,
-            "Expected zero command errors: commands buffered during ReconnectToInitialNodes \
-             recovery must succeed after recovery. Got {} errors (total SETs to mock: {}).",
-            total_errors, total_sets,
+            total_successes + total_errors,
+            expected_cmds,
+            "Commands were silently dropped: {} succeeded + {} errors = {} != {} expected",
+            total_successes,
+            total_errors,
+            total_successes + total_errors,
+            expected_cmds,
         );
     }
 

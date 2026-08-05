@@ -3532,7 +3532,6 @@ where
         Ok((address, conn))
     }
 
-    /// Fail all pending requests immediately with ClientError.
     /// Buffer incoming requests into the recovery queue while reconnect is in progress.
     /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
     /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
@@ -3616,26 +3615,34 @@ where
         }
     }
 
-    /// Fail all requests in the recovery queue with an `AllConnectionsUnavailable` error.
-    /// Called when recovery completes but no connections are available,
-    /// to prevent buffered requests from looping through reconnect indefinitely.
-    fn fail_recovery_queue(&mut self) {
-        if self.recovery_queue.is_empty() {
-            return;
+    /// Fail all pending requests immediately with ClientError.
+    /// Called when entering recovery to prevent requests from waiting for slow
+    /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
+    fn fail_pending_requests(inner: &Core<C>) {
+        let mut rx_guard = inner
+            .pending_requests_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut requests = Vec::new();
+        while let Ok(request) = rx_guard.try_recv() {
+            requests.push(request);
         }
-        let count = self.recovery_queue.len();
-        log_warn_rate_limited!(
-            "cluster",
-            5,
-            format!(
-                "fail_recovery_queue: failing {} queued requests - no connections after recovery",
-                count
-            )
-        );
-        while let Some(request) = self.recovery_queue.pop_front() {
+        drop(rx_guard);
+        let count = requests.len();
+        if count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "fail_pending_requests: failing {} pending requests (Connection in recovery)",
+                    count
+                )
+            );
+        }
+        for request in requests {
             let _ = request.sender.send(Err(RedisError::from((
-                ErrorKind::AllConnectionsUnavailable,
-                "No connections available after recovery",
+                ErrorKind::ClientError,
+                "Connection in recovery",
             ))));
         }
     }
@@ -3726,26 +3733,22 @@ where
             RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
                 match Pin::new(handle).poll(cx) {
                     Poll::Pending => Poll::Pending,
-                    Poll::Ready(Ok(())) | Poll::Ready(Err(_)) => {
-                        // Whether the task succeeded, failed, or panicked, mark recovery complete.
-                        // Then check if we actually have connections: if not, signal failure so
-                        // poll_flush can fail the recovery queue instead of draining it into
-                        // in-flight (which would cause an infinite reconnect loop).
+                    Poll::Ready(Ok(())) => {
+                        log_trace_lazy!("cluster", "Reconnected to initial nodes");
                         self.state = ConnectionState::PollComplete;
-                        if self.inner.conn_lock.read().is_empty() {
-                            log_warn_rate_limited!(
+                        Poll::Ready(Ok(()))
+                    }
+                    Poll::Ready(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            log_trace_lazy!(
                                 "cluster",
-                                5,
-                                "ReconnectToInitialNodes completed but no connections available"
+                                "Reconnect to initial nodes task was aborted"
                             );
-                            Poll::Ready(Err(RedisError::from((
-                                ErrorKind::AllConnectionsUnavailable,
-                                "No connections after reconnect to initial nodes",
-                            ))))
                         } else {
-                            log_trace_lazy!("cluster", "Reconnected to initial nodes");
-                            Poll::Ready(Ok(()))
+                            log_warn_lazy!("cluster", format!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err));
                         }
+                        self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
                     }
                 }
             }
@@ -4033,27 +4036,30 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Buffer incoming requests for all recovery paths so they are retried
-                // once recovery completes, instead of being failed immediately.
-                self.buffer_pending_requests_to_recovery_queue();
+                // Buffer during fast reconnects (circular MOVED) and slot refresh paths.
+                // For ReconnectToInitialNodes, fail fast to preserve throughput.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
+                ) {
+                    self.buffer_pending_requests_to_recovery_queue();
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
+                }
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
-                // Special case: ReconnectToInitialNodes completed but no connections are
-                // available. Fail the recovery queue immediately to prevent an infinite
-                // buffer → drain → AllConnectionsUnavailable → reconnect loop.
-                if err.kind() == ErrorKind::AllConnectionsUnavailable {
-                    self.fail_recovery_queue();
-                    // Also buffer any NEW requests that just arrived before failing them
-                    // on the next poll cycle via the same path.
+                // Same: only buffer during fast Reconnect or RefreshingSlots paths.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
+                ) {
                     self.buffer_pending_requests_to_recovery_queue();
-                    self.refresh_error = Some(err);
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
                 }
-                // For all other errors (e.g. slot refresh errors), buffer requests
-                // so they are retried once recovery completes.
-                self.buffer_pending_requests_to_recovery_queue();
                 self.refresh_error = Some(err);
                 cx.waker().wake_by_ref();
                 return Poll::Pending;

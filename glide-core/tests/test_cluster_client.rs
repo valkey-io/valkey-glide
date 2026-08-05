@@ -837,19 +837,15 @@ mod cluster_client_tests {
         // Test for #4990: Failover causes near-zero throughput
         // See: https://github.com/valkey-io/valkey-glide/issues/4990
         //
-        // Kills all cluster nodes (with a TCP blackhole as one seed node) to force
-        // ReconnectToInitialNodes recovery. Fires CONCURRENT_CMDS commands all at once and
-        // asserts that all of them complete (either with a result or an error) within a
-        // generous deadline once recovery finishes.
-        //
-        // Before the PR fix, requests were immediately failed during ReconnectToInitialNodes.
-        // After the fix, requests are buffered in the recovery queue and retried once recovery
-        // completes. Either way, requests must NOT be silently lost or hung indefinitely.
+        // Kills all cluster nodes with a TCP blackhole as seed node, then measures how many
+        // commands complete in a time window during reconnection. Without the fix, poll_flush
+        // blocks behind the reconnect task (2000ms per attempt) and commands are not processed.
+        // With the fix, ReconnectToInitialNodes path calls fail_pending_requests immediately,
+        // so commands get ClientError quickly and the loop can advance.
         block_on_all(async {
             const CONNECTION_TIMEOUT_MS: u64 = 2000;
-            // Per-command deadline: one full reconnect cycle + generous retry margin
-            const CMD_DEADLINE_MS: u64 = CONNECTION_TIMEOUT_MS * 3 + 2000;
-            const CONCURRENT_CMDS: usize = 10;
+            const WINDOW_MS: u64 = 3000;
+            const MIN_COMMANDS_WITH_FIX: u32 = 10;
 
             // TCP blackhole: accepts connections but never responds.
             // Simulates a seed node whose DNS hasn't updated after failover.
@@ -889,13 +885,12 @@ mod cluster_client_tests {
                 .build()
                 .expect("build cluster client");
 
-            let conn: redis::cluster_async::ClusterConnection = cluster_client
+            let mut conn: redis::cluster_async::ClusterConnection = cluster_client
                 .get_async_connection(None, None, None)
                 .await
                 .expect("connect to cluster");
 
             let ping: redis::RedisResult<redis::Value> = conn
-                .clone()
                 .route_command(
                     &redis::cmd("PING"),
                     redis::cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
@@ -903,7 +898,7 @@ mod cluster_client_tests {
                 .await;
             assert!(ping.is_ok(), "PING before kill failed: {:?}", ping);
 
-            // Kill all cluster nodes to trigger ReconnectToInitialNodes
+            // Kill all cluster nodes to trigger reconnect
             for pid in &pids {
                 std::process::Command::new("kill")
                     .args(["-9", &pid.to_string()])
@@ -914,53 +909,37 @@ mod cluster_client_tests {
             // Wait for connection health checks to detect failures
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Fire CONCURRENT_CMDS commands all at once.
-            // They should be buffered during recovery and all complete within the deadline —
-            // none should be silently dropped or hung indefinitely.
-            let cmd = {
-                let mut c = redis::cmd("GET");
-                c.arg("{test}key");
-                c
-            };
+            // Measure how many commands complete (success or error) in the window.
+            // With fail-fast, each command gets ClientError immediately so the loop
+            // advances quickly. Without the fix, each command would block for
+            // CONNECTION_TIMEOUT_MS waiting for the reconnect task to finish.
+            let mut completed: u32 = 0;
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("{test}key");
+            let window_start = std::time::Instant::now();
 
-            let mut handles = Vec::with_capacity(CONCURRENT_CMDS);
-            for _ in 0..CONCURRENT_CMDS {
-                let mut c = conn.clone();
-                let cmd = cmd.clone();
-                let handle = tokio::spawn(async move {
-                    tokio::time::timeout(
-                        Duration::from_millis(CMD_DEADLINE_MS),
-                        c.route_command(
-                            &cmd,
-                            redis::cluster_routing::RoutingInfo::SingleNode(
-                                SingleNodeRoutingInfo::SpecificNode(Route::new(
-                                    0,
-                                    SlotAddr::Master,
-                                )),
-                            ),
+            while window_start.elapsed() < Duration::from_millis(WINDOW_MS) {
+                let _ = tokio::time::timeout(
+                    Duration::from_millis(CONNECTION_TIMEOUT_MS + 500),
+                    conn.route_command(
+                        &cmd,
+                        redis::cluster_routing::RoutingInfo::SingleNode(
+                            SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
                         ),
-                    )
-                    .await
-                });
-                handles.push(handle);
+                    ),
+                )
+                .await;
+                completed += 1;
             }
 
-            let mut completed = 0usize;
-            for handle in handles {
-                // Ok(Ok(_)) or Ok(Err(_)) = command completed within the deadline (redis ok or err)
-                // Ok(Err(timeout)) would be a tokio::time::error::Elapsed — not Ok(Ok/Err)
-                // Err(_) = task panicked
-                if let Ok(Ok(_)) = handle.await {
-                    completed += 1;
-                }
-            }
-
-            assert_eq!(
-                completed, CONCURRENT_CMDS,
-                "Concurrent requests were lost or hung: only {}/{} completed within {}ms during \
-                 ReconnectToInitialNodes recovery. Requests must be buffered and returned (ok or err), \
-                 not silently dropped.",
-                completed, CONCURRENT_CMDS, CMD_DEADLINE_MS,
+            assert!(
+                completed >= MIN_COMMANDS_WITH_FIX,
+                "Send loop blocked: only {}/{} commands completed in {}ms. \
+                 Each command serialized behind reconnect_to_initial_nodes blocking for {}ms.",
+                completed,
+                MIN_COMMANDS_WITH_FIX,
+                WINDOW_MS,
+                CONNECTION_TIMEOUT_MS,
             );
         });
     }
