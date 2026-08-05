@@ -602,13 +602,55 @@ pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
 }
 
-/// Global singleton watchdog instance.
-static GLOBAL_WATCHDOG: std::sync::OnceLock<TimeoutWatchdog> = std::sync::OnceLock::new();
+/// Global singleton watchdog instance. Uses an atomic pointer so the read path
+/// is lock-free and the state can be replaced after fork().
+static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
-        GLOBAL_WATCHDOG.get_or_init(Self::start_global)
+        let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
+        if !ptr.is_null() {
+            // Safety: only leaked &'static TimeoutWatchdog values are stored.
+            return unsafe { &*ptr };
+        }
+        Self::init_global()
+    }
+
+    /// Initialize the global watchdog (first call or after reinit).
+    /// Uses compare_exchange so only one caller wins the race.
+    fn init_global() -> &'static Self {
+        let w = Box::new(Self::start_global());
+        let w_ref: &'static Self = Box::leak(w);
+        let ptr = w_ref as *const Self as *mut Self;
+        match GLOBAL_WATCHDOG.compare_exchange(
+            std::ptr::null_mut(),
+            ptr,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        ) {
+            Ok(_) => w_ref,
+            Err(existing) => {
+                // Another thread won the race — use theirs.
+                // The leaked alloc is harmless (only happens on contended first init).
+                unsafe { &*existing }
+            }
+        }
+    }
+
+    /// Reinitialize the global watchdog after fork().
+    ///
+    /// After fork(), the watchdog thread is dead but the AtomicPtr still points
+    /// to the old instance. This replaces it with a fresh one. The old instance
+    /// is intentionally leaked (its mpsc channel is in undefined state post-fork).
+    pub fn reinit_global() {
+        let w = Box::new(Self::start_global());
+        let w_ref: &'static Self = Box::leak(w);
+        let ptr = w_ref as *const Self as *mut Self;
+        GLOBAL_WATCHDOG.store(ptr, std::sync::atomic::Ordering::Release);
+        // Reset the published pending count — the old watchdog's entries are gone.
+        PUBLISHED_PENDING.store(0, Ordering::Relaxed);
     }
 
     /// Start the global watchdog instance (publishes pending count).
@@ -960,5 +1002,26 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"PEXPIREAT"), "PEXPIREAT");
         assert_eq!(cmd_name_from_bytes(b"INCRBYFLOAT"), "INCRBYFLOAT");
         assert_eq!(cmd_name_from_bytes(b"unknowncmd"), "UNKNOWN");
+    }
+
+    // ── Fork Safety (reinit) ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn reinit_global_spawns_new_working_watchdog() {
+        // Ensure the global watchdog is initialized.
+        let _pre = TimeoutWatchdog::global();
+
+        // Simulate post-fork reinit: replace the global with a fresh instance.
+        TimeoutWatchdog::reinit_global();
+
+        // The new watchdog must be functional — register and await a timeout.
+        let watchdog = TimeoutWatchdog::global();
+        let rx = watchdog.register(Duration::from_millis(50), Instant::now());
+        let result = tokio::time::timeout(Duration::from_millis(500), rx).await;
+        assert!(
+            result.is_ok(),
+            "watchdog must fire after reinit_global (simulating post-fork)"
+        );
+        assert!(result.unwrap().is_ok());
     }
 }
