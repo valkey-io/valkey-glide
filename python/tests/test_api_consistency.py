@@ -124,6 +124,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
         "test_async_freethreading.py",
+        "test_fork_safety.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
