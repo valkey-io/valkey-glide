@@ -4353,6 +4353,15 @@ pub unsafe extern "C-unwind" fn invoke_script(
     };
 
     let mut client = client_adapter.core.client.clone();
+
+    // Refresh pool activity for batch/script dispatch (same as execute_command)
+    #[cfg(feature = "pool-support")]
+    if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&(client_adapter_ptr as usize))
+    {
+        let (pool_id, client_id) = *entry.value();
+        glide_core::pool::refresh_client_activity(pool_id, client_id);
+    }
+
     client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, None)?;
         client
@@ -4461,6 +4470,13 @@ pub unsafe extern "C" fn batch(
         Arc::from_raw(client_ptr as *mut ClientAdapter)
     };
     let mut client = client_adapter.core.client.clone();
+
+    // Refresh pool activity for batch/script dispatch (same as execute_command)
+    #[cfg(feature = "pool-support")]
+    if let Some(entry) = crate::pool_ffi::get_pool_adapter_map().get(&(client_ptr as usize)) {
+        let (pool_id, client_id) = *entry.value();
+        glide_core::pool::refresh_client_activity(pool_id, client_id);
+    }
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();

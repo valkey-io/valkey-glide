@@ -1406,6 +1406,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
         let handle_id = client_ptr as u64;
 
+        // Refresh pool activity for batch dispatch (same as executeCommandAsync)
+        if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
+            let pool_id = *entry.value();
+            glide_core::pool::refresh_client_activity(pool_id, handle_id);
+        }
+
         // Extract request types
         let cmd_count = match env.get_array_length(&request_types) {
             Ok(len) => len as usize,
@@ -1869,6 +1875,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
         else {
             return Some(());
         };
+
+        // Refresh pool activity for script dispatch (same as executeCommandAsync)
+        if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&(handle_id as u64)) {
+            let pool_id = *entry.value();
+            glide_core::pool::refresh_client_activity(pool_id, handle_id as u64);
+        }
 
         // Extract script hash
         let hash_str = match env.get_string(&hash) {
