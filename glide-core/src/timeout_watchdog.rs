@@ -621,20 +621,21 @@ impl TimeoutWatchdog {
     /// Initialize the global watchdog (first call or after reinit).
     /// Uses compare_exchange so only one caller wins the race.
     fn init_global() -> &'static Self {
-        let w = Box::new(Self::start_global());
-        let w_ref: &'static Self = Box::leak(w);
-        let ptr = w_ref as *const Self as *mut Self;
+        let ptr = Box::into_raw(Box::new(Self::start_global()));
         match GLOBAL_WATCHDOG.compare_exchange(
             std::ptr::null_mut(),
             ptr,
             std::sync::atomic::Ordering::AcqRel,
             std::sync::atomic::Ordering::Acquire,
         ) {
-            Ok(_) => w_ref,
+            Ok(_) => unsafe { &*ptr },
             Err(existing) => {
-                // Another thread won the race — use theirs.
-                // The leaked alloc is harmless (only happens on contended first init).
-                unsafe { &*existing }
+                // Another thread won the race — drop ours (the Sender drop
+                // causes the spawned thread to exit via Disconnected).
+                unsafe {
+                    drop(Box::from_raw(ptr));
+                    &*existing
+                }
             }
         }
     }
