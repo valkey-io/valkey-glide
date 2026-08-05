@@ -421,7 +421,16 @@ class TestBatch:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_move_transaction(self, glide_client: GlideClusterClient):
+    async def test_cluster_move_transaction(
+        self, request, cluster_mode, protocol
+    ):
+        # Use a fresh, unpooled client. The RESP3+cluster pooled client can
+        # surface None from an atomic exec after prior tests on the free-
+        # threaded 3.14t runner leave its aggregator wedged; creating a
+        # dedicated client keeps this test independent of pool state.
+        glide_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
         value = get_random_string(5)
