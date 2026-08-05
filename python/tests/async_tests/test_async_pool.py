@@ -67,6 +67,10 @@ async def _wait_for_pool_ready(pool, min_idle=1, timeout_s=30):
     deadline = asyncio.get_event_loop().time() + timeout_s
     while pool.idle_count < min_idle and asyncio.get_event_loop().time() < deadline:
         await asyncio.sleep(0.05)
+    assert pool.idle_count >= min_idle, (
+        f"Pool did not reach {min_idle} idle clients within {timeout_s}s "
+        f"(idle={pool.idle_count}, total={pool.total_count})"
+    )
 
 
 class TestAsyncClientPool:

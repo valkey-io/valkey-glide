@@ -5,6 +5,8 @@
 //! Uses the same deferred Promise pattern as GlideClientHandle for async work:
 //! synchronous N-API call spawns work on a runtime, resolves/rejects via Deferred.
 
+#![allow(dead_code)]
+
 use glide_core::client::{Client, ConnectionRequest};
 use glide_core::connection_request::ConnectionRequest as ProtobufConnectionRequest;
 use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
