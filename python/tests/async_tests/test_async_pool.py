@@ -65,11 +65,13 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
 async def _wait_for_pool_ready(pool, min_idle=1, timeout_s=30):
     """Poll until pool has at least min_idle clients ready."""
     deadline = asyncio.get_event_loop().time() + timeout_s
-    while pool.idle_count < min_idle and asyncio.get_event_loop().time() < deadline:
+    idle = pool.idle_count
+    while idle < min_idle and asyncio.get_event_loop().time() < deadline:
         await asyncio.sleep(0.05)
-    assert pool.idle_count >= min_idle, (
+        idle = pool.idle_count
+    assert idle >= min_idle, (
         f"Pool did not reach {min_idle} idle clients within {timeout_s}s "
-        f"(idle={pool.idle_count}, total={pool.total_count})"
+        f"(idle={idle}, total={pool.total_count})"
     )
 
 
