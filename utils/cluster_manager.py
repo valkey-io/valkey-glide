@@ -159,15 +159,23 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        # ARM64 runners take longer to generate TLS certificates, and sometimes fail if the timeout shorter (10 seconds).
-        output, err = p.communicate(timeout=20)
+        # openssl genrsa can stall on low-entropy aarch64 runners. Time out here
+        # (inside cluster.py's 80s budget) and kill the child so it stops
+        # writing to the shared ca.key.
+        try:
+            output, err = p.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.communicate()
+            raise
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
             )
 
     # Build CA key
-    make_key(ca_key, 4096)
+    # 2048-bit is enough for test certs and faster on low-entropy runners.
+    make_key(ca_key, 2048)
 
     # Build server key
     make_key(SERVER_KEY, 2048)

@@ -434,7 +434,9 @@ pub fn build_tls_file_paths(tempdir: &tempfile::TempDir) -> TlsFilePaths {
     }
 
     // Build CA Key
-    make_key(&ca_key, 4096);
+    // 2048 bits is enough for a test CA and generates much faster than 4096 on
+    // entropy-constrained runners. Matches the Python cluster manager.
+    make_key(&ca_key, 2048);
 
     // Build redis key
     make_key(&redis_key, 2048);
