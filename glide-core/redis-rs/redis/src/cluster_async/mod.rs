@@ -188,6 +188,13 @@ where
 /// Default maximum number of requests to buffer during a cluster reconnect window.
 pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 
+/// Deadline for the per-connection heartbeat PING issued by the periodic
+/// connection validation task. A silent half-open TCP flow (for example a
+/// stateful NAT device evicting an idle flow with no FIN or RST) never
+/// delivers EOF to the read half, so `is_closed()` stays false and the
+/// existing validation misses it. Sending a bounded PING catches this case.
+const HEARTBEAT_PING_TIMEOUT: Duration = Duration::from_millis(500);
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -1883,14 +1890,44 @@ where
             }
         }
 
-        // identify nodes with closed connection
+        // Identify nodes with a closed transport or an unresponsive one.
+        // `is_closed()` catches transports where the read half has produced
+        // EOF. A silent half-open flow (a middlebox evicting the idle TCP
+        // flow with no FIN or RST) keeps that flag false forever, so a
+        // bounded PING is additionally sent on each open connection.
         let mut addrs_to_refresh = HashSet::new();
         for (addr, con_fut) in &all_valid_conns {
-            let con = con_fut.clone().await;
-            // connection object might be present despite the transport being closed
+            let mut con = con_fut.clone().await;
             if con.is_closed() {
-                // transport is closed, need to refresh
                 addrs_to_refresh.insert(addr.clone());
+                continue;
+            }
+            match tokio::time::timeout(HEARTBEAT_PING_TIMEOUT, con.req_packed_command(&cmd("PING")))
+                .await
+            {
+                Ok(Ok(_)) => {}
+                Ok(Err(err)) => {
+                    log_debug_lazy!(
+                        "cluster",
+                        format!(
+                            "Connection validation PING to {} failed: {}. \
+                             Marking for refresh.",
+                            addr, err
+                        )
+                    );
+                    addrs_to_refresh.insert(addr.clone());
+                }
+                Err(_) => {
+                    log_warn_lazy!(
+                        "cluster",
+                        format!(
+                            "Connection validation PING to {} did not return within {:?}. \
+                             Marking connection for refresh (suspected half-open transport).",
+                            addr, HEARTBEAT_PING_TIMEOUT
+                        )
+                    );
+                    addrs_to_refresh.insert(addr.clone());
+                }
             }
         }
 
