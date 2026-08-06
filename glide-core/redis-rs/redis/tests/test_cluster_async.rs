@@ -7372,6 +7372,120 @@ mod cluster_async {
         );
     }
 
+    /// Regression test for silent half-open cluster connections.
+    ///
+    /// A middlebox on the network path (a stateful NAT or load balancer) can
+    /// silently evict an idle TCP flow between the client and one cluster
+    /// shard. No FIN or RST reaches the client, so the transport looks open,
+    /// `is_closed()` stays false, and the periodic connection validation
+    /// misses the dead socket. Every subsequent request to that shard then
+    /// times out for the remainder of the runtime lifetime.
+    ///
+    /// This test uses the mock cluster harness to put port 6379 into a PING
+    /// "blackhole": any PING routed to that port returns a future that never
+    /// resolves, mimicking a half-open transport where the read half stays
+    /// pending forever. It then waits a few multiples of the periodic
+    /// validation interval and asserts that the client opened at least one
+    /// new connection (proving the validation task detected the dead socket
+    /// and drove a reconnect) and can drive a fresh command afterwards.
+    ///
+    /// On pre-fix code the mock connection reports `is_closed() == false`
+    /// forever, the validation task never triggers a refresh, and the
+    /// connection-count assertion below fails.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_periodic_check_detects_silent_half_open_connection() {
+        let name = "test_periodic_check_detects_half_open";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(0)
+                .periodic_connections_checks(Some(Duration::from_millis(500))),
+            name,
+            move |cmd: &[u8], _port| {
+                if let Err(err) = respond_startup(name, cmd) {
+                    return Err(err);
+                }
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        // Drive one command to prove the connection is healthy end-to-end.
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let conns_before = mock_connection_count(name);
+
+        // Simulate a silent half-open flow on port 6379: any PING routed to
+        // that port hangs forever, mimicking a middlebox eviction with no FIN
+        // or RST. The RAII guard clears the port on drop, so a panic anywhere
+        // below still restores global state and does not leak into sibling
+        // tests that reuse port 6379.
+        let blackhole_guard = AsyncPingBlackholeGuard::new(6379);
+
+        // Wait a few multiples of the heartbeat interval so the validation
+        // task can fire, time out on PING, and drive a reconnect.
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        });
+
+        // Take the blackhole off so the reconnect attempt itself does not
+        // hang: the mock's connect() path is unaffected, but a PING during a
+        // fresh handshake would otherwise stall.
+        drop(blackhole_guard);
+
+        // Give the reconnect path enough time to complete the fresh handshake
+        // and install the replacement connection into routing before we
+        // sample the counter and probe a follow-up command.
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        });
+
+        let conns_after = mock_connection_count(name);
+
+        assert!(
+            conns_after > conns_before,
+            "expected periodic validation to detect the half-open transport and \
+             open at least one new connection; before={conns_before}, after={conns_after}"
+        );
+
+        // The reconnect path swapped in a fresh transport; a follow-up command
+        // must now succeed. This catches regressions where the validation task
+        // detects the dead socket but the refresh fails to install a working
+        // replacement. The reconnect can still be settling into routing, so
+        // poll for a bounded window rather than assuming the first attempt
+        // sees the fresh transport.
+        let post_reconnect = runtime.block_on(async {
+            let mut last: Result<Value, RedisError> = Ok(Value::Nil);
+            for _ in 0..20 {
+                let attempt = cmd("ECHO")
+                    .arg("world")
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+                if matches!(&attempt, Ok(Value::BulkString(_))) {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+            last
+        });
+        assert_eq!(
+            post_reconnect,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected a fresh command to succeed after reconnect"
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;

@@ -96,6 +96,61 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
     MOCK_CONN_BEHAVIORS.write().unwrap()
 }
 
+/// Ports whose async PING requests must never resolve. Reproduces a silent
+/// half-open TCP flow: the transport looks alive but any read on it stays
+/// pending forever. The set is process-global so any test that flips a port
+/// on must clear it before returning, otherwise sibling tests reusing the
+/// same port hang. Callers should acquire an [`AsyncPingBlackholeGuard`]
+/// rather than toggling the raw setter, so that a panic or early return also
+/// clears the port on unwind.
+static ASYNC_PING_BLACKHOLE_PORTS: Lazy<RwLock<std::collections::HashSet<u16>>> =
+    Lazy::new(Default::default);
+
+fn set_async_ping_blackhole_raw(port: u16, blackhole: bool) {
+    let mut guard = ASYNC_PING_BLACKHOLE_PORTS.write().unwrap();
+    if blackhole {
+        guard.insert(port);
+    } else {
+        guard.remove(&port);
+    }
+}
+
+/// RAII guard that installs a PING blackhole on construction and clears it
+/// on drop, including during a panic-driven unwind. Hold the guard for the
+/// entire region that needs the blackhole; do not toggle the state manually.
+#[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
+pub struct AsyncPingBlackholeGuard {
+    port: u16,
+}
+
+impl AsyncPingBlackholeGuard {
+    pub fn new(port: u16) -> Self {
+        set_async_ping_blackhole_raw(port, true);
+        AsyncPingBlackholeGuard { port }
+    }
+}
+
+impl Drop for AsyncPingBlackholeGuard {
+    fn drop(&mut self) {
+        set_async_ping_blackhole_raw(self.port, false);
+    }
+}
+
+fn async_ping_blackholed(port: u16) -> bool {
+    ASYNC_PING_BLACKHOLE_PORTS.read().unwrap().contains(&port)
+}
+
+/// Number of async connections opened against a given mock cluster since it
+/// was registered. Tests use this to detect that the reconnect path fired.
+pub fn mock_connection_count(name: &str) -> usize {
+    MOCK_CONN_BEHAVIORS
+        .read()
+        .unwrap()
+        .get(name)
+        .map(|b| b.connection_id_provider.load(Ordering::SeqCst))
+        .unwrap_or(0)
+}
+
 #[derive(Default)]
 pub enum ConnectionIPReturnType {
     /// New connections' IP will be returned as None
@@ -349,8 +404,12 @@ pub fn respond_startup_with_config(
 #[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
+        let packed = cmd.get_packed_command();
+        if async_ping_blackholed(self.port) && contains_slice(&packed, b"PING") {
+            return Box::pin(future::pending());
+        }
         Box::pin(future::ready(
-            (self.handler)(&cmd.get_packed_command(), self.port)
+            (self.handler)(&packed, self.port)
                 .map_err(|err| err.and_then(|v| v.extract_error()))
                 .expect_err("Handler did not specify a response"),
         ))
