@@ -4016,19 +4016,30 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # Check that timestamp was updated
-            stats_after_first = await listening_client.get_statistics()
-            timestamp_after_first = int(
-                stats_after_first.get("subscription_last_sync_timestamp", "0")
+            async def _timestamp_advanced() -> bool:
+                return (
+                    int(
+                        (await listening_client.get_statistics()).get(
+                            "subscription_last_sync_timestamp", "0"
+                        )
+                    )
+                    > initial_timestamp
+                )
+
+            await wait_for(
+                _timestamp_advanced,
+                "Timestamp should increase after subscription",
             )
 
-            assert (
-                timestamp_after_first > initial_timestamp
-            ), f"Timestamp should increase after subscription: {initial_timestamp} -> {timestamp_after_first}"
+            timestamp_after_first_sub = int(
+                (await listening_client.get_statistics()).get(
+                    "subscription_last_sync_timestamp", "0"
+                )
+            )
 
             # Verify the timestamp is greater than or equal to when we started the subscription
-            assert timestamp_after_first >= time_before_first_sub, (
-                f"Timestamp {timestamp_after_first} should be >= "
+            assert timestamp_after_first_sub >= time_before_first_sub, (
+                f"Timestamp {timestamp_after_first_sub} should be >= "
                 f"{time_before_first_sub} (time before subscription)"
             )
 
