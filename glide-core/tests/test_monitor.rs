@@ -45,6 +45,23 @@ mod test_monitor {
         }
     }
 
+    /// Poll `lines` until `predicate` matches at least one entry, or panic after `timeout`.
+    async fn wait_for_line(
+        lines: &Arc<Mutex<Vec<MonitorLine>>>,
+        predicate: impl Fn(&MonitorLine) -> bool,
+        timeout: std::time::Duration,
+        msg: &str,
+    ) {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if lines.lock().unwrap().iter().any(&predicate) {
+                return;
+            }
+            assert!(std::time::Instant::now() < deadline, "{}", msg);
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }
+
     #[tokio::test]
     async fn test_monitor_start_and_receive_line() {
         let server_addr = get_shared_server_address(false);
@@ -65,6 +82,24 @@ mod test_monitor {
             .get_multiplexed_async_connection(GlideConnectionOptions::default())
             .await
             .unwrap();
+
+        // Send a canary PING and wait for it to appear in the monitor output.
+        // This ensures the monitor stream is actively receiving before we issue
+        // the SET command we actually want to validate.
+        let _: () = redis::cmd("PING")
+            .arg("monitor_canary")
+            .query_async(&mut conn)
+            .await
+            .unwrap();
+
+        wait_for_line(
+            &lines,
+            |l| l.command == "PING" && l.args.first().map(|s| s.as_str()) == Some("monitor_canary"),
+            std::time::Duration::from_secs(15),
+            "timed out waiting for canary PING line",
+        )
+        .await;
+
         let _: () = redis::cmd("SET")
             .arg("monitor_test_key")
             .arg("monitor_test_val")
@@ -72,20 +107,13 @@ mod test_monitor {
             .await
             .unwrap();
 
-        // Generous deadline to tolerate slow/loaded CI; not a behavioral change.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-        loop {
-            if lines.lock().unwrap().iter().any(|l| {
-                l.command == "SET" && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key")
-            }) {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "timed out waiting for SET line"
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        wait_for_line(
+            &lines,
+            |l| l.command == "SET" && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key"),
+            std::time::Duration::from_secs(15),
+            "timed out waiting for SET line",
+        )
+        .await;
 
         let (args, db, client_addr, timestamp) = {
             let found = lines.lock().unwrap();
