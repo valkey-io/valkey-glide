@@ -2010,6 +2010,7 @@ impl Client {
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
+                    iam_config.credentials_provider.clone(),
                 )
                 .await
                 {

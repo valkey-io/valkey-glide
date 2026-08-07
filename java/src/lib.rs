@@ -28,6 +28,7 @@ use std::sync::{Arc, OnceLock};
 
 mod address_resolver;
 mod errors;
+mod iam_token_callback;
 mod jni_client;
 mod jni_pool;
 mod jni_scope;
@@ -38,6 +39,7 @@ use errors::{FFIError, handle_errors, run_ffi};
 use jni_client::*;
 
 use crate::address_resolver::JavaAddressResolver;
+use crate::iam_token_callback::{JavaIamTokenCallback, make_iam_provider_callback};
 /// Process command arguments for compression, matching the socket_listener pattern.
 /// Extracts args from the command, applies compression if applicable, and rebuilds the command.
 fn process_command_for_compression(
@@ -1166,12 +1168,15 @@ fn safe_create_jstring<'local>(mut env: JNIEnv<'local>, input: &str) -> JString<
 /// If address_resolver is not null, it will be stored as a global reference and used
 /// for address resolution callbacks. The global reference ensures the resolver is not
 /// garbage collected while the client is alive.
+/// If iam_credentials_provider is not null, it will be stored as a global reference
+/// and invoked whenever Rust needs to sign a fresh IAM token with custom credentials.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     mut env: JNIEnv,
     _class: JClass,
     connection_request_bytes: JByteArray,
     address_resolver: JObject,
+    iam_credentials_provider: JObject,
 ) -> jlong {
     run_ffi(|| {
         // Convert Java byte array to Rust bytes
@@ -1210,6 +1215,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             match JavaAddressResolver::new(&mut env, jvm, &address_resolver) {
                 Some(resolver) => {
                     connection_request.address_resolver = Some(Arc::new(resolver));
+                }
+                None => {
+                    return Some(0);
+                }
+            }
+        }
+
+        // If an IAM credentials provider is provided, wrap it so that Rust calls back
+        // into Java whenever it needs to sign a fresh token with custom credentials.
+        if !iam_credentials_provider.is_null()
+            && let Some(jvm) = jni_client::JVM.get().cloned()
+        {
+            match JavaIamTokenCallback::new(&mut env, jvm, &iam_credentials_provider) {
+                Some(cb) => {
+                    // Inject the provider into the IAM config, if present.
+                    if let Some(auth_info) = connection_request.authentication_info.as_mut()
+                        && let Some(iam_config) = auth_info.iam_config.as_mut()
+                    {
+                        iam_config.credentials_provider = Some(make_iam_provider_callback(cb));
+                    } else {
+                        log::warn!(
+                            "IAM credentials callback provided but no IAM configuration found. \
+                             The callback will be ignored."
+                        );
+                    }
                 }
                 None => {
                     return Some(0);

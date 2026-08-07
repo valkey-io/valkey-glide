@@ -533,9 +533,25 @@ public class ConnectionManager {
                         // to prevent garbage collection while the client is alive
                         AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
 
+                        // Build the IAM credentials provider when a custom credentials provider is
+                        // set. The lambda is passed to native code as a global reference so that
+                        // Rust can invoke it from any thread when it needs to sign a fresh IAM
+                        // token.
+                        glide.api.models.configuration.GlideCredentialProvider iamCredentialsProvider = null;
+                        if (credentials != null && credentials.getIamConfig() != null) {
+                            glide.api.models.configuration.GlideCredentialProvider configuredProvider =
+                                    credentials.getIamConfig().getCredentialsProvider();
+                            if (configuredProvider != null) {
+                                iamCredentialsProvider = configuredProvider;
+                            }
+                        }
+
                         // Create native client with protobuf bytes
-                        // Native code will store the resolver as a global reference if provided
-                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);
+                        // Native code will store the resolver and IAM provider as global references
+                        // if provided
+                        this.nativeClientHandle =
+                                GlideNativeBridge.createClient(
+                                        requestBytes, addressResolver, iamCredentialsProvider);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");
