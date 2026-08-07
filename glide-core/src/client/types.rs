@@ -32,6 +32,11 @@ pub struct ConnectionRequest {
     pub cluster_mode_enabled: bool,
     pub request_timeout: Option<u32>,
     pub connection_timeout: Option<u32>,
+    /// When set, the client validates the connection with a bounded PING
+    /// before its next command whenever the gap since that connection's
+    /// last successful activity exceeds this value in milliseconds. Zero
+    /// or unset disables the check.
+    pub idle_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
@@ -72,6 +77,15 @@ impl ConnectionRequest {
         self.connection_timeout
             .map(|val| Duration::from_millis(val as u64))
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
+    }
+
+    /// Returns the idle-timeout duration when the option is enabled, or
+    /// `None` when it is disabled. Callers only run the pre-command
+    /// validation hook when this returns `Some`.
+    pub fn get_idle_timeout(&self) -> Option<Duration> {
+        self.idle_timeout
+            .filter(|v| *v > 0)
+            .map(|v| Duration::from_millis(v as u64))
     }
 }
 
@@ -315,6 +329,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
         let connection_timeout = none_if_zero(value.connection_timeout);
+        let idle_timeout = none_if_zero(value.idle_timeout);
         let connection_retry_strategy =
             value
                 .connection_retry_strategy
@@ -480,6 +495,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             cluster_mode_enabled,
             request_timeout,
             connection_timeout,
+            idle_timeout,
             connection_retry_strategy,
             periodic_checks,
             pubsub_subscriptions,

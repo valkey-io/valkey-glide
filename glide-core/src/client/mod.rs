@@ -2309,6 +2309,7 @@ async fn create_cluster_client(
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let idle_timeout = request.get_idle_timeout();
     let connection_timeout = request.get_connection_timeout();
     let address_resolver = &request.address_resolver;
     let initial_nodes: Vec<_> = request
@@ -2396,6 +2397,8 @@ async fn create_cluster_client(
         .recovery_requests_queue_size
         .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE);
     builder = builder.recovery_requests_queue_size(recovery_requests_queue_size);
+
+    builder = builder.idle_timeout(idle_timeout);
 
     let client = builder.build()?;
     let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
@@ -2540,6 +2543,10 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nConnection timeout: {}",
         request.get_connection_timeout().as_millis()
     );
+    let idle_timeout = request
+        .get_idle_timeout()
+        .map(|d| format!("\nIdle timeout: {}", d.as_millis()))
+        .unwrap_or_default();
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -2630,7 +2637,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .unwrap_or_default();
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{idle_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
     )
 }
 
