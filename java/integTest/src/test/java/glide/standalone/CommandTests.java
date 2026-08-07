@@ -403,15 +403,39 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_reset_stat(GlideClient regularClient) {
+        // Mirror of the cluster twin (see glide.cluster.CommandTests#config_reset_stat and issue
+        // #4574). Assert on the command-scoped "total_commands_processed" counter rather than
+        // "total_net_input_bytes". Comparing byte counters is fragile: the pre-reset value depends on
+        // whatever traffic preceded it, and the post-reset value already includes the bytes of the
+        // INFO read used to measure it, so the "after < before" ordering is not guaranteed. Instead we
+        // drive a known number of commands before the reset so the pre-reset count is a controlled
+        // floor, then assert the counter dropped afterwards. Deterministic, not a tuned threshold.
+        final int commandCount = 100;
+        for (int i = 0; i < commandCount; i++) {
+            regularClient.ping().get();
+        }
+
         String data = regularClient.info(new Section[] {STATS}).get();
-        long value_before = getValueFromInfo(data, "total_net_input_bytes");
+        long value_before = getValueFromInfo(data, "total_commands_processed");
+        assertTrue(
+                value_before >= commandCount,
+                () ->
+                        String.format(
+                                "Expected value_before (%d) to reflect the %d commands issued",
+                                value_before, commandCount));
 
         String result = regularClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = regularClient.info(new Section[] {STATS}).get();
-        long value_after = getValueFromInfo(data, "total_net_input_bytes");
-        assertTrue(value_after < value_before);
+        long value_after = getValueFromInfo(data, "total_commands_processed");
+        // After RESETSTAT only the reset and this INFO read have been processed, far below the floor.
+        assertTrue(
+                value_after < value_before,
+                () ->
+                        String.format(
+                                "Expected value_after (%d) to be less than value_before (%d)",
+                                value_after, value_before));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

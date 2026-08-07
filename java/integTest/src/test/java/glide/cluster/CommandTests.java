@@ -661,24 +661,42 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_reset_stat(GlideClusterClient clusterClient) {
-        // Ensure some network activity has occurred to guarantee valueBefore > 0
-        clusterClient.info(new Section[] {STATS}).get();
-        clusterClient.info(new Section[] {STATS}).get();
-
+        // Prior attempts (#4575, #4621, #4668) asserted on "total_net_input_bytes", which counts
+        // every byte the node reads from its sockets, including continuous cluster-bus gossip.
+        // Gossip keeps arriving between RESETSTAT and the re-read, so that counter is not monotonic
+        // on a live cluster node and the "after < before" ordering races (observed 203 vs 100).
+        //
+        // Assert on "total_commands_processed" instead. It is incremented only for client commands
+        // executed on the node; cluster-bus gossip is handled off the command path and never touches
+        // it. We pin all traffic to a single node and deliberately drive a known number of commands
+        // before the reset, so the pre-reset value is a controlled floor and the post-reset value is
+        // just the RESETSTAT + INFO round trip. This is deterministic and gossip-immune, not a tuned
+        // threshold.
         ClusterValue<String> data = clusterClient.info(new Section[] {STATS}).get();
-        // always use the same node address for before and after
-        final String firstNodeAddress = getFirstKeyFromMultiValue(data);
-        String firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
-        long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        // always talk to the same node for the inflation, reset, and both reads
+        final Route route = new ByAddressRoute(getFirstKeyFromMultiValue(data));
 
-        String result = clusterClient.configResetStat().get();
-        assertEquals(OK, result);
+        final int commandCount = 100;
+        for (int i = 0; i < commandCount; i++) {
+            clusterClient.ping(route).get();
+        }
 
-        data = clusterClient.info(new Section[] {STATS}).get();
-        // always use the same node address for before and after
-        firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
-        long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        String nodeInfo = clusterClient.info(new Section[] {STATS}, route).get().getSingleValue();
+        long valueBefore = getValueFromInfo(nodeInfo, "total_commands_processed");
+        assertTrue(
+                valueBefore >= commandCount,
+                () ->
+                        String.format(
+                                "Expected valueBefore (%d) to reflect the %d commands issued",
+                                valueBefore, commandCount));
 
+        assertEquals(OK, clusterClient.configResetStat(route).get());
+
+        nodeInfo = clusterClient.info(new Section[] {STATS}, route).get().getSingleValue();
+        long valueAfter = getValueFromInfo(nodeInfo, "total_commands_processed");
+
+        // After RESETSTAT the only commands processed on the node are the reset itself and this INFO
+        // read, so the counter is a tiny constant far below the inflated pre-reset value.
         assertTrue(
                 valueAfter < valueBefore,
                 () ->
