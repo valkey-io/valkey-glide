@@ -350,4 +350,26 @@ public class TlsAdvancedConfigurationTest {
                         .getMessage()
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
+
+    // Byte and path mTLS material together is unrepresentable through the builder,
+    // so this exercises the constructor directly.
+    @Test
+    void testBothMTlsModesPopulatedThrows() {
+        byte[] cert = "cert".getBytes(StandardCharsets.UTF_8);
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                new TlsAdvancedConfiguration(
+                                        false,
+                                        null,
+                                        cert,
+                                        key,
+                                        "/certs/client.pem",
+                                        "/certs/client.key",
+                                        null));
+        assertTrue(error.getMessage().contains("cannot both be provided"));
+    }
 }
