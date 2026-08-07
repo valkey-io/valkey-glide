@@ -781,6 +781,9 @@ pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
     // Replace the stale writer. The old one is intentionally leaked —
     // its mutex/condvar are in undefined state post-fork.
     ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
+
+    // Also reinitialize the timeout watchdog — its thread is dead post-fork.
+    glide_core::timeout_watchdog::TimeoutWatchdog::reinit_global();
 }
 
 /// Create a new `SharedPipeWriter` and spawn its flush thread.
@@ -1846,11 +1849,13 @@ fn create_client_from_uri_internal(
     // Build base ConnectionRequest from URI
     let mut request = connection_request::ConnectionRequest::new();
 
-    // Extract host and port
-    let host = url
-        .host_str()
-        .ok_or_else(|| "URI missing host".to_string())?
-        .to_string();
+    // Extract host and port.
+    let host = match url.host() {
+        Some(url::Host::Domain(domain)) => domain.to_string(),
+        Some(url::Host::Ipv4(addr)) => addr.to_string(),
+        Some(url::Host::Ipv6(addr)) => addr.to_string(),
+        None => return Err("URI missing host".to_string()),
+    };
     let port = url.port().unwrap_or(6379) as u32;
 
     let mut node_address = connection_request::NodeAddress::new();
@@ -2007,6 +2012,66 @@ mod tests_create_client_from_uri_internal {
             err.contains("Username in URI is not valid UTF-8"),
             "unexpected error: {err}"
         );
+    }
+
+    fn host_and_port(uri: &str) -> (String, u32) {
+        let req = parse_uri(uri);
+        let addr = req.addresses.first().expect("no address parsed");
+        (addr.host.to_string(), addr.port)
+    }
+
+    #[test]
+    fn ipv6_literal_host_is_unbracketed() {
+        let (host, port) = host_and_port("redis://[::1]:6400");
+        assert_eq!(host, "::1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv6_uncompressed_literal_is_canonicalized_unbracketed() {
+        let (host, port) = host_and_port("redis://[0:0:0:0:0:0:0:1]:6400");
+        assert_eq!(host, "::1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv6_v4_mapped_literal_is_unbracketed() {
+        // v4-mapped address: assert on the canonical `Ipv6Addr::to_string()`
+        // output (no brackets). Kept in sync with the std canonical form.
+        let (host, port) = host_and_port("redis://[::ffff:127.0.0.1]:6400");
+        assert_eq!(
+            host,
+            std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0x7f00, 0x0001).to_string()
+        );
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv4_literal_host_is_unchanged() {
+        // Regression control: IPv4 literals must be byte-identical to before.
+        let (host, port) = host_and_port("redis://127.0.0.1:6400");
+        assert_eq!(host, "127.0.0.1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn domain_host_is_unchanged() {
+        // Regression control: domain hosts must be byte-identical to before.
+        let (host, port) = host_and_port("redis://localhost:6400");
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn hostless_uri_returns_missing_host_error() {
+        // A URI that parses as a URL but carries no authority (e.g. only a
+        // path) has `url::Url::host()` == None. The `None` match arm must
+        // surface a clear "URI missing host" error rather than panicking or
+        // silently building an address with an empty host.
+        let c_uri = CString::new("redis:///0").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected missing-host error");
+        assert!(err.contains("URI missing host"), "unexpected error: {err}");
     }
 }
 
