@@ -3179,8 +3179,8 @@ where
             // Loser path. Wait for the winner to finish (bounded so a
             // wedged winner does not stall the whole pool) and pick up
             // whatever connection is installed for this address.
-            let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, tracker.notify.notified())
-                .await;
+            let _ =
+                tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, tracker.notify.notified()).await;
             let refreshed = core.conn_lock.read().connection_for_address(address);
             if let Some((addr, fut)) = refreshed {
                 let fresh_conn = fut.await;
@@ -3282,7 +3282,9 @@ where
                 .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
         }
 
-        let result = conn.req_packed_commands(&pipeline, offset, count, None).await;
+        let result = conn
+            .req_packed_commands(&pipeline, offset, count, None)
+            .await;
         if result.is_ok() {
             if let Some(details) = core
                 .conn_lock
