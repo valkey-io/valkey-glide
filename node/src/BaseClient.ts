@@ -336,20 +336,22 @@ export type GlideString = string | Buffer;
  * Mutual TLS (mTLS) client authentication material.
  *
  * The `kind` field selects one of two mutually exclusive ways to supply the
- * client certificate and private key. The bytes variant uses `certBytes` and
- * `keyBytes`; the path variant uses `certPath` and `keyPath`. Pairing each
- * variant's fields under a shared discriminant lets the compiler reject
- * mixed configurations (for example a `certBytes` alongside `keyPath`, or a
- * `reloadIntervalSeconds` on the bytes variant).
+ * client certificate and private key. The bytes variant uses
+ * `clientCertificate` and `clientKey`; the path variant uses `clientCertPath`
+ * and `clientKeyPath`. Pairing each variant's fields under a shared
+ * discriminant lets the compiler reject mixed configurations (for example a
+ * `clientCertificate` alongside `clientKeyPath`, or a `reloadIntervalSeconds`
+ * on the bytes variant).
  *
- * With `kind: "bytes"`, `certBytes` and `keyBytes` are PEM material passed
- * inline and read once at connect time. A `string` value is encoded as UTF-8.
+ * With `kind: "bytes"`, `clientCertificate` and `clientKey` are PEM material
+ * passed inline and read once at connect time. A `string` value is encoded as
+ * UTF-8.
  *
- * With `kind: "path"`, `certPath` and `keyPath` point at files on disk. The
- * core reads them at connect time and re-reads them on a schedule, so a
- * rotated cert is adopted on the next reconnect while open connections keep
- * their current material. If a reload fails (missing file, mismatched key,
- * unreadable), the last known good material is kept. When
+ * With `kind: "path"`, `clientCertPath` and `clientKeyPath` point at files on
+ * disk. The core reads them at connect time and re-reads them on a schedule,
+ * so a rotated cert is adopted on the next reconnect while open connections
+ * keep their current material. If a reload fails (missing file, mismatched
+ * key, unreadable), the last known good material is kept. When
  * `reloadIntervalSeconds` is omitted, the cadence defaults to the GLIDE core
  * default (`DEFAULT_RELOAD_INTERVAL_SECONDS` in glide-core's `tls_reload`
  * module); very long intervals may adopt a rotated cert late.
@@ -359,13 +361,13 @@ export type GlideString = string | Buffer;
 export type MutualTls =
     | {
           readonly kind: "bytes";
-          readonly certBytes: Buffer | string;
-          readonly keyBytes: Buffer | string;
+          readonly clientCertificate: Buffer | string;
+          readonly clientKey: Buffer | string;
       }
     | {
           readonly kind: "path";
-          readonly certPath: string;
-          readonly keyPath: string;
+          readonly clientCertPath: string;
+          readonly clientKeyPath: string;
           readonly reloadIntervalSeconds?: number;
       };
 
@@ -437,17 +439,17 @@ export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
  *
  * The cert is read first. If it fails, the key file is not touched.
  *
- * @param certPath - Path to a PEM client certificate.
- * @param keyPath - Path to a PEM client private key.
+ * @param clientCertPath - Path to a PEM client certificate.
+ * @param clientKeyPath - Path to a PEM client private key.
  * @returns `{ cert, key }` as Buffers.
  * @throws {@link ConfigurationError} If either file is missing, unreadable, or empty.
  */
 export async function loadClientCertificateAndKeyFromFile(
-    certPath: string,
-    keyPath: string,
+    clientCertPath: string,
+    clientKeyPath: string,
 ): Promise<{ cert: Buffer; key: Buffer }> {
-    const cert = await loadTlsPemFile(certPath, "Client certificate");
-    const key = await loadTlsPemFile(keyPath, "Client key");
+    const cert = await loadTlsPemFile(clientCertPath, "Client certificate");
+    const key = await loadTlsPemFile(clientKeyPath, "Client key");
     return { cert, key };
 }
 
@@ -455,8 +457,9 @@ export async function loadClientCertificateAndKeyFromFile(
  * Encodes PEM input for the connection request and rejects empty material.
  * String values are UTF-8 encoded; Buffer values pass through. Empty content
  * has to be caught here: proto3 `bytes` treats empty as unset, so a request
- * with both `certBytes` and `keyBytes` empty would silently downgrade to
- * server-auth-only TLS instead of surfacing a mTLS configuration error.
+ * with both `clientCertificate` and `clientKey` empty would silently
+ * downgrade to server-auth-only TLS instead of surfacing a mTLS configuration
+ * error.
  *
  * @internal
  */
@@ -510,17 +513,20 @@ function applyMutualTls(
     switch (mtls.kind) {
         case "bytes": {
             request.clientCert = encodePem(
-                mtls.certBytes,
-                "mutualTls.certBytes",
+                mtls.clientCertificate,
+                "mutualTls.clientCertificate",
             );
-            request.clientKey = encodePem(mtls.keyBytes, "mutualTls.keyBytes");
+            request.clientKey = encodePem(
+                mtls.clientKey,
+                "mutualTls.clientKey",
+            );
             return;
         }
 
         case "path": {
             validateReloadInterval(mtls.reloadIntervalSeconds);
-            request.clientCertPath = mtls.certPath;
-            request.clientKeyPath = mtls.keyPath;
+            request.clientCertPath = mtls.clientCertPath;
+            request.clientKeyPath = mtls.clientKeyPath;
             request.certReload = {
                 enabled: true,
                 intervalSeconds: mtls.reloadIntervalSeconds,
