@@ -357,7 +357,7 @@ def valkey_mtls_cluster(request) -> ValkeyCluster:
         cluster_mode=False,
         shard_count=1,
         replica_count=0,
-        require_client_cert=True,
+        tls_auth_clients=True,
     )
 
 

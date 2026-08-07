@@ -21,7 +21,7 @@ class ValkeyCluster:
         replica_count: int = 1,
         load_module: Optional[List[str]] = None,
         addresses: Optional[List[List[str]]] = None,
-        require_client_cert: bool = False,
+        tls_auth_clients: bool = False,
     ) -> None:
         if addresses:
             self.init_from_existing_cluster(addresses)
@@ -33,8 +33,8 @@ class ValkeyCluster:
             args_list.append("start")
             if cluster_mode:
                 args_list.append("--cluster-mode")
-            if require_client_cert:
-                args_list.append("--require-client-cert")
+            if tls_auth_clients:
+                args_list.append("--tls-auth-clients")
             if load_module:
                 if len(load_module) == 0:
                     raise ValueError(

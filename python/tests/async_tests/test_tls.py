@@ -230,8 +230,8 @@ class TestTls:
         self, request, valkey_mtls_cluster
     ):
         """
-        The server requires a client certificate here, so reaching PONG means
-        it accepted the one the client sent.
+        Verify that client can connect to a server that requires a client certificate
+        when a client certificate is specified.
         """
         config = create_client_config(
             request=request,
@@ -251,9 +251,8 @@ class TestTls:
         self, request, valkey_mtls_cluster
     ):
         """
-        The same server rejects a client that sends no certificate. Without
-        this, the accepting case above would also pass against a server that
-        ignores client certs.
+        Verify that client fails to connect to a server that requires a client certificate
+        when a client certificate is not specified.
         """
         with pytest.raises(Exception):
             await create_client(

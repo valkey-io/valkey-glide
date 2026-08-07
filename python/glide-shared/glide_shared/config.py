@@ -543,8 +543,7 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with ``client_key_path``, and cannot be combined with
               byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
-              raise ``ConfigurationError`` when the connection request is built, which
-              also catches a config mutated after construction.
+              raise ``ConfigurationError`` when the connection request is built.
 
             - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
               read and validated by the GLIDE core when the connection is established; a missing,
