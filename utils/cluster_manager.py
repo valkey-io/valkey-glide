@@ -591,26 +591,56 @@ def create_cluster(
     tls_ca_cert_file: Optional[str] = None,
 ):
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
-    p = subprocess.Popen(
-        [
-            get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-            "--cluster",
-            "create",
-            *servers_tuple,
-            "--cluster-replicas",
-            str(replica_count),
-            "--cluster-yes",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if err or "[OK] All 16384 slots covered." not in output:
-        raise Exception(f"Failed to create cluster: {err if err else output}")
+    # Scale timeout with cluster size: larger clusters need more time for CLUSTER MEET
+    cluster_create_timeout = max(40, len(servers) * 10)
+    max_retries = 3
+    last_error = None
+    for attempt in range(max_retries):
+        # Regenerate the servers_tuple each attempt since generators are consumed
+        servers_tuple = (str(server) for server in servers)
+        p = subprocess.Popen(
+            [
+                get_cli_command(),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "--cluster",
+                "create",
+                *servers_tuple,
+                "--cluster-replicas",
+                str(replica_count),
+                "--cluster-yes",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            output, err = p.communicate(timeout=cluster_create_timeout)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.communicate()
+            last_error = (
+                f"Cluster creation timed out after {cluster_create_timeout}s "
+                f"(attempt {attempt + 1}/{max_retries})"
+            )
+            logging.warning(last_error)
+            if attempt < max_retries - 1:
+                time.sleep(5)
+                continue
+            raise Exception(last_error)
+        if err or "[OK] All 16384 slots covered." not in output:
+            last_error = f"Failed to create cluster: {err if err else output}"
+            # Retry on transient CLUSTER MEET failures
+            if "CLUSTER MEET" in (err or output) and attempt < max_retries - 1:
+                logging.warning(
+                    f"Cluster creation failed with transient error "
+                    f"(attempt {attempt + 1}/{max_retries}): {last_error}"
+                )
+                time.sleep(5)
+                continue
+            raise Exception(last_error)
+        # Success
+        break
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
