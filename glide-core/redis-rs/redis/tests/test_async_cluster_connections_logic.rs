@@ -20,7 +20,7 @@ mod test_connect_and_check {
     use super::*;
     use crate::support::{get_mock_connection_handler, ShouldReturnConnectionError};
     use redis::cluster_async::testing::{
-        connect_and_check, ConnectAndCheckResult, ConnectionDetails,
+        connect_and_check, ConnectAndCheckResult, ConnectionDetails, IdleTracker,
     };
 
     fn assert_partial_result(
@@ -237,6 +237,7 @@ mod test_connect_and_check {
                 conn: user_conn,
                 ip: Some(ip),
                 az: None,
+                idle: Arc::new(IdleTracker::new()),
             }
             .into_future(),
             None,
@@ -285,6 +286,7 @@ mod test_connect_and_check {
                 conn: user_conn,
                 ip: prev_ip,
                 az: None,
+                idle: Arc::new(IdleTracker::new()),
             }
             .into_future(),
             None,
@@ -342,6 +344,7 @@ mod test_connect_and_check {
                 conn: old_user_conn,
                 ip: Some(prev_ip),
                 az: None,
+                idle: Arc::new(IdleTracker::new()),
             }
             .into_future(),
             Some(
@@ -349,6 +352,7 @@ mod test_connect_and_check {
                     conn: management_conn,
                     ip: Some(prev_ip),
                     az: None,
+                    idle: Arc::new(IdleTracker::new()),
                 }
                 .into_future(),
             ),
@@ -377,11 +381,12 @@ mod test_connect_and_check {
 mod test_check_node_connections {
 
     use super::*;
-    use redis::cluster_async::testing::{check_node_connections, ConnectionDetails};
+    use redis::cluster_async::testing::{check_node_connections, ConnectionDetails, IdleTracker};
     fn create_node_with_all_connections(name: &str) -> AsyncClusterNode<MockConnection> {
         let ip = None;
         AsyncClusterNode::new(
             ConnectionDetails {
+                idle: Arc::new(IdleTracker::new()),
                 conn: get_mock_connection_with_port(name, 1, 6380),
                 ip,
                 az: None,
@@ -389,6 +394,7 @@ mod test_check_node_connections {
             .into_future(),
             Some(
                 ConnectionDetails {
+                    idle: Arc::new(IdleTracker::new()),
                     conn: get_mock_connection_with_port(name, 2, 6381),
                     ip,
                     az: None,
@@ -470,6 +476,7 @@ mod test_check_node_connections {
                 conn: get_mock_connection(name, 1),
                 ip,
                 az: None,
+                idle: Arc::new(IdleTracker::new()),
             }
             .into_future(),
             None,
@@ -555,6 +562,7 @@ mod test_check_node_connections {
                 conn: get_mock_connection(name, 1),
                 ip: None,
                 az: None,
+                idle: Arc::new(IdleTracker::new()),
             }
             .into_future(),
             None,

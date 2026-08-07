@@ -329,7 +329,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
         let connection_timeout = none_if_zero(value.connection_timeout);
-        let idle_timeout = none_if_zero(value.idle_timeout);
+        let idle_timeout = value.idle_timeout.filter(|v| *v != 0);
         let connection_retry_strategy =
             value
                 .connection_retry_strategy
