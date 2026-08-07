@@ -26,6 +26,13 @@ public class ClientPoolConfig {
     /** Request timeout (for cleanup operations). Default: 5 seconds. */
     @Builder.Default private final Duration requestTimeout = Duration.ofSeconds(5);
 
+    /**
+     * Maximum inactivity time for a borrowed client before the pool reclaims it. The timer resets on
+     * every command sent. The abandon monitor skips clients executing blocking commands (BLPOP, XREAD
+     * BLOCK, etc.). Set to Duration.ZERO to disable abandon detection. Default: 5 minutes.
+     */
+    @Builder.Default private final Duration abandonTimeout = Duration.ofSeconds(300);
+
     /** Send PING on borrow to verify connection health. Default: false. */
     @Builder.Default private final boolean testOnBorrow = false;
 
@@ -35,6 +42,9 @@ public class ClientPoolConfig {
     public void validate() {
         if (maxSize < 1) throw new IllegalArgumentException("maxSize must be >= 1");
         if (minIdle > maxSize) throw new IllegalArgumentException("minIdle must be <= maxSize");
+        if (abandonTimeout.isNegative())
+            throw new IllegalArgumentException(
+                    "abandonTimeout must be >= 0 (use Duration.ZERO to disable)");
         if (clientConfig == null) throw new IllegalArgumentException("clientConfig is required");
         if (clientConfig.getSubscriptionConfiguration() != null) {
             throw new IllegalArgumentException(

@@ -42,6 +42,13 @@ export interface PoolConfig {
     minIdle?: number;
     /** Maximum time to wait when pool is exhausted (seconds). Default: 5. */
     acquireTimeoutS?: number;
+    /**
+     * Maximum inactivity time for a borrowed client before the pool reclaims it (ms).
+     * The timer resets on every command sent. The abandon monitor skips clients
+     * executing blocking commands (BLPOP, XREAD BLOCK, etc.).
+     * Set to 0 to disable abandon detection. Default: 300000 (5 minutes).
+     */
+    abandonTimeoutMs?: number;
     /** Whether to create cluster clients. Default: auto-detected from config. */
     clusterMode?: boolean;
 }
@@ -80,22 +87,46 @@ export class ClientPool {
     private readonly maxSize: number;
     private readonly minIdle: number;
     private readonly acquireTimeoutMs: number;
+    private readonly abandonTimeoutMs: number;
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private waiters: Waiter[] = [];
+    /** Tracks last command activity per active entry id. */
+    private lastActivity = new Map<number, number>();
+    /** Tracks entries currently executing a blocking command. */
+    private blockingEntries = new Set<number>();
+    /** Maps proxy client → entry id for release lookup. */
+    private proxyToEntryId = new WeakMap<object, number>();
+    /** Abandon monitor interval handle. */
+    private abandonMonitor: ReturnType<typeof setInterval> | null = null;
 
     private constructor(
         maxSize: number,
         minIdle: number,
         acquireTimeoutMs: number,
+        abandonTimeoutMs: number,
         isCluster: boolean,
         clientConfig: BaseClientConfiguration,
     ) {
         this.maxSize = maxSize;
         this.minIdle = minIdle;
         this.acquireTimeoutMs = acquireTimeoutMs;
+        this.abandonTimeoutMs = abandonTimeoutMs;
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
+
+        // Start abandon monitor if enabled
+        if (abandonTimeoutMs > 0) {
+            this.abandonMonitor = setInterval(
+                () => this.scanForAbandoned(),
+                abandonTimeoutMs / 2,
+            );
+
+            // Unref so it doesn't prevent Node.js from exiting
+            if (this.abandonMonitor.unref) {
+                this.abandonMonitor.unref();
+            }
+        }
     }
 
     /**
@@ -130,6 +161,7 @@ export class ClientPool {
             maxSize,
             minIdle,
             acquireTimeoutS * 1000,
+            poolConfig?.abandonTimeoutMs ?? 300_000,
             isCluster,
             clientConfig,
         );
@@ -165,14 +197,16 @@ export class ClientPool {
 
         if (entry) {
             this.active.set(entry.id, entry);
-            return entry.client;
+            this.lastActivity.set(entry.id, Date.now());
+            return this.wrapClient(entry);
         }
 
         // If below max size, create a new client
         if (this.idle.length + this.active.size < this.maxSize) {
             const newEntry = await this.createEntry();
             this.active.set(newEntry.id, newEntry);
-            return newEntry.client;
+            this.lastActivity.set(newEntry.id, Date.now());
+            return this.wrapClient(newEntry);
         }
 
         // At max size — wait for a release
@@ -194,7 +228,8 @@ export class ClientPool {
                 resolve: (entry: PoolEntry) => {
                     clearTimeout(timer);
                     this.active.set(entry.id, entry);
-                    resolve(entry.client);
+                    this.lastActivity.set(entry.id, Date.now());
+                    resolve(this.wrapClient(entry));
                 },
                 reject,
                 timer,
@@ -209,18 +244,31 @@ export class ClientPool {
      * GlideClient connection before making it idle again.
      */
     async release(client: BaseClient): Promise<void> {
-        // Find entry by client reference
+        // Find entry by client reference or proxy mapping
         let entry: PoolEntry | undefined;
+        const entryId = this.proxyToEntryId.get(client);
 
-        for (const [id, e] of this.active) {
-            if (e.client === client) {
-                entry = e;
-                this.active.delete(id);
-                break;
+        if (entryId !== undefined) {
+            entry = this.active.get(entryId);
+
+            if (entry) {
+                this.active.delete(entryId);
+                this.proxyToEntryId.delete(client);
+            }
+        } else {
+            for (const [id, e] of this.active) {
+                if (e.client === client) {
+                    entry = e;
+                    this.active.delete(id);
+                    break;
+                }
             }
         }
 
         if (!entry) return;
+
+        this.lastActivity.delete(entry.id);
+        this.blockingEntries.delete(entry.id);
 
         // State reset on the actual connection
         await this.resetClientState(entry.client);
@@ -286,6 +334,12 @@ export class ClientPool {
         if (!this.closed) {
             this.closed = true;
 
+            // Stop abandon monitor
+            if (this.abandonMonitor) {
+                clearInterval(this.abandonMonitor);
+                this.abandonMonitor = null;
+            }
+
             // Reject all waiters
             for (const waiter of this.waiters) {
                 clearTimeout(waiter.timer);
@@ -311,6 +365,78 @@ export class ClientPool {
     // ═══════════════════════════════════════════════════════════════════════════
     // INTERNAL
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Commands that block on the server — abandon monitor skips these.
+     * Keep in sync with is_blocking_command() in glide-core/src/client/mod.rs.
+     */
+    private static readonly BLOCKING_COMMANDS = new Set([
+        "blpop",
+        "brpop",
+        "blmove",
+        "bzpopmax",
+        "bzpopmin",
+        "brpoplpush",
+        "blmpop",
+        "bzmpop",
+        "wait",
+        "waitaof",
+        "xread",
+        "xreadgroup",
+    ]);
+
+    /**
+     * Wrap a client with a Proxy that refreshes activity on every method call
+     * and marks blocking commands so the abandon monitor skips them.
+     */
+    private wrapClient(entry: PoolEntry): BaseClient {
+        const proxy = new Proxy(entry.client, {
+            get: (target, prop, receiver) => {
+                const value = Reflect.get(target, prop, receiver);
+
+                if (typeof value !== "function" || typeof prop !== "string") {
+                    return value;
+                }
+
+                // Return a wrapper that refreshes activity and tracks blocking
+                return (...args: unknown[]) => {
+                    this.lastActivity.set(entry.id, Date.now());
+
+                    const isBlocking = ClientPool.BLOCKING_COMMANDS.has(
+                        prop.toLowerCase(),
+                    );
+
+                    if (isBlocking) {
+                        this.blockingEntries.add(entry.id);
+                    }
+
+                    const result = (
+                        value as (...a: unknown[]) => unknown
+                    ).apply(target, args);
+
+                    // If result is a Promise, unmark blocking when it resolves
+                    if (
+                        isBlocking &&
+                        result &&
+                        typeof (result as { then?: unknown }).then ===
+                            "function"
+                    ) {
+                        (result as Promise<unknown>).then(
+                            () => this.blockingEntries.delete(entry.id),
+                            () => this.blockingEntries.delete(entry.id),
+                        );
+                    } else if (isBlocking) {
+                        this.blockingEntries.delete(entry.id);
+                    }
+
+                    return result;
+                };
+            },
+        });
+
+        this.proxyToEntryId.set(proxy, entry.id);
+        return proxy as BaseClient;
+    }
 
     private async createEntry(): Promise<PoolEntry> {
         const client = this.isCluster
@@ -362,6 +488,59 @@ export class ClientPool {
                 .catch(noop);
         } catch {
             // Connection broken — client will reconnect on next use
+        }
+    }
+
+    /**
+     * Notify the pool that a command was sent on a borrowed client.
+     * Resets the abandon inactivity timer for this client.
+     * Call this from application code if using raw acquire() with long-held clients.
+     */
+    notifyActivity(client: BaseClient): void {
+        const entryId = this.proxyToEntryId.get(client);
+
+        if (entryId !== undefined) {
+            this.lastActivity.set(entryId, Date.now());
+            return;
+        }
+
+        for (const [id, entry] of this.active) {
+            if (entry.client === client) {
+                this.lastActivity.set(id, Date.now());
+                return;
+            }
+        }
+    }
+
+    /** Scan active entries and force-release any that exceed abandon timeout. */
+    private scanForAbandoned(): void {
+        if (this.closed) return;
+
+        const now = Date.now();
+        const abandoned: PoolEntry[] = [];
+
+        for (const [id, entry] of this.active) {
+            // Skip clients currently executing a blocking command
+            if (this.blockingEntries.has(id)) continue;
+
+            const lastActive = this.lastActivity.get(id) ?? 0;
+
+            if (now - lastActive > this.abandonTimeoutMs) {
+                abandoned.push(entry);
+            }
+        }
+
+        for (const entry of abandoned) {
+            console.warn(
+                `[valkey-glide pool] Abandon detection: client ${entry.id} exceeded ` +
+                    `inactivity timeout (${this.abandonTimeoutMs}ms) — discarding connection`,
+            );
+            this.active.delete(entry.id);
+            this.lastActivity.delete(entry.id);
+
+            // Discard rather than return-to-idle for consistency with Rust core:
+            // guarantees a stale release from the original borrower cannot interfere.
+            entry.client.close();
         }
     }
 }

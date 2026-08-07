@@ -13,6 +13,7 @@ public class GlidePoolResolver {
             int minIdle,
             long idleTimeoutMs,
             long requestTimeoutMs,
+            long abandonTimeoutMs,
             byte[] connectionRequestBytes);
 
     public static native long glidePoolTryAcquire(long poolId);
