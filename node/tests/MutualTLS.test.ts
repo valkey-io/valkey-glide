@@ -2,13 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import {
-    afterAll,
-    beforeAll,
-    describe,
-    expect,
-    it,
-} from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import * as fs from "fs";
 import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, Logger, ProtocolVersion } from "../build-ts";
