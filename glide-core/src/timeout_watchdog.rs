@@ -612,7 +612,9 @@ impl TimeoutWatchdog {
     pub fn global() -> &'static Self {
         let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
         if !ptr.is_null() {
-            // Safety: only leaked &'static TimeoutWatchdog values are stored.
+            // Safety: once installed as non-null, the pointer is never freed
+            // until process exit (reinit_global intentionally leaks the prior
+            // instance rather than dropping it).
             return unsafe { &*ptr };
         }
         Self::init_global()
@@ -644,7 +646,11 @@ impl TimeoutWatchdog {
     ///
     /// After fork(), the watchdog thread is dead but the AtomicPtr still points
     /// to the old instance. This replaces it with a fresh one. The old instance
-    /// is intentionally leaked (its mpsc channel is in undefined state post-fork).
+    /// is intentionally leaked — its internal Mutex/Condvar are in undefined
+    /// state post-fork and cannot be safely dropped.
+    ///
+    /// Must only be called in a forked child process where the previous
+    /// watchdog thread is no longer running.
     pub fn reinit_global() {
         let w = Box::new(Self::start_global());
         let w_ref: &'static Self = Box::leak(w);
