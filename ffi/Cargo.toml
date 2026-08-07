@@ -29,7 +29,7 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest = "^0.26"
-serial_test = "3"
+serial_test = "4"
 lazy_static = "1"
 
 [profile.release]
