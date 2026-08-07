@@ -176,6 +176,10 @@ pub enum ReadFrom {
     AZAffinity(String),
     AZAffinityReplicasAndPrimary(String),
     AllNodes,
+    /// Spread the read requests equally among all nodes (primary and replicas) within the
+    /// client's Availability Zone (AZ) in a round robin manner, falling back to a round robin
+    /// across all nodes if no node in the client's AZ is available.
+    AZAffinityAllNodes(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
@@ -249,6 +253,20 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::AZAffinityReplicasAndPrimary => {
                 if let Some(client_az) = chars_to_string_option(&value.client_az) {
                     ReadFrom::AZAffinityReplicasAndPrimary(client_az)
+                } else {
+                    log_warn(
+                        "types",
+                        format!(
+                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
+                            value.client_az
+                        ),
+                    );
+                    ReadFrom::PreferReplica
+                }
+            },
+            protobuf::ReadFrom::AZAffinityAllNodes => {
+                if let Some(client_az) = chars_to_string_option(&value.client_az) {
+                    ReadFrom::AZAffinityAllNodes(client_az)
                 } else {
                     log_warn(
                         "types",

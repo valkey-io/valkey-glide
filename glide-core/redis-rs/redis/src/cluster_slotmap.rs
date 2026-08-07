@@ -44,6 +44,10 @@ pub enum ReadFromReplicaStrategy {
     AZAffinityReplicasAndPrimary(String),
     /// Spread the read requests between all nodes (primary and replicas) in a round robin manner.
     AllNodes,
+    /// Spread the read requests equally among all nodes (primary and replicas) within the client's
+    /// Availability Zone (AZ) in a round robin manner, falling back to a round robin across all
+    /// nodes if no node in the client's AZ is available.
+    AZAffinityAllNodes(String),
 }
 
 #[derive(Debug, Default)]
@@ -91,6 +95,14 @@ fn get_address_from_slot(
         // behavior of these strategies when no local node is known.
         ReadFromReplicaStrategy::AZAffinity(_az) => round_robin_replica(),
         ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => round_robin_all_nodes(),
+        // Explicit replica routes stay in the replica rotation, matching this
+        // strategy's `lookup_route` behavior.
+        ReadFromReplicaStrategy::AZAffinityAllNodes(_az)
+            if slot_addr == SlotAddr::ReplicaRequired =>
+        {
+            round_robin_replica()
+        }
+        ReadFromReplicaStrategy::AZAffinityAllNodes(_az) => round_robin_all_nodes(),
     }
 }
 
@@ -924,6 +936,54 @@ mod tests_cluster_slotmap {
             .into_iter()
             .map(|s| Arc::new(s.to_string()))
             .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_all_nodes_falls_back_to_all_nodes() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityAllNodes(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec![
+                "node3:6379",
+                "replica4:6379",
+                "replica5:6379",
+                "replica6:6379"
+            ]
+            .into_iter()
+            .map(|s| Arc::new(s.to_string()))
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_all_nodes_replica_required_stays_on_replicas() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityAllNodes(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaRequired);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec!["replica4:6379", "replica5:6379", "replica6:6379"]
+                .into_iter()
+                .map(|s| Arc::new(s.to_string()))
+                .collect::<Vec<_>>()
         );
     }
 

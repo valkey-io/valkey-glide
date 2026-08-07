@@ -900,9 +900,16 @@ mod cluster_async {
     ) {
         test_az_affinity_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
     }
+
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_all_nodes_strategy_to_half_replicas()
+    {
+        test_az_affinity_helper(StrategyVariant::AZAffinityAllNodes).await;
+    }
     enum StrategyVariant {
         AZAffinity,
         AZAffinityReplicasAndPrimary,
+        AZAffinityAllNodes,
     }
 
     async fn test_az_affinity_helper(strategy_variant: StrategyVariant) {
@@ -949,6 +956,9 @@ mod cluster_async {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
                     az.clone(),
                 )
+            }
+            StrategyVariant::AZAffinityAllNodes => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
             }
         };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
@@ -1012,6 +1022,11 @@ mod cluster_async {
         test_all_replicas_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
     }
 
+    #[tokio::test]
+    async fn test_az_affinity_all_nodes_to_all_nodes() {
+        test_all_replicas_helper(StrategyVariant::AZAffinityAllNodes).await;
+    }
+
     async fn test_all_replicas_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1053,6 +1068,9 @@ mod cluster_async {
                     az.clone(),
                 )
             }
+            StrategyVariant::AZAffinityAllNodes => {
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
+            }
         };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
             .read_from(strategy)
@@ -1062,9 +1080,15 @@ mod cluster_async {
             .await
             .unwrap();
 
-        // Each replica will return the value of foo n times
+        // For AZAffinityAllNodes the primary is an equal member of the rotation
+        let expected_az_nodes = match strategy_variant {
+            StrategyVariant::AZAffinityAllNodes => replica_num + 1,
+            _ => replica_num,
+        };
+
+        // Each in-AZ node will return the value of foo n times
         let n = 4;
-        for _ in 0..(n * replica_num) {
+        for _ in 0..(n * expected_az_nodes) {
             let mut cmd = redis::cmd("GET");
             cmd.arg("foo");
             let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
@@ -1100,8 +1124,8 @@ mod cluster_async {
 
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
-            replica_num,
-            "Test failed: expected exactly '{replica_num}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
+            expected_az_nodes,
+            "Test failed: expected exactly '{expected_az_nodes}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
         );
     }
 
@@ -1208,6 +1232,121 @@ mod cluster_async {
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
             primary_in_same_az,
             "Test failed: expected exactly '{primary_in_same_az}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_az_affinity_all_nodes_splits_reads_between_local_primary_and_replica() {
+        // Skip test if version is less than Valkey 8.0
+        if engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+        let nodes_in_same_az: u16 = 2; // one primary + one replica
+
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let client_az = "us-east-1a".to_string();
+        let other_az = "us-east-1b".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        // Set AZ for all nodes to a different AZ initially
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &other_az.clone()]);
+
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        // Set the client's AZ for the primary holding the "foo" slot and one of its replicas
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &client_az]);
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    12182, // foo key is mapping to 12182 slot
+                    SlotAddr::Master,
+                ))),
+            )
+            .await
+            .unwrap();
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    12182,
+                    SlotAddr::ReplicaRequired,
+                ))),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(
+                    client_az.clone(),
+                ),
+            )
+            .build()
+            .unwrap()
+            .get_async_connection(None, None, None, None)
+            .await
+            .unwrap();
+
+        // Perform read operations; the in-AZ primary and replica should split them equally
+        let n = 100;
+        for _ in 0..n {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        // Gather INFO
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = "cmdstat_get:calls=".to_string();
+        let half_get_cmdstat = format!("cmdstat_get:calls={}", n / 2);
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&half_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {value}. Expected cmdstat_get:calls={} and availability_zone:{client_az}", n / 2);
+                }
+            }
+        }
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            nodes_in_same_az,
+            "Test failed: expected exactly '{nodes_in_same_az}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
         );
     }
 
