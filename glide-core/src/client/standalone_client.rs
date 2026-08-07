@@ -87,6 +87,10 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
+    /// When set, the client validates the connection with a bounded PING
+    /// before sending the next command whenever the last-activity gap
+    /// exceeds this duration.
+    idle_timeout: Option<Duration>,
     /// Owns the background mTLS certificate reload task, when path-based reload is
     /// configured. Held here so the task lives for the client's lifetime and is
     /// shut down when the client is dropped.
@@ -223,6 +227,7 @@ impl StandaloneClient {
         );
 
         let connection_timeout = connection_request.get_connection_timeout();
+        let idle_timeout = connection_request.get_idle_timeout();
 
         let tcp_nodelay = connection_request.tcp_nodelay;
 
@@ -648,6 +653,7 @@ impl StandaloneClient {
                 nodes,
                 read_from,
                 read_only,
+                idle_timeout,
                 _cert_material_manager: cert_material_manager,
             }),
         })
