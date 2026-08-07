@@ -1197,7 +1197,7 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 		if *settings.reloadInterval < time.Second {
 			return nil, fmt.Errorf(
 				"WithMutualTLSFromFiles: reload interval must be at least 1 second; got %v. "+
-					"Sub-second values would silently round to the GLIDE core default cadence.",
+					"sub-second values would silently round to the GLIDE core default cadence",
 				*settings.reloadInterval)
 		}
 		// A larger value will not fit in the uint32 seconds field.
