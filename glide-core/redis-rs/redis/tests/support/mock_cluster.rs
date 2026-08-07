@@ -106,6 +106,13 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
 static ASYNC_PING_BLACKHOLE_PORTS: Lazy<RwLock<std::collections::HashSet<u16>>> =
     Lazy::new(Default::default);
 
+/// Connection IDs whose async PINGs must never resolve. Lets a test
+/// blackhole only the specific already-open connection (the one about
+/// to be validated) without also blackholing the fresh connections the
+/// reconnect path opens through the same port.
+static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
+    Lazy::new(Default::default);
+
 fn set_async_ping_blackhole_raw(port: u16, blackhole: bool) {
     let mut guard = ASYNC_PING_BLACKHOLE_PORTS.write().unwrap();
     if blackhole {
@@ -136,8 +143,43 @@ impl Drop for AsyncPingBlackholeGuard {
     }
 }
 
+/// RAII guard that blackholes async PINGs for the specific connection
+/// IDs it was created with. Fresh connections opened after
+/// construction (which will have new IDs) still respond normally, so
+/// the reconnect path can complete while the original connection is
+/// silently half-open.
+#[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
+pub struct AsyncPingBlackholeByIdGuard {
+    ids: Vec<usize>,
+}
+
+impl AsyncPingBlackholeByIdGuard {
+    pub fn new(ids: Vec<usize>) -> Self {
+        {
+            let mut guard = ASYNC_PING_BLACKHOLE_IDS.write().unwrap();
+            for id in &ids {
+                guard.insert(*id);
+            }
+        }
+        AsyncPingBlackholeByIdGuard { ids }
+    }
+}
+
+impl Drop for AsyncPingBlackholeByIdGuard {
+    fn drop(&mut self) {
+        let mut guard = ASYNC_PING_BLACKHOLE_IDS.write().unwrap();
+        for id in &self.ids {
+            guard.remove(id);
+        }
+    }
+}
+
 fn async_ping_blackholed(port: u16) -> bool {
     ASYNC_PING_BLACKHOLE_PORTS.read().unwrap().contains(&port)
+}
+
+fn async_ping_blackholed_by_id(id: usize) -> bool {
+    ASYNC_PING_BLACKHOLE_IDS.read().unwrap().contains(&id)
 }
 
 /// Number of async connections opened against a given mock cluster since it
@@ -405,7 +447,9 @@ pub fn respond_startup_with_config(
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
         let packed = cmd.get_packed_command();
-        if async_ping_blackholed(self.port) && contains_slice(&packed, b"PING") {
+        if contains_slice(&packed, b"PING")
+            && (async_ping_blackholed(self.port) || async_ping_blackholed_by_id(self.id))
+        {
             return Box::pin(future::pending());
         }
         Box::pin(future::ready(

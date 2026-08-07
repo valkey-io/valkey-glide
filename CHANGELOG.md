@@ -21,6 +21,7 @@
 
 ### Changes
 
+* Core: Add `idle_timeout` connection option that validates the connection with a bounded PING before the next command whenever the idle gap exceeds the configured value ([#6719](https://github.com/valkey-io/valkey-glide/pull/6719))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads  ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))

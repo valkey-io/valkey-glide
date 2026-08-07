@@ -7372,6 +7372,91 @@ mod cluster_async {
         );
     }
 
+    /// Regression test for the `idle_timeout` pre-command validation
+    /// hook on the async cluster client. Reproduces a silent half-open
+    /// TCP flow to one shard: PING requests targeted at the specific
+    /// already-open connections hang forever, mimicking a middlebox
+    /// that has evicted the idle flow without sending FIN or RST. Fresh
+    /// connections opened by the reconnect path get new IDs and still
+    /// respond normally. Under those conditions the transport looks
+    /// alive (is_closed stays false) and the existing periodic check
+    /// misses it. With `idle_timeout` set, the client must send a
+    /// bounded PING before its next command, spot the half-open flow,
+    /// drive an immediate reconnect, and complete the real command
+    /// against the fresh transport. The periodic check is pushed out
+    /// to an hour so this test's outcome depends only on the new hook.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_detects_silent_half_open_before_next_command() {
+        let name = "test_idle_timeout_detects_silent_half_open";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs to every connection open right now; fresh
+        // connections opened by the reconnect path get new IDs and
+        // still respond normally.
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_reconnect = runtime.block_on(async {
+            let mut last: Result<Value, RedisError> = Ok(Value::Nil);
+            for _ in 0..30 {
+                let attempt = cmd("ECHO")
+                    .arg("world")
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+                if matches!(&attempt, Ok(Value::BulkString(_))) {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            last
+        });
+
+        drop(blackhole_guard);
+
+        assert_eq!(
+            post_reconnect,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected fresh command to succeed after idle_timeout-driven reconnect"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert!(
+            count_after > count_before,
+            "expected idle_timeout to detect the half-open transport and \
+             open at least one new connection; before={count_before}, after={count_after}"
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
