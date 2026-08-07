@@ -41,7 +41,10 @@ runs:
           if: "${{ contains(inputs.target, 'musl') }}"
           run: |
               apk update
-              wget -O - https://sh.rustup.rs | sh -s -- -y
+              tmpfile=$(mktemp)
+              wget -O "$tmpfile" https://sh.rustup.rs
+              sh "$tmpfile" -s -- -y
+              rm -f "$tmpfile"
               source "$HOME/.cargo/env"
               apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
 
