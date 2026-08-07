@@ -41,7 +41,10 @@ runs:
           if: "${{ contains(inputs.target, 'musl') }}"
           run: |
               apk update
-              wget -O - https://sh.rustup.rs | sh -s -- -y
+              wget -O /tmp/rustup-init.sh https://sh.rustup.rs
+              chmod +x /tmp/rustup-init.sh
+              /tmp/rustup-init.sh -y
+              rm /tmp/rustup-init.sh
               source "$HOME/.cargo/env"
               apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
 
