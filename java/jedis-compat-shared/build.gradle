@@ -27,7 +27,7 @@ ext {
 dependencies {
     implementation project(':client')
 
-    api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+    api group: 'org.apache.commons', name: 'commons-pool2', version: '2.13.1'
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
@@ -40,7 +40,7 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok:1.18.44'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.44'
 
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.10.3'
 }
 
 java {
