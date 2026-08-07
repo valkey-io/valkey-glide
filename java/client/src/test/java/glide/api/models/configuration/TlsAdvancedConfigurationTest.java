@@ -363,13 +363,7 @@ public class TlsAdvancedConfigurationTest {
                         ConfigurationError.class,
                         () ->
                                 new TlsAdvancedConfiguration(
-                                        false,
-                                        null,
-                                        cert,
-                                        key,
-                                        "/certs/client.pem",
-                                        "/certs/client.key",
-                                        null));
+                                        false, null, cert, key, "/certs/client.pem", "/certs/client.key", null));
         assertTrue(error.getMessage().contains("cannot both be provided"));
     }
 }
