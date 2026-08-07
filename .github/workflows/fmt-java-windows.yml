@@ -26,4 +26,4 @@ jobs:
         with:
             windows-only: true
         name: FMT - Java Windows
-        secrets: inherit
+        secrets: {}

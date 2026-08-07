@@ -30,4 +30,4 @@ jobs:
         with:
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Redis-RS
-        secrets: inherit
+        secrets: {}

@@ -71,13 +71,13 @@ jobs:
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for GLIDE core lib
-        secrets: inherit
+        secrets: {}
 
     run-full-tests-for-redis-rs:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
         uses: ./.github/workflows/redis-rs.yml
         name: Run CI for Redis-RS client
-        secrets: inherit
+        secrets: {}
 
     run-full-tests-for-java:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
@@ -85,7 +85,7 @@ jobs:
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for java client
-        secrets: inherit
+        secrets: {}
 
     run-full-tests-for-python:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.python == true)
@@ -93,7 +93,7 @@ jobs:
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for python client
-        secrets: inherit
+        secrets: {}
 
     run-full-tests-for-node:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.node == true)
@@ -101,34 +101,34 @@ jobs:
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for node client
-        secrets: inherit
+        secrets: {}
 
     run-full-tests-for-go:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.go == true)
         uses: ./.github/workflows/go.yml
         name: Run CI for go client
-        secrets: inherit
+        secrets: {}
 
     run-modules-tests-for-java:
         if: ((github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.run-modules-tests == true)) && inputs.java != false
         uses: ./.github/workflows/java-modules.yml
         name: Run modules tests for java client
-        secrets: inherit
+        secrets: {}
 
     run-modules-tests-for-python:
         if: ((github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.run-modules-tests == true)) && inputs.python != false
         uses: ./.github/workflows/python-modules.yml
         name: Run modules tests for python client
-        secrets: inherit
+        secrets: {}
 
     run-modules-tests-for-node:
         if: ((github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.run-modules-tests == true)) && inputs.node != false
         uses: ./.github/workflows/node-modules.yml
         name: Run modules tests for node client
-        secrets: inherit
+        secrets: {}
 
     run-modules-tests-for-go:
         if: ((github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.run-modules-tests == true)) && inputs.go != false
         uses: ./.github/workflows/go-modules.yml
         name: Run modules tests for go client
-        secrets: inherit
+        secrets: {}

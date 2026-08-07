@@ -35,7 +35,7 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}
 
     fmt-node:
         if: github.repository_owner == 'valkey-io'
@@ -44,7 +44,7 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}
 
     fmt-go:
         if: github.repository_owner == 'valkey-io'
@@ -53,7 +53,7 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}
 
     fmt-java:
         if: github.repository_owner == 'valkey-io'
@@ -62,7 +62,7 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}
 
     fmt-java-windows:
         if: github.repository_owner == 'valkey-io'
@@ -70,7 +70,7 @@ jobs:
         with:
             full-matrix: true
             windows-only: true
-        secrets: inherit
+        secrets: {}
 
     fmt-rust:
         if: github.repository_owner == 'valkey-io'
@@ -79,11 +79,11 @@ jobs:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}
 
     fmt-redis-rs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/redis-rs.yml
         with:
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
-        secrets: inherit
+        secrets: {}

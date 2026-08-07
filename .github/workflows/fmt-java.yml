@@ -32,4 +32,4 @@ jobs:
             run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Java
-        secrets: inherit
+        secrets: {}

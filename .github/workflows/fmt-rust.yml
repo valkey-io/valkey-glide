@@ -31,4 +31,4 @@ jobs:
             run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Rust
-        secrets: inherit
+        secrets: {}
