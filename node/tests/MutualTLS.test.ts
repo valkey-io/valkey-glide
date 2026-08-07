@@ -5,7 +5,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import * as fs from "fs";
 import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
-import { GlideClient, Logger, ProtocolVersion } from "../build-ts";
+import {
+    GlideClient,
+    GlideClusterClient,
+    Logger,
+    ProtocolVersion,
+} from "../build-ts";
 import {
     getCaCertificateData,
     getClientConfigurationOption,
@@ -113,6 +118,113 @@ describe("mTLS integration", () => {
         async () => {
             await expect(
                 GlideClient.createClient({
+                    ...getClientConfigurationOption(
+                        mtlsCluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                        { requestTimeout: TLS_REQUEST_TIMEOUT },
+                    ),
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: caCertData,
+                        },
+                    },
+                }),
+            ).rejects.toThrow();
+        },
+        TIMEOUT,
+    );
+});
+
+describe("mTLS integration (cluster)", () => {
+    let mtlsCluster: ValkeyCluster;
+    let caCertData: Buffer;
+    let clientCert: Buffer;
+    let clientKey: Buffer;
+
+    beforeAll(async () => {
+        // Start a TLS cluster (3 shards, 1 replica each) with an insecure TLS
+        // bootstrap so getServerVersion can talk to the mTLS-required cluster
+        // without a client certificate. The real tests below use full cert
+        // material.
+        const startupTlsConfig: TestTLSConfig = {
+            useTLS: true,
+            requestTimeout: TLS_REQUEST_TIMEOUT,
+            advancedConfiguration: {
+                tlsAdvancedConfiguration: {
+                    insecure: true,
+                },
+            },
+        };
+
+        mtlsCluster = await ValkeyCluster.createCluster(
+            true,
+            3,
+            1,
+            getServerVersion,
+            true,
+            startupTlsConfig,
+            undefined,
+            true,
+        );
+
+        caCertData = getCaCertificateData();
+        clientCert = readTlsFile("server.crt");
+        clientKey = readTlsFile("server.key");
+    }, CLUSTER_CREATION_TIMEOUT);
+
+    afterAll(async () => {
+        try {
+            if (mtlsCluster) {
+                await mtlsCluster.close();
+            }
+        } catch (error) {
+            Logger.log(
+                "warn",
+                "MutualTLS",
+                "Error closing mTLS cluster",
+                error as Error,
+            );
+        }
+    });
+
+    it(
+        "cluster client with cert+key accepted by server requiring client cert",
+        async () => {
+            const client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    mtlsCluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { requestTimeout: TLS_REQUEST_TIMEOUT },
+                ),
+                useTLS: true,
+                advancedConfiguration: {
+                    tlsAdvancedConfiguration: {
+                        rootCertificates: caCertData,
+                        mutualTls: {
+                            kind: "bytes",
+                            clientCertificate: clientCert,
+                            clientKey: clientKey,
+                        },
+                    },
+                },
+            });
+
+            try {
+                const result = await client.ping();
+                expect(result).toBe("PONG");
+            } finally {
+                await client.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "cluster client without cert+key rejected by server requiring client cert",
+        async () => {
+            await expect(
+                GlideClusterClient.createClient({
                     ...getClientConfigurationOption(
                         mtlsCluster.getAddresses(),
                         ProtocolVersion.RESP3,

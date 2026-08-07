@@ -226,8 +226,9 @@ class TestTls:
         await assert_connected(client)
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mtls_client_cert_accepted_by_server_requiring_one(
-        self, request, valkey_mtls_cluster
+        self, request, cluster_mode: bool, valkey_mtls_target
     ):
         """
         Verify that client can connect to a server that requires a client certificate
@@ -235,9 +236,9 @@ class TestTls:
         """
         config = create_client_config(
             request=request,
-            cluster_mode=False,
+            cluster_mode=cluster_mode,
             use_tls=True,
-            valkey_cluster=valkey_mtls_cluster,
+            valkey_cluster=valkey_mtls_target,
             root_pem_cacerts=get_ca_certificate(),
             client_cert_pem=get_client_certificate(),
             client_key_pem=get_client_key(),
@@ -247,8 +248,9 @@ class TestTls:
         await assert_connected(client)
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mtls_missing_client_cert_rejected_by_server_requiring_one(
-        self, request, valkey_mtls_cluster
+        self, request, cluster_mode: bool, valkey_mtls_target
     ):
         """
         Verify that client fails to connect to a server that requires a client certificate
@@ -257,8 +259,8 @@ class TestTls:
         with pytest.raises(Exception):
             await create_client(
                 request=request,
-                cluster_mode=False,
+                cluster_mode=cluster_mode,
                 use_tls=True,
-                valkey_cluster=valkey_mtls_cluster,
+                valkey_cluster=valkey_mtls_target,
                 root_pem_cacerts=get_ca_certificate(),
             )
