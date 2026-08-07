@@ -3293,7 +3293,9 @@ where
                 .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
         }
 
-        let result = conn.req_packed_commands(&pipeline, offset, count, None).await;
+        let result = conn
+            .req_packed_commands(&pipeline, offset, count, None)
+            .await;
         if result.is_ok() {
             if let Some(details) = core
                 .conn_lock

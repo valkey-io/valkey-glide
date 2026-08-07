@@ -857,19 +857,19 @@ impl StandaloneClient {
         // the socket is silently half-open; reconnect and re-acquire the
         // fresh transport before running the real command so the caller
         // does not see a lost command on a dead flow.
-        if let Some(idle) = idle_timeout {
-            if reconnecting_connection.should_validate(idle) {
-                match tokio::time::timeout(
-                    super::IDLE_TIMEOUT_PING_DEADLINE,
-                    connection.send_packed_command(&redis::cmd("PING")),
-                )
-                .await
-                {
-                    Ok(Ok(_)) => reconnecting_connection.mark_activity(),
-                    Ok(Err(_)) | Err(_) => {
-                        reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-                        connection = reconnecting_connection.get_connection().await?;
-                    }
+        if let Some(idle) = idle_timeout
+            && reconnecting_connection.should_validate(idle)
+        {
+            match tokio::time::timeout(
+                super::IDLE_TIMEOUT_PING_DEADLINE,
+                connection.send_packed_command(&redis::cmd("PING")),
+            )
+            .await
+            {
+                Ok(Ok(_)) => reconnecting_connection.mark_activity(),
+                Ok(Err(_)) | Err(_) => {
+                    reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+                    connection = reconnecting_connection.get_connection().await?;
                 }
             }
         }
