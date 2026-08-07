@@ -12,9 +12,9 @@ use redis::{
 use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{RwLock, RwLockReadGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use telemetrylib::Telemetry;
 use tokio::sync::{Notify, mpsc};
 use tokio::task;
@@ -138,6 +138,16 @@ enum ConnectionState {
 struct InnerReconnectingConnection {
     state: Mutex<ConnectionState>,
     backend: ConnectionBackend,
+    /// A monotonic reference point captured when the connection is
+    /// created. Elapsed millis from this instant are stored in
+    /// `last_activity`; the raw `Instant` is not shared beyond this
+    /// struct.
+    connection_epoch: Instant,
+    /// Milliseconds elapsed from `connection_epoch` to the last observed
+    /// successful activity on this connection. Read and updated with
+    /// `Ordering::Relaxed` because the value only decides whether to send
+    /// an idle-timeout PING; it is not used for cross-thread ordering.
+    last_activity: AtomicU64,
 }
 
 #[derive(Clone)]
@@ -270,6 +280,8 @@ async fn create_connection(
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::Connected(connection)),
                     backend: connection_backend,
+                    connection_epoch: Instant::now(),
+                    last_activity: AtomicU64::new(0),
                 }),
                 connection_options,
             })
@@ -293,6 +305,8 @@ async fn create_connection(
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::InitializedDisconnected),
                     backend: connection_backend,
+                    connection_epoch: Instant::now(),
+                    last_activity: AtomicU64::new(0),
                 }),
                 connection_options,
             };
@@ -390,6 +404,24 @@ impl ReconnectingConnection {
             .backend
             .client_dropped_flagged
             .load(Ordering::Relaxed)
+    }
+
+    /// Returns true when the elapsed millis since the last observed
+    /// successful command on this connection exceeds `idle_timeout`,
+    /// signalling that the caller should validate the connection with a
+    /// PING before sending its next command.
+    pub(super) fn should_validate(&self, idle_timeout: Duration) -> bool {
+        let now = self.inner.connection_epoch.elapsed().as_millis() as u64;
+        let last = self.inner.last_activity.load(Ordering::Relaxed);
+        now.saturating_sub(last) > idle_timeout.as_millis() as u64
+    }
+
+    /// Records the current elapsed reading so the next idle check sees a
+    /// fresh timestamp. Callers invoke this after every successful send
+    /// on this connection.
+    pub(super) fn mark_activity(&self) {
+        let now = self.inner.connection_epoch.elapsed().as_millis() as u64;
+        self.inner.last_activity.store(now, Ordering::Relaxed);
     }
 
     pub(super) fn mark_as_dropped(&self) {

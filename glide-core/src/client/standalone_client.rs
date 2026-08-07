@@ -844,11 +844,36 @@ impl StandaloneClient {
     async fn send_request(
         cmd: &redis::Cmd,
         reconnecting_connection: &ReconnectingConnection,
+        idle_timeout: Option<Duration>,
     ) -> RedisResult<Value> {
         // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
         let mut connection = reconnecting_connection.get_connection().await?;
+
+        // When idle_timeout is enabled and the connection has been idle
+        // longer than the configured window, probe it with a bounded PING
+        // before sending the user command. A failed or slow PING means
+        // the socket is silently half-open; reconnect and re-acquire the
+        // fresh transport before running the real command so the caller
+        // does not see a lost command on a dead flow.
+        if let Some(idle) = idle_timeout {
+            if reconnecting_connection.should_validate(idle) {
+                match tokio::time::timeout(
+                    super::IDLE_TIMEOUT_PING_DEADLINE,
+                    connection.send_packed_command(&redis::cmd("PING")),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => reconnecting_connection.mark_activity(),
+                    Ok(Err(_)) | Err(_) => {
+                        reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+                        connection = reconnecting_connection.get_connection().await?;
+                    }
+                }
+            }
+        }
+
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
@@ -856,7 +881,11 @@ impl StandaloneClient {
                 reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
-            _ => result,
+            Ok(value) => {
+                reconnecting_connection.mark_activity();
+                Ok(value)
+            }
+            other => other,
         }
     }
 
@@ -865,11 +894,12 @@ impl StandaloneClient {
         cmd: &redis::Cmd,
         response_policy: Option<ResponsePolicy>,
     ) -> RedisResult<Value> {
+        let idle_timeout = self.inner.idle_timeout;
         let requests = self
             .inner
             .nodes
             .iter()
-            .map(|node| Self::send_request(cmd, node));
+            .map(|node| Self::send_request(cmd, node, idle_timeout));
 
         // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
         match response_policy {
@@ -940,7 +970,7 @@ impl StandaloneClient {
         readonly: bool,
     ) -> RedisResult<Value> {
         let reconnecting_connection = self.get_connection(readonly).await;
-        Self::send_request(cmd, reconnecting_connection).await
+        Self::send_request(cmd, reconnecting_connection, self.inner.idle_timeout).await
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
