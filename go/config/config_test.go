@@ -926,13 +926,14 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			// Sub-second values are accepted; they round down to zero seconds,
-			// which is the same as not passing the option (core default cadence).
-			name:     "files/sub-second-interval-accepted",
-			kind:     kindFiles,
-			certPath: testClientCertPath,
-			keyPath:  testClientKeyPath,
-			opts:     []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
+			// Sub-second values are rejected up front. Rounding to zero
+			// seconds would silently fall back to the core default cadence.
+			name:          "files/sub-second-interval-rejected",
+			kind:          kindFiles,
+			certPath:      testClientCertPath,
+			keyPath:       testClientKeyPath,
+			opts:          []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
+			wantErrSubstr: "reload interval must be at least 1 second",
 		},
 		{
 			name:          "files/zero-interval-rejected",
@@ -1149,18 +1150,6 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 				certReloadEnabled:   true,
 				certReloadHasIntSec: true,
 				certReloadIntSec:    60,
-			},
-		},
-		{
-			// Sub-second intervals round down to zero seconds, so the interval
-			// field is omitted and the core uses its default cadence, same as
-			// not passing the option.
-			name:  "paths-sub-second-interval-rounds-to-no-interval",
-			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
-			want: wantWire{
-				clientCertPath:    testClientCertPath,
-				clientKeyPath:     testClientKeyPath,
-				certReloadEnabled: true,
 			},
 		},
 	}
