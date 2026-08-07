@@ -3129,6 +3129,17 @@ where
             return None;
         }
 
+        // Register the wait future with `Notify` BEFORE the CAS so a
+        // fast winner that calls `notify_waiters()` right after
+        // releasing `in_flight` cannot race past this task and leave
+        // it blocked for the full `IDLE_TIMEOUT_WAIT_DEADLINE`.
+        // `Notify::notify_waiters()` wakes only currently registered
+        // waiters and stores no permit, so unregistered listeners
+        // miss the wake entirely.
+        let notified = tracker.notify.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+
         if tracker
             .in_flight
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -3176,11 +3187,11 @@ where
             }
             None
         } else {
-            // Loser path. Wait for the winner to finish (bounded so a
-            // wedged winner does not stall the whole pool) and pick up
-            // whatever connection is installed for this address.
-            let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, tracker.notify.notified())
-                .await;
+            // Loser path. Wait on the pre-registered `Notified` future
+            // (bounded so a wedged winner does not stall the whole
+            // pool) and pick up whatever connection is installed for
+            // this address.
+            let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, notified).await;
             let refreshed = core.conn_lock.read().connection_for_address(address);
             if let Some((addr, fut)) = refreshed {
                 let fresh_conn = fut.await;

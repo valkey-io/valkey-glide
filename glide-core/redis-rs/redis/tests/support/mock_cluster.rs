@@ -96,52 +96,12 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
     MOCK_CONN_BEHAVIORS.write().unwrap()
 }
 
-/// Ports whose async PING requests must never resolve. Reproduces a silent
-/// half-open TCP flow: the transport looks alive but any read on it stays
-/// pending forever. The set is process-global so any test that flips a port
-/// on must clear it before returning, otherwise sibling tests reusing the
-/// same port hang. Callers should acquire an [`AsyncPingBlackholeGuard`]
-/// rather than toggling the raw setter, so that a panic or early return also
-/// clears the port on unwind.
-static ASYNC_PING_BLACKHOLE_PORTS: Lazy<RwLock<std::collections::HashSet<u16>>> =
-    Lazy::new(Default::default);
-
 /// Connection IDs whose async PINGs must never resolve. Lets a test
 /// blackhole only the specific already-open connection (the one about
 /// to be validated) without also blackholing the fresh connections the
 /// reconnect path opens through the same port.
 static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
     Lazy::new(Default::default);
-
-fn set_async_ping_blackhole_raw(port: u16, blackhole: bool) {
-    let mut guard = ASYNC_PING_BLACKHOLE_PORTS.write().unwrap();
-    if blackhole {
-        guard.insert(port);
-    } else {
-        guard.remove(&port);
-    }
-}
-
-/// RAII guard that installs a PING blackhole on construction and clears it
-/// on drop, including during a panic-driven unwind. Hold the guard for the
-/// entire region that needs the blackhole; do not toggle the state manually.
-#[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
-pub struct AsyncPingBlackholeGuard {
-    port: u16,
-}
-
-impl AsyncPingBlackholeGuard {
-    pub fn new(port: u16) -> Self {
-        set_async_ping_blackhole_raw(port, true);
-        AsyncPingBlackholeGuard { port }
-    }
-}
-
-impl Drop for AsyncPingBlackholeGuard {
-    fn drop(&mut self) {
-        set_async_ping_blackhole_raw(self.port, false);
-    }
-}
 
 /// RAII guard that blackholes async PINGs for the specific connection
 /// IDs it was created with. Fresh connections opened after
@@ -172,10 +132,6 @@ impl Drop for AsyncPingBlackholeByIdGuard {
             guard.remove(id);
         }
     }
-}
-
-fn async_ping_blackholed(port: u16) -> bool {
-    ASYNC_PING_BLACKHOLE_PORTS.read().unwrap().contains(&port)
 }
 
 fn async_ping_blackholed_by_id(id: usize) -> bool {
@@ -447,9 +403,7 @@ pub fn respond_startup_with_config(
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
         let packed = cmd.get_packed_command();
-        if contains_slice(&packed, b"PING")
-            && (async_ping_blackholed(self.port) || async_ping_blackholed_by_id(self.id))
-        {
+        if contains_slice(&packed, b"PING") && async_ping_blackholed_by_id(self.id) {
             return Box::pin(future::pending());
         }
         Box::pin(future::ready(
