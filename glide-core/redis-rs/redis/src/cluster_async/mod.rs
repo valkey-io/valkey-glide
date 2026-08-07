@@ -3160,10 +3160,7 @@ where
                     for notifier in notifiers {
                         notifier.notified().await;
                     }
-                    core.conn_lock
-                        .read()
-                        .connection_for_address(address)
-                        .map(|(addr, fut)| (addr, fut))
+                    core.conn_lock.read().connection_for_address(address)
                 }
             };
 
