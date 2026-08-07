@@ -75,6 +75,31 @@ public class ValkeyCluster implements AutoCloseable {
             List<String> loadModule,
             List<List<String>> addresses)
             throws IOException, InterruptedException {
+        this(tls, clusterMode, shardCount, replicaCount, loadModule, addresses, false);
+    }
+
+    /**
+     * Creates a new ValkeyCluster instance, optionally requiring client certificates for mutual
+     * TLS.
+     *
+     * @param tls Whether to use TLS
+     * @param clusterMode Whether to use cluster mode
+     * @param shardCount Number of shards (default 3)
+     * @param replicaCount Number of replicas (default 1)
+     * @param loadModule Optional list of module paths to load
+     * @param addresses Optional list of existing cluster addresses
+     * @param tlsAuthClients Passes --tls-auth-clients to cluster_manager.py so the server rejects
+     *     TLS connections that do not present a valid client certificate.
+     */
+    public ValkeyCluster(
+            boolean tls,
+            boolean clusterMode,
+            int shardCount,
+            int replicaCount,
+            List<String> loadModule,
+            List<List<String>> addresses,
+            boolean tlsAuthClients)
+            throws IOException, InterruptedException {
 
         if (addresses != null && !addresses.isEmpty()) {
             initFromExistingCluster(addresses);
@@ -95,6 +120,10 @@ public class ValkeyCluster implements AutoCloseable {
 
             if (clusterMode) {
                 command.add("--cluster-mode");
+            }
+
+            if (tlsAuthClients) {
+                command.add("--tls-auth-clients");
             }
 
             if (loadModule != null && !loadModule.isEmpty()) {
