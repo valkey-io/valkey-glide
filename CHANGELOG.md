@@ -5,7 +5,7 @@
 ### Fixes
 
 * Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
-* Python, Java, Go: standardize cert reload interval validation ([#6678](https://github.com/valkey-io/valkey-glide/pull/6678))
+* fix: bound mTLS cert reload interval and align Node field names across SDKs ([#6678](https://github.com/valkey-io/valkey-glide/pull/6678))
 * Core/FFI: Percent-decode userinfo in `create_client_from_uri` so credentials containing URI-reserved characters (`@`, `:`, `/`, `?`, `#`, `%`, `+`, space, non-ASCII) authenticate correctly ([#6659](https://github.com/valkey-io/valkey-glide/issues/6659))
 * Core/All: Buffer pending cluster requests during reconnect instead of failing immediately. When a circular MOVED redirect triggers a reconnect, requests arriving during the recovery window are now queued and retried transparently once reconnection completes. A new `recovery_requests_queue_size` option (default: 1000) controls the queue depth. ([#6640](https://github.com/valkey-io/valkey-glide/pull/6640))
 * Python: fix trio hang on free-threaded builds by waking `_CompatFuture` waiters from the owning trio thread ([#6685](https://github.com/valkey-io/valkey-glide/pull/6685))
