@@ -4,9 +4,13 @@
 //!
 //! Uses the same deferred Promise pattern as GlideClientHandle for async work:
 //! synchronous N-API call spawns work on a runtime, resolves/rejects via Deferred.
+//!
+//! Note: #[napi] exports are invisible to the Rust compiler's usage analysis,
+//! so dead_code warnings are suppressed at module level.
 
 #![allow(dead_code)]
 
+use dashmap::DashMap;
 use glide_core::client::{Client, ConnectionRequest};
 use glide_core::connection_request::ConnectionRequest as ProtobufConnectionRequest;
 use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
@@ -15,9 +19,9 @@ use napi::bindgen_prelude::*;
 use napi::{Env, Error, Result, Status};
 use napi_derive::napi;
 use protobuf::Message;
-use std::sync::OnceLock;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock, OnceLock};
+use std::time::{Duration, Instant};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -32,6 +36,192 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
             .build()
             .expect("Failed to create pool runtime")
     })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLIENT-TO-POOL TRACKING (for abandon detection hooks in command dispatch)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Maps client_id → pool_id for all pool-borrowed clients.
+/// Consulted by GlideClientHandle::send_command to refresh activity.
+static CLIENT_POOL_MAP: LazyLock<DashMap<u64, u64>> = LazyLock::new(DashMap::new);
+
+/// Tracks activity timestamps for pool-borrowed clients.
+/// Updated on every command dispatch for registered clients.
+static CLIENT_ACTIVITY: LazyLock<DashMap<u64, Instant>> = LazyLock::new(DashMap::new);
+
+/// Tracks blocking state for pool-borrowed clients.
+/// Set to true while a blocking command is in flight.
+static CLIENT_BLOCKING: LazyLock<DashMap<u64, Arc<AtomicBool>>> = LazyLock::new(DashMap::new);
+
+/// Get the client-to-pool map (for use by command dispatch hooks).
+pub fn get_client_pool_map() -> &'static DashMap<u64, u64> {
+    &CLIENT_POOL_MAP
+}
+
+/// Refresh the activity timestamp for a pool-borrowed client.
+/// Called from send_command/send_batch/invoke_script hooks.
+pub fn refresh_activity(client_id: u64) {
+    if let Some(mut entry) = CLIENT_ACTIVITY.get_mut(&client_id) {
+        *entry.value_mut() = Instant::now();
+    }
+}
+
+/// Mark/unmark a pool-borrowed client as executing a blocking command.
+/// Returns true if the mark was applied (client is registered).
+pub fn mark_blocking(client_id: u64, blocking: bool) -> bool {
+    if let Some(entry) = CLIENT_BLOCKING.get(&client_id) {
+        entry.value().store(blocking, Ordering::Release);
+        // Refresh activity on unmark (so client isn't immediately reclaimable after a long block)
+        if !blocking {
+            refresh_activity(client_id);
+        }
+        true
+    } else {
+        false
+    }
+}
+
+/// Register a client as pool-borrowed. Called by TS on acquire.
+#[napi]
+pub fn pool_register_client(pool_id: i64, client_id: i64) {
+    let cid = client_id as u64;
+    CLIENT_POOL_MAP.insert(cid, pool_id as u64);
+    CLIENT_ACTIVITY.insert(cid, Instant::now());
+    CLIENT_BLOCKING.insert(cid, Arc::new(AtomicBool::new(false)));
+}
+
+/// Unregister a client from pool tracking. Called by TS on release/close.
+#[napi]
+pub fn pool_unregister_client(client_id: i64) {
+    let cid = client_id as u64;
+    CLIENT_POOL_MAP.remove(&cid);
+    CLIENT_ACTIVITY.remove(&cid);
+    CLIENT_BLOCKING.remove(&cid);
+}
+
+/// Drain discarded client IDs from the abandon monitor.
+/// Returns client IDs that were abandoned and should be closed by TS.
+#[napi]
+pub fn pool_drain_discarded(pool_id: i64) -> Vec<i64> {
+    // The Node abandon monitor stores discarded IDs in DISCARDED_CLIENTS
+    let mut result = vec![];
+    DISCARDED_CLIENTS.retain(|key, &mut pid| {
+        if pid == pool_id as u64 {
+            result.push(*key as i64);
+            false // remove from map
+        } else {
+            true // keep
+        }
+    });
+    result
+}
+
+/// Stores client IDs discarded by the abandon monitor, keyed by client_id → pool_id.
+static DISCARDED_CLIENTS: LazyLock<DashMap<u64, u64>> = LazyLock::new(DashMap::new);
+
+/// Stores monitor abort handles per pool_id.
+static MONITOR_HANDLES: LazyLock<DashMap<u64, tokio::task::JoinHandle<()>>> =
+    LazyLock::new(DashMap::new);
+
+/// Start the abandon monitor for a pool. Called by TS during pool creation.
+/// pool_id is an arbitrary identifier used to group clients.
+/// abandon_timeout_ms of 0 disables the monitor.
+#[napi]
+pub fn pool_start_monitor(pool_id: i64, abandon_timeout_ms: i64) {
+    start_node_abandon_monitor(
+        pool_id as u64,
+        Duration::from_millis(abandon_timeout_ms as u64),
+    );
+}
+
+/// Stop and abort the abandon monitor for a pool. Called by TS on close().
+#[napi]
+pub fn pool_stop_monitor(pool_id: i64) {
+    if let Some((_, handle)) = MONITOR_HANDLES.remove(&(pool_id as u64)) {
+        handle.abort();
+    }
+}
+
+/// Start the Node-specific abandon monitor for a pool.
+/// Scans CLIENT_ACTIVITY for clients that exceeded abandon_timeout.
+fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
+    if abandon_timeout.is_zero() {
+        return;
+    }
+
+    let scan_interval = std::cmp::max(abandon_timeout / 2, Duration::from_secs(1));
+
+    let handle = get_pool_runtime().spawn(async move {
+        loop {
+            tokio::time::sleep(scan_interval).await;
+
+            // Collect abandoned client IDs
+            let now = Instant::now();
+            let mut abandoned = vec![];
+
+            for entry in CLIENT_POOL_MAP.iter() {
+                let client_id = *entry.key();
+                let pid = *entry.value();
+
+                if pid != pool_id {
+                    continue;
+                }
+
+                // Skip blocking clients
+                if let Some(blocking) = CLIENT_BLOCKING.get(&client_id)
+                    && blocking.value().load(Ordering::Acquire)
+                {
+                    continue;
+                }
+
+                // Check activity
+                if let Some(activity) = CLIENT_ACTIVITY.get(&client_id)
+                    && now.duration_since(*activity.value()) > abandon_timeout
+                {
+                    abandoned.push(client_id);
+                }
+            }
+
+            // Discard abandoned clients
+            for client_id in abandoned {
+                // Revalidate before discarding (TOCTOU protection, fresh timestamp)
+                let recheck_now = Instant::now();
+                let should_discard = CLIENT_ACTIVITY
+                    .get(&client_id)
+                    .map(|a| recheck_now.duration_since(*a.value()) > abandon_timeout)
+                    .unwrap_or(false)
+                    && CLIENT_BLOCKING
+                        .get(&client_id)
+                        .map(|b| !b.value().load(Ordering::Acquire))
+                        .unwrap_or(true);
+
+                if should_discard {
+                    // Remove from tracking and mark as discarded
+                    CLIENT_POOL_MAP.remove(&client_id);
+                    CLIENT_ACTIVITY.remove(&client_id);
+                    CLIENT_BLOCKING.remove(&client_id);
+                    DISCARDED_CLIENTS.insert(client_id, pool_id);
+                    logger_core::log_warn(
+                        "pool",
+                        format!(
+                            "Abandon detection: client {client_id} exceeded inactivity timeout — discarding"
+                        ),
+                    );
+                }
+            }
+
+            // Stop if no more clients for this pool
+            if !CLIENT_POOL_MAP.iter().any(|e| *e.value() == pool_id) {
+                break;
+            }
+        }
+
+        // Clean up handle on self-termination
+        MONITOR_HANDLES.remove(&pool_id);
+    });
+
+    MONITOR_HANDLES.insert(pool_id, handle);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -313,6 +313,9 @@ struct SingleCommandMessage {
     callback_idx: u32,
     cmd: redis::Cmd,
     routing: Option<RoutingInfo>,
+    /// If this command was marked as blocking for pool abandon detection,
+    /// contains the client_id to unmark after completion.
+    pool_blocking_ids: Option<u64>,
 }
 
 /// Batch command message for pipeline or transaction execution.
@@ -326,6 +329,8 @@ struct BatchCommandMessage {
     retry_connection_error: bool,
     routing: Option<RoutingInfo>,
     command_span: Option<GlideSpan>,
+    /// Pool client_id for blocking protection during batch execution.
+    pool_ids: Option<u64>,
 }
 
 /// Script invocation message (EVALSHA with auto-LOAD fallback)
@@ -335,6 +340,8 @@ struct ScriptInvocationMessage {
     keys: Vec<Bytes>,
     args: Vec<Bytes>,
     routing: Option<RoutingInfo>,
+    /// Pool client_id for blocking protection during script execution.
+    pool_ids: Option<u64>,
 }
 
 /// Cluster scan message
@@ -939,6 +946,7 @@ pub fn create_direct_client<'a>(
                     let mut cmd = cmd_msg.cmd;
                     let callback_idx = cmd_msg.callback_idx;
                     let routing = cmd_msg.routing;
+                    let pool_blocking_ids = cmd_msg.pool_blocking_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
@@ -956,6 +964,10 @@ pub fn create_direct_client<'a>(
                             Ok(()) => client_clone.send_command(&mut cmd, routing).await,
                             Err(err) => Err(err),
                         };
+                        // Unmark blocking after command completes
+                        if let Some(client_id) = pool_blocking_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, cmd.span());
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -968,12 +980,19 @@ pub fn create_direct_client<'a>(
                 WorkerMessage::Batch(batch_msg) => {
                     let mut client_clone = client.clone();
                     let callback_idx = batch_msg.callback_idx;
+                    let pool_ids = batch_msg.pool_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
 
                     // Spawn local task for batch execution
                     task::spawn_local(async move {
+                        // Mark as blocking for duration of batch execution.
+                        // Conservative: prevents abandon monitor from discarding a client
+                        // mid-batch even if abandon_timeout < batch execution time.
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, true);
+                        }
                         let command_span = batch_msg.command_span.clone();
                         let result = execute_batch(
                             &mut client_clone,
@@ -987,6 +1006,10 @@ pub fn create_direct_client<'a>(
                             batch_msg.command_span,
                         )
                         .await;
+                        // Unmark blocking after batch completes
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, command_span);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -999,16 +1022,27 @@ pub fn create_direct_client<'a>(
                 WorkerMessage::ScriptInvocation(script_msg) => {
                     let mut client_clone = client.clone();
                     let callback_idx = script_msg.callback_idx;
+                    let pool_ids = script_msg.pool_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
+                        // Mark as blocking for duration of script execution.
+                        // Conservative: prevents abandon monitor from discarding a client
+                        // mid-script even if abandon_timeout < script execution time.
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, true);
+                        }
                         let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
                         let args: Vec<&[u8]> = script_msg.args.iter().map(|a| a.as_ref()).collect();
                         let result = client_clone
                             .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                             .await;
+                        // Unmark blocking after script completes
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -1241,11 +1275,26 @@ impl GlideClientHandle {
         };
         let command_span_for_error = cmd.span();
 
+        // Pool abandon detection: refresh activity and mark blocking commands
+        let pool_blocking_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+            pool::refresh_activity(self.client_id);
+            if glide_core::client::is_blocking_command(&cmd)
+                && pool::mark_blocking(self.client_id, true)
+            {
+                Some(self.client_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Send command to the pinned worker thread via channel
         let msg = WorkerMessage::Command(SingleCommandMessage {
             callback_idx,
             cmd,
             routing,
+            pool_blocking_ids,
         });
 
         // Send via channel (non-blocking)
@@ -1436,6 +1485,14 @@ impl GlideClientHandle {
         };
         let command_span_for_error = command_span.clone();
 
+        // Pool abandon detection: refresh activity for batch duration
+        let pool_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+            pool::refresh_activity(self.client_id);
+            Some(self.client_id)
+        } else {
+            None
+        };
+
         // Send batch message to worker
         let msg = WorkerMessage::Batch(BatchCommandMessage {
             callback_idx,
@@ -1447,6 +1504,7 @@ impl GlideClientHandle {
             retry_connection_error: retry_connection_error.unwrap_or(false),
             routing,
             command_span,
+            pool_ids,
         });
 
         let send_failed = match &self.command_tx {
@@ -1525,12 +1583,21 @@ impl GlideClientHandle {
             None => None,
         };
 
+        // Pool abandon detection: refresh activity for script execution
+        let pool_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+            pool::refresh_activity(self.client_id);
+            Some(self.client_id)
+        } else {
+            None
+        };
+
         let msg = WorkerMessage::ScriptInvocation(ScriptInvocationMessage {
             callback_idx,
             hash,
             keys,
             args,
             routing,
+            pool_ids,
         });
 
         let send_failed = match &self.command_tx {
