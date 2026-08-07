@@ -99,6 +99,45 @@ def _child_stale_client_worker(
     asyncio.run(run())
 
 
+def _child_stale_pubsub_worker(
+    addresses_raw: List[Tuple[str, int]],
+    client_pid: int,
+    result_queue: multiprocessing.Queue,
+):
+    """Worker that tries pubsub on a stale client — should raise."""
+
+    async def run():
+        from glide_shared.config import GlideClusterClientConfiguration, NodeAddress
+
+        config = GlideClusterClientConfiguration(
+            addresses=[NodeAddress(host=h, port=p) for h, p in addresses_raw],
+            request_timeout=5000,
+        )
+        try:
+            client = await GlideClusterClient.create(config)
+            client._create_pid = client_pid
+            # Test get_pubsub_message path
+            await client.get_pubsub_message()
+            result_queue.put(("UNEXPECTED_SUCCESS", "get_pubsub_message"))
+        except ClosingError as e:
+            if "fork" in str(e).lower():
+                # Also verify try_get_pubsub_message raises
+                try:
+                    client.try_get_pubsub_message()
+                    result_queue.put(("UNEXPECTED_SUCCESS", "try_get_pubsub_message"))
+                except ClosingError as e2:
+                    if "fork" in str(e2).lower():
+                        result_queue.put(("OK_REJECTED", str(e)))
+                    else:
+                        result_queue.put(("WRONG_ERROR", str(e2)))
+            else:
+                result_queue.put(("WRONG_ERROR", str(e)))
+        except Exception as e:  # noqa: BLE001
+            result_queue.put(("ERROR", f"{type(e).__name__}: {e}"))
+
+    asyncio.run(run())
+
+
 def _is_free_threaded() -> bool:
     """Detect free-threaded (no-GIL) Python builds."""
     import sys
@@ -273,3 +312,36 @@ class TestForkSafety:
         assert (
             result[0] == "OK_REJECTED"
         ), f"Expected ClosingError for stale client, got: {result}"
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_stale_pubsub_raises_in_child(self, request: Any, cluster_mode: bool):
+        """
+        Using get_pubsub_message on a stale client in a forked child must
+        raise ClosingError (not hang waiting for a message that never comes).
+        """
+        parent_client = await create_client(request, cluster_mode)
+        await parent_client.set("pubsub_fork_init", "ok")
+        parent_pid = os.getpid()
+
+        valkey_cluster: ValkeyCluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        addresses_raw = [(addr.host, addr.port) for addr in valkey_cluster.nodes_addr]
+
+        await parent_client.close()
+
+        ctx = multiprocessing.get_context("fork")
+        result_queue = ctx.Queue()
+        p = ctx.Process(
+            target=_child_stale_pubsub_worker,
+            args=(addresses_raw, parent_pid, result_queue),
+        )
+        p.start()
+        p.join(timeout=15.0)
+        if p.is_alive():
+            p.kill()
+            p.join()
+            pytest.fail("Child hung — pubsub stale client check not working")
+
+        result = result_queue.get(timeout=5.0)
+        assert (
+            result[0] == "OK_REJECTED"
+        ), f"Expected ClosingError for stale pubsub client, got: {result}"
