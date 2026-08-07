@@ -1513,4 +1513,72 @@ mod standalone_client_tests {
             );
         });
     }
+
+    /// End-to-end proof that the pre-command idle-timeout hook fires
+    /// against the standalone client: with `idle_timeout` set, the mock
+    /// sees at least one extra PING land on the socket before the
+    /// follow-up user command; without it, only the handshake PINGs
+    /// are seen. Uses two independent mock servers so each client's
+    /// state is isolated.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_sends_ping_before_next_command() {
+        // Baseline: no idle_timeout.
+        let baseline_mock = ServerMock::new(create_primary_responses());
+        let baseline_addresses = baseline_mock.get_addresses();
+
+        let baseline_ping_count_after_cmd = block_on_all(async {
+            let mut req =
+                create_connection_request(baseline_addresses.as_slice(), &Default::default());
+            req.idle_timeout = None;
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("baseline client build");
+
+            let baseline_after_handshake = baseline_mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_command(&get_cmd).await;
+
+            // Return the delta so the assertion is not affected by
+            // handshake-time PINGs that vary between runs.
+            baseline_mock
+                .get_ping_count()
+                .saturating_sub(baseline_after_handshake)
+        });
+
+        // With idle_timeout=100ms and a 300ms sleep, the pre-command
+        // hook must send one extra PING before the follow-up GET.
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        let idle_ping_count_after_cmd = block_on_all(async {
+            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
+            req.idle_timeout = Some(100);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("idle client build");
+
+            let idle_after_handshake = mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_command(&get_cmd).await;
+
+            mock.get_ping_count().saturating_sub(idle_after_handshake)
+        });
+
+        assert!(
+            idle_ping_count_after_cmd > baseline_ping_count_after_cmd,
+            "expected the pre-command idle_timeout hook to run at least one extra PING; \
+             baseline delta = {baseline_ping_count_after_cmd}, idle delta = \
+             {idle_ping_count_after_cmd}"
+        );
+    }
 }

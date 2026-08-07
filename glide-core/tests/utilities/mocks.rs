@@ -11,7 +11,7 @@ use std::net::TcpStream as StdTcpStream;
 use std::str::from_utf8;
 use std::sync::{
     Arc,
-    atomic::{AtomicU16, Ordering},
+    atomic::{AtomicBool, AtomicU16, Ordering},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -24,9 +24,17 @@ pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
+    /// Total PINGs seen on the socket, whether answered from the
+    /// constant-response table or dropped by the blackhole.
+    ping_count: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
     closing_completed_signal: Arc<ManualResetEvent>,
+    /// When set, PING requests received on the socket are read but not
+    /// answered. Reproduces a silent half-open flow where the transport
+    /// still accepts writes but the read half never delivers a
+    /// response. Used by the idle_timeout integration test.
+    ping_blackhole: Arc<AtomicBool>,
 }
 
 fn read_from_socket(
@@ -74,8 +82,10 @@ fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
     received_commands: &Arc<AtomicU16>,
+    ping_count: &Arc<AtomicU16>,
     constant_responses: &HashMap<String, Value>,
     closing_signal: &Arc<ManualResetEvent>,
+    ping_blackhole: &Arc<AtomicBool>,
 ) -> bool {
     let mut buffer = vec![0; 1024];
     let size = match read_from_socket(&mut buffer, socket, closing_signal) {
@@ -86,6 +96,16 @@ fn receive_and_respond_to_next_message(
     };
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
     log_resp_message(&message);
+
+    if message.contains("PING") {
+        ping_count.fetch_add(1, Ordering::AcqRel);
+    }
+
+    if ping_blackhole.load(Ordering::Acquire) && message.contains("PING") {
+        // Read and drop the PING, sending nothing back. The client's
+        // pre-command PING will time out on its bounded deadline.
+        return true;
+    }
 
     let setinfo_count = message.matches("SETINFO").count();
     if setinfo_count > 0 {
@@ -147,6 +167,8 @@ impl ServerMock {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
         let received_commands_clone = received_commands.clone();
+        let ping_count = Arc::new(AtomicU16::new(0));
+        let ping_count_clone = ping_count.clone();
         let address = ConnectionAddr::Tcp(
             "localhost".to_string(),
             listener.local_addr().unwrap().port(),
@@ -155,6 +177,8 @@ impl ServerMock {
         let closing_signal_clone = closing_signal.clone();
         let closing_completed_signal = Arc::new(ManualResetEvent::new(false));
         let closing_completed_signal_clone = closing_completed_signal.clone();
+        let ping_blackhole = Arc::new(AtomicBool::new(false));
+        let ping_blackhole_clone = ping_blackhole.clone();
         let address_clone = address.clone();
         std::thread::spawn(move || {
             logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
@@ -165,8 +189,10 @@ impl ServerMock {
                 &mut receiver,
                 &mut socket,
                 &received_commands_clone,
+                &ping_count_clone,
                 &constant_responses,
                 &closing_signal_clone,
+                &ping_blackhole_clone,
             ) {}
 
             // Terminate the connection
@@ -185,10 +211,26 @@ impl ServerMock {
             request_sender,
             address,
             received_commands,
+            ping_count,
             runtime: None,
             closing_signal,
             closing_completed_signal,
+            ping_blackhole,
         }
+    }
+
+    /// Enable or disable the PING blackhole. When enabled, any PING
+    /// received on the socket is read but silently dropped so the
+    /// client's pre-command PING times out on its bounded deadline.
+    pub fn set_ping_blackhole(&self, blackhole: bool) {
+        self.ping_blackhole.store(blackhole, Ordering::Release);
+    }
+
+    /// Total number of PING messages seen on the socket, including any
+    /// that were dropped by the blackhole. Useful for asserting the
+    /// pre-command validation fired.
+    pub fn get_ping_count(&self) -> u16 {
+        self.ping_count.load(Ordering::Acquire)
     }
 
     pub async fn close(self) {
