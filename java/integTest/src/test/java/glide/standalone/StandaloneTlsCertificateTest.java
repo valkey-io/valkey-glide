@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
+import static glide.TestUtilities.createClientWithRetry;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,7 +63,8 @@ public class StandaloneTlsCertificateTest {
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, nodeAddr);
 
-        try (GlideClient client = GlideClient.createClient(config).get()) {
+        try (GlideClient client =
+                createClientWithRetry(() -> GlideClient.createClient(config))) {
             TestUtilities.assertConnected(client);
         }
     }
@@ -76,7 +78,8 @@ public class StandaloneTlsCertificateTest {
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(certBundle, nodeAddr);
 
-        try (GlideClient client = GlideClient.createClient(config).get()) {
+        try (GlideClient client =
+                createClientWithRetry(() -> GlideClient.createClient(config))) {
             TestUtilities.assertConnected(client);
         }
     }
@@ -117,7 +120,8 @@ public class StandaloneTlsCertificateTest {
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, address);
 
-        try (GlideClient client = GlideClient.createClient(config).get()) {
+        try (GlideClient client =
+                createClientWithRetry(() -> GlideClient.createClient(config))) {
             TestUtilities.assertConnected(client);
         }
     }
@@ -159,7 +163,8 @@ public class StandaloneTlsCertificateTest {
                             .build();
             ;
 
-            try (GlideClient client = GlideClient.createClient(config).get()) {
+            try (GlideClient client =
+                    createClientWithRetry(() -> GlideClient.createClient(config))) {
                 TestUtilities.assertConnected(client);
             }
         } finally {

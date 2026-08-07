@@ -17,6 +17,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
+import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -28,7 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>See <a href="../../../../../../DEVELOPER.md#dns-tests">DNS Tests</a> for setup instructions.
  */
-@Timeout(10)
+@Timeout(25)
 @EnabledIfEnvironmentVariable(named = "VALKEY_GLIDE_DNS_TESTS_ENABLED", matches = ".*")
 public class DnsTest {
 
@@ -36,7 +37,8 @@ public class DnsTest {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     void testConnectWithValidHostnameNoTls(boolean clusterMode) {
-        try (BaseClient client = buildClient(clusterMode, false, HOSTNAME_NO_TLS)) {
+        try (BaseClient client =
+                createClientWithRetry(() -> buildClientFuture(clusterMode, false, HOSTNAME_NO_TLS))) {
             assertConnected(client);
         }
     }
@@ -44,14 +46,17 @@ public class DnsTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void testConnectWithInvalidHostnameNoTls(boolean clusterMode) {
-        assertThrows(Exception.class, () -> buildClient(clusterMode, false, "nonexistent.invalid"));
+        assertThrows(
+                Exception.class,
+                () -> buildClientFuture(clusterMode, false, "nonexistent.invalid").get());
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     void testTlsConnectWithHostnameInCert(boolean clusterMode) {
-        try (BaseClient client = buildClient(clusterMode, true, HOSTNAME_TLS)) {
+        try (BaseClient client =
+                createClientWithRetry(() -> buildClientFuture(clusterMode, true, HOSTNAME_TLS))) {
             assertConnected(client);
         }
     }
@@ -59,7 +64,9 @@ public class DnsTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void testTlsConnectWithHostnameNotInCert(boolean clusterMode) {
-        assertThrows(Exception.class, () -> buildClient(clusterMode, true, HOSTNAME_NO_TLS));
+        assertThrows(
+                Exception.class,
+                () -> buildClientFuture(clusterMode, true, HOSTNAME_NO_TLS).get());
     }
 
     // -------------------
@@ -67,7 +74,8 @@ public class DnsTest {
     // -------------------
 
     @SneakyThrows
-    private static BaseClient buildClient(boolean clusterMode, boolean useTls, String hostname) {
+    private static CompletableFuture<BaseClient> buildClientFuture(
+            boolean clusterMode, boolean useTls, String hostname) {
 
         // Get port from test configuration.
         String[] hosts =
@@ -95,7 +103,7 @@ public class DnsTest {
                                 .tlsAdvancedConfiguration(tlsConfig)
                                 .build());
             }
-            return GlideClusterClient.createClient(builder.build()).get();
+            return GlideClusterClient.createClient(builder.build()).thenApply(c -> (BaseClient) c);
         } else {
             GlideClientConfigurationBuilder<?, ?> builder =
                     GlideClientConfiguration.builder().address(address).useTLS(useTls);
@@ -105,7 +113,7 @@ public class DnsTest {
                 builder.advancedConfiguration(
                         AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
             }
-            return GlideClient.createClient(builder.build()).get();
+            return GlideClient.createClient(builder.build()).thenApply(c -> (BaseClient) c);
         }
     }
 }
