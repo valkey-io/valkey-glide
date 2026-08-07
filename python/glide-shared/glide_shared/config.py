@@ -751,6 +751,14 @@ class AdvancedBaseClientConfiguration:
                 "configured (both client_cert_path and client_key_path)."
             )
 
+        # The core silently maps `0` to unset and applies its default cadence, so
+        # reject it here instead of leaving callers with a surprising fallback.
+        if interval is not None and interval <= 0:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds must be positive; omit it (None) to defer "
+                "to the GLIDE core's default reload cadence."
+            )
+
         # The core cannot catch these: it reads 0 as unset and never sees a value
         # too large for a uint32.
         if interval is not None and (
