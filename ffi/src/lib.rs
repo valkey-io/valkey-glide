@@ -781,6 +781,9 @@ pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
     // Replace the stale writer. The old one is intentionally leaked —
     // its mutex/condvar are in undefined state post-fork.
     ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
+
+    // Also reinitialize the timeout watchdog — its thread is dead post-fork.
+    glide_core::timeout_watchdog::TimeoutWatchdog::reinit_global();
 }
 
 /// Create a new `SharedPipeWriter` and spawn its flush thread.
