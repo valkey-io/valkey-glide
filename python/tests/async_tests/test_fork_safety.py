@@ -121,7 +121,15 @@ def _child_stale_pubsub_worker(
             result_queue.put(("UNEXPECTED_SUCCESS", "get_pubsub_message"))
         except ClosingError as e:
             if "fork" in str(e).lower():
-                result_queue.put(("OK_REJECTED", str(e)))
+                # Also verify try_get_pubsub_message raises
+                try:
+                    client.try_get_pubsub_message()
+                    result_queue.put(("UNEXPECTED_SUCCESS", "try_get_pubsub_message"))
+                except ClosingError as e2:
+                    if "fork" in str(e2).lower():
+                        result_queue.put(("OK_REJECTED", str(e)))
+                    else:
+                        result_queue.put(("WRONG_ERROR", str(e2)))
             else:
                 result_queue.put(("WRONG_ERROR", str(e)))
         except Exception as e:  # noqa: BLE001
@@ -306,9 +314,7 @@ class TestForkSafety:
         ), f"Expected ClosingError for stale client, got: {result}"
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_stale_pubsub_raises_in_child(
-        self, request: Any, cluster_mode: bool
-    ):
+    async def test_stale_pubsub_raises_in_child(self, request: Any, cluster_mode: bool):
         """
         Using get_pubsub_message on a stale client in a forked child must
         raise ClosingError (not hang waiting for a message that never comes).
