@@ -27,7 +27,7 @@ mod connections_logic;
 mod pipeline_routing;
 /// Exposed only for testing.
 pub mod testing {
-    pub use super::connections_container::{ConnectionDetails, IdleTracker};
+    pub use super::connections_container::{ConnectionDetails, IdleTracker, IdleValidationGuard};
     pub use super::connections_logic::*;
 }
 use crate::{
@@ -44,7 +44,9 @@ use crate::{
     types::ServerError,
     FromRedisValue, InfoDict, PipelineRetryStrategy,
 };
-use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
+use connections_container::{
+    IdleValidationGuard, RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus,
+};
 use dashmap::DashMap;
 use pipeline_routing::{
     collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
@@ -3134,9 +3136,18 @@ where
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            // Winner path. Run one bounded PING; on any failure or
-            // deadline breach drive a refresh and wait for a
-            // replacement transport before returning.
+            // Winner path. Own the latch with an RAII guard so it is
+            // released on every exit, including future cancellation.
+            // Client::send_command drops execute_command_owned when its
+            // outer request timeout fires, which drops this future mid
+            // await. Without the guard the plain "store false at the
+            // end" is skipped and every later stale caller takes the
+            // loser path and stalls for the full wait deadline.
+            let _latch = IdleValidationGuard::new(&tracker);
+
+            // Run one bounded PING; on any failure or deadline breach
+            // drive a refresh and wait for a replacement transport
+            // before returning.
             let mut conn = conn_future.await;
             let ping_result = tokio::time::timeout(
                 IDLE_TIMEOUT_PING_DEADLINE,
@@ -3163,9 +3174,6 @@ where
                     core.conn_lock.read().connection_for_address(address)
                 }
             };
-
-            tracker.in_flight.store(false, Ordering::Release);
-            tracker.notify.notify_waiters();
 
             if let Some((addr, fut)) = refreshed {
                 let fresh_conn = fut.await;

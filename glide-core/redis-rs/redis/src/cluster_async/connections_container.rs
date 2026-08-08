@@ -91,6 +91,34 @@ impl Default for IdleTracker {
     }
 }
 
+/// RAII guard for the winner section of the idle-timeout single-flight.
+///
+/// Constructed immediately after the CAS that flips `in_flight` to
+/// `true`. On drop it clears the latch with Release ordering and calls
+/// `notify_waiters()`, so a winner future that is cancelled mid PING
+/// or mid reconnect still releases the latch. A missed release wedges
+/// every later stale caller onto the loser path for the full wait
+/// deadline.
+pub struct IdleValidationGuard<'a> {
+    tracker: &'a IdleTracker,
+}
+
+impl<'a> IdleValidationGuard<'a> {
+    /// Takes ownership of the winner-side release. Callers construct
+    /// the guard immediately after their CAS succeeds; the release
+    /// runs on drop, so cancellation cannot leave the latch stuck.
+    pub fn new(tracker: &'a IdleTracker) -> Self {
+        Self { tracker }
+    }
+}
+
+impl Drop for IdleValidationGuard<'_> {
+    fn drop(&mut self) {
+        self.tracker.in_flight.store(false, Ordering::Release);
+        self.tracker.notify.notify_waiters();
+    }
+}
+
 /// A struct that encapsulates a network connection along with its associated IP address and AZ.
 #[derive(Clone, Debug)]
 pub struct ConnectionDetails<Connection> {
