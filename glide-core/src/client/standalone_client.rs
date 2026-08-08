@@ -841,24 +841,22 @@ impl StandaloneClient {
         }
     }
 
-    async fn send_request(
-        cmd: &redis::Cmd,
+    /// Acquires a multiplexed connection for the given
+    /// `ReconnectingConnection` and, when `idle_timeout` is enabled and
+    /// the connection has been idle beyond that window, probes it with a
+    /// bounded PING. On a slow or failed PING the connection is
+    /// discarded and a fresh transport is acquired before the caller
+    /// sends its real command, so a silently half-open flow does not
+    /// swallow the request. Callers use the returned connection.
+    async fn acquire_validated_connection(
         reconnecting_connection: &ReconnectingConnection,
         idle_timeout: Option<Duration>,
-    ) -> RedisResult<Value> {
-        // Mark command as sent for watchdog diagnostics
-        cmd.watchdog_phase
-            .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
+    ) -> RedisResult<redis::aio::MultiplexedConnection> {
         let mut connection = reconnecting_connection.get_connection().await?;
 
-        // When idle_timeout is enabled and the connection has been idle
-        // longer than the configured window, probe it with a bounded PING
-        // before sending the user command. A failed or slow PING means
-        // the socket is silently half-open; reconnect and re-acquire the
-        // fresh transport before running the real command so the caller
-        // does not see a lost command on a dead flow.
         if let Some(idle) = idle_timeout
             && reconnecting_connection.should_validate(idle)
+            && connection.is_idle()
         {
             match tokio::time::timeout(
                 super::IDLE_TIMEOUT_PING_DEADLINE,
@@ -873,6 +871,20 @@ impl StandaloneClient {
                 }
             }
         }
+
+        Ok(connection)
+    }
+
+    async fn send_request(
+        cmd: &redis::Cmd,
+        reconnecting_connection: &ReconnectingConnection,
+        idle_timeout: Option<Duration>,
+    ) -> RedisResult<Value> {
+        // Mark command as sent for watchdog diagnostics
+        cmd.watchdog_phase
+            .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
+        let mut connection =
+            Self::acquire_validated_connection(reconnecting_connection, idle_timeout).await?;
 
         let result = connection.send_packed_command(cmd).await;
         match result {
@@ -1001,7 +1013,9 @@ impl StandaloneClient {
         count: usize,
     ) -> RedisResult<Vec<Value>> {
         let reconnecting_connection = self.get_primary_connection();
-        let mut connection = reconnecting_connection.get_connection().await?;
+        let mut connection =
+            Self::acquire_validated_connection(reconnecting_connection, self.inner.idle_timeout)
+                .await?;
         let result = connection
             .send_packed_commands(pipeline, offset, count)
             .await;
@@ -1014,7 +1028,11 @@ impl StandaloneClient {
                 reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
-            _ => result,
+            Ok(values) => {
+                reconnecting_connection.mark_activity();
+                Ok(values)
+            }
+            other => other,
         }
     }
 

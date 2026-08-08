@@ -1581,4 +1581,71 @@ mod standalone_client_tests {
              {idle_ping_count_after_cmd}"
         );
     }
+
+    /// Companion to `test_standalone_idle_timeout_sends_ping_before_next_command`
+    /// but for `send_pipeline`, which reuses the same validate helper.
+    /// Without `idle_timeout` the mock sees only the handshake PINGs
+    /// around the pipeline; with `idle_timeout=100ms` and a 300ms
+    /// sleep, the pre-pipeline hook must send one extra PING before the
+    /// pipeline's commands hit the socket.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_sends_ping_before_next_pipeline() {
+        // Baseline: no idle_timeout.
+        let baseline_mock = ServerMock::new(create_primary_responses());
+        let baseline_addresses = baseline_mock.get_addresses();
+
+        let baseline_ping_delta = block_on_all(async {
+            let mut req =
+                create_connection_request(baseline_addresses.as_slice(), &Default::default());
+            req.idle_timeout = None;
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("baseline client build");
+
+            let baseline_after_handshake = baseline_mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut pipeline = redis::Pipeline::new();
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            pipeline.add_command(get_cmd.clone());
+            baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_pipeline(&pipeline, 0, 1).await;
+
+            baseline_mock
+                .get_ping_count()
+                .saturating_sub(baseline_after_handshake)
+        });
+
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        let idle_ping_delta = block_on_all(async {
+            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
+            req.idle_timeout = Some(100);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("idle client build");
+
+            let idle_after_handshake = mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut pipeline = redis::Pipeline::new();
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            pipeline.add_command(get_cmd.clone());
+            mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_pipeline(&pipeline, 0, 1).await;
+
+            mock.get_ping_count().saturating_sub(idle_after_handshake)
+        });
+
+        assert!(
+            idle_ping_delta > baseline_ping_delta,
+            "expected the pre-pipeline idle_timeout hook to run at least one extra PING; \
+             baseline delta = {baseline_ping_delta}, idle delta = {idle_ping_delta}"
+        );
+    }
 }
