@@ -27,7 +27,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
@@ -273,6 +273,15 @@ pub(crate) struct Pipeline<SinkItem> {
     /// response reading, so a response-only signal would freeze. See
     /// [`Self::send_recv`].
     progress: Arc<AtomicU64>,
+    /// Number of caller-visible requests that have been enqueued but
+    /// whose response has not yet been delivered. Incremented once a
+    /// request is accepted by the writer and decremented when its
+    /// response returns to the caller (success, error, or timeout).
+    /// The pre-command idle-timeout hook reads this to skip PING probes
+    /// on connections that currently carry an in-flight command such as
+    /// `BLPOP 0` or `XREAD BLOCK`, whose ordered reply would otherwise
+    /// be blocked behind the probe.
+    in_flight_count: Arc<AtomicUsize>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -778,6 +787,7 @@ where
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(AtomicU64::new(0));
+        let in_flight_count = Arc::new(AtomicUsize::new(0));
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
@@ -796,6 +806,7 @@ where
                 push_manager,
                 is_stream_closed,
                 progress,
+                in_flight_count,
             },
             f,
         )
@@ -900,6 +911,19 @@ where
                 }
             },
         };
+        // Count this request as in-flight from the moment the writer
+        // accepts it until the caller has its response. The RAII guard
+        // decrements on every exit path, including timeouts and panics,
+        // so the count cannot drift over the lifetime of the connection.
+        struct InFlightGuard(Arc<AtomicUsize>);
+        impl Drop for InFlightGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::AcqRel);
+            }
+        }
+        self.in_flight_count.fetch_add(1, Ordering::AcqRel);
+        let _in_flight = InFlightGuard(self.in_flight_count.clone());
+
         permit.send(PipelineMessage {
             input,
             pipeline_response_count,
@@ -963,6 +987,16 @@ where
     /// Checks if the pipeline is closed.
     pub fn is_closed(&self) -> bool {
         self.is_stream_closed.load(Ordering::Relaxed)
+    }
+
+    /// Returns `true` when the writer has no caller-visible request
+    /// currently awaiting a response. Callers such as the idle-timeout
+    /// hook use this to skip a PING probe against a connection that is
+    /// already carrying an ordered in-flight command (for example a
+    /// blocking `BLPOP 0` or `XREAD BLOCK`), whose reply would
+    /// otherwise be forced to wait behind the probe.
+    pub fn is_idle(&self) -> bool {
+        self.in_flight_count.load(Ordering::Acquire) == 0
     }
 }
 
@@ -1325,6 +1359,10 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_closed(&self) -> bool {
         self.pipeline.is_closed()
+    }
+
+    fn is_idle(&self) -> bool {
+        self.pipeline.is_idle()
     }
 
     /// Get the node's availability zone

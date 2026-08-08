@@ -3219,13 +3219,19 @@ where
         // connection has been idle beyond it, run a bounded PING against
         // the same connection. On PING failure or deadline, drive an
         // immediate refresh and pick up the replacement transport before
-        // running the user's real command.
+        // running the user's real command. Skip the probe when the
+        // connection is already carrying an in-band command such as
+        // `BLPOP 0` or `XREAD BLOCK`; the response ordering guarantees
+        // any PING would queue behind the busy reply and blow past the
+        // bounded deadline.
         let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
         if let Some(idle_timeout) = idle_timeout {
-            if let Some((_, refreshed)) =
-                Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
-            {
-                conn = refreshed;
+            if conn.is_idle() {
+                if let Some((_, refreshed)) =
+                    Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
+                {
+                    conn = refreshed;
+                }
             }
         }
 
@@ -3264,12 +3270,17 @@ where
         // Reuse the same pre-command idle-timeout check as the
         // single-command path. Validating once per pipeline is enough
         // because the pipeline runs on the same underlying connection.
+        // The `is_idle` check skips the probe when the connection is
+        // already carrying an in-band command whose reply would queue
+        // ahead of the PING and blow past the deadline.
         let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
         if let Some(idle_timeout) = idle_timeout {
-            if let Some((_, refreshed)) =
-                Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
-            {
-                conn = refreshed;
+            if conn.is_idle() {
+                if let Some((_, refreshed)) =
+                    Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
+                {
+                    conn = refreshed;
+                }
             }
         }
 

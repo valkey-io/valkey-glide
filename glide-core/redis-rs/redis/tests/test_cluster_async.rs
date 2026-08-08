@@ -7457,6 +7457,80 @@ mod cluster_async {
         );
     }
 
+    /// Regression test for the in-band busy guard on the idle-timeout
+    /// pre-command probe. A connection that reports `is_idle() == false`
+    /// (mimicking an in-flight `BLPOP 0` or `XREAD BLOCK` whose reply
+    /// has not returned yet) must not receive a PING before the next
+    /// command. The PING would queue behind the blocking reply on the
+    /// wire, blow past `IDLE_TIMEOUT_PING_DEADLINE`, and force a
+    /// needless reconnect that disrupts the real command.
+    ///
+    /// The test blackholes PINGs on the initial connection IDs so that
+    /// if the hook mistakenly fired the follow-up command would refresh
+    /// the transport, then marks those same IDs as busy through
+    /// `MockBusyConnectionGuard`. With the guard in place the connection
+    /// count must stay flat across the idle window.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_skips_probe_when_connection_is_busy() {
+        let name = "test_idle_timeout_skips_busy_connection";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs to the currently open connections so any
+        // stray probe would time out and drive a reconnect...
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let _blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids.clone());
+        // ...but also mark them busy so the hook is expected to skip.
+        let _busy_guard = MockBusyConnectionGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_command = runtime.block_on(async {
+            cmd("ECHO")
+                .arg("world")
+                .query_async::<_, Value>(&mut connection)
+                .await
+        });
+        assert_eq!(
+            post_command,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected the follow-up command to succeed on the busy connection without a probe"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert_eq!(
+            count_after, count_before,
+            "expected no new connections to open when the initial connection is busy; \
+             before={count_before}, after={count_after}"
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;

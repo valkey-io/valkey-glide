@@ -113,6 +113,44 @@ static ASYNC_PING_BLACKHOLE_PORTS: Lazy<RwLock<std::collections::HashSet<u16>>> 
 static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
     Lazy::new(Default::default);
 
+/// Connection IDs that should report `is_idle() == false`. Lets a test
+/// simulate a specific in-band blocking command on one connection so
+/// the pre-command idle-timeout hook is expected to skip its PING.
+static ASYNC_BUSY_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
+    Lazy::new(Default::default);
+
+/// RAII guard that marks the given connection IDs as busy for the
+/// lifetime of the guard so `is_idle()` returns `false` for them.
+#[must_use = "the busy flag is only set while the guard is held; bind it to a name"]
+pub struct MockBusyConnectionGuard {
+    ids: Vec<usize>,
+}
+
+impl MockBusyConnectionGuard {
+    pub fn new(ids: Vec<usize>) -> Self {
+        {
+            let mut guard = ASYNC_BUSY_IDS.write().unwrap();
+            for id in &ids {
+                guard.insert(*id);
+            }
+        }
+        MockBusyConnectionGuard { ids }
+    }
+}
+
+impl Drop for MockBusyConnectionGuard {
+    fn drop(&mut self) {
+        let mut guard = ASYNC_BUSY_IDS.write().unwrap();
+        for id in &self.ids {
+            guard.remove(id);
+        }
+    }
+}
+
+fn is_mock_busy(id: usize) -> bool {
+    ASYNC_BUSY_IDS.read().unwrap().contains(&id)
+}
+
 fn set_async_ping_blackhole_raw(port: u16, blackhole: bool) {
     let mut guard = ASYNC_PING_BLACKHOLE_PORTS.write().unwrap();
     if blackhole {
@@ -506,6 +544,10 @@ impl aio::ConnectionLike for MockConnection {
 
     fn is_closed(&self) -> bool {
         false
+    }
+
+    fn is_idle(&self) -> bool {
+        !is_mock_busy(self.id)
     }
 }
 
