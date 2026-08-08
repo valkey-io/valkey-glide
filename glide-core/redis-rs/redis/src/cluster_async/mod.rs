@@ -3176,8 +3176,20 @@ where
             // Loser path. Wait for the winner to finish (bounded so a
             // wedged winner does not stall the whole pool) and pick up
             // whatever connection is installed for this address.
-            let _ =
-                tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, tracker.notify.notified()).await;
+            //
+            // `Notify::notify_waiters` stores no permit: it wakes only
+            // waiters that have already registered when the notification
+            // fires. Build the `Notified` future and enable it *before*
+            // rechecking `in_flight`, so any subsequent `notify_waiters`
+            // is guaranteed to wake us. If the winner has already
+            // released `in_flight` by that point we skip the wait
+            // entirely and go straight to reading the fresh connection.
+            let notified = tracker.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if tracker.in_flight.load(Ordering::Acquire) {
+                let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, notified).await;
+            }
             let refreshed = core.conn_lock.read().connection_for_address(address);
             if let Some((addr, fut)) = refreshed {
                 let fresh_conn = fut.await;
