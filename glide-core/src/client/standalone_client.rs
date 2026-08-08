@@ -886,6 +886,13 @@ impl StandaloneClient {
         let mut connection =
             Self::acquire_validated_connection(reconnecting_connection, idle_timeout).await?;
 
+        // Snapshot the transport-activity counter so we can tell whether
+        // the command actually reached the socket. A client-side cache
+        // hit returns immediately without any writer or reader progress
+        // and must not refresh `last_activity`, otherwise a cache-heavy
+        // workload can suppress the idle PING while the underlying
+        // socket sits half-open.
+        let activity_before = connection.transport_activity();
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
@@ -894,7 +901,9 @@ impl StandaloneClient {
                 Err(err)
             }
             Ok(value) => {
-                reconnecting_connection.mark_activity();
+                if connection.transport_activity() != activity_before {
+                    reconnecting_connection.mark_activity();
+                }
                 Ok(value)
             }
             other => other,

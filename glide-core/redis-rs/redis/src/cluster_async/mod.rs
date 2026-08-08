@@ -3251,14 +3251,31 @@ where
         cmd.watchdog_phase
             .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
 
+        // Snapshot the connection's transport-activity counter. A
+        // client-side cache hit inside `req_packed_command` returns the
+        // cached value without touching the socket, so refreshing
+        // `last_activity` on a cache-served result would let a
+        // cache-heavy workload suppress the idle PING while the socket
+        // has actually been idle. Only advance the timestamp when the
+        // counter observably changed.
+        let activity_before = conn.transport_activity();
         let result = conn.req_packed_command(&cmd).await;
         if idle_timeout.is_some() && result.is_ok() {
-            if let Some(details) = core
-                .conn_lock
-                .read()
-                .connection_details_for_address(&address)
-            {
-                details.1.idle.mark_activity();
+            let touched_socket = match (activity_before, conn.transport_activity()) {
+                (Some(before), Some(after)) => before != after,
+                // Connections without a transport-activity counter must
+                // be treated as always touching the socket; the trait
+                // default returns `None` for them.
+                _ => true,
+            };
+            if touched_socket {
+                if let Some(details) = core
+                    .conn_lock
+                    .read()
+                    .connection_details_for_address(&address)
+                {
+                    details.1.idle.mark_activity();
+                }
             }
         }
         result

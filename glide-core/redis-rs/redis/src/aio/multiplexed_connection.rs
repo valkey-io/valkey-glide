@@ -998,6 +998,16 @@ where
     pub fn is_idle(&self) -> bool {
         self.in_flight_count.load(Ordering::Acquire) == 0
     }
+
+    /// Reads the monotonic writer progress counter. Its value advances
+    /// only when the writer drains a request into the sink or when a
+    /// response arrives from the socket. Idle-timeout callers snapshot
+    /// this before and after `send_packed_command` to distinguish a
+    /// cache hit (no change) from a request that actually touched the
+    /// network (counter advanced).
+    pub fn transport_activity(&self) -> u64 {
+        self.progress.load(Ordering::Relaxed)
+    }
 }
 
 /// A connection object which can be cloned, allowing requests to be be sent concurrently
@@ -1115,6 +1125,13 @@ impl MultiplexedConnection {
     /// Sets the time that the multiplexer will wait for responses on operations before failing.
     pub fn set_response_timeout(&mut self, timeout: std::time::Duration) {
         self.response_timeout = timeout;
+    }
+
+    /// Snapshot of the underlying pipeline's transport-activity counter.
+    /// Advances only on real socket I/O, so callers can distinguish a
+    /// client-side cache hit from a network round trip.
+    pub fn transport_activity(&self) -> u64 {
+        self.pipeline.transport_activity()
     }
 
     /// Sends an already encoded (packed) command into the TCP socket and
@@ -1363,6 +1380,10 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_idle(&self) -> bool {
         self.pipeline.is_idle()
+    }
+
+    fn transport_activity(&self) -> Option<u64> {
+        Some(self.pipeline.transport_activity())
     }
 
     /// Get the node's availability zone

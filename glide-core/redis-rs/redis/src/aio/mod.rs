@@ -94,6 +94,20 @@ pub trait ConnectionLike {
         true
     }
 
+    /// Snapshot of a monotonic counter that only advances on transport
+    /// activity: a request drained into the writer or a response
+    /// received from the socket. Callers detect whether an operation
+    /// actually touched the network by comparing snapshots taken
+    /// before and after the call; equal snapshots mean the operation
+    /// was served without I/O (for example a client-side cache hit).
+    ///
+    /// Implementations that cannot cheaply track this return `None`,
+    /// in which case callers must treat every completion as transport
+    /// activity to stay safe.
+    fn transport_activity(&self) -> Option<u64> {
+        None
+    }
+
     /// Get the connection availibility zone
     fn get_az(&self) -> Option<String> {
         None
