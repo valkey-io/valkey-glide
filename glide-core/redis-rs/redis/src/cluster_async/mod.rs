@@ -586,7 +586,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -3113,7 +3113,7 @@ where
     /// wait on the shared `Notify`; the winner releases waiters when it
     /// finishes so at most one PING and at most one reconnect fire per
     /// idle event per node.
-    async fn validate_idle_connection(
+    pub(crate) async fn validate_idle_connection(
         core: Core<C>,
         address: &str,
         idle_timeout: Duration,
