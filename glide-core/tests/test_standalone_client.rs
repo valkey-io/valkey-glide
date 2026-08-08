@@ -1702,4 +1702,81 @@ mod standalone_client_tests {
             );
         });
     }
+
+    /// Regression for the client-side cache defeating idle_timeout.
+    ///
+    /// Before the transport-activity split, every successful
+    /// send_packed_command refreshed the ReconnectingConnection's
+    /// last_activity, including cache-served results that never
+    /// touched the socket. A workload whose reads all came from the
+    /// local cache indefinitely suppressed the pre-command PING while
+    /// the transport was actually idle.
+    ///
+    /// The test primes a cached GET on the real socket at T=0, then
+    /// issues a cache-hit GET before the idle window elapses (so no
+    /// pre-command PING fires). Under the buggy code the cache hit
+    /// still bumped last_activity forward, so the follow-up bypass
+    /// command right after the window would not see a stale timer and
+    /// would skip the PING. Under the fix the cache hit leaves the
+    /// timer frozen, and the follow-up command must run a PING first.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_cache_hit_does_not_defeat_ping() {
+        use glide_core::connection_request::ClientSideCache;
+
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        block_on_all(async {
+            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
+            req.idle_timeout = Some(200);
+            let mut cache = ClientSideCache::new();
+            cache.cache_id = "test_idle_cache".to_string().into();
+            cache.max_cache_kb = 1024;
+            cache.entry_ttl_ms = 60_000;
+            cache.enable_metrics = true;
+            req.client_side_cache = protobuf::MessageField::some(cache);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("client build with idle_timeout and cache");
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("cached_key");
+            mock.add_response(&get_cmd, "$3\r\nfoo\r\n".to_string());
+
+            let first_get = client.send_command(&get_cmd).await.expect("first GET");
+            assert_eq!(first_get, Value::BulkString(b"foo".to_vec().into()));
+
+            // Hit the cache while last_activity is still fresh. The
+            // pre-command hook does not fire (should_validate returns
+            // false), so under the buggy code the post-cmd
+            // mark_activity refreshes the timer to now even though
+            // nothing touched the socket. Under the fix the timer
+            // remains anchored at the first GET.
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+            let cached_get = client.send_command(&get_cmd).await.expect("cached GET");
+            assert_eq!(cached_get, Value::BulkString(b"foo".to_vec().into()));
+
+            // Now sleep just long enough that the total elapsed since
+            // the first GET exceeds idle_timeout, but the elapsed
+            // since the cached GET does not. In buggy code the
+            // pre-command PING is suppressed; in fixed code it fires.
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+            let ping_before = mock.get_ping_count();
+
+            let mut info_cmd = redis::Cmd::new();
+            info_cmd.arg("INFO");
+            mock.add_response(&info_cmd, "$2\r\nok\r\n".to_string());
+            let _ = client.send_command(&info_cmd).await;
+
+            let ping_after = mock.get_ping_count();
+            assert!(
+                ping_after > ping_before,
+                "expected the idle_timeout PING to fire before the bypass command; \
+                 pings before = {ping_before}, after = {ping_after}"
+            );
+        });
+    }
 }
