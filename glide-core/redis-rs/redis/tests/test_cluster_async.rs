@@ -7531,6 +7531,82 @@ mod cluster_async {
         );
     }
 
+    /// Regression for the idle-timeout single-flight winner leaking
+    /// the latch on cancellation. Prior to the RAII guard the winner
+    /// cleared `in_flight` and notified waiters explicitly at the end
+    /// of the block, so a future dropped mid PING or mid reconnect
+    /// (for example when Client::send_command's outer request timeout
+    /// fires) skipped both steps and every later stale caller took
+    /// the loser path and waited the full validation deadline.
+    #[test]
+    fn test_idle_validation_guard_releases_latch_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+
+        let tracker = IdleTracker::new();
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "test precondition: latch must start unset"
+        );
+        {
+            let _guard = IdleValidationGuard::new(&tracker);
+            assert!(
+                tracker.in_flight.load(Ordering::Acquire),
+                "guard construction does not touch the latch"
+            );
+        }
+        assert!(
+            !tracker.in_flight.load(Ordering::Acquire),
+            "guard drop must release the latch even without an explicit reset"
+        );
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "a fresh caller must be able to acquire the latch after the guard drops"
+        );
+    }
+
+    /// Cancellation-shaped test: build a `Notified` future the way
+    /// the loser path does, drop the winner guard, and confirm the
+    /// waiter is woken. Proves the guard's drop also fires
+    /// `notify_waiters`, so a cancelled winner does not park loser
+    /// tasks for the full wait deadline.
+    #[test]
+    fn test_idle_validation_guard_notifies_waiters_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+        use std::sync::Arc;
+
+        let tracker = Arc::new(IdleTracker::new());
+        assert!(tracker
+            .in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok());
+
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let notified = tracker.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            let guard_tracker = tracker.clone();
+            let handle = tokio::spawn(async move {
+                let guard = IdleValidationGuard::new(&guard_tracker);
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                drop(guard);
+            });
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), notified)
+                .await
+                .expect("waiter must be woken when the winner guard drops");
+            handle.await.unwrap();
+            assert!(!tracker.in_flight.load(Ordering::Acquire));
+        });
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
