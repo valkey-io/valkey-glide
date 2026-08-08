@@ -116,8 +116,7 @@ static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> 
 /// Connection IDs that should report `is_idle() == false`. Lets a test
 /// simulate a specific in-band blocking command on one connection so
 /// the pre-command idle-timeout hook is expected to skip its PING.
-static ASYNC_BUSY_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
-    Lazy::new(Default::default);
+static ASYNC_BUSY_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> = Lazy::new(Default::default);
 
 /// RAII guard that marks the given connection IDs as busy for the
 /// lifetime of the guard so `is_idle()` returns `false` for them.
