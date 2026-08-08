@@ -7457,6 +7457,99 @@ mod cluster_async {
         );
     }
 
+    /// Regression test for the `idle_timeout` pre-command hook on the
+    /// cluster-scan send path. `CmdArg::ClusterScan` dispatches through
+    /// `send_scan`, which is a separate code path from the single-command
+    /// and pipeline sends. Without the same per-address idle probe there,
+    /// a silently half-open transport lets a `SCAN` iteration hang until
+    /// the caller's outer timeout fires instead of driving an immediate
+    /// reconnect.
+    ///
+    /// The setup mirrors the single-command half-open test: blackhole
+    /// PINGs on every connection that is open when the test starts,
+    /// sleep past the idle window, then run one `cluster_scan` iteration.
+    /// The scan must succeed against a fresh transport and the total
+    /// connection count must have grown.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_detects_silent_half_open_before_cluster_scan() {
+        use redis::{ClusterScanArgs, ScanStateRC};
+
+        let name = "test_idle_timeout_detects_silent_half_open_scan";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                // The scan iteration expects a (cursor, keys) tuple.
+                // Returning cursor=0 with an empty key list is enough to
+                // finish the scan in one hop without exercising the retry
+                // path.
+                if contains_slice(cmd, b"SCAN") {
+                    Err(Ok(Value::Array(vec![
+                        Value::BulkString(b"0".to_vec().into()),
+                        Value::Array(vec![]),
+                    ])))
+                } else {
+                    Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let scan_result = runtime.block_on(async {
+            let mut last: RedisResult<(ScanStateRC, Vec<Value>)> = Ok((ScanStateRC::new(), vec![]));
+            for _ in 0..30 {
+                let attempt = connection
+                    .cluster_scan(ScanStateRC::new(), ClusterScanArgs::default())
+                    .await;
+                if attempt.is_ok() {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            last
+        });
+
+        drop(blackhole_guard);
+
+        assert!(
+            scan_result.is_ok(),
+            "expected cluster_scan to succeed after idle_timeout-driven reconnect, got {scan_result:?}"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert!(
+            count_after > count_before,
+            "expected idle_timeout on the cluster-scan send path to detect the half-open \
+             transport and open at least one new connection; before={count_before}, after={count_after}"
+        );
+    }
+
     /// Regression test for the in-band busy guard on the idle-timeout
     /// pre-command probe. A connection that reports `is_idle() == false`
     /// (mimicking an in-flight `BLPOP 0` or `XREAD BLOCK` whose reply
