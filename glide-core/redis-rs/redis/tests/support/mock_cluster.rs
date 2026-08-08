@@ -96,18 +96,15 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
     MOCK_CONN_BEHAVIORS.write().unwrap()
 }
 
-/// Connection IDs whose async PINGs must never resolve. Lets a test
-/// blackhole only the specific already-open connection (the one about
-/// to be validated) without also blackholing the fresh connections the
-/// reconnect path opens through the same port.
+/// Connection IDs whose async PINGs must never resolve. Fresh
+/// connections get new IDs, so the reconnect path still succeeds even
+/// while the original is blackholed.
 static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
     Lazy::new(Default::default);
 
-/// RAII guard that blackholes async PINGs for the specific connection
-/// IDs it was created with. Fresh connections opened after
-/// construction (which will have new IDs) still respond normally, so
-/// the reconnect path can complete while the original connection is
-/// silently half-open.
+/// RAII guard that blackholes async PINGs on the specific connection
+/// IDs passed at construction. Dropping the guard restores normal
+/// behavior for those IDs.
 #[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
 pub struct AsyncPingBlackholeByIdGuard {
     ids: Vec<usize>,
@@ -138,8 +135,8 @@ fn async_ping_blackholed_by_id(id: usize) -> bool {
     ASYNC_PING_BLACKHOLE_IDS.read().unwrap().contains(&id)
 }
 
-/// Number of async connections opened against a given mock cluster since it
-/// was registered. Tests use this to detect that the reconnect path fired.
+/// Total async connections opened against `name` since it was
+/// registered. Tests read this to confirm the reconnect path fired.
 pub fn mock_connection_count(name: &str) -> usize {
     MOCK_CONN_BEHAVIORS
         .read()

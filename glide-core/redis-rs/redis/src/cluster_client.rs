@@ -163,9 +163,8 @@ pub struct ClusterParams {
     /// Optional callback for resolving addresses before connection.
     pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
     pub(crate) recovery_requests_queue_size: Option<u32>,
-    /// When set, the async cluster client validates the specific connection
-    /// about to serve the next command with a bounded PING whenever its
-    /// last-activity gap exceeds this duration.
+    /// Idle window for the pre-command PING validation. `None` disables
+    /// the hook.
     pub(crate) idle_timeout: Option<Duration>,
 }
 
@@ -648,12 +647,11 @@ impl ClusterClientBuilder {
         self
     }
 
-    /// Enables the pre-command idle-timeout check. When the gap since the
-    /// last successful activity on the connection about to serve the next
-    /// command exceeds `idle_timeout`, the async client sends a bounded
-    /// PING on that connection and, on failure or deadline, drives a
-    /// reconnect before the real command runs. `None` (the default)
-    /// disables the check.
+    /// Sets the pre-command idle-timeout window. When the gap since the
+    /// last successful activity on the target connection exceeds this
+    /// duration, the client sends a bounded PING and, on failure or
+    /// deadline, drives a reconnect before running the user command.
+    /// `None` (the default) disables the check.
     pub fn idle_timeout(mut self, idle_timeout: Option<Duration>) -> ClusterClientBuilder {
         self.builder_params.idle_timeout = idle_timeout;
         self

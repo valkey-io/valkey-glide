@@ -9,14 +9,11 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use telemetrylib::Telemetry;
-use tokio::sync::Notify as TokioNotify;
-
-use tracing::debug;
-
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
+use tracing::debug;
 
 /// Count the number of connections in a connections_map object
 macro_rules! count_connections {
@@ -35,59 +32,71 @@ macro_rules! count_connections {
 
 /// Per-node coordination for the idle-timeout pre-command check.
 ///
-/// The `last_activity` counter measures milliseconds elapsed since
-/// `epoch` at the point of the most recent successful command on this
-/// node. Callers read it, compare against the configured `idle_timeout`,
-/// and if the gap is exceeded, take turns running a bounded PING on the
-/// same connection. The `in_flight` boolean is a single-flight latch:
-/// the first task to flip it from false to true owns the PING and the
-/// eventual reconnect, and every other task that also observed the
-/// stale timestamp waits on `notify` until the winner completes.
+/// `last_activity` is the elapsed-millis snapshot at the last successful
+/// command on this node, measured against `epoch`. `in_flight` is a
+/// single-flight latch: the first caller that flips it to `true` runs the
+/// PING (and any resulting reconnect), while every other caller that saw
+/// the same stale timestamp waits on `notify` for the winner to finish.
 #[derive(Debug)]
 pub struct IdleTracker {
-    /// Monotonic reference point set at construction time.
-    pub epoch: Instant,
-    /// Milliseconds elapsed since `epoch` at the last recorded activity.
-    pub last_activity: AtomicU64,
-    /// Set to `true` while a task owns the pre-command PING for this node.
-    pub in_flight: AtomicBool,
-    /// Notified when the single-flight winner releases `in_flight`.
-    pub notify: TokioNotify,
-}
-
-impl IdleTracker {
-    /// Builds a fresh tracker with `last_activity` seeded to zero so the
-    /// very first command targeted at the node treats it as freshly
-    /// created rather than idle.
-    pub fn new() -> Self {
-        Self {
-            epoch: Instant::now(),
-            last_activity: AtomicU64::new(0),
-            in_flight: AtomicBool::new(false),
-            notify: TokioNotify::new(),
-        }
-    }
-
-    /// Records the current elapsed reading against `epoch` so the next
-    /// idle check sees the connection as fresh.
-    pub fn mark_activity(&self) {
-        let now = self.epoch.elapsed().as_millis() as u64;
-        self.last_activity.store(now, Ordering::Relaxed);
-    }
-
-    /// Returns true when the gap since the last recorded activity has
-    /// grown beyond `idle_timeout`, so the caller should run the
-    /// pre-command validation.
-    pub fn should_validate(&self, idle_timeout: std::time::Duration) -> bool {
-        let now = self.epoch.elapsed().as_millis() as u64;
-        let last = self.last_activity.load(Ordering::Relaxed);
-        now.saturating_sub(last) > idle_timeout.as_millis() as u64
-    }
+    epoch: Instant,
+    last_activity: AtomicU64,
+    in_flight: AtomicBool,
+    notify: Notify,
 }
 
 impl Default for IdleTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl IdleTracker {
+    /// Builds a fresh tracker with `last_activity` seeded to zero, so the
+    /// first command on the node treats it as fresh rather than idle.
+    pub fn new() -> Self {
+        Self {
+            epoch: Instant::now(),
+            last_activity: AtomicU64::new(0),
+            in_flight: AtomicBool::new(false),
+            notify: Notify::new(),
+        }
+    }
+
+    /// Records a successful command against the tracker so the next idle
+    /// check sees the connection as fresh.
+    pub fn mark_activity(&self) {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        self.last_activity.store(now, Ordering::Relaxed);
+    }
+
+    /// Returns `true` when the gap since the last recorded activity has
+    /// grown beyond `idle_timeout` and the caller should validate the
+    /// connection with a PING.
+    pub fn should_validate(&self, idle_timeout: Duration) -> bool {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        let last = self.last_activity.load(Ordering::Relaxed);
+        now.saturating_sub(last) > idle_timeout.as_millis() as u64
+    }
+
+    /// Registers a waiter for the next release, then tries to become the
+    /// single-flight PING winner. The `Notified` handle is created before
+    /// the CAS so a fast winner cannot wake `notify_waiters()` before
+    /// losers finish registering.
+    pub fn acquire(&self) -> (bool, tokio::sync::futures::Notified<'_>) {
+        let notified = self.notify.notified();
+        let won = self
+            .in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok();
+        (won, notified)
+    }
+
+    /// Releases the single-flight latch and wakes every currently
+    /// registered waiter. Only the acquiring winner may call this.
+    pub fn release(&self) {
+        self.in_flight.store(false, Ordering::Release);
+        self.notify.notify_waiters();
     }
 }
 
@@ -100,11 +109,9 @@ pub struct ConnectionDetails<Connection> {
     pub ip: Option<IpAddr>,
     /// The availability zone associated with the connection
     pub az: Option<String>,
-    /// Shared per-node idle tracker used by the pre-command
-    /// idle-timeout validation. Every clone of `ConnectionDetails`
-    /// points at the same tracker, so there is exactly one
-    /// last-activity slot and one single-flight latch per node
-    /// address.
+    /// Per-node idle tracker for the pre-command idle-timeout hook.
+    /// Shared through `Arc` so every clone of `ConnectionDetails` reads
+    /// and updates the same last-activity slot and single-flight latch.
     pub idle: Arc<IdleTracker>,
 }
 

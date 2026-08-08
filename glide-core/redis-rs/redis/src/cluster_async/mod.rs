@@ -189,15 +189,13 @@ where
 pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 
 /// Deadline for the pre-command PING sent by the `idle_timeout` hook.
-/// Kept short enough to bound the added latency on a healthy connection
-/// yet long enough to tolerate typical intra-AZ tail latency. Not
-/// user-configurable in this change.
+/// Short enough to bound the added latency on a healthy connection,
+/// long enough to tolerate typical intra-AZ tail latency.
 pub(crate) const IDLE_TIMEOUT_PING_DEADLINE: Duration = Duration::from_millis(500);
 
-/// Fallback ceiling for a losing single-flight waiter. If the winner
-/// task never releases `in_flight`, waiters return anyway after roughly
-/// twice the PING deadline so a wedged winner does not stall the whole
-/// pool of concurrent commands.
+/// Ceiling on how long a losing single-flight waiter blocks. Twice the
+/// PING deadline gives the winner room to finish while making sure a
+/// wedged winner does not stall other commands indefinitely.
 const IDLE_TIMEOUT_WAIT_DEADLINE: Duration = Duration::from_millis(1000);
 
 /// This represents an async Cluster connection. It stores the
@@ -3100,25 +3098,18 @@ where
             .map_err(|err| (OperationTarget::FanOut, err))
     }
 
-    /// Runs the pre-command idle-timeout PING on the node at `address`
-    /// and, on PING failure or timeout, refreshes the node's connection
+    /// Runs the pre-command idle-timeout PING for the node at `address`.
+    /// When the PING fails or the deadline expires, drives a reconnect
     /// and returns the fresh transport. Returns `None` when the tracker
-    /// says the connection is not idle, or when neither a fresh nor an
-    /// original connection can be recovered.
+    /// says the connection is not idle or the node is gone from the map.
     ///
-    /// Concurrent commands targeted at the same node share the tracker's
-    /// single-flight latch. The first caller runs the PING while others
-    /// wait on the shared `Notify`; the winner releases waiters when it
-    /// finishes so at most one PING and at most one reconnect fire per
-    /// idle event per node.
+    /// Concurrent callers on the same node share a single-flight latch,
+    /// so at most one PING and one reconnect fire per idle event.
     async fn validate_idle_connection(
         core: Core<C>,
         address: &str,
         idle_timeout: Duration,
     ) -> Option<(String, C)> {
-        // Fetch the shared tracker and the current connection to the
-        // node under review. Both are cloned out of the container so
-        // subsequent operations do not hold the connection lock.
         let (tracker, conn_future) = {
             let guard = core.conn_lock.read();
             let details = guard.connection_details_for_address(address)?;
@@ -3129,33 +3120,22 @@ where
             return None;
         }
 
-        // Register the wait future with `Notify` BEFORE the CAS so a
-        // fast winner that calls `notify_waiters()` right after
-        // releasing `in_flight` cannot race past this task and leave
-        // it blocked for the full `IDLE_TIMEOUT_WAIT_DEADLINE`.
-        // `Notify::notify_waiters()` wakes only currently registered
-        // waiters and stores no permit, so unregistered listeners
-        // miss the wake entirely.
-        let notified = tracker.notify.notified();
+        // Register on `notify` before the CAS so a fast winner cannot
+        // wake `notify_waiters()` before a loser has a chance to
+        // register. `Notify::notify_waiters()` stores no permit.
+        let (won, notified) = tracker.acquire();
         tokio::pin!(notified);
         notified.as_mut().enable();
 
-        if tracker
-            .in_flight
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-        {
-            // Winner path. Run one bounded PING; on any failure or
-            // deadline breach drive a refresh and wait for a
-            // replacement transport before returning.
+        if won {
             let mut conn = conn_future.await;
-            let ping_result = tokio::time::timeout(
+            let ping = tokio::time::timeout(
                 IDLE_TIMEOUT_PING_DEADLINE,
                 conn.req_packed_command(&cmd("PING")),
             )
             .await;
 
-            let refreshed = match ping_result {
+            let fresh = match ping {
                 Ok(Ok(_)) => {
                     tracker.mark_activity();
                     None
@@ -3168,34 +3148,22 @@ where
                         false,
                     )
                     .await;
-                    for notifier in notifiers {
-                        notifier.notified().await;
+                    for n in notifiers {
+                        n.notified().await;
                     }
                     core.conn_lock.read().connection_for_address(address)
                 }
             };
 
-            tracker.in_flight.store(false, Ordering::Release);
-            tracker.notify.notify_waiters();
-
-            if let Some((addr, fut)) = refreshed {
-                let fresh_conn = fut.await;
-                return Some((addr, fresh_conn));
+            tracker.release();
+            match fresh {
+                Some((addr, fut)) => Some((addr, fut.await)),
+                None => None,
             }
-            None
         } else {
-            // Loser path. Wait on the pre-registered `Notified` future
-            // (bounded so a wedged winner does not stall the whole
-            // pool) and pick up whatever connection is installed for
-            // this address.
             let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, notified).await;
-            let refreshed = core.conn_lock.read().connection_for_address(address);
-            if let Some((addr, fut)) = refreshed {
-                let fresh_conn = fut.await;
-                Some((addr, fresh_conn))
-            } else {
-                None
-            }
+            let (addr, fut) = core.conn_lock.read().connection_for_address(address)?;
+            Some((addr, fut.await))
         }
     }
 
@@ -3226,13 +3194,7 @@ where
             set_routed_node_on_span(&span, &address);
         }
 
-        // If the pre-command idle-timeout is configured and this node's
-        // connection has been idle beyond it, run a bounded PING against
-        // the same connection. On PING failure or deadline, drive an
-        // immediate refresh and pick up the replacement transport before
-        // running the user's real command.
-        let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
-        if let Some(idle_timeout) = idle_timeout {
+        if let Some(idle_timeout) = core.get_cluster_param(|p| p.idle_timeout) {
             if let Some((_, refreshed)) =
                 Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
             {
@@ -3246,17 +3208,24 @@ where
 
         let result = conn.req_packed_command(&cmd).await;
         if result.is_ok() {
-            if let Some(details) = core
-                .conn_lock
-                .read()
-                .connection_details_for_address(&address)
-            {
-                details.1.idle.mark_activity();
-            }
+            Self::mark_node_activity(&core, &address);
         }
         result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
+    }
+
+    /// Records a successful command against the tracker for `address`, so
+    /// the next idle check on that node sees it as fresh. Silently
+    /// no-ops when the node has been evicted from the map.
+    fn mark_node_activity(core: &Core<C>, address: &str) {
+        if let Some(details) = core
+            .conn_lock
+            .read()
+            .connection_details_for_address(address)
+        {
+            details.1.idle.mark_activity();
+        }
     }
 
     async fn try_pipeline_request(
@@ -3272,11 +3241,9 @@ where
             set_routed_node_on_span(&span, &address);
         }
 
-        // Reuse the same pre-command idle-timeout check as the
-        // single-command path. Validating once per pipeline is enough
-        // because the pipeline runs on the same underlying connection.
-        let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
-        if let Some(idle_timeout) = idle_timeout {
+        // A pipeline runs on one connection, so one idle check covers all
+        // of its commands.
+        if let Some(idle_timeout) = core.get_cluster_param(|p| p.idle_timeout) {
             if let Some((_, refreshed)) =
                 Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
             {
@@ -3294,13 +3261,7 @@ where
             .req_packed_commands(&pipeline, offset, count, None)
             .await;
         if result.is_ok() {
-            if let Some(details) = core
-                .conn_lock
-                .read()
-                .connection_details_for_address(&address)
-            {
-                details.1.idle.mark_activity();
-            }
+            Self::mark_node_activity(&core, &address);
         }
         result
             .map(Response::Multiple)
