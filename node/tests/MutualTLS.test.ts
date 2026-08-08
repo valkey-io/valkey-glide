@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import * as fs from "fs";
-import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     GlideClient,
     GlideClusterClient,
@@ -14,7 +14,6 @@ import {
 import {
     getCaCertificateData,
     getClientConfigurationOption,
-    getServerVersion,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -30,6 +29,17 @@ function readTlsFile(name: string): Buffer {
     return fs.readFileSync(`${glideHomeDir}/utils/tls_crts/${name}`);
 }
 
+/**
+ * ValkeyCluster.createCluster calls a version-fetch callback right after the
+ * cluster comes up. The default getServerVersion opens a client, and any such
+ * client on an mTLS-required server has to present a client certificate or
+ * the TLS handshake is dropped. Insecure TLS does not help since it only
+ * skips server-certificate verification on the client side. This stub keeps
+ * the callback signature but does not open a connection, matching the Java
+ * and Python fixtures which do not fetch the version either.
+ */
+const skipVersionFetch = async (): Promise<string> => "";
+
 describe("mTLS integration", () => {
     let mtlsCluster: ValkeyCluster;
     let caCertData: Buffer;
@@ -37,26 +47,13 @@ describe("mTLS integration", () => {
     let clientKey: Buffer;
 
     beforeAll(async () => {
-        // Start the cluster once with an insecure TLS bootstrap so
-        // getServerVersion can talk to the mTLS-required server without a
-        // client certificate. The real tests below use full cert material.
-        const startupTlsConfig: TestTLSConfig = {
-            useTLS: true,
-            requestTimeout: TLS_REQUEST_TIMEOUT,
-            advancedConfiguration: {
-                tlsAdvancedConfiguration: {
-                    insecure: true,
-                },
-            },
-        };
-
         mtlsCluster = await ValkeyCluster.createCluster(
             false,
             1,
             0,
-            getServerVersion,
+            skipVersionFetch,
             true,
-            startupTlsConfig,
+            undefined,
             undefined,
             true,
         );
@@ -143,27 +140,13 @@ describe("mTLS integration (cluster)", () => {
     let clientKey: Buffer;
 
     beforeAll(async () => {
-        // Start a TLS cluster (3 shards, 1 replica each) with an insecure TLS
-        // bootstrap so getServerVersion can talk to the mTLS-required cluster
-        // without a client certificate. The real tests below use full cert
-        // material.
-        const startupTlsConfig: TestTLSConfig = {
-            useTLS: true,
-            requestTimeout: TLS_REQUEST_TIMEOUT,
-            advancedConfiguration: {
-                tlsAdvancedConfiguration: {
-                    insecure: true,
-                },
-            },
-        };
-
         mtlsCluster = await ValkeyCluster.createCluster(
             true,
             3,
             1,
-            getServerVersion,
+            skipVersionFetch,
             true,
-            startupTlsConfig,
+            undefined,
             undefined,
             true,
         );
