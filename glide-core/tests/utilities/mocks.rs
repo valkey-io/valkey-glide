@@ -24,8 +24,7 @@ pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
-    /// Total PINGs seen on the socket, whether answered from the
-    /// constant-response table or dropped by the blackhole.
+    /// Running count of PING messages seen on the socket.
     ping_count: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
@@ -203,8 +202,8 @@ impl ServerMock {
         }
     }
 
-    /// Total number of PING messages seen on the socket. Useful for
-    /// asserting the pre-command validation fired.
+    /// Total PINGs seen on the socket. Tests read this to confirm the
+    /// pre-command validation fired.
     pub fn get_ping_count(&self) -> u16 {
         self.ping_count.load(Ordering::Acquire)
     }

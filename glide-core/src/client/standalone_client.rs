@@ -87,9 +87,9 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
-    /// When set, the client validates the connection with a bounded PING
-    /// before sending the next command whenever the last-activity gap
-    /// exceeds this duration.
+    /// When set, sends a bounded PING before the next command whenever
+    /// the last-activity gap on the target connection exceeds this
+    /// duration.
     idle_timeout: Option<Duration>,
     /// Owns the background mTLS certificate reload task, when path-based reload is
     /// configured. Held here so the task lives for the client's lifetime and is
@@ -851,23 +851,20 @@ impl StandaloneClient {
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
         let mut connection = reconnecting_connection.get_connection().await?;
 
-        // When idle_timeout is enabled and the connection has been idle
-        // longer than the configured window, probe it with a bounded PING
-        // before sending the user command. A failed or slow PING means
-        // the socket is silently half-open; reconnect and re-acquire the
-        // fresh transport before running the real command so the caller
-        // does not see a lost command on a dead flow.
+        // A slow or failed PING on a stale connection signals a silently
+        // half-open flow; reconnect and re-acquire the fresh transport so
+        // the real command runs on a live socket.
         if let Some(idle) = idle_timeout
             && reconnecting_connection.should_validate(idle)
         {
-            match tokio::time::timeout(
+            let ping = tokio::time::timeout(
                 super::IDLE_TIMEOUT_PING_DEADLINE,
                 connection.send_packed_command(&redis::cmd("PING")),
             )
-            .await
-            {
+            .await;
+            match ping {
                 Ok(Ok(_)) => reconnecting_connection.mark_activity(),
-                Ok(Err(_)) | Err(_) => {
+                _ => {
                     reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                     connection = reconnecting_connection.get_connection().await?;
                 }

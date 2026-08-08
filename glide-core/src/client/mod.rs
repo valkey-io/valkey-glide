@@ -80,9 +80,8 @@ pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Deadline for the pre-command PING sent by the `idle_timeout` hook.
-/// Kept short enough to bound the added latency on a healthy connection
-/// yet long enough to tolerate typical intra-AZ tail latency. Not
-/// user-configurable in this change.
+/// Short enough to bound the added latency on a healthy connection,
+/// long enough to tolerate typical intra-AZ tail latency.
 pub(crate) const IDLE_TIMEOUT_PING_DEADLINE: Duration = Duration::from_millis(500);
 
 /// Extract RequestType from a Redis command for decompression processing

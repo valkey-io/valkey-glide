@@ -138,15 +138,11 @@ enum ConnectionState {
 struct InnerReconnectingConnection {
     state: Mutex<ConnectionState>,
     backend: ConnectionBackend,
-    /// A monotonic reference point captured when the connection is
-    /// created. Elapsed millis from this instant are stored in
-    /// `last_activity`; the raw `Instant` is not shared beyond this
-    /// struct.
+    /// Monotonic reference point for `last_activity`.
     connection_epoch: Instant,
-    /// Milliseconds elapsed from `connection_epoch` to the last observed
-    /// successful activity on this connection. Read and updated with
-    /// `Ordering::Relaxed` because the value only decides whether to send
-    /// an idle-timeout PING; it is not used for cross-thread ordering.
+    /// Milliseconds since `connection_epoch` at the last observed
+    /// successful command. Relaxed atomics are enough because the value
+    /// only decides whether to send an idle-timeout PING.
     last_activity: AtomicU64,
 }
 
@@ -406,19 +402,17 @@ impl ReconnectingConnection {
             .load(Ordering::Relaxed)
     }
 
-    /// Returns true when the elapsed millis since the last observed
-    /// successful command on this connection exceeds `idle_timeout`,
-    /// signalling that the caller should validate the connection with a
-    /// PING before sending its next command.
+    /// Returns `true` when the last-activity gap on this connection has
+    /// grown past `idle_timeout` and the caller should validate it with
+    /// a PING before sending the next command.
     pub(super) fn should_validate(&self, idle_timeout: Duration) -> bool {
         let now = self.inner.connection_epoch.elapsed().as_millis() as u64;
         let last = self.inner.last_activity.load(Ordering::Relaxed);
         now.saturating_sub(last) > idle_timeout.as_millis() as u64
     }
 
-    /// Records the current elapsed reading so the next idle check sees a
-    /// fresh timestamp. Callers invoke this after every successful send
-    /// on this connection.
+    /// Records a successful command on this connection so the next idle
+    /// check sees it as fresh.
     pub(super) fn mark_activity(&self) {
         let now = self.inner.connection_epoch.elapsed().as_millis() as u64;
         self.inner.last_activity.store(now, Ordering::Relaxed);

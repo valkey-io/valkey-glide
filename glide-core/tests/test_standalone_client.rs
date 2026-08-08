@@ -1514,71 +1514,47 @@ mod standalone_client_tests {
         });
     }
 
-    /// End-to-end proof that the pre-command idle-timeout hook fires
-    /// against the standalone client: with `idle_timeout` set, the mock
-    /// sees at least one extra PING land on the socket before the
-    /// follow-up user command; without it, only the handshake PINGs
-    /// are seen. Uses two independent mock servers so each client's
-    /// state is isolated.
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_standalone_idle_timeout_sends_ping_before_next_command() {
-        // Baseline: no idle_timeout.
-        let baseline_mock = ServerMock::new(create_primary_responses());
-        let baseline_addresses = baseline_mock.get_addresses();
-
-        let baseline_ping_count_after_cmd = block_on_all(async {
-            let mut req =
-                create_connection_request(baseline_addresses.as_slice(), &Default::default());
-            req.idle_timeout = None;
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("baseline client build");
-
-            let baseline_after_handshake = baseline_mock.get_ping_count();
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-
-            let mut get_cmd = redis::Cmd::new();
-            get_cmd.arg("GET").arg("k");
-            baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
-            let _ = client.send_command(&get_cmd).await;
-
-            // Return the delta so the assertion is not affected by
-            // handshake-time PINGs that vary between runs.
-            baseline_mock
-                .get_ping_count()
-                .saturating_sub(baseline_after_handshake)
-        });
-
-        // With idle_timeout=100ms and a 300ms sleep, the pre-command
-        // hook must send one extra PING before the follow-up GET.
+    /// Runs one send-a-command cycle against a fresh `ServerMock`,
+    /// waits `idle_gap`, and returns the number of PINGs seen on the
+    /// socket after the handshake completed. Isolated to its own mock
+    /// so each call has a clean state.
+    fn ping_delta_around_command(idle_timeout: Option<u32>, idle_gap: std::time::Duration) -> u16 {
         let mock = ServerMock::new(create_primary_responses());
         let addresses = mock.get_addresses();
-
-        let idle_ping_count_after_cmd = block_on_all(async {
+        block_on_all(async move {
             let mut req = create_connection_request(addresses.as_slice(), &Default::default());
-            req.idle_timeout = Some(100);
+            req.idle_timeout = idle_timeout;
             let mut client = StandaloneClient::create_client(req.into(), None, None, None)
                 .await
-                .expect("idle client build");
+                .expect("client build");
 
-            let idle_after_handshake = mock.get_ping_count();
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            let after_handshake = mock.get_ping_count();
+            tokio::time::sleep(idle_gap).await;
 
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("k");
             mock.add_response(&get_cmd, "$-1\r\n".to_string());
             let _ = client.send_command(&get_cmd).await;
 
-            mock.get_ping_count().saturating_sub(idle_after_handshake)
-        });
+            mock.get_ping_count().saturating_sub(after_handshake)
+        })
+    }
 
+    /// Regression test for the `idle_timeout` hook on the standalone
+    /// client. Compares two independent mocks: with the hook off, only
+    /// handshake PINGs land on the socket; with it on, an extra PING
+    /// arrives before the follow-up user command.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_sends_ping_before_next_command() {
+        let idle_gap = std::time::Duration::from_millis(300);
+        let baseline = ping_delta_around_command(None, idle_gap);
+        let with_hook = ping_delta_around_command(Some(100), idle_gap);
         assert!(
-            idle_ping_count_after_cmd > baseline_ping_count_after_cmd,
+            with_hook > baseline,
             "expected the pre-command idle_timeout hook to run at least one extra PING; \
-             baseline delta = {baseline_ping_count_after_cmd}, idle delta = \
-             {idle_ping_count_after_cmd}"
+             baseline delta = {baseline}, idle delta = {with_hook}"
         );
     }
 }
