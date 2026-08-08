@@ -79,8 +79,7 @@ public class ValkeyCluster implements AutoCloseable {
     }
 
     /**
-     * Creates a new ValkeyCluster instance, optionally requiring client certificates for mutual
-     * TLS.
+     * Creates a new ValkeyCluster instance, optionally requiring client certificates for mutual TLS.
      *
      * @param tls Whether to use TLS
      * @param clusterMode Whether to use cluster mode
@@ -88,8 +87,8 @@ public class ValkeyCluster implements AutoCloseable {
      * @param replicaCount Number of replicas (default 1)
      * @param loadModule Optional list of module paths to load
      * @param addresses Optional list of existing cluster addresses
-     * @param tlsAuthClients Passes --tls-auth-clients to cluster_manager.py so the server rejects
-     *     TLS connections that do not present a valid client certificate.
+     * @param tlsAuthClients Passes --tls-auth-clients to cluster_manager.py so the server rejects TLS
+     *     connections that do not present a valid client certificate.
      */
     public ValkeyCluster(
             boolean tls,

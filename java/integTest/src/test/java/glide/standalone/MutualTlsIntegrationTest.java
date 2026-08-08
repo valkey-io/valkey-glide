@@ -52,7 +52,10 @@ public class MutualTlsIntegrationTest {
         nodeAddr = nodes.get(0);
 
         Path tlsDir =
-                Paths.get(System.getProperty("user.dir")).getParent().getParent().resolve("utils")
+                Paths.get(System.getProperty("user.dir"))
+                        .getParent()
+                        .getParent()
+                        .resolve("utils")
                         .resolve("tls_crts");
         caCert = Files.readAllBytes(tlsDir.resolve("ca.crt"));
         clientCert = Files.readAllBytes(tlsDir.resolve("server.crt"));
