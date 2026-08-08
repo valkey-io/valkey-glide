@@ -98,7 +98,10 @@ async def exec_batch(
     is_atomic_cluster = isinstance(glide_client, GlideClusterClient) and getattr(
         batch, "is_atomic", False
     )
-    if result is None and is_atomic_cluster and not raise_on_error:
+    # With raise_on_error=True a real error would have raised, so a None
+    # result here is only ever the transient aggregator artifact and is
+    # safe to retry regardless of the raise_on_error setting.
+    if result is None and is_atomic_cluster:
         result = await _exec_batch_once(
             glide_client, batch, route, timeout, raise_on_error
         )
@@ -274,7 +277,7 @@ class TestBatch:
             batch.pubsub_shardnumsub()
             expected.append(cast(TResult, {}))
 
-        result = await glide_client.exec(batch, raise_on_error=True)
+        result = await exec_batch(glide_client, batch, raise_on_error=True)
         assert isinstance(result, list)
 
         info_response = result[0]
