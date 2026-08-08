@@ -481,7 +481,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: aho-corasick:1.1.4
+Package: aho-corasick:1.1.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -762,7 +762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: android_system_properties:0.1.5
+Package: android_system_properties:0.1.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2373,7 +2373,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.17.3
+Package: aws-lc-rs:1.18.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2595,7 +2595,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.43.0
+Package: aws-lc-sys:0.44.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22292,7 +22292,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ipnet:2.12.0
+Package: ipnet:2.12.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24582,7 +24582,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libredox:0.1.18
+Package: libredox:0.1.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35789,7 +35789,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex-automata:0.4.16
+Package: regex-automata:0.4.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44343,7 +44343,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.54
+Package: time:0.3.55
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57510,7 +57510,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.55
+Package: zerocopy:0.8.56
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57762,7 +57762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.55
+Package: zerocopy-derive:0.8.56
 
 The following copyrights and licenses were found in the source code of this package:
 
