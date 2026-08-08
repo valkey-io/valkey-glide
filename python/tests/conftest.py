@@ -336,6 +336,73 @@ def skip_if_version_below(request):
             client.close()
 
 
+@pytest.fixture(scope="session")
+def valkey_mtls_cluster(request) -> ValkeyCluster:
+    """
+    A single TLS standalone node started with ``--tls-auth-clients yes``.
+
+    The session clusters accept a client that sends no certificate, so they
+    cannot show that a client cert was required or checked. Started on first
+    use because only the mTLS tests need it.
+    """
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(
+            reason="mTLS tests require an internally-created cluster with "
+            "client-cert auth enabled"
+        )
+    return ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=0,
+        tls_auth_clients=True,
+    )
+
+
+@pytest.fixture(scope="session")
+def valkey_mtls_cluster_cluster(request) -> ValkeyCluster:
+    """
+    A TLS cluster (3 shards, 1 replica each) started with ``--tls-cluster yes``
+    and ``--tls-auth-clients yes`` so both the cluster bus and clients use TLS
+    with client certificates.
+
+    The existing session clusters accept a client that sends no certificate,
+    so they cannot show that a client cert was required or checked. Started on
+    first use because only the mTLS tests need it.
+    """
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(
+            reason="mTLS tests require an internally-created cluster with "
+            "client-cert auth enabled"
+        )
+    return ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        shard_count=3,
+        replica_count=1,
+        tls_auth_clients=True,
+    )
+
+
+@pytest.fixture
+def valkey_mtls_target(
+    request,
+    cluster_mode,
+    valkey_mtls_cluster,
+    valkey_mtls_cluster_cluster,
+) -> ValkeyCluster:
+    """
+    Return the mTLS-required fixture matching the requested ``cluster_mode``,
+    mirroring how ``pytest.valkey_tls_cluster`` and
+    ``pytest.standalone_tls_cluster`` are swapped in the non-mTLS TLS tests.
+    """
+    return valkey_mtls_cluster_cluster if cluster_mode else valkey_mtls_cluster
+
+
 @pytest.fixture
 def tls_insecure(request) -> bool:
     # If the test has param'd tls_insecure, use it

@@ -5,6 +5,7 @@ package integTest
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -527,4 +528,195 @@ func getCaCertificate() ([]byte, error) {
 	}
 
 	return config.LoadRootCertificatesFromFile(absPath)
+}
+
+// startMTlsRequiredStandalone spins up a single TLS standalone server that
+// requires a client certificate (--tls-auth-clients). It returns the node
+// address and a stop function; the returned cluster folder is captured inside
+// the stop closure. This mirrors the Python valkey_mtls_cluster fixture: the
+// session TLS servers accept a client that sends no certificate, so they
+// cannot prove the accepting mTLS test above is not passing vacuously.
+func startMTlsRequiredStandalone(suite *GlideTestSuite) (config.NodeAddress, func()) {
+	output := runClusterManager(
+		suite,
+		[]string{"--tls", "start", "--tls-auth-clients", "-n", "1", "-r", "0"},
+		false,
+	)
+	addrs := extractAddresses(suite, output)
+	require.NotEmpty(suite.T(), addrs, "mTLS-required cluster produced no addresses")
+
+	clusterFolder := ""
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "CLUSTER_FOLDER=") {
+			clusterFolder = strings.TrimPrefix(line, "CLUSTER_FOLDER=")
+			break
+		}
+	}
+
+	stop := func() {
+		if clusterFolder == "" {
+			return
+		}
+		runClusterManager(
+			suite,
+			[]string{"--tls", "stop", "--cluster-folder", clusterFolder},
+			true,
+		)
+	}
+	return addrs[0], stop
+}
+
+// startMTlsRequiredCluster spins up a TLS cluster (3 shards, 1 replica each)
+// that requires a client certificate (--tls-auth-clients). It returns the
+// full list of node addresses and a stop function; the returned cluster
+// folder is captured inside the stop closure. This is the cluster-mode
+// companion to startMTlsRequiredStandalone.
+func startMTlsRequiredCluster(suite *GlideTestSuite) ([]config.NodeAddress, func()) {
+	output := runClusterManager(
+		suite,
+		[]string{"--tls", "start", "--cluster-mode", "--tls-auth-clients", "-n", "3", "-r", "1"},
+		false,
+	)
+	addrs := extractAddresses(suite, output)
+	require.NotEmpty(suite.T(), addrs, "mTLS-required cluster produced no addresses")
+
+	clusterFolder := ""
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "CLUSTER_FOLDER=") {
+			clusterFolder = strings.TrimPrefix(line, "CLUSTER_FOLDER=")
+			break
+		}
+	}
+
+	stop := func() {
+		if clusterFolder == "" {
+			return
+		}
+		runClusterManager(
+			suite,
+			[]string{"--tls", "stop", "--cluster-folder", clusterFolder},
+			true,
+		)
+	}
+	return addrs, stop
+}
+
+// TestTlsMTlsClientCertAcceptedByServerRequiringOne verifies that the client
+// can connect to a server that requires a client certificate when a client
+// certificate is specified. This is the accepting half of the pair mirroring
+// the Python coverage in test_tls.py.
+func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	addr, stop := startMTlsRequiredStandalone(suite)
+	defer stop()
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClientConfig().
+		WithAddress(&addr).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne verifies that a
+// client without cert+key fails to connect to the same server. Without this
+// check, the accepting case above would still pass against a server that
+// ignored client certificates.
+func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiringOne() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	addr, stop := startMTlsRequiredStandalone(suite)
+	defer stop()
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(caCert)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClientConfig().
+		WithAddress(&addr).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err = glide.NewClient(clientConfig)
+	require.Error(suite.T(), err)
+}
+
+// TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne mirrors
+// TestTlsMTlsClientCertAcceptedByServerRequiringOne against a cluster that
+// requires client certificates.
+func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	addrs, stop := startMTlsRequiredCluster(suite)
+	defer stop()
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+	certPath, keyPath, err := getClientCertAndKeyPaths()
+	require.NoError(suite.T(), err)
+	clientCert, clientKey, err := config.LoadClientCertificateAndKeyFromFile(certPath, keyPath)
+	require.NoError(suite.T(), err)
+
+	tlsConfig, err := config.NewTlsConfiguration().
+		WithRootCertificates(caCert).
+		WithMutualTLS(clientCert, clientKey)
+	require.NoError(suite.T(), err)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClusterClientConfig().
+		WithAddress(&addrs[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), client)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne mirrors
+// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne against a cluster
+// that requires client certificates.
+func (suite *GlideTestSuite) TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsDisabled(suite)
+
+	addrs, stop := startMTlsRequiredCluster(suite)
+	defer stop()
+
+	caCert, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(caCert)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
+	clientConfig := defaultClusterClientConfig().
+		WithAddress(&addrs[0]).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	_, err = glide.NewClusterClient(clientConfig)
+	require.Error(suite.T(), err)
 }

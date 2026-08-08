@@ -309,4 +309,61 @@ public class TlsAdvancedConfigurationTest {
                                         .build());
         assertTrue(error.getMessage().contains("`certReloadIntervalSeconds` must be positive"));
     }
+
+    // An interval without cert paths has nothing to reload. The builder cannot express
+    // that, so this calls the constructor directly.
+    @Test
+    void testIntervalWithoutCertPathsThrows() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> new TlsAdvancedConfiguration(false, null, null, null, null, null, 60));
+        assertTrue(
+                error
+                        .getMessage()
+                        .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
+    }
+
+    // Integer.MAX_VALUE is below the uint32 bound, so no Integer can exceed it.
+    @Test
+    void testMaxExpressibleIntervalAccepted() {
+        TlsAdvancedConfiguration config =
+                TlsAdvancedConfiguration.builder()
+                        .useMutualTlsWithReload("/certs/client.pem", "/certs/client.key", Integer.MAX_VALUE)
+                        .build();
+
+        assertEquals(Integer.MAX_VALUE, config.getCertReloadIntervalSeconds());
+        assertTrue(Integer.MAX_VALUE <= TlsAdvancedConfiguration.MAX_RELOAD_INTERVAL_SECONDS);
+    }
+
+    @Test
+    void testIntervalWithByteBasedMutualTlsThrows() {
+        byte[] cert = "cert".getBytes(StandardCharsets.UTF_8);
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () -> new TlsAdvancedConfiguration(false, null, cert, key, null, null, 60));
+        assertTrue(
+                error
+                        .getMessage()
+                        .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
+    }
+
+    // Byte and path mTLS material together is unrepresentable through the builder,
+    // so this exercises the constructor directly.
+    @Test
+    void testBothMTlsModesPopulatedThrows() {
+        byte[] cert = "cert".getBytes(StandardCharsets.UTF_8);
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                new TlsAdvancedConfiguration(
+                                        false, null, cert, key, "/certs/client.pem", "/certs/client.key", null));
+        assertTrue(error.getMessage().contains("cannot both be provided"));
+    }
 }

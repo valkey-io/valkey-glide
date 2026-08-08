@@ -92,6 +92,7 @@ excluded_shared_symbols = [
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
     "StrPath",  # Assignment (type alias used in TlsAdvancedConfiguration + loader signatures)
+    "MAX_RELOAD_INTERVAL_SECONDS",  # Assignment (uint32 bound used by _validate_mtls_config)
     "load_root_certificates_from_file",  # FunctionDef
     "load_client_certificate_from_file",  # FunctionDef
     "load_client_key_from_file",  # FunctionDef

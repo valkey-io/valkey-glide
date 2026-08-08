@@ -385,8 +385,8 @@ describe('mutualTls kind: "bytes"', () => {
         const request = buildTlsRequest({
             mutualTls: {
                 kind: "bytes",
-                certBytes: CLIENT_CERT_PEM,
-                keyBytes: CLIENT_KEY_PEM,
+                clientCertificate: CLIENT_CERT_PEM,
+                clientKey: CLIENT_KEY_PEM,
             },
         });
 
@@ -408,8 +408,8 @@ describe('mutualTls kind: "bytes"', () => {
         const request = buildTlsRequest({
             mutualTls: {
                 kind: "bytes",
-                certBytes: certBuffer,
-                keyBytes: keyBuffer,
+                clientCertificate: certBuffer,
+                clientKey: keyBuffer,
             },
         });
 
@@ -424,8 +424,8 @@ describe('mutualTls kind: "bytes"', () => {
                     {
                         mutualTls: {
                             kind: "bytes",
-                            certBytes: CLIENT_CERT_PEM,
-                            keyBytes: CLIENT_KEY_PEM,
+                            clientCertificate: CLIENT_CERT_PEM,
+                            clientKey: CLIENT_KEY_PEM,
                         },
                     },
                     TlsMode.NoTls,
@@ -437,60 +437,60 @@ describe('mutualTls kind: "bytes"', () => {
     // Regression guard. proto3 `bytes` treats an empty value as unset, so if
     // both cert and key were sent empty the core would see no mTLS material
     // and quietly fall back to server-auth-only TLS instead of erroring.
-    it("rejects both certBytes and keyBytes empty", () => {
+    it("rejects both clientCertificate and clientKey empty", () => {
         expectConfigurationError(
             () =>
                 buildTlsRequest({
                     mutualTls: {
                         kind: "bytes",
-                        certBytes: "",
-                        keyBytes: Buffer.alloc(0),
+                        clientCertificate: "",
+                        clientKey: Buffer.alloc(0),
                     },
                 }),
-            "mutualTls.certBytes must not be empty",
+            "mutualTls.clientCertificate must not be empty",
         );
     });
 
-    it("rejects an empty certBytes", () => {
+    it("rejects an empty clientCertificate", () => {
         expectConfigurationError(
             () =>
                 buildTlsRequest({
                     mutualTls: {
                         kind: "bytes",
-                        certBytes: "",
-                        keyBytes: CLIENT_KEY_PEM,
+                        clientCertificate: "",
+                        clientKey: CLIENT_KEY_PEM,
                     },
                 }),
-            "mutualTls.certBytes must not be empty",
+            "mutualTls.clientCertificate must not be empty",
         );
     });
 
-    it("rejects an empty keyBytes", () => {
+    it("rejects an empty clientKey", () => {
         expectConfigurationError(
             () =>
                 buildTlsRequest({
                     mutualTls: {
                         kind: "bytes",
-                        certBytes: CLIENT_CERT_PEM,
-                        keyBytes: Buffer.alloc(0),
+                        clientCertificate: CLIENT_CERT_PEM,
+                        clientKey: Buffer.alloc(0),
                     },
                 }),
-            "mutualTls.keyBytes must not be empty",
+            "mutualTls.clientKey must not be empty",
         );
     });
 });
 
 describe('mutualTls kind: "path" (implicit reload)', () => {
     let tmpDir: string;
-    let certPath: string;
-    let keyPath: string;
+    let clientCertPath: string;
+    let clientKeyPath: string;
 
     beforeAll(() => {
         tmpDir = mkdtempSync(join(tmpdir(), "glide-mtls-path-"));
-        certPath = join(tmpDir, "client.crt");
-        keyPath = join(tmpDir, "client.key");
-        writeFileSync(certPath, CLIENT_CERT_PEM);
-        writeFileSync(keyPath, CLIENT_KEY_PEM);
+        clientCertPath = join(tmpDir, "client.crt");
+        clientKeyPath = join(tmpDir, "client.key");
+        writeFileSync(clientCertPath, CLIENT_CERT_PEM);
+        writeFileSync(clientKeyPath, CLIENT_KEY_PEM);
     });
 
     afterAll(() => {
@@ -501,13 +501,13 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         const request = buildTlsRequest({
             mutualTls: {
                 kind: "path",
-                certPath,
-                keyPath,
+                clientCertPath,
+                clientKeyPath,
             },
         });
 
-        expect(request.clientCertPath).toBe(certPath);
-        expect(request.clientKeyPath).toBe(keyPath);
+        expect(request.clientCertPath).toBe(clientCertPath);
+        expect(request.clientKeyPath).toBe(clientKeyPath);
         expect(request.certReload?.enabled).toBe(true);
         expect(request.certReload?.intervalSeconds).toBeUndefined();
         expect(request.clientCert).toBeFalsy();
@@ -518,8 +518,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         const request = buildTlsRequest({
             mutualTls: {
                 kind: "path",
-                certPath,
-                keyPath,
+                clientCertPath,
+                clientKeyPath,
                 reloadIntervalSeconds: 120,
             },
         });
@@ -537,8 +537,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
         const request = buildTlsRequest({
             mutualTls: {
                 kind: "path",
-                certPath,
-                keyPath,
+                clientCertPath,
+                clientKeyPath,
                 reloadIntervalSeconds: maxUint32,
             },
         });
@@ -566,8 +566,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
                     buildTlsRequest({
                         mutualTls: {
                             kind: "path",
-                            certPath,
-                            keyPath,
+                            clientCertPath,
+                            clientKeyPath,
                             reloadIntervalSeconds: value,
                         },
                     }),
@@ -582,8 +582,8 @@ describe('mutualTls kind: "path" (implicit reload)', () => {
                 buildTlsRequest({
                     mutualTls: {
                         kind: "path",
-                        certPath,
-                        keyPath,
+                        clientCertPath,
+                        clientKeyPath,
                         reloadIntervalSeconds: 2 ** 32,
                     },
                 }),
@@ -596,8 +596,8 @@ describe("mutualTls unsupported variant fallthrough", () => {
     it("rejects an unknown kind and reports the discriminant only", () => {
         const bogus = {
             kind: "future" as const,
-            certBytes: "SENSITIVE-PEM-BYTES",
-            keyBytes: "SENSITIVE-KEY-BYTES",
+            clientCertificate: "SENSITIVE-PEM-BYTES",
+            clientKey: "SENSITIVE-KEY-BYTES",
         } as unknown as MutualTls;
 
         let thrown: unknown;
@@ -636,8 +636,8 @@ describe("mutualTls interaction with existing TLS knobs", () => {
             insecure: true,
             mutualTls: {
                 kind: "bytes",
-                certBytes: CLIENT_CERT_PEM,
-                keyBytes: CLIENT_KEY_PEM,
+                clientCertificate: CLIENT_CERT_PEM,
+                clientKey: CLIENT_KEY_PEM,
             },
         });
 
@@ -752,8 +752,8 @@ describe("TLS PEM file loaders", () => {
         // `never` and this line stops type-checking.
         const _pathVariant: Extract<MutualTls, { kind: "path" }> = {
             kind: "path",
-            certPath: "/tmp/c",
-            keyPath: "/tmp/k",
+            clientCertPath: "/tmp/c",
+            clientKeyPath: "/tmp/k",
         };
         expect(_pathVariant.kind).toBe("path");
     });

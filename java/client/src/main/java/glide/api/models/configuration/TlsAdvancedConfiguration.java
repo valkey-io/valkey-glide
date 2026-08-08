@@ -51,6 +51,9 @@ import lombok.Getter;
                         + " instance")
 public class TlsAdvancedConfiguration {
 
+    /** Largest reload interval that fits in the protobuf uint32 seconds field. */
+    public static final long MAX_RELOAD_INTERVAL_SECONDS = 4294967295L;
+
     /**
      * Whether to bypass TLS certificate verification.
      *
@@ -212,6 +215,13 @@ public class TlsAdvancedConfiguration {
                             + " key.");
         }
 
+        if (!hasCertPath && certReloadIntervalSeconds != null) {
+            throw new ConfigurationError(
+                    "`certReloadIntervalSeconds` may only be set with path-based mTLS; use a"
+                            + " `useMutualTlsWithReload` overload, which supplies the certificate and key"
+                            + " paths that are reloaded.");
+        }
+
         // Enablement and interval are separate. When path-based reloading is enabled (a cert path is
         // set), a supplied interval must be positive; a non-positive value is rejected because static
         // (no-reload) mTLS is expressed by the byte-based useMutualTls overload, not by passing 0
@@ -222,6 +232,16 @@ public class TlsAdvancedConfiguration {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` must be positive; omit it (null) to defer to the GLIDE"
                             + " core's default cadence.");
+        }
+
+        // Cannot fire while the field is an Integer, whose max is below this bound. Kept
+        // so the rule still holds if that type widens.
+        if (certReloadIntervalSeconds != null
+                && certReloadIntervalSeconds > MAX_RELOAD_INTERVAL_SECONDS) {
+            throw new ConfigurationError(
+                    "`certReloadIntervalSeconds` must be at most "
+                            + MAX_RELOAD_INTERVAL_SECONDS
+                            + "; omit it (null) to defer to the GLIDE core's default cadence.");
         }
     }
 
