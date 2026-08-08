@@ -254,6 +254,17 @@ impl ServerMock {
     /// Enable or disable the PING blackhole. When enabled, any PING
     /// received on the socket is read but silently dropped so the
     /// client's pre-command PING times out on its bounded deadline.
+    ///
+    /// A live server always shuts a closed socket by sending FIN or
+    /// RST, which the client sees as end-of-stream and turns into a
+    /// clean reconnect. The half-open middlebox scenario we need to
+    /// reproduce for idle_timeout looks nothing like that: writes keep
+    /// succeeding and reads never surface a hangup, so is_closed()
+    /// stays false and only a bounded PING with no reply exposes the
+    /// dead flow. There is no portable way to force that shape on a
+    /// real redis-server, which is why the mock keeps this
+    /// blackhole. Real-server coverage of the non-half-open reconnect
+    /// path lives alongside the idle_timeout tests.
     pub fn set_ping_blackhole(&self, blackhole: bool) {
         self.ping_blackhole.store(blackhole, Ordering::Release);
     }

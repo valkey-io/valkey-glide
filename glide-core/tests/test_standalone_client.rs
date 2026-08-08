@@ -1779,4 +1779,67 @@ mod standalone_client_tests {
             );
         });
     }
+
+    /// Companion real-server assertion for the reconnect path. Runs
+    /// against a live RedisServer so the whole idle_timeout flow
+    /// exercises a genuine socket, TCP handshake, and reconnect
+    /// (without middlebox-style half-open eviction, which the mock
+    /// covers separately). Restarts the server underneath the client
+    /// so the pre-command PING sees a broken transport and drives a
+    /// real reconnect and a real follow-up command against a fresh
+    /// server process.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_reconnects_against_real_server() {
+        block_on_all(async move {
+            let server = RedisServer::new(ServerType::Tcp { tls: false });
+            let address = server.get_client_addr();
+            wait_for_server_to_become_ready(&address).await;
+
+            let mut req =
+                create_connection_request(std::slice::from_ref(&address), &Default::default());
+            req.idle_timeout = Some(100);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("client build against real server");
+
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("k").arg("v");
+            client.send_command(&set_cmd).await.expect("initial SET");
+
+            // Bounce the server so the underlying TCP flow is broken
+            // during the client's idle window. The next command must
+            // succeed once the client's pre-command validation drives
+            // a reconnect.
+            drop(server);
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let address_clone = address.clone();
+            std::thread::spawn(move || {
+                block_on_all(async move {
+                    let new_server = RedisServer::new_with_addr_and_modules(address_clone, &[]);
+                    let _ = sender.send(new_server);
+                })
+            });
+            let _new_server = receiver.await;
+            wait_for_server_to_become_ready(&address).await;
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            let mut succeeded = false;
+            for _ in 0..30 {
+                if client.send_command(&get_cmd).await.is_ok() {
+                    succeeded = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            assert!(
+                succeeded,
+                "expected the follow-up command to succeed after idle_timeout drove a reconnect \
+                 against a real server"
+            );
+        });
+    }
 }
