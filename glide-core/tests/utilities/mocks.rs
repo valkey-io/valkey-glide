@@ -11,7 +11,7 @@ use std::net::TcpStream as StdTcpStream;
 use std::str::from_utf8;
 use std::sync::{
     Arc,
-    atomic::{AtomicU16, Ordering},
+    atomic::{AtomicBool, AtomicU16, Ordering},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -24,9 +24,17 @@ pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
+    /// Total PINGs seen on the socket, whether answered from the
+    /// constant-response table or dropped by the blackhole.
+    ping_count: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
     closing_completed_signal: Arc<ManualResetEvent>,
+    /// When set, PING requests received on the socket are read but not
+    /// answered. Reproduces a silent half-open flow where the transport
+    /// still accepts writes but the read half never delivers a
+    /// response. Used by the idle_timeout integration test.
+    ping_blackhole: Arc<AtomicBool>,
 }
 
 fn read_from_socket(
@@ -74,8 +82,10 @@ fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
     received_commands: &Arc<AtomicU16>,
+    ping_count: &Arc<AtomicU16>,
     constant_responses: &HashMap<String, Value>,
     closing_signal: &Arc<ManualResetEvent>,
+    ping_blackhole: &Arc<AtomicBool>,
 ) -> bool {
     let mut buffer = vec![0; 1024];
     let size = match read_from_socket(&mut buffer, socket, closing_signal) {
@@ -86,6 +96,21 @@ fn receive_and_respond_to_next_message(
     };
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
     log_resp_message(&message);
+
+    if message.contains("PING") {
+        ping_count.fetch_add(1, Ordering::AcqRel);
+    }
+
+    if ping_blackhole.swap(false, Ordering::AcqRel) && message.contains("PING") {
+        // Read and drop the PING once, then clear the blackhole and
+        // shut down this socket. The client's pre-command PING will
+        // trip its bounded deadline, close the dead flow, and start a
+        // fresh reconnect. Subsequent PINGs (on the fresh socket) go
+        // through normally so the retried command sees a live
+        // transport.
+        let _ = socket.shutdown(std::net::Shutdown::Both);
+        return false;
+    }
 
     let setinfo_count = message.matches("SETINFO").count();
     if setinfo_count > 0 {
@@ -147,6 +172,8 @@ impl ServerMock {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
         let received_commands_clone = received_commands.clone();
+        let ping_count = Arc::new(AtomicU16::new(0));
+        let ping_count_clone = ping_count.clone();
         let address = ConnectionAddr::Tcp(
             "localhost".to_string(),
             listener.local_addr().unwrap().port(),
@@ -155,24 +182,55 @@ impl ServerMock {
         let closing_signal_clone = closing_signal.clone();
         let closing_completed_signal = Arc::new(ManualResetEvent::new(false));
         let closing_completed_signal_clone = closing_completed_signal.clone();
+        let ping_blackhole = Arc::new(AtomicBool::new(false));
+        let ping_blackhole_clone = ping_blackhole.clone();
         let address_clone = address.clone();
         std::thread::spawn(move || {
             logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
-            let mut socket: StdTcpStream = listener.accept().unwrap().0;
-            let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
-            while receive_and_respond_to_next_message(
-                &mut receiver,
-                &mut socket,
-                &received_commands_clone,
-                &constant_responses,
-                &closing_signal_clone,
-            ) {}
+            // Poll accept in a loop so a client-side reconnect can drop
+            // its current socket and immediately establish a replacement
+            // against the same listener. `accept()` on the underlying
+            // socket blocks by default, but the outer loop watches the
+            // closing signal so the thread exits cleanly on drop.
+            listener
+                .set_nonblocking(true)
+                .expect("set listener non-blocking");
 
-            // Terminate the connection
-            let _ = socket.shutdown(std::net::Shutdown::Both);
+            'accept: loop {
+                let mut socket = loop {
+                    if closing_signal_clone.is_set() {
+                        break 'accept;
+                    }
+                    match listener.accept() {
+                        Ok((sock, _)) => break sock,
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            continue;
+                        }
+                        Err(_) => break 'accept,
+                    }
+                };
+                let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
-            // Now notify exit completed
+                while receive_and_respond_to_next_message(
+                    &mut receiver,
+                    &mut socket,
+                    &received_commands_clone,
+                    &ping_count_clone,
+                    &constant_responses,
+                    &closing_signal_clone,
+                    &ping_blackhole_clone,
+                ) {}
+
+                // Terminate the current connection and go accept the
+                // next one. A well-behaved client that noticed the
+                // half-open flow reconnects to the same port and picks
+                // up the fresh handshake through the constant-response
+                // table.
+                let _ = socket.shutdown(std::net::Shutdown::Both);
+            }
+
             closing_completed_signal_clone.set();
 
             logger_core::log_info(
@@ -185,10 +243,37 @@ impl ServerMock {
             request_sender,
             address,
             received_commands,
+            ping_count,
             runtime: None,
             closing_signal,
             closing_completed_signal,
+            ping_blackhole,
         }
+    }
+
+    /// Enable or disable the PING blackhole. When enabled, any PING
+    /// received on the socket is read but silently dropped so the
+    /// client's pre-command PING times out on its bounded deadline.
+    ///
+    /// A live server always shuts a closed socket by sending FIN or
+    /// RST, which the client sees as end-of-stream and turns into a
+    /// clean reconnect. The half-open middlebox scenario we need to
+    /// reproduce for idle_timeout looks nothing like that: writes keep
+    /// succeeding and reads never surface a hangup, so is_closed()
+    /// stays false and only a bounded PING with no reply exposes the
+    /// dead flow. There is no portable way to force that shape on a
+    /// real redis-server, which is why the mock keeps this
+    /// blackhole. Real-server coverage of the non-half-open reconnect
+    /// path lives alongside the idle_timeout tests.
+    pub fn set_ping_blackhole(&self, blackhole: bool) {
+        self.ping_blackhole.store(blackhole, Ordering::Release);
+    }
+
+    /// Total number of PING messages seen on the socket, including any
+    /// that were dropped by the blackhole. Useful for asserting the
+    /// pre-command validation fired.
+    pub fn get_ping_count(&self) -> u16 {
+        self.ping_count.load(Ordering::Acquire)
     }
 
     pub async fn close(self) {

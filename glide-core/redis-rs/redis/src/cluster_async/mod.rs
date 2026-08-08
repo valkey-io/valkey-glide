@@ -27,7 +27,7 @@ mod connections_logic;
 mod pipeline_routing;
 /// Exposed only for testing.
 pub mod testing {
-    pub use super::connections_container::ConnectionDetails;
+    pub use super::connections_container::{ConnectionDetails, IdleTracker, IdleValidationGuard};
     pub use super::connections_logic::*;
 }
 use crate::{
@@ -44,7 +44,9 @@ use crate::{
     types::ServerError,
     FromRedisValue, InfoDict, PipelineRetryStrategy,
 };
-use connections_container::{RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus};
+use connections_container::{
+    IdleValidationGuard, RefreshTaskNotifier, RefreshTaskState, RefreshTaskStatus,
+};
 use dashmap::DashMap;
 use pipeline_routing::{
     collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
@@ -187,6 +189,18 @@ where
 
 /// Default maximum number of requests to buffer during a cluster reconnect window.
 pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
+
+/// Deadline for the pre-command PING sent by the `idle_timeout` hook.
+/// Kept short enough to bound the added latency on a healthy connection
+/// yet long enough to tolerate typical intra-AZ tail latency. Not
+/// user-configurable in this change.
+pub(crate) const IDLE_TIMEOUT_PING_DEADLINE: Duration = Duration::from_millis(500);
+
+/// Fallback ceiling for a losing single-flight waiter. If the winner
+/// task never releases `in_flight`, waiters return anyway after roughly
+/// twice the PING deadline so a wedged winner does not stall the whole
+/// pool of concurrent commands.
+const IDLE_TIMEOUT_WAIT_DEADLINE: Duration = Duration::from_millis(1000);
 
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
@@ -3088,6 +3102,112 @@ where
             .map_err(|err| (OperationTarget::FanOut, err))
     }
 
+    /// Runs the pre-command idle-timeout PING on the node at `address`
+    /// and, on PING failure or timeout, refreshes the node's connection
+    /// and returns the fresh transport. Returns `None` when the tracker
+    /// says the connection is not idle, or when neither a fresh nor an
+    /// original connection can be recovered.
+    ///
+    /// Concurrent commands targeted at the same node share the tracker's
+    /// single-flight latch. The first caller runs the PING while others
+    /// wait on the shared `Notify`; the winner releases waiters when it
+    /// finishes so at most one PING and at most one reconnect fire per
+    /// idle event per node.
+    async fn validate_idle_connection(
+        core: Core<C>,
+        address: &str,
+        idle_timeout: Duration,
+    ) -> Option<(String, C)> {
+        // Fetch the shared tracker and the current connection to the
+        // node under review. Both are cloned out of the container so
+        // subsequent operations do not hold the connection lock.
+        let (tracker, conn_future) = {
+            let guard = core.conn_lock.read();
+            let details = guard.connection_details_for_address(address)?;
+            (details.1.idle.clone(), details.1.conn.clone())
+        };
+
+        if !tracker.should_validate(idle_timeout) {
+            return None;
+        }
+
+        if tracker
+            .in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            // Winner path. Own the latch with an RAII guard so it is
+            // released on every exit, including future cancellation.
+            // Client::send_command drops execute_command_owned when its
+            // outer request timeout fires, which drops this future mid
+            // await. Without the guard the plain "store false at the
+            // end" is skipped and every later stale caller takes the
+            // loser path and stalls for the full wait deadline.
+            let _latch = IdleValidationGuard::new(&tracker);
+
+            // Run one bounded PING; on any failure or deadline breach
+            // drive a refresh and wait for a replacement transport
+            // before returning.
+            let mut conn = conn_future.await;
+            let ping_result = tokio::time::timeout(
+                IDLE_TIMEOUT_PING_DEADLINE,
+                conn.req_packed_command(&cmd("PING")),
+            )
+            .await;
+
+            let refreshed = match ping_result {
+                Ok(Ok(_)) => {
+                    tracker.mark_activity();
+                    None
+                }
+                _ => {
+                    let notifiers = Self::trigger_refresh_connection_tasks(
+                        core.clone(),
+                        HashSet::from([address.to_string()]),
+                        RefreshConnectionType::AllConnections,
+                        false,
+                    )
+                    .await;
+                    for notifier in notifiers {
+                        notifier.notified().await;
+                    }
+                    core.conn_lock.read().connection_for_address(address)
+                }
+            };
+
+            if let Some((addr, fut)) = refreshed {
+                let fresh_conn = fut.await;
+                return Some((addr, fresh_conn));
+            }
+            None
+        } else {
+            // Loser path. Wait for the winner to finish (bounded so a
+            // wedged winner does not stall the whole pool) and pick up
+            // whatever connection is installed for this address.
+            //
+            // `Notify::notify_waiters` stores no permit: it wakes only
+            // waiters that have already registered when the notification
+            // fires. Build the `Notified` future and enable it *before*
+            // rechecking `in_flight`, so any subsequent `notify_waiters`
+            // is guaranteed to wake us. If the winner has already
+            // released `in_flight` by that point we skip the wait
+            // entirely and go straight to reading the fresh connection.
+            let notified = tracker.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if tracker.in_flight.load(Ordering::Acquire) {
+                let _ = tokio::time::timeout(IDLE_TIMEOUT_WAIT_DEADLINE, notified).await;
+            }
+            let refreshed = core.conn_lock.read().connection_for_address(address);
+            if let Some((addr, fut)) = refreshed {
+                let fresh_conn = fut.await;
+                Some((addr, fresh_conn))
+            } else {
+                None
+            }
+        }
+    }
+
     pub(crate) async fn try_cmd_request(
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
@@ -3108,19 +3228,65 @@ where
         };
         log_trace_lazy!("cluster", "route request to single node");
 
-        let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
+        let (address, mut conn) = Self::get_connection(routing, core.clone(), Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
 
+        // If the pre-command idle-timeout is configured and this node's
+        // connection has been idle beyond it, run a bounded PING against
+        // the same connection. On PING failure or deadline, drive an
+        // immediate refresh and pick up the replacement transport before
+        // running the user's real command. Skip the probe when the
+        // connection is already carrying an in-band command such as
+        // `BLPOP 0` or `XREAD BLOCK`; the response ordering guarantees
+        // any PING would queue behind the busy reply and blow past the
+        // bounded deadline.
+        let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
+        if let Some(idle_timeout) = idle_timeout {
+            if conn.is_idle() {
+                if let Some((_, refreshed)) =
+                    Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
+                {
+                    conn = refreshed;
+                }
+            }
+        }
+
         // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
 
-        conn.req_packed_command(&cmd)
-            .await
+        // Snapshot the connection's transport-activity counter. A
+        // client-side cache hit inside `req_packed_command` returns the
+        // cached value without touching the socket, so refreshing
+        // `last_activity` on a cache-served result would let a
+        // cache-heavy workload suppress the idle PING while the socket
+        // has actually been idle. Only advance the timestamp when the
+        // counter observably changed.
+        let activity_before = conn.transport_activity();
+        let result = conn.req_packed_command(&cmd).await;
+        if idle_timeout.is_some() && result.is_ok() {
+            let touched_socket = match (activity_before, conn.transport_activity()) {
+                (Some(before), Some(after)) => before != after,
+                // Connections without a transport-activity counter must
+                // be treated as always touching the socket; the trait
+                // default returns `None` for them.
+                _ => true,
+            };
+            if touched_socket {
+                if let Some(details) = core
+                    .conn_lock
+                    .read()
+                    .connection_details_for_address(&address)
+                {
+                    details.1.idle.mark_activity();
+                }
+            }
+        }
+        result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3130,11 +3296,29 @@ where
         offset: usize,
         count: usize,
         conn: impl Future<Output = RedisResult<(String, C)>>,
+        core: Core<C>,
     ) -> OperationResult {
         log_trace_lazy!("cluster", "try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
         if let Some(span) = pipeline.span() {
             set_routed_node_on_span(&span, &address);
+        }
+
+        // Reuse the same pre-command idle-timeout check as the
+        // single-command path. Validating once per pipeline is enough
+        // because the pipeline runs on the same underlying connection.
+        // The `is_idle` check skips the probe when the connection is
+        // already carrying an in-band command whose reply would queue
+        // ahead of the PING and blow past the deadline.
+        let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
+        if let Some(idle_timeout) = idle_timeout {
+            if conn.is_idle() {
+                if let Some((_, refreshed)) =
+                    Self::validate_idle_connection(core.clone(), &address, idle_timeout).await
+                {
+                    conn = refreshed;
+                }
+            }
         }
 
         // Mark diagnostic handles on pipeline commands as sent
@@ -3143,8 +3327,19 @@ where
                 .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
         }
 
-        conn.req_packed_commands(&pipeline, offset, count, None)
-            .await
+        let result = conn
+            .req_packed_commands(&pipeline, offset, count, None)
+            .await;
+        if idle_timeout.is_some() && result.is_ok() {
+            if let Some(details) = core
+                .conn_lock
+                .read()
+                .connection_details_for_address(&address)
+            {
+                details.1.idle.mark_activity();
+            }
+        }
+        result
             .map(Response::Multiple)
             .map_err(|err| (OperationTarget::Node { address }, err))
     }
@@ -3161,6 +3356,7 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
+                    let core_for_hook = core.clone();
                     Self::try_pipeline_request(
                         pipeline,
                         offset,
@@ -3170,6 +3366,7 @@ where
                             core,
                             None,
                         ),
+                        core_for_hook,
                     )
                     .await
                 } else {

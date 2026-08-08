@@ -7372,6 +7372,241 @@ mod cluster_async {
         );
     }
 
+    /// Regression test for the `idle_timeout` pre-command validation
+    /// hook on the async cluster client. Reproduces a silent half-open
+    /// TCP flow to one shard: PING requests targeted at the specific
+    /// already-open connections hang forever, mimicking a middlebox
+    /// that has evicted the idle flow without sending FIN or RST. Fresh
+    /// connections opened by the reconnect path get new IDs and still
+    /// respond normally. Under those conditions the transport looks
+    /// alive (is_closed stays false) and the existing periodic check
+    /// misses it. With `idle_timeout` set, the client must send a
+    /// bounded PING before its next command, spot the half-open flow,
+    /// drive an immediate reconnect, and complete the real command
+    /// against the fresh transport. The periodic check is pushed out
+    /// to an hour so this test's outcome depends only on the new hook.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_detects_silent_half_open_before_next_command() {
+        let name = "test_idle_timeout_detects_silent_half_open";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs to every connection open right now; fresh
+        // connections opened by the reconnect path get new IDs and
+        // still respond normally.
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_reconnect = runtime.block_on(async {
+            let mut last: Result<Value, RedisError> = Ok(Value::Nil);
+            for _ in 0..30 {
+                let attempt = cmd("ECHO")
+                    .arg("world")
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+                if matches!(&attempt, Ok(Value::BulkString(_))) {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            last
+        });
+
+        drop(blackhole_guard);
+
+        assert_eq!(
+            post_reconnect,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected fresh command to succeed after idle_timeout-driven reconnect"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert!(
+            count_after > count_before,
+            "expected idle_timeout to detect the half-open transport and \
+             open at least one new connection; before={count_before}, after={count_after}"
+        );
+    }
+
+    /// Regression test for the in-band busy guard on the idle-timeout
+    /// pre-command probe. A connection that reports `is_idle() == false`
+    /// (mimicking an in-flight `BLPOP 0` or `XREAD BLOCK` whose reply
+    /// has not returned yet) must not receive a PING before the next
+    /// command. The PING would queue behind the blocking reply on the
+    /// wire, blow past `IDLE_TIMEOUT_PING_DEADLINE`, and force a
+    /// needless reconnect that disrupts the real command.
+    ///
+    /// The test blackholes PINGs on the initial connection IDs so that
+    /// if the hook mistakenly fired the follow-up command would refresh
+    /// the transport, then marks those same IDs as busy through
+    /// `MockBusyConnectionGuard`. With the guard in place the connection
+    /// count must stay flat across the idle window.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_skips_probe_when_connection_is_busy() {
+        let name = "test_idle_timeout_skips_busy_connection";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs to the currently open connections so any
+        // stray probe would time out and drive a reconnect...
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let _blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids.clone());
+        // ...but also mark them busy so the hook is expected to skip.
+        let _busy_guard = MockBusyConnectionGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_command = runtime.block_on(async {
+            cmd("ECHO")
+                .arg("world")
+                .query_async::<_, Value>(&mut connection)
+                .await
+        });
+        assert_eq!(
+            post_command,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected the follow-up command to succeed on the busy connection without a probe"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert_eq!(
+            count_after, count_before,
+            "expected no new connections to open when the initial connection is busy; \
+             before={count_before}, after={count_after}"
+        );
+    }
+
+    /// Regression for the idle-timeout single-flight winner leaking
+    /// the latch on cancellation. Prior to the RAII guard the winner
+    /// cleared `in_flight` and notified waiters explicitly at the end
+    /// of the block, so a future dropped mid PING or mid reconnect
+    /// (for example when Client::send_command's outer request timeout
+    /// fires) skipped both steps and every later stale caller took
+    /// the loser path and waited the full validation deadline.
+    #[test]
+    fn test_idle_validation_guard_releases_latch_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+
+        let tracker = IdleTracker::new();
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "test precondition: latch must start unset"
+        );
+        {
+            let _guard = IdleValidationGuard::new(&tracker);
+            assert!(
+                tracker.in_flight.load(Ordering::Acquire),
+                "guard construction does not touch the latch"
+            );
+        }
+        assert!(
+            !tracker.in_flight.load(Ordering::Acquire),
+            "guard drop must release the latch even without an explicit reset"
+        );
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "a fresh caller must be able to acquire the latch after the guard drops"
+        );
+    }
+
+    /// Cancellation-shaped test: build a `Notified` future the way
+    /// the loser path does, drop the winner guard, and confirm the
+    /// waiter is woken. Proves the guard's drop also fires
+    /// `notify_waiters`, so a cancelled winner does not park loser
+    /// tasks for the full wait deadline.
+    #[test]
+    fn test_idle_validation_guard_notifies_waiters_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+        use std::sync::Arc;
+
+        let tracker = Arc::new(IdleTracker::new());
+        assert!(tracker
+            .in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok());
+
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let notified = tracker.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            let guard_tracker = tracker.clone();
+            let handle = tokio::spawn(async move {
+                let guard = IdleValidationGuard::new(&guard_tracker);
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                drop(guard);
+            });
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), notified)
+                .await
+                .expect("waiter must be woken when the winner guard drops");
+            handle.await.unwrap();
+            assert!(!tracker.in_flight.load(Ordering::Acquire));
+        });
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;

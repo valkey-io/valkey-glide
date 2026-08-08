@@ -83,6 +83,31 @@ pub trait ConnectionLike {
     /// Returns the state of the connection
     fn is_closed(&self) -> bool;
 
+    /// Returns `true` when the connection has no caller-visible request
+    /// currently awaiting a response. The pre-command idle-timeout hook
+    /// uses this to skip a PING probe on a connection that already
+    /// carries an ordered in-flight command (for example `BLPOP 0` or
+    /// `XREAD BLOCK`), whose reply would otherwise wait behind the
+    /// probe. Implementations that cannot cheaply answer this may
+    /// return `true` and accept a redundant probe.
+    fn is_idle(&self) -> bool {
+        true
+    }
+
+    /// Snapshot of a monotonic counter that only advances on transport
+    /// activity: a request drained into the writer or a response
+    /// received from the socket. Callers detect whether an operation
+    /// actually touched the network by comparing snapshots taken
+    /// before and after the call; equal snapshots mean the operation
+    /// was served without I/O (for example a client-side cache hit).
+    ///
+    /// Implementations that cannot cheaply track this return `None`,
+    /// in which case callers must treat every completion as transport
+    /// activity to stay safe.
+    fn transport_activity(&self) -> Option<u64> {
+        None
+    }
+
     /// Get the connection availibility zone
     fn get_az(&self) -> Option<String> {
         None

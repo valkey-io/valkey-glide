@@ -7,9 +7,11 @@ use futures::FutureExt;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use telemetrylib::Telemetry;
+use tokio::sync::Notify as TokioNotify;
 
 use tracing::debug;
 
@@ -31,8 +33,94 @@ macro_rules! count_connections {
     }};
 }
 
+/// Per-node coordination for the idle-timeout pre-command check.
+///
+/// The `last_activity` counter measures milliseconds elapsed since
+/// `epoch` at the point of the most recent successful command on this
+/// node. Callers read it, compare against the configured `idle_timeout`,
+/// and if the gap is exceeded, take turns running a bounded PING on the
+/// same connection. The `in_flight` boolean is a single-flight latch:
+/// the first task to flip it from false to true owns the PING and the
+/// eventual reconnect, and every other task that also observed the
+/// stale timestamp waits on `notify` until the winner completes.
+#[derive(Debug)]
+pub struct IdleTracker {
+    /// Monotonic reference point set at construction time.
+    pub epoch: Instant,
+    /// Milliseconds elapsed since `epoch` at the last recorded activity.
+    pub last_activity: AtomicU64,
+    /// Set to `true` while a task owns the pre-command PING for this node.
+    pub in_flight: AtomicBool,
+    /// Notified when the single-flight winner releases `in_flight`.
+    pub notify: TokioNotify,
+}
+
+impl IdleTracker {
+    /// Builds a fresh tracker with `last_activity` seeded to zero so the
+    /// very first command targeted at the node treats it as freshly
+    /// created rather than idle.
+    pub fn new() -> Self {
+        Self {
+            epoch: Instant::now(),
+            last_activity: AtomicU64::new(0),
+            in_flight: AtomicBool::new(false),
+            notify: TokioNotify::new(),
+        }
+    }
+
+    /// Records the current elapsed reading against `epoch` so the next
+    /// idle check sees the connection as fresh.
+    pub fn mark_activity(&self) {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        self.last_activity.store(now, Ordering::Relaxed);
+    }
+
+    /// Returns true when the gap since the last recorded activity has
+    /// grown beyond `idle_timeout`, so the caller should run the
+    /// pre-command validation.
+    pub fn should_validate(&self, idle_timeout: std::time::Duration) -> bool {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        let last = self.last_activity.load(Ordering::Relaxed);
+        now.saturating_sub(last) > idle_timeout.as_millis() as u64
+    }
+}
+
+impl Default for IdleTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// RAII guard for the winner section of the idle-timeout single-flight.
+///
+/// Constructed immediately after the CAS that flips `in_flight` to
+/// `true`. On drop it clears the latch with Release ordering and calls
+/// `notify_waiters()`, so a winner future that is cancelled mid PING
+/// or mid reconnect still releases the latch. A missed release wedges
+/// every later stale caller onto the loser path for the full wait
+/// deadline.
+pub struct IdleValidationGuard<'a> {
+    tracker: &'a IdleTracker,
+}
+
+impl<'a> IdleValidationGuard<'a> {
+    /// Takes ownership of the winner-side release. Callers construct
+    /// the guard immediately after their CAS succeeds; the release
+    /// runs on drop, so cancellation cannot leave the latch stuck.
+    pub fn new(tracker: &'a IdleTracker) -> Self {
+        Self { tracker }
+    }
+}
+
+impl Drop for IdleValidationGuard<'_> {
+    fn drop(&mut self) {
+        self.tracker.in_flight.store(false, Ordering::Release);
+        self.tracker.notify.notify_waiters();
+    }
+}
+
 /// A struct that encapsulates a network connection along with its associated IP address and AZ.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
@@ -40,7 +128,21 @@ pub struct ConnectionDetails<Connection> {
     pub ip: Option<IpAddr>,
     /// The availability zone associated with the connection
     pub az: Option<String>,
+    /// Shared per-node idle tracker used by the pre-command
+    /// idle-timeout validation. Every clone of `ConnectionDetails`
+    /// points at the same tracker, so there is exactly one
+    /// last-activity slot and one single-flight latch per node
+    /// address.
+    pub idle: Arc<IdleTracker>,
 }
+
+impl<Connection: PartialEq> PartialEq for ConnectionDetails<Connection> {
+    fn eq(&self, other: &Self) -> bool {
+        self.conn == other.conn && self.ip == other.ip && self.az == other.az
+    }
+}
+
+impl<Connection: Eq> Eq for ConnectionDetails<Connection> {}
 
 impl<Connection> ConnectionDetails<Connection>
 where
@@ -54,6 +156,7 @@ where
             conn: async { self.conn }.boxed().shared(),
             ip: self.ip,
             az: self.az,
+            idle: self.idle,
         }
     }
 }
@@ -66,6 +169,7 @@ impl<Connection> From<(Connection, Option<IpAddr>, Option<String>)>
             conn: val.0,
             ip: val.1,
             az: val.2,
+            idle: Arc::new(IdleTracker::new()),
         }
     }
 }

@@ -87,6 +87,10 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
+    /// When set, the client validates the connection with a bounded PING
+    /// before sending the next command whenever the last-activity gap
+    /// exceeds this duration.
+    idle_timeout: Option<Duration>,
     /// Owns the background mTLS certificate reload task, when path-based reload is
     /// configured. Held here so the task lives for the client's lifetime and is
     /// shut down when the client is dropped.
@@ -223,6 +227,7 @@ impl StandaloneClient {
         );
 
         let connection_timeout = connection_request.get_connection_timeout();
+        let idle_timeout = connection_request.get_idle_timeout();
 
         let tcp_nodelay = connection_request.tcp_nodelay;
 
@@ -648,6 +653,7 @@ impl StandaloneClient {
                 nodes,
                 read_from,
                 read_only,
+                idle_timeout,
                 _cert_material_manager: cert_material_manager,
             }),
         })
@@ -835,14 +841,58 @@ impl StandaloneClient {
         }
     }
 
+    /// Acquires a multiplexed connection for the given
+    /// `ReconnectingConnection` and, when `idle_timeout` is enabled and
+    /// the connection has been idle beyond that window, probes it with a
+    /// bounded PING. On a slow or failed PING the connection is
+    /// discarded and a fresh transport is acquired before the caller
+    /// sends its real command, so a silently half-open flow does not
+    /// swallow the request. Callers use the returned connection.
+    async fn acquire_validated_connection(
+        reconnecting_connection: &ReconnectingConnection,
+        idle_timeout: Option<Duration>,
+    ) -> RedisResult<redis::aio::MultiplexedConnection> {
+        let mut connection = reconnecting_connection.get_connection().await?;
+
+        if let Some(idle) = idle_timeout
+            && reconnecting_connection.should_validate(idle)
+            && connection.is_idle()
+        {
+            match tokio::time::timeout(
+                super::IDLE_TIMEOUT_PING_DEADLINE,
+                connection.send_packed_command(&redis::cmd("PING")),
+            )
+            .await
+            {
+                Ok(Ok(_)) => reconnecting_connection.mark_activity(),
+                Ok(Err(_)) | Err(_) => {
+                    reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
+                    connection = reconnecting_connection.get_connection().await?;
+                }
+            }
+        }
+
+        Ok(connection)
+    }
+
     async fn send_request(
         cmd: &redis::Cmd,
         reconnecting_connection: &ReconnectingConnection,
+        idle_timeout: Option<Duration>,
     ) -> RedisResult<Value> {
         // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
-        let mut connection = reconnecting_connection.get_connection().await?;
+        let mut connection =
+            Self::acquire_validated_connection(reconnecting_connection, idle_timeout).await?;
+
+        // Snapshot the transport-activity counter so we can tell whether
+        // the command actually reached the socket. A client-side cache
+        // hit returns immediately without any writer or reader progress
+        // and must not refresh `last_activity`, otherwise a cache-heavy
+        // workload can suppress the idle PING while the underlying
+        // socket sits half-open.
+        let activity_before = connection.transport_activity();
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
@@ -850,7 +900,13 @@ impl StandaloneClient {
                 reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
-            _ => result,
+            Ok(value) => {
+                if connection.transport_activity() != activity_before {
+                    reconnecting_connection.mark_activity();
+                }
+                Ok(value)
+            }
+            other => other,
         }
     }
 
@@ -859,11 +915,12 @@ impl StandaloneClient {
         cmd: &redis::Cmd,
         response_policy: Option<ResponsePolicy>,
     ) -> RedisResult<Value> {
+        let idle_timeout = self.inner.idle_timeout;
         let requests = self
             .inner
             .nodes
             .iter()
-            .map(|node| Self::send_request(cmd, node));
+            .map(|node| Self::send_request(cmd, node, idle_timeout));
 
         // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
         match response_policy {
@@ -934,7 +991,7 @@ impl StandaloneClient {
         readonly: bool,
     ) -> RedisResult<Value> {
         let reconnecting_connection = self.get_connection(readonly).await;
-        Self::send_request(cmd, reconnecting_connection).await
+        Self::send_request(cmd, reconnecting_connection, self.inner.idle_timeout).await
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
@@ -965,7 +1022,9 @@ impl StandaloneClient {
         count: usize,
     ) -> RedisResult<Vec<Value>> {
         let reconnecting_connection = self.get_primary_connection();
-        let mut connection = reconnecting_connection.get_connection().await?;
+        let mut connection =
+            Self::acquire_validated_connection(reconnecting_connection, self.inner.idle_timeout)
+                .await?;
         let result = connection
             .send_packed_commands(pipeline, offset, count)
             .await;
@@ -978,7 +1037,11 @@ impl StandaloneClient {
                 reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
-            _ => result,
+            Ok(values) => {
+                reconnecting_connection.mark_activity();
+                Ok(values)
+            }
+            other => other,
         }
     }
 
