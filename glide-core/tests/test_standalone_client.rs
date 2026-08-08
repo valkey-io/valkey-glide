@@ -1648,4 +1648,58 @@ mod standalone_client_tests {
              baseline delta = {baseline_ping_delta}, idle delta = {idle_ping_delta}"
         );
     }
+
+    /// End-to-end assertion for the reconnect path. Uses the mock's
+    /// PING blackhole to simulate a silently half-open transport: the
+    /// first PING on the first socket is silently dropped and the
+    /// socket is shut down, then the blackhole self-clears. With
+    /// `idle_timeout` enabled the client detects that on the
+    /// pre-command probe, closes the dead flow, and reconnects. The
+    /// mock re-accepts on the same listener and serves the retried
+    /// command through the fresh transport, so the follow-up `GET`
+    /// must succeed.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_reconnects_and_serves_next_command() {
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        block_on_all(async {
+            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
+            req.idle_timeout = Some(100);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("client build with idle_timeout");
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+
+            // Half-open the first transport before the client's idle
+            // window elapses.
+            mock.set_ping_blackhole(true);
+
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            // Poll for a bounded window; the reconnect settles
+            // asynchronously and the constant-response table serves
+            // fresh handshakes. Add response for each attempt so the
+            // retried GET has a queued reply once the client picks up
+            // the fresh transport.
+            let mut succeeded = false;
+            for _ in 0..30 {
+                mock.add_response(&get_cmd, "$-1\r\n".to_string());
+                if let Ok(Value::Nil) = client.send_command(&get_cmd).await {
+                    succeeded = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            assert!(
+                succeeded,
+                "expected the follow-up command to succeed after idle_timeout drove a reconnect \
+                 through the mock's re-accepted socket"
+            );
+        });
+    }
 }

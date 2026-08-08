@@ -101,10 +101,15 @@ fn receive_and_respond_to_next_message(
         ping_count.fetch_add(1, Ordering::AcqRel);
     }
 
-    if ping_blackhole.load(Ordering::Acquire) && message.contains("PING") {
-        // Read and drop the PING, sending nothing back. The client's
-        // pre-command PING will time out on its bounded deadline.
-        return true;
+    if ping_blackhole.swap(false, Ordering::AcqRel) && message.contains("PING") {
+        // Read and drop the PING once, then clear the blackhole and
+        // shut down this socket. The client's pre-command PING will
+        // trip its bounded deadline, close the dead flow, and start a
+        // fresh reconnect. Subsequent PINGs (on the fresh socket) go
+        // through normally so the retried command sees a live
+        // transport.
+        let _ = socket.shutdown(std::net::Shutdown::Both);
+        return false;
     }
 
     let setinfo_count = message.matches("SETINFO").count();
@@ -182,23 +187,50 @@ impl ServerMock {
         let address_clone = address.clone();
         std::thread::spawn(move || {
             logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
-            let mut socket: StdTcpStream = listener.accept().unwrap().0;
-            let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
-            while receive_and_respond_to_next_message(
-                &mut receiver,
-                &mut socket,
-                &received_commands_clone,
-                &ping_count_clone,
-                &constant_responses,
-                &closing_signal_clone,
-                &ping_blackhole_clone,
-            ) {}
+            // Poll accept in a loop so a client-side reconnect can drop
+            // its current socket and immediately establish a replacement
+            // against the same listener. `accept()` on the underlying
+            // socket blocks by default, but the outer loop watches the
+            // closing signal so the thread exits cleanly on drop.
+            listener
+                .set_nonblocking(true)
+                .expect("set listener non-blocking");
 
-            // Terminate the connection
-            let _ = socket.shutdown(std::net::Shutdown::Both);
+            'accept: loop {
+                let mut socket = loop {
+                    if closing_signal_clone.is_set() {
+                        break 'accept;
+                    }
+                    match listener.accept() {
+                        Ok((sock, _)) => break sock,
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            continue;
+                        }
+                        Err(_) => break 'accept,
+                    }
+                };
+                let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
-            // Now notify exit completed
+                while receive_and_respond_to_next_message(
+                    &mut receiver,
+                    &mut socket,
+                    &received_commands_clone,
+                    &ping_count_clone,
+                    &constant_responses,
+                    &closing_signal_clone,
+                    &ping_blackhole_clone,
+                ) {}
+
+                // Terminate the current connection and go accept the
+                // next one. A well-behaved client that noticed the
+                // half-open flow reconnects to the same port and picks
+                // up the fresh handshake through the constant-response
+                // table.
+                let _ = socket.shutdown(std::net::Shutdown::Both);
+            }
+
             closing_completed_signal_clone.set();
 
             logger_core::log_info(
