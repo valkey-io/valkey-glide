@@ -7372,19 +7372,11 @@ mod cluster_async {
         );
     }
 
-    /// Regression test for the `idle_timeout` pre-command validation
-    /// hook on the async cluster client. Reproduces a silent half-open
-    /// TCP flow to one shard: PING requests targeted at the specific
-    /// already-open connections hang forever, mimicking a middlebox
-    /// that has evicted the idle flow without sending FIN or RST. Fresh
-    /// connections opened by the reconnect path get new IDs and still
-    /// respond normally. Under those conditions the transport looks
-    /// alive (is_closed stays false) and the existing periodic check
-    /// misses it. With `idle_timeout` set, the client must send a
-    /// bounded PING before its next command, spot the half-open flow,
-    /// drive an immediate reconnect, and complete the real command
-    /// against the fresh transport. The periodic check is pushed out
-    /// to an hour so this test's outcome depends only on the new hook.
+    /// With `idle_timeout` set, a silently half-open connection (PINGs
+    /// hang, `is_closed` stays false) must be detected on the
+    /// pre-command probe and replaced before the real command runs.
+    /// The periodic check is pinned to an hour so only the new hook
+    /// can drive the reconnect.
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_idle_timeout_detects_silent_half_open_before_next_command() {
@@ -7415,9 +7407,8 @@ mod cluster_async {
         assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
 
         let count_before = mock_connection_count(name);
-        // Blackhole PINGs to every connection open right now; fresh
-        // connections opened by the reconnect path get new IDs and
-        // still respond normally.
+        // Blackhole PINGs on the currently open IDs only; fresh
+        // connections from the reconnect path get new IDs.
         let currently_open_ids: Vec<usize> = (0..count_before).collect();
         let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
 
@@ -7457,19 +7448,10 @@ mod cluster_async {
         );
     }
 
-    /// Regression test for the `idle_timeout` pre-command hook on the
-    /// cluster-scan send path. `CmdArg::ClusterScan` dispatches through
-    /// `send_scan`, which is a separate code path from the single-command
-    /// and pipeline sends. Without the same per-address idle probe there,
-    /// a silently half-open transport lets a `SCAN` iteration hang until
-    /// the caller's outer timeout fires instead of driving an immediate
-    /// reconnect.
-    ///
-    /// The setup mirrors the single-command half-open test: blackhole
-    /// PINGs on every connection that is open when the test starts,
-    /// sleep past the idle window, then run one `cluster_scan` iteration.
-    /// The scan must succeed against a fresh transport and the total
-    /// connection count must have grown.
+    /// Same half-open scenario as the single-command test, but on the
+    /// `send_scan` path. Without the per-address probe here a SCAN
+    /// iteration would hang until the caller's outer timeout instead
+    /// of reconnecting.
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_idle_timeout_detects_silent_half_open_before_cluster_scan() {
@@ -7490,10 +7472,8 @@ mod cluster_async {
             name,
             move |cmd: &[u8], _port| {
                 respond_startup(name, cmd)?;
-                // The scan iteration expects a (cursor, keys) tuple.
-                // Returning cursor=0 with an empty key list is enough to
-                // finish the scan in one hop without exercising the retry
-                // path.
+                // cursor=0 with an empty key list finishes the scan in
+                // one hop without exercising the retry path.
                 if contains_slice(cmd, b"SCAN") {
                     Err(Ok(Value::Array(vec![
                         Value::BulkString(b"0".to_vec().into()),
@@ -7550,19 +7530,10 @@ mod cluster_async {
         );
     }
 
-    /// Regression test for the in-band busy guard on the idle-timeout
-    /// pre-command probe. A connection that reports `is_idle() == false`
-    /// (mimicking an in-flight `BLPOP 0` or `XREAD BLOCK` whose reply
-    /// has not returned yet) must not receive a PING before the next
-    /// command. The PING would queue behind the blocking reply on the
-    /// wire, blow past `IDLE_TIMEOUT_PING_DEADLINE`, and force a
-    /// needless reconnect that disrupts the real command.
-    ///
-    /// The test blackholes PINGs on the initial connection IDs so that
-    /// if the hook mistakenly fired the follow-up command would refresh
-    /// the transport, then marks those same IDs as busy through
-    /// `MockBusyConnectionGuard`. With the guard in place the connection
-    /// count must stay flat across the idle window.
+    /// A busy connection (`is_idle() == false`) must not receive a
+    /// pre-command PING. The blackhole would force a reconnect if the
+    /// hook mistakenly fired; with the busy guard the connection count
+    /// must stay flat across the idle window.
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_idle_timeout_skips_probe_when_connection_is_busy() {
@@ -7593,11 +7564,10 @@ mod cluster_async {
         assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
 
         let count_before = mock_connection_count(name);
-        // Blackhole PINGs to the currently open connections so any
-        // stray probe would time out and drive a reconnect...
+        // Blackhole PINGs on the open IDs and mark them busy: if the
+        // hook ran, the probe would time out and force a reconnect.
         let currently_open_ids: Vec<usize> = (0..count_before).collect();
         let _blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids.clone());
-        // ...but also mark them busy so the hook is expected to skip.
         let _busy_guard = MockBusyConnectionGuard::new(currently_open_ids);
 
         runtime.block_on(async {
@@ -7624,13 +7594,9 @@ mod cluster_async {
         );
     }
 
-    /// Regression for the idle-timeout single-flight winner leaking
-    /// the latch on cancellation. Prior to the RAII guard the winner
-    /// cleared `in_flight` and notified waiters explicitly at the end
-    /// of the block, so a future dropped mid PING or mid reconnect
-    /// (for example when Client::send_command's outer request timeout
-    /// fires) skipped both steps and every later stale caller took
-    /// the loser path and waited the full validation deadline.
+    /// Dropping `IdleValidationGuard` must clear `in_flight`, or a
+    /// cancelled winner leaves every stale caller stuck on the loser
+    /// wait deadline.
     #[test]
     fn test_idle_validation_guard_releases_latch_on_drop() {
         use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
@@ -7663,11 +7629,8 @@ mod cluster_async {
         );
     }
 
-    /// Cancellation-shaped test: build a `Notified` future the way
-    /// the loser path does, drop the winner guard, and confirm the
-    /// waiter is woken. Proves the guard's drop also fires
-    /// `notify_waiters`, so a cancelled winner does not park loser
-    /// tasks for the full wait deadline.
+    /// Dropping the guard must also wake `notify` waiters, or a
+    /// cancelled winner parks loser tasks for the full wait deadline.
     #[test]
     fn test_idle_validation_guard_notifies_waiters_on_drop() {
         use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};

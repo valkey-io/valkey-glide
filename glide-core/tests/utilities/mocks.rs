@@ -24,16 +24,13 @@ pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
-    /// Total PINGs seen on the socket, whether answered from the
-    /// constant-response table or dropped by the blackhole.
+    /// Total PINGs seen on the socket, answered or blackholed.
     ping_count: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
     closing_completed_signal: Arc<ManualResetEvent>,
-    /// When set, PING requests received on the socket are read but not
-    /// answered. Reproduces a silent half-open flow where the transport
-    /// still accepts writes but the read half never delivers a
-    /// response. Used by the idle_timeout integration test.
+    /// While set, incoming PINGs are read but not answered so the
+    /// idle_timeout probe hits its deadline.
     ping_blackhole: Arc<AtomicBool>,
 }
 
@@ -102,12 +99,9 @@ fn receive_and_respond_to_next_message(
     }
 
     if ping_blackhole.swap(false, Ordering::AcqRel) && message.contains("PING") {
-        // Read and drop the PING once, then clear the blackhole and
-        // shut down this socket. The client's pre-command PING will
-        // trip its bounded deadline, close the dead flow, and start a
-        // fresh reconnect. Subsequent PINGs (on the fresh socket) go
-        // through normally so the retried command sees a live
-        // transport.
+        // Drop the PING and shut this socket so the client's probe
+        // hits its deadline; the blackhole self-clears so the retry
+        // path sees a live transport.
         let _ = socket.shutdown(std::net::Shutdown::Both);
         return false;
     }
@@ -188,11 +182,10 @@ impl ServerMock {
         std::thread::spawn(move || {
             logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
 
-            // Poll accept in a loop so a client-side reconnect can drop
-            // its current socket and immediately establish a replacement
-            // against the same listener. `accept()` on the underlying
-            // socket blocks by default, but the outer loop watches the
-            // closing signal so the thread exits cleanly on drop.
+            // Non-blocking accept so a client-side reconnect finds a
+            // fresh accepter waiting on the same listener; the outer
+            // loop watches the closing signal so the thread exits on
+            // drop.
             listener
                 .set_nonblocking(true)
                 .expect("set listener non-blocking");
@@ -223,11 +216,7 @@ impl ServerMock {
                     &ping_blackhole_clone,
                 ) {}
 
-                // Terminate the current connection and go accept the
-                // next one. A well-behaved client that noticed the
-                // half-open flow reconnects to the same port and picks
-                // up the fresh handshake through the constant-response
-                // table.
+                // Close the current connection and go back to accepting.
                 let _ = socket.shutdown(std::net::Shutdown::Both);
             }
 
@@ -251,27 +240,19 @@ impl ServerMock {
         }
     }
 
-    /// Enable or disable the PING blackhole. When enabled, any PING
-    /// received on the socket is read but silently dropped so the
-    /// client's pre-command PING times out on its bounded deadline.
-    ///
-    /// A live server always shuts a closed socket by sending FIN or
-    /// RST, which the client sees as end-of-stream and turns into a
-    /// clean reconnect. The half-open middlebox scenario we need to
-    /// reproduce for idle_timeout looks nothing like that: writes keep
-    /// succeeding and reads never surface a hangup, so is_closed()
-    /// stays false and only a bounded PING with no reply exposes the
-    /// dead flow. There is no portable way to force that shape on a
-    /// real redis-server, which is why the mock keeps this
-    /// blackhole. Real-server coverage of the non-half-open reconnect
-    /// path lives alongside the idle_timeout tests.
+    /// Enables the PING blackhole: PINGs are read and silently
+    /// dropped so the client's pre-command probe hits its deadline.
+    /// A live redis-server always sends FIN or RST when a socket
+    /// closes, so is_closed() flips and the client reconnects
+    /// cleanly. There is no portable way to force a genuinely
+    /// half-open flow from a real server, which is why this mock
+    /// keeps the blackhole.
     pub fn set_ping_blackhole(&self, blackhole: bool) {
         self.ping_blackhole.store(blackhole, Ordering::Release);
     }
 
-    /// Total number of PING messages seen on the socket, including any
-    /// that were dropped by the blackhole. Useful for asserting the
-    /// pre-command validation fired.
+    /// Total PING messages seen on the socket, including any dropped
+    /// by the blackhole.
     pub fn get_ping_count(&self) -> u16 {
         self.ping_count.load(Ordering::Acquire)
     }

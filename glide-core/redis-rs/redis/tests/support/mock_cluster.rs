@@ -96,30 +96,18 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
     MOCK_CONN_BEHAVIORS.write().unwrap()
 }
 
-/// Ports whose async PING requests must never resolve. Reproduces a silent
-/// half-open TCP flow: the transport looks alive but any read on it stays
-/// pending forever. The set is process-global so any test that flips a port
-/// on must clear it before returning, otherwise sibling tests reusing the
-/// same port hang. Callers should acquire an [`AsyncPingBlackholeGuard`]
-/// rather than toggling the raw setter, so that a panic or early return also
-/// clears the port on unwind.
-static ASYNC_PING_BLACKHOLE_PORTS: Lazy<RwLock<std::collections::HashSet<u16>>> =
-    Lazy::new(Default::default);
-
-/// Connection IDs whose async PINGs must never resolve. Lets a test
-/// blackhole only the specific already-open connection (the one about
-/// to be validated) without also blackholing the fresh connections the
-/// reconnect path opens through the same port.
+/// Connection IDs whose async PINGs must never resolve. Reproduces a
+/// silent half-open flow on the specific open connection without also
+/// affecting fresh connections opened by the reconnect path.
 static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
     Lazy::new(Default::default);
 
-/// Connection IDs that should report `is_idle() == false`. Lets a test
-/// simulate a specific in-band blocking command on one connection so
-/// the pre-command idle-timeout hook is expected to skip its PING.
+/// Connection IDs that report `is_idle() == false`, simulating an
+/// in-band blocking command so the idle-timeout hook must skip its PING.
 static ASYNC_BUSY_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> = Lazy::new(Default::default);
 
-/// RAII guard that marks the given connection IDs as busy for the
-/// lifetime of the guard so `is_idle()` returns `false` for them.
+/// RAII guard that marks the given connection IDs as busy for its
+/// lifetime so `is_idle()` returns `false` for them.
 #[must_use = "the busy flag is only set while the guard is held; bind it to a name"]
 pub struct MockBusyConnectionGuard {
     ids: Vec<usize>,
@@ -150,41 +138,10 @@ fn is_mock_busy(id: usize) -> bool {
     ASYNC_BUSY_IDS.read().unwrap().contains(&id)
 }
 
-fn set_async_ping_blackhole_raw(port: u16, blackhole: bool) {
-    let mut guard = ASYNC_PING_BLACKHOLE_PORTS.write().unwrap();
-    if blackhole {
-        guard.insert(port);
-    } else {
-        guard.remove(&port);
-    }
-}
-
-/// RAII guard that installs a PING blackhole on construction and clears it
-/// on drop, including during a panic-driven unwind. Hold the guard for the
-/// entire region that needs the blackhole; do not toggle the state manually.
-#[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
-pub struct AsyncPingBlackholeGuard {
-    port: u16,
-}
-
-impl AsyncPingBlackholeGuard {
-    pub fn new(port: u16) -> Self {
-        set_async_ping_blackhole_raw(port, true);
-        AsyncPingBlackholeGuard { port }
-    }
-}
-
-impl Drop for AsyncPingBlackholeGuard {
-    fn drop(&mut self) {
-        set_async_ping_blackhole_raw(self.port, false);
-    }
-}
-
-/// RAII guard that blackholes async PINGs for the specific connection
-/// IDs it was created with. Fresh connections opened after
-/// construction (which will have new IDs) still respond normally, so
-/// the reconnect path can complete while the original connection is
-/// silently half-open.
+/// RAII guard that blackholes async PINGs for the given connection IDs
+/// for its lifetime. Fresh connections opened later get new IDs and
+/// still respond, so the reconnect path can complete while the original
+/// connection is silently half-open.
 #[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
 pub struct AsyncPingBlackholeByIdGuard {
     ids: Vec<usize>,
@@ -211,16 +168,12 @@ impl Drop for AsyncPingBlackholeByIdGuard {
     }
 }
 
-fn async_ping_blackholed(port: u16) -> bool {
-    ASYNC_PING_BLACKHOLE_PORTS.read().unwrap().contains(&port)
-}
-
 fn async_ping_blackholed_by_id(id: usize) -> bool {
     ASYNC_PING_BLACKHOLE_IDS.read().unwrap().contains(&id)
 }
 
-/// Number of async connections opened against a given mock cluster since it
-/// was registered. Tests use this to detect that the reconnect path fired.
+/// Number of async connections opened against the named mock cluster
+/// since it was registered. Tests use this to detect a reconnect.
 pub fn mock_connection_count(name: &str) -> usize {
     MOCK_CONN_BEHAVIORS
         .read()
@@ -484,9 +437,7 @@ pub fn respond_startup_with_config(
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
         let packed = cmd.get_packed_command();
-        if contains_slice(&packed, b"PING")
-            && (async_ping_blackholed(self.port) || async_ping_blackholed_by_id(self.id))
-        {
+        if contains_slice(&packed, b"PING") && async_ping_blackholed_by_id(self.id) {
             return Box::pin(future::pending());
         }
         Box::pin(future::ready(

@@ -1514,28 +1514,31 @@ mod standalone_client_tests {
         });
     }
 
-    /// End-to-end proof that the pre-command idle-timeout hook fires
-    /// against the standalone client: with `idle_timeout` set, the mock
-    /// sees at least one extra PING land on the socket before the
-    /// follow-up user command; without it, only the handshake PINGs
-    /// are seen. Uses two independent mock servers so each client's
-    /// state is isolated.
+    async fn build_idle_timeout_client(
+        addresses: &[redis::ConnectionAddr],
+        idle_timeout: Option<u32>,
+    ) -> StandaloneClient {
+        let mut req = create_connection_request(addresses, &Default::default());
+        req.idle_timeout = idle_timeout;
+        StandaloneClient::create_client(req.into(), None, None, None)
+            .await
+            .expect("client build")
+    }
+
+    /// With `idle_timeout` set, the mock must see at least one extra
+    /// PING before the follow-up command; without it, only handshake
+    /// PINGs land.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_idle_timeout_sends_ping_before_next_command() {
-        // Baseline: no idle_timeout.
         let baseline_mock = ServerMock::new(create_primary_responses());
         let baseline_addresses = baseline_mock.get_addresses();
 
+        // Returns PING count delta caused by the follow-up command
+        // (subtracting handshake-time PINGs, which vary between runs).
         let baseline_ping_count_after_cmd = block_on_all(async {
-            let mut req =
-                create_connection_request(baseline_addresses.as_slice(), &Default::default());
-            req.idle_timeout = None;
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("baseline client build");
-
+            let mut client = build_idle_timeout_client(&baseline_addresses, None).await;
             let baseline_after_handshake = baseline_mock.get_ping_count();
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
@@ -1544,25 +1547,16 @@ mod standalone_client_tests {
             baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
             let _ = client.send_command(&get_cmd).await;
 
-            // Return the delta so the assertion is not affected by
-            // handshake-time PINGs that vary between runs.
             baseline_mock
                 .get_ping_count()
                 .saturating_sub(baseline_after_handshake)
         });
 
-        // With idle_timeout=100ms and a 300ms sleep, the pre-command
-        // hook must send one extra PING before the follow-up GET.
         let mock = ServerMock::new(create_primary_responses());
         let addresses = mock.get_addresses();
 
         let idle_ping_count_after_cmd = block_on_all(async {
-            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
-            req.idle_timeout = Some(100);
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("idle client build");
-
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
             let idle_after_handshake = mock.get_ping_count();
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
@@ -1582,28 +1576,17 @@ mod standalone_client_tests {
         );
     }
 
-    /// Companion to `test_standalone_idle_timeout_sends_ping_before_next_command`
+    /// Same shape as `test_standalone_idle_timeout_sends_ping_before_next_command`
     /// but for `send_pipeline`, which reuses the same validate helper.
-    /// Without `idle_timeout` the mock sees only the handshake PINGs
-    /// around the pipeline; with `idle_timeout=100ms` and a 300ms
-    /// sleep, the pre-pipeline hook must send one extra PING before the
-    /// pipeline's commands hit the socket.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_idle_timeout_sends_ping_before_next_pipeline() {
-        // Baseline: no idle_timeout.
         let baseline_mock = ServerMock::new(create_primary_responses());
         let baseline_addresses = baseline_mock.get_addresses();
 
         let baseline_ping_delta = block_on_all(async {
-            let mut req =
-                create_connection_request(baseline_addresses.as_slice(), &Default::default());
-            req.idle_timeout = None;
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("baseline client build");
-
+            let mut client = build_idle_timeout_client(&baseline_addresses, None).await;
             let baseline_after_handshake = baseline_mock.get_ping_count();
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
@@ -1623,12 +1606,7 @@ mod standalone_client_tests {
         let addresses = mock.get_addresses();
 
         let idle_ping_delta = block_on_all(async {
-            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
-            req.idle_timeout = Some(100);
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("idle client build");
-
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
             let idle_after_handshake = mock.get_ping_count();
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
@@ -1649,15 +1627,10 @@ mod standalone_client_tests {
         );
     }
 
-    /// End-to-end assertion for the reconnect path. Uses the mock's
-    /// PING blackhole to simulate a silently half-open transport: the
-    /// first PING on the first socket is silently dropped and the
-    /// socket is shut down, then the blackhole self-clears. With
-    /// `idle_timeout` enabled the client detects that on the
-    /// pre-command probe, closes the dead flow, and reconnects. The
-    /// mock re-accepts on the same listener and serves the retried
-    /// command through the fresh transport, so the follow-up `GET`
-    /// must succeed.
+    /// The mock's PING blackhole simulates a silently half-open flow:
+    /// the first PING is dropped and the socket shut down. The client
+    /// must detect that on the pre-command probe, reconnect through
+    /// the mock's re-accept, and serve the follow-up GET.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
@@ -1666,26 +1639,17 @@ mod standalone_client_tests {
         let addresses = mock.get_addresses();
 
         block_on_all(async {
-            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
-            req.idle_timeout = Some(100);
-            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
-                .await
-                .expect("client build with idle_timeout");
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
 
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("k");
 
-            // Half-open the first transport before the client's idle
-            // window elapses.
             mock.set_ping_blackhole(true);
-
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
-            // Poll for a bounded window; the reconnect settles
-            // asynchronously and the constant-response table serves
-            // fresh handshakes. Add response for each attempt so the
-            // retried GET has a queued reply once the client picks up
-            // the fresh transport.
+            // The reconnect settles asynchronously, so poll for a
+            // bounded window. Queue a response per attempt so the
+            // retried GET has a reply on the fresh transport.
             let mut succeeded = false;
             for _ in 0..30 {
                 mock.add_response(&get_cmd, "$-1\r\n".to_string());
@@ -1703,22 +1667,11 @@ mod standalone_client_tests {
         });
     }
 
-    /// Regression for the client-side cache defeating idle_timeout.
-    ///
-    /// Before the transport-activity split, every successful
-    /// send_packed_command refreshed the ReconnectingConnection's
-    /// last_activity, including cache-served results that never
-    /// touched the socket. A workload whose reads all came from the
-    /// local cache indefinitely suppressed the pre-command PING while
-    /// the transport was actually idle.
-    ///
-    /// The test primes a cached GET on the real socket at T=0, then
-    /// issues a cache-hit GET before the idle window elapses (so no
-    /// pre-command PING fires). Under the buggy code the cache hit
-    /// still bumped last_activity forward, so the follow-up bypass
-    /// command right after the window would not see a stale timer and
-    /// would skip the PING. Under the fix the cache hit leaves the
-    /// timer frozen, and the follow-up command must run a PING first.
+    /// A client-side cache hit must not refresh `last_activity`, else
+    /// a cache-heavy workload silently suppresses the idle probe while
+    /// the socket sits idle. The test primes a cached GET, hits the
+    /// cache before the idle window elapses, then a bypass command
+    /// after the window must send the PING.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
@@ -1748,20 +1701,16 @@ mod standalone_client_tests {
             let first_get = client.send_command(&get_cmd).await.expect("first GET");
             assert_eq!(first_get, Value::BulkString(b"foo".to_vec().into()));
 
-            // Hit the cache while last_activity is still fresh. The
-            // pre-command hook does not fire (should_validate returns
-            // false), so under the buggy code the post-cmd
-            // mark_activity refreshes the timer to now even though
-            // nothing touched the socket. Under the fix the timer
-            // remains anchored at the first GET.
+            // Cache-hit GET while last_activity is still fresh: the
+            // probe skips, so `mark_activity` must not refresh the
+            // timer even though the send returned successfully.
             tokio::time::sleep(std::time::Duration::from_millis(80)).await;
             let cached_get = client.send_command(&get_cmd).await.expect("cached GET");
             assert_eq!(cached_get, Value::BulkString(b"foo".to_vec().into()));
 
-            // Now sleep just long enough that the total elapsed since
-            // the first GET exceeds idle_timeout, but the elapsed
-            // since the cached GET does not. In buggy code the
-            // pre-command PING is suppressed; in fixed code it fires.
+            // Sleep so total elapsed from the first GET exceeds the
+            // idle window; elapsed from the cache hit still does not.
+            // A correct implementation now sends the probe.
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
             let ping_before = mock.get_ping_count();
@@ -1780,14 +1729,9 @@ mod standalone_client_tests {
         });
     }
 
-    /// Companion real-server assertion for the reconnect path. Runs
-    /// against a live RedisServer so the whole idle_timeout flow
-    /// exercises a genuine socket, TCP handshake, and reconnect
-    /// (without middlebox-style half-open eviction, which the mock
-    /// covers separately). Restarts the server underneath the client
-    /// so the pre-command PING sees a broken transport and drives a
-    /// real reconnect and a real follow-up command against a fresh
-    /// server process.
+    /// Companion real-server assertion: bounce the server underneath
+    /// the client so the pre-command PING sees a broken transport and
+    /// the follow-up command must succeed against the fresh process.
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
@@ -1808,10 +1752,9 @@ mod standalone_client_tests {
             set_cmd.arg("SET").arg("k").arg("v");
             client.send_command(&set_cmd).await.expect("initial SET");
 
-            // Bounce the server so the underlying TCP flow is broken
-            // during the client's idle window. The next command must
-            // succeed once the client's pre-command validation drives
-            // a reconnect.
+            // Bounce the server so the TCP flow is broken during the
+            // client's idle window; the follow-up command must succeed
+            // through the pre-command validation reconnect.
             drop(server);
             let (sender, receiver) = tokio::sync::oneshot::channel();
             let address_clone = address.clone();
