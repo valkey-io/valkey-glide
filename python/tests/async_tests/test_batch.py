@@ -1719,8 +1719,8 @@ class TestBatch:
         )
         key = get_random_string(10)
         await glide_client.set(key, "value")
-        batch.migrate("invalid-host", 6379, key, 0, 5000)
-        batch.migrate("invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True))
+        batch.migrate("invalid-host", 6379, key, 0, 500)
+        batch.migrate("invalid-host", 6379, key, 0, 500, MigrateOptions(copy=True))
         result = await exec_batch(glide_client, batch, raise_on_error=False)
         assert result is not None
         assert isinstance(result[0], RequestError)
@@ -1730,7 +1730,7 @@ class TestBatch:
         if not cluster_mode:
             batch2 = Batch(is_atomic=False)
             with pytest.raises(ValueError):
-                batch2.migrate("invalid-host", 6379, [], 0, 5000)
+                batch2.migrate("invalid-host", 6379, [], 0, 500)
 
     @pytest.fixture(scope="class")
     def second_server(self, request):
