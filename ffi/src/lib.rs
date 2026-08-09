@@ -2631,7 +2631,17 @@ impl ResponseArena {
             }
         })
     }
-    fn return_to_pool(self) {
+    fn return_to_pool(mut self) {
+        // Drop the payload buffers and node tree NOW, not when this pool slot
+        // is next reused: `strings` owns the response payload bytes (e.g. the
+        // value of a large GET). The pool is thread-local and this runs on the
+        // consumer's thread (via `free_command_response` from language
+        // bindings), where `from_pool` never executes — a parked arena that
+        // kept its buffers would pin up to MAX_ARENA_POOL_SIZE full response
+        // payloads per thread indefinitely, leaking roughly one payload per
+        // command. Only the Vec allocations are worth recycling.
+        self.strings.clear();
+        self.nodes.clear();
         ARENA_POOL.with(|p| {
             let mut p = p.borrow_mut();
             if p.len() < MAX_ARENA_POOL_SIZE {
@@ -5673,5 +5683,59 @@ mod tests_push_notification_safety {
             process_push_notification(push_msg, counting_callback, 0);
         }
         assert_eq!(CALLBACK_INVOCATIONS.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[cfg(test)]
+mod tests_response_arena {
+    use super::*;
+
+    /// Regression test for the v2.5.0 per-response payload leak
+    /// (https://github.com/valkey-io/valkey-glide/issues/6740): freeing a
+    /// response arena parks it in the thread-local ARENA_POOL for reuse, but
+    /// the pool is populated on consumer threads where `from_pool` never
+    /// runs. If `return_to_pool` kept `strings` populated, every parked arena
+    /// would pin its full response payload (e.g. a multi-MB GET value)
+    /// indefinitely — leaking roughly one payload per command.
+    #[test]
+    fn free_response_arena_releases_payload_buffers() {
+        let payload_len = 1 << 20;
+        let value = Value::BulkString(vec![7u8; payload_len]);
+
+        let (root, arena_ptr) =
+            valkey_value_to_arena_response(value, None).expect("arena build failed");
+
+        // Read the response back the way a binding would.
+        unsafe {
+            let root_ref = &*root;
+            assert!(matches!(root_ref.response_type, ResponseType::String));
+            assert_eq!(root_ref.string_value_len as usize, payload_len);
+            let payload = std::slice::from_raw_parts(
+                root_ref.string_value as *const u8,
+                root_ref.string_value_len as usize,
+            );
+            assert_eq!(payload[0], 7u8);
+            assert_eq!(payload[payload_len - 1], 7u8);
+        }
+
+        unsafe { free_response_arena(arena_ptr) };
+
+        // Tests run on their own thread, so this thread's pool contains
+        // exactly the arenas parked by this test. The parked arena must have
+        // released its payload buffers and node tree.
+        ARENA_POOL.with(|p| {
+            let p = p.borrow();
+            assert!(!p.is_empty(), "freed arena should be parked for reuse");
+            for arena in p.iter() {
+                assert!(
+                    arena.strings.is_empty(),
+                    "parked arena must not retain response payload buffers"
+                );
+                assert!(
+                    arena.nodes.is_empty(),
+                    "parked arena must not retain its node tree"
+                );
+            }
+        });
     }
 }
