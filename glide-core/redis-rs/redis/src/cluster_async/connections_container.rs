@@ -34,31 +34,24 @@ macro_rules! count_connections {
 }
 
 /// Per-node coordination for the idle-timeout pre-command check.
-///
-/// The `last_activity` counter measures milliseconds elapsed since
-/// `epoch` at the point of the most recent successful command on this
-/// node. Callers read it, compare against the configured `idle_timeout`,
-/// and if the gap is exceeded, take turns running a bounded PING on the
-/// same connection. The `in_flight` boolean is a single-flight latch:
-/// the first task to flip it from false to true owns the PING and the
-/// eventual reconnect, and every other task that also observed the
-/// stale timestamp waits on `notify` until the winner completes.
+/// `last_activity` and `in_flight` together let concurrent commands
+/// share a single bounded PING per idle event: the first task to CAS
+/// `in_flight` runs the probe, the rest wait on `notify`.
 #[derive(Debug)]
 pub struct IdleTracker {
-    /// Monotonic reference point set at construction time.
+    /// Monotonic reference point captured at construction time.
     pub epoch: Instant,
-    /// Milliseconds elapsed since `epoch` at the last recorded activity.
+    /// Elapsed millis from `epoch` at the last successful activity.
     pub last_activity: AtomicU64,
-    /// Set to `true` while a task owns the pre-command PING for this node.
+    /// True while a task owns the pre-command PING for this node.
     pub in_flight: AtomicBool,
-    /// Notified when the single-flight winner releases `in_flight`.
+    /// Woken when the single-flight winner releases `in_flight`.
     pub notify: TokioNotify,
 }
 
 impl IdleTracker {
-    /// Builds a fresh tracker with `last_activity` seeded to zero so the
-    /// very first command targeted at the node treats it as freshly
-    /// created rather than idle.
+    /// Seeds `last_activity` to zero so the first command on a new
+    /// node treats it as fresh rather than idle.
     pub fn new() -> Self {
         Self {
             epoch: Instant::now(),
@@ -68,16 +61,15 @@ impl IdleTracker {
         }
     }
 
-    /// Records the current elapsed reading against `epoch` so the next
-    /// idle check sees the connection as fresh.
+    /// Records the current elapsed reading so the next idle check
+    /// sees the connection as fresh.
     pub fn mark_activity(&self) {
         let now = self.epoch.elapsed().as_millis() as u64;
         self.last_activity.store(now, Ordering::Relaxed);
     }
 
-    /// Returns true when the gap since the last recorded activity has
-    /// grown beyond `idle_timeout`, so the caller should run the
-    /// pre-command validation.
+    /// True when the gap since the last recorded activity exceeds
+    /// `idle_timeout`.
     pub fn should_validate(&self, idle_timeout: std::time::Duration) -> bool {
         let now = self.epoch.elapsed().as_millis() as u64;
         let last = self.last_activity.load(Ordering::Relaxed);
@@ -92,21 +84,15 @@ impl Default for IdleTracker {
 }
 
 /// RAII guard for the winner section of the idle-timeout single-flight.
-///
-/// Constructed immediately after the CAS that flips `in_flight` to
-/// `true`. On drop it clears the latch with Release ordering and calls
-/// `notify_waiters()`, so a winner future that is cancelled mid PING
-/// or mid reconnect still releases the latch. A missed release wedges
-/// every later stale caller onto the loser path for the full wait
-/// deadline.
+/// On drop it clears `in_flight` and wakes waiters, so a winner future
+/// dropped mid PING still releases the latch. Skipping this leaves
+/// every stale caller stuck on the loser wait deadline.
 pub struct IdleValidationGuard<'a> {
     tracker: &'a IdleTracker,
 }
 
 impl<'a> IdleValidationGuard<'a> {
-    /// Takes ownership of the winner-side release. Callers construct
-    /// the guard immediately after their CAS succeeds; the release
-    /// runs on drop, so cancellation cannot leave the latch stuck.
+    /// Constructs the guard; callers hold it for the winner section.
     pub fn new(tracker: &'a IdleTracker) -> Self {
         Self { tracker }
     }
@@ -128,11 +114,8 @@ pub struct ConnectionDetails<Connection> {
     pub ip: Option<IpAddr>,
     /// The availability zone associated with the connection
     pub az: Option<String>,
-    /// Shared per-node idle tracker used by the pre-command
-    /// idle-timeout validation. Every clone of `ConnectionDetails`
-    /// points at the same tracker, so there is exactly one
-    /// last-activity slot and one single-flight latch per node
-    /// address.
+    /// Shared per-node idle tracker. All clones of a `ConnectionDetails`
+    /// see the same tracker, so there is one latch per node address.
     pub idle: Arc<IdleTracker>,
 }
 

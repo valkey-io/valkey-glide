@@ -273,14 +273,10 @@ pub(crate) struct Pipeline<SinkItem> {
     /// response reading, so a response-only signal would freeze. See
     /// [`Self::send_recv`].
     progress: Arc<AtomicU64>,
-    /// Number of caller-visible requests that have been enqueued but
-    /// whose response has not yet been delivered. Incremented once a
-    /// request is accepted by the writer and decremented when its
-    /// response returns to the caller (success, error, or timeout).
-    /// The pre-command idle-timeout hook reads this to skip PING probes
-    /// on connections that currently carry an in-flight command such as
-    /// `BLPOP 0` or `XREAD BLOCK`, whose ordered reply would otherwise
-    /// be blocked behind the probe.
+    /// Count of caller-visible requests accepted by the writer whose
+    /// response has not yet returned. The idle-timeout hook reads this
+    /// to skip a PING probe when a blocking reply would queue ahead of
+    /// it, such as while `BLPOP 0` is still pending.
     in_flight_count: Arc<AtomicUsize>,
 }
 
@@ -911,10 +907,9 @@ where
                 }
             },
         };
-        // Count this request as in-flight from the moment the writer
-        // accepts it until the caller has its response. The RAII guard
-        // decrements on every exit path, including timeouts and panics,
-        // so the count cannot drift over the lifetime of the connection.
+        // Count the request as in-flight until the caller has its
+        // response. The RAII guard decrements on every exit path so the
+        // count cannot drift after a timeout or panic.
         struct InFlightGuard(Arc<AtomicUsize>);
         impl Drop for InFlightGuard {
             fn drop(&mut self) {
@@ -989,22 +984,15 @@ where
         self.is_stream_closed.load(Ordering::Relaxed)
     }
 
-    /// Returns `true` when the writer has no caller-visible request
-    /// currently awaiting a response. Callers such as the idle-timeout
-    /// hook use this to skip a PING probe against a connection that is
-    /// already carrying an ordered in-flight command (for example a
-    /// blocking `BLPOP 0` or `XREAD BLOCK`), whose reply would
-    /// otherwise be forced to wait behind the probe.
+    /// True when no caller-visible request is currently awaiting a
+    /// response. See the `ConnectionLike::is_idle` docstring.
     pub fn is_idle(&self) -> bool {
         self.in_flight_count.load(Ordering::Acquire) == 0
     }
 
-    /// Reads the monotonic writer progress counter. Its value advances
-    /// only when the writer drains a request into the sink or when a
-    /// response arrives from the socket. Idle-timeout callers snapshot
-    /// this before and after `send_packed_command` to distinguish a
-    /// cache hit (no change) from a request that actually touched the
-    /// network (counter advanced).
+    /// Snapshot of the writer progress counter, which advances only on
+    /// real socket I/O. Comparing snapshots across a call distinguishes
+    /// a cache hit from a round trip.
     pub fn transport_activity(&self) -> u64 {
         self.progress.load(Ordering::Relaxed)
     }
@@ -1127,9 +1115,9 @@ impl MultiplexedConnection {
         self.response_timeout = timeout;
     }
 
-    /// Snapshot of the underlying pipeline's transport-activity counter.
-    /// Advances only on real socket I/O, so callers can distinguish a
-    /// client-side cache hit from a network round trip.
+    /// Snapshot of the writer progress counter. Advances only on real
+    /// socket I/O, so callers can distinguish a cache hit from a
+    /// network round trip.
     pub fn transport_activity(&self) -> u64 {
         self.pipeline.transport_activity()
     }

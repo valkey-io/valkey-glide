@@ -695,26 +695,12 @@ where
     if let Some(conn_future) = core.connection_for_address(&address).await {
         let mut conn = conn_future.await;
 
-        // Route SCAN through the same per-address idle-timeout probe the
-        // single-command and pipeline paths use. Each iteration hits one
-        // node, so validation runs against the iteration's target rather
-        // than once for the whole scan. The `is_idle` gate keeps the
-        // probe from queueing behind an in-band blocking reply on the
-        // shared user connection.
+        // Each scan iteration hits one node, so the same per-address
+        // idle probe used by the single-command and pipeline paths
+        // applies here.
         let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
-        if let Some(idle_timeout) = idle_timeout {
-            if conn.is_idle() {
-                if let Some((_, refreshed)) = ClusterConnInner::<C>::validate_idle_connection(
-                    core.clone(),
-                    &address,
-                    idle_timeout,
-                )
-                .await
-                {
-                    conn = refreshed;
-                }
-            }
-        }
+        ClusterConnInner::<C>::apply_idle_timeout_check(&core, &address, &mut conn, idle_timeout)
+            .await;
 
         let mut scan_command = cmd("SCAN");
         scan_command.arg(scan_state.cursor);
@@ -728,25 +714,10 @@ where
             scan_command.arg("TYPE").arg(object_type.to_string());
         }
 
-        // Only refresh the activity marker when the reply came from the
-        // socket, mirroring the single-command path so cache-served
-        // replies do not silently suppress the next idle probe.
         let activity_before = conn.transport_activity();
         let result = conn.req_packed_command(&scan_command).await;
         if idle_timeout.is_some() && result.is_ok() {
-            let touched_socket = match (activity_before, conn.transport_activity()) {
-                (Some(before), Some(after)) => before != after,
-                _ => true,
-            };
-            if touched_socket {
-                if let Some(details) = core
-                    .conn_lock
-                    .read()
-                    .connection_details_for_address(&address)
-                {
-                    details.1.idle.mark_activity();
-                }
-            }
+            ClusterConnInner::<C>::mark_activity_if_touched(&core, &address, activity_before, &conn);
         }
         result
     } else {
