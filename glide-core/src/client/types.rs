@@ -32,10 +32,9 @@ pub struct ConnectionRequest {
     pub cluster_mode_enabled: bool,
     pub request_timeout: Option<u32>,
     pub connection_timeout: Option<u32>,
-    /// When set, the client validates the connection with a bounded PING
-    /// before its next command whenever the gap since that connection's
-    /// last successful activity exceeds this value in milliseconds. Zero
-    /// or unset disables the check.
+    /// Milliseconds of idleness past which the client validates the
+    /// connection with a bounded PING before its next command. `None`
+    /// or zero disables the check.
     pub idle_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
     pub periodic_checks: Option<PeriodicCheck>,
@@ -79,9 +78,7 @@ impl ConnectionRequest {
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
     }
 
-    /// Returns the idle-timeout duration when the option is enabled, or
-    /// `None` when it is disabled. Callers only run the pre-command
-    /// validation hook when this returns `Some`.
+    /// Idle-timeout duration if the option is enabled, else `None`.
     pub fn get_idle_timeout(&self) -> Option<Duration> {
         self.idle_timeout
             .filter(|v| *v > 0)

@@ -87,9 +87,8 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
-    /// When set, the client validates the connection with a bounded PING
-    /// before sending the next command whenever the last-activity gap
-    /// exceeds this duration.
+    /// Gap since last observed activity past which the client validates
+    /// a connection with a bounded PING before its next command.
     idle_timeout: Option<Duration>,
     /// Owns the background mTLS certificate reload task, when path-based reload is
     /// configured. Held here so the task lives for the client's lifetime and is
@@ -841,13 +840,10 @@ impl StandaloneClient {
         }
     }
 
-    /// Acquires a multiplexed connection for the given
-    /// `ReconnectingConnection` and, when `idle_timeout` is enabled and
-    /// the connection has been idle beyond that window, probes it with a
-    /// bounded PING. On a slow or failed PING the connection is
-    /// discarded and a fresh transport is acquired before the caller
-    /// sends its real command, so a silently half-open flow does not
-    /// swallow the request. Callers use the returned connection.
+    /// Returns a live connection, probing with a bounded PING first
+    /// when the idle window has elapsed. A slow or failed PING drops
+    /// the connection and returns a fresh transport so a half-open
+    /// flow cannot swallow the caller's real command.
     async fn acquire_validated_connection(
         reconnecting_connection: &ReconnectingConnection,
         idle_timeout: Option<Duration>,
@@ -880,18 +876,13 @@ impl StandaloneClient {
         reconnecting_connection: &ReconnectingConnection,
         idle_timeout: Option<Duration>,
     ) -> RedisResult<Value> {
-        // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
         let mut connection =
             Self::acquire_validated_connection(reconnecting_connection, idle_timeout).await?;
 
-        // Snapshot the transport-activity counter so we can tell whether
-        // the command actually reached the socket. A client-side cache
-        // hit returns immediately without any writer or reader progress
-        // and must not refresh `last_activity`, otherwise a cache-heavy
-        // workload can suppress the idle PING while the underlying
-        // socket sits half-open.
+        // A client-side cache hit returns without any writer or reader
+        // progress; only refresh `last_activity` when the counter moves.
         let activity_before = connection.transport_activity();
         let result = connection.send_packed_command(cmd).await;
         match result {

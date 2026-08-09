@@ -148,10 +148,9 @@ message ConnectionRequest {
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
     optional uint32 recovery_requests_queue_size = 34;
-    // When set, the client validates the connection with a bounded PING
-    // before its next command whenever the gap since the last successful
-    // activity on that connection exceeds this value in milliseconds.
-    // Zero or unset disables the check.
+    // Milliseconds of idleness past which the client validates the
+    // connection with a bounded PING before its next command. Zero or
+    // unset disables the check.
     optional uint32 idle_timeout = 35;
 }
 
