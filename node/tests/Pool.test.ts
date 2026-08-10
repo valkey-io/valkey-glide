@@ -378,27 +378,30 @@ describe("ClientPool", () => {
                 await waitForIdle(pool, 2);
                 const key = makeKey(false, "blpop-custom");
 
-                // BLPOP via customCommand — previously invisible to TS Proxy
-                const blockingPromise = pool.borrow(async (client) => {
-                    return await (client as GlideClient).customCommand([
-                        "BLPOP",
-                        key,
-                        "3", // 3 second server timeout
-                    ]);
-                });
+                try {
+                    // BLPOP via customCommand — previously invisible to TS Proxy
+                    const blockingPromise = pool.borrow(async (client) => {
+                        return await (client as GlideClient).customCommand([
+                            "BLPOP",
+                            key,
+                            "3", // 3 second server timeout
+                        ]);
+                    });
 
-                // Wait longer than abandon timeout
-                await new Promise((r) => setTimeout(r, 1500));
+                    // Wait longer than abandon timeout
+                    await new Promise((r) => setTimeout(r, 1500));
 
-                // Unblock by pushing a value from another client
-                await pool.borrow(async (client) => {
-                    await client.lpush(key, ["done"]);
-                });
+                    // Unblock by pushing a value from another client
+                    await pool.borrow(async (client) => {
+                        await client.lpush(key, ["done"]);
+                    });
 
-                // Blocking command should complete successfully (not be killed)
-                const result = await blockingPromise;
-                expect(result).not.toBeNull();
-                pool.close();
+                    // Blocking command should complete successfully (not be killed)
+                    const result = await blockingPromise;
+                    expect(result).toEqual([key, "done"]);
+                } finally {
+                    pool.close();
+                }
             },
             TIMEOUT,
         );
@@ -413,21 +416,24 @@ describe("ClientPool", () => {
                 });
                 await waitForIdle(pool, 1);
 
-                // Acquire and hold without sending commands
-                const client = await pool.acquire();
-                const originalId = client.getClientId();
-                expect(pool.activeCount).toBe(1);
+                try {
+                    // Acquire and hold without sending commands
+                    const client = await pool.acquire();
+                    const originalId = client.getClientId();
+                    expect(pool.activeCount).toBe(1);
 
-                // Wait for abandon monitor to discard (timeout + scan interval)
-                await new Promise((r) => setTimeout(r, 2000));
+                    // Wait for abandon monitor to discard (timeout + scan interval)
+                    await new Promise((r) => setTimeout(r, 2000));
 
-                // Trigger drain by acquiring again
-                const client2 = await pool.acquire();
+                    // Trigger drain by acquiring again
+                    const client2 = await pool.acquire();
 
-                // Original client should have been discarded
-                expect(client2.getClientId()).not.toBe(originalId);
-                await pool.release(client2);
-                pool.close();
+                    // Original client should have been discarded
+                    expect(client2.getClientId()).not.toBe(originalId);
+                    await pool.release(client2);
+                } finally {
+                    pool.close();
+                }
             },
             TIMEOUT,
         );

@@ -1305,6 +1305,10 @@ impl GlideClientHandle {
         if send_failed {
             // Channel closed - client was shut down
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            // Release blocking mark — the worker will never run
+            if let Some(client_id) = pool_blocking_ids {
+                pool::mark_blocking(client_id, false);
+            }
             mark_span_error(&command_span_for_error, "Client connection closed");
             let response = CommandResponse {
                 callback_idx,
@@ -1651,6 +1655,11 @@ impl GlideClientHandle {
             object_type,
             allow_non_covered_slots: allow_non_covered_slots.unwrap_or(false),
         });
+
+        // Pool abandon detection: refresh activity for scan
+        if pool::get_client_pool_map().contains_key(&self.client_id) {
+            pool::refresh_activity(self.client_id);
+        }
 
         let send_failed = match &self.command_tx {
             Some(tx) => tx.send(msg).is_err(),

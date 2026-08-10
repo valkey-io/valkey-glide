@@ -5,7 +5,7 @@
 //! Uses the same deferred Promise pattern as GlideClientHandle for async work:
 //! synchronous N-API call spawns work on a runtime, resolves/rejects via Deferred.
 //!
-//! Note: #[napi] exports are invisible to the Rust compiler's usage analysis,
+//! Note: `#[napi]` exports are invisible to the Rust compiler's usage analysis,
 //! so dead_code warnings are suppressed at module level.
 
 #![allow(dead_code)]
@@ -129,6 +129,9 @@ static MONITOR_HANDLES: LazyLock<DashMap<u64, tokio::task::JoinHandle<()>>> =
 /// abandon_timeout_ms of 0 disables the monitor.
 #[napi]
 pub fn pool_start_monitor(pool_id: i64, abandon_timeout_ms: i64) {
+    if abandon_timeout_ms <= 0 {
+        return; // 0 = disabled, negative = invalid
+    }
     start_node_abandon_monitor(
         pool_id as u64,
         Duration::from_millis(abandon_timeout_ms as u64),
@@ -138,9 +141,12 @@ pub fn pool_start_monitor(pool_id: i64, abandon_timeout_ms: i64) {
 /// Stop and abort the abandon monitor for a pool. Called by TS on close().
 #[napi]
 pub fn pool_stop_monitor(pool_id: i64) {
-    if let Some((_, handle)) = MONITOR_HANDLES.remove(&(pool_id as u64)) {
+    let pid = pool_id as u64;
+    if let Some((_, handle)) = MONITOR_HANDLES.remove(&pid) {
         handle.abort();
     }
+    // Drop any undrained discard records for this pool
+    DISCARDED_CLIENTS.retain(|_, owner| *owner != pid);
 }
 
 /// Start the Node-specific abandon monitor for a pool.
@@ -211,14 +217,10 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
                 }
             }
 
-            // Stop if no more clients for this pool
-            if !CLIENT_POOL_MAP.iter().any(|e| *e.value() == pool_id) {
-                break;
-            }
+            // Do not self-terminate: clients are registered lazily on acquire,
+            // so an empty pool is a normal transient state. The monitor is
+            // aborted by pool_stop_monitor() when the pool closes.
         }
-
-        // Clean up handle on self-termination
-        MONITOR_HANDLES.remove(&pool_id);
     });
 
     MONITOR_HANDLES.insert(pool_id, handle);
