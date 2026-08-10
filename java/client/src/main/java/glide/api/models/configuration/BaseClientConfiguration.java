@@ -73,10 +73,18 @@ public abstract class BaseClientConfiguration {
     private final String clientName;
 
     /**
-     * Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
-     * during connection establishment.
+     * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
+     * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
+     * present, it is appended to the effective library name in parentheses.
      */
     private final String libName;
+
+    /**
+     * Optional attribution tag appended to the effective library name in parentheses. For example,
+     * {@code GlideJava(my-framework:1.2.3)}. The tag must not contain Unicode whitespace. If null or
+     * empty, no tag is appended.
+     */
+    private final String clientInfoTag;
 
     /**
      * Serialization protocol to be used with the server. If not set, {@link ProtocolVersion#RESP3}
@@ -189,6 +197,35 @@ public abstract class BaseClientConfiguration {
      * @see CompressionConfiguration
      */
     private final CompressionConfiguration compressionConfiguration;
+
+    /** Abstract builder class for {@link BaseClientConfiguration}. */
+    public abstract static class BaseClientConfigurationBuilder<
+            C extends BaseClientConfiguration, B extends BaseClientConfigurationBuilder<C, B>> {
+
+        /**
+         * Sets the optional client information tag.
+         *
+         * @param clientInfoTag attribution tag; null or empty means absent
+         * @return this builder
+         * @throws IllegalArgumentException if the tag contains Unicode whitespace
+         */
+        public B clientInfoTag(String clientInfoTag) {
+            if (clientInfoTag != null
+                    && clientInfoTag
+                            .codePoints()
+                            .anyMatch(BaseClientConfigurationBuilder::isUnicodeWhitespace)) {
+                throw new IllegalArgumentException("clientInfoTag must not contain whitespace characters");
+            }
+            this.clientInfoTag = clientInfoTag;
+            return self();
+        }
+
+        private static boolean isUnicodeWhitespace(int codePoint) {
+            return Character.isWhitespace(codePoint)
+                    || Character.isSpaceChar(codePoint)
+                    || codePoint == 0x0085;
+        }
+    }
 
     public List<NodeAddress> getAddresses() {
         return Collections.unmodifiableList(new ArrayList<>(addresses));

@@ -339,11 +339,7 @@ public class ConnectionManager {
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
                         }
-                        if (configuration.getLibName() != null) {
-                            requestBuilder.setLibName(configuration.getLibName());
-                        } else {
-                            requestBuilder.setLibName(DEFAULT_LIB_NAME);
-                        }
+                        requestBuilder.setLibName(composeLibName(configuration));
                         requestBuilder.setLazyConnect(configuration.isLazyConnect());
 
                         // Set database ID
@@ -659,6 +655,19 @@ public class ConnectionManager {
             throw new IllegalStateException("Client is closed");
         }
         return GlideNativeBridge.getClientInfo(nativeClientHandle);
+    }
+
+    static String composeLibName(BaseClientConfiguration configuration) {
+        String baseName = configuration.getLibName();
+        if (baseName == null || baseName.isEmpty()) {
+            baseName = DEFAULT_LIB_NAME;
+        }
+
+        String clientInfoTag = configuration.getClientInfoTag();
+        if (clientInfoTag == null || clientInfoTag.isEmpty()) {
+            return baseName;
+        }
+        return baseName + "(" + clientInfoTag + ")";
     }
 
     private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
