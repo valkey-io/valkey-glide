@@ -54,6 +54,39 @@ public class BaseClientConfigurationTest {
     }
 
     @Test
+    public void testClientInfoTagDefault() {
+        TestClientConfiguration config = TestClientConfiguration.builder().build();
+        assertNull(config.getClientInfoTag());
+    }
+
+    @Test
+    public void testClientInfoTagIsInheritedByStandaloneAndClusterConfigurations() {
+        assertEquals(
+                "standalone-framework",
+                GlideClientConfiguration.builder()
+                        .clientInfoTag("standalone-framework")
+                        .build()
+                        .getClientInfoTag());
+        assertEquals(
+                "cluster-framework",
+                GlideClusterClientConfiguration.builder()
+                        .clientInfoTag("cluster-framework")
+                        .build()
+                        .getClientInfoTag());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"a b", "a\tb", "a\nb", "a\u0085b", "a\u00A0b", "a\u2007b", "a\u202Fb", "a\u3000b"})
+    public void testClientInfoTagRejectsWhitespace(String clientInfoTag) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
+        assertEquals("clientInfoTag must not contain whitespace characters", exception.getMessage());
+    }
+
+    @Test
     public void testDatabaseIdDefault() {
         // Test that databaseId defaults to null when not specified
         TestClientConfiguration config = TestClientConfiguration.builder().build();
