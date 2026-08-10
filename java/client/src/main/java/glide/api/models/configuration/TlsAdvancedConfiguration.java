@@ -52,8 +52,8 @@ import lombok.Getter;
 public class TlsAdvancedConfiguration {
 
     /**
-     * Largest value that fits in an unsigned 32-bit protobuf field. Reused by validators that need
-     * to bound a value to the uint32 wire range.
+     * Largest value that fits in an unsigned 32-bit protobuf field. Reused by validators that need to
+     * bound a value to the uint32 wire range.
      */
     public static final long MAX_UINT32 = 4294967295L;
 
@@ -239,8 +239,7 @@ public class TlsAdvancedConfiguration {
 
         // Cannot fire while the field is an Integer, whose max is below this bound. Kept
         // so the rule still holds if that type widens.
-        if (certReloadIntervalSeconds != null
-                && certReloadIntervalSeconds > MAX_UINT32) {
+        if (certReloadIntervalSeconds != null && certReloadIntervalSeconds > MAX_UINT32) {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` must be at most "
                             + MAX_UINT32

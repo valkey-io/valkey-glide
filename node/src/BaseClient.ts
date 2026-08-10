@@ -487,11 +487,7 @@ function validateReloadInterval(value: number | undefined): void {
         return;
     }
 
-    if (
-        !Number.isInteger(value) ||
-        value <= 0 ||
-        value > MAX_UINT32
-    ) {
+    if (!Number.isInteger(value) || value <= 0 || value > MAX_UINT32) {
         throw new ConfigurationError(
             `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_UINT32}.`,
         );
