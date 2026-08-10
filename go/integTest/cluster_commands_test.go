@@ -151,6 +151,33 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {
+	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
+
+	// Test clientInfoTag only (default lib name)
+	tagConfig := suite.defaultClusterClientConfig().
+		WithClientInfoTag("framework:1.2")
+	tagClient, err := suite.clusterClient(tagConfig)
+	require.NoError(suite.T(), err)
+
+	result, err := tagClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult := result.SingleValue().(string)
+	assert.Contains(suite.T(), strResult, "lib-name=GlideGo(framework:1.2)")
+
+	// Test combined libName + clientInfoTag
+	combinedConfig := suite.defaultClusterClientConfig().
+		WithLibName("custom-client").
+		WithClientInfoTag("framework:1.2")
+	combinedClient, err := suite.clusterClient(combinedConfig)
+	require.NoError(suite.T(), err)
+
+	result, err = combinedClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult = result.SingleValue().(string)
+	assert.Contains(suite.T(), strResult, "lib-name=custom-client(framework:1.2)")
+}
+
 func (suite *GlideTestSuite) TestClusterCustomCommandWithRoute_Info() {
 	client := suite.defaultClusterClient()
 	route := config.SimpleNodeRoute(config.AllPrimaries)

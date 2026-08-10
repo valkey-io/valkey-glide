@@ -1965,3 +1965,98 @@ func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_zero_disables_
 	assert.NotNil(t, result.RecoveryRequestsQueueSize)
 	assert.Equal(t, uint32(0), *result.RecoveryRequestsQueueSize) // 0 = disabled
 }
+
+// --- LibName and ClientInfoTag tests ---
+
+func TestClientConfiguration_WithLibName_default_notSet(t *testing.T) {
+	config := NewClientConfiguration()
+
+	result, err := config.toProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "", result.LibName)
+}
+
+func TestClientConfiguration_WithLibName_override(t *testing.T) {
+	config := NewClientConfiguration().
+		WithLibName("custom-client")
+
+	result, err := config.toProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "custom-client", result.LibName)
+}
+
+func TestClientConfiguration_WithClientInfoTag_alone(t *testing.T) {
+	config := NewClientConfiguration().
+		WithClientInfoTag("framework:1.2")
+
+	result, err := config.toProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "GlideGo(framework:1.2)", result.LibName)
+}
+
+func TestClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing.T) {
+	config := NewClientConfiguration().
+		WithLibName("custom-client").
+		WithClientInfoTag("framework:1.2")
+
+	result, err := config.toProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "custom-client(framework:1.2)", result.LibName)
+}
+
+func TestClientConfiguration_WithClientInfoTag_whitespace_panics(t *testing.T) {
+	assert.Panics(t, func() {
+		NewClientConfiguration().WithClientInfoTag("has space")
+	})
+	assert.Panics(t, func() {
+		NewClientConfiguration().WithClientInfoTag("has\ttab")
+	})
+	assert.Panics(t, func() {
+		NewClientConfiguration().WithClientInfoTag("has\nnewline")
+	})
+}
+
+func TestClusterClientConfiguration_WithLibName_default_notSet(t *testing.T) {
+	config := NewClusterClientConfiguration()
+
+	result, err := config.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "", result.LibName)
+}
+
+func TestClusterClientConfiguration_WithLibName_override(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithLibName("custom-cluster-client")
+
+	result, err := config.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "custom-cluster-client", result.LibName)
+}
+
+func TestClusterClientConfiguration_WithClientInfoTag_alone(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithClientInfoTag("my-app:3.0")
+
+	result, err := config.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "GlideGo(my-app:3.0)", result.LibName)
+}
+
+func TestClusterClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithLibName("custom-cluster-client").
+		WithClientInfoTag("my-app:3.0")
+
+	result, err := config.ToProtobuf()
+	require.NoError(t, err)
+	assert.Equal(t, "custom-cluster-client(my-app:3.0)", result.LibName)
+}
+
+func TestClusterClientConfiguration_WithClientInfoTag_whitespace_panics(t *testing.T) {
+	assert.Panics(t, func() {
+		NewClusterClientConfiguration().WithClientInfoTag("has space")
+	})
+	assert.Panics(t, func() {
+		NewClusterClientConfiguration().WithClientInfoTag("has\ttab")
+	})
+}
