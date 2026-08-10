@@ -229,7 +229,9 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
 
                 if should_discard {
                     // Remove from tracking and mark as discarded
-                    CLIENT_POOL_MAP.remove(&client_id);
+                    if CLIENT_POOL_MAP.remove(&client_id).is_some() {
+                        POOL_CLIENT_COUNT.fetch_sub(1, Ordering::Relaxed);
+                    }
                     CLIENT_ACTIVITY.remove(&client_id);
                     CLIENT_BLOCKING.remove(&client_id);
                     DISCARDED_CLIENTS.insert(client_id, pool_id);
