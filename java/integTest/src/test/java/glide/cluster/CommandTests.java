@@ -4318,8 +4318,13 @@ public class CommandTests {
     public void migrate_cluster_mode_basic() {
         // Note: This test verifies the command works in cluster mode
         // Full MIGRATE testing requires a second cluster which is complex to set up
+        // Use a generous requestTimeout because the MIGRATE command blocks server-side
+        // while resolving the destination host, and the default client timeout (250ms)
+        // can fire before the server responds under CI load (see #5728).
         GlideClusterClient client =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().requestTimeout(10000).build())
+                        .get();
 
         try {
             String key = "{key}:" + UUID.randomUUID();
@@ -4329,11 +4334,13 @@ public class CommandTests {
             assertEquals(OK, client.set(key, value).get());
 
             // Attempt to migrate to a non-existent destination
-            // This will fail but verifies the command is properly routed in cluster mode
+            // This will fail but verifies the command is properly routed in cluster mode.
+            // Use a short server-side timeout (500ms) since we only need DNS resolution
+            // to fail; a long timeout increases the chance of client-side timeout firing first.
             ExecutionException exception =
                     assertThrows(
                             ExecutionException.class,
-                            () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+                            () -> client.migrate("nonexistent.host", 6379, key, 0, 500).get());
 
             // The error should be about connection, not about the command being unsupported
             assertNotNull(exception.getCause(), "Exception should have a cause");
