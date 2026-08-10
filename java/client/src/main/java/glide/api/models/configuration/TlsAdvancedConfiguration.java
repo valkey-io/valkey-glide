@@ -51,8 +51,11 @@ import lombok.Getter;
                         + " instance")
 public class TlsAdvancedConfiguration {
 
-    /** Largest reload interval that fits in the protobuf uint32 seconds field. */
-    public static final long MAX_RELOAD_INTERVAL_SECONDS = 4294967295L;
+    /**
+     * Largest value that fits in an unsigned 32-bit protobuf field. Reused by validators that need
+     * to bound a value to the uint32 wire range.
+     */
+    public static final long MAX_UINT32 = 4294967295L;
 
     /**
      * Whether to bypass TLS certificate verification.
@@ -237,10 +240,10 @@ public class TlsAdvancedConfiguration {
         // Cannot fire while the field is an Integer, whose max is below this bound. Kept
         // so the rule still holds if that type widens.
         if (certReloadIntervalSeconds != null
-                && certReloadIntervalSeconds > MAX_RELOAD_INTERVAL_SECONDS) {
+                && certReloadIntervalSeconds > MAX_UINT32) {
             throw new ConfigurationError(
                     "`certReloadIntervalSeconds` must be at most "
-                            + MAX_RELOAD_INTERVAL_SECONDS
+                            + MAX_UINT32
                             + "; omit it (null) to defer to the GLIDE core's default cadence.");
         }
     }

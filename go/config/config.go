@@ -18,9 +18,9 @@ const (
 	DefaultPort = 6379
 )
 
-// MaxReloadIntervalSeconds is the largest reload interval that fits in the protobuf
-// uint32 seconds field.
-const MaxReloadIntervalSeconds = math.MaxUint32
+// MaxUint32 is the largest value that fits in an unsigned 32-bit protobuf field.
+// Reused by validators that need to bound a value to the uint32 wire range.
+const MaxUint32 = math.MaxUint32
 
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
@@ -1109,7 +1109,7 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 // The interval is sent as uint32 seconds. Sub-second values would round to zero
 // and silently fall back to the core default cadence, so they are rejected up
 // front. WithMutualTLSFromFiles also rejects a value whose whole seconds exceed
-// [MaxReloadIntervalSeconds].
+// [MaxUint32].
 func WithReloadInterval(d time.Duration) MutualTLSOption {
 	return reloadIntervalOption{interval: d}
 }
@@ -1201,10 +1201,10 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 				*settings.reloadInterval)
 		}
 		// A larger value will not fit in the uint32 seconds field.
-		if uint64(*settings.reloadInterval/time.Second) > MaxReloadIntervalSeconds {
+		if uint64(*settings.reloadInterval/time.Second) > MaxUint32 {
 			return nil, fmt.Errorf(
 				"WithMutualTLSFromFiles: reload interval must be at most %d seconds; got %v",
-				uint64(MaxReloadIntervalSeconds), *settings.reloadInterval)
+				uint64(MaxUint32), *settings.reloadInterval)
 		}
 		interval = *settings.reloadInterval
 	}

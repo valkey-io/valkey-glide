@@ -37,8 +37,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
 # (for example ``pathlib.Path``).
 StrPath = Union[str, os.PathLike[str]]
 
-# Largest value that fits in the uint32 ``cert_reload.interval_seconds`` field.
-MAX_RELOAD_INTERVAL_SECONDS = 2**32 - 1
+# Largest value that fits in an unsigned 32-bit protobuf field. Reused by
+# validators that need to bound a value to the uint32 wire range.
+MAX_UINT32 = 2**32 - 1
 
 
 class NodeAddress:
@@ -568,7 +569,7 @@ class TlsAdvancedConfiguration:
               and ``client_key_path`` raises ``ConfigurationError`` when the connection request
               is built.
 
-            - Must be a positive integer no greater than ``MAX_RELOAD_INTERVAL_SECONDS``.
+            - Must be a positive integer no greater than ``MAX_UINT32``.
               Values outside that range raise ``ConfigurationError`` when the connection
               request is built.
 
@@ -761,11 +762,11 @@ class AdvancedBaseClientConfiguration:
         # The core cannot catch these: it reads 0 as unset and never sees a value
         # too large for a uint32.
         if interval is not None and (
-            interval <= 0 or interval > MAX_RELOAD_INTERVAL_SECONDS
+            interval <= 0 or interval > MAX_UINT32
         ):
             raise ConfigurationError(
                 "cert_reload_interval_seconds must be a positive integer no greater "
-                f"than {MAX_RELOAD_INTERVAL_SECONDS}; got {interval}. Omit it to defer "
+                f"than {MAX_UINT32}; got {interval}. Omit it to defer "
                 "to the GLIDE core's default reload cadence."
             )
 

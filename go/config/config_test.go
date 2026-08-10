@@ -958,7 +958,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			certPath: testClientCertPath,
 			keyPath:  testClientKeyPath,
 			opts: []MutualTLSOption{
-				WithReloadInterval(MaxReloadIntervalSeconds * time.Second),
+				WithReloadInterval(MaxUint32 * time.Second),
 			},
 		},
 		{
@@ -967,11 +967,11 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			certPath: testClientCertPath,
 			keyPath:  testClientKeyPath,
 			opts: []MutualTLSOption{
-				WithReloadInterval((MaxReloadIntervalSeconds + 1) * time.Second),
+				WithReloadInterval((MaxUint32 + 1) * time.Second),
 			},
 			wantErrSubstr: fmt.Sprintf(
 				"WithMutualTLSFromFiles: reload interval must be at most %d seconds",
-				uint64(MaxReloadIntervalSeconds)),
+				uint64(MaxUint32)),
 		},
 	}
 

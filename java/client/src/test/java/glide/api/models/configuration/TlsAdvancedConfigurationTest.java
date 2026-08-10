@@ -333,7 +333,7 @@ public class TlsAdvancedConfigurationTest {
                         .build();
 
         assertEquals(Integer.MAX_VALUE, config.getCertReloadIntervalSeconds());
-        assertTrue(Integer.MAX_VALUE <= TlsAdvancedConfiguration.MAX_RELOAD_INTERVAL_SECONDS);
+        assertTrue(Integer.MAX_VALUE <= TlsAdvancedConfiguration.MAX_UINT32);
     }
 
     @Test

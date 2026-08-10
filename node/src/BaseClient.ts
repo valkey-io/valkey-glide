@@ -372,16 +372,16 @@ export type MutualTls =
       };
 
 /**
- * Maximum allowed value for {@link MutualTls.reloadIntervalSeconds}:
- * `4_294_967_295` (`2 ** 32 - 1`), the largest `uint32`. The corresponding
- * protobuf field is `uint32`, and protobufjs casts through `value >>> 0`
+ * Largest value that fits in an unsigned 32-bit protobuf field:
+ * `4_294_967_295` (`2 ** 32 - 1`). Reused by validators that need to bound
+ * a value to the uint32 wire range. protobufjs casts through `value >>> 0`
  * when the request is built, so a larger value would silently truncate
  * before reaching the core. Rejecting up front keeps the user's requested
- * cadence visible instead of quietly changing it.
+ * value visible instead of quietly changing it.
  *
  * @internal
  */
-const MAX_RELOAD_INTERVAL_SECONDS = 2 ** 32 - 1;
+const MAX_UINT32 = 2 ** 32 - 1;
 
 /**
  * Reads a PEM file for TLS configuration. Shared by
@@ -490,10 +490,10 @@ function validateReloadInterval(value: number | undefined): void {
     if (
         !Number.isInteger(value) ||
         value <= 0 ||
-        value > MAX_RELOAD_INTERVAL_SECONDS
+        value > MAX_UINT32
     ) {
         throw new ConfigurationError(
-            `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_RELOAD_INTERVAL_SECONDS}.`,
+            `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_UINT32}.`,
         );
     }
 }
