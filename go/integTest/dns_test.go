@@ -16,26 +16,22 @@ import (
 
 const hostnameInvalid = "nonexistent.invalid"
 
-// Skips the current test if DNS tests are not enabled or if
-// the TLS configuration does not match the test requirements.
-func skipIfNotEnabled(suite *GlideTestSuite, useTLS bool) {
+// Skips the current test if DNS tests are not enabled via the environment.
+func skipIfDnsTestsDisabled(suite *GlideTestSuite) {
 	if os.Getenv("VALKEY_GLIDE_DNS_TESTS_ENABLED") == "" {
 		suite.T().Skip("DNS tests are not enabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.")
-	}
-
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	if useTLS {
-		skipIfTlsDisabled(suite)
-	} else {
-		skipIfTlsEnabled(suite)
 	}
 }
 
 // Builds and returns a standalone client with the given hostname and TLS configuration.
 func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool) (*glide.Client, error) {
+	port := suite.standaloneHosts[0].Port
+	if useTLS {
+		port = suite.standaloneTlsHosts[0].Port
+	}
 	address := config.NodeAddress{
 		Host: hostname,
-		Port: suite.standaloneHosts[0].Port,
+		Port: port,
 	}
 
 	clientConfig := defaultClientConfig().WithAddress(&address)
@@ -58,9 +54,13 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 
 // Builds and returns a cluster client with the given hostname and TLS configuration.
 func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*glide.ClusterClient, error) {
+	port := suite.clusterHosts[0].Port
+	if useTLS {
+		port = suite.clusterTlsHosts[0].Port
+	}
 	address := config.NodeAddress{
 		Host: hostname,
-		Port: suite.clusterHosts[0].Port,
+		Port: port,
 	}
 
 	clientConfig := defaultClusterClientConfig().WithAddress(&address)
@@ -83,7 +83,7 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 }
 
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone() {
-	skipIfNotEnabled(suite, false)
+	skipIfDnsTestsDisabled(suite)
 
 	client, err := suite.buildStandaloneClient(HostnameNoTLS, false)
 	require.NoError(suite.T(), err)
@@ -93,7 +93,7 @@ func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone(
 }
 
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Cluster() {
-	skipIfNotEnabled(suite, false)
+	skipIfDnsTestsDisabled(suite)
 
 	client, err := suite.buildClusterClient(HostnameNoTLS, false)
 	require.NoError(suite.T(), err)
@@ -103,21 +103,21 @@ func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Cluster() {
 }
 
 func (suite *GlideTestSuite) TestDnsConnectWithInvalidHostnameFails_Standalone() {
-	skipIfNotEnabled(suite, false)
+	skipIfDnsTestsDisabled(suite)
 
 	_, err := suite.buildStandaloneClient(hostnameInvalid, false)
 	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestDnsConnectWithInvalidHostnameFails_Cluster() {
-	skipIfNotEnabled(suite, false)
+	skipIfDnsTestsDisabled(suite)
 
 	_, err := suite.buildClusterClient(hostnameInvalid, false)
 	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Standalone() {
-	skipIfNotEnabled(suite, true)
+	skipIfDnsTestsDisabled(suite)
 
 	client, err := suite.buildStandaloneClient(HostnameTLS, true)
 	require.NoError(suite.T(), err)
@@ -127,7 +127,7 @@ func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Standal
 }
 
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Cluster() {
-	skipIfNotEnabled(suite, true)
+	skipIfDnsTestsDisabled(suite)
 
 	client, err := suite.buildClusterClient(HostnameTLS, true)
 	require.NoError(suite.T(), err)
@@ -137,14 +137,14 @@ func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Cluster
 }
 
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameNotInCertificateFails_Standalone() {
-	skipIfNotEnabled(suite, true)
+	skipIfDnsTestsDisabled(suite)
 
 	_, err := suite.buildStandaloneClient(HostnameNoTLS, true)
 	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameNotInCertificateFails_Cluster() {
-	skipIfNotEnabled(suite, true)
+	skipIfDnsTestsDisabled(suite)
 
 	_, err := suite.buildClusterClient(HostnameNoTLS, true)
 	assert.Error(suite.T(), err)

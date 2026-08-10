@@ -213,11 +213,11 @@ make integ-test test-filter="Test\(Set\|Get\)"
 
 #### Additional Parameters
 
-Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
-By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
+Integration and modules tests accept `standalone-endpoints` and `cluster-endpoints` parameters to run tests against existing non-TLS servers.
+By default, those test suites start both TLS and non-TLS standalone and cluster servers and stop them at the end.
 
 ```bash
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 ```
 
 #### IAM Authentication Tests

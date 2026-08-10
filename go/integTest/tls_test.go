@@ -15,10 +15,7 @@ import (
 
 // TestTlsWithoutCertificate_Standalone tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true)
 
 	_, err := glide.NewClient(clientConfig)
@@ -27,9 +24,6 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 
 // TestTlsWithSelfSignedCertificate_Standalone tests standalone client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	if err != nil {
 		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
@@ -38,7 +32,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -52,9 +46,6 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 
 // TestTlsWithMultipleCertificates_Standalone tests standalone client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	if err != nil {
 		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
@@ -67,7 +58,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -81,10 +72,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 
 // TestTlsWithoutCertificate_Cluster tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true)
 
 	_, err := glide.NewClusterClient(clientConfig)
@@ -93,9 +81,6 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
 
 // TestTlsWithSelfSignedCertificate_Cluster tests cluster client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	if err != nil {
 		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
@@ -104,7 +89,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -118,9 +103,6 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 
 // TestTlsWithMultipleCertificates_Cluster tests cluster client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	if err != nil {
 		suite.T().Skipf("CA certificate not found, skipping test: %v", err)
@@ -133,7 +115,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -147,14 +129,11 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 
 // TestTlsWithEmptyCertificate_Standalone tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -164,14 +143,11 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
 
 // TestTlsWithEmptyCertificate_Cluster tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -181,14 +157,11 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
 
 // TestTlsWithInvalidCertificate_Standalone tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -198,14 +171,11 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
 
 // TestTlsWithInvalidCertificate_Cluster tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -233,9 +203,6 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 // TestTlsLoadClientCertificateAndKeyFromFile covers the mTLS
 // LoadClientCertificateAndKeyFromFile helper.
 func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	// Load a real cert/key pair from disk and check the returned bytes.
 	certPath, keyPath, err := getClientCertAndKeyPaths()
 	require.NoError(suite.T(), err)
@@ -278,9 +245,6 @@ func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
 // standalone server. Skipped when TLS is disabled in CI; when TLS is enabled,
 // missing cert material fails the test hard rather than skipping.
 func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	caCert, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
@@ -293,7 +257,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -311,9 +275,6 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 // glide-core/tests/test_client.rs. Missing cert material under TLS-enabled
 // runs is a hard failure.
 func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	caCert, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
@@ -324,7 +285,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 		WithMutualTLSFromFiles(certPath, keyPath)
 	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -338,9 +299,6 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 
 // TestTlsMutualTLS_Cluster mirrors TestTlsMutualTLS_Standalone against a cluster.
 func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	caCert, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
@@ -353,7 +311,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -370,9 +328,6 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 // the rotation itself is covered by core tests in glide-core/tests/test_client.rs.
 // Missing cert material under TLS-enabled runs is a hard failure.
 func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	caCert, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 	certPath, keyPath, err := getClientCertAndKeyPaths()
@@ -383,7 +338,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
 		WithMutualTLSFromFiles(certPath, keyPath)
 	require.NoError(suite.T(), err)
 	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterTlsHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -397,15 +352,12 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
 
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
 		Host: IPAddressV4,
-		Port: suite.standaloneHosts[0].Port,
+		Port: suite.standaloneTlsHosts[0].Port,
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
@@ -426,15 +378,12 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv4AddressSucceeds_Cluster tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
 		Host: IPAddressV4,
-		Port: suite.clusterHosts[0].Port,
+		Port: suite.clusterTlsHosts[0].Port,
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
@@ -455,15 +404,12 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 
 // TestTlsWithIPv6AddressSucceeds_Standalone tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
 		Host: IPAddressV6,
-		Port: suite.standaloneHosts[0].Port,
+		Port: suite.standaloneTlsHosts[0].Port,
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
@@ -484,15 +430,12 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv6AddressSucceeds_Cluster tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
 		Host: IPAddressV6,
-		Port: suite.clusterHosts[0].Port,
+		Port: suite.clusterTlsHosts[0].Port,
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)

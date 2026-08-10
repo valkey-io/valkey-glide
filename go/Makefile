@@ -212,7 +212,6 @@ __it:
 	set -o pipefail; \
 	$(TEST_CMD) \
 	$(TEST_FILTER) \
-	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)

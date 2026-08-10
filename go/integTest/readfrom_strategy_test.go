@@ -171,7 +171,6 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 
 	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ("non-existing-az"))
@@ -220,7 +219,6 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	// Create client for setting the configs
 	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second))
 	require.NoError(suite.T(), err)
 
@@ -254,7 +252,6 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
 	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityReplicaAndPrimary).
 		WithClientAZ(az))
@@ -307,7 +304,6 @@ func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 
 	client, err := suite.clusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.ReadFromAllNodes))
 	require.NoError(suite.T(), err)

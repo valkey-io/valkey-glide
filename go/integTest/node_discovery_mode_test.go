@@ -15,7 +15,6 @@ import (
 func (suite *GlideTestSuite) TestStaticConnects() {
 	cfg := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeStatic)
 	client, err := suite.client(cfg)
 	require.NoError(suite.T(), err)
@@ -28,7 +27,6 @@ func (suite *GlideTestSuite) TestStaticConnects() {
 func (suite *GlideTestSuite) TestStaticAllowsWrites() {
 	cfg := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeStatic)
 	client, err := suite.client(cfg)
 	require.NoError(suite.T(), err)
@@ -48,7 +46,6 @@ func (suite *GlideTestSuite) TestStaticAllowsWrites() {
 func (suite *GlideTestSuite) TestReadOnlyRejectsDiscoverAll() {
 	cfg := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
 		WithReadOnly(true).
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeDiscoverAll)
 	_, err := glide.NewClient(cfg)

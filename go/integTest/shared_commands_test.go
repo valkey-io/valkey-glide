@@ -5583,13 +5583,11 @@ func (suite *GlideTestSuite) TestXRead() {
 		var testClient interfaces.BaseClientCommands
 		if _, ok := client.(interfaces.GlideClientCommands); ok {
 			testClient, err = suite.client(config.NewClientConfiguration().
-				WithAddress(&suite.standaloneHosts[0]).
-				WithUseTLS(suite.tls))
+				WithAddress(&suite.standaloneHosts[0]))
 			require.NoError(suite.T(), err)
 		} else {
 			testClient, err = suite.clusterClient(config.NewClusterClientConfiguration().
-				WithAddress(&suite.clusterHosts[0]).
-				WithUseTLS(suite.tls))
+				WithAddress(&suite.clusterHosts[0]))
 			require.NoError(suite.T(), err)
 		}
 		read, err = testClient.XReadWithOptions(

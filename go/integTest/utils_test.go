@@ -225,22 +225,6 @@ func assertConnected(t *testing.T, client interface{}) {
 	require.Equal(t, "PONG", result)
 }
 
-// Skips the current test if TLS is disabled.
-// TODO #5509: TLS tests do not currently run as part of CI.
-func skipIfTlsDisabled(suite *GlideTestSuite) {
-	if !suite.tls {
-		suite.T().Skip("TLS is disabled, skipping TLS tests")
-	}
-}
-
-// Skips the current test if TLS is enabled.
-// TODO #5509: TLS tests do not currently run as part of CI.
-func skipIfTlsEnabled(suite *GlideTestSuite) {
-	if suite.tls {
-		suite.T().Skip("TLS is enabled, skipping non-TLS tests")
-	}
-}
-
 // assertClientTrackingInfo asserts that a ClientTrackingInfo reflects expected tracking state.
 func assertClientTrackingInfo(t *testing.T, info models.ClientTrackingInfo, on bool) {
 	if on {

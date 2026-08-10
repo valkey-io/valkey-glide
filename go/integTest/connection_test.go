@@ -413,9 +413,6 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 // TestConnectWithIPv4AddressSucceeds_Standalone tests non-TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsEnabled(suite)
-
 	address := config.NodeAddress{
 		Host: IPAddressV4,
 		Port: suite.standaloneHosts[0].Port,
@@ -433,9 +430,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 // TestConnectWithIPv4AddressSucceeds_Cluster tests non-TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsEnabled(suite)
-
 	address := config.NodeAddress{
 		Host: IPAddressV4,
 		Port: suite.clusterHosts[0].Port,
@@ -452,9 +446,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 
 func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsEnabled(suite)
-
 	address := config.NodeAddress{
 		Host: IPAddressV6,
 		Port: suite.standaloneHosts[0].Port,
@@ -471,9 +462,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 
 func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsEnabled(suite)
-
 	address := config.NodeAddress{
 		Host: IPAddressV6,
 		Port: suite.clusterHosts[0].Port,

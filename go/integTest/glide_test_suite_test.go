@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,19 +44,19 @@ func (c ClientTypeFlag) Has(ctype ClientTypeFlag) bool {
 
 type GlideTestSuite struct {
 	suite.Suite
-	standaloneHosts []config.NodeAddress
-	clusterHosts    []config.NodeAddress
-	tls             bool
-	serverVersion   string
-	clients         []interfaces.GlideClientCommands
-	clusterClients  []interfaces.GlideClusterClientCommands
+	standaloneHosts    []config.NodeAddress
+	clusterHosts       []config.NodeAddress
+	standaloneTlsHosts []config.NodeAddress
+	clusterTlsHosts    []config.NodeAddress
+	serverVersion      string
+	clients            []interfaces.GlideClientCommands
+	clusterClients     []interfaces.GlideClusterClientCommands
 	// Cached default clients reused across tests (pooled)
 	cachedStandaloneClient *glide.Client
 	cachedClusterClient    *glide.ClusterClient
 }
 
 var (
-	tls             = flag.Bool("tls", false, "Set to true to enable TLS connections")
 	clusterHosts    = flag.String("cluster-endpoints", "", "Specifies specific endpoints the cluster nodes are running on")
 	standaloneHosts = flag.String(
 		"standalone-endpoints",
@@ -80,15 +79,9 @@ func (suite *GlideTestSuite) SetupSuite() {
 		log.Fatal(err)
 	}
 
-	cmd := []string{}
-	suite.tls = false
-	if *tls {
-		cmd = []string{"--tls"}
-		suite.tls = true
-	}
-	suite.T().Logf("TLS = %t", suite.tls)
-
-	// Note: code does not start standalone if cluster hosts are given and vice versa
+	// Note: code does not start standalone if cluster hosts are given and vice versa.
+	// External endpoints, when provided, only cover the non-TLS server pair; TLS
+	// tests are only run against fixture-created servers.
 	startServer := true
 
 	if *standaloneHosts != "" {
@@ -100,17 +93,27 @@ func (suite *GlideTestSuite) SetupSuite() {
 		startServer = false
 	}
 	if startServer {
-		// Start standalone instance
-		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), false)
+		// Start non-TLS standalone instance
+		clusterManagerOutput := runClusterManager(suite, []string{"start", "-r", "3"}, false)
 		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
 
-		// Start cluster
-		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
+		// Start non-TLS cluster
+		clusterManagerOutput = runClusterManager(suite, []string{"start", "--cluster-mode", "-r", "3"}, false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
+
+		// Start TLS standalone instance
+		clusterManagerOutput = runClusterManager(suite, []string{"--tls", "start", "-r", "3"}, false)
+		suite.standaloneTlsHosts = extractAddresses(suite, clusterManagerOutput)
+
+		// Start TLS cluster
+		clusterManagerOutput = runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "3"}, false)
+		suite.clusterTlsHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 
 	suite.T().Logf("Standalone hosts = %s", fmt.Sprint(suite.standaloneHosts))
 	suite.T().Logf("Cluster hosts = %s", fmt.Sprint(suite.clusterHosts))
+	suite.T().Logf("Standalone TLS hosts = %s", fmt.Sprint(suite.standaloneTlsHosts))
+	suite.T().Logf("Cluster TLS hosts = %s", fmt.Sprint(suite.clusterTlsHosts))
 
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
@@ -220,17 +223,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 	if len(suite.standaloneHosts) > 0 {
 		clientConfig := config.NewClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
-			WithUseTLS(suite.tls).
 			WithRequestTimeout(5 * time.Second)
-
-		// If TLS is enabled, try to load custom certificates
-		if suite.tls {
-			if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-				tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-				advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
-				clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
-			}
-		}
 
 		client, err := glide.NewClient(clientConfig)
 		if err == nil && client != nil {
@@ -251,17 +244,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 
 	clientConfig := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
-
-	// If TLS is enabled, try to load custom certificates
-	if suite.tls {
-		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
-			clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
-		}
-	}
 
 	client, err := glide.NewClusterClient(clientConfig)
 	if err == nil && client != nil {
@@ -428,20 +411,11 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
-
-	// If TLS is enabled, try to load custom certificates
-	if suite.tls {
-		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
-		}
-	}
 
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
@@ -481,20 +455,11 @@ func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
 	clientConfig := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClusterClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
-
-	// If TLS is enabled, try to load custom certificates
-	if suite.tls {
-		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
-		}
-	}
 
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
@@ -1129,22 +1094,4 @@ func getChannelMode(sharded bool) TestChannelMode {
 
 type PubSubQueuer interface {
 	GetQueue() (*glide.PubSubMessageQueue, error)
-}
-
-// loadCaCertificateForTests loads the CA certificate for TLS tests.
-// It looks for the certificate in the utils/tls_crts directory.
-// Returns the certificate data or an error if not found.
-func loadCaCertificateForTests() ([]byte, error) {
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		glideHome = "../.."
-	}
-
-	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
-	absPath, err := filepath.Abs(caCertPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return config.LoadRootCertificatesFromFile(absPath)
 }
