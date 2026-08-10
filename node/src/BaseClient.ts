@@ -906,6 +906,8 @@ export enum NodeDiscoveryMode {
  * ### Client Identification
  *
  * - **Client Name**: Set `clientName` to identify the client connection.
+ * - **Library Name**: Set `libName` to override the default library name (`GlideNode`) reported by `CLIENT INFO`.
+ * - **Client Info Tag**: Set `clientInfoTag` to append an attribution tag to the library name (e.g., `GlideNode(my-framework:1.0)`).
  *
  * ### Read Strategy
  *
@@ -1044,6 +1046,23 @@ export interface BaseClientConfiguration {
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
     clientName?: string;
+    /**
+     * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
+     * establishment. If not set, the default {@code GlideNode} is used. When {@link clientInfoTag}
+     * is present, it is appended to the effective library name in parentheses.
+     */
+    libName?: string;
+    /**
+     * Optional attribution tag appended to the effective library name in parentheses.
+     * For example, setting this to {@code "my-framework:1.2.3"} results in a lib-name of
+     * {@code GlideNode(my-framework:1.2.3)} (or {@code custom-lib(my-framework:1.2.3)} if
+     * {@link libName} is also set).
+     *
+     * The tag must not contain whitespace characters.
+     *
+     * @throws ConfigurationError if the tag contains whitespace.
+     */
+    clientInfoTag?: string;
     /**
      * Default decoder when decoder is not set per command.
      * If not set, 'Decoder.String' will be used.
@@ -9875,6 +9894,13 @@ export class BaseClient {
             );
         }
 
+        // Validate clientInfoTag does not contain whitespace
+        if (options.clientInfoTag && /\s/.test(options.clientInfoTag)) {
+            throw new ConfigurationError(
+                "clientInfoTag must not contain whitespace characters",
+            );
+        }
+
         // Configure client-side cache if provided
         let clientSideCache: connection_request.IClientSideCache | undefined;
 
@@ -9908,6 +9934,14 @@ export class BaseClient {
             lazyConnect: options.lazyConnect ?? false,
             clientSideCache,
         };
+
+        // Compose libName from options.libName and options.clientInfoTag
+        if (options.clientInfoTag) {
+            const baseName = options.libName || "GlideNode";
+            request.libName = `${baseName}(${options.clientInfoTag})`;
+        } else if (options.libName) {
+            request.libName = options.libName;
+        }
 
         if (options.compression) {
             validateCompressionConfiguration(options.compression);

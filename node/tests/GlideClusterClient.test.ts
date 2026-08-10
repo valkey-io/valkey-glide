@@ -216,6 +216,87 @@ describe("GlideClusterClient", () => {
         timeout: TIMEOUT,
     });
 
+    it(
+        "register_custom_client_info_names",
+        async () => {
+            if (cluster.checkIfServerVersionLessThan("7.2.0")) return;
+
+            // Test libName override only
+            const overrideOnlyClient = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { libName: "custom-client" },
+                ),
+            );
+
+            try {
+                const info = (await overrideOnlyClient.customCommand(
+                    ["CLIENT", "INFO"],
+                    { route: "allNodes" },
+                )) as GlideRecord<string>;
+
+                for (const entry of info) {
+                    expect(entry.value).toContain("lib-name=custom-client");
+                }
+            } finally {
+                overrideOnlyClient.close();
+            }
+
+            // Test clientInfoTag only (appended to default GlideNode)
+            const tagOnlyClient = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "framework:1.2" },
+                ),
+            );
+
+            try {
+                const info = (await tagOnlyClient.customCommand(
+                    ["CLIENT", "INFO"],
+                    { route: "allNodes" },
+                )) as GlideRecord<string>;
+
+                for (const entry of info) {
+                    expect(entry.value).toContain(
+                        "lib-name=GlideNode(framework:1.2)",
+                    );
+                }
+            } finally {
+                tagOnlyClient.close();
+            }
+
+            // Test combined libName + clientInfoTag
+            const combinedClient = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    {
+                        libName: "custom-client",
+                        clientInfoTag: "framework:1.2",
+                    },
+                ),
+            );
+
+            try {
+                const info = (await combinedClient.customCommand(
+                    ["CLIENT", "INFO"],
+                    { route: "allNodes" },
+                )) as GlideRecord<string>;
+
+                for (const entry of info) {
+                    expect(entry.value).toContain(
+                        "lib-name=custom-client(framework:1.2)",
+                    );
+                }
+            } finally {
+                combinedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientPauseAll then clientUnpause_%p",
         async (protocol) => {
