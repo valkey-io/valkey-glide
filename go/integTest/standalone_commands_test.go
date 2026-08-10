@@ -56,6 +56,47 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	assert.True(suite.T(), strings.Contains(strResult, fmt.Sprintf("name=%s", clientName)))
 }
 
+func (suite *GlideTestSuite) TestRegisterCustomClientInfoTag() {
+	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
+
+	// Test libName override only
+	overrideConfig := config.NewClientConfiguration().
+		WithAddress(&suite.standaloneHosts[0]).
+		WithLibName("custom-client")
+	overrideClient, err := suite.client(overrideConfig)
+	require.NoError(suite.T(), err)
+
+	result, err := overrideClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult := result.(string)
+	assert.Contains(suite.T(), strResult, "lib-name=custom-client")
+
+	// Test clientInfoTag only (default lib name)
+	tagConfig := config.NewClientConfiguration().
+		WithAddress(&suite.standaloneHosts[0]).
+		WithClientInfoTag("framework:1.2")
+	tagClient, err := suite.client(tagConfig)
+	require.NoError(suite.T(), err)
+
+	result, err = tagClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult = result.(string)
+	assert.Contains(suite.T(), strResult, "lib-name=GlideGo(framework:1.2)")
+
+	// Test combined libName + clientInfoTag
+	combinedConfig := config.NewClientConfiguration().
+		WithAddress(&suite.standaloneHosts[0]).
+		WithLibName("custom-client").
+		WithClientInfoTag("framework:1.2")
+	combinedClient, err := suite.client(combinedConfig)
+	require.NoError(suite.T(), err)
+
+	result, err = combinedClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult = result.(string)
+	assert.Contains(suite.T(), strResult, "lib-name=custom-client(framework:1.2)")
+}
+
 func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()

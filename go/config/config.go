@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"time"
+	"unicode"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
@@ -234,6 +235,8 @@ type baseClientConfiguration struct {
 	requestTimeout        time.Duration
 	clientName            string
 	clientAZ              string
+	libName               string
+	clientInfoTag         string
 	reconnectStrategy     *BackoffStrategy
 	lazyConnect           bool
 	DatabaseId            *int `json:"database_id,omitempty"`
@@ -275,6 +278,20 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.clientAZ != "" {
 		request.ClientAz = config.clientAZ
+	}
+
+	// Compose lib name from libName and clientInfoTag.
+	// If neither is set, Rust core uses default ("GlideGo").
+	if config.libName != "" || config.clientInfoTag != "" {
+		baseName := config.libName
+		if baseName == "" {
+			baseName = "GlideGo"
+		}
+		if config.clientInfoTag != "" {
+			request.LibName = baseName + "(" + config.clientInfoTag + ")"
+		} else {
+			request.LibName = baseName
+		}
 	}
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
@@ -579,6 +596,29 @@ func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfigur
 	return config
 }
 
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. If not set, the default "GlideGo" is used by the Rust core. When [WithClientInfoTag] is also
+// configured, the tag is appended in parentheses (e.g. "custom-lib(my-tag)").
+func (config *ClientConfiguration) WithLibName(libName string) *ClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
+// The tag must not contain Unicode whitespace characters.
+//
+// Panics if clientInfoTag contains any Unicode whitespace character.
+func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
+	for _, r := range clientInfoTag {
+		if unicode.IsSpace(r) {
+			panic("clientInfoTag must not contain whitespace characters")
+		}
+	}
+	config.clientInfoTag = clientInfoTag
+	return config
+}
+
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
 func (config *ClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *ClientConfiguration {
@@ -837,6 +877,29 @@ func (config *ClusterClientConfiguration) WithClientName(clientName string) *Clu
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. If not set, the default "GlideGo" is used by the Rust core. When [WithClientInfoTag] is also
+// configured, the tag is appended in parentheses (e.g. "custom-lib(my-tag)").
+func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
+// The tag must not contain Unicode whitespace characters.
+//
+// Panics if clientInfoTag contains any Unicode whitespace character.
+func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
+	for _, r := range clientInfoTag {
+		if unicode.IsSpace(r) {
+			panic("clientInfoTag must not contain whitespace characters")
+		}
+	}
+	config.clientInfoTag = clientInfoTag
 	return config
 }
 
