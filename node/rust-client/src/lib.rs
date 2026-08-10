@@ -1276,7 +1276,9 @@ impl GlideClientHandle {
         let command_span_for_error = cmd.span();
 
         // Pool abandon detection: refresh activity and mark blocking commands
-        let pool_blocking_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+        let pool_blocking_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
             pool::refresh_activity(self.client_id);
             if glide_core::client::is_blocking_command(&cmd)
                 && pool::mark_blocking(self.client_id, true)
@@ -1490,7 +1492,9 @@ impl GlideClientHandle {
         let command_span_for_error = command_span.clone();
 
         // Pool abandon detection: refresh activity for batch duration
-        let pool_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+        let pool_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
             pool::refresh_activity(self.client_id);
             Some(self.client_id)
         } else {
@@ -1588,7 +1592,9 @@ impl GlideClientHandle {
         };
 
         // Pool abandon detection: refresh activity for script execution
-        let pool_ids = if pool::get_client_pool_map().contains_key(&self.client_id) {
+        let pool_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
             pool::refresh_activity(self.client_id);
             Some(self.client_id)
         } else {
@@ -1657,7 +1663,7 @@ impl GlideClientHandle {
         });
 
         // Pool abandon detection: refresh activity for scan
-        if pool::get_client_pool_map().contains_key(&self.client_id) {
+        if pool::any_pool_clients() && pool::get_client_pool_map().contains_key(&self.client_id) {
             pool::refresh_activity(self.client_id);
         }
 

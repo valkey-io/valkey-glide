@@ -29,6 +29,7 @@ import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import {
+    poolAllocateId,
     poolDrainDiscarded,
     poolRegisterClient,
     poolStartMonitor,
@@ -100,8 +101,6 @@ export class ClientPool {
     private readonly clientConfig: BaseClientConfiguration;
     private waiters: Waiter[] = [];
 
-    private static nextPoolId = 1;
-
     private constructor(
         maxSize: number,
         minIdle: number,
@@ -117,8 +116,8 @@ export class ClientPool {
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
 
-        // Use static counter as unique pool identifier for Rust-level tracking
-        this.poolId = ClientPool.nextPoolId++;
+        // Allocate pool ID from Rust (process-global, safe across worker_threads)
+        this.poolId = poolAllocateId();
 
         // Start Rust-level abandon monitor (handles blocking detection, activity
         // tracking, and discard — no JS Proxy or setInterval needed)

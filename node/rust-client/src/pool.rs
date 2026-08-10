@@ -42,6 +42,26 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
 // CLIENT-TO-POOL TRACKING (for abandon detection hooks in command dispatch)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+use std::sync::atomic::AtomicU64;
+
+/// Process-global pool ID allocator. Guarantees uniqueness across worker_threads.
+static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a unique pool ID. Called by TS in the constructor.
+#[napi]
+pub fn pool_allocate_id() -> i64 {
+    NEXT_POOL_ID.fetch_add(1, Ordering::Relaxed) as i64
+}
+
+/// Counter of registered pool clients (for fast-path gate in command dispatch).
+static POOL_CLIENT_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Returns true if any pool clients are currently registered.
+/// Used to skip DashMap lookup on the hot path for non-pool clients.
+pub fn any_pool_clients() -> bool {
+    POOL_CLIENT_COUNT.load(Ordering::Relaxed) > 0
+}
+
 /// Maps client_id → pool_id for all pool-borrowed clients.
 /// Consulted by GlideClientHandle::send_command to refresh activity.
 static CLIENT_POOL_MAP: LazyLock<DashMap<u64, u64>> = LazyLock::new(DashMap::new);
@@ -89,15 +109,20 @@ pub fn pool_register_client(pool_id: i64, client_id: i64) {
     CLIENT_POOL_MAP.insert(cid, pool_id as u64);
     CLIENT_ACTIVITY.insert(cid, Instant::now());
     CLIENT_BLOCKING.insert(cid, Arc::new(AtomicBool::new(false)));
+    POOL_CLIENT_COUNT.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Unregister a client from pool tracking. Called by TS on release/close.
 #[napi]
 pub fn pool_unregister_client(client_id: i64) {
     let cid = client_id as u64;
-    CLIENT_POOL_MAP.remove(&cid);
+    if CLIENT_POOL_MAP.remove(&cid).is_some() {
+        POOL_CLIENT_COUNT.fetch_sub(1, Ordering::Relaxed);
+    }
     CLIENT_ACTIVITY.remove(&cid);
     CLIENT_BLOCKING.remove(&cid);
+    // Drop any pending discard record so it can't be applied to a later borrow
+    DISCARDED_CLIENTS.remove(&cid);
 }
 
 /// Drain discarded client IDs from the abandon monitor.
