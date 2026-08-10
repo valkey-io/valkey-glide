@@ -3237,7 +3237,11 @@ where
         if !touched {
             return;
         }
-        if let Some(details) = core.conn_lock.read().connection_details_for_address(address) {
+        if let Some(details) = core
+            .conn_lock
+            .read()
+            .connection_details_for_address(address)
+        {
             details.1.idle.mark_activity();
         }
     }

@@ -717,7 +717,12 @@ where
         let activity_before = conn.transport_activity();
         let result = conn.req_packed_command(&scan_command).await;
         if idle_timeout.is_some() && result.is_ok() {
-            ClusterConnInner::<C>::mark_activity_if_touched(&core, &address, activity_before, &conn);
+            ClusterConnInner::<C>::mark_activity_if_touched(
+                &core,
+                &address,
+                activity_before,
+                &conn,
+            );
         }
         result
     } else {
