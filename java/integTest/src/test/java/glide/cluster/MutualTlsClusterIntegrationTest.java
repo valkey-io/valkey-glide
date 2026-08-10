@@ -24,9 +24,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The tests share a TLS cluster (3 shards, 1 replica each) started with {@code
  * --tls-auth-clients}, so the cluster bus and clients both use TLS with client certificates and the
- * server rejects any TLS connection that does not present a valid client certificate. The
- * accepting case and the rejecting case are both required. Without the rejecting case, the
- * accepting case could pass against a server that quietly ignored client certificates.
+ * server rejects any TLS connection that does not present a valid client certificate. The accepting
+ * case and the rejecting case are both required. Without the rejecting case, the accepting case
+ * could pass against a server that quietly ignored client certificates.
  */
 public class MutualTlsClusterIntegrationTest {
 
