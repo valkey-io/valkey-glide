@@ -549,9 +549,6 @@ func startMTlsRequiredCluster(suite *GlideTestSuite) ([]config.NodeAddress, func
 // This is the accepting half of an accepting plus rejecting pair; the
 // rejecting case sits below.
 func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	addr, stop := startMTlsRequiredStandalone(suite)
 	defer stop()
 
@@ -585,9 +582,6 @@ func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne()
 // check, the accepting case above would still pass against a server that
 // silently ignored client certificates.
 func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiringOne() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	addr, stop := startMTlsRequiredStandalone(suite)
 	defer stop()
 
@@ -609,9 +603,6 @@ func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiri
 // counterpart to TestTlsMTlsClientCertAcceptedByServerRequiringOne. The
 // standalone case would not catch a cluster-only regression in mTLS setup.
 func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	addrs, stop := startMTlsRequiredCluster(suite)
 	defer stop()
 
@@ -645,9 +636,6 @@ func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiri
 // TestTlsMTlsMissingClientCertRejectedByServerRequiringOne. It guards
 // against a cluster-only mTLS setup that quietly accepts a missing cert.
 func (suite *GlideTestSuite) TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne() {
-	// TODO #5509: TLS tests do not currently run as part of CI.
-	skipIfTlsDisabled(suite)
-
 	addrs, stop := startMTlsRequiredCluster(suite)
 	defer stop()
 
