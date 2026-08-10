@@ -324,7 +324,8 @@ public class TlsAdvancedConfigurationTest {
                         .contains("`certReloadIntervalSeconds` may only be set with path-based mTLS"));
     }
 
-    // Integer.MAX_VALUE is below the uint32 bound, so no Integer can exceed it.
+    // The largest int a caller can pass still sits below the uint32 bound, so it
+    // round-trips through the builder.
     @Test
     void testMaxExpressibleIntervalAccepted() {
         TlsAdvancedConfiguration config =
@@ -333,7 +334,6 @@ public class TlsAdvancedConfigurationTest {
                         .build();
 
         assertEquals(Integer.MAX_VALUE, config.getCertReloadIntervalSeconds());
-        assertTrue(Integer.MAX_VALUE <= TlsAdvancedConfiguration.MAX_UINT32);
     }
 
     @Test

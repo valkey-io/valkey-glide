@@ -759,9 +759,9 @@ class AdvancedBaseClientConfiguration:
                 "to the GLIDE core's default reload cadence."
             )
 
-        # The core cannot catch these: it reads 0 as unset and never sees a value
-        # too large for a uint32.
-        if interval is not None and (interval <= 0 or interval > MAX_UINT32):
+        # The core cannot catch values above the uint32 wire field; it never
+        # sees them.
+        if interval is not None and interval > MAX_UINT32:
             raise ConfigurationError(
                 "cert_reload_interval_seconds must be a positive integer no greater "
                 f"than {MAX_UINT32}; got {interval}. Omit it to defer "

@@ -236,15 +236,6 @@ public class TlsAdvancedConfiguration {
                     "`certReloadIntervalSeconds` must be positive; omit it (null) to defer to the GLIDE"
                             + " core's default cadence.");
         }
-
-        // Cannot fire while the field is an Integer, whose max is below this bound. Kept
-        // so the rule still holds if that type widens.
-        if (certReloadIntervalSeconds != null && certReloadIntervalSeconds > MAX_UINT32) {
-            throw new ConfigurationError(
-                    "`certReloadIntervalSeconds` must be at most "
-                            + MAX_UINT32
-                            + "; omit it (null) to defer to the GLIDE core's default cadence.");
-        }
     }
 
     /**
