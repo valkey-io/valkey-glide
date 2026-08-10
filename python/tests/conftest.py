@@ -396,9 +396,10 @@ def valkey_mtls_target(
     valkey_mtls_cluster_cluster,
 ) -> ValkeyCluster:
     """
-    Return the mTLS-required fixture matching the requested ``cluster_mode``,
-    mirroring how ``pytest.valkey_tls_cluster`` and
-    ``pytest.standalone_tls_cluster`` are swapped in the non-mTLS TLS tests.
+    Return the mTLS-required fixture matching the requested ``cluster_mode``.
+
+    Keyed by ``cluster_mode`` so the same test body exercises both the
+    standalone and cluster topologies.
     """
     return valkey_mtls_cluster_cluster if cluster_mode else valkey_mtls_cluster
 

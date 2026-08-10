@@ -33,10 +33,9 @@ function readTlsFile(name: string): Buffer {
  * ValkeyCluster.createCluster calls a version-fetch callback right after the
  * cluster comes up. The default getServerVersion opens a client, and any such
  * client on an mTLS-required server has to present a client certificate or
- * the TLS handshake is dropped. Insecure TLS does not help since it only
- * skips server-certificate verification on the client side. This stub keeps
- * the callback signature but does not open a connection, matching the Java
- * and Python fixtures which do not fetch the version either.
+ * the TLS handshake is dropped. Insecure TLS does not help; it only skips
+ * server-certificate verification on the client side. This stub satisfies
+ * the callback signature without opening a connection.
  */
 const skipVersionFetch = async (): Promise<string> => "";
 

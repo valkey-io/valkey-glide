@@ -532,10 +532,10 @@ func getCaCertificate() ([]byte, error) {
 
 // startMTlsRequiredStandalone spins up a single TLS standalone server that
 // requires a client certificate (--tls-auth-clients). It returns the node
-// address and a stop function; the returned cluster folder is captured inside
-// the stop closure. This mirrors the Python valkey_mtls_cluster fixture: the
-// session TLS servers accept a client that sends no certificate, so they
-// cannot prove the accepting mTLS test above is not passing vacuously.
+// address and a stop function; the cluster folder is captured inside the
+// stop closure. The shared session TLS servers accept clients that send no
+// certificate, so a dedicated server that rejects such clients is required
+// to prove the accepting mTLS test is not passing vacuously.
 func startMTlsRequiredStandalone(suite *GlideTestSuite) (config.NodeAddress, func()) {
 	output := runClusterManager(
 		suite,
@@ -568,9 +568,9 @@ func startMTlsRequiredStandalone(suite *GlideTestSuite) (config.NodeAddress, fun
 
 // startMTlsRequiredCluster spins up a TLS cluster (3 shards, 1 replica each)
 // that requires a client certificate (--tls-auth-clients). It returns the
-// full list of node addresses and a stop function; the returned cluster
-// folder is captured inside the stop closure. This is the cluster-mode
-// companion to startMTlsRequiredStandalone.
+// full list of node addresses and a stop function; the cluster folder is
+// captured inside the stop closure. This is the cluster-mode companion to
+// startMTlsRequiredStandalone.
 func startMTlsRequiredCluster(suite *GlideTestSuite) ([]config.NodeAddress, func()) {
 	output := runClusterManager(
 		suite,
@@ -601,10 +601,10 @@ func startMTlsRequiredCluster(suite *GlideTestSuite) ([]config.NodeAddress, func
 	return addrs, stop
 }
 
-// TestTlsMTlsClientCertAcceptedByServerRequiringOne verifies that the client
-// can connect to a server that requires a client certificate when a client
-// certificate is specified. This is the accepting half of the pair mirroring
-// the Python coverage in test_tls.py.
+// TestTlsMTlsClientCertAcceptedByServerRequiringOne asserts that a client
+// with a valid client certificate connects to a server that requires one.
+// This is the accepting half of an accepting plus rejecting pair; the
+// rejecting case sits below.
 func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
@@ -637,10 +637,10 @@ func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne()
 	assertConnected(suite.T(), client)
 }
 
-// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne verifies that a
+// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne asserts that a
 // client without cert+key fails to connect to the same server. Without this
 // check, the accepting case above would still pass against a server that
-// ignored client certificates.
+// silently ignored client certificates.
 func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiringOne() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
@@ -662,9 +662,9 @@ func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiri
 	require.Error(suite.T(), err)
 }
 
-// TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne mirrors
-// TestTlsMTlsClientCertAcceptedByServerRequiringOne against a cluster that
-// requires client certificates.
+// TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne is the cluster
+// counterpart to TestTlsMTlsClientCertAcceptedByServerRequiringOne. The
+// standalone case would not catch a cluster-only regression in mTLS setup.
 func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiringOne() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
@@ -697,9 +697,10 @@ func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiri
 	assertConnected(suite.T(), client)
 }
 
-// TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne mirrors
-// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne against a cluster
-// that requires client certificates.
+// TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne is the
+// cluster counterpart to
+// TestTlsMTlsMissingClientCertRejectedByServerRequiringOne. It guards
+// against a cluster-only mTLS setup that quietly accepts a missing cert.
 func (suite *GlideTestSuite) TestTlsMTlsClusterMissingClientCertRejectedByServerRequiringOne() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)

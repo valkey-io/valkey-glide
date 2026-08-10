@@ -1105,11 +1105,9 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 // [TlsConfiguration.WithMutualTLSFromFiles]. The value is a whole number of
 // seconds and must be positive; WithMutualTLSFromFiles rejects zero.
 //
-// The interval is sent as a uint32 seconds field on the wire, so the parameter
-// type is uint32 to eliminate any risk of rounding or truncation and to match
-// the Python, Java, and Node bindings, which all take an integer seconds value.
-// The type also makes the [MaxUint32] upper bound and non-negativity trivially
-// guaranteed by the signature.
+// The protobuf field is uint32 seconds, so the parameter is uint32. That
+// removes any risk of rounding or truncation at the API boundary and makes
+// the [MaxUint32] upper bound and non-negativity guaranteed by the type.
 func WithReloadInterval(seconds uint32) MutualTLSOption {
 	return reloadIntervalOption{interval: seconds}
 }

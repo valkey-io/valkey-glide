@@ -528,7 +528,7 @@ def create_servers(
             key_file,
             "--tls-ca-cert-file",
             ca_file,
-            # Whether mutual TLS is enabled (.i.e. whether client certificate is required for authentication).
+            # When true, the server requires a client certificate on every TLS connection.
             "--tls-auth-clients",
             "yes" if tls_auth_clients else "no",
             "--port",

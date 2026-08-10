@@ -24,10 +24,9 @@ import org.junit.jupiter.api.Test;
  * Integration tests that verify mutual TLS behaviour end to end.
  *
  * <p>The tests share a single-node TLS standalone server started with {@code --tls-auth-clients},
- * so the server rejects any TLS connection that does not present a valid client certificate. This
- * pair of accepting/rejecting tests mirrors the Python shape in {@code test_tls.py}: without the
- * rejecting case, the accepting case could pass against a server that quietly ignored client
- * certificates.
+ * so the server rejects any TLS connection that does not present a valid client certificate. The
+ * accepting case and the rejecting case are both required. Without the rejecting case, the
+ * accepting case could pass against a server that quietly ignored client certificates.
  */
 public class MutualTlsIntegrationTest {
 
