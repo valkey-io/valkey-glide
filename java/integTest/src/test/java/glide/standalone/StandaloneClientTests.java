@@ -61,6 +61,42 @@ public class StandaloneClientTests {
 
     @Test
     @SneakyThrows
+    public void register_custom_client_info_names() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        try (GlideClient overrideOnlyClient =
+                GlideClient.createClient(commonClientConfig().libName("custom-client").build()).get()) {
+            String overrideOnlyInfo =
+                    (String) overrideOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(overrideOnlyInfo.contains("lib-name=custom-client"));
+        }
+
+        try (GlideClient tagOnlyClient =
+                GlideClient.createClient(commonClientConfig().clientInfoTag("framework:1.2").build())
+                        .get()) {
+            String tagOnlyInfo =
+                    (String) tagOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(tagOnlyInfo.contains("lib-name=GlideJava(framework:1.2)"));
+        }
+
+        try (GlideClient combinedClient =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .libName("custom-client")
+                                        .clientInfoTag("framework:1.2")
+                                        .build())
+                        .get()) {
+            String combinedInfo =
+                    (String) combinedClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(combinedInfo.contains("lib-name=custom-client(framework:1.2)"));
+        }
+    }
+
+    @Test
+    @SneakyThrows
     public void can_connect_with_auth_require_pass() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
