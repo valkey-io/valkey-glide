@@ -419,11 +419,10 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
-			// WithMutualTLSFromFiles already rejected anything too large for a uint32.
-			if seconds := uint64(tlsConfig.certReloadInterval / time.Second); seconds > 0 {
-				s := uint32(seconds)
-				reload.IntervalSeconds = &s
-			}
+			// certReloadInterval is a uint32 seconds value validated by
+			// WithMutualTLSFromFiles; forward it straight to the wire field.
+			s := tlsConfig.certReloadInterval
+			reload.IntervalSeconds = &s
 		}
 		request.CertReload = reload
 	}
@@ -1002,7 +1001,7 @@ func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientC
 //
 //	tls, err := config.NewTlsConfiguration().WithMutualTLSFromFiles(
 //	    "/etc/glide/client.pem", "/etc/glide/client.key",
-//	    config.WithReloadInterval(60*time.Second))
+//	    config.WithReloadInterval(60))
 //	if err != nil {
 //	    return err
 //	}
@@ -1039,12 +1038,12 @@ type TlsConfiguration struct {
 	//                         path fields empty; certReloadInterval zero.
 	// State 3 (path + reload): clientCertPath and clientKeyPath non-empty; byte fields nil;
 	//                          certReloadInterval is zero (core default cadence) or a
-	//                          positive value from WithReloadInterval.
+	//                          positive uint32 seconds value from WithReloadInterval.
 	clientCertificate  []byte
 	clientKey          []byte
 	clientCertPath     string
 	clientKeyPath      string
-	certReloadInterval time.Duration
+	certReloadInterval uint32
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -1091,11 +1090,11 @@ type mtlsSettings struct {
 	// reloadInterval is a pointer so we can tell "option not passed" (nil,
 	// use the core default cadence) apart from an explicit
 	// WithReloadInterval(0) (a value we then validate and reject).
-	reloadInterval *time.Duration
+	reloadInterval *uint32
 }
 
 // reloadIntervalOption is the concrete option produced by [WithReloadInterval].
-type reloadIntervalOption struct{ interval time.Duration }
+type reloadIntervalOption struct{ interval uint32 }
 
 func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 	d := o.interval
@@ -1103,15 +1102,16 @@ func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
 }
 
 // WithReloadInterval overrides the cert reload cadence for
-// [TlsConfiguration.WithMutualTLSFromFiles]. The interval must be at least one
-// second; WithMutualTLSFromFiles rejects zero, negative, and sub-second values.
+// [TlsConfiguration.WithMutualTLSFromFiles]. The value is a whole number of
+// seconds and must be positive; WithMutualTLSFromFiles rejects zero.
 //
-// The interval is sent as uint32 seconds. Sub-second values would round to zero
-// and silently fall back to the core default cadence, so they are rejected up
-// front. WithMutualTLSFromFiles also rejects a value whose whole seconds exceed
-// [MaxUint32].
-func WithReloadInterval(d time.Duration) MutualTLSOption {
-	return reloadIntervalOption{interval: d}
+// The interval is sent as a uint32 seconds field on the wire, so the parameter
+// type is uint32 to eliminate any risk of rounding or truncation and to match
+// the Python, Java, and Node bindings, which all take an integer seconds value.
+// The type also makes the [MaxUint32] upper bound and non-negativity trivially
+// guaranteed by the signature.
+func WithReloadInterval(seconds uint32) MutualTLSOption {
+	return reloadIntervalOption{interval: seconds}
 }
 
 // WithMutualTLS enables mutual TLS with an in-memory PEM cert and key loaded
@@ -1155,13 +1155,11 @@ func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*Tl
 // on disk. The GLIDE core reads them at connect time and re-reads them
 // periodically so rotated material is picked up. If no [WithReloadInterval]
 // option is passed, the cadence is the core's default (currently 300 seconds).
-// Pass [WithReloadInterval](d) to override it.
+// Pass [WithReloadInterval](seconds) to override it.
 //
 // Both certPath and keyPath must be non-empty. A reload interval, if passed,
-// must be at least one second; zero, negative, and sub-second values return an
-// error and leave the receiver unchanged. Sub-second values are rejected up
-// front rather than rounded to zero, which would silently fall back to the
-// core default cadence.
+// must be positive. The value is uint32 seconds; the underlying protobuf field
+// cannot represent sub-second cadences.
 //
 // Calling this after [TlsConfiguration.WithMutualTLS] replaces the byte-based
 // state with the new path-based state.
@@ -1181,30 +1179,14 @@ func (config *TlsConfiguration) WithMutualTLSFromFiles(
 	}
 
 	// interval is zero when the caller did not pass WithReloadInterval; any
-	// user-supplied value is validated to be at least one second.
+	// user-supplied value is validated to be positive.
 	// applyClientCertAndKey relies on that: it treats certReloadInterval == 0
 	// as "not specified" and only emits IntervalSeconds when the value is > 0.
-	var interval time.Duration
+	var interval uint32
 	if settings.reloadInterval != nil {
-		if *settings.reloadInterval <= 0 {
+		if *settings.reloadInterval == 0 {
 			return nil, fmt.Errorf(
-				"WithMutualTLSFromFiles: reload interval must be positive; got %v",
-				*settings.reloadInterval)
-		}
-		// Sub-second values would round to zero seconds on the wire, which
-		// the core treats as "use default cadence". Reject them so callers
-		// see the mistake instead of a silent substitution.
-		if *settings.reloadInterval < time.Second {
-			return nil, fmt.Errorf(
-				"WithMutualTLSFromFiles: reload interval must be at least 1 second; got %v. "+
-					"sub-second values would silently round to the GLIDE core default cadence",
-				*settings.reloadInterval)
-		}
-		// A larger value will not fit in the uint32 seconds field.
-		if uint64(*settings.reloadInterval/time.Second) > MaxUint32 {
-			return nil, fmt.Errorf(
-				"WithMutualTLSFromFiles: reload interval must be at most %d seconds; got %v",
-				uint64(MaxUint32), *settings.reloadInterval)
+				"WithMutualTLSFromFiles: reload interval must be positive; got 0")
 		}
 		interval = *settings.reloadInterval
 	}

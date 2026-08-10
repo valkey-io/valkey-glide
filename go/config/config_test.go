@@ -909,7 +909,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			kind:     kindFiles,
 			certPath: testClientCertPath,
 			keyPath:  testClientKeyPath,
-			opts:     []MutualTLSOption{WithReloadInterval(60 * time.Second)},
+			opts:     []MutualTLSOption{WithReloadInterval(60)},
 		},
 		{
 			name:          "files/empty-cert-path",
@@ -926,29 +926,11 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			// Sub-second values are rejected up front. Rounding to zero
-			// seconds would silently fall back to the core default cadence.
-			name:          "files/sub-second-interval-rejected",
-			kind:          kindFiles,
-			certPath:      testClientCertPath,
-			keyPath:       testClientKeyPath,
-			opts:          []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
-			wantErrSubstr: "reload interval must be at least 1 second",
-		},
-		{
 			name:          "files/zero-interval-rejected",
 			kind:          kindFiles,
 			certPath:      testClientCertPath,
 			keyPath:       testClientKeyPath,
 			opts:          []MutualTLSOption{WithReloadInterval(0)},
-			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
-		},
-		{
-			name:          "files/negative-interval-rejected",
-			kind:          kindFiles,
-			certPath:      testClientCertPath,
-			keyPath:       testClientKeyPath,
-			opts:          []MutualTLSOption{WithReloadInterval(-1 * time.Second)},
 			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
 		{
@@ -958,20 +940,8 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			certPath: testClientCertPath,
 			keyPath:  testClientKeyPath,
 			opts: []MutualTLSOption{
-				WithReloadInterval(MaxUint32 * time.Second),
+				WithReloadInterval(MaxUint32),
 			},
-		},
-		{
-			name:     "files/above-max-interval-rejected",
-			kind:     kindFiles,
-			certPath: testClientCertPath,
-			keyPath:  testClientKeyPath,
-			opts: []MutualTLSOption{
-				WithReloadInterval((MaxUint32 + 1) * time.Second),
-			},
-			wantErrSubstr: fmt.Sprintf(
-				"WithMutualTLSFromFiles: reload interval must be at most %d seconds",
-				uint64(MaxUint32)),
 		},
 	}
 
@@ -1003,7 +973,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 				assert.Equal(t, tc.keyBytes, got.clientKey)
 				assert.Empty(t, got.clientCertPath)
 				assert.Empty(t, got.clientKeyPath)
-				assert.Equal(t, time.Duration(0), got.certReloadInterval)
+				assert.Equal(t, uint32(0), got.certReloadInterval)
 			case kindFiles:
 				assert.Nil(t, got.clientCertificate)
 				assert.Nil(t, got.clientKey)
@@ -1047,7 +1017,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 
 	t.Run("files-to-bytes", func(t *testing.T) {
 		tls, err := NewTlsConfiguration().WithMutualTLSFromFiles(
-			testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
+			testClientCertPath, testClientKeyPath, WithReloadInterval(60))
 		require.NoError(t, err)
 		tls, err = tls.WithMutualTLS(byteCert, byteKey)
 		require.NoError(t, err)
@@ -1056,7 +1026,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 		assert.Equal(t, byteKey, tls.clientKey)
 		assert.Empty(t, tls.clientCertPath)
 		assert.Empty(t, tls.clientKeyPath)
-		assert.Equal(t, time.Duration(0), tls.certReloadInterval)
+		assert.Equal(t, uint32(0), tls.certReloadInterval)
 
 		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
 		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
@@ -1143,7 +1113,7 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 		},
 		{
 			name:  "paths-explicit-interval",
-			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second)),
+			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60)),
 			want: wantWire{
 				clientCertPath:      testClientCertPath,
 				clientKeyPath:       testClientKeyPath,
