@@ -103,6 +103,99 @@ public class ClientPoolIntegrationTest {
         }
     }
 
+    private ClientPoolConfig clientInfoPoolConfig(
+            boolean clusterMode, String libName, String clientInfoTag) {
+        assumeMode(clusterMode);
+
+        glide.api.models.configuration.BaseClientConfiguration clientConfig;
+        if (clusterMode) {
+            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                    GlideClusterClientConfiguration.builder();
+            for (String host : CLUSTER_HOSTS) {
+                String[] parts = host.split(":");
+                builder.address(
+                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+            }
+            builder.requestTimeout(5000);
+            if (libName != null) {
+                builder.libName(libName);
+            }
+            if (clientInfoTag != null) {
+                builder.clientInfoTag(clientInfoTag);
+            }
+            clientConfig = builder.build();
+        } else {
+            String[] parts = STANDALONE_HOSTS[0].split(":");
+            GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder =
+                    GlideClientConfiguration.builder()
+                            .address(
+                                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                            .requestTimeout(5000);
+            if (libName != null) {
+                builder.libName(libName);
+            }
+            if (clientInfoTag != null) {
+                builder.clientInfoTag(clientInfoTag);
+            }
+            clientConfig = builder.build();
+        }
+
+        return ClientPoolConfig.builder()
+                .maxSize(1)
+                .minIdle(1)
+                .acquireTimeout(Duration.ofSeconds(10))
+                .clientConfig(clientConfig)
+                .build();
+    }
+
+    private void assertPooledClientLibName(
+            boolean clusterMode, String libName, String clientInfoTag, String expectedLibName)
+            throws Exception {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                glide.TestConfiguration.SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        try (ClientPool pool =
+                ClientPool.create(clientInfoPoolConfig(clusterMode, libName, clientInfoTag))) {
+            waitForPoolReady(pool, 1);
+            assertTrue(pool.getIdleCount() >= 1, "Should have at least 1 idle client");
+
+            try (glide.api.models.pool.PooledGlideClient client =
+                    pool.acquire().get(10, TimeUnit.SECONDS)) {
+                Object response =
+                        client.unwrap().customCommand(new String[] {"CLIENT", "INFO"}).get(5, TimeUnit.SECONDS);
+                assertInstanceOf(String.class, response);
+                String clientInfo = (String) response;
+                assertTrue(
+                        clientInfo.contains("lib-name=" + expectedLibName),
+                        () ->
+                                "Expected pooled client lib-name="
+                                        + expectedLibName
+                                        + ", but CLIENT INFO returned: "
+                                        + clientInfo);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsDefaultLibraryName(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, null, null, "GlideJava");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsConfiguredLibraryName(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, "custom-client", null, "custom-client");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsClientInfoTag(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, null, "framework:1.2", "GlideJava(framework:1.2)");
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testPoolCreateAcquireRelease(boolean clusterMode) throws Exception {
