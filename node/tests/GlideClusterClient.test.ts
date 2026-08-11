@@ -19,6 +19,7 @@ import {
     ClientSideCache,
     ClientTrackingInfo,
     ClusterBatch,
+    ConfigurationError,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -296,6 +297,38 @@ describe("GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it("clientInfoTag_rejects_whitespace", async () => {
+        await expect(
+            GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has space" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
+
+        await expect(
+            GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has\ttab" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
+
+        await expect(
+            GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has\nnewline" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
+    });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientPauseAll then clientUnpause_%p",
