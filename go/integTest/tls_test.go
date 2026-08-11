@@ -222,19 +222,22 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 }
 
 // getClientCertAndKeyPaths returns absolute paths for a client cert/key pair
-// under utils/tls_crts (same convention as getCaCertificate). It resolves the
-// paths but does not stat them; callers use require.NoError so a missing file
-// fails the test at the top instead of silently skipping.
+// under utils/tls_crts (same convention as getCaCertificate). It reuses the
+// server cert/key as the client credentials because cluster_manager.py only
+// generates ca.crt, server.crt, and server.key; the mTLS servers accept any
+// cert signed by that shared CA, mirroring the Java mTLS integration tests.
+// It resolves the paths but does not stat them; callers use require.NoError
+// so a missing file fails the test at the top instead of silently skipping.
 func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
 	glideHome := os.Getenv("GLIDE_HOME_DIR")
 	if glideHome == "" {
 		glideHome = "../.."
 	}
-	certPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.crt"))
+	certPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "server.crt"))
 	if err != nil {
 		return "", "", err
 	}
-	keyPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.key"))
+	keyPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "server.key"))
 	if err != nil {
 		return "", "", err
 	}
