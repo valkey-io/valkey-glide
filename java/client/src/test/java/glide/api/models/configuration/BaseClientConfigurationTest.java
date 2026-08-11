@@ -86,6 +86,17 @@ public class BaseClientConfigurationTest {
         assertEquals("clientInfoTag must not contain whitespace characters", exception.getMessage());
     }
 
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"a b", "a\tb", "a\nb", "a\u0085b", "a\u00A0b", "a\u2007b", "a\u202Fb", "a\u3000b"})
+    public void testLibNameRejectsWhitespace(String libName) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().libName(libName));
+        assertEquals("libName must not contain whitespace characters", exception.getMessage());
+    }
+
     @Test
     public void testDatabaseIdDefault() {
         // Test that databaseId defaults to null when not specified
