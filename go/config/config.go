@@ -227,6 +227,15 @@ const (
 // during connection and topology refresh.
 type AddressResolver func(host string, port int) (string, int)
 
+// validateClientInfoTag panics if tag contains any Unicode whitespace character.
+func validateClientInfoTag(tag string) {
+	for _, r := range tag {
+		if unicode.IsSpace(r) {
+			panic("clientInfoTag must not contain whitespace characters")
+		}
+	}
+}
+
 type baseClientConfiguration struct {
 	addresses             []NodeAddress
 	useTLS                bool
@@ -610,11 +619,7 @@ func (config *ClientConfiguration) WithLibName(libName string) *ClientConfigurat
 //
 // Panics if clientInfoTag contains any Unicode whitespace character.
 func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
-	for _, r := range clientInfoTag {
-		if unicode.IsSpace(r) {
-			panic("clientInfoTag must not contain whitespace characters")
-		}
-	}
+	validateClientInfoTag(clientInfoTag)
 	config.clientInfoTag = clientInfoTag
 	return config
 }
@@ -894,11 +899,7 @@ func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterCl
 //
 // Panics if clientInfoTag contains any Unicode whitespace character.
 func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
-	for _, r := range clientInfoTag {
-		if unicode.IsSpace(r) {
-			panic("clientInfoTag must not contain whitespace characters")
-		}
-	}
+	validateClientInfoTag(clientInfoTag)
 	config.clientInfoTag = clientInfoTag
 	return config
 }
