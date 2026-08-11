@@ -8577,12 +8577,12 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
+            long blockTimeMs = 2000L;
             assertNull(
                     testClient
                             .xread(
                                     createMap(key1, timestamp_1_1),
-                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadOptions.builder().block(blockTimeMs).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -8593,7 +8593,7 @@ public class SharedCommandTests {
                             testClient
                                     .xread(
                                             createMap(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(5, TimeUnit.SECONDS));
         }
     }
 
@@ -8640,12 +8640,12 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            long oneSecondInMS = 1000L;
+            long blockTimeMs = 2000L;
             assertNull(
                     testClient
                             .xreadBinary(
                                     createMap(key1, timestamp_1_1),
-                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                                    StreamReadOptions.builder().block(blockTimeMs).build())
                             .get());
 
             // with 0 timeout (no timeout) should never time out,
@@ -8656,7 +8656,7 @@ public class SharedCommandTests {
                             testClient
                                     .xreadBinary(
                                             createMap(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
-                                    .get(3, TimeUnit.SECONDS));
+                                    .get(5, TimeUnit.SECONDS));
         }
     }
 
