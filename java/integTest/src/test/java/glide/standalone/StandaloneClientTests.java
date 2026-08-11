@@ -71,7 +71,7 @@ public class StandaloneClientTests {
                 GlideClient.createClient(commonClientConfig().libName("custom-client").build()).get()) {
             String overrideOnlyInfo =
                     (String) overrideOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
-            assertTrue(overrideOnlyInfo.contains("lib-name=custom-client"));
+            assertTrue(overrideOnlyInfo.contains(" lib-name=custom-client "));
         }
 
         try (GlideClient tagOnlyClient =
