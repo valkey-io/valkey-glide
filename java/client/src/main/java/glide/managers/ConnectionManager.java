@@ -27,6 +27,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
+import glide.internal.ClientLibraryNameResolver;
 import glide.internal.GlideNativeBridge;
 import java.util.Map;
 import java.util.Set;
@@ -40,9 +41,6 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 public class ConnectionManager {
-
-    /** Default library name for Java clients */
-    private static final String DEFAULT_LIB_NAME = "GlideJava";
 
     /** Native client handle for operations */
     private volatile long nativeClientHandle = 0;
@@ -339,7 +337,9 @@ public class ConnectionManager {
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
                         }
-                        requestBuilder.setLibName(composeLibName(configuration));
+                        requestBuilder.setLibName(
+                                ClientLibraryNameResolver.resolve(
+                                        configuration.getLibName(), configuration.getClientInfoTag()));
                         requestBuilder.setLazyConnect(configuration.isLazyConnect());
 
                         // Set database ID
@@ -655,19 +655,6 @@ public class ConnectionManager {
             throw new IllegalStateException("Client is closed");
         }
         return GlideNativeBridge.getClientInfo(nativeClientHandle);
-    }
-
-    static String composeLibName(BaseClientConfiguration configuration) {
-        String baseName = configuration.getLibName();
-        if (baseName == null || baseName.isEmpty()) {
-            baseName = DEFAULT_LIB_NAME;
-        }
-
-        String clientInfoTag = configuration.getClientInfoTag();
-        if (clientInfoTag == null || clientInfoTag.isEmpty()) {
-            return baseName;
-        }
-        return baseName + "(" + clientInfoTag + ")";
     }
 
     private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
