@@ -154,15 +154,26 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {
 	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
 
+	// Test libName override only
+	overrideConfig := suite.defaultClusterClientConfig().
+		WithLibName("custom-client")
+	overrideClient, err := suite.clusterClient(overrideConfig)
+	require.NoError(suite.T(), err)
+
+	result, err := overrideClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	require.NoError(suite.T(), err)
+	strResult := result.SingleValue().(string)
+	assert.Contains(suite.T(), strResult, "lib-name=custom-client")
+
 	// Test clientInfoTag only (default lib name)
 	tagConfig := suite.defaultClusterClientConfig().
 		WithClientInfoTag("framework:1.2")
 	tagClient, err := suite.clusterClient(tagConfig)
 	require.NoError(suite.T(), err)
 
-	result, err := tagClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+	result, err = tagClient.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
 	require.NoError(suite.T(), err)
-	strResult := result.SingleValue().(string)
+	strResult = result.SingleValue().(string)
 	assert.Contains(suite.T(), strResult, "lib-name=GlideGo(framework:1.2)")
 
 	// Test combined libName + clientInfoTag
