@@ -75,7 +75,8 @@ public abstract class BaseClientConfiguration {
     /**
      * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
      * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
-     * present, it is appended to the effective library name in parentheses.
+     * present, it is appended to the effective library name in parentheses. The override must not
+     * contain Unicode whitespace.
      */
     private final String libName;
 
@@ -203,6 +204,19 @@ public abstract class BaseClientConfiguration {
             C extends BaseClientConfiguration, B extends BaseClientConfigurationBuilder<C, B>> {
 
         /**
+         * Sets the optional library-name override.
+         *
+         * @param libName library-name override; null or empty means absent
+         * @return this builder
+         * @throws IllegalArgumentException if the override contains Unicode whitespace
+         */
+        public B libName(String libName) {
+            validateNoUnicodeWhitespace("libName", libName);
+            this.libName = libName;
+            return self();
+        }
+
+        /**
          * Sets the optional client information tag.
          *
          * @param clientInfoTag attribution tag; null or empty means absent
@@ -210,14 +224,16 @@ public abstract class BaseClientConfiguration {
          * @throws IllegalArgumentException if the tag contains Unicode whitespace
          */
         public B clientInfoTag(String clientInfoTag) {
-            if (clientInfoTag != null
-                    && clientInfoTag
-                            .codePoints()
-                            .anyMatch(BaseClientConfigurationBuilder::isUnicodeWhitespace)) {
-                throw new IllegalArgumentException("clientInfoTag must not contain whitespace characters");
-            }
+            validateNoUnicodeWhitespace("clientInfoTag", clientInfoTag);
             this.clientInfoTag = clientInfoTag;
             return self();
+        }
+
+        private static void validateNoUnicodeWhitespace(String fieldName, String value) {
+            if (value != null
+                    && value.codePoints().anyMatch(BaseClientConfigurationBuilder::isUnicodeWhitespace)) {
+                throw new IllegalArgumentException(fieldName + " must not contain whitespace characters");
+            }
         }
 
         private static boolean isUnicodeWhitespace(int codePoint) {
