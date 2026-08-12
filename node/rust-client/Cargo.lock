@@ -3212,6 +3212,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "bytes",
+ "dashmap 5.5.3",
  "glide-core",
  "logger_core",
  "napi",
