@@ -166,7 +166,12 @@ export class ClientPool {
         // This validates connectivity — if the config is wrong (bad address,
         // wrong cluster mode), the error propagates to the caller immediately
         // instead of being discovered at acquire() time.
-        await pool.createAndAddClient();
+        try {
+            await pool.createAndAddClient();
+        } catch (e) {
+            pool.close(); // Stop monitor and clean up
+            throw e;
+        }
 
         // Remaining warmup is best-effort background
         for (let i = 1; i < minIdle; i++) {
@@ -281,17 +286,20 @@ export class ClientPool {
             this.resetting--;
         }
 
+        if (this.closed) {
+            entry.client.close();
+            return;
+        }
+
         // If waiters are queued, hand directly to next waiter (FIFO fairness)
-        if (this.waiters.length > 0 && !this.closed) {
+        if (this.waiters.length > 0) {
             const waiter = this.waiters.shift()!;
             waiter.resolve(entry);
             return;
         }
 
         // Return to idle stack (LIFO for connection reuse locality)
-        if (!this.closed) {
-            this.idle.push(entry);
-        }
+        this.idle.push(entry);
     }
 
     /**
