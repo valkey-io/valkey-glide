@@ -56,6 +56,23 @@ public class ConnectionManager {
     private volatile byte[] connectionRequestBytes;
 
     /**
+     * True when this manager wraps a pool-borrowed native client. The pool owns the native
+     * connection's lifecycle, so close() here must not tear it down.
+     */
+    private boolean poolBorrowed = false;
+
+    /**
+     * Constructor for pool-borrowed clients. Seeds the fields that {@code scopedConnection} reads
+     * (native handle plus the pool's serialized ConnectionRequest) so scope acquisition can proceed
+     * without going through {@link #connectToValkey}.
+     */
+    public ConnectionManager(long nativeClientHandle, byte[] connectionRequestBytes) {
+        this.nativeClientHandle = nativeClientHandle;
+        this.connectionRequestBytes = connectionRequestBytes;
+        this.poolBorrowed = true;
+    }
+
+    /**
      * Connect to Valkey using the native bridge.
      *
      * @param configuration Connection Configuration
@@ -559,6 +576,11 @@ public class ConnectionManager {
     public Future<Void> closeConnection() {
         return CompletableFuture.supplyAsync(
                 () -> {
+                    if (poolBorrowed) {
+                        // The pool owns the native handle; releasing goes through the pool.
+                        isClosed = true;
+                        return null;
+                    }
                     if (!isClosed && nativeClientHandle != 0) {
                         try {
                             // Clean up any pending async operations for this client
@@ -577,6 +599,12 @@ public class ConnectionManager {
     public void closeConnectionSync() {
         if (isClosed) {
             return; // Already closed
+        }
+
+        if (poolBorrowed) {
+            // The pool owns the native handle; releasing goes through the pool.
+            isClosed = true;
+            return;
         }
 
         try {

@@ -51,13 +51,15 @@ public class ClientPool implements AutoCloseable {
 
     private final long poolId;
     private final ClientPoolConfig config;
+    private final byte[] connectionRequestBytes;
     private final AtomicInteger state = new AtomicInteger(RUNNING);
     private final java.util.concurrent.ConcurrentHashMap<Long, GlideClient> clientCache =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    private ClientPool(long poolId, ClientPoolConfig config) {
+    private ClientPool(long poolId, ClientPoolConfig config, byte[] connectionRequestBytes) {
         this.poolId = poolId;
         this.config = config;
+        this.connectionRequestBytes = connectionRequestBytes;
     }
 
     /**
@@ -90,7 +92,7 @@ public class ClientPool implements AutoCloseable {
         if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");
         if (poolId < 0) throw new RuntimeException("Pool creation failed: " + poolId);
 
-        ClientPool pool = new ClientPool(poolId, config);
+        ClientPool pool = new ClientPool(poolId, config, connectionRequestBytes);
 
         // Connectivity probe: create one client to validate the config eagerly.
         // If this fails, propagate the actual connection error (not a timeout).
@@ -197,7 +199,10 @@ public class ClientPool implements AutoCloseable {
         GlideClient cached = clientCache.get(clientId);
         if (cached != null) return cached;
         return clientCache.computeIfAbsent(
-                clientId, id -> GlideClient.fromPoolHandle(id, 0, config.getRequestTimeout().toMillis()));
+                clientId,
+                id ->
+                        GlideClient.fromPoolHandle(
+                                id, 0, config.getRequestTimeout().toMillis(), connectionRequestBytes));
     }
 
     /** Release a client back to the pool. */
