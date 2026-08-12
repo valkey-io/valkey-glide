@@ -76,14 +76,14 @@ public abstract class BaseClientConfiguration {
      * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
      * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
      * present, it is appended to the effective library name in parentheses. The override must not
-     * contain Unicode whitespace.
+     * contain Unicode whitespace. Dedicated standalone monitor clients also apply this option.
      */
     private final String libName;
 
     /**
      * Optional attribution tag appended to the effective library name in parentheses. For example,
      * {@code GlideJava(my-framework:1.2.3)}. The tag must not contain Unicode whitespace. If null or
-     * empty, no tag is appended.
+     * empty, no tag is appended. Dedicated standalone monitor clients also apply this option.
      */
     private final String clientInfoTag;
 

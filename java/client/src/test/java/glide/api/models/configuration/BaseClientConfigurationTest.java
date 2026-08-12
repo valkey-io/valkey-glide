@@ -60,19 +60,22 @@ public class BaseClientConfigurationTest {
     }
 
     @Test
-    public void testClientInfoTagIsInheritedByStandaloneAndClusterConfigurations() {
-        assertEquals(
-                "standalone-framework",
+    public void testIdentificationFieldsAreInheritedByStandaloneAndClusterConfigurations() {
+        GlideClientConfiguration standalone =
                 GlideClientConfiguration.builder()
+                        .libName("standalone-client")
                         .clientInfoTag("standalone-framework")
-                        .build()
-                        .getClientInfoTag());
-        assertEquals(
-                "cluster-framework",
+                        .build();
+        assertEquals("standalone-client", standalone.getLibName());
+        assertEquals("standalone-framework", standalone.getClientInfoTag());
+
+        GlideClusterClientConfiguration cluster =
                 GlideClusterClientConfiguration.builder()
+                        .libName("cluster-client")
                         .clientInfoTag("cluster-framework")
-                        .build()
-                        .getClientInfoTag());
+                        .build();
+        assertEquals("cluster-client", cluster.getLibName());
+        assertEquals("cluster-framework", cluster.getClientInfoTag());
     }
 
     @ParameterizedTest

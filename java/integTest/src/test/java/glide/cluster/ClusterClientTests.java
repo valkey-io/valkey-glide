@@ -106,7 +106,7 @@ public class ClusterClientTests {
                         .get();
         assertTrue(clientInfo.hasMultiData());
         for (Object info : clientInfo.getMultiValue().values()) {
-            assertTrue(((String) info).contains("lib-name=" + expectedLibName));
+            assertTrue(((String) info).contains(" lib-name=" + expectedLibName + " "));
         }
     }
 
