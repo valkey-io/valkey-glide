@@ -155,9 +155,9 @@ jobs:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
-                      make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                      make install-tools modules-test tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
                   else
-                      make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                      make install-tools build modules-test tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
                   fi
 
             - name: Upload test reports

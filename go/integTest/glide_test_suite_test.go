@@ -63,6 +63,18 @@ var (
 		"",
 		"Specifies specific endpoints the standalone server is running on",
 	)
+	standaloneTlsHostsFlag = flag.String(
+		"tls-standalone-endpoints",
+		"",
+		"Specifies TLS-enabled endpoints the standalone nodes are running on. "+
+			"When set, the fixture does not spin up a TLS standalone pair.",
+	)
+	clusterTlsHostsFlag = flag.String(
+		"tls-cluster-endpoints",
+		"",
+		"Specifies TLS-enabled endpoints the cluster nodes are running on. "+
+			"When set, the fixture does not spin up a TLS cluster.",
+	)
 	longTimeoutTests = flag.Bool("long-timeout-tests", false, "Set to true to run tests with longer timeouts")
 	otelTest         = flag.Bool("otel-test", false, "Set to true to run opentelemetry tests")
 )
@@ -79,34 +91,36 @@ func (suite *GlideTestSuite) SetupSuite() {
 		log.Fatal(err)
 	}
 
-	// Note: code does not start standalone if cluster hosts are given and vice versa.
-	// External endpoints, when provided, only cover the non-TLS server pair; TLS
-	// tests are only run against fixture-created servers.
-	startServer := true
-
+	// Each of the four server pairs (non-TLS standalone, non-TLS cluster, TLS
+	// standalone, TLS cluster) is independently either supplied by an external
+	// endpoint flag or started by the fixture. Passing only one flag overrides
+	// only that pair; the other three still boot inside the fixture.
 	if *standaloneHosts != "" {
 		suite.standaloneHosts = parseHosts(suite, *standaloneHosts)
-		startServer = false
-	}
-	if *clusterHosts != "" {
-		suite.clusterHosts = parseHosts(suite, *clusterHosts)
-		startServer = false
-	}
-	if startServer {
+	} else {
 		// Start non-TLS standalone instance
 		clusterManagerOutput := runClusterManager(suite, []string{"start", "-r", "3"}, false)
 		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
-
+	}
+	if *clusterHosts != "" {
+		suite.clusterHosts = parseHosts(suite, *clusterHosts)
+	} else {
 		// Start non-TLS cluster
-		clusterManagerOutput = runClusterManager(suite, []string{"start", "--cluster-mode", "-r", "3"}, false)
+		clusterManagerOutput := runClusterManager(suite, []string{"start", "--cluster-mode", "-r", "3"}, false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
-
+	}
+	if *standaloneTlsHostsFlag != "" {
+		suite.standaloneTlsHosts = parseHosts(suite, *standaloneTlsHostsFlag)
+	} else {
 		// Start TLS standalone instance
-		clusterManagerOutput = runClusterManager(suite, []string{"--tls", "start", "-r", "3"}, false)
+		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "3"}, false)
 		suite.standaloneTlsHosts = extractAddresses(suite, clusterManagerOutput)
-
+	}
+	if *clusterTlsHostsFlag != "" {
+		suite.clusterTlsHosts = parseHosts(suite, *clusterTlsHostsFlag)
+	} else {
 		// Start TLS cluster
-		clusterManagerOutput = runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "3"}, false)
+		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "3"}, false)
 		suite.clusterTlsHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 

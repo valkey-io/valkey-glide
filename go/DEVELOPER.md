@@ -213,11 +213,20 @@ make integ-test test-filter="Test\(Set\|Get\)"
 
 #### Additional Parameters
 
-Integration and modules tests accept `standalone-endpoints` and `cluster-endpoints` parameters to run tests against existing non-TLS servers.
-By default, those test suites start both TLS and non-TLS standalone and cluster servers and stop them at the end.
+Integration and modules tests accept endpoint parameters to run tests against existing servers instead of spinning up the fixture for that pair.
+Each of the four fixture pairs can be overridden independently; unset pairs still boot inside the fixture.
+
+- `standalone-endpoints`: existing non-TLS standalone server(s).
+- `cluster-endpoints`: existing non-TLS cluster server(s).
+- `tls-standalone-endpoints`: existing TLS standalone server(s).
+- `tls-cluster-endpoints`: existing TLS cluster server(s).
+
+The older `tls=true` Makefile parameter is gone.
+Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
 
 ```bash
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
+make modules-test tls-cluster-endpoints=tls.example.internal:6379
 ```
 
 #### IAM Authentication Tests
