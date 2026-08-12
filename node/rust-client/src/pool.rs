@@ -216,7 +216,8 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
 
             // Discard abandoned clients
             for client_id in abandoned {
-                // Revalidate before discarding (TOCTOU protection, fresh timestamp)
+                // Revalidate before discarding (TOCTOU mitigation — reduces but does not
+                // eliminate the race window, same pattern as glide-core's monitor)
                 let recheck_now = Instant::now();
                 let should_discard = CLIENT_ACTIVITY
                     .get(&client_id)
@@ -255,6 +256,7 @@ fn start_node_abandon_monitor(pool_id: u64, abandon_timeout: Duration) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POOL CONFIG / METRICS
+// TODO: Wire TS pool to these Rust-managed functions, replacing TS-level state duplication.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[napi(object)]

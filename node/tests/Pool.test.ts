@@ -437,5 +437,32 @@ describe("ClientPool", () => {
             },
             TIMEOUT,
         );
+
+        it(
+            "does not exceed maxSize during concurrent acquire while release is resetting",
+            async () => {
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 1,
+                    minIdle: 1,
+                });
+                await waitForIdle(pool, 1);
+
+                try {
+                    const firstClient = await pool.acquire();
+
+                    // release() is async (state reset). Concurrent acquires should
+                    // not create extra clients beyond maxSize.
+                    const releasePromise = pool.release(firstClient);
+                    const secondClient = await pool.acquire();
+                    await releasePromise;
+
+                    expect(pool.getMetrics().total).toBeLessThanOrEqual(1);
+                    await pool.release(secondClient);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
     });
 });

@@ -92,6 +92,7 @@ export class ClientPool {
     private active = new Map<number, PoolEntry>();
     private closed = false;
     private nextId = 1;
+    private resetting = 0;
     private readonly maxSize: number;
     private readonly minIdle: number;
     private readonly acquireTimeoutMs: number;
@@ -210,7 +211,10 @@ export class ClientPool {
         }
 
         // If below max size, create a new client
-        if (this.idle.length + this.active.size < this.maxSize) {
+        if (
+            this.idle.length + this.active.size + this.resetting <
+            this.maxSize
+        ) {
             const newEntry = await this.createEntry();
             this.active.set(newEntry.id, newEntry);
             poolRegisterClient(this.poolId, newEntry.client.getClientId());
@@ -268,8 +272,14 @@ export class ClientPool {
         // Unregister from Rust-level pool tracking
         poolUnregisterClient(entry.client.getClientId());
 
-        // State reset on the actual connection
-        await this.resetClientState(entry.client);
+        // State reset on the actual connection (track as resetting for capacity)
+        this.resetting++;
+
+        try {
+            await this.resetClientState(entry.client);
+        } finally {
+            this.resetting--;
+        }
 
         // If waiters are queued, hand directly to next waiter (FIFO fairness)
         if (this.waiters.length > 0 && !this.closed) {
