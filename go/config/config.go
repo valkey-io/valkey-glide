@@ -227,13 +227,14 @@ const (
 // during connection and topology refresh.
 type AddressResolver func(host string, port int) (string, int)
 
-// validateClientInfoTag panics if tag contains any Unicode whitespace character.
-func validateClientInfoTag(tag string) {
+// validateClientInfoTag returns an error if tag contains any Unicode whitespace character.
+func validateClientInfoTag(tag string) error {
 	for _, r := range tag {
 		if unicode.IsSpace(r) {
-			panic("clientInfoTag must not contain whitespace characters")
+			return errors.New("clientInfoTag must not contain whitespace characters")
 		}
 	}
+	return nil
 }
 
 type baseClientConfiguration struct {
@@ -292,6 +293,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	// Compose lib name from libName and clientInfoTag.
 	// If neither is set, Rust core uses default ("GlideGo").
 	if config.libName != "" || config.clientInfoTag != "" {
+		if config.clientInfoTag != "" {
+			if err := validateClientInfoTag(config.clientInfoTag); err != nil {
+				return nil, err
+			}
+		}
 		baseName := config.libName
 		if baseName == "" {
 			baseName = "GlideGo"
@@ -615,11 +621,8 @@ func (config *ClientConfiguration) WithLibName(libName string) *ClientConfigurat
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
 // For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
-// The tag must not contain Unicode whitespace characters.
-//
-// Panics if clientInfoTag contains any Unicode whitespace character.
+// The tag must not contain Unicode whitespace characters; validation occurs at client creation time.
 func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
-	validateClientInfoTag(clientInfoTag)
 	config.clientInfoTag = clientInfoTag
 	return config
 }
@@ -895,11 +898,8 @@ func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterCl
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
 // For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
-// The tag must not contain Unicode whitespace characters.
-//
-// Panics if clientInfoTag contains any Unicode whitespace character.
+// The tag must not contain Unicode whitespace characters; validation occurs at client creation time.
 func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
-	validateClientInfoTag(clientInfoTag)
 	config.clientInfoTag = clientInfoTag
 	return config
 }

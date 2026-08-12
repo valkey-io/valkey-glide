@@ -2004,16 +2004,14 @@ func TestClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing.T) {
 	assert.Equal(t, "custom-client(framework:1.2)", result.LibName)
 }
 
-func TestClientConfiguration_WithClientInfoTag_whitespace_panics(t *testing.T) {
-	assert.Panics(t, func() {
-		NewClientConfiguration().WithClientInfoTag("has space")
-	})
-	assert.Panics(t, func() {
-		NewClientConfiguration().WithClientInfoTag("has\ttab")
-	})
-	assert.Panics(t, func() {
-		NewClientConfiguration().WithClientInfoTag("has\nnewline")
-	})
+func TestClientConfiguration_WithClientInfoTag_whitespace_errors(t *testing.T) {
+	cases := []string{"has space", "has\ttab", "has\nnewline"}
+	for _, tag := range cases {
+		config := NewClientConfiguration().WithClientInfoTag(tag)
+		_, err := config.ToProtobuf()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "clientInfoTag must not contain whitespace characters")
+	}
 }
 
 func TestClusterClientConfiguration_WithLibName_default_notSet(t *testing.T) {
@@ -2052,11 +2050,12 @@ func TestClusterClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing
 	assert.Equal(t, "custom-cluster-client(my-app:3.0)", result.LibName)
 }
 
-func TestClusterClientConfiguration_WithClientInfoTag_whitespace_panics(t *testing.T) {
-	assert.Panics(t, func() {
-		NewClusterClientConfiguration().WithClientInfoTag("has space")
-	})
-	assert.Panics(t, func() {
-		NewClusterClientConfiguration().WithClientInfoTag("has\ttab")
-	})
+func TestClusterClientConfiguration_WithClientInfoTag_whitespace_errors(t *testing.T) {
+	cases := []string{"has space", "has\ttab"}
+	for _, tag := range cases {
+		config := NewClusterClientConfiguration().WithClientInfoTag(tag)
+		_, err := config.ToProtobuf()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "clientInfoTag must not contain whitespace characters")
+	}
 }

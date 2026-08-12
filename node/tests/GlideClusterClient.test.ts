@@ -244,7 +244,7 @@ describe("GlideClusterClient", () => {
                 overrideOnlyClient.close();
             }
 
-            // Test clientInfoTag only (appended to default GlideNode)
+            // Test clientInfoTag only (appended to default GlideJS)
             const tagOnlyClient = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -261,7 +261,7 @@ describe("GlideClusterClient", () => {
 
                 for (const entry of info) {
                     expect(entry.value).toContain(
-                        "lib-name=GlideNode(framework:1.2)",
+                        "lib-name=GlideJS(framework:1.2)",
                     );
                 }
             } finally {

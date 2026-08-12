@@ -1006,8 +1006,9 @@ pub fn connect(
 
 pub(crate) fn client_set_info_pipeline(lib_name: Option<&str>) -> Pipeline {
     let mut pipeline = crate::pipe();
-    let lib_name_value = lib_name.unwrap_or("UnknownClient");
-    let final_lib_name = option_env!("GLIDE_NAME").unwrap_or(lib_name_value);
+    let final_lib_name = lib_name
+        .or(option_env!("GLIDE_NAME"))
+        .unwrap_or("UnknownClient");
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")

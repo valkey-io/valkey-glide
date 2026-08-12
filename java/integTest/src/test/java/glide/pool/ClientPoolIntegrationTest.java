@@ -198,6 +198,16 @@ public class ClientPoolIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsCombinedLibraryMetadata(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(
+                clusterMode,
+                "custom-client",
+                "framework:1.2",
+                "custom-client(framework:1.2)");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testPoolCreateAcquireRelease(boolean clusterMode) throws Exception {
         ClientPool pool = ClientPool.create(poolConfig(clusterMode));
         waitForPoolReady(pool, 1);
