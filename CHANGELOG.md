@@ -24,7 +24,7 @@
 
 ### Changes
 
-* Java: Add optional `clientInfoTag` configuration for standalone and cluster clients, composing tags with the default or custom library name reported by `CLIENT INFO` ([#6429](https://github.com/valkey-io/valkey-glide/issues/6429))
+* Java: Add optional `clientInfoTag` configuration for standalone, cluster, pooled, and dedicated standalone monitor clients, composing tags with the default or custom library name reported by server client metadata ([#6429](https://github.com/valkey-io/valkey-glide/issues/6429))
 * Go: Add optional `clientInfoTag` and `libName` configuration via `WithClientInfoTag` and `WithLibName` for standalone and cluster clients, composing tags with the default or custom library name reported by `CLIENT INFO` ([#6429](https://github.com/valkey-io/valkey-glide/issues/6429))
 * Node: Add optional `libName` and `clientInfoTag` configuration for standalone and cluster clients, composing tags with the default or custom library name reported by `CLIENT INFO` ([#6429](https://github.com/valkey-io/valkey-glide/issues/6429))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads  ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))

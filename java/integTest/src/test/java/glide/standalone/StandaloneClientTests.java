@@ -53,7 +53,7 @@ public class StandaloneClientTests {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
         String info = (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get();
-        assertTrue(info.contains("lib-name=GlideJava"));
+        assertTrue(info.contains(" lib-name=GlideJava "));
         assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
 
         client.close();
@@ -79,7 +79,7 @@ public class StandaloneClientTests {
                         .get()) {
             String tagOnlyInfo =
                     (String) tagOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
-            assertTrue(tagOnlyInfo.contains("lib-name=GlideJava(framework:1.2)"));
+            assertTrue(tagOnlyInfo.contains(" lib-name=GlideJava(framework:1.2) "));
         }
 
         try (GlideClient combinedClient =
@@ -91,7 +91,7 @@ public class StandaloneClientTests {
                         .get()) {
             String combinedInfo =
                     (String) combinedClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
-            assertTrue(combinedInfo.contains("lib-name=custom-client(framework:1.2)"));
+            assertTrue(combinedInfo.contains(" lib-name=custom-client(framework:1.2) "));
         }
     }
 
