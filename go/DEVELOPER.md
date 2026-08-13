@@ -221,7 +221,6 @@ Each of the four fixture pairs can be overridden independently; unset pairs stil
 - `tls-standalone-endpoints`: existing TLS standalone server(s).
 - `tls-cluster-endpoints`: existing TLS cluster server(s).
 
-The older `tls=true` Makefile parameter is gone.
 Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
 
 ```bash
