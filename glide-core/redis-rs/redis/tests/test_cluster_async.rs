@@ -7372,6 +7372,66 @@ mod cluster_async {
         );
     }
 
+    // Regression test for #6759. Under topology-refresh churn a concurrent
+    // remove_node call against the DashMap-backed connection_map can drain
+    // the primary or node iterator between the outer is_empty check and
+    // the walk that fills `receivers`, so `aggregate_results` runs with an
+    // empty receivers vector. The pre-fix classification for that branch
+    // was `ErrorKind::ClientError` with the misleading message
+    // "Failed to aggregate results for multi-slot command. Maybe a
+    // malformed command?", and `ClientError` has `RetryMethod::NoRetry`,
+    // so callers surfaced a non-retryable error for a transient
+    // connectivity condition.
+    //
+    // The empty-receivers branch is reachable deterministically from a
+    // test by routing a command with `MultipleNodeRoutingInfo::MultiSlot`
+    // and an empty routes vector: `into_channels` yields no channels, so
+    // `aggregate_results` receives `receivers.is_empty() == true` on the
+    // very first call. Before the fix this test hits the old
+    // `ClientError` classification; after the fix it hits the retryable
+    // `ConnectionNotFoundForRoute` classification with an honest message.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_empty_receivers_multi_node_is_retryable() {
+        let name = "test_async_cluster_empty_receivers_multi_node_is_retryable";
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], _port| {
+                respond_startup_two_nodes(name, received_cmd)?;
+                Err(Ok(Value::Nil))
+            },
+        );
+
+        let routing = RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![],
+                redis::cluster_routing::MultiSlotArgPattern::KeysOnly,
+            )),
+            None,
+        ));
+        let err = runtime
+            .block_on(connection.route_command(&cmd("MGET"), routing))
+            .expect_err("empty-receivers multi-node fan-out must fail");
+
+        assert_eq!(
+            err.kind(),
+            ErrorKind::ConnectionNotFoundForRoute,
+            "empty-receivers branch must classify as retryable \
+             ConnectionNotFoundForRoute, got kind={:?} err={err:?}",
+            err.kind(),
+        );
+        assert!(
+            !err.to_string().contains("malformed command"),
+            "error message must not claim the command was malformed: {err}",
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;

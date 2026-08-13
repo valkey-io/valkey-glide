@@ -2170,12 +2170,16 @@ where
             convert_result(receiver.await)
         };
 
-        // Sanity check: if there are no receivers at all, this is a client‐error
+        // Under topology-refresh churn, a concurrent remove_node against the
+        // DashMap-backed connection_map can transiently drain the primary or
+        // node iterator between the outer is_empty check and this walk.
+        // Classify the empty-receivers case as a retryable connectivity
+        // condition so the FanOut RefreshSlots+retry path fires.
         if receivers.is_empty() {
             return Err(RedisError::from((
-                ErrorKind::ClientError,
+                ErrorKind::ConnectionNotFoundForRoute,
                 "Client internal error",
-                "Failed to aggregate results for multi-slot command. Maybe a malformed command?"
+                "No live receivers for multi-node fan-out; likely a transient topology-refresh race"
                     .to_string(),
             )));
         }
