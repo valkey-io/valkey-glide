@@ -227,14 +227,29 @@ const (
 // during connection and topology refresh.
 type AddressResolver func(host string, port int) (string, int)
 
-// validateClientInfoTag returns an error if tag contains any Unicode whitespace character.
-func validateClientInfoTag(tag string) error {
-	for _, r := range tag {
-		if unicode.IsSpace(r) {
-			return errors.New("clientInfoTag must not contain whitespace characters")
+// resolveLibName validates and composes the library name reported to the server.
+func resolveLibName(libName, clientInfoTag string) (string, error) {
+	for _, value := range []struct {
+		field string
+		value string
+	}{
+		{field: "libName", value: libName},
+		{field: "clientInfoTag", value: clientInfoTag},
+	} {
+		for _, r := range value.value {
+			if unicode.IsSpace(r) {
+				return "", fmt.Errorf("%s must not contain whitespace characters", value.field)
+			}
 		}
 	}
-	return nil
+
+	if libName == "" {
+		libName = "GlideGo"
+	}
+	if clientInfoTag != "" {
+		libName += "(" + clientInfoTag + ")"
+	}
+	return libName, nil
 }
 
 type baseClientConfiguration struct {
@@ -290,24 +305,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		request.ClientAz = config.clientAZ
 	}
 
-	// Compose lib name from libName and clientInfoTag.
-	// If neither is set, Rust core uses default ("GlideGo").
-	if config.libName != "" || config.clientInfoTag != "" {
-		if config.clientInfoTag != "" {
-			if err := validateClientInfoTag(config.clientInfoTag); err != nil {
-				return nil, err
-			}
-		}
-		baseName := config.libName
-		if baseName == "" {
-			baseName = "GlideGo"
-		}
-		if config.clientInfoTag != "" {
-			request.LibName = baseName + "(" + config.clientInfoTag + ")"
-		} else {
-			request.LibName = baseName
-		}
+	libName, err := resolveLibName(config.libName, config.clientInfoTag)
+	if err != nil {
+		return nil, err
 	}
+	request.LibName = libName
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
@@ -612,16 +614,18 @@ func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfigur
 }
 
 // WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
-// establishment. If not set, the default "GlideGo" is used by the Rust core. When [WithClientInfoTag] is also
-// configured, the tag is appended in parentheses (e.g. "custom-lib(my-tag)").
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). The value must not contain Unicode whitespace;
+// validation occurs at client creation time.
 func (config *ClientConfiguration) WithLibName(libName string) *ClientConfiguration {
 	config.libName = libName
 	return config
 }
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
-// For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
-// The tag must not contain Unicode whitespace characters; validation occurs at client creation time.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. The value must not contain Unicode whitespace; validation occurs at client creation
+// time.
 func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
 	config.clientInfoTag = clientInfoTag
 	return config
@@ -889,16 +893,18 @@ func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *Cluster
 }
 
 // WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
-// establishment. If not set, the default "GlideGo" is used by the Rust core. When [WithClientInfoTag] is also
-// configured, the tag is appended in parentheses (e.g. "custom-lib(my-tag)").
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). The value must not contain Unicode whitespace;
+// validation occurs at client creation time.
 func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterClientConfiguration {
 	config.libName = libName
 	return config
 }
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
-// For example, configuring the tag "framework:1.2" results in the lib name "GlideGo(framework:1.2)".
-// The tag must not contain Unicode whitespace characters; validation occurs at client creation time.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. The value must not contain Unicode whitespace; validation occurs at client creation
+// time.
 func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
 	config.clientInfoTag = clientInfoTag
 	return config

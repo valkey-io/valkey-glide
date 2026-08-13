@@ -25,6 +25,7 @@ const (
 func TestDefaultStandaloneConfig(t *testing.T) {
 	config := NewClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: false,
 		ReadFrom:           protobuf.ReadFrom_Primary,
@@ -41,6 +42,7 @@ func TestDefaultStandaloneConfig(t *testing.T) {
 func TestDefaultClusterConfig(t *testing.T) {
 	config := NewClusterClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: true,
 		ReadFrom:           protobuf.ReadFrom_Primary,
@@ -74,6 +76,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		WithDatabaseId(databaseId)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_PreferReplica,
 		ClusterModeEnabled: false,
@@ -123,6 +126,7 @@ func TestGlideClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	j := uint32(jitter)
 	expected := &protobuf.ConnectionRequest{
+		LibName: "GlideGo",
 		Addresses: []*protobuf.NodeAddress{
 			{Host: host, Port: uint32(port)},
 		},
@@ -157,6 +161,7 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	j := uint32(jitter)
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		ClusterModeEnabled: true,
 		Addresses: []*protobuf.NodeAddress{
 			{Host: host, Port: uint32(port)},
@@ -277,6 +282,7 @@ func TestConfig_AzAffinity(t *testing.T) {
 		WithClientAZ(az)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_AZAffinity,
 		ClusterModeEnabled: false,
@@ -1650,6 +1656,7 @@ func TestConfig_AllFieldsSetWithCompression(t *testing.T) {
 		WithCompressionConfiguration(compressionConfig)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_PreferReplica,
 		ClusterModeEnabled: false,
@@ -1968,94 +1975,102 @@ func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_zero_disables_
 
 // --- LibName and ClientInfoTag tests ---
 
-func TestClientConfiguration_WithLibName_default_notSet(t *testing.T) {
-	config := NewClientConfiguration()
-
-	result, err := config.toProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "", result.LibName)
+type resolveLibNameTestCase struct {
+	name           string
+	libName        string
+	clientInfoTag  string
+	expected       string
+	errorFieldName string
 }
 
-func TestClientConfiguration_WithLibName_override(t *testing.T) {
-	config := NewClientConfiguration().
-		WithLibName("custom-client")
-
-	result, err := config.toProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "custom-client", result.LibName)
-}
-
-func TestClientConfiguration_WithClientInfoTag_alone(t *testing.T) {
-	config := NewClientConfiguration().
-		WithClientInfoTag("framework:1.2")
-
-	result, err := config.toProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "GlideGo(framework:1.2)", result.LibName)
-}
-
-func TestClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing.T) {
-	config := NewClientConfiguration().
-		WithLibName("custom-client").
-		WithClientInfoTag("framework:1.2")
-
-	result, err := config.toProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "custom-client(framework:1.2)", result.LibName)
-}
-
-func TestClientConfiguration_WithClientInfoTag_whitespace_errors(t *testing.T) {
-	cases := []string{"has space", "has\ttab", "has\nnewline"}
-	for _, tag := range cases {
-		config := NewClientConfiguration().WithClientInfoTag(tag)
-		_, err := config.ToProtobuf()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "clientInfoTag must not contain whitespace characters")
+func resolveLibNameTestCases() []resolveLibNameTestCase {
+	return []resolveLibNameTestCase{
+		{name: "default", expected: "GlideGo"},
+		{name: "override", libName: "custom-client", expected: "custom-client"},
+		{name: "tag", clientInfoTag: "framework:1.2", expected: "GlideGo(framework:1.2)"},
+		{
+			name: "combined", libName: "custom-client", clientInfoTag: "framework:1.2",
+			expected: "custom-client(framework:1.2)",
+		},
+		{name: "empty override", libName: "", clientInfoTag: "tag", expected: "GlideGo(tag)"},
+		{name: "empty tag", libName: "custom-client", clientInfoTag: "", expected: "custom-client"},
+		{name: "both empty", libName: "", clientInfoTag: "", expected: "GlideGo"},
+		{
+			name: "punctuation", libName: "custom/client@2.0", clientInfoTag: "framework:1.2+beta",
+			expected: "custom/client@2.0(framework:1.2+beta)",
+		},
+		{name: "lib name ASCII space", libName: "custom client", errorFieldName: "libName"},
+		{name: "lib name tab", libName: "custom\tclient", errorFieldName: "libName"},
+		{name: "lib name newline", libName: "custom\nclient", errorFieldName: "libName"},
+		{name: "lib name non-ASCII whitespace", libName: "custom\u00a0client", errorFieldName: "libName"},
+		{name: "tag ASCII space", clientInfoTag: "client tag", errorFieldName: "clientInfoTag"},
+		{name: "tag tab", clientInfoTag: "client\ttag", errorFieldName: "clientInfoTag"},
+		{name: "tag newline", clientInfoTag: "client\ntag", errorFieldName: "clientInfoTag"},
+		{
+			name: "tag non-ASCII whitespace", clientInfoTag: "client\u00a0tag",
+			errorFieldName: "clientInfoTag",
+		},
 	}
 }
 
-func TestClusterClientConfiguration_WithLibName_default_notSet(t *testing.T) {
-	config := NewClusterClientConfiguration()
+func TestResolveLibName(t *testing.T) {
+	for _, testCase := range resolveLibNameTestCases() {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := resolveLibName(testCase.libName, testCase.clientInfoTag)
+			if testCase.errorFieldName != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errorFieldName+" must not contain whitespace characters")
+				assert.Empty(t, result)
+				return
+			}
 
-	result, err := config.ToProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "", result.LibName)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
 }
 
-func TestClusterClientConfiguration_WithLibName_override(t *testing.T) {
-	config := NewClusterClientConfiguration().
-		WithLibName("custom-cluster-client")
+func TestClientConfigurationsResolveLibName(t *testing.T) {
+	configurationTypes := []struct {
+		name       string
+		toProtobuf func(string, string) (*protobuf.ConnectionRequest, error)
+	}{
+		{
+			name: "standalone",
+			toProtobuf: func(libName, clientInfoTag string) (*protobuf.ConnectionRequest, error) {
+				return NewClientConfiguration().
+					WithLibName(libName).
+					WithClientInfoTag(clientInfoTag).
+					ToProtobuf()
+			},
+		},
+		{
+			name: "cluster",
+			toProtobuf: func(libName, clientInfoTag string) (*protobuf.ConnectionRequest, error) {
+				return NewClusterClientConfiguration().
+					WithLibName(libName).
+					WithClientInfoTag(clientInfoTag).
+					ToProtobuf()
+			},
+		},
+	}
 
-	result, err := config.ToProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "custom-cluster-client", result.LibName)
-}
+	for _, configurationType := range configurationTypes {
+		t.Run(configurationType.name, func(t *testing.T) {
+			for _, testCase := range resolveLibNameTestCases() {
+				t.Run(testCase.name, func(t *testing.T) {
+					request, err := configurationType.toProtobuf(testCase.libName, testCase.clientInfoTag)
+					if testCase.errorFieldName != "" {
+						require.Error(t, err)
+						assert.Contains(t, err.Error(), testCase.errorFieldName+" must not contain whitespace characters")
+						assert.Nil(t, request)
+						return
+					}
 
-func TestClusterClientConfiguration_WithClientInfoTag_alone(t *testing.T) {
-	config := NewClusterClientConfiguration().
-		WithClientInfoTag("my-app:3.0")
-
-	result, err := config.ToProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "GlideGo(my-app:3.0)", result.LibName)
-}
-
-func TestClusterClientConfiguration_WithLibName_and_WithClientInfoTag(t *testing.T) {
-	config := NewClusterClientConfiguration().
-		WithLibName("custom-cluster-client").
-		WithClientInfoTag("my-app:3.0")
-
-	result, err := config.ToProtobuf()
-	require.NoError(t, err)
-	assert.Equal(t, "custom-cluster-client(my-app:3.0)", result.LibName)
-}
-
-func TestClusterClientConfiguration_WithClientInfoTag_whitespace_errors(t *testing.T) {
-	cases := []string{"has space", "has\ttab"}
-	for _, tag := range cases {
-		config := NewClusterClientConfiguration().WithClientInfoTag(tag)
-		_, err := config.ToProtobuf()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "clientInfoTag must not contain whitespace characters")
+					require.NoError(t, err)
+					assert.Equal(t, testCase.expected, request.LibName)
+				})
+			}
+		})
 	}
 }
