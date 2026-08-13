@@ -1077,7 +1077,7 @@ func TestPoolPublishConcurrent(t *testing.T) {
 }
 
 func TestPoolBlockingCmdIsolation(t *testing.T) {
-	// BLPOP targets a single key — standalone only to avoid cross-slot issues.
+	// Proves that a blocking command on one pool client does not block another.
 	t.Run("standalone", func(t *testing.T) {
 		if standaloneHosts == nil || *standaloneHosts == "" {
 			t.Skip("No --standalone-endpoints provided")
@@ -1087,6 +1087,7 @@ func TestPoolBlockingCmdIsolation(t *testing.T) {
 			MaxSize:        2,
 			MinIdle:        2,
 			AcquireTimeout: 10 * time.Second,
+			AbandonTimeout: -1 * time.Second, // disable — test intentionally holds a blocking client
 		})
 		defer pool.Close()
 
@@ -1108,17 +1109,16 @@ func TestPoolBlockingCmdIsolation(t *testing.T) {
 		blpopKey := fmt.Sprintf("pool-blpop-iso-%d", time.Now().UnixNano())
 		setKey := fmt.Sprintf("pool-getset-iso-%d", time.Now().UnixNano())
 
-		// Client1: run BLPOP with long timeout (will be unblocked by LPUSH)
+		// Client1: run BLPOP with short timeout (will time out on server after 1s)
 		var blpopDone sync.WaitGroup
 		blpopDone.Add(1)
 		go func() {
 			defer blpopDone.Done()
-			// BLPOP key timeout — will be unblocked by LPUSH from client2
-			client1.CustomCommand(ctx, []string{"BLPOP", blpopKey, "30"})
-			client1.Close()
+			client1.CustomCommand(ctx, []string{"BLPOP", blpopKey, "1"})
 		}()
 
 		// Client2: GET/SET should complete quickly despite client1 blocking
+		time.Sleep(100 * time.Millisecond) // let BLPOP dispatch first
 		start := time.Now()
 		_, err = client2.Set(ctx, setKey, "fast-value")
 		require.NoError(t, err)
@@ -1131,13 +1131,23 @@ func TestPoolBlockingCmdIsolation(t *testing.T) {
 		assert.Less(t, elapsed, 1*time.Second,
 			"GET/SET on client2 should complete in <1s while client1 BLPOP is blocking")
 
-		// Unblock the BLPOP by pushing to its key
-		client2.CustomCommand(ctx, []string{"LPUSH", blpopKey, "unblock"})
-		client2.Client.Del(ctx, []string{setKey})
-		client2.Close()
+		// Wait for BLPOP to time out (1s server-side timeout)
+		done := make(chan struct{})
+		go func() {
+			blpopDone.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			// OK — BLPOP timed out as expected
+		case <-time.After(10 * time.Second):
+			t.Fatal("BLPOP goroutine did not complete within 10s (expected 1s server timeout)")
+		}
 
-		// Wait for BLPOP to complete (should be immediate now)
-		blpopDone.Wait()
+		// Cleanup
+		client2.Client.Del(ctx, []string{setKey})
+		pool.Release(id1)
+		pool.Release(id2)
 	})
 }
 

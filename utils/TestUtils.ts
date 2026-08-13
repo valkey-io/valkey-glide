@@ -85,6 +85,7 @@ export class ValkeyCluster {
         tls: boolean = false,
         tlsConfig?: TestTLSConfig,
         loadModule?: string[],
+        tlsAuthClients: boolean = false,
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
             const commandArgs = [
@@ -101,6 +102,10 @@ export class ValkeyCluster {
 
             if (cluster_mode) {
                 commandArgs.push("--cluster-mode");
+            }
+
+            if (tlsAuthClients) {
+                commandArgs.push("--tls-auth-clients");
             }
 
             if (loadModule) {

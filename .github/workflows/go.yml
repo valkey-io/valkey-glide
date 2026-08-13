@@ -181,6 +181,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
@@ -358,6 +359,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test

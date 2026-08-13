@@ -586,8 +586,8 @@ impl ResponsePolicy {
         match cmd {
             b"SCRIPT EXISTS" => Some(ResponsePolicy::AggregateLogical(LogicalAggregateOp::And)),
 
-            b"DBSIZE" | b"DEL" | b"EXISTS" | b"SLOWLOG LEN" | b"TOUCH" | b"UNLINK"
-            | b"LATENCY RESET" | b"PUBSUB NUMPAT" => {
+            b"CLIENT KILL" | b"DBSIZE" | b"DEL" | b"EXISTS" | b"LATENCY RESET"
+            | b"PUBSUB NUMPAT" | b"SLOWLOG LEN" | b"TOUCH" | b"UNLINK" => {
                 Some(ResponsePolicy::Aggregate(AggregateOp::Sum))
             }
 
@@ -652,33 +652,38 @@ enum RouteBy {
 
 fn base_routing(cmd: &[u8]) -> RouteBy {
     match cmd {
-        b"ACL SETUSER"
-        | b"ACL DELUSER"
+        b"ACL DELUSER"
         | b"ACL SAVE"
+        | b"ACL SETUSER"
         | b"AUTH"
-        | b"CLIENT SETNAME"
+        | b"CLIENT KILL"
         | b"CLIENT SETINFO"
-        | b"SELECT"
-        | b"SLOWLOG GET"
-        | b"SLOWLOG LEN"
-        | b"SLOWLOG RESET"
-        | b"CONFIG SET"
+        | b"CLIENT SETNAME"
         | b"CONFIG RESETSTAT"
         | b"CONFIG REWRITE"
-        | b"SCRIPT FLUSH"
-        | b"SCRIPT LOAD"
-        | b"PUBSUB NUMPAT"
+        | b"CONFIG SET"
+        | b"FUNCTION KILL"
+        | b"FUNCTION STATS"
         | b"PUBSUB CHANNELS"
+        | b"PUBSUB NUMPAT"
         | b"PUBSUB NUMSUB"
         | b"PUBSUB SHARDCHANNELS"
         | b"PUBSUB SHARDNUMSUB"
         | b"RESET"
+        | b"SCRIPT FLUSH"
         | b"SCRIPT KILL"
-        | b"FUNCTION KILL"
-        | b"FUNCTION STATS" => RouteBy::AllNodes,
+        | b"SCRIPT LOAD"
+        | b"SELECT"
+        | b"SLOWLOG GET"
+        | b"SLOWLOG LEN"
+        | b"SLOWLOG RESET" => RouteBy::AllNodes,
 
         b"BGREWRITEAOF"
         | b"BGSAVE"
+        | b"CLIENT INFO"
+        | b"CLIENT LIST"
+        | b"CLIENT PAUSE"
+        | b"CLIENT UNPAUSE"
         | b"DBSIZE"
         | b"DEBUG"
         | b"FLUSHALL"
@@ -702,15 +707,11 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"MEMORY PURGE"
         | b"MEMORY STATS"
         | b"PING"
-        | b"CLIENT INFO"
-        | b"CLIENT LIST"
-        | b"CLIENT PAUSE"
-        | b"CLIENT UNPAUSE"
+        | b"RANDOMKEY"
         | b"SAVE"
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
-        | b"RANDOMKEY"
         | b"WAITAOF" => RouteBy::AllPrimaries,
 
         b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" | b"SUBSCRIBE"
@@ -763,7 +764,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CLIENT GETNAME"
         | b"CLIENT GETREDIR"
         | b"CLIENT ID"
-        | b"CLIENT KILL"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
         | b"CLIENT UNBLOCK"

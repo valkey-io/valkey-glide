@@ -7,6 +7,7 @@
  * to suppress unused import errors for types referenced only in JSDoc.
  */
 
+import { readFile } from "node:fs/promises";
 import Long from "long";
 import { Buffer } from "protobufjs/minimal";
 import {
@@ -330,6 +331,256 @@ export type GlideReturnType =
  * Union type that can store either a valid UTF-8 string or array of bytes.
  */
 export type GlideString = string | Buffer;
+
+/**
+ * Mutual TLS (mTLS) client authentication material.
+ *
+ * The `kind` field selects one of two mutually exclusive ways to supply the
+ * client certificate and private key. The bytes variant uses
+ * `clientCertificate` and `clientKey`; the path variant uses `clientCertPath`
+ * and `clientKeyPath`. Pairing each variant's fields under a shared
+ * discriminant lets the compiler reject mixed configurations (for example a
+ * `clientCertificate` alongside `clientKeyPath`, or a `reloadIntervalSeconds`
+ * on the bytes variant).
+ *
+ * With `kind: "bytes"`, `clientCertificate` and `clientKey` are PEM material
+ * passed inline and read once at connect time. A `string` value is encoded as
+ * UTF-8.
+ *
+ * With `kind: "path"`, `clientCertPath` and `clientKeyPath` point at files on
+ * disk. The core reads them at connect time and re-reads them on a schedule,
+ * so a rotated cert is adopted on the next reconnect while open connections
+ * keep their current material. If a reload fails (missing file, mismatched
+ * key, unreadable), the last known good material is kept. When
+ * `reloadIntervalSeconds` is omitted, the cadence defaults to the GLIDE core
+ * default (`DEFAULT_RELOAD_INTERVAL_SECONDS` in glide-core's `tls_reload`
+ * module); very long intervals may adopt a rotated cert late.
+ *
+ * Reload is on iff `kind === "path"`. There is no separate toggle.
+ */
+export type MutualTls =
+    | {
+          readonly kind: "bytes";
+          readonly clientCertificate: Buffer | string;
+          readonly clientKey: Buffer | string;
+      }
+    | {
+          readonly kind: "path";
+          readonly clientCertPath: string;
+          readonly clientKeyPath: string;
+          readonly reloadIntervalSeconds?: number;
+      };
+
+/**
+ * Largest value that fits in an unsigned 32-bit protobuf field:
+ * `4_294_967_295` (`2 ** 32 - 1`). Reused by validators that need to bound
+ * a value to the uint32 wire range. protobufjs casts through `value >>> 0`
+ * when the request is built, so a larger value would silently truncate
+ * before reaching the core. Rejecting up front keeps the user's requested
+ * value visible instead of quietly changing it.
+ *
+ * @internal
+ */
+const MAX_UINT32 = 2 ** 32 - 1;
+
+/**
+ * Reads a PEM file for TLS configuration. Shared by
+ * {@link loadRootCertificatesFromFile} and
+ * {@link loadClientCertificateAndKeyFromFile}.
+ *
+ * @param path - Path to the PEM file.
+ * @param label - Label used in error messages (e.g. `"Root certificate"`).
+ * @returns The file contents.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ * @internal
+ */
+async function loadTlsPemFile(path: string, label: string): Promise<Buffer> {
+    let data: Buffer;
+
+    try {
+        data = await readFile(path);
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
+        const message =
+            fsError.code === "ENOENT"
+                ? `${label} file not found: ${path}`
+                : `Failed to read ${label.toLowerCase()} file at ${path}: ${
+                      error instanceof Error ? error.message : String(error)
+                  }`;
+        const wrapped = new ConfigurationError(message);
+        (wrapped as Error).cause = error;
+        throw wrapped;
+    }
+
+    if (data.length === 0) {
+        throw new ConfigurationError(`${label} file is empty: ${path}`);
+    }
+
+    return data;
+}
+
+/**
+ * Loads PEM-encoded root certificates for TLS server verification. Feed the
+ * result to `rootCertificates` on
+ * {@link AdvancedBaseClientConfiguration.tlsAdvancedConfiguration}.
+ *
+ * @param path - Path to a PEM root certificate or bundle.
+ * @returns The certificate bytes.
+ * @throws {@link ConfigurationError} If the file is missing, unreadable, or empty.
+ */
+export function loadRootCertificatesFromFile(path: string): Promise<Buffer> {
+    return loadTlsPemFile(path, "Root certificate");
+}
+
+/**
+ * Loads a PEM client certificate and its private key for the byte-based
+ * {@link MutualTls} variant (`kind: "bytes"`). For automatic reload, use the
+ * path-based variant instead; the core then owns the file lifecycle.
+ *
+ * The cert is read first. If it fails, the key file is not touched.
+ *
+ * @param clientCertPath - Path to a PEM client certificate.
+ * @param clientKeyPath - Path to a PEM client private key.
+ * @returns `{ cert, key }` as Buffers.
+ * @throws {@link ConfigurationError} If either file is missing, unreadable, or empty.
+ */
+export async function loadClientCertificateAndKeyFromFile(
+    clientCertPath: string,
+    clientKeyPath: string,
+): Promise<{ cert: Buffer; key: Buffer }> {
+    const cert = await loadTlsPemFile(clientCertPath, "Client certificate");
+    const key = await loadTlsPemFile(clientKeyPath, "Client key");
+    return { cert, key };
+}
+
+/**
+ * Encodes PEM input for the connection request and rejects empty material.
+ * String values are UTF-8 encoded; Buffer values pass through. Empty content
+ * has to be caught here: proto3 `bytes` treats empty as unset, so a request
+ * with both `clientCertificate` and `clientKey` empty would silently
+ * downgrade to server-auth-only TLS instead of surfacing a mTLS configuration
+ * error.
+ *
+ * @internal
+ */
+function encodePem(value: Buffer | string, fieldName: string): Uint8Array {
+    const buffer =
+        typeof value === "string" ? Buffer.from(value, "utf-8") : value;
+
+    if (buffer.length === 0) {
+        throw new ConfigurationError(`${fieldName} must not be empty.`);
+    }
+
+    return new Uint8Array(buffer);
+}
+
+/**
+ * Validates the optional reload interval. protobufjs casts `uint32` through
+ * `value >>> 0` when the request is built, so an out-of-range or non-integer
+ * value would silently truncate before reaching the core. The core cannot
+ * validate what it never receives, so this check has to stay client-side.
+ *
+ * @internal
+ */
+function validateReloadInterval(value: number | undefined): void {
+    if (value === undefined) {
+        return;
+    }
+
+    if (!Number.isInteger(value) || value <= 0 || value > MAX_UINT32) {
+        throw new ConfigurationError(
+            `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_UINT32}.`,
+        );
+    }
+}
+
+/**
+ * Writes a {@link MutualTls} value into the connection request. The byte
+ * variant sets `client_cert` / `client_key` (proto fields 22/23); the path
+ * variant sets `client_cert_path` / `client_key_path` / `cert_reload`
+ * (proto fields 31/32/33).
+ *
+ * @internal
+ */
+function applyMutualTls(
+    mtls: MutualTls,
+    request: connection_request.IConnectionRequest,
+): void {
+    switch (mtls.kind) {
+        case "bytes": {
+            request.clientCert = encodePem(
+                mtls.clientCertificate,
+                "mutualTls.clientCertificate",
+            );
+            request.clientKey = encodePem(
+                mtls.clientKey,
+                "mutualTls.clientKey",
+            );
+            return;
+        }
+
+        case "path": {
+            validateReloadInterval(mtls.reloadIntervalSeconds);
+            request.clientCertPath = mtls.clientCertPath;
+            request.clientKeyPath = mtls.clientKeyPath;
+            request.certReload = {
+                enabled: true,
+                intervalSeconds: mtls.reloadIntervalSeconds,
+            };
+            return;
+        }
+
+        default: {
+            // Compile-time: assigning `mtls` to `never` fails to build if a
+            // new variant is added without a case. Runtime: the throw only
+            // fires for an untyped JS caller supplying an unknown `kind`,
+            // and the cast is needed because `mtls` is narrowed to `never`.
+            const _exhaustive: never = mtls;
+            void _exhaustive;
+            throw new ConfigurationError(
+                `Unsupported mutualTls variant: kind=${String(
+                    (mtls as { kind?: unknown }).kind,
+                )}`,
+            );
+        }
+    }
+}
+
+/**
+ * Applies the `tlsAdvancedConfiguration` block onto the connection request:
+ * the `useTLS`-off guard, the `insecure` flag, `rootCertificates`, and the
+ * mTLS dispatch.
+ *
+ * @internal
+ */
+export function applyTlsAdvancedConfiguration(
+    tls: NonNullable<
+        AdvancedBaseClientConfiguration["tlsAdvancedConfiguration"]
+    >,
+    request: connection_request.IConnectionRequest,
+): void {
+    if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        throw new ConfigurationError(
+            "TLS advanced configuration cannot be set when useTLS is disabled.",
+        );
+    }
+
+    if (tls.insecure) {
+        request.tlsMode = connection_request.TlsMode.InsecureTls;
+    }
+
+    if (tls.rootCertificates) {
+        const certData =
+            typeof tls.rootCertificates === "string"
+                ? Buffer.from(tls.rootCertificates, "utf-8")
+                : tls.rootCertificates;
+        request.rootCerts = [new Uint8Array(certData)];
+    }
+
+    if (tls.mutualTls !== undefined) {
+        applyMutualTls(tls.mutualTls, request);
+    }
+}
 
 /**
  * Enum representing the different types of decoders.
@@ -1057,6 +1308,20 @@ export interface AdvancedBaseClientConfiguration {
          * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
          */
         rootCertificates?: string | Buffer;
+
+        /**
+         * Mutual TLS (mTLS) client authentication material. See
+         * {@link MutualTls} for the two variants: `kind: "bytes"` for static
+         * material and `kind: "path"` for material the core reloads from
+         * disk. Reload is on iff `kind === "path"`. When
+         * `reloadIntervalSeconds` is omitted, the reload cadence defaults to
+         * the GLIDE core default (see `DEFAULT_RELOAD_INTERVAL_SECONDS` in
+         * glide-core's `tls_reload` module).
+         *
+         * Requires `useTLS: true` on the base client configuration. Setting
+         * `mutualTls` when TLS is disabled raises a {@link ConfigurationError}.
+         */
+        readonly mutualTls?: MutualTls;
     };
 
     /**
@@ -9542,6 +9807,7 @@ export class BaseClient {
     /**
      * @internal
      */
+    // TODO #6669: move to module level so the request is testable
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
@@ -9704,7 +9970,7 @@ export class BaseClient {
     protected configureAdvancedConfigurationBase(
         options: AdvancedBaseClientConfiguration,
         request: connection_request.IConnectionRequest,
-    ) {
+    ): void {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
@@ -9720,31 +9986,11 @@ export class BaseClient {
                 options.pubsubReconciliationIntervalMs;
         }
 
-        // Apply TLS configuration if present
         if (options.tlsAdvancedConfiguration) {
-            // request.tlsMode is either SecureTls or InsecureTls here
-            if (request.tlsMode === connection_request.TlsMode.NoTls) {
-                throw new ConfigurationError(
-                    "TLS advanced configuration cannot be set when useTLS is disabled.",
-                );
-            }
-
-            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
-            if (options.tlsAdvancedConfiguration.insecure) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            }
-
-            if (options.tlsAdvancedConfiguration.rootCertificates) {
-                const certData =
-                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
-                    "string"
-                        ? Buffer.from(
-                              options.tlsAdvancedConfiguration.rootCertificates,
-                              "utf-8",
-                          )
-                        : options.tlsAdvancedConfiguration.rootCertificates;
-                request.rootCerts = [new Uint8Array(certData)];
-            }
+            applyTlsAdvancedConfiguration(
+                options.tlsAdvancedConfiguration,
+                request,
+            );
         }
     }
 

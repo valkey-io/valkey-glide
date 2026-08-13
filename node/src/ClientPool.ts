@@ -28,6 +28,14 @@ import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import {
+    poolAllocateId,
+    poolDrainDiscarded,
+    poolRegisterClient,
+    poolStartMonitor,
+    poolStopMonitor,
+    poolUnregisterClient,
+} from "../build-ts/native";
 
 /** Re-export the pool client type (full command set). */
 export type PoolClient = BaseClient;
@@ -42,6 +50,13 @@ export interface PoolConfig {
     minIdle?: number;
     /** Maximum time to wait when pool is exhausted (seconds). Default: 5. */
     acquireTimeoutS?: number;
+    /**
+     * Maximum inactivity time for a borrowed client before the pool reclaims it (ms).
+     * The timer resets on every command sent. The abandon monitor skips clients
+     * executing blocking commands (BLPOP, XREAD BLOCK, etc.).
+     * Set to 0 to disable abandon detection. Default: 300000 (5 minutes).
+     */
+    abandonTimeoutMs?: number;
     /** Whether to create cluster clients. Default: auto-detected from config. */
     clusterMode?: boolean;
 }
@@ -77,9 +92,12 @@ export class ClientPool {
     private active = new Map<number, PoolEntry>();
     private closed = false;
     private nextId = 1;
+    private resetting = 0;
     private readonly maxSize: number;
     private readonly minIdle: number;
     private readonly acquireTimeoutMs: number;
+    private readonly abandonTimeoutMs: number;
+    private readonly poolId: number;
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private waiters: Waiter[] = [];
@@ -88,14 +106,23 @@ export class ClientPool {
         maxSize: number,
         minIdle: number,
         acquireTimeoutMs: number,
+        abandonTimeoutMs: number,
         isCluster: boolean,
         clientConfig: BaseClientConfiguration,
     ) {
         this.maxSize = maxSize;
         this.minIdle = minIdle;
         this.acquireTimeoutMs = acquireTimeoutMs;
+        this.abandonTimeoutMs = abandonTimeoutMs;
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
+
+        // Allocate pool ID from Rust (process-global, safe across worker_threads)
+        this.poolId = poolAllocateId();
+
+        // Start Rust-level abandon monitor (handles blocking detection, activity
+        // tracking, and discard — no JS Proxy or setInterval needed)
+        poolStartMonitor(this.poolId, abandonTimeoutMs);
     }
 
     /**
@@ -130,6 +157,7 @@ export class ClientPool {
             maxSize,
             minIdle,
             acquireTimeoutS * 1000,
+            poolConfig?.abandonTimeoutMs ?? 300_000,
             isCluster,
             clientConfig,
         );
@@ -138,7 +166,12 @@ export class ClientPool {
         // This validates connectivity — if the config is wrong (bad address,
         // wrong cluster mode), the error propagates to the caller immediately
         // instead of being discovered at acquire() time.
-        await pool.createAndAddClient();
+        try {
+            await pool.createAndAddClient();
+        } catch (e) {
+            pool.close(); // Stop monitor and clean up
+            throw e;
+        }
 
         // Remaining warmup is best-effort background
         for (let i = 1; i < minIdle; i++) {
@@ -160,18 +193,36 @@ export class ClientPool {
             throw new Error("Pool is closed");
         }
 
+        // Drain any clients discarded by the Rust abandon monitor
+        const discarded = poolDrainDiscarded(this.poolId);
+
+        for (const clientId of discarded) {
+            for (const [id, entry] of this.active) {
+                if (entry.client.getClientId() === clientId) {
+                    this.active.delete(id);
+                    entry.client.close();
+                    break;
+                }
+            }
+        }
+
         // Fast path: LIFO pop from idle stack
         const entry = this.idle.pop();
 
         if (entry) {
             this.active.set(entry.id, entry);
+            poolRegisterClient(this.poolId, entry.client.getClientId());
             return entry.client;
         }
 
         // If below max size, create a new client
-        if (this.idle.length + this.active.size < this.maxSize) {
+        if (
+            this.idle.length + this.active.size + this.resetting <
+            this.maxSize
+        ) {
             const newEntry = await this.createEntry();
             this.active.set(newEntry.id, newEntry);
+            poolRegisterClient(this.poolId, newEntry.client.getClientId());
             return newEntry.client;
         }
 
@@ -194,6 +245,7 @@ export class ClientPool {
                 resolve: (entry: PoolEntry) => {
                     clearTimeout(timer);
                     this.active.set(entry.id, entry);
+                    poolRegisterClient(this.poolId, entry.client.getClientId());
                     resolve(entry.client);
                 },
                 reject,
@@ -222,20 +274,32 @@ export class ClientPool {
 
         if (!entry) return;
 
-        // State reset on the actual connection
-        await this.resetClientState(entry.client);
+        // Unregister from Rust-level pool tracking
+        poolUnregisterClient(entry.client.getClientId());
+
+        // State reset on the actual connection (track as resetting for capacity)
+        this.resetting++;
+
+        try {
+            await this.resetClientState(entry.client);
+        } finally {
+            this.resetting--;
+        }
+
+        if (this.closed) {
+            entry.client.close();
+            return;
+        }
 
         // If waiters are queued, hand directly to next waiter (FIFO fairness)
-        if (this.waiters.length > 0 && !this.closed) {
+        if (this.waiters.length > 0) {
             const waiter = this.waiters.shift()!;
             waiter.resolve(entry);
             return;
         }
 
         // Return to idle stack (LIFO for connection reuse locality)
-        if (!this.closed) {
-            this.idle.push(entry);
-        }
+        this.idle.push(entry);
     }
 
     /**
@@ -286,6 +350,9 @@ export class ClientPool {
         if (!this.closed) {
             this.closed = true;
 
+            // Stop Rust-level abandon monitor
+            poolStopMonitor(this.poolId);
+
             // Reject all waiters
             for (const waiter of this.waiters) {
                 clearTimeout(waiter.timer);
@@ -294,12 +361,14 @@ export class ClientPool {
 
             this.waiters = [];
 
-            // Close all clients
-            for (const entry of this.idle) {
+            // Unregister and close all active clients
+            for (const entry of this.active.values()) {
+                poolUnregisterClient(entry.client.getClientId());
                 entry.client.close();
             }
 
-            for (const entry of this.active.values()) {
+            // Close all idle clients
+            for (const entry of this.idle) {
                 entry.client.close();
             }
 

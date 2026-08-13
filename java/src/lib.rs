@@ -1406,6 +1406,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
         let handle_id = client_ptr as u64;
 
+        // Refresh pool activity for batch dispatch and get pool_id for blocking protection
+        let batch_pool_id: Option<u64> =
+            if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
+                let pool_id = *entry.value();
+                glide_core::pool::refresh_client_activity(pool_id, handle_id);
+                Some(pool_id)
+            } else {
+                None
+            };
+
         // Extract request types
         let cmd_count = match env.get_array_length(&request_types) {
             Ok(len) => len as usize,
@@ -1556,6 +1566,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             ))
                         })?;
 
+                        // Mark as blocking for duration of batch/script execution
+                        if let Some(pid) = batch_pool_id {
+                            glide_core::pool::mark_client_blocking(pid, handle_id, true);
+                        }
+
                         // Execute
                         let exec_res = if is_atomic_bool {
                             client
@@ -1580,6 +1595,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 )
                                 .await
                         };
+
+                        // Unmark blocking after batch completes
+                        if let Some(pid) = batch_pool_id {
+                            glide_core::pool::mark_client_blocking(pid, handle_id, false);
+                        }
 
                         // Decompress if needed
                         match exec_res {
@@ -1802,7 +1822,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     ))
                 })?;
 
-                client.send_command(&mut cmd, routing).await
+                // Abandon monitor integration: for pool-borrowed clients refresh the
+                // inactivity timer on every command, and mark blocking commands so the
+                // monitor skips them while they are in flight.
+                let blocking_flag = crate::jni_pool::get_pool_client_map()
+                    .get(&handle_id)
+                    .map(|entry| *entry.value())
+                    .and_then(|pool_id| {
+                        glide_core::pool::refresh_client_activity(pool_id, handle_id);
+                        if glide_core::client::is_blocking_command(&cmd)
+                            && glide_core::pool::mark_client_blocking(pool_id, handle_id, true)
+                        {
+                            Some(pool_id)
+                        } else {
+                            None
+                        }
+                    });
+
+                let result = client.send_command(&mut cmd, routing).await;
+
+                // Unmark blocking after command completes
+                if let Some(pool_id) = blocking_flag {
+                    glide_core::pool::mark_client_blocking(pool_id, handle_id, false);
+                }
+
+                result
             }
             .await;
 
@@ -1845,6 +1889,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
         else {
             return Some(());
         };
+
+        // Refresh pool activity for script dispatch and get pool_id for blocking protection
+        let script_pool_id: Option<u64> =
+            if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&(handle_id as u64)) {
+                let pool_id = *entry.value();
+                glide_core::pool::refresh_client_activity(pool_id, handle_id as u64);
+                Some(pool_id)
+            } else {
+                None
+            };
 
         // Extract script hash
         let hash_str = match env.get_string(&hash) {
@@ -2017,6 +2071,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         }
                     };
 
+                    // Mark as blocking for duration of script execution
+                    if let Some(pid) = script_pool_id {
+                        glide_core::pool::mark_client_blocking(pid, handle_id as u64, true);
+                    }
+
                     let result = client
                         .invoke_script(
                             &hash_str,
@@ -2032,6 +2091,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 e.to_string(),
                             ))
                         });
+
+                    // Unmark blocking after script completes
+                    if let Some(pid) = script_pool_id {
+                        glide_core::pool::mark_client_blocking(pid, handle_id as u64, false);
+                    }
 
                     let binary_mode = expect_utf8 == 0;
                     complete_callback(jvm, callback_id, result, binary_mode);

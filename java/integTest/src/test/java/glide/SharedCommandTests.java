@@ -14393,7 +14393,7 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination, 1).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14409,7 +14409,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14468,7 +14468,7 @@ public class SharedCommandTests {
         }
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14483,7 +14483,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14525,12 +14525,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals("one", client.get(destination).get());
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());
@@ -14557,12 +14557,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals(gs("one"), client.get(destination).get());
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());
