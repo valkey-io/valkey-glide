@@ -9,9 +9,8 @@ class provides the acquire-with-timeout retry loop and maps client_id handles
 to usable GlideClient wrappers for command dispatch.
 
 Usage:
-    from glide_sync import GlideClient
+    from glide_sync import GlideClient, GlideClientConfiguration, NodeAddress
     from glide_sync.client_pool import ClientPool, PoolConfig
-    from glide_shared.config import GlideClientConfiguration, NodeAddress
 
     config = GlideClientConfiguration([NodeAddress("localhost", 6379)])
     pool = ClientPool(config, PoolConfig(max_size=10, min_idle=2))
