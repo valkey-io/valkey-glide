@@ -1010,7 +1010,7 @@ fn effective_lib_name<'a>(
 ) -> &'a str {
     runtime_lib_name
         .filter(|lib_name| !lib_name.is_empty())
-        .or(compile_time_lib_name)
+        .or(compile_time_lib_name.filter(|lib_name| !lib_name.is_empty()))
         .unwrap_or("UnknownClient")
 }
 
@@ -1842,6 +1842,11 @@ mod tests {
     #[test]
     fn test_effective_lib_name_uses_unknown_client_without_names() {
         assert_eq!(effective_lib_name(None, None), "UnknownClient");
+    }
+
+    #[test]
+    fn test_effective_lib_name_treats_empty_compile_time_name_as_absent() {
+        assert_eq!(effective_lib_name(None, Some("")), "UnknownClient");
     }
 
     #[test]
