@@ -296,6 +296,7 @@ import {
     connection_request,
     response,
 } from "../build-ts/ProtobufMessage";
+import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -906,8 +907,9 @@ export enum NodeDiscoveryMode {
  * ### Client Identification
  *
  * - **Client Name**: Set `clientName` to identify the client connection.
- * - **Library Name**: Set `libName` to override the default library name (`GlideJS`) reported by `CLIENT INFO`.
- * - **Client Info Tag**: Set `clientInfoTag` to append an attribution tag to the library name (e.g., `GlideJS(my-framework:1.0)`).
+ * - **Library Name**: Set `libName` to override the default library name (`GlideJS`) reported by `CLIENT INFO`; an empty value uses the default.
+ * - **Client Info Tag**: Set `clientInfoTag` to append an attribution tag to the library name (e.g., `GlideJS(my-framework:1.0)`); an empty value adds no tag.
+ * - Both options apply to ordinary standalone and cluster clients and to dedicated monitor clients. Non-empty values containing Unicode whitespace are rejected with a `ConfigurationError`.
  *
  * ### Read Strategy
  *
@@ -1048,19 +1050,26 @@ export interface BaseClientConfiguration {
     clientName?: string;
     /**
      * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
-     * establishment. If not set, the default {@code GlideJS} is used. When {@link clientInfoTag}
-     * is present, it is appended to the effective library name in parentheses.
+     * establishment. If omitted or empty, the default {@code GlideJS} is used. When
+     * {@link clientInfoTag} is present and non-empty, it is appended to the effective library name
+     * in parentheses.
+     *
+     * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
+     * A non-empty override must not contain Unicode whitespace characters; punctuation is preserved.
+     *
+     * @throws ConfigurationError if a non-empty override contains Unicode whitespace.
      */
     libName?: string;
     /**
      * Optional attribution tag appended to the effective library name in parentheses.
      * For example, setting this to {@code "my-framework:1.2.3"} results in a lib-name of
      * {@code GlideJS(my-framework:1.2.3)} (or {@code custom-lib(my-framework:1.2.3)} if
-     * {@link libName} is also set).
+     * {@link libName} is also set). An empty tag is treated as absent.
      *
-     * The tag must not contain whitespace characters.
+     * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
+     * A non-empty tag must not contain Unicode whitespace characters; punctuation is preserved.
      *
-     * @throws ConfigurationError if the tag contains whitespace.
+     * @throws ConfigurationError if a non-empty tag contains Unicode whitespace.
      */
     clientInfoTag?: string;
     /**
@@ -9894,13 +9903,6 @@ export class BaseClient {
             );
         }
 
-        // Validate clientInfoTag does not contain whitespace
-        if (options.clientInfoTag && /\s/.test(options.clientInfoTag)) {
-            throw new ConfigurationError(
-                "clientInfoTag must not contain whitespace characters",
-            );
-        }
-
         // Configure client-side cache if provided
         let clientSideCache: connection_request.IClientSideCache | undefined;
 
@@ -9919,6 +9921,10 @@ export class BaseClient {
         const request: connection_request.IConnectionRequest = {
             protocol,
             clientName: options.clientName,
+            libName: resolveClientLibraryName(
+                options.libName,
+                options.clientInfoTag,
+            ),
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls
@@ -9934,14 +9940,6 @@ export class BaseClient {
             lazyConnect: options.lazyConnect ?? false,
             clientSideCache,
         };
-
-        // Compose libName from options.libName and options.clientInfoTag
-        if (options.clientInfoTag) {
-            const baseName = options.libName || "GlideJS";
-            request.libName = `${baseName}(${options.clientInfoTag})`;
-        } else if (options.libName) {
-            request.libName = options.libName;
-        }
 
         if (options.compression) {
             validateCompressionConfiguration(options.compression);

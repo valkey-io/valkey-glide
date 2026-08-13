@@ -176,6 +176,24 @@ describe("GlideClient", () => {
         async () => {
             if (cluster.checkIfServerVersionLessThan("7.2.0")) return;
 
+            // Test default library name
+            const defaultClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            try {
+                const defaultInfo = (await defaultClient.customCommand([
+                    "CLIENT",
+                    "INFO",
+                ])) as string;
+                expect(defaultInfo).toContain("lib-name=GlideJS");
+            } finally {
+                defaultClient.close();
+            }
+
             // Test libName override only
             const overrideOnlyClient = await GlideClient.createClient(
                 getClientConfigurationOption(
@@ -186,10 +204,11 @@ describe("GlideClient", () => {
             );
 
             try {
-                const overrideOnlyInfo = (await overrideOnlyClient.customCommand([
-                    "CLIENT",
-                    "INFO",
-                ])) as string;
+                const overrideOnlyInfo =
+                    (await overrideOnlyClient.customCommand([
+                        "CLIENT",
+                        "INFO",
+                    ])) as string;
                 expect(overrideOnlyInfo).toContain("lib-name=custom-client");
             } finally {
                 overrideOnlyClient.close();
