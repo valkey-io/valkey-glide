@@ -41,10 +41,7 @@ public class PooledClientScopeIntegrationTest {
                 .clientConfig(
                         GlideClientConfiguration.builder()
                                 .address(
-                                        NodeAddress.builder()
-                                                .host(parts[0])
-                                                .port(Integer.parseInt(parts[1]))
-                                                .build())
+                                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
                                 .requestTimeout(5000)
                                 .build())
                 .build();
@@ -65,9 +62,7 @@ public class PooledClientScopeIntegrationTest {
         PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
         try {
             IsolatedScope scope =
-                    pooled.unwrap()
-                            .scopedConnection(Duration.ofSeconds(10))
-                            .get(10, TimeUnit.SECONDS);
+                    pooled.unwrap().scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
             assertNotNull(scope, "scopedConnection must return a scope on a pool-borrowed client");
             assertFalse(scope.isReleased());
 

@@ -137,8 +137,8 @@ public class GlideClient extends BaseClient
      * @param nativeHandle the native client handle (same as client_id from pool)
      * @param maxInflight max inflight requests (0 = use core defaults)
      * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
-     * @param connectionRequestBytes the pool's serialized protobuf ConnectionRequest, or {@code
-     *     null} when unavailable (scope acquisition will fail with "Client not connected")
+     * @param connectionRequestBytes the pool's serialized protobuf ConnectionRequest, or {@code null}
+     *     when unavailable (scope acquisition will fail with "Client not connected")
      * @return a fully-functional GlideClient backed by the pool connection
      */
     public static GlideClient fromPoolHandle(
