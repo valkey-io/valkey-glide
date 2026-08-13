@@ -220,6 +220,8 @@ Each of the four fixture pairs can be overridden independently; unset pairs stil
 - `cluster-endpoints`: existing non-TLS cluster server(s).
 - `tls-standalone-endpoints`: existing TLS standalone server(s).
 - `tls-cluster-endpoints`: existing TLS cluster server(s).
+- `modules-mode`: reroute the default client factories through the TLS host slices with TLS enabled.
+`make modules-test` sets this automatically so an external `tls-cluster-endpoints` or `tls-standalone-endpoints` flag is enough for module tests to run against the TLS endpoint.
 
 Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
 

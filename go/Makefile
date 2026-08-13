@@ -181,7 +181,10 @@ integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(te
 integ-test: __it
 
 # modules tests - run substask with default filter
+# Force modules-mode so the default client factories route through the TLS host slices,
+# which is required when the workflow only supplies tls-cluster-endpoints / tls-standalone-endpoints.
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
+modules-test: modules-mode = true
 modules-test: __it
 
 # pubsub tests - run pubsub tests using testify filter
@@ -216,6 +219,7 @@ __it:
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
 	$(if $(tls-standalone-endpoints), --tls-standalone-endpoints=$(tls-standalone-endpoints)) \
 	$(if $(tls-cluster-endpoints), --tls-cluster-endpoints=$(tls-cluster-endpoints)) \
+	$(if $(modules-mode), --modules-mode) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

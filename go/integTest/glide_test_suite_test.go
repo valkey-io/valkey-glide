@@ -77,6 +77,12 @@ var (
 	)
 	longTimeoutTests = flag.Bool("long-timeout-tests", false, "Set to true to run tests with longer timeouts")
 	otelTest         = flag.Bool("otel-test", false, "Set to true to run opentelemetry tests")
+	modulesMode      = flag.Bool(
+		"modules-mode",
+		false,
+		"Route defaultClusterClient / defaultClient through the TLS host slices with TLS enabled; "+
+			"use for module tests against external TLS endpoints",
+	)
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -128,6 +134,15 @@ func (suite *GlideTestSuite) SetupSuite() {
 	suite.T().Logf("Cluster hosts = %s", fmt.Sprint(suite.clusterHosts))
 	suite.T().Logf("Standalone TLS hosts = %s", fmt.Sprint(suite.standaloneTlsHosts))
 	suite.T().Logf("Cluster TLS hosts = %s", fmt.Sprint(suite.clusterTlsHosts))
+
+	// modules-mode reroutes the default client factories through the TLS host slices,
+	// so at least one TLS slice must be populated. Otherwise module tests would silently
+	// fall back to the non-TLS defaults and connect to the wrong endpoint.
+	if *modulesMode && len(suite.clusterTlsHosts) == 0 && len(suite.standaloneTlsHosts) == 0 {
+		log.Fatal(
+			"--modules-mode requires at least one of --tls-cluster-endpoints or --tls-standalone-endpoints to be set",
+		)
+	}
 
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
@@ -423,9 +438,20 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 }
 
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
+	address := &suite.standaloneHosts[0]
+	useTLS := false
+	if *modulesMode && len(suite.standaloneTlsHosts) > 0 {
+		address = &suite.standaloneTlsHosts[0]
+		useTLS = true
+	}
+
 	clientConfig := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
+		WithAddress(address).
 		WithRequestTimeout(5 * time.Second)
+
+	if useTLS {
+		clientConfig = clientConfig.WithUseTLS(true)
+	}
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClientConfiguration().
@@ -467,9 +493,20 @@ func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.
 }
 
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
+	address := &suite.clusterHosts[0]
+	useTLS := false
+	if *modulesMode && len(suite.clusterTlsHosts) > 0 {
+		address = &suite.clusterTlsHosts[0]
+		useTLS = true
+	}
+
 	clientConfig := config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
+		WithAddress(address).
 		WithRequestTimeout(5 * time.Second)
+
+	if useTLS {
+		clientConfig = clientConfig.WithUseTLS(true)
+	}
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClusterClientConfiguration().
