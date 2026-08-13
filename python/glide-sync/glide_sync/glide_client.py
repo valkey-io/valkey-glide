@@ -16,6 +16,7 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    _resolve_lib_name,
 )
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
@@ -25,6 +26,7 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.routes import (
     AllNodes,
     AllPrimaries,
@@ -56,6 +58,19 @@ else:
 _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
+
+
+def _create_connection_request(
+    config: BaseClientConfiguration,
+) -> ConnectionRequest:
+    """Build a sync client request with resolved library identification."""
+    conn_req = config._create_a_protobuf_conn_request(
+        cluster_mode=type(config) is GlideClusterClientConfiguration
+    )
+    conn_req.lib_name = _resolve_lib_name(
+        config.lib_name, config.client_info_tag, "GlidePySync"
+    )
+    return conn_req
 
 
 # Enum values must match the Rust definition
@@ -133,16 +148,7 @@ class BaseClient(CoreCommands):
         # client already closed, and recreate it anyway.
         if self._is_closed:
             return
-        conn_req = self._config._create_a_protobuf_conn_request(
-            cluster_mode=type(self._config) is GlideClusterClientConfiguration
-        )
-        # Preserve a user-configured lib_name; otherwise fall back to the sync default.
-        if not conn_req.lib_name:
-            conn_req.lib_name = "GlidePySync"
-        # Optionally append a client info tag, preserving the library identity
-        # (e.g. "GlidePySync(my-framework:1.2.3)").
-        if self._config.client_info_tag:
-            conn_req.lib_name = f"{conn_req.lib_name}({self._config.client_info_tag})"
+        conn_req = _create_connection_request(self._config)
         conn_req_bytes = conn_req.SerializeToString()
         # Store for scoped_connection
         self._conn_req_bytes = conn_req_bytes

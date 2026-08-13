@@ -46,6 +46,7 @@ from glide_shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     ServerCredentials,
+    _resolve_lib_name,
 )
 from glide_shared.constants import (
     OK,
@@ -66,6 +67,7 @@ from glide_shared.ffi_helpers import (
     to_c_route_ptr_and_len,
     to_c_strings,
 )
+from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.routes import Route
 
 from .async_commands.cluster_commands import ClusterCommands
@@ -76,6 +78,19 @@ from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
 
 _ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
+
+
+def _create_connection_request(
+    config: BaseClientConfiguration,
+) -> ConnectionRequest:
+    """Build an async client request with resolved library identification."""
+    conn_req = config._create_a_protobuf_conn_request(
+        cluster_mode=isinstance(config, GlideClusterClientConfiguration)
+    )
+    conn_req.lib_name = _resolve_lib_name(
+        config.lib_name, config.client_info_tag, "GlidePy"
+    )
+    return conn_req
 
 
 if sys.version_info >= (3, 11):
@@ -584,16 +599,7 @@ class BaseClient(CoreCommands):
         self._loop = asyncio.get_running_loop() if self._is_asyncio else None
 
         # Build connection request
-        conn_req = config._create_a_protobuf_conn_request(
-            cluster_mode=isinstance(config, GlideClusterClientConfiguration)
-        )
-        # Preserve a user-configured lib_name; otherwise fall back to the async default.
-        if not conn_req.lib_name:
-            conn_req.lib_name = "GlidePy"
-        # Append client_info_tag if configured
-        # (e.g. "GlidePy(my-framework:1.2.3)").
-        if config.client_info_tag:
-            conn_req.lib_name = f"{conn_req.lib_name}({config.client_info_tag})"
+        conn_req = _create_connection_request(config)
         conn_req_bytes = conn_req.SerializeToString()
         # Store for scoped_connection
         self._conn_req_bytes = conn_req_bytes

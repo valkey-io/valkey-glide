@@ -17,10 +17,31 @@ from glide_shared.config import (
     PeriodicChecksStatus,
     ReadFrom,
     TlsAdvancedConfiguration,
+    _resolve_lib_name,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
+
+
+@pytest.mark.parametrize("runtime_default", ["GlidePy", "GlidePySync"])
+@pytest.mark.parametrize(
+    ("lib_name", "client_info_tag", "expected"),
+    [
+        (None, None, "{default}"),
+        ("custom-client", None, "custom-client"),
+        (None, "framework:1.2", "{default}(framework:1.2)"),
+        ("custom-client", "framework:1.2", "custom-client(framework:1.2)"),
+        ("", None, "{default}"),
+        (None, "", "{default}"),
+        ("", "", "{default}"),
+        ("lib:name/1.0", "tag@v2!", "lib:name/1.0(tag@v2!)"),
+    ],
+)
+def test_resolve_lib_name(runtime_default, lib_name, client_info_tag, expected):
+    assert _resolve_lib_name(
+        lib_name, client_info_tag, runtime_default
+    ) == expected.format(default=runtime_default)
 
 
 def test_default_client_config():
