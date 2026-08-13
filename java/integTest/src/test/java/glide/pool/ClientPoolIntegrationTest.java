@@ -262,10 +262,7 @@ public class ClientPoolIntegrationTest {
     @ValueSource(booleans = {true, false})
     public void testPooledClientReportsCombinedLibraryMetadata(boolean clusterMode) throws Exception {
         assertPooledClientLibName(
-                clusterMode,
-                "custom-client",
-                "framework:1.2",
-                "custom-client(framework:1.2)");
+                clusterMode, "custom-client", "framework:1.2", "custom-client(framework:1.2)");
     }
 
     @ParameterizedTest
