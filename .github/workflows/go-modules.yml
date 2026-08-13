@@ -95,9 +95,14 @@ jobs:
 
             - name: Build and run modules tests
               working-directory: go
+              # The docker-based module servers are plaintext, so override
+              # modules-mode= to bypass the modules-test target's default that
+              # would otherwise route clients through the fixture-started TLS
+              # hosts and fail on self-signed certificates.
               run: |
                   make install-tools build
                   make modules-test \
+                    modules-mode= \
                     standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
