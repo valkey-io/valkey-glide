@@ -69,6 +69,12 @@ EXCLUDED_TESTS = {
         "test_inflight_commands_get_closing_error_on_close",
         "test_pubsub_callback_with_closed_client_no_crash",
         "test_client_death_mid_command",
+        # Async-only: _CompatFuture is the trio/anyio future shim, which has no
+        # sync counterpart (the sync client blocks on FFI calls instead).
+        "test_set_result_from_worker_thread_wakes_waiter",
+        "test_set_exception_from_worker_thread_wakes_waiter",
+        # Backend-pinning fixture override for the _CompatFuture tests above
+        "anyio_backend",
         # Nested helper functions in lifecycle tests
         "client_workload",
         "blocking_cmd",
@@ -78,6 +84,7 @@ EXCLUDED_TESTS = {
         "close_after_dispatch",
         "kill_after_delay",
         "cb",
+        "waiter",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
         # Module-scoped fixture overrides declared in test_auth.py; the sync
@@ -86,6 +93,9 @@ EXCLUDED_TESTS = {
         "acl_glide_client",
         "glide_client",
         "management_client",
+        # Abandon detection tests — async-only (monitor runs on tokio runtime)
+        "test_pool_abandon_detection",
+        "test_pool_abandon_detection_disabled",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -124,6 +134,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
         "test_async_freethreading.py",
+        "test_fork_safety.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",

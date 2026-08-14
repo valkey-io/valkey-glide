@@ -364,5 +364,105 @@ describe("ClientPool", () => {
             },
             TIMEOUT,
         );
+
+        it(
+            "blocking customCommand is not reclaimed by abandon monitor",
+            async () => {
+                // Use a short abandon timeout to prove blocking detection works
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 2,
+                    minIdle: 2,
+                    acquireTimeoutS: 10,
+                    abandonTimeoutMs: 1000, // 1 second
+                });
+                await waitForIdle(pool, 2);
+                const key = makeKey(false, "blpop-custom");
+
+                try {
+                    // BLPOP via customCommand — previously invisible to TS Proxy
+                    const blockingPromise = pool.borrow(async (client) => {
+                        return await (client as GlideClient).customCommand([
+                            "BLPOP",
+                            key,
+                            "3", // 3 second server timeout
+                        ]);
+                    });
+
+                    // Wait longer than abandon timeout
+                    await new Promise((r) => setTimeout(r, 1500));
+
+                    // Unblock by pushing a value from another client
+                    await pool.borrow(async (client) => {
+                        await client.lpush(key, ["done"]);
+                    });
+
+                    // Blocking command should complete successfully (not be killed)
+                    const result = await blockingPromise;
+                    expect(result).toEqual([key, "done"]);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "abandon detection discards inactive clients",
+            async () => {
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 2,
+                    minIdle: 1,
+                    abandonTimeoutMs: 1000, // 1 second
+                });
+                await waitForIdle(pool, 1);
+
+                try {
+                    // Acquire and hold without sending commands
+                    const client = await pool.acquire();
+                    const originalId = client.getClientId();
+                    expect(pool.activeCount).toBe(1);
+
+                    // Wait for abandon monitor to discard (timeout + scan interval)
+                    await new Promise((r) => setTimeout(r, 2000));
+
+                    // Trigger drain by acquiring again
+                    const client2 = await pool.acquire();
+
+                    // Original client should have been discarded
+                    expect(client2.getClientId()).not.toBe(originalId);
+                    await pool.release(client2);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "does not exceed maxSize during concurrent acquire while release is resetting",
+            async () => {
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 1,
+                    minIdle: 1,
+                });
+                await waitForIdle(pool, 1);
+
+                try {
+                    const firstClient = await pool.acquire();
+
+                    // release() is async (state reset). Concurrent acquires should
+                    // not create extra clients beyond maxSize.
+                    const releasePromise = pool.release(firstClient);
+                    const secondClient = await pool.acquire();
+                    await releasePromise;
+
+                    expect(pool.getMetrics().total).toBeLessThanOrEqual(1);
+                    await pool.release(secondClient);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
     });
 });

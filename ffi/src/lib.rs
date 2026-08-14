@@ -39,7 +39,7 @@ use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::{Condvar, OnceLock};
+use std::sync::Condvar;
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -587,7 +587,25 @@ struct SharedPipeWriter {
     #[allow(dead_code)]
     pipe_fd: i32,
 }
-static ASYNC_PIPE: OnceLock<SharedPipeWriter> = OnceLock::new();
+/// The process-wide async pipe state. Uses an atomic pointer so the read path
+/// is lock-free and cannot be inherited in a locked state after fork().
+/// Note: the `SharedPipeWriter` itself contains a `Mutex<Vec<u8>>` which is
+/// fork-unsafe; callers must swap in a fresh writer via `reinit_async_pipe`
+/// before any push touches the inherited instance.
+static ASYNC_PIPE: std::sync::atomic::AtomicPtr<SharedPipeWriter> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+/// Returns the current pipe writer, if one is installed. Lock-free read.
+#[inline]
+fn get_async_pipe() -> Option<&'static SharedPipeWriter> {
+    let p = ASYNC_PIPE.load(std::sync::atomic::Ordering::Acquire);
+    if p.is_null() {
+        None
+    } else {
+        // Safety: only leaked &'static SharedPipeWriter values are ever stored.
+        Some(unsafe { &*p })
+    }
+}
 impl SharedPipeWriter {
     fn push_success(&self, cid: u64, rid: usize, rp: usize, ap: usize) {
         let mut b = self.buffer.lock().unwrap();
@@ -716,77 +734,130 @@ pub unsafe extern "C" fn free_pipe_error_string(ptr: *mut c_char) {
 /// Initialize the process-wide shared pipe for async response delivery.
 /// Spawns a dedicated OS flush thread with adaptive batching.
 ///
+/// This function is idempotent within a single process — calling it multiple
+/// times with the same or different fd is safe (only the first call takes effect).
+/// After `fork()`, call [`reinit_async_pipe`] instead to create a fresh pipe
+/// and flush thread in the child process.
+///
 /// # Safety
-/// Must be called with a valid writable pipe file descriptor.
+///
+/// * `pipe_write_fd` must be a valid writable pipe file descriptor.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn init_async_pipe(pipe_write_fd: i32) {
-    ASYNC_PIPE.get_or_init(|| {
-        let w = SharedPipeWriter {
-            buffer: std::sync::Mutex::new(Vec::with_capacity(FRAME_SIZE * 64)),
-            condvar: Condvar::new(),
-            pipe_fd: pipe_write_fd,
-        };
-        let fd = pipe_write_fd;
-        std::thread::Builder::new()
-            .name("glide-async-pipe-flush".into())
-            .spawn(move || {
-                let flush_threshold: usize = std::env::var("GLIDE_PIPE_FLUSH_THRESHOLD")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(1);
-                while let Some(sw) = ASYNC_PIPE.get() {
-                    let data = {
-                        let mut buf = sw.buffer.lock().unwrap();
-                        while buf.is_empty() {
-                            buf = sw.condvar.wait(buf).unwrap();
-                        }
-                        // Flush threshold: if frames buffered <= threshold, flush immediately
-                        // to minimize latency. If more are queued, yield briefly to let more
-                        // accumulate for batch efficiency (amortizes syscall cost).
-                        // Configurable via GLIDE_PIPE_FLUSH_THRESHOLD (default: 1).
-                        let fc = buf.len() / FRAME_SIZE;
-                        if fc <= flush_threshold {
-                            let mut d = Vec::with_capacity(FRAME_SIZE * 4);
-                            std::mem::swap(&mut *buf, &mut d);
-                            d
-                        } else {
-                            drop(buf);
-                            std::thread::yield_now();
-                            let mut buf = sw.buffer.lock().unwrap();
-                            let mut d = Vec::with_capacity(FRAME_SIZE * 64);
-                            std::mem::swap(&mut *buf, &mut d);
-                            d
-                        }
-                    };
-                    if data.is_empty() {
-                        continue;
+    let w = create_pipe_writer(pipe_write_fd);
+    let ptr = w as *const SharedPipeWriter as *mut SharedPipeWriter;
+    // First-call-wins: only install if currently null.
+    if ASYNC_PIPE
+        .compare_exchange(
+            std::ptr::null_mut(),
+            ptr,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        )
+        .is_err()
+    {
+        // Another call already initialized — the leaked alloc is harmless.
+    }
+}
+
+/// Reinitialize the async pipe after `fork()`.
+///
+/// After `fork()`, the flush thread from the parent process is gone but the
+/// `ASYNC_PIPE` state is inherited. This function replaces the stale pipe
+/// writer with a fresh one backed by the new `pipe_write_fd`, and spawns a
+/// new flush thread.
+///
+/// The old `SharedPipeWriter` is intentionally leaked (not dropped) because
+/// the parent's Mutex/Condvar state is in an undefined state post-fork.
+///
+/// # Safety
+///
+/// * `pipe_write_fd` must be a valid writable pipe file descriptor.
+/// * Must only be called once per child process, before any commands are issued.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
+    let w = create_pipe_writer(pipe_write_fd);
+    let ptr = w as *const SharedPipeWriter as *mut SharedPipeWriter;
+    // Replace the stale writer. The old one is intentionally leaked —
+    // its mutex/condvar are in undefined state post-fork.
+    ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
+
+    // Also reinitialize the timeout watchdog — its thread is dead post-fork.
+    glide_core::timeout_watchdog::TimeoutWatchdog::reinit_global();
+}
+
+/// Create a new `SharedPipeWriter` and spawn its flush thread.
+/// Returns a `&'static` reference by leaking the allocation (lives for
+/// the lifetime of the process).
+fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
+    let w = Box::new(SharedPipeWriter {
+        buffer: std::sync::Mutex::new(Vec::with_capacity(FRAME_SIZE * 64)),
+        condvar: Condvar::new(),
+        pipe_fd: pipe_write_fd,
+    });
+    // Leak to get 'static lifetime — the pipe writer lives for the process lifetime.
+    let w_ref: &'static SharedPipeWriter = Box::leak(w);
+    let fd = pipe_write_fd;
+    // Spawn flush thread. `w_ref` is &'static and SharedPipeWriter is Sync,
+    // so sharing across threads is safe.
+    let sw_ref = w_ref;
+    std::thread::Builder::new()
+        .name("glide-async-pipe-flush".into())
+        .spawn(move || {
+            let flush_threshold: usize = std::env::var("GLIDE_PIPE_FLUSH_THRESHOLD")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1);
+            let sw = sw_ref;
+            loop {
+                let data = {
+                    let mut buf = sw.buffer.lock().unwrap();
+                    while buf.is_empty() {
+                        buf = sw.condvar.wait(buf).unwrap();
                     }
-                    let mut off = 0;
-                    while off < data.len() {
-                        let w = unsafe {
-                            libc::write(
-                                fd,
-                                data[off..].as_ptr() as *const libc::c_void,
-                                data.len() - off,
-                            )
-                        };
-                        if w > 0 {
-                            off += w as usize;
-                        } else if w == 0 {
-                            break;
-                        } else {
-                            let e = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-                            if e == libc::EINTR || e == libc::EAGAIN {
-                                continue;
-                            }
-                            break; // EPIPE/EBADF — fd is gone
+                    let fc = buf.len() / FRAME_SIZE;
+                    if fc <= flush_threshold {
+                        let mut d = Vec::with_capacity(FRAME_SIZE * 4);
+                        std::mem::swap(&mut *buf, &mut d);
+                        d
+                    } else {
+                        drop(buf);
+                        std::thread::yield_now();
+                        let mut buf = sw.buffer.lock().unwrap();
+                        let mut d = Vec::with_capacity(FRAME_SIZE * 64);
+                        std::mem::swap(&mut *buf, &mut d);
+                        d
+                    }
+                };
+                if data.is_empty() {
+                    continue;
+                }
+                let mut off = 0;
+                while off < data.len() {
+                    let w = unsafe {
+                        libc::write(
+                            fd,
+                            data[off..].as_ptr() as *const libc::c_void,
+                            data.len() - off,
+                        )
+                    };
+                    if w > 0 {
+                        off += w as usize;
+                    } else if w == 0 {
+                        break;
+                    } else {
+                        let e = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+                        if e == libc::EINTR || e == libc::EAGAIN {
+                            continue;
                         }
+                        // EPIPE/EBADF — fd is gone, exit the flush thread.
+                        return;
                     }
                 }
-            })
-            .expect("flush thread");
-        w
-    });
+            }
+        })
+        .expect("flush thread");
+    w_ref
 }
 
 /// A `GlideClient` adapter.
@@ -838,7 +909,7 @@ impl ClientAdapter {
                 let cid = self
                     .pipe_client_id
                     .load(std::sync::atomic::Ordering::Relaxed);
-                if cid != 0 && ASYNC_PIPE.get().is_some() {
+                if cid != 0 && get_async_pipe().is_some() {
                     self.runtime.spawn(async move {
                         match request_future.await {
                             Ok(value) => {
@@ -846,7 +917,7 @@ impl ClientAdapter {
                                     response_buf.as_ref().map(|rb| rb.as_slice()).unwrap_or(&[]);
                                 match valkey_value_to_arena_response(value, buf) {
                                     Ok((root_ptr, arena_ptr)) => {
-                                        if let Some(w) = ASYNC_PIPE.get() {
+                                        if let Some(w) = get_async_pipe() {
                                             w.push_success(
                                                 cid,
                                                 request_id,
@@ -856,7 +927,7 @@ impl ClientAdapter {
                                         }
                                     }
                                     Err(err) => {
-                                        if let Some(w) = ASYNC_PIPE.get() {
+                                        if let Some(w) = get_async_pipe() {
                                             w.push_error(
                                                 cid,
                                                 request_id,
@@ -868,7 +939,7 @@ impl ClientAdapter {
                                 }
                             }
                             Err(err) => {
-                                if let Some(w) = ASYNC_PIPE.get() {
+                                if let Some(w) = get_async_pipe() {
                                     w.push_error(
                                         cid,
                                         request_id,
@@ -1085,8 +1156,8 @@ impl ClientAdapter {
                 let cid = self
                     .pipe_client_id
                     .load(std::sync::atomic::Ordering::Relaxed);
-                if cid != 0 && ASYNC_PIPE.get().is_some() {
-                    if let Some(w) = ASYNC_PIPE.get() {
+                if cid != 0 && get_async_pipe().is_some() {
+                    if let Some(w) = get_async_pipe() {
                         w.push_error(cid, request_id, error_type, error_string);
                     }
                 } else {
@@ -1426,7 +1497,7 @@ fn create_client_internal(
                 if pipe_cid != 0 {
                     // Wait for ASYNC_PIPE if not yet initialized (brief spin during startup)
                     let w = loop {
-                        if let Some(w) = ASYNC_PIPE.get() {
+                        if let Some(w) = get_async_pipe() {
                             break w;
                         }
                         std::hint::spin_loop();
@@ -1778,11 +1849,13 @@ fn create_client_from_uri_internal(
     // Build base ConnectionRequest from URI
     let mut request = connection_request::ConnectionRequest::new();
 
-    // Extract host and port
-    let host = url
-        .host_str()
-        .ok_or_else(|| "URI missing host".to_string())?
-        .to_string();
+    // Extract host and port.
+    let host = match url.host() {
+        Some(url::Host::Domain(domain)) => domain.to_string(),
+        Some(url::Host::Ipv4(addr)) => addr.to_string(),
+        Some(url::Host::Ipv6(addr)) => addr.to_string(),
+        None => return Err("URI missing host".to_string()),
+    };
     let port = url.port().unwrap_or(6379) as u32;
 
     let mut node_address = connection_request::NodeAddress::new();
@@ -1939,6 +2012,66 @@ mod tests_create_client_from_uri_internal {
             err.contains("Username in URI is not valid UTF-8"),
             "unexpected error: {err}"
         );
+    }
+
+    fn host_and_port(uri: &str) -> (String, u32) {
+        let req = parse_uri(uri);
+        let addr = req.addresses.first().expect("no address parsed");
+        (addr.host.to_string(), addr.port)
+    }
+
+    #[test]
+    fn ipv6_literal_host_is_unbracketed() {
+        let (host, port) = host_and_port("redis://[::1]:6400");
+        assert_eq!(host, "::1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv6_uncompressed_literal_is_canonicalized_unbracketed() {
+        let (host, port) = host_and_port("redis://[0:0:0:0:0:0:0:1]:6400");
+        assert_eq!(host, "::1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv6_v4_mapped_literal_is_unbracketed() {
+        // v4-mapped address: assert on the canonical `Ipv6Addr::to_string()`
+        // output (no brackets). Kept in sync with the std canonical form.
+        let (host, port) = host_and_port("redis://[::ffff:127.0.0.1]:6400");
+        assert_eq!(
+            host,
+            std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0x7f00, 0x0001).to_string()
+        );
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn ipv4_literal_host_is_unchanged() {
+        // Regression control: IPv4 literals must be byte-identical to before.
+        let (host, port) = host_and_port("redis://127.0.0.1:6400");
+        assert_eq!(host, "127.0.0.1");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn domain_host_is_unchanged() {
+        // Regression control: domain hosts must be byte-identical to before.
+        let (host, port) = host_and_port("redis://localhost:6400");
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 6400);
+    }
+
+    #[test]
+    fn hostless_uri_returns_missing_host_error() {
+        // A URI that parses as a URL but carries no authority (e.g. only a
+        // path) has `url::Url::host()` == None. The `None` match arm must
+        // surface a clear "URI missing host" error rather than panicking or
+        // silently building an address with an empty host.
+        let c_uri = CString::new("redis:///0").unwrap();
+        let err = create_client_from_uri_internal(c_uri.as_ptr(), std::ptr::null())
+            .expect_err("expected missing-host error");
+        assert!(err.contains("URI missing host"), "unexpected error: {err}");
     }
 }
 
@@ -3481,9 +3614,38 @@ unsafe fn execute_command(
     // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let mut client = client_adapter.core.client.clone();
 
+    // Abandon monitor integration: for pool-borrowed clients refresh the inactivity
+    // timer on every command, and mark blocking commands so the monitor skips them
+    // while they are in flight. Non-pooled clients skip this entirely (no map lookup cost).
+    #[cfg(feature = "pool-support")]
+    let blocking_flag = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_adapter_ptr as usize))
+        .map(|entry| *entry.value())
+        .and_then(|(pool_id, client_id)| {
+            glide_core::pool::refresh_client_activity(pool_id, client_id);
+            if glide_core::client::is_blocking_command(&cmd)
+                && glide_core::pool::mark_client_blocking(pool_id, client_id, true)
+            {
+                Some((pool_id, client_id))
+            } else {
+                None
+            }
+        });
+    #[cfg(not(feature = "pool-support"))]
+    let blocking_flag: Option<(u64, u64)> = None;
+
     client_adapter.execute_request_with_buffer(
         request_id,
-        async move { client.send_command(&mut cmd, routing_info).await },
+        async move {
+            let result = client.send_command(&mut cmd, routing_info).await;
+            // Unmark blocking after command completes
+            #[cfg(feature = "pool-support")]
+            if let Some((pool_id, client_id)) = blocking_flag {
+                glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+            }
+            let _ = blocking_flag; // suppress unused warning when pool-support disabled
+            result
+        },
         response_buffer,
     )
 }
@@ -4129,7 +4291,7 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
     // Python pipe clients have cid != 0 AND ASYNC_PIPE initialized.
     // Go/other clients may have cid != 0 for address resolver but no pipe.
     let is_pipe_or_sync = matches!(client_adapter.core.client_type, ClientType::SyncClient)
-        || (cid != 0 && ASYNC_PIPE.get().is_some());
+        || (cid != 0 && get_async_pipe().is_some());
     if is_pipe_or_sync {
         match result {
             Ok(value) => match valkey_value_to_arena_response(value, &[]) {
@@ -4256,11 +4418,39 @@ pub unsafe extern "C-unwind" fn invoke_script(
     };
 
     let mut client = client_adapter.core.client.clone();
+
+    // Refresh pool activity for batch/script dispatch (same as execute_command)
+    #[cfg(feature = "pool-support")]
+    let script_pool_ids = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_adapter_ptr as usize))
+        .map(|entry| *entry.value());
+    #[cfg(feature = "pool-support")]
+    if let Some((pool_id, client_id)) = script_pool_ids {
+        glide_core::pool::refresh_client_activity(pool_id, client_id);
+    }
+    #[cfg(not(feature = "pool-support"))]
+    let script_pool_ids: Option<(u64, u64)> = None;
+
     client_adapter.execute_request(request_id, async move {
+        // Mark as blocking for duration of script execution
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = script_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+        }
+
         let routing_info = get_route(route, None)?;
-        client
+        let result = client
             .invoke_script(hash_str, &keys_vec, &args_vec, routing_info)
-            .await
+            .await;
+
+        // Unmark blocking after script completes
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = script_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        }
+        let _ = script_pool_ids;
+
+        result
     })
 }
 
@@ -4365,6 +4555,18 @@ pub unsafe extern "C" fn batch(
     };
     let mut client = client_adapter.core.client.clone();
 
+    // Refresh pool activity for batch/script dispatch (same as execute_command)
+    #[cfg(feature = "pool-support")]
+    let batch_pool_ids = crate::pool_ffi::get_pool_adapter_map()
+        .get(&(client_ptr as usize))
+        .map(|entry| *entry.value());
+    #[cfg(feature = "pool-support")]
+    if let Some((pool_id, client_id)) = batch_pool_ids {
+        glide_core::pool::refresh_client_activity(pool_id, client_id);
+    }
+    #[cfg(not(feature = "pool-support"))]
+    let batch_pool_ids: Option<(u64, u64)> = None;
+
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
     // Clone for use in async block
@@ -4394,6 +4596,12 @@ pub unsafe extern "C" fn batch(
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client_adapter.execute_request(callback_index, async move {
+        // Mark as blocking for duration of batch execution
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = batch_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, true);
+        }
+
         let result = if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -4409,6 +4617,13 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         };
+
+        // Unmark blocking after batch completes
+        #[cfg(feature = "pool-support")]
+        if let Some((pool_id, client_id)) = batch_pool_ids {
+            glide_core::pool::mark_client_blocking(pool_id, client_id, false);
+        }
+        let _ = batch_pool_ids;
 
         // Process batch response for decompression if compression is enabled
         match result {

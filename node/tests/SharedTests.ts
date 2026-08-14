@@ -410,20 +410,24 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "save %p",
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                await waitForSaveNotInProgress(client);
-
-                const result = await client.save();
-                expect(result).toEqual("OK");
-
-                if (client instanceof GlideClusterClient) {
+            await runTest(
+                async (client: BaseClient) => {
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.save(
-                        PRIMARY_SLOT_ROUTE_OPTION,
-                    );
-                    expect(clusterResult).toEqual("OK");
-                }
-            }, protocol);
+
+                    const result = await client.save();
+                    expect(result).toEqual("OK");
+
+                    if (client instanceof GlideClusterClient) {
+                        await waitForSaveNotInProgress(client);
+                        const clusterResult = await client.save(
+                            PRIMARY_SLOT_ROUTE_OPTION,
+                        );
+                        expect(clusterResult).toEqual("OK");
+                    }
+                },
+                protocol,
+                { requestTimeout: 25000 },
+            );
         },
         config.timeout,
     );

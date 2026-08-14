@@ -14,6 +14,16 @@ use jni::sys::{jint, jlong};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+/// Maps handle_id (== client_id for pool clients) → pool_id.
+/// Used by the command dispatch path to detect pool-borrowed clients
+/// and mark them as blocking / refresh activity.
+static JNI_POOL_CLIENT_MAP: std::sync::OnceLock<dashmap::DashMap<u64, u64>> =
+    std::sync::OnceLock::new();
+
+pub(crate) fn get_pool_client_map() -> &'static dashmap::DashMap<u64, u64> {
+    JNI_POOL_CLIENT_MAP.get_or_init(dashmap::DashMap::new)
+}
+
 /// Create a new pool. Returns pool_id > 0 on success, -1 on invalid config.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreate(
@@ -23,6 +33,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     min_idle: jint,
     idle_timeout_ms: jlong,
     request_timeout_ms: jlong,
+    abandon_timeout_ms: jlong,
     connection_request_bytes: JByteArray,
 ) -> jlong {
     let bytes = match env.convert_byte_array(&connection_request_bytes) {
@@ -45,6 +56,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                 .map(|req| req.database_id)
                 .unwrap_or(0)
         },
+        abandon_timeout: Duration::from_millis(abandon_timeout_ms as u64),
     };
 
     let pool = match ClientPool::new(config) {
@@ -53,6 +65,10 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     };
 
     let pool_id = pool::register_pool(pool);
+
+    // Start abandon monitor
+    let runtime = get_runtime();
+    pool::start_abandon_monitor(pool_id, runtime.handle());
 
     // Spawn min_idle background client creation
     if min_idle > 0 {
@@ -74,6 +90,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                         get_handle_table().insert(client_id, client.clone());
                         // Register in scope client registry too
                         glide_core::scope::register_client(client_id, client);
+                        // Map handle_id → pool_id for abandon monitor integration
+                        get_pool_client_map().insert(client_id, pool_id as u64);
                     }
                     Err(e) => log::error!("Pool background client creation failed: {}", e),
                 }
@@ -98,6 +116,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
+            // Clean up any clients discarded by the abandon monitor
+            let discarded = pool.drain_discarded_ids();
+            for cid in discarded {
+                get_handle_table().remove(&cid);
+                glide_core::scope::unregister_client(cid);
+                get_pool_client_map().remove(&cid);
+            }
+
             let result = pool.try_acquire();
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
@@ -116,6 +142,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                             let client_id = pool.add_client_reserved(client.clone());
                             get_handle_table().insert(client_id, client.clone());
                             glide_core::scope::register_client(client_id, client);
+                            get_pool_client_map().insert(client_id, pool_id as u64);
                         }
                         Err(e) => {
                             log::error!("Pool background client creation failed: {}", e);
@@ -165,13 +192,22 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
     runtime.spawn(async move {
         let mut pool = pool_arc.lock().await;
         // Clean up JNI handle table entries for all pooled clients
+        // (includes discarded clients from the abandon monitor)
+        let discarded = pool.drain_discarded_ids();
         for entry in pool.idle.iter() {
             handle_table.remove(&entry.client_id);
             glide_core::scope::unregister_client(entry.client_id);
+            get_pool_client_map().remove(&entry.client_id);
         }
         for entry in pool.in_use.iter() {
             handle_table.remove(entry.key());
             glide_core::scope::unregister_client(*entry.key());
+            get_pool_client_map().remove(entry.key());
+        }
+        for cid in discarded {
+            handle_table.remove(&cid);
+            glide_core::scope::unregister_client(cid);
+            get_pool_client_map().remove(&cid);
         }
         pool.destroy();
     });

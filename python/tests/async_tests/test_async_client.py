@@ -13364,3 +13364,109 @@ class TestClientLifecycle:
             except Exception:
                 pass
             await admin_client.close()
+
+
+class TestCompatFutureThreadSafety:
+    """`_CompatFuture` must be completable from a non-trio thread.
+
+    Under free-threading the pipe reader dispatches response handling to a
+    thread pool, so completions reach `_CompatFuture` off the trio thread.
+    `anyio.Event` is a `trio.Event` there and is not thread-safe: setting it
+    from a foreign thread marks it set without rescheduling the parked waiter,
+    hanging the awaiting task indefinitely. These tests pin the thread hop that
+    keeps the waiter wakeable whichever thread completes the future.
+
+    Scoped to trio on purpose: `_get_new_future_instance` hands back a real
+    `asyncio.Future` under asyncio, so `_CompatFuture` is only ever awaited on
+    trio (or another non-asyncio framework) in production.
+    """
+
+    @pytest.fixture
+    def anyio_backend(self, request):
+        if "trio" not in request.config.async_backends:
+            pytest.skip(reason="trio is excluded")
+        return ("trio", {"restrict_keyboard_interrupt_to_checkpoints": True})
+
+    @staticmethod
+    async def _await_parked_waiter(fut):
+        """Block until a task is actually parked on ``fut``'s completion event.
+
+        Polling `statistics().tasks_waiting` is what makes the ordering
+        deterministic: releasing the worker any earlier lets it complete the
+        future before anyone parks, which would let the test pass without
+        exercising the lost-wakeup path it exists to pin.
+        """
+        with anyio.fail_after(5):
+            while fut._is_done.statistics().tasks_waiting == 0:
+                await anyio.sleep(0)
+
+    @pytest.mark.anyio
+    async def test_set_result_from_worker_thread_wakes_waiter(self):
+        import threading
+
+        from glide.glide_client import _CompatFuture
+
+        fut = _CompatFuture()
+        parked = threading.Event()
+        received = []
+        worker_error = []
+
+        def worker():
+            parked.wait(5)
+            try:
+                fut.set_result("from-thread")
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                worker_error.append(exc)
+
+        async def waiter():
+            received.append(await fut)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        with anyio.move_on_after(10) as scope:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(waiter)
+                # Only release the worker once the waiter has really parked.
+                await self._await_parked_waiter(fut)
+                parked.set()
+        assert not worker_error, f"set_result() raised off-thread: {worker_error}"
+        assert (
+            not scope.cancel_called
+        ), "set_result() from a worker thread did not wake the parked waiter"
+        assert received == ["from-thread"]
+
+    @pytest.mark.anyio
+    async def test_set_exception_from_worker_thread_wakes_waiter(self):
+        import threading
+
+        from glide.glide_client import _CompatFuture
+
+        fut = _CompatFuture()
+        parked = threading.Event()
+        raised = []
+        worker_error = []
+
+        def worker():
+            parked.wait(5)
+            try:
+                fut.set_exception(ValueError("boom"))
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                worker_error.append(exc)
+
+        async def waiter():
+            with pytest.raises(ValueError, match="boom"):
+                await fut
+            raised.append(True)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        with anyio.move_on_after(10) as scope:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(waiter)
+                await self._await_parked_waiter(fut)
+                parked.set()
+        assert not worker_error, f"set_exception() raised off-thread: {worker_error}"
+        assert (
+            not scope.cancel_called
+        ), "set_exception() from a worker thread did not wake the parked waiter"
+        assert raised == [True]

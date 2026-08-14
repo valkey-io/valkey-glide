@@ -1090,7 +1090,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			kind:     kindFiles,
 			certPath: testClientCertPath,
 			keyPath:  testClientKeyPath,
-			opts:     []MutualTLSOption{WithReloadInterval(60 * time.Second)},
+			opts:     []MutualTLSOption{WithReloadInterval(60)},
 		},
 		{
 			name:          "files/empty-cert-path",
@@ -1107,15 +1107,6 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: keyPath must be non-empty",
 		},
 		{
-			// Sub-second values are accepted; they round to zero on the wire,
-			// which is the same as not passing the option (core default cadence).
-			name:     "files/sub-second-interval-accepted",
-			kind:     kindFiles,
-			certPath: testClientCertPath,
-			keyPath:  testClientKeyPath,
-			opts:     []MutualTLSOption{WithReloadInterval(500 * time.Millisecond)},
-		},
-		{
 			name:          "files/zero-interval-rejected",
 			kind:          kindFiles,
 			certPath:      testClientCertPath,
@@ -1124,12 +1115,14 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
 		},
 		{
-			name:          "files/negative-interval-rejected",
-			kind:          kindFiles,
-			certPath:      testClientCertPath,
-			keyPath:       testClientKeyPath,
-			opts:          []MutualTLSOption{WithReloadInterval(-1 * time.Second)},
-			wantErrSubstr: "WithMutualTLSFromFiles: reload interval must be positive",
+			// The largest interval that fits in a uint32.
+			name:     "files/max-interval-accepted",
+			kind:     kindFiles,
+			certPath: testClientCertPath,
+			keyPath:  testClientKeyPath,
+			opts: []MutualTLSOption{
+				WithReloadInterval(MaxUint32),
+			},
 		},
 	}
 
@@ -1161,7 +1154,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 				assert.Equal(t, tc.keyBytes, got.clientKey)
 				assert.Empty(t, got.clientCertPath)
 				assert.Empty(t, got.clientKeyPath)
-				assert.Equal(t, time.Duration(0), got.certReloadInterval)
+				assert.Equal(t, uint32(0), got.certReloadInterval)
 			case kindFiles:
 				assert.Nil(t, got.clientCertificate)
 				assert.Nil(t, got.clientKey)
@@ -1176,7 +1169,7 @@ func TestTlsConfiguration_WithMutualTLS_TableDriven(t *testing.T) {
 // mTLS builder clears whatever the other left behind. Bytes to paths must
 // clear the byte fields and enable cert reload; paths to bytes must clear
 // the path fields and drop the reload block. Both the in-memory state and
-// the ToProtobuf wire output are checked.
+// the ToProtobuf output are checked.
 func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 	byteCert := []byte(testClientCertData)
 	byteKey := []byte(testClientKeyData)
@@ -1205,7 +1198,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 
 	t.Run("files-to-bytes", func(t *testing.T) {
 		tls, err := NewTlsConfiguration().WithMutualTLSFromFiles(
-			testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second))
+			testClientCertPath, testClientKeyPath, WithReloadInterval(60))
 		require.NoError(t, err)
 		tls, err = tls.WithMutualTLS(byteCert, byteKey)
 		require.NoError(t, err)
@@ -1214,7 +1207,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 		assert.Equal(t, byteKey, tls.clientKey)
 		assert.Empty(t, tls.clientCertPath)
 		assert.Empty(t, tls.clientKeyPath)
-		assert.Equal(t, time.Duration(0), tls.certReloadInterval)
+		assert.Equal(t, uint32(0), tls.certReloadInterval)
 
 		adv := NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
 		req, err := NewClientConfiguration().WithUseTLS(true).WithAdvancedConfiguration(adv).ToProtobuf()
@@ -1228,7 +1221,7 @@ func TestTlsConfiguration_WithMutualTLS_ModeReplacement(t *testing.T) {
 }
 
 // TestTlsConfiguration_WireSnapshot_TableDriven checks that ToProtobuf emits
-// the right wire fields for every mTLS mode, run against both standalone and
+// the right protobuf fields for every mTLS mode, run against both standalone and
 // cluster. The two topologies share the same cases so any divergence shows
 // up as one row failing on cluster only.
 func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
@@ -1301,25 +1294,13 @@ func TestTlsConfiguration_WireSnapshot_TableDriven(t *testing.T) {
 		},
 		{
 			name:  "paths-explicit-interval",
-			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60*time.Second)),
+			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(60)),
 			want: wantWire{
 				clientCertPath:      testClientCertPath,
 				clientKeyPath:       testClientKeyPath,
 				certReloadEnabled:   true,
 				certReloadHasIntSec: true,
 				certReloadIntSec:    60,
-			},
-		},
-		{
-			// Sub-second intervals round to zero on the wire, so the interval
-			// field is omitted and the core uses its default cadence, same as
-			// not passing the option.
-			name:  "paths-sub-second-interval-rounds-to-no-wire-interval",
-			build: mustFromFiles(testClientCertPath, testClientKeyPath, WithReloadInterval(500*time.Millisecond)),
-			want: wantWire{
-				clientCertPath:    testClientCertPath,
-				clientKeyPath:     testClientKeyPath,
-				certReloadEnabled: true,
 			},
 		},
 	}
