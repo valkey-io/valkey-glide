@@ -478,6 +478,23 @@ func (suite *GlideTestSuite) requireModuleStandaloneHost() {
 	}
 }
 
+// requireModuleClusterHost mirrors requireModuleStandaloneHost for the cluster
+// module tests. When modulesMode is on, defaultClusterClientConfig selects the
+// TLS cluster host, so an empty --tls-cluster-endpoints must skip. When it is
+// off, defaultClusterClientConfig uses the plaintext clusterHosts slice, which
+// the plaintext modules-test workflow populates via --cluster-endpoints.
+func (suite *GlideTestSuite) requireModuleClusterHost() {
+	if *modulesMode {
+		if *clusterTlsHostsFlag == "" {
+			suite.T().Skip("modules-mode cluster tests require --tls-cluster-endpoints")
+		}
+		return
+	}
+	if len(suite.clusterHosts) == 0 {
+		suite.T().Skip("No cluster server configured")
+	}
+}
+
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
 	// Reuse cached client if still alive
 	if suite.cachedStandaloneClient != nil {

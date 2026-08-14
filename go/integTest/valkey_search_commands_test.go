@@ -87,6 +87,7 @@ func (suite *GlideTestSuite) createIndexHelperStandalone(ctx context.Context, cl
 // --- ft_create ---
 
 func (suite *GlideTestSuite) TestModuleFtCreate() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -174,6 +175,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 // --- ft_search ---
 
 func (suite *GlideTestSuite) TestModuleFtSearch() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -225,6 +227,7 @@ func (suite *GlideTestSuite) TestModuleFtSearch() {
 // --- ft_search_nocontent ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -265,6 +268,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
 // --- ft_search_dialect ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -298,6 +302,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
 // --- ft_drop_and_ft_list ---
 
 func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -340,6 +345,7 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
 // --- ft_aggregate (bicycles + movies) ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
+	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
@@ -389,6 +395,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 }
 
 func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
+	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
@@ -468,6 +475,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
 // --- ft_info ---
 
 func (suite *GlideTestSuite) TestModuleFtInfo() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -558,6 +566,7 @@ func (suite *GlideTestSuite) TestModuleFtInfo() {
 // --- ft_aliasadd_aliasdel_aliasupdate_aliaslist ---
 
 func (suite *GlideTestSuite) TestModuleFtAliasOperations() {
+	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("ALIAS is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -623,6 +632,7 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperations() {
 // --- ft_explain ---
 
 func (suite *GlideTestSuite) TestModuleFtExplain() {
+	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -656,6 +666,7 @@ func (suite *GlideTestSuite) TestModuleFtExplain() {
 // --- ft_explaincli ---
 
 func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
+	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -690,6 +701,7 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
 // --- ft_search_1_2_sortby ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -739,6 +751,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 // --- ft_search_1_2_withsortkeys ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -798,6 +811,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
 // --- ft_search_1_2_text_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -837,6 +851,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
 // --- ft_search_1_2_shard_consistency ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -879,6 +894,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 // --- ft_aggregate_1_2_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -934,6 +950,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 // --- ft_create_1_2_index_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -1031,6 +1048,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 // --- ft_create_1_2_field_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -1093,6 +1111,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
 // --- ft_info_1_2_options ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -2187,6 +2206,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 // correct way to guarantee order in this scenario.
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
+	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
