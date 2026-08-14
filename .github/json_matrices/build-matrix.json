@@ -89,10 +89,11 @@
         "OS": "windows",
         "NAMED_OS": "windows",
         "RUNNER": "windows-latest",
+        "CD_RUNNER": "windows-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
-        "PACKAGE_MANAGERS": ["maven"],
-        "languages": ["java"],
+        "PACKAGE_MANAGERS": ["maven", "npm"],
+        "languages": ["java", "node"],
         "run": "always"
     }
 ]
