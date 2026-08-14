@@ -980,8 +980,19 @@ class BaseClientConfiguration:
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
 
-        if client_info_tag is not None and any(c.isspace() for c in client_info_tag):
-            raise ValueError("client_info_tag must not contain whitespace characters")
+        if client_info_tag is not None and any(
+            not "!" <= character <= "~" for character in client_info_tag
+        ):
+            raise ValueError(
+                "client_info_tag must contain only non-whitespace printable ASCII characters"
+            )
+
+        if lib_name is not None and any(
+            not "!" <= character <= "~" for character in lib_name
+        ):
+            raise ValueError(
+                "lib_name must contain only non-whitespace printable ASCII characters"
+            )
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(

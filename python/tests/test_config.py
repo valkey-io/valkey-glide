@@ -59,6 +59,42 @@ def test_connection_request_lib_name(
     assert request.lib_name == expected.format(default=runtime_default)
 
 
+# CLIENT SETINFO validates both LIB-NAME and LIB-VER with validateClientAttr,
+# which permits only visible ASCII characters from "!" through "~" so that
+# CLIENT LIST remains space-delimited and parseable. Apply the same constraint
+# to lib_name and client_info_tag, which are composed into the LIB-NAME value.
+# See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+@pytest.mark.parametrize("field_name", ["lib_name", "client_info_tag"])
+@pytest.mark.parametrize(
+    "invalid_character",
+    [
+        pytest.param(" ", id="space"),
+        pytest.param("\t", id="tab"),
+        pytest.param("\n", id="newline"),
+        pytest.param("\r", id="carriage-return"),
+        pytest.param("\x00", id="null-control-character"),
+        pytest.param("\x1f", id="unit-separator-control-character"),
+        pytest.param("\x7f", id="delete-control-character"),
+        pytest.param("\u00a0", id="non-breaking-space"),
+        pytest.param("\u2003", id="em-space"),
+        pytest.param("\x80", id="non-ascii-boundary"),
+        pytest.param("é", id="non-ascii-latin-character"),
+        pytest.param("中", id="non-ascii-cjk-character"),
+        pytest.param("😀", id="non-ascii-emoji"),
+    ],
+)
+def test_client_library_metadata_rejects_invalid_characters(
+    field_name, invalid_character
+):
+    value = f"valid{invalid_character}value"
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{field_name} must contain only non-whitespace printable ASCII characters",
+    ):
+        GlideClientConfiguration(addresses=[], **{field_name: value})
+
+
 def test_default_client_config():
     config = BaseClientConfiguration([])
     assert len(config.addresses) == 0
