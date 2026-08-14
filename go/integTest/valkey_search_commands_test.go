@@ -1162,9 +1162,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 // --- ft_create (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1252,9 +1250,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 // --- ft_search (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1305,9 +1301,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
 // --- ft_search_nocontent (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1347,9 +1341,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
 // --- ft_search_dialect (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1383,9 +1375,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
 // --- ft_drop_and_ft_list (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1429,9 +1419,7 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1483,9 +1471,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1563,9 +1549,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 // --- ft_info (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1651,9 +1635,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAliasOperationsStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("ALIAS is currently unsupported")
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1712,9 +1694,7 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperationsStandalone() {
 func (suite *GlideTestSuite) TestModuleFtExplainStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1746,9 +1726,7 @@ func (suite *GlideTestSuite) TestModuleFtExplainStandalone() {
 func (suite *GlideTestSuite) TestModuleFtExplainCLIStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1779,9 +1757,7 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLIStandalone() {
 // --- ft_search sortby (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1831,9 +1807,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 // --- ft_search withsortkeys (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1889,9 +1863,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
 // --- ft_search text query flags (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1931,9 +1903,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
 // --- ft_aggregate query flags (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1989,9 +1959,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 // --- ft_create index options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2089,9 +2057,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 // --- ft_create field options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2151,9 +2117,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
 // --- ft_info with options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2312,9 +2276,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
 // --- ft_search_sortby_with_return_excluding_sort_field (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStandalone() {
-	if len(suite.standaloneHosts) == 0 || *standaloneTlsHostsFlag == "" {
-		suite.T().Skip("No standalone server configured")
-	}
+	suite.requireModuleStandaloneHost()
 	client := suite.defaultClient()
 	ctx := context.Background()
 

@@ -462,6 +462,22 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 	return clientConfig
 }
 
+// requireModuleStandaloneHost skips a standalone module test when the endpoint the
+// test would actually use is not configured. When modulesMode is on, defaultClientConfig
+// selects the TLS host, so an empty --tls-standalone-endpoints must skip. When it is
+// off, defaultClientConfig uses the plaintext standaloneHosts slice.
+func (suite *GlideTestSuite) requireModuleStandaloneHost() {
+	if *modulesMode {
+		if *standaloneTlsHostsFlag == "" {
+			suite.T().Skip("modules-mode standalone tests require --tls-standalone-endpoints")
+		}
+		return
+	}
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
+}
+
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
 	// Reuse cached client if still alive
 	if suite.cachedStandaloneClient != nil {
