@@ -57,7 +57,8 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef("""
+        self._ffi.cdef(
+            """
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -451,7 +452,8 @@ class _GlideFFI:
                 size_t connection_request_len,
                 uint32_t min_idle
             );
-            """)
+            """
+        )
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))

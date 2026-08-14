@@ -17,7 +17,7 @@ from glide_shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
 )
-from glide_shared.connection_request import create_sync_connection_request
+from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
     ClosingError,
@@ -134,7 +134,7 @@ class BaseClient(CoreCommands):
         # client already closed, and recreate it anyway.
         if self._is_closed:
             return
-        conn_req = create_sync_connection_request(self._config)
+        conn_req = _create_sync_connection_request(self._config)
         conn_req_bytes = conn_req.SerializeToString()
         # Store for scoped_connection
         self._conn_req_bytes = conn_req_bytes

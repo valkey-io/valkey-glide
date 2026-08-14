@@ -8,7 +8,7 @@ from typing import Callable, List, Optional
 from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
-from glide_shared.connection_request import create_sync_connection_request
+from glide_shared.connection_request import _create_sync_connection_request
 
 
 class MonitorClient:
@@ -59,7 +59,7 @@ class MonitorClient:
             )
         instance = cls()
         instance._user_callback = callback
-        conn_req = create_sync_connection_request(config)
+        conn_req = _create_sync_connection_request(config)
         conn_req_bytes = conn_req.SerializeToString()
 
         @instance._ffi.callback("MonitorCallback")

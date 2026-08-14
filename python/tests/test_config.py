@@ -19,8 +19,8 @@ from glide_shared.config import (
     TlsAdvancedConfiguration,
 )
 from glide_shared.connection_request import (
-    create_async_connection_request,
-    create_sync_connection_request,
+    _create_async_connection_request,
+    _create_sync_connection_request,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -30,8 +30,8 @@ from glide_shared.protobuf.connection_request_pb2 import TlsMode
 @pytest.mark.parametrize(
     ("request_factory", "runtime_default"),
     [
-        (create_async_connection_request, "GlidePy"),
-        (create_sync_connection_request, "GlidePySync"),
+        (_create_async_connection_request, "GlidePy"),
+        (_create_sync_connection_request, "GlidePySync"),
     ],
 )
 @pytest.mark.parametrize(

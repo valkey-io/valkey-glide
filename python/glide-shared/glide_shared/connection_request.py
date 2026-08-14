@@ -29,14 +29,14 @@ def _create_connection_request(
     return request
 
 
-def create_async_connection_request(
+def _create_async_connection_request(
     config: BaseClientConfiguration,
 ) -> ConnectionRequest:
     """Build an asynchronous Python client connection request."""
     return _create_connection_request(config, "GlidePy")
 
 
-def create_sync_connection_request(
+def _create_sync_connection_request(
     config: BaseClientConfiguration,
 ) -> ConnectionRequest:
     """Build a synchronous Python client connection request."""
