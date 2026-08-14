@@ -54,8 +54,9 @@ public class BaseClientConfigurationTest {
     }
 
     @Test
-    public void testClientInfoTagDefault() {
+    public void testIdentificationFieldsDefaultToNull() {
         TestClientConfiguration config = TestClientConfiguration.builder().build();
+        assertNull(config.getLibName());
         assertNull(config.getClientInfoTag());
     }
 
@@ -79,25 +80,65 @@ public class BaseClientConfigurationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {"a b", "a\tb", "a\nb", "a\u0085b", "a\u00A0b", "a\u2007b", "a\u202Fb", "a\u3000b"})
-    public void testClientInfoTagRejectsWhitespace(String clientInfoTag) {
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
-        assertEquals("clientInfoTag must not contain whitespace characters", exception.getMessage());
+    @ValueSource(strings = {"", "!", "~", "client!#$%&'*+,-./:;=?@[]^_`{|}~"})
+    public void testClientInfoTagAcceptsEmptyAndPrintableAscii(String clientInfoTag) {
+        TestClientConfiguration config =
+                TestClientConfiguration.builder().clientInfoTag(clientInfoTag).build();
+        assertEquals(clientInfoTag, config.getClientInfoTag());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "!", "~", "client!#$%&'*+,-./:;=?@[]^_`{|}~"})
+    public void testLibNameAcceptsEmptyAndPrintableAscii(String libName) {
+        TestClientConfiguration config =
+                TestClientConfiguration.builder().libName(libName).build();
+        assertEquals(libName, config.getLibName());
     }
 
     @ParameterizedTest
     @ValueSource(
-            strings = {"a b", "a\tb", "a\nb", "a\u0085b", "a\u00A0b", "a\u2007b", "a\u202Fb", "a\u3000b"})
-    public void testLibNameRejectsWhitespace(String libName) {
+            strings = {
+                "a b",
+                "a\tb",
+                "a\nb",
+                "a\u0000b",
+                "a\u001Fb",
+                "a\u007Fb",
+                "a\u00A0b",
+                "aéb",
+                "a中b"
+            })
+    public void testClientInfoTagRejectsCharactersOutsidePrintableAscii(String clientInfoTag) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "a b",
+                "a\tb",
+                "a\nb",
+                "a\u0000b",
+                "a\u001Fb",
+                "a\u007Fb",
+                "a\u00A0b",
+                "aéb",
+                "a中b"
+            })
+    public void testLibNameRejectsCharactersOutsidePrintableAscii(String libName) {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> TestClientConfiguration.builder().libName(libName));
-        assertEquals("libName must not contain whitespace characters", exception.getMessage());
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~'",
+                exception.getMessage());
     }
 
     @Test

@@ -75,15 +75,19 @@ public abstract class BaseClientConfiguration {
     /**
      * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
      * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
-     * present, it is appended to the effective library name in parentheses. The override must not
-     * contain Unicode whitespace. Dedicated standalone monitor clients also apply this option.
+     * present, it is appended to the effective library name in parentheses. Every character in a
+     * non-empty override must be printable ASCII from {@code !} (U+0021) through {@code ~}
+     * (U+007E), inclusive. Dedicated standalone monitor clients also apply this option.
+     * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     private final String libName;
 
     /**
      * Optional attribution tag appended to the effective library name in parentheses. For example,
-     * {@code GlideJava(my-framework:1.2.3)}. The tag must not contain Unicode whitespace. If null or
-     * empty, no tag is appended. Dedicated standalone monitor clients also apply this option.
+     * {@code GlideJava(my-framework:1.2.3)}. Every character in a non-empty tag must be printable
+     * ASCII from {@code !} (U+0021) through {@code ~} (U+007E), inclusive. If null or empty, no tag
+     * is appended. Dedicated standalone monitor clients also apply this option.
+     * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     private final String clientInfoTag;
 
@@ -208,10 +212,12 @@ public abstract class BaseClientConfiguration {
          *
          * @param libName library-name override; null or empty means absent
          * @return this builder
-         * @throws IllegalArgumentException if the override contains Unicode whitespace
+         * @throws IllegalArgumentException if a non-empty override contains a character outside
+         *     printable ASCII U+0021 through U+007E
+         *     See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
          */
         public B libName(String libName) {
-            validateNoUnicodeWhitespace("libName", libName);
+            validatePrintableAscii("libName", libName);
             this.libName = libName;
             return self();
         }
@@ -221,25 +227,21 @@ public abstract class BaseClientConfiguration {
          *
          * @param clientInfoTag attribution tag; null or empty means absent
          * @return this builder
-         * @throws IllegalArgumentException if the tag contains Unicode whitespace
+         * @throws IllegalArgumentException if a non-empty tag contains a character outside printable
+         *     ASCII U+0021 through U+007E.
+         *     See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
          */
         public B clientInfoTag(String clientInfoTag) {
-            validateNoUnicodeWhitespace("clientInfoTag", clientInfoTag);
+            validatePrintableAscii("clientInfoTag", clientInfoTag);
             this.clientInfoTag = clientInfoTag;
             return self();
         }
 
-        private static void validateNoUnicodeWhitespace(String fieldName, String value) {
-            if (value != null
-                    && value.codePoints().anyMatch(BaseClientConfigurationBuilder::isUnicodeWhitespace)) {
-                throw new IllegalArgumentException(fieldName + " must not contain whitespace characters");
+        private static void validatePrintableAscii(String fieldName, String value) {
+            if (value != null && value.codePoints().anyMatch(codePoint -> codePoint < '!' || codePoint > '~')) {
+                throw new IllegalArgumentException(
+                        fieldName + " must contain only printable ASCII characters from '!' through '~'");
             }
-        }
-
-        private static boolean isUnicodeWhitespace(int codePoint) {
-            return Character.isWhitespace(codePoint)
-                    || Character.isSpaceChar(codePoint)
-                    || codePoint == 0x0085;
         }
     }
 
