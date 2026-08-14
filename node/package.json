@@ -31,6 +31,8 @@
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
     "dependencies": {
+        "@aws-sdk/client-elasticache": "^3.600.0",
+        "dotenv": "^16.4.5",
         "long": "5",
         "protobufjs": "^7.6.3"
     },

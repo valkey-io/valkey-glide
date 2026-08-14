@@ -10,6 +10,7 @@ import {
     PubSubMsg,
     TimeoutError,
 } from "../build-ts";
+import { retryWithBackoff } from "./TestUtilities";
 
 type TGlideClient = GlideClient | GlideClusterClient;
 
@@ -582,11 +583,20 @@ export async function createPubsubClient(
         };
     }
 
-    // Create and return the client
+    // Create and return the client — retry on transient connection errors
+    // (e.g. 'No primary node found' during ElastiCache recovery after killConnections)
     if (clusterMode) {
-        return await GlideClusterClient.createClient(baseConfig);
+        return await retryWithBackoff(
+            () => GlideClusterClient.createClient(baseConfig),
+            5, // up to 5 retries
+            2000, // 2s initial delay, doubles each attempt
+        );
     } else {
-        return await GlideClient.createClient(baseConfig);
+        return await retryWithBackoff(
+            () => GlideClient.createClient(baseConfig),
+            5,
+            2000,
+        );
     }
 }
 

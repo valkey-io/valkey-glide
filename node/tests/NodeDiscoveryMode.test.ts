@@ -98,20 +98,44 @@ describe("NodeDiscoveryMode", () => {
         10000,
     );
 
-    describe("DiscoverAll", () => {
+    (process.env.USE_ELASTICACHE === "true" ? describe.skip : describe)("DiscoverAll", () => {
         let discoveryCluster: ValkeyCluster;
 
         beforeAll(async () => {
-            discoveryCluster = await ValkeyCluster.createCluster(
-                false,
-                1,
-                3,
-                getServerVersion,
-            );
-        }, 40000);
+            if (process.env.USE_ELASTICACHE === "true") {
+                // Use the pre-created ElastiCache discovery cluster
+                // global.DISCOVERY_NODE_ADDRESSES contains [host, port] pairs
+                // We create a dummy ValkeyCluster from existing addresses using
+                // the first address as the "cluster" endpoint
+                if (
+                    !global.DISCOVERY_NODE_ADDRESSES ||
+                    global.DISCOVERY_NODE_ADDRESSES.length < 2
+                ) {
+                    throw new Error(
+                        "[DiscoverAll] DISCOVERY_NODE_ADDRESSES not set or insufficient nodes. " +
+                            "Ensure globalSetup created a discovery cluster with 3 replicas.",
+                    );
+                }
+
+                discoveryCluster = await ValkeyCluster.initFromExistingCluster(
+                    false,
+                    global.DISCOVERY_NODE_ADDRESSES,
+                    getServerVersion,
+                );
+            } else {
+                discoveryCluster = await ValkeyCluster.createCluster(
+                    false,
+                    1,
+                    3,
+                    getServerVersion,
+                );
+            }
+        }, 120000);
 
         afterAll(async () => {
-            await discoveryCluster.close();
+            if (process.env.USE_ELASTICACHE !== "true") {
+                await discoveryCluster.close();
+            }
         });
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
