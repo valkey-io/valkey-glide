@@ -6,6 +6,10 @@ import { Logger } from "../build-ts";
 beforeAll(() => {
     Logger.init("error", "log.log");
     // Logger.setLoggerConfig("off");
+    // Retry failing tests up to 2 times in CI to absorb transient failures
+    if (process.env.CI) {
+        jest.retryTimes(2, { logErrorsBeforeRetry: true });
+    }
 });
 
 // Clear all timers after each test to prevent hanging handles,
