@@ -90,8 +90,7 @@ public class BaseClientConfigurationTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "!", "~", "client!#$%&'*+,-./:;=?@[]^_`{|}~"})
     public void testLibNameAcceptsEmptyAndPrintableAscii(String libName) {
-        TestClientConfiguration config =
-                TestClientConfiguration.builder().libName(libName).build();
+        TestClientConfiguration config = TestClientConfiguration.builder().libName(libName).build();
         assertEquals(libName, config.getLibName());
     }
 

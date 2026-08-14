@@ -70,9 +70,7 @@ def test_connection_request_lib_name(
     ],
 )
 def test_client_library_metadata_accepts_printable_ascii(field_name, accepted_value):
-    config = GlideClientConfiguration(
-        addresses=[], **{field_name: accepted_value}
-    )
+    config = GlideClientConfiguration(addresses=[], **{field_name: accepted_value})
 
     assert getattr(config, field_name) == accepted_value
 

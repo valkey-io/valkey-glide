@@ -24,10 +24,7 @@
 
 ### Changes
 
-* Java: Add optional `clientInfoTag` configuration for standalone, cluster, pooled, and dedicated standalone monitor clients, composing tags with the default or custom library name reported by server client metadata ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
-* Core: Prefer a non-empty runtime library name over the compile-time binding name during connection setup, while retaining the compile-time name and `UnknownClient` as fallbacks ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
-* Go: Add optional `clientInfoTag` and `libName` configuration via `WithClientInfoTag` and `WithLibName` for standalone, cluster, and dedicated standalone monitor clients, composing tags with the default or custom library name reported by server client metadata ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
-* Node: Add optional `libName` and `clientInfoTag` configuration for standalone, cluster, and dedicated standalone monitor clients, composing tags with the default or custom library name reported by server client metadata ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
+* Java, Node, Python, Go: Add optional client information tags across standalone, cluster, pooled, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
@@ -37,7 +34,6 @@
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Node: Replace socket IPC with direct NAPI layer ([#5325](https://github.com/valkey-io/valkey-glide/pull/5325))
 * feat(python-sync): add zero-copy buffers to mget ([#6367](https://github.com/valkey-io/valkey-glide/pull/6367))
-* Python: Add configurable `lib_name` and `client_info_tag` to async and sync client configuration, including dedicated standalone monitor connections. ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * Python: Add OpenTelemetry span creation for script invocations (`EVALSHA`) so `invoke_script` calls appear in traces with DB semantic convention attributes ([#6350](https://github.com/valkey-io/valkey-glide/pull/6350))
 * Core, Java: add mTLS client certificates with automatic reloading ([#6386](https://github.com/valkey-io/valkey-glide/pull/6386))
 * Go: add mTLS client certificates with automatic reloading ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
