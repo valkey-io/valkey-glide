@@ -56,7 +56,7 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
     };
 }
 
-describe("Auth tests", () => {
+(process.env.USE_ELASTICACHE === "true" ? describe.skip : describe)("Auth tests", () => {
     let cmeCluster: ValkeyCluster;
     let cmdCluster: ValkeyCluster;
     let managementClient: BaseClient;

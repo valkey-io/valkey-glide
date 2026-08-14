@@ -2542,6 +2542,7 @@ export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
+    readOnly = false,
 ): Promise<string> {
     let info = "";
 
@@ -2563,6 +2564,11 @@ export async function getServerVersion(
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            readOnly,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = await glideClient.info([InfoOptions.Server]);
         await flushAndCloseClient(
@@ -2737,4 +2743,38 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Retries an async operation with exponential backoff.
+ * Useful for flaky network operations like TLS connections on Windows/WSL.
+ *
+ * @param fn - Async function to retry
+ * @param retries - Number of retry attempts (default: 3)
+ * @param delayMs - Initial delay between retries in ms (default: 1000)
+ * @returns Result of the function
+ * @throws Last error if all retries exhausted
+ */
+export async function retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    retries = 3,
+    delayMs = 1000,
+): Promise<T> {
+    let lastError: Error | unknown;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastError = e;
+
+            if (attempt < retries) {
+                await new Promise((r) =>
+                    setTimeout(r, delayMs * (attempt + 1)),
+                );
+            }
+        }
+    }
+
+    throw lastError;
 }
