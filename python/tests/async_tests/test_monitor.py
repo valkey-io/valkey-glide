@@ -5,42 +5,11 @@ from typing import List, Optional
 import anyio
 import pytest
 from glide import GlideClusterClientConfiguration, MonitorClient
-from glide.glide_client import _create_connection_request
-from glide.monitor_client import _create_monitor_connection_request
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
 
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import create_client_config, wait_for
-
-_ASYNC_REQUEST_IDENTIFICATION_CASES = [
-    (None, None, "GlidePy"),
-    ("custom-client", None, "custom-client"),
-    (None, "framework:1.2", "GlidePy(framework:1.2)"),
-    ("custom-client", "framework:1.2", "custom-client(framework:1.2)"),
-    ("", None, "GlidePy"),
-    (None, "", "GlidePy"),
-    ("", "", "GlidePy"),
-    ("lib:name/1.0", "tag@v2!", "lib:name/1.0(tag@v2!)"),
-]
-
-
-@pytest.mark.parametrize(
-    ("lib_name", "client_info_tag", "expected"),
-    _ASYNC_REQUEST_IDENTIFICATION_CASES,
-)
-def test_async_monitor_request_matches_ordinary(
-    lib_name: Optional[str], client_info_tag: Optional[str], expected: str
-) -> None:
-    config = GlideClientConfiguration(
-        addresses=[], lib_name=lib_name, client_info_tag=client_info_tag
-    )
-
-    ordinary_request = _create_connection_request(config)
-    monitor_request = _create_monitor_connection_request(config)
-
-    assert ordinary_request.lib_name == expected
-    assert monitor_request.SerializeToString() == ordinary_request.SerializeToString()
 
 
 def _client_list_contains_monitor(client_list: bytes, expected_lib_name: str) -> bool:

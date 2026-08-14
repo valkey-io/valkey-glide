@@ -42,14 +42,6 @@ StrPath = Union[str, os.PathLike[str]]
 MAX_UINT32 = 2**32 - 1
 
 
-def _resolve_lib_name(
-    lib_name: Optional[str], client_info_tag: Optional[str], runtime_default: str
-) -> str:
-    """Resolve the library name sent in a client connection request."""
-    resolved_name = lib_name or runtime_default
-    return f"{resolved_name}({client_info_tag})" if client_info_tag else resolved_name
-
-
 class NodeAddress:
     """
     Represents the address and port of a node in the cluster.
