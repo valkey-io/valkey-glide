@@ -8,7 +8,6 @@ import (
 	"math"
 	"os"
 	"time"
-	"unicode"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
@@ -237,8 +236,10 @@ func resolveLibName(libName, clientInfoTag string) (string, error) {
 		{field: "clientInfoTag", value: clientInfoTag},
 	} {
 		for _, r := range value.value {
-			if unicode.IsSpace(r) {
-				return "", fmt.Errorf("%s must not contain whitespace characters", value.field)
+			if r < '!' || r > '~' {
+				return "", fmt.Errorf(
+					"%s must contain only printable ASCII characters from '!' through '~'", value.field,
+				)
 			}
 		}
 	}
@@ -615,8 +616,10 @@ func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfigur
 
 // WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
 // establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
-// is appended in parentheses (for example, "custom-lib(my-tag)"). The value must not contain Unicode whitespace;
-// validation occurs at client creation time.
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive; validation occurs at client creation time.
+// See: validateClientAttr in
+// https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
 func (config *ClientConfiguration) WithLibName(libName string) *ClientConfiguration {
 	config.libName = libName
 	return config
@@ -624,8 +627,10 @@ func (config *ClientConfiguration) WithLibName(libName string) *ClientConfigurat
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
 // For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
-// An empty value adds no suffix. The value must not contain Unicode whitespace; validation occurs at client creation
-// time.
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive; validation occurs at client creation time.
+// See: validateClientAttr in
+// https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
 func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
 	config.clientInfoTag = clientInfoTag
 	return config
@@ -894,8 +899,10 @@ func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *Cluster
 
 // WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
 // establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
-// is appended in parentheses (for example, "custom-lib(my-tag)"). The value must not contain Unicode whitespace;
-// validation occurs at client creation time.
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive; validation occurs at client creation time.
+// See: validateClientAttr in
+// https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
 func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterClientConfiguration {
 	config.libName = libName
 	return config
@@ -903,8 +910,10 @@ func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterCl
 
 // WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
 // For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
-// An empty value adds no suffix. The value must not contain Unicode whitespace; validation occurs at client creation
-// time.
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive; validation occurs at client creation time.
+// See: validateClientAttr in
+// https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
 func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
 	config.clientInfoTag = clientInfoTag
 	return config

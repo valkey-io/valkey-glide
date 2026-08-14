@@ -1999,17 +1999,29 @@ func resolveLibNameTestCases() []resolveLibNameTestCase {
 			name: "punctuation", libName: "custom/client@2.0", clientInfoTag: "framework:1.2+beta",
 			expected: "custom/client@2.0(framework:1.2+beta)",
 		},
+		{name: "lib name lower boundary", libName: "!", expected: "!"},
+		{name: "lib name upper boundary", libName: "~", expected: "~"},
+		{name: "tag lower boundary", clientInfoTag: "!", expected: "GlideGo(!)"},
+		{name: "tag upper boundary", clientInfoTag: "~", expected: "GlideGo(~)"},
 		{name: "lib name ASCII space", libName: "custom client", errorFieldName: "libName"},
+		{name: "lib name null control", libName: "custom\x00client", errorFieldName: "libName"},
+		{name: "lib name unit separator", libName: "custom\x1fclient", errorFieldName: "libName"},
 		{name: "lib name tab", libName: "custom\tclient", errorFieldName: "libName"},
 		{name: "lib name newline", libName: "custom\nclient", errorFieldName: "libName"},
+		{name: "lib name DEL", libName: "custom\x7fclient", errorFieldName: "libName"},
 		{name: "lib name non-ASCII whitespace", libName: "custom\u00a0client", errorFieldName: "libName"},
+		{name: "lib name printable non-ASCII", libName: "customéclient", errorFieldName: "libName"},
 		{name: "tag ASCII space", clientInfoTag: "client tag", errorFieldName: "clientInfoTag"},
+		{name: "tag null control", clientInfoTag: "client\x00tag", errorFieldName: "clientInfoTag"},
+		{name: "tag unit separator", clientInfoTag: "client\x1ftag", errorFieldName: "clientInfoTag"},
 		{name: "tag tab", clientInfoTag: "client\ttag", errorFieldName: "clientInfoTag"},
 		{name: "tag newline", clientInfoTag: "client\ntag", errorFieldName: "clientInfoTag"},
+		{name: "tag DEL", clientInfoTag: "client\x7ftag", errorFieldName: "clientInfoTag"},
 		{
 			name: "tag non-ASCII whitespace", clientInfoTag: "client\u00a0tag",
 			errorFieldName: "clientInfoTag",
 		},
+		{name: "tag printable non-ASCII", clientInfoTag: "clientétag", errorFieldName: "clientInfoTag"},
 	}
 }
 
@@ -2019,7 +2031,11 @@ func TestResolveLibName(t *testing.T) {
 			result, err := resolveLibName(testCase.libName, testCase.clientInfoTag)
 			if testCase.errorFieldName != "" {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), testCase.errorFieldName+" must not contain whitespace characters")
+				assert.Contains(
+					t,
+					err.Error(),
+					testCase.errorFieldName+" must contain only printable ASCII characters from '!' through '~'",
+				)
 				assert.Empty(t, result)
 				return
 			}
@@ -2062,7 +2078,11 @@ func TestClientConfigurationsResolveLibName(t *testing.T) {
 					request, err := configurationType.toProtobuf(testCase.libName, testCase.clientInfoTag)
 					if testCase.errorFieldName != "" {
 						require.Error(t, err)
-						assert.Contains(t, err.Error(), testCase.errorFieldName+" must not contain whitespace characters")
+						assert.Contains(
+							t,
+							err.Error(),
+							testCase.errorFieldName+" must contain only printable ASCII characters from '!' through '~'",
+						)
 						assert.Nil(t, request)
 						return
 					}
