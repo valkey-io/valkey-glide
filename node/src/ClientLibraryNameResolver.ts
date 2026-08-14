@@ -3,15 +3,15 @@
 import { ConfigurationError } from "./Errors.js";
 
 const DEFAULT_LIBRARY_NAME = "GlideJS";
-const WHITESPACE_PATTERN = /\p{White_Space}/u;
+const PRINTABLE_ASCII_PATTERN = /^[!-~]+$/;
 
 function validateIdentificationValue(
     fieldName: "libName" | "clientInfoTag",
     value: string | undefined,
 ): void {
-    if (value && WHITESPACE_PATTERN.test(value)) {
+    if (value && !PRINTABLE_ASCII_PATTERN.test(value)) {
         throw new ConfigurationError(
-            `${fieldName} must not contain whitespace characters`,
+            `${fieldName} must contain only printable ASCII characters from '!' through '~'`,
         );
     }
 }

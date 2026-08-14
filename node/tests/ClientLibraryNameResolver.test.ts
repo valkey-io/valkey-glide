@@ -28,16 +28,45 @@ describe("resolveClientLibraryName", () => {
     );
 
     it.each([
-        ["libName", "custom client"],
-        ["libName", "custom\tclient"],
-        ["libName", "custom\u00a0client"],
-        ["libName", "custom\u0085client"],
-        ["clientInfoTag", "framework tag"],
-        ["clientInfoTag", "framework\ntag"],
-        ["clientInfoTag", "framework\u2003tag"],
-        ["clientInfoTag", "framework\u0085tag"],
+        ["libName", ""],
+        ["libName", "!"],
+        ["libName", "~"],
+        ["libName", "client!#$%&'*+,-./:;=?@[]^_`{|}~"],
+        ["clientInfoTag", ""],
+        ["clientInfoTag", "!"],
+        ["clientInfoTag", "~"],
+        ["clientInfoTag", "tag!#$%&'*+,-./:;=?@[]^_`{|}~"],
     ] as ["libName" | "clientInfoTag", string][])(
-        "rejects whitespace in %s",
+        "accepts printable ASCII boundaries and punctuation in %s",
+        (fieldName, value) => {
+            expect(() =>
+                resolveClientLibraryName(
+                    fieldName === "libName" ? value : undefined,
+                    fieldName === "clientInfoTag" ? value : undefined,
+                ),
+            ).not.toThrow();
+        },
+    );
+
+    it.each([
+        ["libName", "custom client"],
+        ["libName", "custom\u0000client"],
+        ["libName", "custom\tclient"],
+        ["libName", "custom\nclient"],
+        ["libName", "custom\u007fclient"],
+        ["libName", "custom\u00a0client"],
+        ["libName", "customéclient"],
+        ["libName", "custom中client"],
+        ["clientInfoTag", "framework tag"],
+        ["clientInfoTag", "framework\u0000tag"],
+        ["clientInfoTag", "framework\ttag"],
+        ["clientInfoTag", "framework\ntag"],
+        ["clientInfoTag", "framework\u007ftag"],
+        ["clientInfoTag", "framework\u2003tag"],
+        ["clientInfoTag", "frameworkétag"],
+        ["clientInfoTag", "framework中tag"],
+    ] as ["libName" | "clientInfoTag", string][])(
+        "rejects characters outside printable ASCII in %s",
         (fieldName, value) => {
             const resolve = () =>
                 resolveClientLibraryName(
@@ -47,7 +76,7 @@ describe("resolveClientLibraryName", () => {
 
             expect(resolve).toThrow(ConfigurationError);
             expect(resolve).toThrow(
-                `${fieldName} must not contain whitespace characters`,
+                `${fieldName} must contain only printable ASCII characters from '!' through '~'`,
             );
         },
     );
