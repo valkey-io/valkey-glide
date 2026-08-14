@@ -7427,8 +7427,9 @@ mod cluster_async {
             err.kind(),
         );
         assert!(
-            !err.to_string().contains("malformed command"),
-            "error message must not claim the command was malformed: {err}",
+            err.to_string()
+                .contains("No live receivers for multi-node fan-out"),
+            "error message must describe the empty receiver condition: {err}",
         );
     }
 
