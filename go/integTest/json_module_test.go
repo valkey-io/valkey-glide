@@ -64,6 +64,7 @@ type jsonOps struct {
 }
 
 func (suite *GlideTestSuite) standaloneJsonOps() jsonOps {
+	suite.requireModuleStandaloneHost()
 	c := suite.defaultClient()
 	return jsonOps{
 		set: func(ctx context.Context, k, p, v string) (string, error) { return glidejson.JsonSet(c, ctx, k, p, v) },
@@ -142,6 +143,7 @@ func (suite *GlideTestSuite) standaloneJsonOps() jsonOps {
 }
 
 func (suite *GlideTestSuite) clusterJsonOps() jsonOps {
+	suite.requireModuleClusterHost()
 	c := suite.defaultClusterClient()
 	return jsonOps{
 		set: func(ctx context.Context, k, p, v string) (string, error) {
