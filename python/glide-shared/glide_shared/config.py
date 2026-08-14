@@ -857,8 +857,8 @@ class BaseClientConfiguration:
             during connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
             command during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. The value may contain only non-whitespace printable ASCII
-            characters. If not set, a client-specific default (e.g. ``GlidePy`` for the async client, ``GlidePySync`` for the
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset. If not set, a client-specific default (e.g. ``GlidePy`` for the async client, ``GlidePySync`` for the
             sync client) is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
@@ -986,14 +986,14 @@ class BaseClientConfiguration:
             not "!" <= character <= "~" for character in client_info_tag
         ):
             raise ValueError(
-                "client_info_tag must contain only non-whitespace printable ASCII characters"
+                "client_info_tag must contain only printable ASCII characters from '!' through '~'"
             )
 
         if lib_name is not None and any(
             not "!" <= character <= "~" for character in lib_name
         ):
             raise ValueError(
-                "lib_name must contain only non-whitespace printable ASCII characters"
+                "lib_name must contain only printable ASCII characters from '!' through '~'"
             )
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
@@ -1205,8 +1205,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. The value may contain only non-whitespace printable ASCII
-            characters. If not set, a client-specific default is used.
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset. If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
@@ -1465,8 +1465,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. The value may contain only non-whitespace printable ASCII
-            characters. If not set, a client-specific default is used.
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset. If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of

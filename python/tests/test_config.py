@@ -59,6 +59,24 @@ def test_connection_request_lib_name(
     assert request.lib_name == expected.format(default=runtime_default)
 
 
+@pytest.mark.parametrize("field_name", ["lib_name", "client_info_tag"])
+@pytest.mark.parametrize(
+    "accepted_value",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("!", id="lower-boundary"),
+        pytest.param("~", id="upper-boundary"),
+        pytest.param("client!#$%&'*+,-./:;=?@[]^_`{|}~", id="punctuation"),
+    ],
+)
+def test_client_library_metadata_accepts_printable_ascii(field_name, accepted_value):
+    config = GlideClientConfiguration(
+        addresses=[], **{field_name: accepted_value}
+    )
+
+    assert getattr(config, field_name) == accepted_value
+
+
 # CLIENT SETINFO validates both LIB-NAME and LIB-VER with validateClientAttr,
 # which permits only visible ASCII characters from "!" through "~" so that
 # CLIENT LIST remains space-delimited and parseable. Apply the same constraint
@@ -90,7 +108,7 @@ def test_client_library_metadata_rejects_invalid_characters(
 
     with pytest.raises(
         ValueError,
-        match=rf"{field_name} must contain only non-whitespace printable ASCII characters",
+        match=rf"{field_name} must contain only printable ASCII characters from '!' through '~'",
     ):
         GlideClientConfiguration(addresses=[], **{field_name: value})
 
