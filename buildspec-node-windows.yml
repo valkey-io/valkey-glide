@@ -225,10 +225,10 @@ phases:
         Write-Host "=== Building Node client ==="
         Set-Location node
         npm ci
-        # On Windows, $npm_config_build_flags is not expanded to empty by the shell.
-        # Set it explicitly so napi build does not receive a literal '$npm_config_build_flags' argument.
-        $env:npm_config_build_flags = ""
-        npm run build:release
+        # Pass --build-flags= so npm sets npm_config_build_flags='' in the script env.
+        # On Windows, $npm_config_build_flags in package.json scripts is not shell-expanded
+        # unless npm itself injects it as an empty env var.
+        npm run build:release --build-flags=
         Set-Location ..
 
   build:
