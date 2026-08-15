@@ -225,16 +225,7 @@ phases:
         Write-Host "=== Building Node client ==="
         Set-Location node
         npm ci
-        # Build protobuf
-        npm run build-protobuf
-        # Build Rust client directly (avoids $npm_config_build_flags which Windows cmd.exe does not expand)
-        Set-Location rust-client
-        npm ci
-        npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide
-        npm run postbuild:copy-node
-        Set-Location ..
-        # Build TypeScript
-        npm run build:ts
+        npm run build:release
         Set-Location ..
 
   build:
