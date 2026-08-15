@@ -225,10 +225,16 @@ phases:
         Write-Host "=== Building Node client ==="
         Set-Location node
         npm ci
-        # Pass --build-flags= so npm sets npm_config_build_flags='' in the script env.
-        # On Windows, $npm_config_build_flags in package.json scripts is not shell-expanded
-        # unless npm itself injects it as an empty env var.
-        npm run build:release --build-flags=
+        # Build protobuf
+        npm run build-protobuf
+        # Build Rust client directly (avoids $npm_config_build_flags which Windows cmd.exe does not expand)
+        Set-Location rust-client
+        npm ci
+        npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide
+        npm run postbuild:copy-node
+        Set-Location ..
+        # Build TypeScript
+        npm run build:ts
         Set-Location ..
 
   build:
