@@ -157,11 +157,20 @@ jobs:
               working-directory: ./go
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
+              # cluster-endpoints reuses the same MEMDB address to override the
+              # non-TLS cluster fixture start. The modules suite only reaches for
+              # the TLS host slices under modules-mode, but SetupSuite still boots
+              # every pair it has no override for, so this keeps the biggest
+              # local topology (3 shards x 4 nodes) from spinning up on the runner.
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
-                      make install-tools modules-test tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+                      make install-tools modules-test \
+                        cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} \
+                        tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
                   else
-                      make install-tools build modules-test tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+                      make install-tools build modules-test \
+                        cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} \
+                        tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
                   fi
 
             - name: Upload test reports
