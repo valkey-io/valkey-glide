@@ -181,10 +181,12 @@ integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(te
 integ-test: __it
 
 # modules tests - run substask with default filter
-# Force modules-mode so the default client factories route through the TLS host slices,
-# which is required when the workflow only supplies tls-cluster-endpoints / tls-standalone-endpoints.
+# Default modules-mode to true only when a tls-*-endpoints variable is set, so the
+# default client factories route through the TLS host slices for TLS runs. Plaintext
+# module servers (docker fixtures using standalone-endpoints / cluster-endpoints) keep
+# modules-mode unset and therefore run the full module test coverage without opting in.
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
-modules-test: modules-mode = true
+modules-test: modules-mode = $(if $(or $(tls-standalone-endpoints),$(tls-cluster-endpoints)),true)
 modules-test: __it
 
 # pubsub tests - run pubsub tests using testify filter
