@@ -475,11 +475,15 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 }
 
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
-	address := &suite.standaloneHosts[0]
+	var address *config.NodeAddress
 	useTLS := false
 	if *modulesMode && len(suite.standaloneTlsHosts) > 0 {
 		address = &suite.standaloneTlsHosts[0]
 		useTLS = true
+	} else if len(suite.standaloneHosts) > 0 {
+		address = &suite.standaloneHosts[0]
+	} else {
+		suite.T().Skip("No standalone server configured for this invocation")
 	}
 
 	clientConfig := config.NewClientConfiguration().
@@ -563,11 +567,15 @@ func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.
 }
 
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
-	address := &suite.clusterHosts[0]
+	var address *config.NodeAddress
 	useTLS := false
 	if *modulesMode && len(suite.clusterTlsHosts) > 0 {
 		address = &suite.clusterTlsHosts[0]
 		useTLS = true
+	} else if len(suite.clusterHosts) > 0 {
+		address = &suite.clusterHosts[0]
+	} else {
+		suite.T().Skip("No cluster server configured for this invocation")
 	}
 
 	clientConfig := config.NewClusterClientConfiguration().

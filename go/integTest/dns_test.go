@@ -25,9 +25,14 @@ func skipIfDnsTestsDisabled(suite *GlideTestSuite) {
 
 // Builds and returns a standalone client with the given hostname and TLS configuration.
 func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool) (*glide.Client, error) {
-	port := suite.standaloneHosts[0].Port
+	var port int
 	if useTLS {
-		port = suite.standaloneTlsHosts[0].Port
+		port = suite.requireTlsHost(false).Port
+	} else {
+		if len(suite.standaloneHosts) == 0 {
+			suite.T().Skip("No standalone server configured for this invocation")
+		}
+		port = suite.standaloneHosts[0].Port
 	}
 	address := config.NodeAddress{
 		Host: hostname,
@@ -54,9 +59,14 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 
 // Builds and returns a cluster client with the given hostname and TLS configuration.
 func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*glide.ClusterClient, error) {
-	port := suite.clusterHosts[0].Port
+	var port int
 	if useTLS {
-		port = suite.clusterTlsHosts[0].Port
+		port = suite.requireTlsHost(true).Port
+	} else {
+		if len(suite.clusterHosts) == 0 {
+			suite.T().Skip("No cluster server configured for this invocation")
+		}
+		port = suite.clusterHosts[0].Port
 	}
 	address := config.NodeAddress{
 		Host: hostname,
