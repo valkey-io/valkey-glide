@@ -118,15 +118,17 @@ func (suite *GlideTestSuite) SetupSuite() {
 	if *standaloneTlsHostsFlag != "" {
 		suite.standaloneTlsHosts = parseHosts(suite, *standaloneTlsHostsFlag)
 	} else {
-		// Start TLS standalone instance
-		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "3"}, false)
+		// Start TLS standalone instance. Every reader indexes at [0], so
+		// the primary is enough and the extra replicas are wasted processes.
+		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "0"}, false)
 		suite.standaloneTlsHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 	if *clusterTlsHostsFlag != "" {
 		suite.clusterTlsHosts = parseHosts(suite, *clusterTlsHostsFlag)
 	} else {
-		// Start TLS cluster
-		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "3"}, false)
+		// Start TLS cluster. Same reason as the TLS standalone above:
+		// callers only index at [0], so replicas add nothing.
+		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "0"}, false)
 		suite.clusterTlsHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 
