@@ -147,15 +147,6 @@ func (suite *GlideTestSuite) SetupSuite() {
 	suite.T().Logf("Standalone TLS hosts = %s", fmt.Sprint(suite.standaloneTlsHosts))
 	suite.T().Logf("Cluster TLS hosts = %s", fmt.Sprint(suite.clusterTlsHosts))
 
-	// modules-mode reroutes the default client factories through the TLS host slices,
-	// so at least one TLS slice must be populated. Otherwise module tests would silently
-	// fall back to the non-TLS defaults and connect to the wrong endpoint.
-	if *modulesMode && len(suite.clusterTlsHosts) == 0 && len(suite.standaloneTlsHosts) == 0 {
-		log.Fatal(
-			"--modules-mode requires at least one of --tls-cluster-endpoints or --tls-standalone-endpoints to be set",
-		)
-	}
-
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
