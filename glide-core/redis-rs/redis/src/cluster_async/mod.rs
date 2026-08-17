@@ -5008,6 +5008,60 @@ mod pipeline_routing_tests {
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
     }
+
+    // Regression test for #6759. Under topology-refresh churn a concurrent
+    // `remove_node` against the DashMap-backed `connection_map` can drain the
+    // primary or node iterator between the outer `is_empty` check and the
+    // walk that fills `receivers`, so `aggregate_results` runs with an empty
+    // receivers vector. Reproducing that timing precisely in an integration
+    // test would require a new mock hook to drop connections mid-walk; here
+    // we exercise the retryable branch directly by calling
+    // `ClusterConnInner::aggregate_results` with an already-empty
+    // `receivers` vec, which is the exact state the race leaves behind.
+    //
+    // Locks in that the empty-receivers branch:
+    //   1. Classifies as `ErrorKind::ConnectionNotFoundForRoute` so the
+    //      FanOut error-handling arm at `Request::poll` triggers the
+    //      `RefreshSlots` retry path.
+    //   2. Uses `RetryMethod::Reconnect`, which is what unlocks that retry.
+    //   3. Surfaces an honest message describing the connectivity condition
+    //      instead of the pre-fix "malformed command" wording.
+    #[test]
+    fn empty_receivers_is_retryable_connection_not_found() {
+        use crate::{types::RetryMethod, ErrorKind};
+
+        for routing in [
+            MultipleNodeRoutingInfo::AllNodes,
+            MultipleNodeRoutingInfo::AllMasters,
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![(Route::new(0, SlotAddr::Master), vec![1usize])],
+                MultiSlotArgPattern::KeysOnly,
+            )),
+        ] {
+            let err = block_on(ClusterConnInner::<MultiplexedConnection>::aggregate_results(
+                Vec::new(),
+                &routing,
+                None,
+            ))
+            .expect_err("empty receivers must fail");
+
+            assert_eq!(
+                err.kind(),
+                ErrorKind::ConnectionNotFoundForRoute,
+                "kind mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert_eq!(
+                err.retry_method(),
+                RetryMethod::Reconnect,
+                "retry_method mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert!(
+                err.to_string()
+                    .contains("No live receivers for multi-node fan-out"),
+                "message mismatch for routing {routing:?}: {err}",
+            );
+        }
+    }
 }
 
 #[cfg(test)]
