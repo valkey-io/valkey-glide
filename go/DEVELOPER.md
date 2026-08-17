@@ -226,7 +226,7 @@ A fixture only starts when its own endpoint flag is empty AND the invocation opt
 
 Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
 Non-TLS-only invocations no longer spawn the TLS fixture, so a host running the plaintext form does not need `python3`, `openssl`, or a local engine.
-TLS tests that need only a shared TLS server (`TestTlsWithoutCertificate_*`, `TestTlsMutualTLS*`) run against external endpoints via `tls-*-endpoints`.
+TLS tests that need only a shared TLS server (`TestTlsWithoutCertificate_*`) run against external endpoints via `tls-*-endpoints`.
 
 ```bash
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
@@ -236,7 +236,7 @@ make modules-test tls-cluster-endpoints=tls.example.internal:6379
 A subset of TLS tests still requires the fixture-managed servers under `utils/tls_crts/` and cannot honor external endpoints:
 
 - `TestTlsWithIPv4AddressSucceeds_*` and `TestTlsWithIPv6AddressSucceeds_*` dial `127.0.0.1` / `::1` directly.
-- `TestTlsWithSelfSignedCertificate_*`, `TestTlsWithMultipleCertificates_*`, and `TestTlsLoad*` verify against the fixture CA at `utils/tls_crts/ca.crt`.
+- `TestTlsWithSelfSignedCertificate_*`, `TestTlsWithMultipleCertificates_*`, `TestTlsMutualTLS*`, and `TestTlsLoad*` pin the root CA to the fixture at `utils/tls_crts/ca.crt`, so they cannot honor external endpoints (the fixture CA does not match a real server's certificate chain).
 - `TestTlsMTls*` (both mTLS-required accepting and rejecting cases) spin up dedicated fixture servers via `cluster_manager.py --tls --tls-auth-clients`.
 
 Use `make integ-test` with no endpoint flags for the full TLS test coverage, or pair external `tls-*-endpoints` with `test-filter` to skip the fixture-bound tests above.
