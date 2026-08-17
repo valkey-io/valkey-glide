@@ -214,7 +214,8 @@ make integ-test test-filter="Test\(Set\|Get\)"
 #### Additional Parameters
 
 Integration and modules tests accept endpoint parameters to run tests against existing servers instead of spinning up the fixture for that pair.
-Each of the four fixture pairs can be overridden independently; unset pairs still boot inside the fixture.
+The four fixture pairs (non-TLS standalone, non-TLS cluster, TLS standalone, TLS cluster) can be overridden independently.
+A fixture only starts when its own endpoint flag is empty AND the invocation opts into that mode: any non-TLS endpoint flag opts into plaintext mode, any TLS endpoint flag or `modules-mode` opts into TLS mode, and a bare invocation with no flags asks for everything.
 
 - `standalone-endpoints`: existing non-TLS standalone server(s).
 - `cluster-endpoints`: existing non-TLS cluster server(s).
@@ -224,11 +225,21 @@ Each of the four fixture pairs can be overridden independently; unset pairs stil
 `make modules-test` sets this automatically so an external `tls-cluster-endpoints` or `tls-standalone-endpoints` flag is enough for module tests to run against the TLS endpoint.
 
 Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
+Non-TLS-only invocations no longer spawn the TLS fixture, so a host running the plaintext form does not need `python3`, `openssl`, or a local engine.
+TLS tests that need only a shared TLS server (`TestTlsWithoutCertificate_*`, `TestTlsMutualTLS*`) run against external endpoints via `tls-*-endpoints`.
 
 ```bash
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
 make modules-test tls-cluster-endpoints=tls.example.internal:6379
 ```
+
+A subset of TLS tests still requires the fixture-managed servers under `utils/tls_crts/` and cannot honor external endpoints:
+
+- `TestTlsWithIPv4AddressSucceeds_*` and `TestTlsWithIPv6AddressSucceeds_*` dial `127.0.0.1` / `::1` directly.
+- `TestTlsWithSelfSignedCertificate_*`, `TestTlsWithMultipleCertificates_*`, and `TestTlsLoad*` verify against the fixture CA at `utils/tls_crts/ca.crt`.
+- `TestTlsMTls*` (both mTLS-required accepting and rejecting cases) spin up dedicated fixture servers via `cluster_manager.py --tls --tls-auth-clients`.
+
+Use `make integ-test` with no endpoint flags for the full TLS test coverage, or pair external `tls-*-endpoints` with `test-filter` to skip the fixture-bound tests above.
 
 #### IAM Authentication Tests
 
