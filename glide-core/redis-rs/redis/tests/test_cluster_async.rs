@@ -1350,6 +1350,133 @@ mod cluster_async {
         );
     }
 
+    #[tokio::test]
+    async fn test_az_affinity_all_nodes_replica_required_reads_stay_on_replicas() {
+        // Skip test if version is less than Valkey 8.0
+        if engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let client_az = "us-east-1a".to_string();
+        let other_az = "us-east-1b".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        // Set AZ for all nodes to a different AZ initially
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &other_az.clone()]);
+
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        // Set the client's AZ for the primary holding the "foo" slot and one of its
+        // replicas: the layout where an all-nodes rotation would hit the primary.
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &client_az]);
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    12182, // foo key is mapping to 12182 slot
+                    SlotAddr::Master,
+                ))),
+            )
+            .await
+            .unwrap();
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    12182,
+                    SlotAddr::ReplicaRequired,
+                ))),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(
+                    client_az.clone(),
+                ),
+            )
+            .build()
+            .unwrap()
+            .get_async_connection(None, None, None, None)
+            .await
+            .unwrap();
+
+        // Explicitly replica-routed reads must never land on the primary.
+        let n = 100;
+        for _ in 0..n {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = client
+                .route_command(
+                    &cmd,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        12182,
+                        SlotAddr::ReplicaRequired,
+                    ))),
+                )
+                .await;
+        }
+
+        // Gather INFO
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = "cmdstat_get:calls=".to_string();
+        let all_gets_cmdstat = format!("cmdstat_get:calls={n}");
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                assert!(
+                    value.contains("role:slave"),
+                    "Replica-required reads landed on a primary: {value}"
+                );
+                if value.contains(&client_az) && value.contains(&all_gets_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {value}. Expected cmdstat_get:calls={n} and availability_zone:{client_az}"
+                    );
+                }
+            }
+        }
+
+        assert_eq!(
+            matching_entries_count, 1,
+            "Test failed: expected exactly one in-AZ replica with '{get_cmdstat}{n}', found {matching_entries_count}"
+        );
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_basic_eval() {
