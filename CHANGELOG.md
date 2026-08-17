@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
 * Core/FFI: Percent-decode userinfo in `create_client_from_uri` so credentials containing URI-reserved characters (`@`, `:`, `/`, `?`, `#`, `%`, `+`, space, non-ASCII) authenticate correctly ([#6659](https://github.com/valkey-io/valkey-glide/issues/6659))
 * Core/All: Buffer pending cluster requests during reconnect instead of failing immediately. When a circular MOVED redirect triggers a reconnect, requests arriving during the recovery window are now queued and retried transparently once reconnection completes. A new `recovery_requests_queue_size` option (default: 1000) controls the queue depth. ([#6640](https://github.com/valkey-io/valkey-glide/pull/6640))
@@ -21,7 +22,7 @@
 
 ### Changes
 
-* Core, Python: Add support to AZAffinityAllNodes read strategy ([#6653](https://github.com/valkey-io/valkey-glide/issues/6653))
+* Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads  ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
