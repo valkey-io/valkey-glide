@@ -318,6 +318,10 @@ phases:
         if (-not $env:TLS_STANDALONE_ENDPOINT -and -not $env:TLS_CLUSTER_ENDPOINT) {
           $ignorePatterns += "TlsTest"
         }
+        if ($env:USE_ELASTICACHE -eq "true") {
+          # MutualTLS requires a local valkey-server which is not available on ElastiCache builds
+          $ignorePatterns += "MutualTLS"
+        }
         foreach ($pattern in $ignorePatterns) { $testArgs += "--testPathIgnorePatterns=$pattern" }
 
         Write-Host "Running: npm $($testArgs -join ' ')"
