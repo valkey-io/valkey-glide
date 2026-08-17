@@ -93,17 +93,24 @@ var (
 func (suite *GlideTestSuite) SetupSuite() {
 	// Each of the four server pairs (non-TLS standalone, non-TLS cluster, TLS
 	// standalone, TLS cluster) is supplied by an external endpoint flag, started
-	// by the fixture, or left empty when the invocation does not need it. The
-	// mode is derived from the flags: any non-TLS endpoint flag opts into
-	// plaintext mode, any TLS endpoint flag or --modules-mode opts into TLS
-	// mode, and a bare invocation with no flags asks for everything. A fixture
-	// only starts when its own endpoint flag is empty AND its mode is wanted.
+	// by the fixture, or left empty when the invocation does not need it. A
+	// fixture starts if and only if its own endpoint flag is empty AND at
+	// least one test in that topology will run this invocation.
+	//
+	// A bare invocation with no flags asks for the full suite, so all four
+	// fixtures start. Once any endpoint flag is supplied the invocation is
+	// targeted: plaintext coverage is opted into by --standalone-endpoints or
+	// --cluster-endpoints, TLS coverage by --tls-standalone-endpoints or
+	// --tls-cluster-endpoints. --modules-mode by itself never implies a
+	// fixture. Each modules-tagged test independently requires the specific
+	// endpoint its requireModule*Host guard checks and skips otherwise, so a
+	// modules-mode invocation only ever uses the endpoints it was handed.
 	allFlagsEmpty := *standaloneHosts == "" && *clusterHosts == "" &&
 		*standaloneTlsHostsFlag == "" && *clusterTlsHostsFlag == ""
-	wantsPlaintext := allFlagsEmpty ||
-		(!*modulesMode && (*standaloneHosts != "" || *clusterHosts != ""))
-	wantsTls := allFlagsEmpty || *modulesMode ||
-		*standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != ""
+	wantsPlaintext := !*modulesMode &&
+		(allFlagsEmpty || *standaloneHosts != "" || *clusterHosts != "")
+	wantsTls := !*modulesMode &&
+		(allFlagsEmpty || *standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != "")
 	suite.startedPlaintextFixture = wantsPlaintext && (*standaloneHosts == "" || *clusterHosts == "")
 	suite.startedTlsFixture = wantsTls && (*standaloneTlsHostsFlag == "" || *clusterTlsHostsFlag == "")
 
