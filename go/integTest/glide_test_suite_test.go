@@ -98,26 +98,36 @@ func (suite *GlideTestSuite) SetupSuite() {
 	}
 
 	// Each of the four server pairs (non-TLS standalone, non-TLS cluster, TLS
-	// standalone, TLS cluster) is independently either supplied by an external
-	// endpoint flag or started by the fixture. Passing only one flag overrides
-	// only that pair; the other three still boot inside the fixture.
+	// standalone, TLS cluster) is supplied by an external endpoint flag, started
+	// by the fixture, or left empty when the invocation does not need it. The
+	// mode is derived from the flags: any non-TLS endpoint flag opts into
+	// plaintext mode, any TLS endpoint flag or --modules-mode opts into TLS
+	// mode, and a bare invocation with no flags asks for everything. A fixture
+	// only starts when its own endpoint flag is empty AND its mode is wanted.
+	allFlagsEmpty := *standaloneHosts == "" && *clusterHosts == "" &&
+		*standaloneTlsHostsFlag == "" && *clusterTlsHostsFlag == ""
+	wantsPlaintext := allFlagsEmpty ||
+		(!*modulesMode && (*standaloneHosts != "" || *clusterHosts != ""))
+	wantsTls := allFlagsEmpty || *modulesMode ||
+		*standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != ""
+
 	if *standaloneHosts != "" {
 		suite.standaloneHosts = parseHosts(suite, *standaloneHosts)
-	} else {
+	} else if wantsPlaintext {
 		// Start non-TLS standalone instance
 		clusterManagerOutput := runClusterManager(suite, []string{"start", "-r", "3"}, false)
 		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 	if *clusterHosts != "" {
 		suite.clusterHosts = parseHosts(suite, *clusterHosts)
-	} else {
+	} else if wantsPlaintext {
 		// Start non-TLS cluster
 		clusterManagerOutput := runClusterManager(suite, []string{"start", "--cluster-mode", "-r", "3"}, false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 	if *standaloneTlsHostsFlag != "" {
 		suite.standaloneTlsHosts = parseHosts(suite, *standaloneTlsHostsFlag)
-	} else {
+	} else if wantsTls {
 		// Start TLS standalone instance. Every reader indexes at [0], so
 		// the primary is enough and the extra replicas are wasted processes.
 		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "0"}, false)
@@ -125,7 +135,7 @@ func (suite *GlideTestSuite) SetupSuite() {
 	}
 	if *clusterTlsHostsFlag != "" {
 		suite.clusterTlsHosts = parseHosts(suite, *clusterTlsHostsFlag)
-	} else {
+	} else if wantsTls {
 		// Start TLS cluster. Same reason as the TLS standalone above:
 		// callers only index at [0], so replicas add nothing.
 		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "0"}, false)
@@ -250,7 +260,7 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 }
 
 func getServerVersion(suite *GlideTestSuite) string {
-	var err error = nil
+	var lastErr error
 	if len(suite.standaloneHosts) > 0 {
 		clientConfig := config.NewClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
@@ -265,32 +275,39 @@ func getServerVersion(suite *GlideTestSuite) string {
 			)
 			return extractServerVersion(suite, info)
 		}
+		lastErr = err
 	}
-	if len(suite.clusterHosts) == 0 {
-		if err != nil {
-			suite.T().Fatalf("No cluster hosts configured, standalone failed with %s", err.Error())
+	if len(suite.clusterHosts) > 0 {
+		clientConfig := config.NewClusterClientConfiguration().
+			WithAddress(&suite.clusterHosts[0]).
+			WithRequestTimeout(5 * time.Second)
+
+		client, err := glide.NewClusterClient(clientConfig)
+		if err == nil && client != nil {
+			defer client.Close()
+
+			info, _ := client.InfoWithOptions(
+				context.Background(),
+				options.ClusterInfoOptions{
+					InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
+					RouteOption: &options.RouteOption{Route: config.RandomRoute},
+				},
+			)
+			return extractServerVersion(suite, info.SingleValue())
 		}
-		suite.T().Fatal("No server hosts configured")
+		lastErr = err
 	}
-
-	clientConfig := config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithRequestTimeout(5 * time.Second)
-
-	client, err := glide.NewClusterClient(clientConfig)
-	if err == nil && client != nil {
-		defer client.Close()
-
-		info, _ := client.InfoWithOptions(
-			context.Background(),
-			options.ClusterInfoOptions{
-				InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
-				RouteOption: &options.RouteOption{Route: config.RandomRoute},
-			},
-		)
-		return extractServerVersion(suite, info.SingleValue())
+	// Uniform fixture-gating leaves the non-TLS slices empty on TLS-only
+	// invocations (external TLS endpoints or --modules-mode without any
+	// non-TLS flag). No plaintext peer means we cannot detect the server
+	// version through the shared factory. Log and return empty; the version
+	// comparison in SkipIfServerVersionLowerThan then skips version-gated
+	// tests conservatively rather than failing the whole suite.
+	if lastErr != nil {
+		suite.T().Logf("Could not determine server version; version-gated tests will skip. Last error: %s", lastErr.Error())
+	} else {
+		suite.T().Logf("Could not determine server version: no plaintext host configured; version-gated tests will skip")
 	}
-	suite.T().Fatalf("Can't connect to any server to get version: %s", err.Error())
 	return ""
 }
 

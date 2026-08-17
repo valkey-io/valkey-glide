@@ -14,15 +14,31 @@ import (
 )
 
 // requireTlsHost returns the first TLS host for the requested variant.
-// SetupSuite populates both TLS slices unconditionally (from a flag or by
-// starting the fixture), and extractAddresses fails the suite rather than
-// returning empty, so callers can index directly without a length guard.
+// SetupSuite populates a TLS slice only when the invocation opts into TLS mode
+// (any --tls-*-endpoints flag, --modules-mode, or a bare invocation with no
+// flags). Non-TLS-only runs leave both slices empty, so callers must skip
+// rather than panic on an out-of-range index.
 func (suite *GlideTestSuite) requireTlsHost(cluster bool) config.NodeAddress {
 	hosts := suite.standaloneTlsHosts
+	variant := "standalone"
 	if cluster {
 		hosts = suite.clusterTlsHosts
+		variant = "cluster"
+	}
+	if len(hosts) == 0 {
+		suite.T().Skipf("No TLS %s server configured for this invocation", variant)
 	}
 	return hosts[0]
+}
+
+// skipIfNoTlsFixture skips a TLS test whose fixture-management path does not
+// go through requireTlsHost (mTLS tests spin up their own dedicated servers).
+// Both TLS slices staying empty means the invocation did not opt into TLS
+// mode, so the mTLS servers should not be spawned either.
+func (suite *GlideTestSuite) skipIfNoTlsFixture() {
+	if len(suite.standaloneTlsHosts) == 0 && len(suite.clusterTlsHosts) == 0 {
+		suite.T().Skip("No TLS invocation: run has no TLS mode selected")
+	}
 }
 
 // TestTlsWithoutCertificate_Standalone tests that connection fails without providing certificates
@@ -509,6 +525,7 @@ func getCaCertificate() ([]byte, error) {
 // certificate, so a dedicated server that rejects such clients is required
 // to prove the accepting mTLS test is not passing vacuously.
 func startMTlsRequiredStandalone(suite *GlideTestSuite) (config.NodeAddress, func()) {
+	suite.skipIfNoTlsFixture()
 	output := runClusterManager(
 		suite,
 		[]string{"--tls", "start", "--tls-auth-clients", "-n", "1", "-r", "0"},
@@ -544,6 +561,7 @@ func startMTlsRequiredStandalone(suite *GlideTestSuite) (config.NodeAddress, fun
 // captured inside the stop closure. This is the cluster-mode companion to
 // startMTlsRequiredStandalone.
 func startMTlsRequiredCluster(suite *GlideTestSuite) ([]config.NodeAddress, func()) {
+	suite.skipIfNoTlsFixture()
 	output := runClusterManager(
 		suite,
 		[]string{"--tls", "start", "--cluster-mode", "--tls-auth-clients", "-n", "3", "-r", "1"},
