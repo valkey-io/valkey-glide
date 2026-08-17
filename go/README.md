@@ -139,35 +139,6 @@ func main() {
 }
 ```
 
-### Client library identification
-
-Standalone and cluster configurations can customize the library name reported by `CLIENT INFO`:
-
-```go
-standaloneConfig := config.NewClientConfiguration().
-    WithAddress(&config.NodeAddress{Host: "localhost", Port: 6379}).
-    WithLibName("custom-client").
-    WithClientInfoTag("framework:1.2")
-
-clusterConfig := config.NewClusterClientConfiguration().
-    WithAddress(&config.NodeAddress{Host: "localhost", Port: 7001}).
-    WithLibName("custom-client").
-    WithClientInfoTag("framework:1.2")
-```
-
-`WithLibName` overrides the default `GlideGo` base name. `WithClientInfoTag` appends an attribution tag in parentheses, so the examples above report `custom-client(framework:1.2)`. A tag without an override reports `GlideGo(framework:1.2)`. Empty values are treated as absent, punctuation is preserved, and values containing Unicode whitespace are rejected when the client is created.
-
-Dedicated standalone monitor connections use the same configuration and identification values:
-
-```go
-monitor, err := glide.NewMonitorClient(standaloneConfig, nil)
-if err != nil {
-    // Handle the connection error.
-    return
-}
-defer monitor.Close()
-```
-
 ### PubSub Example:
 
 Valkey GLIDE supports PubSub (Publish/Subscribe) for real-time messaging. You can subscribe to channels and patterns, and dynamically manage subscriptions.
