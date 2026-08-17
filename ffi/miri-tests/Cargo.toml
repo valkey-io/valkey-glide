@@ -19,3 +19,6 @@ logger_core = { path = "./mock-logger-core", package = "mock-logger-core" }
 
 [lib]
 path = "../src/lib.rs"
+
+[features]
+pool-support = []

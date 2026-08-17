@@ -9,9 +9,8 @@ class provides the acquire-with-timeout retry loop and maps client_id handles
 to usable GlideClient wrappers for command dispatch.
 
 Usage:
-    from glide_sync import GlideClient
+    from glide_sync import GlideClient, GlideClientConfiguration, NodeAddress
     from glide_sync.client_pool import ClientPool, PoolConfig
-    from glide_shared.config import GlideClientConfiguration, NodeAddress
 
     config = GlideClientConfiguration([NodeAddress("localhost", 6379)])
     pool = ClientPool(config, PoolConfig(max_size=10, min_idle=2))
@@ -52,6 +51,12 @@ class PoolConfig:
 
     acquire_timeout_s: float = 5.0
     """Maximum time to wait when pool is exhausted (seconds)."""
+
+    abandon_timeout_ms: int = 300_000
+    """Maximum inactivity time for a borrowed client before the pool reclaims it (ms).
+    The timer resets on every command sent. The abandon monitor skips clients
+    executing blocking commands (BLPOP, XREAD BLOCK, etc.).
+    Set to 0 to disable abandon detection. Default: 5 minutes."""
 
 
 class ClientPool:
@@ -149,6 +154,7 @@ class ClientPool:
             self._pool_config.min_idle,
             self._pool_config.idle_timeout_ms,
             self._pool_config.request_timeout_ms,
+            self._pool_config.abandon_timeout_ms,
             self._conn_req_bytes,
             len(self._conn_req_bytes),
             client_type,

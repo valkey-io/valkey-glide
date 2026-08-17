@@ -84,6 +84,7 @@ public class ClientPool implements AutoCloseable {
                         config.getMinIdle(),
                         config.getIdleTimeout().toMillis(),
                         config.getRequestTimeout().toMillis(),
+                        config.getAbandonTimeout().toMillis(),
                         connectionRequestBytes);
 
         if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");

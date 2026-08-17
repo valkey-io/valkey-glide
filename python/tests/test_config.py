@@ -807,9 +807,51 @@ def test_tls_cert_reload_interval_requires_paths():
     assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
 
 
+def test_tls_cert_reload_interval_rejected_with_byte_based_mtls():
+    # Byte-based mTLS never reloads, so an interval here is an error rather than
+    # something to drop silently.
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        cert_reload_interval_seconds=60,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("interval", [0, -1])
+def test_tls_cert_reload_interval_rejects_non_positive_with_paths(tmp_path, interval):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=interval,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be positive" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("interval", [2**32])
+def test_tls_cert_reload_interval_out_of_range(tmp_path, interval):
+    # A value too large for a uint32 never reaches the core, so reject it here.
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=interval,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be a positive integer no greater than" in str(exc_info.value)
+
+
 def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
-    # The interval value is validated by the GLIDE core, not the client; the
-    # client only forwards it. The maximum uint32 value is emitted verbatim.
+    # The bound is inclusive: max uint32 is accepted, max+1 is not.
     cert_path, key_path = _write_cert_key(tmp_path)
     tls_config = TlsAdvancedConfiguration(
         client_cert_path=str(cert_path),

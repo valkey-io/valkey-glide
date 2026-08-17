@@ -9,6 +9,7 @@ pub mod errors;
 pub mod otel_db_semantics;
 pub mod request_type;
 pub mod scripts_container;
+pub mod timeout_watchdog;
 
 pub use client::*;
 pub use cluster_scan_container::*;

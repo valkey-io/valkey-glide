@@ -65,8 +65,14 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
 async def _wait_for_pool_ready(pool, min_idle=1, timeout_s=30):
     """Poll until pool has at least min_idle clients ready."""
     deadline = asyncio.get_event_loop().time() + timeout_s
-    while pool.idle_count < min_idle and asyncio.get_event_loop().time() < deadline:
+    idle = pool.idle_count
+    while idle < min_idle and asyncio.get_event_loop().time() < deadline:
         await asyncio.sleep(0.05)
+        idle = pool.idle_count
+    assert idle >= min_idle, (
+        f"Pool did not reach {min_idle} idle clients within {timeout_s}s "
+        f"(idle={idle}, total={pool.total_count})"
+    )
 
 
 class TestAsyncClientPool:
@@ -293,6 +299,71 @@ class TestAsyncClientPool:
 
                 assert await client.get(key) == b"1"
                 await client.delete([key])
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_detection(self, cluster_mode):
+        """Watchdog reclaims abandoned clients after abandon_timeout expires."""
+        config = _get_pool_client_config(cluster_mode)
+        # Create pool with 2-second abandon timeout for fast test
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=2000),
+        )
+        await _wait_for_pool_ready(pool, 1)
+
+        try:
+            # Acquire the only client — do NOT release it
+            await pool.acquire()
+            assert pool.active_count == 1
+            assert pool.idle_count == 0
+
+            # Wait for the abandon monitor to reclaim it (scan interval = timeout/2 = 1s,
+            # so it should be reclaimed within ~3 seconds)
+            deadline = asyncio.get_event_loop().time() + 5
+            while pool.active_count > 0 and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(0.2)
+
+            # The abandon monitor discards the abandoned client (safety: prevents
+            # stale release from corrupting another borrower's connection)
+            assert pool.active_count == 0, (
+                f"Expected abandon monitor to discard abandoned client within 5s. "
+                f"idle={pool.idle_count}, active={pool.active_count}"
+            )
+
+            # Verify the pool can still serve new requests (creates a fresh client)
+            new_client_id = await pool.acquire(timeout=5)
+            assert new_client_id is not None
+            pool.release(new_client_id)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_detection_disabled(self, cluster_mode):
+        """Setting abandon_timeout_ms=0 disables the abandon monitor."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=0),
+        )
+        await _wait_for_pool_ready(pool, 1)
+
+        try:
+            # Acquire and hold without releasing
+            client_id = await pool.acquire()
+            assert pool.active_count == 1
+
+            # Wait 3 seconds — no monitor should reclaim it
+            await asyncio.sleep(3)
+            assert pool.idle_count == 0, "Client should NOT be reclaimed when disabled"
+            assert pool.active_count == 1
+
+            # Manually release
+            pool.release(client_id)
+            # Wait for async state reset to complete
+            await asyncio.sleep(0.5)
+            assert pool.idle_count == 1
         finally:
             pool.close()
 
