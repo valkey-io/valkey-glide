@@ -2170,11 +2170,10 @@ where
             convert_result(receiver.await)
         };
 
-        // Under topology-refresh churn, a concurrent remove_node against the
-        // DashMap-backed connection_map can transiently drain the primary or
-        // node iterator between the outer is_empty check and this walk.
-        // Classify the empty-receivers case as a retryable connectivity
-        // condition so the FanOut RefreshSlots+retry path fires.
+        // A concurrent remove_node during a topology refresh can drain the
+        // connection map between the outer is_empty check and this walk, so
+        // classify no-receivers as a retryable connectivity error to trigger
+        // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::ConnectionNotFoundForRoute,
@@ -3067,12 +3066,10 @@ where
                         .map(|tuple| Some((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
-                    // cluster_routing::multi_shard normally never emits an
-                    // empty slots vector; if one reaches us the caller passed
-                    // a malformed routing plan, not a topology race. Fail
-                    // fast with a distinctly-classified non-retryable error
-                    // so the retryable empty-receivers branch below stays
-                    // scoped strictly to the race.
+                    // multi_shard never emits an empty slots vec, so an empty
+                    // one here is a caller bug rather than the topology race
+                    // aggregate_results retries on. Return a non-retryable
+                    // ClientError to keep those two paths distinct.
                     if slots.is_empty() {
                         return OperationResult::Err((
                             OperationTarget::FanOut,
@@ -5009,23 +5006,11 @@ mod pipeline_routing_tests {
         );
     }
 
-    // Regression test for #6759. Under topology-refresh churn a concurrent
-    // `remove_node` against the DashMap-backed `connection_map` can drain the
-    // primary or node iterator between the outer `is_empty` check and the
-    // walk that fills `receivers`, so `aggregate_results` runs with an empty
-    // receivers vector. Reproducing that timing precisely in an integration
-    // test would require a new mock hook to drop connections mid-walk; here
-    // we exercise the retryable branch directly by calling
-    // `ClusterConnInner::aggregate_results` with an already-empty
-    // `receivers` vec, which is the exact state the race leaves behind.
-    //
-    // Locks in that the empty-receivers branch:
-    //   1. Classifies as `ErrorKind::ConnectionNotFoundForRoute` so the
-    //      FanOut error-handling arm at `Request::poll` triggers the
-    //      `RefreshSlots` retry path.
-    //   2. Uses `RetryMethod::Reconnect`, which is what unlocks that retry.
-    //   3. Surfaces an honest message describing the connectivity condition
-    //      instead of the pre-fix "malformed command" wording.
+    // Regression for #6759. Reproducing the remove_node race in an
+    // integration test would need a new hook to drop connections mid-walk,
+    // so call aggregate_results with an empty receivers vec directly and
+    // check the empty branch returns ConnectionNotFoundForRoute with
+    // RetryMethod::Reconnect and the connectivity-flavored message.
     #[test]
     fn empty_receivers_is_retryable_connection_not_found() {
         use crate::{types::RetryMethod, ErrorKind};

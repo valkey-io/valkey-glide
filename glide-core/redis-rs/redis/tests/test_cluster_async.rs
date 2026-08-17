@@ -7372,13 +7372,9 @@ mod cluster_async {
         );
     }
 
-    // Guards the caller-invariant break path added alongside the #6759 fix.
-    // cluster_routing::multi_shard never emits an empty slots vec today, but
-    // if a caller passes MultipleNodeRoutingInfo::MultiSlot((vec![], _))
-    // directly the fan-out has no work to do and no retry can recover it.
-    // The guard in execute_on_multiple_nodes must fail fast with a
-    // non-retryable ClientError so the retryable empty-receivers branch in
-    // aggregate_results stays scoped strictly to the topology-refresh race.
+    // If a caller passes an empty MultiSlot routing plan, the fan-out guard
+    // must fail with a non-retryable ClientError so the retryable empty-
+    // receivers branch stays scoped to the topology-refresh race (#6759).
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_multi_slot_empty_slots_is_client_error() {
@@ -7421,43 +7417,21 @@ mod cluster_async {
         );
     }
 
-    // Companion test that exercises the retryable empty-receivers branch in
-    // `aggregate_results` in isolation. In production this branch is hit
-    // when a concurrent `remove_node` drains the primary or node iterator
-    // between the outer `is_empty` check and the walk that fills
-    // `receivers`; reproducing that race precisely in the MockEnv would
-    // require a new test hook to drop connections mid-walk. We instead
-    // invoke `route_command` through a `MockEnv` whose closure never
-    // completes so no receiver is delivered, and drop the connection to
-    // force the retry loop to terminate on `sender.is_closed()`. This
-    // covers the classification via the same code path a real race would
-    // exercise, without needing to reproduce the race timing.
-    //
-    // The retryable branch itself is asserted by the crate-internal unit
-    // test `empty_receivers_is_retryable_connection_not_found` in
-    // `glide-core/redis-rs/redis/src/cluster_async/mod.rs`, which calls
-    // `ClusterConnInner::aggregate_results(vec![], ...)` directly.
+    // Same empty MultiSlot input as the guard test above, but with retries(3)
+    // to prove the guard short-circuits the retry loop and never triggers a
+    // slot refresh. The retryable empty-receivers branch is covered directly
+    // by `empty_receivers_is_retryable_connection_not_found` in
+    // `glide-core/redis-rs/redis/src/cluster_async/mod.rs`.
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero() {
-        // Same empty MultiSlot input as the guard test above, but with a
-        // non-zero retry budget. The guard classifies as ClientError which
-        // is `RetryMethod::NoRetry`, so the request must still finish in one
-        // pass. This locks in that the guard short-circuits the retry
-        // loop even when retries are configured, preventing a wasted
-        // retry budget on a caller-invariant break.
         let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
-        // Counts CLUSTER SLOTS traffic observed by the mock *after* startup
-        // completes. The retryable empty-receivers classification
-        // (ConnectionNotFoundForRoute) drives `RefreshSlots + retry` in the
-        // driver, which reissues CLUSTER SLOTS against the mock on every
-        // retry. The non-retryable ClientError guard short-circuits before
-        // any refresh fires, so this counter stays at zero when the guard is
-        // active. Inspecting a caller-side `Cmd::watchdog_retry_count` would
-        // not distinguish these two paths: `route_command` clones the `Cmd`
-        // into the internal request and `Cmd::clone` resets the retry
-        // counter, so the caller's copy is always zero regardless of what
-        // the retry loop did.
+        // Counts CLUSTER SLOTS the mock sees after startup. Each retry driven
+        // by the retryable empty-receivers branch would trigger a slot
+        // refresh, so this stays at zero when the guard is active. The
+        // caller-side `Cmd::watchdog_retry_count` cannot be used here because
+        // `route_command` clones the `Cmd` and `Cmd::clone` resets the
+        // counter.
         let post_startup_cluster_slots = Arc::new(atomic::AtomicUsize::new(0));
         let startup_done = Arc::new(AtomicBool::new(false));
         let counter_handler = post_startup_cluster_slots.clone();
@@ -7470,11 +7444,9 @@ mod cluster_async {
         } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")])
                 .retries(3)
-                // Disable the slot-refresh rate limiter so every retry-driven
-                // `RefreshSlots` actually reissues CLUSTER SLOTS against the
-                // mock. Without this, the throttler skips the follow-up
-                // refreshes (the startup refresh already set `last_run`) and
-                // the counter cannot distinguish a retry from a single pass.
+                // Disable the slot-refresh throttler so a retry-driven
+                // RefreshSlots always reissues CLUSTER SLOTS; otherwise the
+                // counter cannot tell a retry from a single pass.
                 .slots_refresh_rate_limit(Duration::from_secs(0), 0),
             name,
             move |received_cmd: &[u8], _port| {
@@ -7488,11 +7460,9 @@ mod cluster_async {
                 Err(Ok(Value::Nil))
             },
         );
-        // MockEnv::with_client_builder synchronously drives the initial
-        // connection setup to completion (get_async_generic_connection is
-        // awaited on the current-thread runtime), so any CLUSTER SLOTS
-        // observed after this point comes from a driver-triggered refresh,
-        // not startup.
+        // MockEnv::with_client_builder finishes the initial connection setup
+        // before returning, so any CLUSTER SLOTS after this point is a
+        // driver-triggered refresh rather than startup.
         startup_done.store(true, Ordering::SeqCst);
 
         let routing = RoutingInfo::MultiNode((
@@ -7517,9 +7487,8 @@ mod cluster_async {
         assert_eq!(
             refreshes, 0,
             "guard must short-circuit the retry loop: observed {refreshes} \
-             post-startup CLUSTER SLOTS refresh(es), which would only fire \
-             if the empty-receivers classification (retryable \
-             ConnectionNotFoundForRoute) had leaked through",
+             post-startup CLUSTER SLOTS refresh(es), which only fires if the \
+             retryable empty-receivers branch leaked through",
         );
     }
 
