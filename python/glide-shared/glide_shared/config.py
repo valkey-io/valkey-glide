@@ -1689,7 +1689,7 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
     Example usage::
 
-        from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
+        from glide import load_root_certificates_from_file, TlsAdvancedConfiguration
 
         certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
         tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
@@ -1763,7 +1763,7 @@ def load_client_certificate_and_key_from_file(
 
     Example::
 
-        from glide_shared.config import (
+        from glide import (
             TlsAdvancedConfiguration,
             load_client_certificate_and_key_from_file,
         )

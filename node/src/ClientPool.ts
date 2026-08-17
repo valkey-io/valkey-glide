@@ -28,6 +28,14 @@ import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import {
+    poolAllocateId,
+    poolDrainDiscarded,
+    poolRegisterClient,
+    poolStartMonitor,
+    poolStopMonitor,
+    poolUnregisterClient,
+} from "../build-ts/native";
 
 /** Re-export the pool client type (full command set). */
 export type PoolClient = BaseClient;
@@ -84,21 +92,15 @@ export class ClientPool {
     private active = new Map<number, PoolEntry>();
     private closed = false;
     private nextId = 1;
+    private resetting = 0;
     private readonly maxSize: number;
     private readonly minIdle: number;
     private readonly acquireTimeoutMs: number;
     private readonly abandonTimeoutMs: number;
+    private readonly poolId: number;
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private waiters: Waiter[] = [];
-    /** Tracks last command activity per active entry id. */
-    private lastActivity = new Map<number, number>();
-    /** Tracks entries currently executing a blocking command. */
-    private blockingEntries = new Set<number>();
-    /** Maps proxy client → entry id for release lookup. */
-    private proxyToEntryId = new WeakMap<object, number>();
-    /** Abandon monitor interval handle. */
-    private abandonMonitor: ReturnType<typeof setInterval> | null = null;
 
     private constructor(
         maxSize: number,
@@ -115,18 +117,12 @@ export class ClientPool {
         this.isCluster = isCluster;
         this.clientConfig = clientConfig;
 
-        // Start abandon monitor if enabled
-        if (abandonTimeoutMs > 0) {
-            this.abandonMonitor = setInterval(
-                () => this.scanForAbandoned(),
-                abandonTimeoutMs / 2,
-            );
+        // Allocate pool ID from Rust (process-global, safe across worker_threads)
+        this.poolId = poolAllocateId();
 
-            // Unref so it doesn't prevent Node.js from exiting
-            if (this.abandonMonitor.unref) {
-                this.abandonMonitor.unref();
-            }
-        }
+        // Start Rust-level abandon monitor (handles blocking detection, activity
+        // tracking, and discard — no JS Proxy or setInterval needed)
+        poolStartMonitor(this.poolId, abandonTimeoutMs);
     }
 
     /**
@@ -170,7 +166,12 @@ export class ClientPool {
         // This validates connectivity — if the config is wrong (bad address,
         // wrong cluster mode), the error propagates to the caller immediately
         // instead of being discovered at acquire() time.
-        await pool.createAndAddClient();
+        try {
+            await pool.createAndAddClient();
+        } catch (e) {
+            pool.close(); // Stop monitor and clean up
+            throw e;
+        }
 
         // Remaining warmup is best-effort background
         for (let i = 1; i < minIdle; i++) {
@@ -192,21 +193,37 @@ export class ClientPool {
             throw new Error("Pool is closed");
         }
 
+        // Drain any clients discarded by the Rust abandon monitor
+        const discarded = poolDrainDiscarded(this.poolId);
+
+        for (const clientId of discarded) {
+            for (const [id, entry] of this.active) {
+                if (entry.client.getClientId() === clientId) {
+                    this.active.delete(id);
+                    entry.client.close();
+                    break;
+                }
+            }
+        }
+
         // Fast path: LIFO pop from idle stack
         const entry = this.idle.pop();
 
         if (entry) {
             this.active.set(entry.id, entry);
-            this.lastActivity.set(entry.id, Date.now());
-            return this.wrapClient(entry);
+            poolRegisterClient(this.poolId, entry.client.getClientId());
+            return entry.client;
         }
 
         // If below max size, create a new client
-        if (this.idle.length + this.active.size < this.maxSize) {
+        if (
+            this.idle.length + this.active.size + this.resetting <
+            this.maxSize
+        ) {
             const newEntry = await this.createEntry();
             this.active.set(newEntry.id, newEntry);
-            this.lastActivity.set(newEntry.id, Date.now());
-            return this.wrapClient(newEntry);
+            poolRegisterClient(this.poolId, newEntry.client.getClientId());
+            return newEntry.client;
         }
 
         // At max size — wait for a release
@@ -228,8 +245,8 @@ export class ClientPool {
                 resolve: (entry: PoolEntry) => {
                     clearTimeout(timer);
                     this.active.set(entry.id, entry);
-                    this.lastActivity.set(entry.id, Date.now());
-                    resolve(this.wrapClient(entry));
+                    poolRegisterClient(this.poolId, entry.client.getClientId());
+                    resolve(entry.client);
                 },
                 reject,
                 timer,
@@ -244,46 +261,45 @@ export class ClientPool {
      * GlideClient connection before making it idle again.
      */
     async release(client: BaseClient): Promise<void> {
-        // Find entry by client reference or proxy mapping
+        // Find entry by client reference
         let entry: PoolEntry | undefined;
-        const entryId = this.proxyToEntryId.get(client);
 
-        if (entryId !== undefined) {
-            entry = this.active.get(entryId);
-
-            if (entry) {
-                this.active.delete(entryId);
-                this.proxyToEntryId.delete(client);
-            }
-        } else {
-            for (const [id, e] of this.active) {
-                if (e.client === client) {
-                    entry = e;
-                    this.active.delete(id);
-                    break;
-                }
+        for (const [id, e] of this.active) {
+            if (e.client === client) {
+                entry = e;
+                this.active.delete(id);
+                break;
             }
         }
 
         if (!entry) return;
 
-        this.lastActivity.delete(entry.id);
-        this.blockingEntries.delete(entry.id);
+        // Unregister from Rust-level pool tracking
+        poolUnregisterClient(entry.client.getClientId());
 
-        // State reset on the actual connection
-        await this.resetClientState(entry.client);
+        // State reset on the actual connection (track as resetting for capacity)
+        this.resetting++;
+
+        try {
+            await this.resetClientState(entry.client);
+        } finally {
+            this.resetting--;
+        }
+
+        if (this.closed) {
+            entry.client.close();
+            return;
+        }
 
         // If waiters are queued, hand directly to next waiter (FIFO fairness)
-        if (this.waiters.length > 0 && !this.closed) {
+        if (this.waiters.length > 0) {
             const waiter = this.waiters.shift()!;
             waiter.resolve(entry);
             return;
         }
 
         // Return to idle stack (LIFO for connection reuse locality)
-        if (!this.closed) {
-            this.idle.push(entry);
-        }
+        this.idle.push(entry);
     }
 
     /**
@@ -334,11 +350,8 @@ export class ClientPool {
         if (!this.closed) {
             this.closed = true;
 
-            // Stop abandon monitor
-            if (this.abandonMonitor) {
-                clearInterval(this.abandonMonitor);
-                this.abandonMonitor = null;
-            }
+            // Stop Rust-level abandon monitor
+            poolStopMonitor(this.poolId);
 
             // Reject all waiters
             for (const waiter of this.waiters) {
@@ -348,12 +361,14 @@ export class ClientPool {
 
             this.waiters = [];
 
-            // Close all clients
-            for (const entry of this.idle) {
+            // Unregister and close all active clients
+            for (const entry of this.active.values()) {
+                poolUnregisterClient(entry.client.getClientId());
                 entry.client.close();
             }
 
-            for (const entry of this.active.values()) {
+            // Close all idle clients
+            for (const entry of this.idle) {
                 entry.client.close();
             }
 
@@ -365,78 +380,6 @@ export class ClientPool {
     // ═══════════════════════════════════════════════════════════════════════════
     // INTERNAL
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Commands that block on the server — abandon monitor skips these.
-     * Keep in sync with is_blocking_command() in glide-core/src/client/mod.rs.
-     */
-    private static readonly BLOCKING_COMMANDS = new Set([
-        "blpop",
-        "brpop",
-        "blmove",
-        "bzpopmax",
-        "bzpopmin",
-        "brpoplpush",
-        "blmpop",
-        "bzmpop",
-        "wait",
-        "waitaof",
-        "xread",
-        "xreadgroup",
-    ]);
-
-    /**
-     * Wrap a client with a Proxy that refreshes activity on every method call
-     * and marks blocking commands so the abandon monitor skips them.
-     */
-    private wrapClient(entry: PoolEntry): BaseClient {
-        const proxy = new Proxy(entry.client, {
-            get: (target, prop, receiver) => {
-                const value = Reflect.get(target, prop, receiver);
-
-                if (typeof value !== "function" || typeof prop !== "string") {
-                    return value;
-                }
-
-                // Return a wrapper that refreshes activity and tracks blocking
-                return (...args: unknown[]) => {
-                    this.lastActivity.set(entry.id, Date.now());
-
-                    const isBlocking = ClientPool.BLOCKING_COMMANDS.has(
-                        prop.toLowerCase(),
-                    );
-
-                    if (isBlocking) {
-                        this.blockingEntries.add(entry.id);
-                    }
-
-                    const result = (
-                        value as (...a: unknown[]) => unknown
-                    ).apply(target, args);
-
-                    // If result is a Promise, unmark blocking when it resolves
-                    if (
-                        isBlocking &&
-                        result &&
-                        typeof (result as { then?: unknown }).then ===
-                            "function"
-                    ) {
-                        (result as Promise<unknown>).then(
-                            () => this.blockingEntries.delete(entry.id),
-                            () => this.blockingEntries.delete(entry.id),
-                        );
-                    } else if (isBlocking) {
-                        this.blockingEntries.delete(entry.id);
-                    }
-
-                    return result;
-                };
-            },
-        });
-
-        this.proxyToEntryId.set(proxy, entry.id);
-        return proxy as BaseClient;
-    }
 
     private async createEntry(): Promise<PoolEntry> {
         const client = this.isCluster
@@ -488,59 +431,6 @@ export class ClientPool {
                 .catch(noop);
         } catch {
             // Connection broken — client will reconnect on next use
-        }
-    }
-
-    /**
-     * Notify the pool that a command was sent on a borrowed client.
-     * Resets the abandon inactivity timer for this client.
-     * Call this from application code if using raw acquire() with long-held clients.
-     */
-    notifyActivity(client: BaseClient): void {
-        const entryId = this.proxyToEntryId.get(client);
-
-        if (entryId !== undefined) {
-            this.lastActivity.set(entryId, Date.now());
-            return;
-        }
-
-        for (const [id, entry] of this.active) {
-            if (entry.client === client) {
-                this.lastActivity.set(id, Date.now());
-                return;
-            }
-        }
-    }
-
-    /** Scan active entries and force-release any that exceed abandon timeout. */
-    private scanForAbandoned(): void {
-        if (this.closed) return;
-
-        const now = Date.now();
-        const abandoned: PoolEntry[] = [];
-
-        for (const [id, entry] of this.active) {
-            // Skip clients currently executing a blocking command
-            if (this.blockingEntries.has(id)) continue;
-
-            const lastActive = this.lastActivity.get(id) ?? 0;
-
-            if (now - lastActive > this.abandonTimeoutMs) {
-                abandoned.push(entry);
-            }
-        }
-
-        for (const entry of abandoned) {
-            console.warn(
-                `[valkey-glide pool] Abandon detection: client ${entry.id} exceeded ` +
-                    `inactivity timeout (${this.abandonTimeoutMs}ms) — discarding connection`,
-            );
-            this.active.delete(entry.id);
-            this.lastActivity.delete(entry.id);
-
-            // Discard rather than return-to-idle for consistency with Rust core:
-            // guarantees a stale release from the original borrower cannot interfere.
-            entry.client.close();
         }
     }
 }
