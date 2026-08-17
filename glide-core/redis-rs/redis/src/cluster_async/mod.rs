@@ -5038,11 +5038,13 @@ mod pipeline_routing_tests {
                 MultiSlotArgPattern::KeysOnly,
             )),
         ] {
-            let err = block_on(ClusterConnInner::<MultiplexedConnection>::aggregate_results(
-                Vec::new(),
-                &routing,
-                None,
-            ))
+            let err = block_on(
+                ClusterConnInner::<MultiplexedConnection>::aggregate_results(
+                    Vec::new(),
+                    &routing,
+                    None,
+                ),
+            )
             .expect_err("empty receivers must fail");
 
             assert_eq!(

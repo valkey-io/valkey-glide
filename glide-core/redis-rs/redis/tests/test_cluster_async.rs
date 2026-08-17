@@ -7416,8 +7416,7 @@ mod cluster_async {
             err.kind(),
         );
         assert!(
-            err.to_string()
-                .contains("MultiSlot routing plan is empty"),
+            err.to_string().contains("MultiSlot routing plan is empty"),
             "error message must describe the empty routing plan: {err}",
         );
     }
@@ -7447,8 +7446,7 @@ mod cluster_async {
         // pass. This locks in that the guard short-circuits the retry
         // loop even when retries are configured, preventing a wasted
         // retry budget on a caller-invariant break.
-        let name =
-            "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
+        let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
         let MockEnv {
             runtime,
             async_connection: mut connection,
