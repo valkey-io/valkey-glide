@@ -13,20 +13,14 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
-// requireTlsHost returns the first TLS host for the requested variant, or
-// skips the test when external-endpoint mode did not supply TLS hosts. TLS
-// tests reach for the fixture-provided hosts directly, so without this guard
-// a run that only points at external non-TLS endpoints would panic on an
-// empty-slice index.
+// requireTlsHost returns the first TLS host for the requested variant.
+// SetupSuite populates both TLS slices unconditionally (from a flag or by
+// starting the fixture), and extractAddresses fails the suite rather than
+// returning empty, so callers can index directly without a length guard.
 func (suite *GlideTestSuite) requireTlsHost(cluster bool) config.NodeAddress {
 	hosts := suite.standaloneTlsHosts
-	label := "standalone"
 	if cluster {
 		hosts = suite.clusterTlsHosts
-		label = "cluster"
-	}
-	if len(hosts) == 0 {
-		suite.T().Skipf("no %s TLS hosts configured, external-endpoint mode without a TLS endpoint", label)
 	}
 	return hosts[0]
 }
