@@ -54,6 +54,11 @@ type GlideTestSuite struct {
 	// Cached default clients reused across tests (pooled)
 	cachedStandaloneClient *glide.Client
 	cachedClusterClient    *glide.ClusterClient
+	// Set in SetupSuite; TearDownSuite reads these to know which cluster_manager.py
+	// invocations to run for cleanup. A fully-external invocation leaves both false
+	// and skips cluster_manager.py entirely, matching the SetupSuite gating.
+	startedPlaintextFixture bool
+	startedTlsFixture       bool
 }
 
 var (
@@ -86,17 +91,6 @@ var (
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
-	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
-	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
-	runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
-	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
-
-	// Delete dirs to ensure clean state before starting new clusters
-	err := os.RemoveAll("../../utils/clusters")
-	if err != nil && !os.IsNotExist(err) {
-		log.Fatal(err)
-	}
-
 	// Each of the four server pairs (non-TLS standalone, non-TLS cluster, TLS
 	// standalone, TLS cluster) is supplied by an external endpoint flag, started
 	// by the fixture, or left empty when the invocation does not need it. The
@@ -110,6 +104,28 @@ func (suite *GlideTestSuite) SetupSuite() {
 		(!*modulesMode && (*standaloneHosts != "" || *clusterHosts != ""))
 	wantsTls := allFlagsEmpty || *modulesMode ||
 		*standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != ""
+	suite.startedPlaintextFixture = wantsPlaintext && (*standaloneHosts == "" || *clusterHosts == "")
+	suite.startedTlsFixture = wantsTls && (*standaloneTlsHostsFlag == "" || *clusterTlsHostsFlag == "")
+
+	// Stop leftover fixtures from a previous run, but only for topologies we
+	// might start ourselves this run. Under a fully-external invocation this
+	// avoids calling cluster_manager.py at all, which lets hosts without
+	// python3 or a local engine follow the plaintext-only invocation.
+	if suite.startedPlaintextFixture {
+		runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
+	}
+	if suite.startedTlsFixture {
+		runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
+	}
+
+	// Delete dirs to ensure clean state before starting new clusters. Skipped
+	// when no fixture will start; there is nothing for us to have written.
+	if suite.startedPlaintextFixture || suite.startedTlsFixture {
+		err := os.RemoveAll("../../utils/clusters")
+		if err != nil && !os.IsNotExist(err) {
+			log.Fatal(err)
+		}
+	}
 
 	if *standaloneHosts != "" {
 		suite.standaloneHosts = parseHosts(suite, *standaloneHosts)
@@ -334,8 +350,12 @@ func (suite *GlideTestSuite) TearDownSuite() {
 	if suite.cachedClusterClient != nil {
 		suite.cachedClusterClient.Close()
 	}
-	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
-	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
+	if suite.startedPlaintextFixture {
+		runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
+	}
+	if suite.startedTlsFixture {
+		runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
+	}
 }
 
 func (suite *GlideTestSuite) TearDownTest() {
