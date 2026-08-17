@@ -134,7 +134,7 @@ func storeScript(script []byte) string {
 	defer C.free_script_hash_buffer(cHash)
 
 	len := C.int(cHash.len)
-	hash := string(C.GoBytes(unsafe.Pointer(cHash.ptr), len))
+	hash := C.GoStringN((*C.char)(unsafe.Pointer(cHash.ptr)), len)
 
 	return hash
 }
