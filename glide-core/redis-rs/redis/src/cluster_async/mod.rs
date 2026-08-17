@@ -2178,7 +2178,7 @@ where
         if receivers.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::ConnectionNotFoundForRoute,
-                "Client internal error",
+                "Connection not found for route",
                 "No live receivers for multi-node fan-out; likely a transient topology-refresh race"
                     .to_string(),
             )));
@@ -3067,6 +3067,22 @@ where
                         .map(|tuple| Some((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
+                    // cluster_routing::multi_shard normally never emits an
+                    // empty slots vector; if one reaches us the caller passed
+                    // a malformed routing plan, not a topology race. Fail
+                    // fast with a distinctly-classified non-retryable error
+                    // so the retryable empty-receivers branch below stays
+                    // scoped strictly to the race.
+                    if slots.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            (
+                                ErrorKind::ClientError,
+                                "MultiSlot routing plan is empty; no routes to fan out to",
+                            )
+                                .into(),
+                        ));
+                    }
                     into_channels(slots.iter().map(|(route, indices)| {
                         connections_container
                             .connection_for_route(route)
