@@ -7447,19 +7447,53 @@ mod cluster_async {
         // loop even when retries are configured, preventing a wasted
         // retry budget on a caller-invariant break.
         let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
+        // Counts CLUSTER SLOTS traffic observed by the mock *after* startup
+        // completes. The retryable empty-receivers classification
+        // (ConnectionNotFoundForRoute) drives `RefreshSlots + retry` in the
+        // driver, which reissues CLUSTER SLOTS against the mock on every
+        // retry. The non-retryable ClientError guard short-circuits before
+        // any refresh fires, so this counter stays at zero when the guard is
+        // active. Inspecting a caller-side `Cmd::watchdog_retry_count` would
+        // not distinguish these two paths: `route_command` clones the `Cmd`
+        // into the internal request and `Cmd::clone` resets the retry
+        // counter, so the caller's copy is always zero regardless of what
+        // the retry loop did.
+        let post_startup_cluster_slots = Arc::new(atomic::AtomicUsize::new(0));
+        let startup_done = Arc::new(AtomicBool::new(false));
+        let counter_handler = post_startup_cluster_slots.clone();
+        let startup_done_handler = startup_done.clone();
         let MockEnv {
             runtime,
             async_connection: mut connection,
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(3)
+                // Disable the slot-refresh rate limiter so every retry-driven
+                // `RefreshSlots` actually reissues CLUSTER SLOTS against the
+                // mock. Without this, the throttler skips the follow-up
+                // refreshes (the startup refresh already set `last_run`) and
+                // the counter cannot distinguish a retry from a single pass.
+                .slots_refresh_rate_limit(Duration::from_secs(0), 0),
             name,
             move |received_cmd: &[u8], _port| {
+                if startup_done_handler.load(Ordering::SeqCst)
+                    && contains_slice(received_cmd, b"CLUSTER")
+                    && contains_slice(received_cmd, b"SLOTS")
+                {
+                    counter_handler.fetch_add(1, Ordering::SeqCst);
+                }
                 respond_startup_two_nodes(name, received_cmd)?;
                 Err(Ok(Value::Nil))
             },
         );
+        // MockEnv::with_client_builder synchronously drives the initial
+        // connection setup to completion (get_async_generic_connection is
+        // awaited on the current-thread runtime), so any CLUSTER SLOTS
+        // observed after this point comes from a driver-triggered refresh,
+        // not startup.
+        startup_done.store(true, Ordering::SeqCst);
 
         let routing = RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::MultiSlot((
@@ -7468,9 +7502,8 @@ mod cluster_async {
             )),
             None,
         ));
-        let cmd_obj = cmd("MGET");
         let err = runtime
-            .block_on(connection.route_command(&cmd_obj, routing))
+            .block_on(connection.route_command(&cmd("MGET"), routing))
             .expect_err("empty MultiSlot routing plan must fail");
 
         assert_eq!(
@@ -7480,12 +7513,13 @@ mod cluster_async {
              kind={:?} err={err:?}",
             err.kind(),
         );
-        let retries = cmd_obj
-            .watchdog_retry_count
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let refreshes = post_startup_cluster_slots.load(Ordering::SeqCst);
         assert_eq!(
-            retries, 0,
-            "guard must short-circuit the retry loop: observed {retries} retry attempts",
+            refreshes, 0,
+            "guard must short-circuit the retry loop: observed {refreshes} \
+             post-startup CLUSTER SLOTS refresh(es), which would only fire \
+             if the empty-receivers classification (retryable \
+             ConnectionNotFoundForRoute) had leaked through",
         );
     }
 
