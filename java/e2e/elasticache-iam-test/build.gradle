@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.google.osdetector' version '1.7.3'
+    id 'com.gradleup.shadow' version '9.1.0'
+}
+
+group = 'glide'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation "io.valkey:valkey-glide:255.255.255:${osdetector.classifier}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
+application {
+    mainClass = 'glide.ElastiCacheIamTest'
+}
+
+shadowJar {
+    archiveClassifier.set('')
+}
+
+// Silence Gradle 8 implicit-dependency validation errors between the shadow plugin
+// and the application plugin's distribution tasks. Shadow 9.x + Gradle 8 does not
+// wire these automatically.
+afterEvaluate {
+    tasks.named('distTar')            { dependsOn shadowJar }
+    tasks.named('distZip')            { dependsOn shadowJar }
+    tasks.named('startScripts')       { dependsOn shadowJar }
+    tasks.named('startShadowScripts') { dependsOn jar }
+    tasks.named('shadowDistTar')      { dependsOn jar }
+    tasks.named('shadowDistZip')      { dependsOn jar }
+}
