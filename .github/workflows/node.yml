@@ -458,7 +458,7 @@ jobs:
         environment: AWS_ACTIONS
         steps:
             - name: Configure AWS credentials
-              uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d1d85baa0abe8 # v4
+              uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
               with:
                   role-to-assume: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
                   aws-region: us-east-1
