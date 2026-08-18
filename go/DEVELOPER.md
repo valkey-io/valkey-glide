@@ -233,13 +233,8 @@ make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:
 make modules-test tls-cluster-endpoints=tls.example.internal:6379
 ```
 
-A subset of TLS tests still requires the fixture-managed servers under `utils/tls_crts/` and cannot honor external endpoints:
-
-- `TestTlsWithIPv4AddressSucceeds_*` and `TestTlsWithIPv6AddressSucceeds_*` dial `127.0.0.1` / `::1` directly.
-- `TestTlsWithSelfSignedCertificate_*`, `TestTlsWithMultipleCertificates_*`, `TestTlsMutualTLS*`, and `TestTlsLoad*` pin the root CA to the fixture at `utils/tls_crts/ca.crt`, so they cannot honor external endpoints (the fixture CA does not match a real server's certificate chain).
-- `TestTlsMTls*` (both mTLS-required accepting and rejecting cases) spin up dedicated fixture servers via `cluster_manager.py --tls --tls-auth-clients`.
-
-Use `make integ-test` with no endpoint flags for the full TLS test coverage, or pair external `tls-*-endpoints` with `test-filter` to skip the fixture-bound tests above.
+Fixture-bound TLS tests (CA-pinned, loopback address bringup, and dedicated mTLS servers) automatically skip when `tls-standalone-endpoints` or `tls-cluster-endpoints` supplies external hosts for their pair, so no manual `test-filter` is required.
+Use `make integ-test` with no endpoint flags for the full TLS test coverage.
 
 #### IAM Authentication Tests
 
