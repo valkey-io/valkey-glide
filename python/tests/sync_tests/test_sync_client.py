@@ -9847,11 +9847,11 @@ class TestCommands:
         glide_sync_client.set(key, value)
 
         with pytest.raises(RequestError):
-            glide_sync_client.migrate("invalid-host", 6379, key, 0, 5000)
+            glide_sync_client.migrate("invalid-host", 6379, key, 0, 500)
 
         with pytest.raises(RequestError):
             glide_sync_client.migrate(
-                "invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True)
+                "invalid-host", 6379, key, 0, 500, MigrateOptions(copy=True)
             )
 
         with pytest.raises(ValueError):
@@ -9865,11 +9865,11 @@ class TestCommands:
             glide_sync_client.set(key2, "value2")
             glide_sync_client.set(key3, "value3")
             with pytest.raises(RequestError):
-                glide_sync_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+                glide_sync_client.migrate("invalid-host", 6379, [key2, key3], 0, 500)
 
             # Multi-key: empty keys list raises ValueError
             with pytest.raises(ValueError):
-                glide_sync_client.migrate("invalid-host", 6379, [], 0, 5000)
+                glide_sync_client.migrate("invalid-host", 6379, [], 0, 500)
 
             # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
             non_existent1 = get_random_string(5)
@@ -9879,7 +9879,7 @@ class TestCommands:
                 6379,
                 [non_existent1, non_existent2],
                 0,
-                5000,
+                500,
             )
             assert result == b"NOKEY"
 
