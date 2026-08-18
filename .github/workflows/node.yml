@@ -2,6 +2,7 @@ name: Node
 
 permissions:
     contents: read
+    id-token: write
 
 on:
     push:
@@ -450,3 +451,66 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-windows:
+        name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d1d85baa0abe8 # v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
+                  aws-region: us-east-1
+
+            - name: Trigger CodeBuild and wait for result
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+                  REPORT_BUCKET: valkey-glide-win
+              run: |
+                  echo "Starting CodeBuild project ${PROJECT_NAME}..."
+                  BUILD_ID=$(aws codebuild start-build \
+                    --project-name "${PROJECT_NAME}" \
+                    --query 'build.id' \
+                    --output text)
+                  echo "Build started: ${BUILD_ID}"
+
+                  # Poll until the build reaches a terminal state
+                  echo "Polling for build completion..."
+                  while true; do
+                    STATUS=$(aws codebuild batch-get-builds \
+                      --ids "${BUILD_ID}" \
+                      --query 'builds[0].buildStatus' \
+                      --output text)
+                    echo "  Status: ${STATUS}"
+                    case "${STATUS}" in
+                      SUCCEEDED)
+                        echo "CodeBuild succeeded."
+                        break
+                        ;;
+                      FAILED|FAULT|STOPPED|TIMED_OUT)
+                        echo "::error::CodeBuild build ${BUILD_ID} finished with status: ${STATUS}"
+                        exit 1
+                        ;;
+                      IN_PROGRESS)
+                        sleep 30
+                        ;;
+                      *)
+                        echo "Unexpected status '${STATUS}', continuing to poll..."
+                        sleep 30
+                        ;;
+                    esac
+                  done
+
+                  # Download the test report from S3 so it can be uploaded as a GitHub artifact
+                  aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html || echo "Warning: could not download test report from S3"
+
+            - name: Upload Windows test report
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: node-test-report-windows-${{ github.run_id }}
+                  path: test-report-windows.html
+                  if-no-files-found: ignore
