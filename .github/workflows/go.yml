@@ -439,10 +439,10 @@ jobs:
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k long-timeout-test test-filter=TestLongTimeout
+                    make -k long-timeout-test test-filter=TestLongTimeout skip-tls-fixtures=true
                   else
                     make install-tools build
-                    make -k long-timeout-test test-filter=TestLongTimeout
+                    make -k long-timeout-test test-filter=TestLongTimeout skip-tls-fixtures=true
                   fi
                   make -k pubsub-test
 

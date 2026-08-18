@@ -224,6 +224,9 @@ A fixture only starts when its own endpoint flag is empty AND the invocation opt
 - `tls-cluster-endpoints`: existing TLS cluster server(s).
 - `modules-mode`: reroute the default client factories through the TLS host slices with TLS enabled.
 `make modules-test` sets this automatically so an external `tls-cluster-endpoints` or `tls-standalone-endpoints` flag is enough for module tests to run against the TLS endpoint.
+- `skip-tls-fixtures`: do not start the two TLS fixture pairs, for an invocation whose test filter cannot select a TLS test.
+A supplied `tls-standalone-endpoints` or `tls-cluster-endpoints` is still used, and a bare invocation with no flags still starts all four pairs.
+`make pubsub-test` sets this automatically, as does `make opentelemetry-test` when given no `test-filter`.
 
 Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
 Non-TLS-only invocations no longer spawn the TLS fixture, so a host running the plaintext form does not need `python3`, `openssl`, or a local engine.

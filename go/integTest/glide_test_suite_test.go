@@ -95,6 +95,12 @@ var (
 		"Route defaultClusterClient / defaultClient through the TLS host slices with TLS enabled; "+
 			"use for module tests against external TLS endpoints",
 	)
+	skipTlsFixtures = flag.Bool(
+		"skip-tls-fixtures",
+		false,
+		"Do not start the TLS fixture pairs. Use when the invocation's test filter cannot select "+
+			"any TLS test; supplied --tls-*-endpoints are still honored.",
+	)
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -112,11 +118,16 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// fixture. Each modules-tagged test independently requires the specific
 	// endpoint its requireModule*Host guard checks and skips otherwise, so a
 	// modules-mode invocation only ever uses the endpoints it was handed.
+	//
+	// --skip-tls-fixtures suppresses the TLS fixture start and nothing else.
+	// It is for invocations whose test filter cannot select a TLS test, where
+	// the two TLS pairs would otherwise boot unused. A supplied
+	// --tls-*-endpoints is still parsed and used with the flag set.
 	allFlagsEmpty := *standaloneHosts == "" && *clusterHosts == "" &&
 		*standaloneTlsHostsFlag == "" && *clusterTlsHostsFlag == ""
 	wantsPlaintext := !*modulesMode &&
 		(allFlagsEmpty || *standaloneHosts != "" || *clusterHosts != "")
-	wantsTls := !*modulesMode &&
+	wantsTls := !*modulesMode && !*skipTlsFixtures &&
 		(allFlagsEmpty || *standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != "")
 	suite.startedPlaintextFixture = wantsPlaintext && (*standaloneHosts == "" || *clusterHosts == "")
 	suite.startedTlsFixture = wantsTls && (*standaloneTlsHostsFlag == "" || *clusterTlsHostsFlag == "")
