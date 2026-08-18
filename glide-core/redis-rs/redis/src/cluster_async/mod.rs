@@ -3577,7 +3577,6 @@ where
         Ok((address, conn))
     }
 
-    /// Fail all pending requests immediately with ClientError.
     /// Buffer incoming requests into the recovery queue while reconnect is in progress.
     /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
     /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
@@ -4082,11 +4081,12 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Only buffer during fast reconnects (circular MOVED path).
-                // For ReconnectToInitialNodes and RefreshingSlots, fail fast to preserve throughput.
+                // Buffer during fast reconnects (circular MOVED) and slot refresh paths.
+                // For ReconnectToInitialNodes, fail fast to preserve throughput.
                 if matches!(
                     &self.state,
                     ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
                 ) {
                     self.buffer_pending_requests_to_recovery_queue();
                 } else {
@@ -4095,10 +4095,11 @@ where
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
-                // Same: only buffer during fast Reconnect path.
+                // Same: only buffer during fast Reconnect or RefreshingSlots paths.
                 if matches!(
                     &self.state,
                     ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
                 ) {
                     self.buffer_pending_requests_to_recovery_queue();
                 } else {
