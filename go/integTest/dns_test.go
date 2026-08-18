@@ -27,7 +27,10 @@ func skipIfDnsTestsDisabled(suite *GlideTestSuite) {
 func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool) (*glide.Client, error) {
 	var port int
 	if useTLS {
-		port = suite.requireTlsHost(false).Port
+		// DNS TLS tests dial loopback aliases mapped in /etc/hosts and rely
+		// on the fixture-managed CA, so they must skip when the standalone
+		// TLS pair was supplied by --tls-standalone-endpoints.
+		port = suite.requireFixtureTlsHost(false).Port
 	} else {
 		if len(suite.standaloneHosts) == 0 {
 			suite.T().Skip("No standalone server configured for this invocation")
@@ -61,7 +64,10 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*glide.ClusterClient, error) {
 	var port int
 	if useTLS {
-		port = suite.requireTlsHost(true).Port
+		// DNS TLS tests dial loopback aliases mapped in /etc/hosts and rely
+		// on the fixture-managed CA, so they must skip when the cluster TLS
+		// pair was supplied by --tls-cluster-endpoints.
+		port = suite.requireFixtureTlsHost(true).Port
 	} else {
 		if len(suite.clusterHosts) == 0 {
 			suite.T().Skip("No cluster server configured for this invocation")

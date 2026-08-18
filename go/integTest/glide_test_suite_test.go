@@ -59,6 +59,13 @@ type GlideTestSuite struct {
 	// and skips cluster_manager.py entirely, matching the SetupSuite gating.
 	startedPlaintextFixture bool
 	startedTlsFixture       bool
+	// True when the corresponding TLS pair was booted by runClusterManager in
+	// SetupSuite; false when it was populated from --tls-*-endpoints or left
+	// empty. Fixture-bound tests (CA-pinned certs, loopback bringup, dedicated
+	// mTLS servers) key off these via requireFixtureTlsHost so they skip
+	// against externally-supplied TLS endpoints.
+	standaloneTlsFixtureStarted bool
+	clusterTlsFixtureStarted    bool
 }
 
 var (
@@ -155,6 +162,7 @@ func (suite *GlideTestSuite) SetupSuite() {
 		// the primary is enough and the extra replicas are wasted processes.
 		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "0"}, false)
 		suite.standaloneTlsHosts = extractAddresses(suite, clusterManagerOutput)
+		suite.standaloneTlsFixtureStarted = true
 	}
 	if *clusterTlsHostsFlag != "" {
 		suite.clusterTlsHosts = parseHosts(suite, *clusterTlsHostsFlag)
@@ -163,6 +171,7 @@ func (suite *GlideTestSuite) SetupSuite() {
 		// callers only index at [0], so replicas add nothing.
 		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "0"}, false)
 		suite.clusterTlsHosts = extractAddresses(suite, clusterManagerOutput)
+		suite.clusterTlsFixtureStarted = true
 	}
 
 	suite.T().Logf("Standalone hosts = %s", fmt.Sprint(suite.standaloneHosts))
