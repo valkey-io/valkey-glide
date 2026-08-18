@@ -189,6 +189,7 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
+                  make -k integ-test tls=true
                   make -k opentelemetry-test
 
             - name: Run Example Tests
@@ -439,10 +440,10 @@ jobs:
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k long-timeout-test test-filter=TestLongTimeout skip-tls-fixtures=true
+                    make -k long-timeout-test test-filter=TestLongTimeout
                   else
                     make install-tools build
-                    make -k long-timeout-test test-filter=TestLongTimeout skip-tls-fixtures=true
+                    make -k long-timeout-test test-filter=TestLongTimeout
                   fi
                   make -k pubsub-test
 

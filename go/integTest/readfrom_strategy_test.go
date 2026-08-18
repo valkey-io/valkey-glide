@@ -165,14 +165,13 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
-	host := suite.requirePlaintextClusterHost()
-
 	const nGetCalls = 3
 	const nReplicaCalls = 1
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nReplicaCalls)
 
 	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&host).
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ("non-existing-az"))
@@ -213,8 +212,6 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
-	host := suite.requirePlaintextClusterHost()
-
 	az := "us-east-1a"
 	otherAz := "us-east-1b"
 	const nGetCalls = 4
@@ -222,7 +219,8 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 
 	// Create client for setting the configs
 	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&host).
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second))
 	require.NoError(suite.T(), err)
 
@@ -255,7 +253,8 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 
 	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
 	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&host).
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityReplicaAndPrimary).
 		WithClientAZ(az))
@@ -304,12 +303,11 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
-	host := suite.requirePlaintextClusterHost()
-
 	const nGetCalls = 100
 
 	client, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&host).
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.ReadFromAllNodes))
 	require.NoError(suite.T(), err)

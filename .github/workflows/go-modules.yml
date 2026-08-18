@@ -95,10 +95,6 @@ jobs:
 
             - name: Build and run modules tests
               working-directory: go
-              # The docker-based module servers are plaintext. The modules-test
-              # target defaults --modules-mode only when a tls-*-endpoints
-              # variable is set, so passing plaintext endpoints here keeps that
-              # default off automatically.
               run: |
                   make install-tools build
                   make modules-test \
@@ -157,15 +153,11 @@ jobs:
               working-directory: ./go
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
-              # --modules-mode makes SetupSuite start no fixtures at all, so only
-              # the TLS endpoint override is needed here.
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
-                      make install-tools modules-test \
-                        tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+                      make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
                   else
-                      make install-tools build modules-test \
-                        tls-cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+                      make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
                   fi
 
             - name: Upload test reports

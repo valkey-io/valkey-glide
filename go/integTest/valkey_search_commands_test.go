@@ -87,7 +87,6 @@ func (suite *GlideTestSuite) createIndexHelperStandalone(ctx context.Context, cl
 // --- ft_create ---
 
 func (suite *GlideTestSuite) TestModuleFtCreate() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -175,7 +174,6 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 // --- ft_search ---
 
 func (suite *GlideTestSuite) TestModuleFtSearch() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -227,7 +225,6 @@ func (suite *GlideTestSuite) TestModuleFtSearch() {
 // --- ft_search_nocontent ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -268,7 +265,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
 // --- ft_search_dialect ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -302,7 +298,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
 // --- ft_drop_and_ft_list ---
 
 func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -345,7 +340,6 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
 // --- ft_aggregate (bicycles + movies) ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
-	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
@@ -395,7 +389,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 }
 
 func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
-	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
@@ -475,7 +468,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
 // --- ft_info ---
 
 func (suite *GlideTestSuite) TestModuleFtInfo() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -566,7 +558,6 @@ func (suite *GlideTestSuite) TestModuleFtInfo() {
 // --- ft_aliasadd_aliasdel_aliasupdate_aliaslist ---
 
 func (suite *GlideTestSuite) TestModuleFtAliasOperations() {
-	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("ALIAS is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -632,7 +623,6 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperations() {
 // --- ft_explain ---
 
 func (suite *GlideTestSuite) TestModuleFtExplain() {
-	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -666,7 +656,6 @@ func (suite *GlideTestSuite) TestModuleFtExplain() {
 // --- ft_explaincli ---
 
 func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
-	suite.requireModuleClusterHost()
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
@@ -701,7 +690,6 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
 // --- ft_search_1_2_sortby ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -751,7 +739,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 // --- ft_search_1_2_withsortkeys ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -811,7 +798,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
 // --- ft_search_1_2_text_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -851,7 +837,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
 // --- ft_search_1_2_shard_consistency ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -894,7 +879,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 // --- ft_aggregate_1_2_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -950,7 +934,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 // --- ft_create_1_2_index_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -1048,7 +1031,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 // --- ft_create_1_2_field_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -1111,7 +1093,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
 // --- ft_info_1_2_options ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -1181,7 +1162,9 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 // --- ft_create (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1269,7 +1252,9 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 // --- ft_search (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1320,7 +1305,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
 // --- ft_search_nocontent (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1360,7 +1347,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
 // --- ft_search_dialect (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1394,7 +1383,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
 // --- ft_drop_and_ft_list (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1438,7 +1429,9 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1490,7 +1483,9 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1568,7 +1563,9 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 // --- ft_info (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1654,7 +1651,9 @@ func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
 func (suite *GlideTestSuite) TestModuleFtAliasOperationsStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("ALIAS is currently unsupported")
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1713,7 +1712,9 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperationsStandalone() {
 func (suite *GlideTestSuite) TestModuleFtExplainStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1745,7 +1746,9 @@ func (suite *GlideTestSuite) TestModuleFtExplainStandalone() {
 func (suite *GlideTestSuite) TestModuleFtExplainCLIStandalone() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1776,7 +1779,9 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLIStandalone() {
 // --- ft_search sortby (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1826,7 +1831,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 // --- ft_search withsortkeys (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1882,7 +1889,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
 // --- ft_search text query flags (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1922,7 +1931,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
 // --- ft_aggregate query flags (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -1978,7 +1989,9 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 // --- ft_create index options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2076,7 +2089,9 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 // --- ft_create field options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2136,7 +2151,9 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
 // --- ft_info with options (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -2206,7 +2223,6 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 // correct way to guarantee order in this scenario.
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
-	suite.requireModuleClusterHost()
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
 
@@ -2296,7 +2312,9 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
 // --- ft_search_sortby_with_return_excluding_sort_field (standalone) ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStandalone() {
-	suite.requireModuleStandaloneHost()
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
 	client := suite.defaultClient()
 	ctx := context.Background()
 

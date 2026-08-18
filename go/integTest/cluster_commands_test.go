@@ -2895,7 +2895,6 @@ func (suite *GlideTestSuite) TestRetryStrategyIsNotSupportedForTransactions() {
 }
 
 func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
-	host := suite.requirePlaintextClusterHost()
 	client := suite.defaultClusterClient()
 	opts := pipeline.NewClusterBatchOptions()
 
@@ -2943,7 +2942,7 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 			context.Background(),
 			*batch,
 			true,
-			*opts.WithRoute(config.NewByAddressRoute(host.Host, int32(host.Port))),
+			*opts.WithRoute(config.NewByAddressRoute(suite.clusterHosts[0].Host, int32(suite.clusterHosts[0].Port))),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)

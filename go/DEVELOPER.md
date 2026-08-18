@@ -213,33 +213,16 @@ make integ-test test-filter="Test\(Set\|Get\)"
 
 #### Additional Parameters
 
-Integration and modules tests accept endpoint parameters to run tests against existing servers instead of spinning up the fixture for that pair.
-The four fixture pairs (non-TLS standalone, non-TLS cluster, TLS standalone, TLS cluster) can be overridden independently.
-A fixture only starts when its own endpoint flag is empty AND the invocation opts into that mode: any non-TLS endpoint flag opts into plaintext mode, any TLS endpoint flag opts into TLS mode, and a bare invocation with no flags asks for everything.
-`modules-mode` opts into neither, it only reroutes the default client factories, so a modules-mode run starts no fixture and uses exactly the endpoints it was handed.
-
-- `standalone-endpoints`: existing non-TLS standalone server(s).
-- `cluster-endpoints`: existing non-TLS cluster server(s).
-- `tls-standalone-endpoints`: existing TLS standalone server(s).
-- `tls-cluster-endpoints`: existing TLS cluster server(s).
-- `modules-mode`: reroute the default client factories through the TLS host slices with TLS enabled.
-`make modules-test` sets this automatically so an external `tls-cluster-endpoints` or `tls-standalone-endpoints` flag is enough for module tests to run against the TLS endpoint.
-- `skip-tls-fixtures`: do not start the two TLS fixture pairs, for an invocation whose test filter cannot select a TLS test.
-A supplied `tls-standalone-endpoints` or `tls-cluster-endpoints` is still used, and a bare invocation with no flags still starts all four pairs.
-`make pubsub-test` sets this automatically, as does `make opentelemetry-test` when given no `test-filter`.
-
-Point tests at a TLS endpoint by passing `tls-standalone-endpoints` or `tls-cluster-endpoints` directly.
-Non-TLS-only invocations no longer spawn the TLS fixture, so a host running the plaintext form does not need `python3`, `openssl`, or a local engine.
-Only the TLS negatives that fail before any handshake (`TestTlsWithEmptyCertificate_*` and `TestTlsWithInvalidCertificate_*`) run against external endpoints via `tls-*-endpoints`.
+Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
+By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
 
 ```bash
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000
-make modules-test tls-cluster-endpoints=tls.example.internal:6379
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
-Fixture-bound TLS tests (CA-pinned, loopback address bringup, dedicated mTLS servers, and the `TestTlsWithoutCertificate_*` negatives) automatically skip when `tls-standalone-endpoints` or `tls-cluster-endpoints` supplies external hosts for their pair, so no manual `test-filter` is required.
-The no-certificate negatives belong to that group because a client with no root certificates falls back to the system trust store, which would accept a publicly chained external endpoint.
-Use `make integ-test` with no endpoint flags for the full TLS test coverage.
+The integration suite therefore runs in one of two modes: plaintext by default, or TLS when you pass `tls=true`.
+CI runs the suite both ways, so a break in either mode shows up.
+TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
 #### IAM Authentication Tests
 

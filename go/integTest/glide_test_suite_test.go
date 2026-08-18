@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,151 +45,72 @@ func (c ClientTypeFlag) Has(ctype ClientTypeFlag) bool {
 
 type GlideTestSuite struct {
 	suite.Suite
-	standaloneHosts    []config.NodeAddress
-	clusterHosts       []config.NodeAddress
-	standaloneTlsHosts []config.NodeAddress
-	clusterTlsHosts    []config.NodeAddress
-	serverVersion      string
-	clients            []interfaces.GlideClientCommands
-	clusterClients     []interfaces.GlideClusterClientCommands
+	standaloneHosts []config.NodeAddress
+	clusterHosts    []config.NodeAddress
+	tls             bool
+	serverVersion   string
+	clients         []interfaces.GlideClientCommands
+	clusterClients  []interfaces.GlideClusterClientCommands
 	// Cached default clients reused across tests (pooled)
 	cachedStandaloneClient *glide.Client
 	cachedClusterClient    *glide.ClusterClient
-	// Set in SetupSuite; TearDownSuite reads these to know which cluster_manager.py
-	// invocations to run for cleanup. A fully-external invocation leaves both false
-	// and skips cluster_manager.py entirely, matching the SetupSuite gating.
-	startedPlaintextFixture bool
-	startedTlsFixture       bool
-	// True when the corresponding TLS pair was booted by runClusterManager in
-	// SetupSuite; false when it was populated from --tls-*-endpoints or left
-	// empty. Fixture-bound tests (CA-pinned certs, loopback bringup, dedicated
-	// mTLS servers) key off these via requireFixtureTlsHost so they skip
-	// against externally-supplied TLS endpoints.
-	standaloneTlsFixtureStarted bool
-	clusterTlsFixtureStarted    bool
 }
 
 var (
+	tls             = flag.Bool("tls", false, "Set to true to enable TLS connections")
 	clusterHosts    = flag.String("cluster-endpoints", "", "Specifies specific endpoints the cluster nodes are running on")
 	standaloneHosts = flag.String(
 		"standalone-endpoints",
 		"",
 		"Specifies specific endpoints the standalone server is running on",
 	)
-	standaloneTlsHostsFlag = flag.String(
-		"tls-standalone-endpoints",
-		"",
-		"Specifies TLS-enabled endpoints the standalone nodes are running on. "+
-			"When set, the fixture does not spin up a TLS standalone pair.",
-	)
-	clusterTlsHostsFlag = flag.String(
-		"tls-cluster-endpoints",
-		"",
-		"Specifies TLS-enabled endpoints the cluster nodes are running on. "+
-			"When set, the fixture does not spin up a TLS cluster.",
-	)
 	longTimeoutTests = flag.Bool("long-timeout-tests", false, "Set to true to run tests with longer timeouts")
 	otelTest         = flag.Bool("otel-test", false, "Set to true to run opentelemetry tests")
-	modulesMode      = flag.Bool(
-		"modules-mode",
-		false,
-		"Route defaultClusterClient / defaultClient through the TLS host slices with TLS enabled; "+
-			"use for module tests against external TLS endpoints",
-	)
-	skipTlsFixtures = flag.Bool(
-		"skip-tls-fixtures",
-		false,
-		"Do not start the TLS fixture pairs. Use when the invocation's test filter cannot select "+
-			"any TLS test; supplied --tls-*-endpoints are still honored.",
-	)
 )
 
 func (suite *GlideTestSuite) SetupSuite() {
-	// Each of the four server pairs (non-TLS standalone, non-TLS cluster, TLS
-	// standalone, TLS cluster) is supplied by an external endpoint flag, started
-	// by the fixture, or left empty when the invocation does not need it. A
-	// fixture starts if and only if its own endpoint flag is empty AND at
-	// least one test in that topology will run this invocation.
-	//
-	// A bare invocation with no flags asks for the full suite, so all four
-	// fixtures start. Once any endpoint flag is supplied the invocation is
-	// targeted: plaintext coverage is opted into by --standalone-endpoints or
-	// --cluster-endpoints, TLS coverage by --tls-standalone-endpoints or
-	// --tls-cluster-endpoints. --modules-mode by itself never implies a
-	// fixture. Each modules-tagged test independently requires the specific
-	// endpoint its requireModule*Host guard checks and skips otherwise, so a
-	// modules-mode invocation only ever uses the endpoints it was handed.
-	//
-	// --skip-tls-fixtures suppresses the TLS fixture start and nothing else.
-	// It is for invocations whose test filter cannot select a TLS test, where
-	// the two TLS pairs would otherwise boot unused. A supplied
-	// --tls-*-endpoints is still parsed and used with the flag set.
-	allFlagsEmpty := *standaloneHosts == "" && *clusterHosts == "" &&
-		*standaloneTlsHostsFlag == "" && *clusterTlsHostsFlag == ""
-	wantsPlaintext := !*modulesMode &&
-		(allFlagsEmpty || *standaloneHosts != "" || *clusterHosts != "")
-	wantsTls := !*modulesMode && !*skipTlsFixtures &&
-		(allFlagsEmpty || *standaloneTlsHostsFlag != "" || *clusterTlsHostsFlag != "")
-	suite.startedPlaintextFixture = wantsPlaintext && (*standaloneHosts == "" || *clusterHosts == "")
-	suite.startedTlsFixture = wantsTls && (*standaloneTlsHostsFlag == "" || *clusterTlsHostsFlag == "")
+	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
+	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
+	runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
 
-	// Stop leftover fixtures from a previous run, but only for topologies we
-	// might start ourselves this run. Under a fully-external invocation this
-	// avoids calling cluster_manager.py at all, which lets hosts without
-	// python3 or a local engine follow the plaintext-only invocation.
-	if suite.startedPlaintextFixture {
-		runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
-	}
-	if suite.startedTlsFixture {
-		runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
+	// Delete dirs to ensure clean state before starting new clusters
+	err := os.RemoveAll("../../utils/clusters")
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatal(err)
 	}
 
-	// Delete dirs to ensure clean state before starting new clusters. Skipped
-	// when no fixture will start; there is nothing for us to have written.
-	if suite.startedPlaintextFixture || suite.startedTlsFixture {
-		err := os.RemoveAll("../../utils/clusters")
-		if err != nil && !os.IsNotExist(err) {
-			log.Fatal(err)
-		}
+	cmd := []string{}
+	suite.tls = false
+	if *tls {
+		cmd = []string{"--tls"}
+		suite.tls = true
 	}
+	suite.T().Logf("TLS = %t", suite.tls)
+
+	// Note: code does not start standalone if cluster hosts are given and vice versa
+	startServer := true
 
 	if *standaloneHosts != "" {
 		suite.standaloneHosts = parseHosts(suite, *standaloneHosts)
-	} else if wantsPlaintext {
-		// Start non-TLS standalone instance
-		clusterManagerOutput := runClusterManager(suite, []string{"start", "-r", "3"}, false)
-		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
+		startServer = false
 	}
 	if *clusterHosts != "" {
 		suite.clusterHosts = parseHosts(suite, *clusterHosts)
-	} else if wantsPlaintext {
-		// Start non-TLS cluster
-		clusterManagerOutput := runClusterManager(suite, []string{"start", "--cluster-mode", "-r", "3"}, false)
+		startServer = false
+	}
+	if startServer {
+		// Start standalone instance
+		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), false)
+		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
+
+		// Start cluster
+		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
-	}
-	if *standaloneTlsHostsFlag != "" {
-		suite.standaloneTlsHosts = parseHosts(suite, *standaloneTlsHostsFlag)
-	} else if wantsTls {
-		// Start TLS standalone instance. Every reader indexes at [0], so
-		// the primary is enough and the extra replicas are wasted processes.
-		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "-r", "0"}, false)
-		suite.standaloneTlsHosts = extractAddresses(suite, clusterManagerOutput)
-		suite.standaloneTlsFixtureStarted = true
-	}
-	if *clusterTlsHostsFlag != "" {
-		suite.clusterTlsHosts = parseHosts(suite, *clusterTlsHostsFlag)
-	} else if wantsTls {
-		// Start TLS cluster. Same reason as the TLS standalone above:
-		// callers only index at [0], so replicas add nothing.
-		clusterManagerOutput := runClusterManager(suite, []string{"--tls", "start", "--cluster-mode", "-r", "0"}, false)
-		suite.clusterTlsHosts = extractAddresses(suite, clusterManagerOutput)
-		suite.clusterTlsFixtureStarted = true
 	}
 
 	suite.T().Logf("Standalone hosts = %s", fmt.Sprint(suite.standaloneHosts))
 	suite.T().Logf("Cluster hosts = %s", fmt.Sprint(suite.clusterHosts))
-	suite.T().Logf("Standalone TLS hosts = %s", fmt.Sprint(suite.standaloneTlsHosts))
-	suite.T().Logf("Cluster TLS hosts = %s", fmt.Sprint(suite.clusterTlsHosts))
 
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
@@ -294,11 +216,21 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 }
 
 func getServerVersion(suite *GlideTestSuite) string {
-	var lastErr error
+	var err error = nil
 	if len(suite.standaloneHosts) > 0 {
 		clientConfig := config.NewClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
+			WithUseTLS(suite.tls).
 			WithRequestTimeout(5 * time.Second)
+
+		// If TLS is enabled, try to load custom certificates
+		if suite.tls {
+			if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+				tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+				advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+				clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+			}
+		}
 
 		client, err := glide.NewClient(clientConfig)
 		if err == nil && client != nil {
@@ -309,39 +241,42 @@ func getServerVersion(suite *GlideTestSuite) string {
 			)
 			return extractServerVersion(suite, info)
 		}
-		lastErr = err
 	}
-	if len(suite.clusterHosts) > 0 {
-		clientConfig := config.NewClusterClientConfiguration().
-			WithAddress(&suite.clusterHosts[0]).
-			WithRequestTimeout(5 * time.Second)
-
-		client, err := glide.NewClusterClient(clientConfig)
-		if err == nil && client != nil {
-			defer client.Close()
-
-			info, _ := client.InfoWithOptions(
-				context.Background(),
-				options.ClusterInfoOptions{
-					InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
-					RouteOption: &options.RouteOption{Route: config.RandomRoute},
-				},
-			)
-			return extractServerVersion(suite, info.SingleValue())
+	if len(suite.clusterHosts) == 0 {
+		if err != nil {
+			suite.T().Fatalf("No cluster hosts configured, standalone failed with %s", err.Error())
 		}
-		lastErr = err
+		suite.T().Fatal("No server hosts configured")
 	}
-	// Uniform fixture-gating leaves the non-TLS slices empty on TLS-only
-	// invocations (external TLS endpoints or --modules-mode without any
-	// non-TLS flag). No plaintext peer means we cannot detect the server
-	// version through the shared factory. Log and return empty; the version
-	// comparison in SkipIfServerVersionLowerThan then skips version-gated
-	// tests conservatively rather than failing the whole suite.
-	if lastErr != nil {
-		suite.T().Logf("Could not determine server version; version-gated tests will skip. Last error: %s", lastErr.Error())
-	} else {
-		suite.T().Logf("Could not determine server version: no plaintext host configured; version-gated tests will skip")
+
+	clientConfig := config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(5 * time.Second)
+
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+			clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+		}
 	}
+
+	client, err := glide.NewClusterClient(clientConfig)
+	if err == nil && client != nil {
+		defer client.Close()
+
+		info, _ := client.InfoWithOptions(
+			context.Background(),
+			options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server}},
+				RouteOption: &options.RouteOption{Route: config.RandomRoute},
+			},
+		)
+		return extractServerVersion(suite, info.SingleValue())
+	}
+	suite.T().Fatalf("Can't connect to any server to get version: %s", err.Error())
 	return ""
 }
 
@@ -377,12 +312,8 @@ func (suite *GlideTestSuite) TearDownSuite() {
 	if suite.cachedClusterClient != nil {
 		suite.cachedClusterClient.Close()
 	}
-	if suite.startedPlaintextFixture {
-		runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
-	}
-	if suite.startedTlsFixture {
-		runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
-	}
+	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
 
 func (suite *GlideTestSuite) TearDownTest() {
@@ -495,65 +426,26 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 }
 
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
-	var address *config.NodeAddress
-	useTLS := false
-	if *modulesMode && len(suite.standaloneTlsHosts) > 0 {
-		address = &suite.standaloneTlsHosts[0]
-		useTLS = true
-	} else if len(suite.standaloneHosts) > 0 {
-		address = &suite.standaloneHosts[0]
-	} else {
-		suite.T().Skip("No standalone server configured for this invocation")
-	}
-
 	clientConfig := config.NewClientConfiguration().
-		WithAddress(address).
+		WithAddress(&suite.standaloneHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
-
-	if useTLS {
-		clientConfig = clientConfig.WithUseTLS(true)
-	}
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
 
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+		}
+	}
+
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
 	return clientConfig
-}
-
-// requireModuleStandaloneHost skips a standalone module test when the endpoint the
-// test would actually use is not configured. When modulesMode is on, defaultClientConfig
-// selects the TLS host, so an empty --tls-standalone-endpoints must skip. When it is
-// off, defaultClientConfig uses the plaintext standaloneHosts slice.
-func (suite *GlideTestSuite) requireModuleStandaloneHost() {
-	if *modulesMode {
-		if *standaloneTlsHostsFlag == "" {
-			suite.T().Skip("modules-mode standalone tests require --tls-standalone-endpoints")
-		}
-		return
-	}
-	if len(suite.standaloneHosts) == 0 {
-		suite.T().Skip("No standalone server configured")
-	}
-}
-
-// requireModuleClusterHost mirrors requireModuleStandaloneHost for the cluster
-// module tests. When modulesMode is on, defaultClusterClientConfig selects the
-// TLS cluster host, so an empty --tls-cluster-endpoints must skip. When it is
-// off, defaultClusterClientConfig uses the plaintext clusterHosts slice, which
-// the plaintext modules-test workflow populates via --cluster-endpoints.
-func (suite *GlideTestSuite) requireModuleClusterHost() {
-	if *modulesMode {
-		if *clusterTlsHostsFlag == "" {
-			suite.T().Skip("modules-mode cluster tests require --tls-cluster-endpoints")
-		}
-		return
-	}
-	if len(suite.clusterHosts) == 0 {
-		suite.T().Skip("No cluster server configured")
-	}
 }
 
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
@@ -587,28 +479,22 @@ func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.
 }
 
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
-	var address *config.NodeAddress
-	useTLS := false
-	if *modulesMode && len(suite.clusterTlsHosts) > 0 {
-		address = &suite.clusterTlsHosts[0]
-		useTLS = true
-	} else if len(suite.clusterHosts) > 0 {
-		address = &suite.clusterHosts[0]
-	} else {
-		suite.T().Skip("No cluster server configured for this invocation")
-	}
-
 	clientConfig := config.NewClusterClientConfiguration().
-		WithAddress(address).
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
-
-	if useTLS {
-		clientConfig = clientConfig.WithUseTLS(true)
-	}
 
 	// Set default connection timeout for tests
 	advancedConfig := config.NewAdvancedClusterClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
+
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+		}
+	}
 
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
@@ -1243,4 +1129,22 @@ func getChannelMode(sharded bool) TestChannelMode {
 
 type PubSubQueuer interface {
 	GetQueue() (*glide.PubSubMessageQueue, error)
+}
+
+// loadCaCertificateForTests loads the CA certificate for TLS tests.
+// It looks for the certificate in the utils/tls_crts directory.
+// Returns the certificate data or an error if not found.
+func loadCaCertificateForTests() ([]byte, error) {
+	glideHome := os.Getenv("GLIDE_HOME_DIR")
+	if glideHome == "" {
+		glideHome = "../.."
+	}
+
+	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
+	absPath, err := filepath.Abs(caCertPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return config.LoadRootCertificatesFromFile(absPath)
 }

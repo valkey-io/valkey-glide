@@ -181,32 +181,19 @@ integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(te
 integ-test: __it
 
 # modules tests - run substask with default filter
-# Default modules-mode to true only when a tls-*-endpoints variable is set, so the
-# default client factories route through the TLS host slices for TLS runs. Plaintext
-# module servers (docker fixtures using standalone-endpoints / cluster-endpoints) keep
-# modules-mode unset and therefore run the full module test coverage without opting in.
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
-modules-test: modules-mode = $(if $(or $(tls-standalone-endpoints),$(tls-cluster-endpoints)),true)
 modules-test: __it
 
 # pubsub tests - run pubsub tests using testify filter
-# The filter here is hardcoded with no test-filter override, so no TLS test can
-# be selected and the TLS pairs would only boot unused.
 pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m TestPubSub
-pubsub-test: skip-tls-fixtures = true
 pubsub-test: __it
 
 # long timeout tests - run subtask with the long timeout flag enabled
-# Deliberately does not default skip-tls-fixtures: with no test-filter this
-# target carries no method filter at all and does run the TLS tests.
 long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
 long-timeout-test: __it
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
-# The default filter cannot select a TLS test, but a caller-supplied test-filter
-# replaces it and could, so only opt out when there is no test-filter.
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
-opentelemetry-test: skip-tls-fixtures = $(if $(test-filter),,true)
 opentelemetry-test: __it
 
 # Test command for integration tests
@@ -225,12 +212,9 @@ __it:
 	set -o pipefail; \
 	$(TEST_CMD) \
 	$(TEST_FILTER) \
+	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	$(if $(tls-standalone-endpoints), --tls-standalone-endpoints=$(tls-standalone-endpoints)) \
-	$(if $(tls-cluster-endpoints), --tls-cluster-endpoints=$(tls-cluster-endpoints)) \
-	$(if $(filter true,$(modules-mode)), --modules-mode) \
-	$(if $(filter true,$(skip-tls-fixtures)), --skip-tls-fixtures) \
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/integ-tests.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

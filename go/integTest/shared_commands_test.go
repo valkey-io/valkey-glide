@@ -5582,14 +5582,14 @@ func (suite *GlideTestSuite) TestXRead() {
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient interfaces.BaseClientCommands
 		if _, ok := client.(interfaces.GlideClientCommands); ok {
-			host := suite.requirePlaintextStandaloneHost()
 			testClient, err = suite.client(config.NewClientConfiguration().
-				WithAddress(&host))
+				WithAddress(&suite.standaloneHosts[0]).
+				WithUseTLS(suite.tls))
 			require.NoError(suite.T(), err)
 		} else {
-			host := suite.requirePlaintextClusterHost()
 			testClient, err = suite.clusterClient(config.NewClusterClientConfiguration().
-				WithAddress(&host))
+				WithAddress(&suite.clusterHosts[0]).
+				WithUseTLS(suite.tls))
 			require.NoError(suite.T(), err)
 		}
 		read, err = testClient.XReadWithOptions(
