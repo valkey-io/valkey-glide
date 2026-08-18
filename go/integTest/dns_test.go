@@ -32,10 +32,7 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 		// TLS pair was supplied by --tls-standalone-endpoints.
 		port = suite.requireFixtureTlsHost(false).Port
 	} else {
-		if len(suite.standaloneHosts) == 0 {
-			suite.T().Skip("No standalone server configured for this invocation")
-		}
-		port = suite.standaloneHosts[0].Port
+		port = suite.requirePlaintextStandaloneHost().Port
 	}
 	address := config.NodeAddress{
 		Host: hostname,
@@ -69,10 +66,7 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 		// pair was supplied by --tls-cluster-endpoints.
 		port = suite.requireFixtureTlsHost(true).Port
 	} else {
-		if len(suite.clusterHosts) == 0 {
-			suite.T().Skip("No cluster server configured for this invocation")
-		}
-		port = suite.clusterHosts[0].Port
+		port = suite.requirePlaintextClusterHost().Port
 	}
 	address := config.NodeAddress{
 		Host: hostname,

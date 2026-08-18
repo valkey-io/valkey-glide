@@ -64,6 +64,34 @@ func (suite *GlideTestSuite) requireFixtureTlsHost(cluster bool) config.NodeAddr
 	return hosts[0]
 }
 
+// requirePlaintextStandaloneHost returns the first non-TLS standalone host or
+// skips when the slice is empty. SetupSuite leaves standaloneHosts empty for
+// TLS-only invocations (any --tls-*-endpoints flag without a matching
+// plaintext flag), and integ-test still selects every non-module test, so
+// callers must skip rather than index out of range. Mirrors the design of
+// requireTlsHost on the TLS side.
+func (suite *GlideTestSuite) requirePlaintextStandaloneHost() config.NodeAddress {
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip(
+			"No plaintext standalone endpoint configured for this invocation; " +
+				"supply --standalone-endpoints or run without a TLS-only flag",
+		)
+	}
+	return suite.standaloneHosts[0]
+}
+
+// requirePlaintextClusterHost mirrors requirePlaintextStandaloneHost for the
+// non-TLS cluster slice. See that helper for the rationale.
+func (suite *GlideTestSuite) requirePlaintextClusterHost() config.NodeAddress {
+	if len(suite.clusterHosts) == 0 {
+		suite.T().Skip(
+			"No plaintext cluster endpoint configured for this invocation; " +
+				"supply --cluster-endpoints or run without a TLS-only flag",
+		)
+	}
+	return suite.clusterHosts[0]
+}
+
 // skipIfNoFixtureTlsPair skips the current test when neither TLS pair was
 // fixture-started for this invocation. Use it in tests that only need the
 // fixture's shared cert material under utils/tls_crts/ (e.g., cert-file

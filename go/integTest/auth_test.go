@@ -31,11 +31,13 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
 
+	host := suite.requirePlaintextClusterHost()
+
 	// Create cluster client configuration
 	clusterConfig := config.NewClusterClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: suite.clusterHosts[0].Host,
-			Port: suite.clusterHosts[0].Port,
+			Host: host.Host,
+			Port: host.Port,
 		}).
 		WithCredentials(credentials)
 
@@ -89,10 +91,12 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
 
+	host := suite.requirePlaintextClusterHost()
+
 	clusterConfig := config.NewClusterClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: suite.clusterHosts[0].Host,
-			Port: suite.clusterHosts[0].Port,
+			Host: host.Host,
+			Port: host.Port,
 		}).
 		WithCredentials(credentials)
 
@@ -131,11 +135,13 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
 
+	host := suite.requirePlaintextStandaloneHost()
+
 	// Create standalone client configuration
 	standaloneConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: suite.standaloneHosts[0].Host,
-			Port: suite.standaloneHosts[0].Port,
+			Host: host.Host,
+			Port: host.Port,
 		}).
 		WithCredentials(credentials)
 
@@ -186,10 +192,12 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
 
+	host := suite.requirePlaintextStandaloneHost()
+
 	standaloneConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: suite.standaloneHosts[0].Host,
-			Port: suite.standaloneHosts[0].Port,
+			Host: host.Host,
+			Port: host.Port,
 		}).
 		WithCredentials(credentials)
 

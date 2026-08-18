@@ -41,9 +41,10 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 }
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
+	host := suite.requirePlaintextStandaloneHost()
 	clientName := "TEST_CLIENT_NAME"
 	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
+		WithAddress(&host).
 		WithClientName(clientName)
 	client, err := suite.client(config)
 	require.NoError(suite.T(), err)
@@ -101,9 +102,10 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 }
 
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
+	host := suite.requirePlaintextStandaloneHost()
 	clientName := "TEST_CLIENT_NAME"
 	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
+		WithAddress(&host).
 		WithClientName(clientName)
 	client, err := suite.client(config)
 	require.NoError(suite.T(), err)

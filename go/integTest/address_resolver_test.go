@@ -11,8 +11,9 @@ import (
 
 func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Standalone() {
 	// Get the actual server address from test configuration
-	actualHost := suite.standaloneHosts[0].Host
-	actualPort := suite.standaloneHosts[0].Port
+	host := suite.requirePlaintextStandaloneHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Use a fake/placeholder address in configuration
 	fakeHost := "fake-host-that-does-not-exist.invalid"
@@ -53,8 +54,9 @@ func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Standalone() {
 
 func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Cluster() {
 	// Get the actual server address from test configuration
-	actualHost := suite.clusterHosts[0].Host
-	actualPort := suite.clusterHosts[0].Port
+	host := suite.requirePlaintextClusterHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Use a fake/placeholder address in configuration
 	fakeHost := "fake-cluster-host.invalid"
@@ -95,8 +97,9 @@ func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Cluster() {
 
 func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Standalone() {
 	// Get the actual server address from test configuration
-	actualHost := suite.standaloneHosts[0].Host
-	actualPort := suite.standaloneHosts[0].Port
+	host := suite.requirePlaintextStandaloneHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Create resolver that always panics
 	resolver := func(host string, port int) (string, int) {
@@ -121,8 +124,9 @@ func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Sta
 
 func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Cluster() {
 	// Get the actual server address from test configuration
-	actualHost := suite.clusterHosts[0].Host
-	actualPort := suite.clusterHosts[0].Port
+	host := suite.requirePlaintextClusterHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Create resolver that always panics
 	resolver := func(host string, port int) (string, int) {
@@ -147,8 +151,9 @@ func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Clu
 
 func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_Standalone() {
 	// Get the actual server address from test configuration
-	actualHost := suite.standaloneHosts[0].Host
-	actualPort := suite.standaloneHosts[0].Port
+	host := suite.requirePlaintextStandaloneHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Create resolver that returns empty host (signals fallback)
 	resolver := func(host string, port int) (string, int) {
@@ -173,8 +178,9 @@ func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_
 
 func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_Cluster() {
 	// Get the actual server address from test configuration
-	actualHost := suite.clusterHosts[0].Host
-	actualPort := suite.clusterHosts[0].Port
+	host := suite.requirePlaintextClusterHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Create resolver that returns empty host (signals fallback)
 	resolver := func(host string, port int) (string, int) {
@@ -199,8 +205,9 @@ func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_
 
 func (suite *GlideTestSuite) TestAddressResolverNil_Standalone() {
 	// Get the actual server address from test configuration
-	actualHost := suite.standaloneHosts[0].Host
-	actualPort := suite.standaloneHosts[0].Port
+	host := suite.requirePlaintextStandaloneHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Configure client with nil resolver - should work normally
 	clientConfig := defaultClientConfig().
@@ -219,8 +226,9 @@ func (suite *GlideTestSuite) TestAddressResolverNil_Standalone() {
 
 func (suite *GlideTestSuite) TestAddressResolverNil_Cluster() {
 	// Get the actual server address from test configuration
-	actualHost := suite.clusterHosts[0].Host
-	actualPort := suite.clusterHosts[0].Port
+	host := suite.requirePlaintextClusterHost()
+	actualHost := host.Host
+	actualPort := host.Port
 
 	// Configure client with nil resolver - should work normally
 	clientConfig := defaultClusterClientConfig().
