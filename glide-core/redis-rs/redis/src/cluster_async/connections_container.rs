@@ -386,7 +386,7 @@ where
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
         let total_nodes = addrs.replicas().len() + 1; // primary + replicas
-        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let initial_index = slot_map_value.last_used_node_index.load(Ordering::Relaxed);
         let mut check_count = 0;
 
         loop {
@@ -405,7 +405,7 @@ where
             };
 
             if let Some(connection) = self.connection_for_address(address.as_str()) {
-                let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                let _ = slot_map_value.last_used_node_index.compare_exchange_weak(
                     initial_index,
                     index,
                     Ordering::Relaxed,
@@ -421,7 +421,7 @@ where
         slot_map_value: &SlotMapValue,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
-        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let initial_index = slot_map_value.last_used_node_index.load(Ordering::Relaxed);
         let mut check_count = 0;
         loop {
             check_count += 1;
@@ -433,7 +433,7 @@ where
             let index = (initial_index + check_count) % addrs.replicas().len();
             if let Some(connection) = self.connection_for_address(addrs.replicas()[index].as_str())
             {
-                let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                let _ = slot_map_value.last_used_node_index.compare_exchange_weak(
                     initial_index,
                     index,
                     Ordering::Relaxed,
@@ -474,8 +474,8 @@ where
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
         let total_nodes = addrs.replicas().len() + 1; // primary + replicas, index 0 = primary
-                                                      // `last_used_replica` is shared with the replica-only rotations, as in the AllNodes strategy.
-        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+                                                      // `last_used_node_index` is shared with the replica-only rotations, as in the AllNodes strategy.
+        let initial_index = slot_map_value.last_used_node_index.load(Ordering::Relaxed);
         let mut check_count = 0;
 
         loop {
@@ -498,8 +498,8 @@ where
                 self.connection_details_for_address(node_address.as_str())
             {
                 if self.az_for_address(&address).as_deref() == Some(client_az) {
-                    // Attempt to update `last_used_replica` with the index of this node.
-                    let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                    // Attempt to update `last_used_node_index` with the index of this node.
+                    let _ = slot_map_value.last_used_node_index.compare_exchange_weak(
                         initial_index,
                         index,
                         Ordering::Relaxed,
@@ -521,7 +521,7 @@ where
         check_primary: bool, // Strategy flag
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
-        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let initial_index = slot_map_value.last_used_node_index.load(Ordering::Relaxed);
         let mut retries = 0usize;
 
         // Step 1: Try to find a replica in the same AZ
@@ -541,8 +541,8 @@ where
                 self.connection_details_for_address(replica.as_str())
             {
                 if self.az_for_address(&address).as_deref() == Some(client_az) {
-                    // Attempt to update `latest_used_replica` with the index of this replica.
-                    let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                    // Attempt to update `last_used_node_index` with the index of this replica.
+                    let _ = slot_map_value.last_used_node_index.compare_exchange_weak(
                         initial_index,
                         index,
                         Ordering::Relaxed,

@@ -23,8 +23,9 @@ pub struct SlotMapValue {
     /// The shard addresses responsible for this slot range.
     pub addrs: Arc<ShardAddrs>,
 
-    /// Index of the last used replica for round-robin load balancing when reading from replicas.
-    pub last_used_replica: Arc<AtomicUsize>,
+    /// Index of the last used node for round-robin load balancing when reading from
+    /// replicas or, in node-inclusive strategies, from all nodes (index 0 = primary).
+    pub last_used_node_index: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -69,7 +70,7 @@ fn get_address_from_slot(
     }
     let round_robin_replica = || {
         let index = slot
-            .last_used_replica
+            .last_used_node_index
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             % addrs.replicas().len();
         addrs.replicas()[index].clone()
@@ -78,7 +79,7 @@ fn get_address_from_slot(
         // Round-robin across all nodes: primary + all replicas
         let total_nodes = addrs.replicas().len() + 1;
         let index = slot
-            .last_used_replica // named for replica-based strategy, but index 0 refers to primary
+            .last_used_node_index // index 0 refers to the primary
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             % total_nodes;
         if index == 0 {
@@ -158,7 +159,7 @@ impl SlotMap {
                 SlotMapValue {
                     addrs: shard_addrs_arc,
                     start: slot.start,
-                    last_used_replica: Arc::new(AtomicUsize::new(0)),
+                    last_used_node_index: Arc::new(AtomicUsize::new(0)),
                 },
             );
         }
@@ -330,7 +331,7 @@ impl SlotMap {
             SlotMapValue {
                 start: slot,
                 addrs: shard_addrs,
-                last_used_replica: Arc::new(AtomicUsize::new(0)),
+                last_used_node_index: Arc::new(AtomicUsize::new(0)),
             },
         )
     }
@@ -521,7 +522,7 @@ impl SlotMap {
 
                 let start: u16 = curr_slot_val.start;
                 let addrs = curr_slot_val.addrs.clone();
-                let last_used_replica = curr_slot_val.last_used_replica.clone();
+                let last_used_node_index = curr_slot_val.last_used_node_index.clone();
 
                 // Modify the current slot range to become part C: [slot + 1, end], still owned by the current shard.
                 curr_slot_val.start = slot + 1;
@@ -533,7 +534,7 @@ impl SlotMap {
                     SlotMapValue {
                         start,
                         addrs,
-                        last_used_replica,
+                        last_used_node_index,
                     },
                 );
 

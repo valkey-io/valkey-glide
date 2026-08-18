@@ -75,7 +75,7 @@ enum ReadFrom {
     },
     AZAffinityReplicasAndPrimary {
         client_az: String,
-        last_read_replica_index: Arc<AtomicUsize>,
+        latest_read_node_index: Arc<AtomicUsize>,
     },
     AZAffinityAllNodes {
         client_az: String,
@@ -788,11 +788,11 @@ impl StandaloneClient {
     /// AZAffinityReplicasAndPrimary strategy: same-AZ replica → same-AZ primary → any node (round-robin).
     async fn round_robin_read_from_replica_az_awareness_replicas_and_primary(
         &self,
-        latest_read_replica_index: &Arc<AtomicUsize>,
+        latest_read_node_index: &Arc<AtomicUsize>,
         client_az: &str,
     ) -> &ReconnectingConnection {
         if let Some(replica) = self
-            .get_next_local_node(latest_read_replica_index, client_az, false)
+            .get_next_local_node(latest_read_node_index, client_az, false)
             .await
         {
             return replica;
@@ -808,7 +808,7 @@ impl StandaloneClient {
         }
 
         // Step 3: Fall back to any available node using round-robin
-        self.round_robin_read_from_all_nodes(latest_read_replica_index)
+        self.round_robin_read_from_all_nodes(latest_read_node_index)
     }
 
     /// AZAffinityAllNodes strategy: same-AZ node (primary or replica, equal round-robin)
@@ -851,10 +851,10 @@ impl StandaloneClient {
             }
             ReadFrom::AZAffinityReplicasAndPrimary {
                 client_az,
-                last_read_replica_index,
+                latest_read_node_index,
             } => {
                 self.round_robin_read_from_replica_az_awareness_replicas_and_primary(
-                    last_read_replica_index,
+                    latest_read_node_index,
                     client_az,
                 )
                 .await
@@ -1245,7 +1245,7 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::AZAffinityReplicasAndPrimary(az)) => {
             ReadFrom::AZAffinityReplicasAndPrimary {
                 client_az: az,
-                last_read_replica_index: Default::default(),
+                latest_read_node_index: Default::default(),
             }
         }
         Some(super::ReadFrom::AZAffinityAllNodes(az)) => ReadFrom::AZAffinityAllNodes {
