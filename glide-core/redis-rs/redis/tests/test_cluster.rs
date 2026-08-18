@@ -11,9 +11,24 @@ mod cluster {
     use crate::support::*;
     use redis::{
         cluster::{cluster_pipe, ClusterClient},
-        cmd, parse_redis_value, Commands, ConnectionLike, ErrorKind, ProtocolVersion, RedisError,
-        Value,
+        cmd, parse_redis_value, AddressResolver, Commands, ConnectionLike, ErrorKind,
+        ProtocolVersion, RedisError, Value,
     };
+
+    #[derive(Debug)]
+    struct InternalNodeResolver {
+        resolved_name: &'static str,
+    }
+
+    impl AddressResolver for InternalNodeResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "internal-node" {
+                (self.resolved_name.to_string(), port)
+            } else {
+                (host.to_string(), port)
+            }
+        }
+    }
 
     #[test]
     #[serial_test::serial]
@@ -533,6 +548,41 @@ mod cluster {
         let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
 
         assert_eq!(value, Ok(Some(123)));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_cluster_moved_redirect_with_address_resolver() {
+        let name = "test_cluster_moved_redirect_with_address_resolver";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .address_resolver(Arc::new(InternalNodeResolver { resolved_name: name })),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup_two_nodes(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(
+                        b"-MOVED 14000 internal-node:6380\r\n",
+                    )),
+                    (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
     }
 
     #[test]

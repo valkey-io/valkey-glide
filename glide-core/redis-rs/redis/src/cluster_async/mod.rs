@@ -32,6 +32,7 @@ pub mod testing {
 }
 use crate::{
     client::GlideConnectionOptions,
+    cluster,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
     cluster_slotmap::SlotMap,
     cluster_topology::{
@@ -585,6 +586,44 @@ where
         F: FnOnce(&mut ClusterParams),
     {
         f(&mut self.cluster_params.write());
+    }
+
+    /// Resolves a raw `"host:port"` address from a redirect into the address used
+    /// by the connection map.
+    pub(crate) fn resolve_address(&self, address: &str) -> String {
+        self.resolve_address_with_path(address).0
+    }
+
+    /// Resolves a raw `"host:port"` address and returns the resolution path used.
+    pub(crate) fn resolve_address_with_path(&self, address: &str) -> (String, &'static str) {
+        let conn_lock = self.conn_lock.read();
+
+        // Valkey redirects can contain raw IPs. Prefer the exact node address
+        // already known from topology, including its port.
+        if let Some((host, _port_str)) = address.rsplit_once(':') {
+            if let Ok(ip) = host.parse::<IpAddr>() {
+                if let Some(node_address) = conn_lock.slot_map.node_address_for_ip(ip) {
+                    return ((*node_address).clone(), "reverse_ip_lookup");
+                }
+            }
+        }
+
+        drop(conn_lock);
+
+        let resolved = self.get_cluster_param(|params| {
+            cluster::resolve_address(address, params.address_resolver.as_deref())
+        });
+
+        if self
+            .conn_lock
+            .read()
+            .connection_for_address(&resolved)
+            .is_some()
+        {
+            return (resolved, "address_resolver");
+        }
+
+        (resolved, "raw_fallback")
     }
 
     // return epoch of node
@@ -1442,7 +1481,7 @@ where
                         // Check for circular MOVED and trigger reconnect if detected
                         // Use resolve_address to handle hostname vs IP mismatches
                         if is_circular_moved_redirect(redirect_node, &address, |addr| {
-                            ClusterConnInner::resolve_address(&core, addr)
+                            core.resolve_address(addr)
                         }) {
                             // Reset routing and reconnect with retry
                             request.info.reset_routing();
@@ -2864,35 +2903,6 @@ where
         Ok(())
     }
 
-    /// Resolves a raw address (which may be a raw IP:port from a MOVED/ASK redirect)
-    /// to a canonical hostname:port usable for connection lookup.
-    ///
-    /// Resolution order:
-    /// 1. Reverse IP lookup: parse the host as an IP and look it up in the slot map's
-    ///    IP→address table (built from DNS resolution during CLUSTER SLOTS refresh).
-    ///    If found, replace only the host portion, preserving the original port.
-    /// 2. Raw address fallback: return the original address unchanged.
-    pub(crate) fn resolve_address(inner: &Arc<InnerCore<C>>, address: &str) -> String {
-        let conn_lock = inner.conn_lock.read();
-
-        // Step 1: Reverse IP lookup via slot map.
-        if let Some((host, port)) = address.rsplit_once(':') {
-            if let Ok(ip) = host.parse::<IpAddr>() {
-                if let Some(node_addr) = conn_lock.slot_map.node_address_for_ip(ip) {
-                    // Extract just the hostname from the resolved address and combine with original port
-                    if let Some((resolved_host, _resolved_port)) = node_addr.rsplit_once(':') {
-                        return format!("{}:{}", resolved_host, port);
-                    }
-                    // Fallback: if resolved address has no port (shouldn't happen), return as-is
-                    return (*node_addr).clone();
-                }
-            }
-        }
-
-        // Step 2: Return raw address as fallback.
-        address.to_string()
-    }
-
     /// Handles MOVED errors by updating the client's slot and node mappings based on the new primary's role:
     ///
     /// 1. **No Change**: If the new primary is already the current slot owner, no updates are needed.
@@ -3381,24 +3391,27 @@ where
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
                 ..
-            } => core
-                .conn_lock
-                .read()
-                .connection_for_address(moved_addr.as_str())
-                .map_or(
-                    ConnectionCheck::OnlyAddress(moved_addr),
-                    ConnectionCheck::Found,
-                ),
+            } => {
+                let resolved_addr = core.resolve_address(&moved_addr);
+                core.conn_lock
+                    .read()
+                    .connection_for_address(resolved_addr.as_str())
+                    .map_or(
+                        ConnectionCheck::OnlyAddress(resolved_addr),
+                        ConnectionCheck::Found,
+                    )
+            }
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Ask(ask_addr, should_exec_asking),
                 ..
             } => {
                 asking = should_exec_asking;
+                let resolved_addr = core.resolve_address(&ask_addr);
                 core.conn_lock
                     .read()
-                    .connection_for_address(ask_addr.as_str())
+                    .connection_for_address(resolved_addr.as_str())
                     .map_or(
-                        ConnectionCheck::OnlyAddress(ask_addr),
+                        ConnectionCheck::OnlyAddress(resolved_addr),
                         ConnectionCheck::Found,
                     )
             }
@@ -3937,11 +3950,7 @@ where
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
                                 moved_redirect.slot,
-                                ClusterConnInner::resolve_address(
-                                    &self.inner,
-                                    &moved_redirect.address,
-                                )
-                                .into(),
+                                self.inner.resolve_address(&moved_redirect.address).into(),
                             )),
                         })
                     } else if let Some(ref request) = request {
