@@ -2170,16 +2170,17 @@ where
             convert_result(receiver.await)
         };
 
-        // A concurrent remove_node during a topology refresh can drain the
-        // connection map between the outer is_empty check and this walk, so
-        // classify no-receivers as a retryable connectivity error to trigger
+        // No receivers means we reached no node for this fan-out. Either a
+        // concurrent remove_node drained the connection map after the outer
+        // is_empty check, or the slot map lists primaries or routes that the
+        // connection map does not have, which can persist outside any race.
+        // Both are connectivity failures, so classify as retryable to trigger
         // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::ConnectionNotFoundForRoute,
                 "Connection not found for route",
-                "No live receivers for multi-node fan-out; likely a transient topology-refresh race"
-                    .to_string(),
+                "No connections available for multi-node fan-out".to_string(),
             )));
         }
 
@@ -5006,11 +5007,11 @@ mod pipeline_routing_tests {
         );
     }
 
-    // Regression for #6759. Reproducing the remove_node race in an
-    // integration test would need a new hook to drop connections mid-walk,
-    // so call aggregate_results with an empty receivers vec directly and
-    // check the empty branch returns ConnectionNotFoundForRoute with
-    // RetryMethod::Reconnect and the connectivity-flavored message.
+    // Regression for #6759. Neither path into the empty branch (a remove_node
+    // race, or a slot map listing nodes the connection map lacks) is easy to
+    // force in an integration test, so call aggregate_results with an empty
+    // receivers vec directly and check it returns ConnectionNotFoundForRoute
+    // with RetryMethod::Reconnect and a connectivity message.
     #[test]
     fn empty_receivers_is_retryable_connection_not_found() {
         use crate::{types::RetryMethod, ErrorKind};
@@ -5043,8 +5044,7 @@ mod pipeline_routing_tests {
                 "retry_method mismatch for routing {routing:?}: err={err:?}",
             );
             assert!(
-                err.to_string()
-                    .contains("No live receivers for multi-node fan-out"),
+                err.to_string().contains("No connections available for multi-node fan-out"),
                 "message mismatch for routing {routing:?}: {err}",
             );
         }
