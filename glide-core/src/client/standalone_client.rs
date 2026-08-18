@@ -798,9 +798,9 @@ impl StandaloneClient {
             return replica;
         }
 
-        // Step 2: Check if primary is in the same AZ
+        // Step 2: Check if primary is in the same AZ, skipping it if not currently connected.
         let primary = self.get_primary_connection();
-        if let Ok(connection) = primary.get_connection().await
+        if let Some(connection) = primary.try_get_connection().await
             && let Some(primary_az) = connection.get_az().as_deref()
             && primary_az == client_az
         {
