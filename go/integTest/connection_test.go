@@ -20,11 +20,15 @@ func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string
 	return startDedicatedValkeyServerWithReplicas(suite, clusterMode, 0)
 }
 
+// Starts a server outside the suite's shared fixtures. That server never speaks TLS, so a test that
+// talks to it cannot pass when the suite runs with TLS, and is skipped instead.
 func startDedicatedValkeyServerWithReplicas(
 	suite *GlideTestSuite,
 	clusterMode bool,
 	replicaCount int,
 ) (string, error) {
+	skipIfTlsEnabled(suite)
+
 	args := []string{}
 	args = append(args, "start")
 	if clusterMode {
