@@ -54,6 +54,7 @@ struct BuilderParams {
     server_assisted_cache: bool,
     address_resolver: Option<Arc<dyn AddressResolver>>,
     recovery_requests_queue_size: Option<u32>,
+    idle_timeout: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -162,6 +163,10 @@ pub struct ClusterParams {
     /// Optional callback for resolving addresses before connection.
     pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
     pub(crate) recovery_requests_queue_size: Option<u32>,
+    /// Gap since last observed activity past which the async cluster
+    /// client validates a connection with a bounded PING before its
+    /// next command.
+    pub(crate) idle_timeout: Option<Duration>,
 }
 
 impl ClusterParams {
@@ -205,6 +210,7 @@ impl ClusterParams {
             server_assisted_cache: value.server_assisted_cache,
             address_resolver: value.address_resolver,
             recovery_requests_queue_size: value.recovery_requests_queue_size,
+            idle_timeout: value.idle_timeout,
         })
     }
 }
@@ -239,6 +245,7 @@ impl ClusterParams {
             server_assisted_cache: false,
             address_resolver: None,
             recovery_requests_queue_size: None, // will use default of 1000 in buffer_pending_requests
+            idle_timeout: None,
         }
     }
 }
@@ -638,6 +645,16 @@ impl ClusterClientBuilder {
     /// memory usage. Defaults to 1000 if not set.
     pub fn recovery_requests_queue_size(mut self, size: u32) -> ClusterClientBuilder {
         self.builder_params.recovery_requests_queue_size = Some(size);
+        self
+    }
+
+    /// Enables the pre-command idle-timeout check. When the gap since
+    /// the last successful activity on the target connection exceeds
+    /// `idle_timeout`, the client sends a bounded PING and, on failure
+    /// or deadline, reconnects before the real command runs. `None`
+    /// disables the check.
+    pub fn idle_timeout(mut self, idle_timeout: Option<Duration>) -> ClusterClientBuilder {
+        self.builder_params.idle_timeout = idle_timeout;
         self
     }
 

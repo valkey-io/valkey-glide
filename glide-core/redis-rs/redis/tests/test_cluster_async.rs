@@ -7372,6 +7372,297 @@ mod cluster_async {
         );
     }
 
+    /// With `idle_timeout` set, a silently half-open connection (PINGs
+    /// hang, `is_closed` stays false) must be detected on the
+    /// pre-command probe and replaced before the real command runs.
+    /// The periodic check is pinned to an hour so only the new hook
+    /// can drive the reconnect.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_detects_silent_half_open_before_next_command() {
+        let name = "test_idle_timeout_detects_silent_half_open";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs on the currently open IDs only; fresh
+        // connections from the reconnect path get new IDs.
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_reconnect = runtime.block_on(async {
+            let mut last: Result<Value, RedisError> = Ok(Value::Nil);
+            for _ in 0..30 {
+                let attempt = cmd("ECHO")
+                    .arg("world")
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+                if matches!(&attempt, Ok(Value::BulkString(_))) {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            last
+        });
+
+        drop(blackhole_guard);
+
+        assert_eq!(
+            post_reconnect,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected fresh command to succeed after idle_timeout-driven reconnect"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert!(
+            count_after > count_before,
+            "expected idle_timeout to detect the half-open transport and \
+             open at least one new connection; before={count_before}, after={count_after}"
+        );
+    }
+
+    /// Same half-open scenario as the single-command test, but on the
+    /// `send_scan` path. Without the per-address probe here a SCAN
+    /// iteration would hang until the caller's outer timeout instead
+    /// of reconnecting.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_detects_silent_half_open_before_cluster_scan() {
+        use redis::{ClusterScanArgs, ScanStateRC};
+
+        let name = "test_idle_timeout_detects_silent_half_open_scan";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                // cursor=0 with an empty key list finishes the scan in
+                // one hop without exercising the retry path.
+                if contains_slice(cmd, b"SCAN") {
+                    Err(Ok(Value::Array(vec![
+                        Value::BulkString(b"0".to_vec().into()),
+                        Value::Array(vec![]),
+                    ])))
+                } else {
+                    Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let scan_result = runtime.block_on(async {
+            let mut last: RedisResult<(ScanStateRC, Vec<Value>)> = Ok((ScanStateRC::new(), vec![]));
+            for _ in 0..30 {
+                let attempt = connection
+                    .cluster_scan(ScanStateRC::new(), ClusterScanArgs::default())
+                    .await;
+                if attempt.is_ok() {
+                    return attempt;
+                }
+                last = attempt;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            last
+        });
+
+        drop(blackhole_guard);
+
+        assert!(
+            scan_result.is_ok(),
+            "expected cluster_scan to succeed after idle_timeout-driven reconnect, got {scan_result:?}"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert!(
+            count_after > count_before,
+            "expected idle_timeout on the cluster-scan send path to detect the half-open \
+             transport and open at least one new connection; before={count_before}, after={count_after}"
+        );
+    }
+
+    /// A busy connection (`is_idle() == false`) must not receive a
+    /// pre-command PING. The blackhole would force a reconnect if the
+    /// hook mistakenly fired; with the busy guard the connection count
+    /// must stay flat across the idle window.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_idle_timeout_skips_probe_when_connection_is_busy() {
+        let name = "test_idle_timeout_skips_busy_connection";
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(1)
+                .periodic_connections_checks(Some(Duration::from_secs(3600)))
+                .idle_timeout(Some(Duration::from_millis(100))),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup(name, cmd)?;
+                Err(Ok(Value::BulkString(b"PONG".to_vec().into())))
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("ECHO")
+                .arg("hello")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"PONG".to_vec().into())));
+
+        let count_before = mock_connection_count(name);
+        // Blackhole PINGs on the open IDs and mark them busy: if the
+        // hook ran, the probe would time out and force a reconnect.
+        let currently_open_ids: Vec<usize> = (0..count_before).collect();
+        let _blackhole_guard = AsyncPingBlackholeByIdGuard::new(currently_open_ids.clone());
+        let _busy_guard = MockBusyConnectionGuard::new(currently_open_ids);
+
+        runtime.block_on(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        });
+
+        let post_command = runtime.block_on(async {
+            cmd("ECHO")
+                .arg("world")
+                .query_async::<_, Value>(&mut connection)
+                .await
+        });
+        assert_eq!(
+            post_command,
+            Ok(Value::BulkString(b"PONG".to_vec().into())),
+            "expected the follow-up command to succeed on the busy connection without a probe"
+        );
+
+        let count_after = mock_connection_count(name);
+        assert_eq!(
+            count_after, count_before,
+            "expected no new connections to open when the initial connection is busy; \
+             before={count_before}, after={count_after}"
+        );
+    }
+
+    /// Dropping `IdleValidationGuard` must clear `in_flight`, or a
+    /// cancelled winner leaves every stale caller stuck on the loser
+    /// wait deadline.
+    #[test]
+    fn test_idle_validation_guard_releases_latch_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+
+        let tracker = IdleTracker::new();
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "test precondition: latch must start unset"
+        );
+        {
+            let _guard = IdleValidationGuard::new(&tracker);
+            assert!(
+                tracker.in_flight.load(Ordering::Acquire),
+                "guard construction does not touch the latch"
+            );
+        }
+        assert!(
+            !tracker.in_flight.load(Ordering::Acquire),
+            "guard drop must release the latch even without an explicit reset"
+        );
+        assert!(
+            tracker
+                .in_flight
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+            "a fresh caller must be able to acquire the latch after the guard drops"
+        );
+    }
+
+    /// Dropping the guard must also wake `notify` waiters, or a
+    /// cancelled winner parks loser tasks for the full wait deadline.
+    #[test]
+    fn test_idle_validation_guard_notifies_waiters_on_drop() {
+        use redis::cluster_async::testing::{IdleTracker, IdleValidationGuard};
+        use std::sync::Arc;
+
+        let tracker = Arc::new(IdleTracker::new());
+        assert!(tracker
+            .in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok());
+
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let notified = tracker.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            let guard_tracker = tracker.clone();
+            let handle = tokio::spawn(async move {
+                let guard = IdleValidationGuard::new(&guard_tracker);
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                drop(guard);
+            });
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), notified)
+                .await
+                .expect("waiter must be woken when the winner guard drops");
+            handle.await.unwrap();
+            assert!(!tracker.in_flight.load(Ordering::Acquire));
+        });
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;

@@ -27,7 +27,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
@@ -273,6 +273,11 @@ pub(crate) struct Pipeline<SinkItem> {
     /// response reading, so a response-only signal would freeze. See
     /// [`Self::send_recv`].
     progress: Arc<AtomicU64>,
+    /// Count of caller-visible requests accepted by the writer whose
+    /// response has not yet returned. The idle-timeout hook reads this
+    /// to skip a PING probe when a blocking reply would queue ahead of
+    /// it, such as while `BLPOP 0` is still pending.
+    in_flight_count: Arc<AtomicUsize>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -778,6 +783,7 @@ where
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(AtomicU64::new(0));
+        let in_flight_count = Arc::new(AtomicUsize::new(0));
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
@@ -796,6 +802,7 @@ where
                 push_manager,
                 is_stream_closed,
                 progress,
+                in_flight_count,
             },
             f,
         )
@@ -900,6 +907,18 @@ where
                 }
             },
         };
+        // Count the request as in-flight until the caller has its
+        // response. The RAII guard decrements on every exit path so the
+        // count cannot drift after a timeout or panic.
+        struct InFlightGuard(Arc<AtomicUsize>);
+        impl Drop for InFlightGuard {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::AcqRel);
+            }
+        }
+        self.in_flight_count.fetch_add(1, Ordering::AcqRel);
+        let _in_flight = InFlightGuard(self.in_flight_count.clone());
+
         permit.send(PipelineMessage {
             input,
             pipeline_response_count,
@@ -963,6 +982,19 @@ where
     /// Checks if the pipeline is closed.
     pub fn is_closed(&self) -> bool {
         self.is_stream_closed.load(Ordering::Relaxed)
+    }
+
+    /// True when no caller-visible request is currently awaiting a
+    /// response. See the `ConnectionLike::is_idle` docstring.
+    pub fn is_idle(&self) -> bool {
+        self.in_flight_count.load(Ordering::Acquire) == 0
+    }
+
+    /// Snapshot of the writer progress counter, which advances only on
+    /// real socket I/O. Comparing snapshots across a call distinguishes
+    /// a cache hit from a round trip.
+    pub fn transport_activity(&self) -> u64 {
+        self.progress.load(Ordering::Relaxed)
     }
 }
 
@@ -1081,6 +1113,13 @@ impl MultiplexedConnection {
     /// Sets the time that the multiplexer will wait for responses on operations before failing.
     pub fn set_response_timeout(&mut self, timeout: std::time::Duration) {
         self.response_timeout = timeout;
+    }
+
+    /// Snapshot of the writer progress counter. Advances only on real
+    /// socket I/O, so callers can distinguish a cache hit from a
+    /// network round trip.
+    pub fn transport_activity(&self) -> u64 {
+        self.pipeline.transport_activity()
     }
 
     /// Sends an already encoded (packed) command into the TCP socket and
@@ -1325,6 +1364,14 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_closed(&self) -> bool {
         self.pipeline.is_closed()
+    }
+
+    fn is_idle(&self) -> bool {
+        self.pipeline.is_idle()
+    }
+
+    fn transport_activity(&self) -> Option<u64> {
+        Some(self.pipeline.transport_activity())
     }
 
     /// Get the node's availability zone

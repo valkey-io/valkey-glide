@@ -148,6 +148,10 @@ message ConnectionRequest {
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
     optional uint32 recovery_requests_queue_size = 34;
+    // Milliseconds of idleness past which the client validates the
+    // connection with a bounded PING before its next command. Zero or
+    // unset disables the check.
+    optional uint32 idle_timeout = 35;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

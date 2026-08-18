@@ -7,9 +7,11 @@ use futures::FutureExt;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use telemetrylib::Telemetry;
+use tokio::sync::Notify as TokioNotify;
 
 use tracing::debug;
 
@@ -31,8 +33,80 @@ macro_rules! count_connections {
     }};
 }
 
+/// Per-node coordination for the idle-timeout pre-command check.
+/// `last_activity` and `in_flight` together let concurrent commands
+/// share a single bounded PING per idle event: the first task to CAS
+/// `in_flight` runs the probe, the rest wait on `notify`.
+#[derive(Debug)]
+pub struct IdleTracker {
+    /// Monotonic reference point captured at construction time.
+    pub epoch: Instant,
+    /// Elapsed millis from `epoch` at the last successful activity.
+    pub last_activity: AtomicU64,
+    /// True while a task owns the pre-command PING for this node.
+    pub in_flight: AtomicBool,
+    /// Woken when the single-flight winner releases `in_flight`.
+    pub notify: TokioNotify,
+}
+
+impl IdleTracker {
+    /// Seeds `last_activity` to zero so the first command on a new
+    /// node treats it as fresh rather than idle.
+    pub fn new() -> Self {
+        Self {
+            epoch: Instant::now(),
+            last_activity: AtomicU64::new(0),
+            in_flight: AtomicBool::new(false),
+            notify: TokioNotify::new(),
+        }
+    }
+
+    /// Records the current elapsed reading so the next idle check
+    /// sees the connection as fresh.
+    pub fn mark_activity(&self) {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        self.last_activity.store(now, Ordering::Relaxed);
+    }
+
+    /// True when the gap since the last recorded activity exceeds
+    /// `idle_timeout`.
+    pub fn should_validate(&self, idle_timeout: std::time::Duration) -> bool {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        let last = self.last_activity.load(Ordering::Relaxed);
+        now.saturating_sub(last) > idle_timeout.as_millis() as u64
+    }
+}
+
+impl Default for IdleTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// RAII guard for the winner section of the idle-timeout single-flight.
+/// On drop it clears `in_flight` and wakes waiters, so a winner future
+/// dropped mid PING still releases the latch. Skipping this leaves
+/// every stale caller stuck on the loser wait deadline.
+pub struct IdleValidationGuard<'a> {
+    tracker: &'a IdleTracker,
+}
+
+impl<'a> IdleValidationGuard<'a> {
+    /// Constructs the guard; callers hold it for the winner section.
+    pub fn new(tracker: &'a IdleTracker) -> Self {
+        Self { tracker }
+    }
+}
+
+impl Drop for IdleValidationGuard<'_> {
+    fn drop(&mut self) {
+        self.tracker.in_flight.store(false, Ordering::Release);
+        self.tracker.notify.notify_waiters();
+    }
+}
+
 /// A struct that encapsulates a network connection along with its associated IP address and AZ.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
@@ -40,7 +114,18 @@ pub struct ConnectionDetails<Connection> {
     pub ip: Option<IpAddr>,
     /// The availability zone associated with the connection
     pub az: Option<String>,
+    /// Shared per-node idle tracker. All clones of a `ConnectionDetails`
+    /// see the same tracker, so there is one latch per node address.
+    pub idle: Arc<IdleTracker>,
 }
+
+impl<Connection: PartialEq> PartialEq for ConnectionDetails<Connection> {
+    fn eq(&self, other: &Self) -> bool {
+        self.conn == other.conn && self.ip == other.ip && self.az == other.az
+    }
+}
+
+impl<Connection: Eq> Eq for ConnectionDetails<Connection> {}
 
 impl<Connection> ConnectionDetails<Connection>
 where
@@ -54,6 +139,7 @@ where
             conn: async { self.conn }.boxed().shared(),
             ip: self.ip,
             az: self.az,
+            idle: self.idle,
         }
     }
 }
@@ -66,6 +152,7 @@ impl<Connection> From<(Connection, Option<IpAddr>, Option<String>)>
             conn: val.0,
             ip: val.1,
             az: val.2,
+            idle: Arc::new(IdleTracker::new()),
         }
     }
 }

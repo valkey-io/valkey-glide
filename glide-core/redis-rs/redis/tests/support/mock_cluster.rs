@@ -96,6 +96,93 @@ fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockC
     MOCK_CONN_BEHAVIORS.write().unwrap()
 }
 
+/// Connection IDs whose async PINGs must never resolve. Reproduces a
+/// silent half-open flow on the specific open connection without also
+/// affecting fresh connections opened by the reconnect path.
+static ASYNC_PING_BLACKHOLE_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> =
+    Lazy::new(Default::default);
+
+/// Connection IDs that report `is_idle() == false`, simulating an
+/// in-band blocking command so the idle-timeout hook must skip its PING.
+static ASYNC_BUSY_IDS: Lazy<RwLock<std::collections::HashSet<usize>>> = Lazy::new(Default::default);
+
+/// RAII guard that marks the given connection IDs as busy for its
+/// lifetime so `is_idle()` returns `false` for them.
+#[must_use = "the busy flag is only set while the guard is held; bind it to a name"]
+pub struct MockBusyConnectionGuard {
+    ids: Vec<usize>,
+}
+
+impl MockBusyConnectionGuard {
+    pub fn new(ids: Vec<usize>) -> Self {
+        {
+            let mut guard = ASYNC_BUSY_IDS.write().unwrap();
+            for id in &ids {
+                guard.insert(*id);
+            }
+        }
+        MockBusyConnectionGuard { ids }
+    }
+}
+
+impl Drop for MockBusyConnectionGuard {
+    fn drop(&mut self) {
+        let mut guard = ASYNC_BUSY_IDS.write().unwrap();
+        for id in &self.ids {
+            guard.remove(id);
+        }
+    }
+}
+
+fn is_mock_busy(id: usize) -> bool {
+    ASYNC_BUSY_IDS.read().unwrap().contains(&id)
+}
+
+/// RAII guard that blackholes async PINGs for the given connection IDs
+/// for its lifetime. Fresh connections opened later get new IDs and
+/// still respond, so the reconnect path can complete while the original
+/// connection is silently half-open.
+#[must_use = "the blackhole is only active while the guard is held; bind it to a name"]
+pub struct AsyncPingBlackholeByIdGuard {
+    ids: Vec<usize>,
+}
+
+impl AsyncPingBlackholeByIdGuard {
+    pub fn new(ids: Vec<usize>) -> Self {
+        {
+            let mut guard = ASYNC_PING_BLACKHOLE_IDS.write().unwrap();
+            for id in &ids {
+                guard.insert(*id);
+            }
+        }
+        AsyncPingBlackholeByIdGuard { ids }
+    }
+}
+
+impl Drop for AsyncPingBlackholeByIdGuard {
+    fn drop(&mut self) {
+        let mut guard = ASYNC_PING_BLACKHOLE_IDS.write().unwrap();
+        for id in &self.ids {
+            guard.remove(id);
+        }
+    }
+}
+
+fn async_ping_blackholed_by_id(id: usize) -> bool {
+    ASYNC_PING_BLACKHOLE_IDS.read().unwrap().contains(&id)
+}
+
+/// Number of async connections opened against the named mock cluster
+/// since it was registered. Tests use this to detect a reconnect.
+pub fn mock_connection_count(name: &str) -> usize {
+    MOCK_CONN_BEHAVIORS
+        .read()
+        .unwrap()
+        .get(name)
+        .map(|b| b.connection_id_provider.load(Ordering::SeqCst))
+        .unwrap_or(0)
+}
+
 #[derive(Default)]
 pub enum ConnectionIPReturnType {
     /// New connections' IP will be returned as None
@@ -349,8 +436,12 @@ pub fn respond_startup_with_config(
 #[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
+        let packed = cmd.get_packed_command();
+        if contains_slice(&packed, b"PING") && async_ping_blackholed_by_id(self.id) {
+            return Box::pin(future::pending());
+        }
         Box::pin(future::ready(
-            (self.handler)(&cmd.get_packed_command(), self.port)
+            (self.handler)(&packed, self.port)
                 .map_err(|err| err.and_then(|v| v.extract_error()))
                 .expect_err("Handler did not specify a response"),
         ))
@@ -403,6 +494,10 @@ impl aio::ConnectionLike for MockConnection {
 
     fn is_closed(&self) -> bool {
         false
+    }
+
+    fn is_idle(&self) -> bool {
+        !is_mock_busy(self.id)
     }
 }
 

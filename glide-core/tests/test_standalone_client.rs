@@ -1513,4 +1513,276 @@ mod standalone_client_tests {
             );
         });
     }
+
+    async fn build_idle_timeout_client(
+        addresses: &[redis::ConnectionAddr],
+        idle_timeout: Option<u32>,
+    ) -> StandaloneClient {
+        let mut req = create_connection_request(addresses, &Default::default());
+        req.idle_timeout = idle_timeout;
+        StandaloneClient::create_client(req.into(), None, None, None)
+            .await
+            .expect("client build")
+    }
+
+    /// With `idle_timeout` set, the mock must see at least one extra
+    /// PING before the follow-up command; without it, only handshake
+    /// PINGs land.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_sends_ping_before_next_command() {
+        let baseline_mock = ServerMock::new(create_primary_responses());
+        let baseline_addresses = baseline_mock.get_addresses();
+
+        // Returns PING count delta caused by the follow-up command
+        // (subtracting handshake-time PINGs, which vary between runs).
+        let baseline_ping_count_after_cmd = block_on_all(async {
+            let mut client = build_idle_timeout_client(&baseline_addresses, None).await;
+            let baseline_after_handshake = baseline_mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_command(&get_cmd).await;
+
+            baseline_mock
+                .get_ping_count()
+                .saturating_sub(baseline_after_handshake)
+        });
+
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        let idle_ping_count_after_cmd = block_on_all(async {
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
+            let idle_after_handshake = mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_command(&get_cmd).await;
+
+            mock.get_ping_count().saturating_sub(idle_after_handshake)
+        });
+
+        assert!(
+            idle_ping_count_after_cmd > baseline_ping_count_after_cmd,
+            "expected the pre-command idle_timeout hook to run at least one extra PING; \
+             baseline delta = {baseline_ping_count_after_cmd}, idle delta = \
+             {idle_ping_count_after_cmd}"
+        );
+    }
+
+    /// Same shape as `test_standalone_idle_timeout_sends_ping_before_next_command`
+    /// but for `send_pipeline`, which reuses the same validate helper.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_sends_ping_before_next_pipeline() {
+        let baseline_mock = ServerMock::new(create_primary_responses());
+        let baseline_addresses = baseline_mock.get_addresses();
+
+        let baseline_ping_delta = block_on_all(async {
+            let mut client = build_idle_timeout_client(&baseline_addresses, None).await;
+            let baseline_after_handshake = baseline_mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut pipeline = redis::Pipeline::new();
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            pipeline.add_command(get_cmd.clone());
+            baseline_mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_pipeline(&pipeline, 0, 1).await;
+
+            baseline_mock
+                .get_ping_count()
+                .saturating_sub(baseline_after_handshake)
+        });
+
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        let idle_ping_delta = block_on_all(async {
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
+            let idle_after_handshake = mock.get_ping_count();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut pipeline = redis::Pipeline::new();
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            pipeline.add_command(get_cmd.clone());
+            mock.add_response(&get_cmd, "$-1\r\n".to_string());
+            let _ = client.send_pipeline(&pipeline, 0, 1).await;
+
+            mock.get_ping_count().saturating_sub(idle_after_handshake)
+        });
+
+        assert!(
+            idle_ping_delta > baseline_ping_delta,
+            "expected the pre-pipeline idle_timeout hook to run at least one extra PING; \
+             baseline delta = {baseline_ping_delta}, idle delta = {idle_ping_delta}"
+        );
+    }
+
+    /// The mock's PING blackhole simulates a silently half-open flow:
+    /// the first PING is dropped and the socket shut down. The client
+    /// must detect that on the pre-command probe, reconnect through
+    /// the mock's re-accept, and serve the follow-up GET.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_reconnects_and_serves_next_command() {
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        block_on_all(async {
+            let mut client = build_idle_timeout_client(&addresses, Some(100)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+
+            mock.set_ping_blackhole(true);
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            // The reconnect settles asynchronously, so poll for a
+            // bounded window. Queue a response per attempt so the
+            // retried GET has a reply on the fresh transport.
+            let mut succeeded = false;
+            for _ in 0..30 {
+                mock.add_response(&get_cmd, "$-1\r\n".to_string());
+                if let Ok(Value::Nil) = client.send_command(&get_cmd).await {
+                    succeeded = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            assert!(
+                succeeded,
+                "expected the follow-up command to succeed after idle_timeout drove a reconnect \
+                 through the mock's re-accepted socket"
+            );
+        });
+    }
+
+    /// A client-side cache hit must not refresh `last_activity`, else
+    /// a cache-heavy workload silently suppresses the idle probe while
+    /// the socket sits idle. The test primes a cached GET, hits the
+    /// cache before the idle window elapses, then a bypass command
+    /// after the window must send the PING.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_cache_hit_does_not_defeat_ping() {
+        use glide_core::connection_request::ClientSideCache;
+
+        let mock = ServerMock::new(create_primary_responses());
+        let addresses = mock.get_addresses();
+
+        block_on_all(async {
+            let mut req = create_connection_request(addresses.as_slice(), &Default::default());
+            req.idle_timeout = Some(200);
+            let mut cache = ClientSideCache::new();
+            cache.cache_id = "test_idle_cache".to_string().into();
+            cache.max_cache_kb = 1024;
+            cache.entry_ttl_ms = 60_000;
+            cache.enable_metrics = true;
+            req.client_side_cache = protobuf::MessageField::some(cache);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("client build with idle_timeout and cache");
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("cached_key");
+            mock.add_response(&get_cmd, "$3\r\nfoo\r\n".to_string());
+
+            let first_get = client.send_command(&get_cmd).await.expect("first GET");
+            assert_eq!(first_get, Value::BulkString(b"foo".to_vec().into()));
+
+            // Cache-hit GET while last_activity is still fresh: the
+            // probe skips, so `mark_activity` must not refresh the
+            // timer even though the send returned successfully.
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+            let cached_get = client.send_command(&get_cmd).await.expect("cached GET");
+            assert_eq!(cached_get, Value::BulkString(b"foo".to_vec().into()));
+
+            // Sleep so total elapsed from the first GET exceeds the
+            // idle window; elapsed from the cache hit still does not.
+            // A correct implementation now sends the probe.
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+            let ping_before = mock.get_ping_count();
+
+            let mut info_cmd = redis::Cmd::new();
+            info_cmd.arg("INFO");
+            mock.add_response(&info_cmd, "$2\r\nok\r\n".to_string());
+            let _ = client.send_command(&info_cmd).await;
+
+            let ping_after = mock.get_ping_count();
+            assert!(
+                ping_after > ping_before,
+                "expected the idle_timeout PING to fire before the bypass command; \
+                 pings before = {ping_before}, after = {ping_after}"
+            );
+        });
+    }
+
+    /// Companion real-server assertion: bounce the server underneath
+    /// the client so the pre-command PING sees a broken transport and
+    /// the follow-up command must succeed against the fresh process.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    fn test_standalone_idle_timeout_reconnects_against_real_server() {
+        block_on_all(async move {
+            let server = RedisServer::new(ServerType::Tcp { tls: false });
+            let address = server.get_client_addr();
+            wait_for_server_to_become_ready(&address).await;
+
+            let mut req =
+                create_connection_request(std::slice::from_ref(&address), &Default::default());
+            req.idle_timeout = Some(100);
+            let mut client = StandaloneClient::create_client(req.into(), None, None, None)
+                .await
+                .expect("client build against real server");
+
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("k").arg("v");
+            client.send_command(&set_cmd).await.expect("initial SET");
+
+            // Bounce the server so the TCP flow is broken during the
+            // client's idle window; the follow-up command must succeed
+            // through the pre-command validation reconnect.
+            drop(server);
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let address_clone = address.clone();
+            std::thread::spawn(move || {
+                block_on_all(async move {
+                    let new_server = RedisServer::new_with_addr_and_modules(address_clone, &[]);
+                    let _ = sender.send(new_server);
+                })
+            });
+            let _new_server = receiver.await;
+            wait_for_server_to_become_ready(&address).await;
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("k");
+            let mut succeeded = false;
+            for _ in 0..30 {
+                if client.send_command(&get_cmd).await.is_ok() {
+                    succeeded = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            assert!(
+                succeeded,
+                "expected the follow-up command to succeed after idle_timeout drove a reconnect \
+                 against a real server"
+            );
+        });
+    }
 }

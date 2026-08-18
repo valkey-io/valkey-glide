@@ -691,11 +691,17 @@ async fn send_scan<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    if let Some(conn_future) = core
-        .connection_for_address(&scan_state.address_in_scan)
-        .await
-    {
+    let address = scan_state.address_in_scan.clone();
+    if let Some(conn_future) = core.connection_for_address(&address).await {
         let mut conn = conn_future.await;
+
+        // Each scan iteration hits one node, so the same per-address
+        // idle probe used by the single-command and pipeline paths
+        // applies here.
+        let idle_timeout = core.get_cluster_param(|p| p.idle_timeout);
+        ClusterConnInner::<C>::apply_idle_timeout_check(&core, &address, &mut conn, idle_timeout)
+            .await;
+
         let mut scan_command = cmd("SCAN");
         scan_command.arg(scan_state.cursor);
         if let Some(match_pattern) = cluster_scan_args.match_pattern.as_ref() {
@@ -707,7 +713,18 @@ where
         if let Some(object_type) = &cluster_scan_args.object_type {
             scan_command.arg("TYPE").arg(object_type.to_string());
         }
-        conn.req_packed_command(&scan_command).await
+
+        let activity_before = conn.transport_activity();
+        let result = conn.req_packed_command(&scan_command).await;
+        if idle_timeout.is_some() && result.is_ok() {
+            ClusterConnInner::<C>::mark_activity_if_touched(
+                &core,
+                &address,
+                activity_before,
+                &conn,
+            );
+        }
+        result
     } else {
         Err(RedisError::from((
             ErrorKind::ConnectionNotFoundForRoute,
