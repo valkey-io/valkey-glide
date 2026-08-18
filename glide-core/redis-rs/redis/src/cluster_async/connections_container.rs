@@ -449,7 +449,7 @@ where
     pub(crate) fn round_robin_read_from_replica_with_az_awareness(
         &self,
         slot_map_value: &SlotMapValue,
-        client_az: String,
+        client_az: &str,
     ) -> Option<ConnectionAndAddress<Connection>> {
         self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, false)
     }
@@ -459,7 +459,7 @@ where
     pub(crate) fn round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
         &self,
         slot_map_value: &SlotMapValue,
-        client_az: String,
+        client_az: &str,
     ) -> Option<ConnectionAndAddress<Connection>> {
         self.get_connection_by_az_affinity_strategy(slot_map_value, client_az, true)
     }
@@ -470,7 +470,7 @@ where
     pub(crate) fn round_robin_read_from_all_nodes_with_az_awareness(
         &self,
         slot_map_value: &SlotMapValue,
-        client_az: String,
+        client_az: &str,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
         let total_nodes = addrs.replicas().len() + 1; // primary + replicas, index 0 = primary
@@ -497,7 +497,7 @@ where
             if let Some((address, connection_details)) =
                 self.connection_details_for_address(node_address.as_str())
             {
-                if self.az_for_address(&address) == Some(client_az.clone()) {
+                if self.az_for_address(&address).as_deref() == Some(client_az) {
                     // Attempt to update `last_used_replica` with the index of this node.
                     let _ = slot_map_value.last_used_replica.compare_exchange_weak(
                         initial_index,
@@ -517,7 +517,7 @@ where
     fn get_connection_by_az_affinity_strategy(
         &self,
         slot_map_value: &SlotMapValue,
-        client_az: String,
+        client_az: &str,
         check_primary: bool, // Strategy flag
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
@@ -540,7 +540,7 @@ where
             if let Some((address, connection_details)) =
                 self.connection_details_for_address(replica.as_str())
             {
-                if self.az_for_address(&address) == Some(client_az.clone()) {
+                if self.az_for_address(&address).as_deref() == Some(client_az) {
                     // Attempt to update `latest_used_replica` with the index of this replica.
                     let _ = slot_map_value.last_used_replica.compare_exchange_weak(
                         initial_index,
@@ -558,7 +558,7 @@ where
             if let Some((address, connection_details)) =
                 self.connection_details_for_address(addrs.primary().as_str())
             {
-                if self.az_for_address(&address) == Some(client_az) {
+                if self.az_for_address(&address).as_deref() == Some(client_az) {
                     return Some((address, connection_details.conn));
                 }
             }
@@ -589,41 +589,33 @@ where
                 ReadFromReplicaStrategy::AllNodes => {
                     self.round_robin_read_from_all_nodes(slot_map_value)
                 }
-                ReadFromReplicaStrategy::AZAffinity(az) => self
-                    .round_robin_read_from_replica_with_az_awareness(
-                        slot_map_value,
-                        az.to_string(),
-                    ),
+                ReadFromReplicaStrategy::AZAffinity(az) => {
+                    self.round_robin_read_from_replica_with_az_awareness(slot_map_value, az)
+                }
                 ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az) => self
                     .round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
                         slot_map_value,
-                        az.to_string(),
+                        az,
                     ),
-                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => self
-                    .round_robin_read_from_all_nodes_with_az_awareness(
-                        slot_map_value,
-                        az.to_string(),
-                    ),
+                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => {
+                    self.round_robin_read_from_all_nodes_with_az_awareness(slot_map_value, az)
+                }
             },
             // when the user strategy per command is replica_preffered
             SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
-                ReadFromReplicaStrategy::AZAffinity(az) => self
-                    .round_robin_read_from_replica_with_az_awareness(
-                        slot_map_value,
-                        az.to_string(),
-                    ),
+                ReadFromReplicaStrategy::AZAffinity(az) => {
+                    self.round_robin_read_from_replica_with_az_awareness(slot_map_value, az)
+                }
                 ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az) => self
                     .round_robin_read_from_replica_with_az_awareness_replicas_and_primary(
                         slot_map_value,
-                        az.to_string(),
+                        az,
                     ),
                 // Explicit replica routes stay in the replica rotation for this strategy:
                 // in-AZ replicas first, then any replica, primary only if no replica is connected.
-                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => self
-                    .round_robin_read_from_replica_with_az_awareness(
-                        slot_map_value,
-                        az.to_string(),
-                    ),
+                ReadFromReplicaStrategy::AZAffinityAllNodes(az) => {
+                    self.round_robin_read_from_replica_with_az_awareness(slot_map_value, az)
+                }
                 _ => self.round_robin_read_from_replica(slot_map_value),
             },
         }
