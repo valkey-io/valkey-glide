@@ -22,6 +22,10 @@ func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string
 
 // Starts a server outside the suite's shared fixtures. That server never speaks TLS, so a test that
 // talks to it cannot pass when the suite runs with TLS, and is skipped instead.
+//
+// The skip here only works for a test that calls this from its own method body. Skipping from inside a
+// subtest goroutine acts on the parent test and Go reports that as a failure, so a caller that reaches
+// this from within a subtest has to guard at the top of its own method instead.
 func startDedicatedValkeyServerWithReplicas(
 	suite *GlideTestSuite,
 	clusterMode bool,
@@ -280,6 +284,9 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 }
 
 func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
+	// Needs a dedicated plaintext server, and reaches for it inside a subtest, so it guards here.
+	skipIfTlsEnabled(suite)
+
 	// Run test for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
 		ctx := context.Background()
@@ -326,6 +333,9 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 }
 
 func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
+	// Needs a dedicated plaintext server, and reaches for it inside a subtest, so it guards here.
+	skipIfTlsEnabled(suite)
+
 	// Test TCP_NODELAY configuration for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
 		_, isCluster := client.(interfaces.GlideClusterClientCommands)

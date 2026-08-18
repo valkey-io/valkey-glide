@@ -425,6 +425,23 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 	return clients
 }
 
+// The suite's servers use a self-signed CA, so every client built for a TLS run needs that CA as a
+// root certificate. The certificate rides on the advanced configuration, which means any builder that
+// sets its own advanced configuration has to attach this too, or the client will fail the handshake.
+// Returns nil when the suite runs in plaintext mode or the certificate cannot be read.
+func (suite *GlideTestSuite) testTlsConfiguration() *config.TlsConfiguration {
+	if !suite.tls {
+		return nil
+	}
+
+	certData, certErr := loadCaCertificateForTests()
+	if certErr != nil {
+		return nil
+	}
+
+	return config.NewTlsConfiguration().WithRootCertificates(certData)
+}
+
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
@@ -435,12 +452,8 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 	advancedConfig := config.NewAdvancedClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
 
-	// If TLS is enabled, try to load custom certificates
-	if suite.tls {
-		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
-		}
+	if tlsConfig := suite.testTlsConfiguration(); tlsConfig != nil {
+		advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
 	}
 
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
@@ -488,12 +501,8 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientC
 	advancedConfig := config.NewAdvancedClusterClientConfiguration().
 		WithConnectionTimeout(10 * time.Second)
 
-	// If TLS is enabled, try to load custom certificates
-	if suite.tls {
-		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
-			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
-		}
+	if tlsConfig := suite.testTlsConfiguration(); tlsConfig != nil {
+		advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
 	}
 
 	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
@@ -535,22 +544,28 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 	connectTimeout, requestTimeout time.Duration,
 	backoffStrategy *config.BackoffStrategy,
 ) (*glide.Client, error) {
+	advancedConfig := config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout)
+	if tlsConfig := suite.testTlsConfiguration(); tlsConfig != nil {
+		advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+	}
+
 	clientConfig := suite.defaultClientConfig().
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
-		WithAdvancedConfiguration(
-			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout),
-		)
+		WithAdvancedConfiguration(advancedConfig)
 	return glide.NewClient(clientConfig)
 }
 
 func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 	connectTimeout, requestTimeout time.Duration,
 ) (*glide.ClusterClient, error) {
+	advancedConfig := config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout)
+	if tlsConfig := suite.testTlsConfiguration(); tlsConfig != nil {
+		advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+	}
+
 	clientConfig := suite.defaultClusterClientConfig().
-		WithAdvancedConfiguration(
-			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout),
-		).
+		WithAdvancedConfiguration(advancedConfig).
 		WithRequestTimeout(requestTimeout)
 	return glide.NewClusterClient(clientConfig)
 }
