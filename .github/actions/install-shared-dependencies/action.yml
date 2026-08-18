@@ -41,10 +41,13 @@ runs:
           if: "${{ contains(inputs.target, 'musl') }}"
           run: |
               apk update
-              wget -O /tmp/rustup-init.sh https://sh.rustup.rs
-              chmod +x /tmp/rustup-init.sh
-              /tmp/rustup-init.sh -y
-              rm /tmp/rustup-init.sh
+              RUSTUP_INIT=$(mktemp)
+              trap "rm -f $RUSTUP_INIT" EXIT
+              wget -O "$RUSTUP_INIT" \
+                  "https://static.rust-lang.org/rustup/archive/1.28.1/x86_64-unknown-linux-musl/rustup-init"
+              echo "8e60c9157b7aa2bf32baab5c124b80a31dd24ba6c41b39b50645d354d381f831  $RUSTUP_INIT" | sha256sum -c -
+              chmod +x "$RUSTUP_INIT"
+              "$RUSTUP_INIT" -y
               source "$HOME/.cargo/env"
               apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
 

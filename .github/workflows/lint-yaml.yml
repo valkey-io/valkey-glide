@@ -29,3 +29,20 @@ jobs:
             - name: Run Prettier on YAML files
               run: |
                   npx prettier --check .github/
+
+            - name: Validate dependabot cooldown
+              run: |
+                  python3 - <<'EOF'
+                  import yaml, sys
+                  with open(".github/dependabot.yml") as f:
+                      config = yaml.safe_load(f)
+                  missing = [
+                      entry.get("directory", "unknown")
+                      for entry in config.get("updates", [])
+                      if not entry.get("cooldown", {}).get("default-days")
+                  ]
+                  if missing:
+                      print("ERROR: Missing cooldown.default-days in:", missing)
+                      sys.exit(1)
+                  print(f"OK: all {len(config['updates'])} dependabot entries have cooldown.default-days")
+                  EOF

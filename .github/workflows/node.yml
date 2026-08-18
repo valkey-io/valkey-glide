@@ -239,6 +239,7 @@ jobs:
               id: install-yarn
               shell: bash
               run: |
+                  npm install --global corepack@0.35.0
                   corepack enable
                   corepack prepare yarn@4.10.3 --activate
 
@@ -248,12 +249,12 @@ jobs:
               shell: bash
               run: |
                   cd depend-on-glide-package
-                  yarn install
+                  yarn install --immutable
                   rm -rf node_modules/@valkey/valkey-glide/build-ts/*
                   cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
                   yarn run build
                   cd ../depend-on-glide-dependent
-                  yarn install
+                  yarn install --immutable
                   yarn run build
 
             # Test hybrid node modules - commonjs
