@@ -1477,6 +1477,118 @@ mod cluster_async {
         );
     }
 
+    #[tokio::test]
+    async fn test_az_affinity_all_nodes_cluster_scan_stays_on_replicas() {
+        // Skip test if version is less than Valkey 8.0
+        if engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 2;
+        let primaries_num: u16 = 3;
+        let keys_num = 30;
+
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        // Node AZs are deliberately left unset: the slot-map path used by cluster scan is AZ-blind.
+        let client_az = "us-east-1a".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        // Seed keys across the shards.
+        for i in 0..keys_num {
+            let key = format!("key{i}");
+            let _: Result<(), RedisError> = redis::cmd("SET")
+                .arg(&key)
+                .arg("value")
+                .query_async(&mut connection)
+                .await;
+        }
+
+        // Reset stats so the seeding SETs and their replication don't show up in the counts.
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg("RESETSTAT");
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(
+                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(
+                    client_az.clone(),
+                ),
+            )
+            .build()
+            .unwrap()
+            .get_async_connection(None, None, None, None)
+            .await
+            .unwrap();
+
+        // Run a full cluster scan; its per-slot node picks must stay on replicas.
+        let mut scan_state_rc = redis::ScanStateRC::new();
+        let mut keys: Vec<String> = vec![];
+        loop {
+            let (next_cursor, scan_keys): (redis::ScanStateRC, Vec<Value>) = client
+                .cluster_scan(scan_state_rc, redis::ClusterScanArgs::default())
+                .await
+                .unwrap();
+            scan_state_rc = next_cursor;
+            keys.extend(
+                scan_keys
+                    .into_iter()
+                    .map(|v| redis::from_redis_value::<String>(&v).unwrap()),
+            );
+            if scan_state_rc.is_finished() {
+                break;
+            }
+        }
+        keys.sort();
+        keys.dedup();
+        assert_eq!(
+            keys.len(),
+            keys_num,
+            "cluster scan did not cover all seeded keys"
+        );
+
+        // Gather INFO
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let mut scanning_replicas = 0usize;
+        for value in info_result.values() {
+            if value.contains("cmdstat_scan:calls=") {
+                assert!(
+                    value.contains("role:slave"),
+                    "Cluster scan landed on a primary: {value}"
+                );
+                scanning_replicas += 1;
+            }
+        }
+        assert_eq!(
+            scanning_replicas, primaries_num as usize,
+            "Test failed: expected one scanning replica per shard, found {scanning_replicas}"
+        );
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_basic_eval() {
