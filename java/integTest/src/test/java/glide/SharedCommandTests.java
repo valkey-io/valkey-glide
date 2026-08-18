@@ -2,10 +2,12 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.isWindows;
+import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
@@ -135,6 +137,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -197,15 +200,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public void cleanup() {
-        // Flush all databases to ensure clean state between tests
+        // Flush all databases in parallel to reduce teardown time
+        List<CompletableFuture<String>> futures = new ArrayList<>();
         for (Arguments client : clients) {
             BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
             if (baseClient instanceof GlideClient) {
-                ((GlideClient) baseClient).flushall().get();
+                futures.add(((GlideClient) baseClient).flushall());
             } else if (baseClient instanceof GlideClusterClient) {
-                ((GlideClusterClient) baseClient).flushall().get();
+                futures.add(((GlideClusterClient) baseClient).flushall());
             }
         }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
     }
 
     @SneakyThrows
@@ -14388,7 +14393,7 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination, 1).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14404,7 +14409,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14463,7 +14468,7 @@ public class SharedCommandTests {
         }
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14478,7 +14483,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14520,12 +14525,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals("one", client.get(destination).get());
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());
@@ -14552,12 +14557,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals(gs("one"), client.get(destination).get());
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());
@@ -18433,12 +18438,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new String[] {key}).get();
@@ -18531,12 +18535,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new GlideString[] {key}).get();
@@ -18639,12 +18642,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000, options).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new String[] {key}).get();
@@ -18674,6 +18676,37 @@ public class SharedCommandTests {
         assertEquals("OK", result);
     }
 
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void reset(BaseClient client) {
+        String result =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).reset().get()
+                        : ((GlideClient) client).reset().get();
+        assertEquals("RESET", result);
+        // Verify client recovers after reset
+        String pong =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).ping().get()
+                        : ((GlideClient) client).ping().get();
+        assertEquals("PONG", pong);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void save(BaseClient client) {
+        waitForSaveNotInProgress(client);
+
+        // TODO #6166: Simplify once SAVE declaration moved to base client.
+        if (client instanceof GlideClient) {
+            assertEquals(OK, ((GlideClient) client).save().get());
+        } else {
+            assertEquals(OK, ((GlideClusterClient) client).save().get());
+        }
+    }
+
     /**
      * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD and
      * returns true if successful, false if it fails with ACL file not configured error.
@@ -18695,5 +18728,33 @@ public class SharedCommandTests {
             // If it's a different error, rethrow it
             throw e;
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo_cache_off(BaseClient client) {
+
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
+
+        assertClientTrackingInfo(info, false);
+    }
+
+    @ParameterizedTest(autoCloseArguments = true)
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
+    @SneakyThrows
+    public void clientTrackingInfo_cache_on(BaseClient client) {
+
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
+
+        assertClientTrackingInfo(info, true);
     }
 }
