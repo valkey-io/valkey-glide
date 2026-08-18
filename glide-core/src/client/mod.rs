@@ -2375,7 +2375,7 @@ async fn create_cluster_client(
             strategy.factor,
             strategy.number_of_retries,
             strategy.jitter_percent,
-        ),
+        )?,
         None => RetryStrategy::default(),
     };
     builder = builder.reconnect_retry_strategy(retry_strategy);

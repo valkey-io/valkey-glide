@@ -754,7 +754,7 @@ export class GlideClusterClient extends BaseClient {
      *     numberOfRetries: 5,
      *     factor: 1000,
      *     exponentBase: 2,
-     *     jitter: 20,
+     *     jitterPercent: 20,
      *   },
      * });
      * ```
