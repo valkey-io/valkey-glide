@@ -2180,8 +2180,7 @@ where
             return Err(RedisError::from((
                 ErrorKind::ConnectionNotFoundForRoute,
                 "Connection not found for route",
-                "No connections available for multi-node fan-out"
-                    .to_string(),
+                "No connections available for multi-node fan-out".to_string(),
             )));
         }
 
