@@ -1060,7 +1060,7 @@ name = "glide-ffi"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "dashmap 5.5.3",
+ "dashmap 6.1.0",
  "glide-core",
  "lazy_static",
  "libc",
