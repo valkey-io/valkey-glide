@@ -1069,7 +1069,7 @@ where
         // Use resolve_address to handle hostname vs IP mismatches
         if matches!(retry_method, RetryMethod::MovedRedirect)
             && is_circular_moved_redirect(redis_error.redirect_node(), &address, |addr| {
-                ClusterConnInner::resolve_address(&core, addr)
+                core.resolve_address(addr)
             })
         {
             circular_moved_entries.push((indices, address, error));
@@ -1185,7 +1185,7 @@ where
             }
         })?;
 
-    let resolved_address = ClusterConnInner::resolve_address(&core, &redirect_node.address);
+    let resolved_address = core.resolve_address(&redirect_node.address);
     ClusterConnInner::update_upon_moved_error(
         core.clone(),
         redirect_node.slot,
