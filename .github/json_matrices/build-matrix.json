@@ -93,7 +93,7 @@
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["maven", "npm"],
-        "languages": ["java", "node"],
+        "languages": ["java"],
         "run": "always"
     }
 ]
