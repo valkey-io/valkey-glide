@@ -7372,6 +7372,126 @@ mod cluster_async {
         );
     }
 
+    // If a caller passes an empty MultiSlot routing plan, the fan-out guard
+    // must fail with a non-retryable ClientError so the retryable empty-
+    // receivers branch stays scoped to the topology-refresh race (#6759).
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_multi_slot_empty_slots_is_client_error() {
+        let name = "test_async_cluster_multi_slot_empty_slots_is_client_error";
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], _port| {
+                respond_startup_two_nodes(name, received_cmd)?;
+                Err(Ok(Value::Nil))
+            },
+        );
+
+        let routing = RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![],
+                redis::cluster_routing::MultiSlotArgPattern::KeysOnly,
+            )),
+            None,
+        ));
+        let err = runtime
+            .block_on(connection.route_command(&cmd("MGET"), routing))
+            .expect_err("empty MultiSlot routing plan must fail");
+
+        assert_eq!(
+            err.kind(),
+            ErrorKind::ClientError,
+            "empty MultiSlot routing plan must classify as a non-retryable \
+             ClientError from the fan-out guard, got kind={:?} err={err:?}",
+            err.kind(),
+        );
+        assert!(
+            err.to_string().contains("MultiSlot routing plan is empty"),
+            "error message must describe the empty routing plan: {err}",
+        );
+    }
+
+    // Same empty MultiSlot input as the guard test above, but with retries(3)
+    // to prove the guard short-circuits the retry loop and never triggers a
+    // slot refresh. The retryable empty-receivers branch is covered directly
+    // by `empty_receivers_is_retryable_connection_not_found` in
+    // `glide-core/redis-rs/redis/src/cluster_async/mod.rs`.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero() {
+        let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
+        // Counts CLUSTER SLOTS the mock sees after startup. Each retry driven
+        // by the retryable empty-receivers branch would trigger a slot
+        // refresh, so this stays at zero when the guard is active. The
+        // caller-side `Cmd::watchdog_retry_count` cannot be used here because
+        // `route_command` clones the `Cmd` and `Cmd::clone` resets the
+        // counter.
+        let post_startup_cluster_slots = Arc::new(atomic::AtomicUsize::new(0));
+        let startup_done = Arc::new(AtomicBool::new(false));
+        let counter_handler = post_startup_cluster_slots.clone();
+        let startup_done_handler = startup_done.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(3)
+                // Disable the slot-refresh throttler so a retry-driven
+                // RefreshSlots always reissues CLUSTER SLOTS; otherwise the
+                // counter cannot tell a retry from a single pass.
+                .slots_refresh_rate_limit(Duration::from_secs(0), 0),
+            name,
+            move |received_cmd: &[u8], _port| {
+                if startup_done_handler.load(Ordering::SeqCst)
+                    && contains_slice(received_cmd, b"CLUSTER")
+                    && contains_slice(received_cmd, b"SLOTS")
+                {
+                    counter_handler.fetch_add(1, Ordering::SeqCst);
+                }
+                respond_startup_two_nodes(name, received_cmd)?;
+                Err(Ok(Value::Nil))
+            },
+        );
+        // MockEnv::with_client_builder finishes the initial connection setup
+        // before returning, so any CLUSTER SLOTS after this point is a
+        // driver-triggered refresh rather than startup.
+        startup_done.store(true, Ordering::SeqCst);
+
+        let routing = RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![],
+                redis::cluster_routing::MultiSlotArgPattern::KeysOnly,
+            )),
+            None,
+        ));
+        let err = runtime
+            .block_on(connection.route_command(&cmd("MGET"), routing))
+            .expect_err("empty MultiSlot routing plan must fail");
+
+        assert_eq!(
+            err.kind(),
+            ErrorKind::ClientError,
+            "guard must remain non-retryable even with retries(3): \
+             kind={:?} err={err:?}",
+            err.kind(),
+        );
+        let refreshes = post_startup_cluster_slots.load(Ordering::SeqCst);
+        assert_eq!(
+            refreshes, 0,
+            "guard must short-circuit the retry loop: observed {refreshes} \
+             post-startup CLUSTER SLOTS refresh(es), which only fires if the \
+             retryable empty-receivers branch leaked through",
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
