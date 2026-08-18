@@ -15,11 +15,13 @@ import (
 
 // requireTlsHost returns the first TLS host for the requested variant.
 // SetupSuite populates a TLS slice only when the invocation opts into TLS mode
-// (any --tls-*-endpoints flag, --modules-mode, or a bare invocation with no
-// flags). Non-TLS-only runs leave both slices empty, so callers must skip
-// rather than panic on an out-of-range index. Use this in tests whose
-// assertions do not depend on the fixture-managed cert paths or loopback
-// bringup; tests that do must use requireFixtureTlsHost instead.
+// (any --tls-*-endpoints flag, or a bare invocation with no flags). Non-TLS-only
+// runs leave both slices empty, so callers must skip rather than panic on an
+// out-of-range index. Use this in tests whose assertions do not depend on the
+// fixture-managed cert paths or loopback bringup; tests that do must use
+// requireFixtureTlsHost instead. A test asserting that the handshake fails also
+// needs requireFixtureTlsHost, because an externally supplied endpoint may
+// present a publicly trusted certificate that the system trust store accepts.
 func (suite *GlideTestSuite) requireTlsHost(cluster bool) config.NodeAddress {
 	hosts := suite.standaloneTlsHosts
 	variant := "standalone"
@@ -39,8 +41,9 @@ func (suite *GlideTestSuite) requireTlsHost(cluster bool) config.NodeAddress {
 // Use it in tests whose assertions depend on the fixture-managed certificate
 // paths under utils/tls_crts/ (CA-pinned), on a loopback address bringup, or
 // on dedicated mTLS servers spun up via cluster_manager.py --tls
-// --tls-auth-clients. Tests that only care that a TLS endpoint is reachable
-// (e.g., "no certificate" negatives) should stay on requireTlsHost.
+// --tls-auth-clients. The "no certificate" negatives need it too: with no root
+// certificates the core falls back to the system trust store, so a publicly
+// chained external endpoint would connect instead of failing.
 func (suite *GlideTestSuite) requireFixtureTlsHost(cluster bool) config.NodeAddress {
 	hosts := suite.standaloneTlsHosts
 	started := suite.standaloneTlsFixtureStarted
@@ -105,7 +108,7 @@ func (suite *GlideTestSuite) skipIfNoFixtureTlsPair() {
 
 // TestTlsWithoutCertificate_Standalone tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
-	addr := suite.requireTlsHost(false)
+	addr := suite.requireFixtureTlsHost(false)
 	clientConfig := defaultClientConfig().WithAddress(&addr).
 		WithUseTLS(true)
 
@@ -163,7 +166,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 
 // TestTlsWithoutCertificate_Cluster tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
-	addr := suite.requireTlsHost(true)
+	addr := suite.requireFixtureTlsHost(true)
 	clientConfig := defaultClusterClientConfig().WithAddress(&addr).
 		WithUseTLS(true)
 
