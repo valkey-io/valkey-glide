@@ -2180,7 +2180,8 @@ where
             return Err(RedisError::from((
                 ErrorKind::ConnectionNotFoundForRoute,
                 "Connection not found for route",
-                "No connections available for multi-node fan-out".to_string(),
+                "No connections available for multi-node fan-out"
+                    .to_string(),
             )));
         }
 
@@ -5044,7 +5045,8 @@ mod pipeline_routing_tests {
                 "retry_method mismatch for routing {routing:?}: err={err:?}",
             );
             assert!(
-                err.to_string().contains("No connections available for multi-node fan-out"),
+                err.to_string()
+                    .contains("No connections available for multi-node fan-out"),
                 "message mismatch for routing {routing:?}: {err}",
             );
         }
