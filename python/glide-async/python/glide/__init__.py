@@ -177,6 +177,10 @@ from glide_shared import (
     VectorFieldAttributesHnsw,
     VectorType,
     json_batch,
+    load_client_certificate_and_key_from_file,
+    load_client_certificate_from_file,
+    load_client_key_from_file,
+    load_root_certificates_from_file,
 )
 from glide_shared._glide_ffi import _GlideFFI as _FFI
 
@@ -292,6 +296,10 @@ __all__ = [
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
     "TlsAdvancedConfiguration",
+    "load_client_certificate_and_key_from_file",
+    "load_client_certificate_from_file",
+    "load_client_key_from_file",
+    "load_root_certificates_from_file",
     # Response
     "OK",
     "TClusterResponse",
