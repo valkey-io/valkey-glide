@@ -42,10 +42,8 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithClientName(clientName)
-	client, err := suite.client(config)
+	clientConfig := suite.defaultClientConfig().WithClientName(clientName)
+	client, err := suite.client(clientConfig)
 	require.NoError(suite.T(), err)
 
 	result, err := client.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
@@ -102,10 +100,8 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithClientName(clientName)
-	client, err := suite.client(config)
+	clientConfig := suite.defaultClientConfig().WithClientName(clientName)
+	client, err := suite.client(clientConfig)
 	require.NoError(suite.T(), err)
 
 	key1 := uuid.New().String()
@@ -1500,7 +1496,7 @@ func (suite *GlideTestSuite) TestMigrateMultiKey() {
 	suite.Equal(int64(0), exists)
 
 	// Keys should exist on destination
-	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	destClient, err := glide.NewClient(plaintextClientConfigFor(destAddresses[0]))
 	suite.NoError(err)
 	defer destClient.Close()
 	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
@@ -1560,7 +1556,7 @@ func (suite *GlideTestSuite) TestMigrateMultiKeyWithOptions() {
 	suite.Equal(int64(2), exists)
 
 	// Keys should also exist on destination
-	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	destClient, err := glide.NewClient(plaintextClientConfigFor(destAddresses[0]))
 	suite.NoError(err)
 	defer destClient.Close()
 	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
@@ -1577,9 +1573,7 @@ func (suite *GlideTestSuite) TestFailover() {
 	addresses := extractAddresses(suite, output)
 	defer stopDedicatedValkeyServer(suite, clusterFolder)
 
-	cfg := defaultClientConfig()
-	cfg.WithAddress(&addresses[0])
-	client, err := glide.NewClient(cfg)
+	client, err := glide.NewClient(plaintextClientConfigFor(addresses[0]))
 	suite.Require().NoError(err)
 	defer client.Close()
 

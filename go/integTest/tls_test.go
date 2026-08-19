@@ -17,8 +17,7 @@ import (
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 	skipIfTlsDisabled(suite)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true)
+	clientConfig := tlsClientConfigFor(nil, suite.standaloneHosts[0])
 
 	_, err := glide.NewClient(clientConfig)
 	assert.Error(suite.T(), err, "Expected connection to fail without certificate")
@@ -34,11 +33,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -62,11 +57,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 	multipleCerts = append(multipleCerts, certData...)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -80,8 +71,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
 	skipIfTlsDisabled(suite)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true)
+	clientConfig := tlsClusterClientConfigFor(nil, suite.clusterHosts[0])
 
 	_, err := glide.NewClusterClient(clientConfig)
 	assert.Error(suite.T(), err, "Expected connection to fail without certificate")
@@ -97,11 +87,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -125,11 +111,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 	multipleCerts = append(multipleCerts, certData...)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -145,11 +127,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	_, err := glide.NewClient(clientConfig)
 	assert.Error(suite.T(), err)
@@ -161,11 +139,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	_, err := glide.NewClusterClient(clientConfig)
 	assert.Error(suite.T(), err)
@@ -177,11 +151,7 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	_, err := glide.NewClient(clientConfig)
 	assert.Error(suite.T(), err)
@@ -193,11 +163,7 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Cluster() {
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	_, err := glide.NewClusterClient(clientConfig)
 	assert.Error(suite.T(), err)
@@ -283,10 +249,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Standalone() {
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -313,10 +276,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Standalone() {
 		WithRootCertificates(caCert).
 		WithMutualTLSFromFiles(certPath, keyPath)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, suite.standaloneHosts[0])
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -341,10 +301,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLS_Cluster() {
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -370,10 +327,7 @@ func (suite *GlideTestSuite) TestTlsMutualTLSWithReload_Cluster() {
 		WithRootCertificates(caCert).
 		WithMutualTLSFromFiles(certPath, keyPath)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, suite.clusterHosts[0])
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -396,13 +350,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClientConfig().
-		WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().
-		WithAddress(&address).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, address)
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -424,13 +372,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClusterClientConfig().
-		WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&address).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, address)
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -452,13 +394,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClientConfig().
-		WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClientConfig().
-		WithAddress(&address).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, address)
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -480,38 +416,13 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := defaultAdvancedClusterClientConfig().
-		WithTlsConfiguration(tlsConfig)
-
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&address).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, address)
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
 	assertConnected(suite.T(), client)
-}
-
-// getCaCertificate returns the CA certificate bytes in PEM format.
-// It looks for the certificate in the utils/tls_crts directory.
-func getCaCertificate() ([]byte, error) {
-	// Try to get GLIDE_HOME_DIR from environment, otherwise use relative path
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		// Default to ../../ from the integTest directory
-		glideHome = "../.."
-	}
-
-	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
-	absPath, err := filepath.Abs(caCertPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return config.LoadRootCertificatesFromFile(absPath)
 }
 
 // startMTlsRequiredStandalone spins up a single TLS standalone server that
@@ -606,11 +517,7 @@ func (suite *GlideTestSuite) TestTlsMTlsClientCertAcceptedByServerRequiringOne()
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().
-		WithAddress(&addr).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, addr)
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -634,11 +541,7 @@ func (suite *GlideTestSuite) TestTlsMTlsMissingClientCertRejectedByServerRequiri
 	require.NoError(suite.T(), err)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(caCert)
-	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClientConfig().
-		WithAddress(&addr).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClientConfigFor(tlsConfig, addr)
 
 	_, err = glide.NewClient(clientConfig)
 	require.Error(suite.T(), err)
@@ -664,11 +567,7 @@ func (suite *GlideTestSuite) TestTlsMTlsClusterClientCertAcceptedByServerRequiri
 		WithRootCertificates(caCert).
 		WithMutualTLS(clientCert, clientKey)
 	require.NoError(suite.T(), err)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&addrs[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, addrs[0])
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -692,11 +591,7 @@ func (suite *GlideTestSuite) TestTlsMTlsClusterMissingClientCertRejectedByServer
 	require.NoError(suite.T(), err)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(caCert)
-	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&addrs[0]).
-		WithUseTLS(true).
-		WithAdvancedConfiguration(advancedConfig)
+	clientConfig := tlsClusterClientConfigFor(tlsConfig, addrs[0])
 
 	_, err = glide.NewClusterClient(clientConfig)
 	require.Error(suite.T(), err)

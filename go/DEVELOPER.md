@@ -224,6 +224,12 @@ The integration suite therefore runs in one of two modes: plaintext by default, 
 CI runs the suite both ways, so a break in either mode shows up.
 TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
+Because of those two modes, a test client's address, its TLS setting and its root certificate have to agree with each other.
+Take every client configuration from [`integTest/client_config_seam_test.go`](integTest/client_config_seam_test.go) rather than calling `config.NewClientConfiguration` and friends directly, and pick the constructor that matches the server the test connects to.
+`clientConfigFor` and `clusterClientConfigFor` follow the run mode and attach the fixture CA under TLS, which is what a test wants for the suite's shared servers.
+`plaintextClientConfigFor` is for a server the test starts itself without TLS, and `tlsClientConfigFor` is for a test that supplies its own certificates because the TLS wiring is what it checks.
+`TestClientConfigsComeFromTheSeam` fails if a file in the package builds a configuration directly.
+
 #### IAM Authentication Tests
 
 To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
