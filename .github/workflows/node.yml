@@ -505,8 +505,33 @@ jobs:
                     esac
                   done
 
-                  # Download the test report from S3 so it can be uploaded as a GitHub artifact
-                  aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html || echo "Warning: could not download test report from S3"
+                  # Download the test report from S3.
+                  # Get the exact artifact S3 location from CodeBuild build metadata
+                  # rather than guessing the key structure.
+                  ARTIFACT_URL=$(aws codebuild batch-get-builds \
+                    --ids "${BUILD_ID}" \
+                    --query 'builds[0].artifacts.location' \
+                    --output text 2>/dev/null || true)
+                  echo "CodeBuild artifact location: ${ARTIFACT_URL}"
+
+                  if [[ -n "${ARTIFACT_URL}" && "${ARTIFACT_URL}" != "None" ]]; then
+                    # artifacts.location is an S3 ARN (arn:aws:s3:::bucket/path) or s3://bucket/path.
+                    # Normalize to s3:// URI.
+                    if [[ "${ARTIFACT_URL}" == arn:aws:s3:::* ]]; then
+                      S3_URI="s3://${ARTIFACT_URL#arn:aws:s3:::}"
+                    else
+                      S3_URI="${ARTIFACT_URL}"
+                    fi
+                    echo "Downloading report from ${S3_URI}"
+                    # The artifact path may be a directory; use --recursive and find the html file.
+                    aws s3 cp "${S3_URI}/test-report.html" ./test-report-windows.html \
+                      || aws s3 cp "${S3_URI}" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3 path ${S3_URI}"
+                  else
+                    # Fallback: try the build-id prefix directly
+                    aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3"
+                  fi
 
             - name: Upload Windows test report
               if: always()
