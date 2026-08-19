@@ -87,13 +87,6 @@ func (suite *GlideTestSuite) SetupSuite() {
 	}
 	suite.T().Logf("TLS = %t", suite.tls)
 
-	// Under TLS every client needs the fixture CA. Checking it here reports a missing or unreadable
-	// certificate as itself, instead of as a failed handshake in every test that connects.
-	if suite.tls {
-		_, certErr := getCaCertificate()
-		require.NoError(suite.T(), certErr, "a TLS run needs the CA certificate at utils/tls_crts/ca.crt")
-	}
-
 	// Note: code does not start standalone if cluster hosts are given and vice versa
 	startServer := true
 
@@ -113,6 +106,14 @@ func (suite *GlideTestSuite) SetupSuite() {
 		// Start cluster
 		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
+
+		// The servers write the fixture certificates as they start, so the CA can only be checked here.
+		// Checking it reports a missing or unreadable certificate as itself, rather than as a failed
+		// handshake in every test that connects.
+		if suite.tls {
+			_, certErr := getCaCertificate()
+			require.NoError(suite.T(), certErr, "a TLS run needs the CA certificate at utils/tls_crts/ca.crt")
+		}
 	}
 
 	suite.T().Logf("Standalone hosts = %s", fmt.Sprint(suite.standaloneHosts))

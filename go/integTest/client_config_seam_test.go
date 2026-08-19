@@ -43,9 +43,30 @@ func runUsesTls() bool {
 	return *tls
 }
 
+// runUsesOwnServers reports whether the suite starts the servers itself, which is what generates the
+// fixture certificates under utils/tls_crts. Given endpoints belong to someone else and present a
+// certificate the fixture CA did not sign.
+func runUsesOwnServers() bool {
+	return *standaloneHosts == "" && *clusterHosts == ""
+}
+
+var (
+	caCertificateMu  sync.Mutex
+	caCertificatePem []byte
+)
+
 // getCaCertificate returns the PEM bytes of the certificate authority that signed the test servers'
-// certificates, from utils/tls_crts. Read once, since every TLS client in the run needs the same bytes.
-var getCaCertificate = sync.OnceValues(func() ([]byte, error) {
+// certificates, from utils/tls_crts. A successful read is cached, since every TLS client in the run needs
+// the same bytes. A failed read is not, because the fixtures only appear once the suite starts its servers,
+// so caching the failure would leave every later client without a certificate.
+func getCaCertificate() ([]byte, error) {
+	caCertificateMu.Lock()
+	defer caCertificateMu.Unlock()
+
+	if caCertificatePem != nil {
+		return caCertificatePem, nil
+	}
+
 	glideHome := os.Getenv("GLIDE_HOME_DIR")
 	if glideHome == "" {
 		glideHome = "../.."
@@ -56,20 +77,28 @@ var getCaCertificate = sync.OnceValues(func() ([]byte, error) {
 		return nil, err
 	}
 
-	return config.LoadRootCertificatesFromFile(absPath)
-})
+	certData, err := config.LoadRootCertificatesFromFile(absPath)
+	if err != nil {
+		return nil, err
+	}
 
-// runTlsConfiguration returns the fixture CA as a root certificate for a TLS run, and nil for a plaintext
-// run. A certificate that cannot be read also gives nil, because SetupSuite checks for that up front and
-// reports it as a missing certificate instead of as a failed handshake in every test that connects.
+	caCertificatePem = certData
+	return caCertificatePem, nil
+}
+
+// runTlsConfiguration returns the root certificate a test client should trust: the fixture CA for a TLS run
+// against the suite's own servers, and nil otherwise. Given endpoints get nil so the client verifies them
+// against the platform's certificate authorities, which signed them.
 func runTlsConfiguration() *config.TlsConfiguration {
-	if !runUsesTls() {
+	if !runUsesTls() || !runUsesOwnServers() {
 		return nil
 	}
 
 	certData, err := getCaCertificate()
 	if err != nil {
-		return nil
+		// Returning no certificate here would surface much later as a verification error in whichever
+		// test happened to connect first, so fail where the cause is.
+		panic(fmt.Sprintf("cannot build a TLS test client without the fixture CA: %v", err))
 	}
 
 	return config.NewTlsConfiguration().WithRootCertificates(certData)
