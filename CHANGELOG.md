@@ -4,6 +4,8 @@
 
 ### Fixes
 
+* Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
+* Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Strip brackets from IPv6 address literals in `create_client_from_uri` so bracketed hosts (e.g. `redis://[::1]:6379`) resolve correctly. `url::Url::host_str()` returns the literal with its surrounding brackets (`[::1]`), which `tokio::net::lookup_host` cannot resolve, causing connections to IPv6 literals to hang until the connect timeout. The URI parser now uses the unbracketed canonical form via `Ipv6Addr::to_string()`.
 
 * Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
@@ -26,6 +28,7 @@
 
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, pooled, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
+* Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
