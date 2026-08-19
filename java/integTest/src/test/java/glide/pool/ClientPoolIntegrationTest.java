@@ -11,12 +11,16 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
+import glide.api.models.pool.PooledGlideClient;
+import glide.api.models.scope.IsolatedScope;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -101,6 +105,33 @@ public class ClientPoolIntegrationTest {
         while (pool.getIdleCount() < minIdle && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
+    }
+
+    // Shared by the PoolAndScope cases.
+
+    /** A cluster-mode pool that is ready to hand out clients. */
+    private ClientPool clusterPool() throws InterruptedException {
+        ClientPool pool = ClientPool.create(poolConfig(true));
+        waitForPoolReady(pool, 1);
+        return pool;
+    }
+
+    /** Open a scope on a pooled client, pinned to the slot of {@code routingKey}. */
+    private static IsolatedScope scopeOn(PooledGlideClient client, String routingKey)
+            throws Exception {
+        return client
+                .unwrap()
+                .scopedConnection(Duration.ofSeconds(10), routingKey)
+                .get(10, TimeUnit.SECONDS);
+    }
+
+    /**
+     * A cluster key under a hash tag other than the one {@link #testKey} uses, so it lands in a
+     * different slot.
+     */
+    private static String otherSlotKey(String prefix) {
+        String id = UUID.randomUUID().toString().substring(0, 8);
+        return "{pool-test-other}-" + prefix + "-" + id;
     }
 
     @ParameterizedTest
@@ -469,5 +500,46 @@ public class ClientPoolIntegrationTest {
                         .build();
 
         assertThrows(RuntimeException.class, () -> ClientPool.create(badConfig));
+    }
+
+    /**
+     * A scope opened on a pooled client commits a transaction on one slot, then refuses a key from
+     * another slot.
+     */
+    @Test
+    @Disabled(
+            "Pooled clients cannot open scopes: https://github.com/valkey-io/valkey-glide/issues/6764")
+    public void testPoolAndScopeCluster() throws Exception {
+        assumeMode(true);
+        ClientPool pool = clusterPool();
+        String key = testKey(true, "pool-scope");
+        String foreignKey = otherSlotKey("pool-scope");
+
+        try (PooledGlideClient client = pool.acquire().get(10, TimeUnit.SECONDS)) {
+            client.set(key, "10").get(5, TimeUnit.SECONDS);
+
+            try (IsolatedScope scope = scopeOn(client, key)) {
+                assertEquals("OK", scope.watch(key).get(5, TimeUnit.SECONDS));
+                assertEquals("10", scope.get(key).get(5, TimeUnit.SECONDS));
+                assertEquals("OK", scope.multi().get(5, TimeUnit.SECONDS));
+                scope.set(key, "11").get(5, TimeUnit.SECONDS);
+                String exec = scope.exec().get(5, TimeUnit.SECONDS);
+                assertNotNull(exec, "EXEC should commit, nobody touched the key");
+
+                // The scope is pinned to this key's slot, so another slot's key must be rejected.
+                ExecutionException ex =
+                        assertThrows(
+                                ExecutionException.class, () -> scope.get(foreignKey).get(5, TimeUnit.SECONDS));
+                assertTrue(
+                        ex.getMessage().toLowerCase().contains("crossslot"),
+                        "Expected a cross-slot error, got: " + ex.getMessage());
+            } // scope released here, before the client goes back to the pool
+
+            assertEquals("11", client.get(key).get(5, TimeUnit.SECONDS));
+            client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
+        }
+
+        pool.close();
+        System.out.println("testPoolAndScopeCluster PASSED");
     }
 }
