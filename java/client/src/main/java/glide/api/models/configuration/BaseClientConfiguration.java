@@ -77,8 +77,8 @@ public abstract class BaseClientConfiguration {
      * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
      * present, it is appended to the effective library name in parentheses. Every character in a
      * non-empty override must be printable ASCII from {@code !} (U+0021) through {@code ~} (U+007E),
-     * inclusive. Dedicated standalone monitor clients also apply this option. See: validateClientAttr
-     * in
+     * inclusive, excluding {@code (} and {@code )}. Dedicated standalone monitor clients also apply
+     * this option. See: validateClientAttr in
      * https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     private final String libName;
@@ -86,9 +86,9 @@ public abstract class BaseClientConfiguration {
     /**
      * Optional attribution tag appended to the effective library name in parentheses. For example,
      * {@code GlideJava(my-framework:1.2.3)}. Every character in a non-empty tag must be printable
-     * ASCII from {@code !} (U+0021) through {@code ~} (U+007E), inclusive. If null or empty, no tag
-     * is appended. Dedicated standalone monitor clients also apply this option. See:
-     * validateClientAttr in
+     * ASCII from {@code !} (U+0021) through {@code ~} (U+007E), inclusive, excluding {@code (} and
+     * {@code )}. If null or empty, no tag is appended. Dedicated standalone monitor clients also
+     * apply this option. See: validateClientAttr in
      * https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     private final String clientInfoTag;
@@ -215,7 +215,8 @@ public abstract class BaseClientConfiguration {
          * @param libName library-name override; null or empty means absent
          * @return this builder
          * @throws IllegalArgumentException if a non-empty override contains a character outside
-         *     printable ASCII U+0021 through U+007E See: validateClientAttr in
+         *     printable ASCII U+0021 through U+007E or contains {@code (} or {@code )}. See:
+         *     validateClientAttr in
          *     https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
          */
         public B libName(String libName) {
@@ -230,7 +231,8 @@ public abstract class BaseClientConfiguration {
          * @param clientInfoTag attribution tag; null or empty means absent
          * @return this builder
          * @throws IllegalArgumentException if a non-empty tag contains a character outside printable
-         *     ASCII U+0021 through U+007E. See: validateClientAttr in
+         *     ASCII U+0021 through U+007E or contains {@code (} or {@code )}. See: validateClientAttr
+         *     in
          *     https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
          */
         public B clientInfoTag(String clientInfoTag) {
@@ -241,9 +243,15 @@ public abstract class BaseClientConfiguration {
 
         private static void validatePrintableAscii(String fieldName, String value) {
             if (value != null
-                    && value.codePoints().anyMatch(codePoint -> codePoint < '!' || codePoint > '~')) {
+                    && value
+                            .codePoints()
+                            .anyMatch(
+                                    codePoint ->
+                                            codePoint < '!' || codePoint > '~' || codePoint == '(' || codePoint == ')')) {
                 throw new IllegalArgumentException(
-                        fieldName + " must contain only printable ASCII characters from '!' through '~'");
+                        fieldName
+                                + " must contain only printable ASCII characters from '!' through '~', excluding"
+                                + " '(' and ')'");
             }
         }
     }

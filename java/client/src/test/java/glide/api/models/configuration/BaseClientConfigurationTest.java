@@ -95,6 +95,32 @@ public class BaseClientConfigurationTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"(", ")"})
+    public void testClientInfoTagRejectsReservedParentheses(String clientInfoTag) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"(", ")"})
+    public void testLibNameRejectsReservedParentheses(String libName) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().libName(libName));
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
     @ValueSource(
             strings = {
                 "a b",
@@ -113,7 +139,8 @@ public class BaseClientConfigurationTest {
                         IllegalArgumentException.class,
                         () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
         assertEquals(
-                "clientInfoTag must contain only printable ASCII characters from '!' through '~'",
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
                 exception.getMessage());
     }
 
@@ -136,7 +163,8 @@ public class BaseClientConfigurationTest {
                         IllegalArgumentException.class,
                         () -> TestClientConfiguration.builder().libName(libName));
         assertEquals(
-                "libName must contain only printable ASCII characters from '!' through '~'",
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
                 exception.getMessage());
     }
 

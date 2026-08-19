@@ -77,8 +77,8 @@ def test_client_library_metadata_accepts_printable_ascii(field_name, accepted_va
 
 # CLIENT SETINFO validates both LIB-NAME and LIB-VER with validateClientAttr,
 # which permits only visible ASCII characters from "!" through "~" so that
-# CLIENT LIST remains space-delimited and parseable. Apply the same constraint
-# to lib_name and client_info_tag, which are composed into the LIB-NAME value.
+# CLIENT LIST remains space-delimited and parseable. Parentheses are additionally
+# reserved as delimiters when composing lib_name and client_info_tag.
 # See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
 @pytest.mark.parametrize("field_name", ["lib_name", "client_info_tag"])
 @pytest.mark.parametrize(
@@ -90,6 +90,8 @@ def test_client_library_metadata_accepts_printable_ascii(field_name, accepted_va
         pytest.param("\r", id="carriage-return"),
         pytest.param("\x00", id="null-control-character"),
         pytest.param("\x1f", id="unit-separator-control-character"),
+        pytest.param("(", id="opening-parenthesis"),
+        pytest.param(")", id="closing-parenthesis"),
         pytest.param("\x7f", id="delete-control-character"),
         pytest.param("\u00a0", id="non-breaking-space"),
         pytest.param("\u2003", id="em-space"),
@@ -104,11 +106,13 @@ def test_client_library_metadata_rejects_invalid_characters(
 ):
     value = f"valid{invalid_character}value"
 
-    with pytest.raises(
-        ValueError,
-        match=rf"{field_name} must contain only printable ASCII characters from '!' through '~'",
-    ):
+    with pytest.raises(ValueError) as error:
         GlideClientConfiguration(addresses=[], **{field_name: value})
+
+    assert str(error.value) == (
+        f"{field_name} must contain only printable ASCII characters from '!' "
+        "through '~', excluding '(' and ')'"
+    )
 
 
 def test_default_client_config():

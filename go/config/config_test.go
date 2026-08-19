@@ -2003,6 +2003,10 @@ func resolveLibNameTestCases() []resolveLibNameTestCase {
 		{name: "lib name upper boundary", libName: "~", expected: "~"},
 		{name: "tag lower boundary", clientInfoTag: "!", expected: "GlideGo(!)"},
 		{name: "tag upper boundary", clientInfoTag: "~", expected: "GlideGo(~)"},
+		{name: "lib name opening parenthesis", libName: "(", errorFieldName: "libName"},
+		{name: "lib name closing parenthesis", libName: ")", errorFieldName: "libName"},
+		{name: "tag opening parenthesis", clientInfoTag: "(", errorFieldName: "clientInfoTag"},
+		{name: "tag closing parenthesis", clientInfoTag: ")", errorFieldName: "clientInfoTag"},
 		{name: "lib name ASCII space", libName: "custom client", errorFieldName: "libName"},
 		{name: "lib name null control", libName: "custom\x00client", errorFieldName: "libName"},
 		{name: "lib name unit separator", libName: "custom\x1fclient", errorFieldName: "libName"},
@@ -2030,11 +2034,11 @@ func TestResolveLibName(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			result, err := resolveLibName(testCase.libName, testCase.clientInfoTag)
 			if testCase.errorFieldName != "" {
-				require.Error(t, err)
-				assert.Contains(
+				require.EqualError(
 					t,
-					err.Error(),
-					testCase.errorFieldName+" must contain only printable ASCII characters from '!' through '~'",
+					err,
+					testCase.errorFieldName+
+						" must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
 				)
 				assert.Empty(t, result)
 				return
@@ -2077,11 +2081,11 @@ func TestClientConfigurationsResolveLibName(t *testing.T) {
 				t.Run(testCase.name, func(t *testing.T) {
 					request, err := configurationType.toProtobuf(testCase.libName, testCase.clientInfoTag)
 					if testCase.errorFieldName != "" {
-						require.Error(t, err)
-						assert.Contains(
+						require.EqualError(
 							t,
-							err.Error(),
-							testCase.errorFieldName+" must contain only printable ASCII characters from '!' through '~'",
+							err,
+							testCase.errorFieldName+
+								" must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
 						)
 						assert.Nil(t, request)
 						return

@@ -909,7 +909,7 @@ export enum NodeDiscoveryMode {
  * - **Client Name**: Set `clientName` to identify the client connection.
  * - **Library Name**: Set `libName` to override the default library name (`GlideJS`) reported by `CLIENT INFO`; an empty value uses the default.
  * - **Client Info Tag**: Set `clientInfoTag` to append an attribution tag to the library name (e.g., `GlideJS(my-framework:1.0)`); an empty value adds no tag.
- * - Both options apply to ordinary standalone and cluster clients and to dedicated monitor clients. Every character in a non-empty value must be printable ASCII from `!` (U+0021) through `~` (U+007E), inclusive; otherwise a `ConfigurationError` is thrown.
+ * - Both options apply to ordinary standalone and cluster clients and to dedicated monitor clients. Every character in a non-empty value must be printable ASCII from `!` (U+0021) through `~` (U+007E), inclusive, excluding `(` and `)`, which are reserved as composition delimiters; otherwise a `ConfigurationError` is thrown.
  *
  * ### Read Strategy
  *
@@ -1056,10 +1056,11 @@ export interface BaseClientConfiguration {
      *
      * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
      * Every character in a non-empty override must be printable ASCII from {@code !} (U+0021)
-     * through {@code ~} (U+007E), inclusive; punctuation is preserved.
+     * through {@code ~} (U+007E), inclusive, excluding {@code (} and {@code )}, which are
+     * reserved as composition delimiters; all other in-range punctuation is preserved.
      *
      * @throws ConfigurationError if a non-empty override contains a character outside printable
-     * ASCII U+0021 through U+007E.
+     * ASCII U+0021 through U+007E or contains the reserved {@code (} or {@code )} delimiter.
      * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     libName?: string;
@@ -1071,10 +1072,11 @@ export interface BaseClientConfiguration {
      *
      * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
      * Every character in a non-empty tag must be printable ASCII from {@code !} (U+0021) through
-     * {@code ~} (U+007E), inclusive; punctuation is preserved.
+     * {@code ~} (U+007E), inclusive, excluding {@code (} and {@code )}, which are reserved as
+     * composition delimiters; all other in-range punctuation is preserved.
      *
      * @throws ConfigurationError if a non-empty tag contains a character outside printable ASCII
-     * U+0021 through U+007E.
+     * U+0021 through U+007E or contains the reserved {@code (} or {@code )} delimiter.
      * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     clientInfoTag?: string;

@@ -858,14 +858,16 @@ class BaseClientConfiguration:
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
             command during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
-            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
             If not set, a client-specific default (e.g. ``GlidePy`` for the async client,
             ``GlidePySync`` for the sync client) is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
-            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -984,17 +986,18 @@ class BaseClientConfiguration:
         self.client_circuit_breaker = client_circuit_breaker
 
         if client_info_tag is not None and any(
-            not "!" <= character <= "~" for character in client_info_tag
+            not "!" <= character <= "~" or character in "()"
+            for character in client_info_tag
         ):
             raise ValueError(
-                "client_info_tag must contain only printable ASCII characters from '!' through '~'"
+                "client_info_tag must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
             )
 
         if lib_name is not None and any(
-            not "!" <= character <= "~" for character in lib_name
+            not "!" <= character <= "~" or character in "()" for character in lib_name
         ):
             raise ValueError(
-                "lib_name must contain only printable ASCII characters from '!' through '~'"
+                "lib_name must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
             )
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
@@ -1207,13 +1210,15 @@ class GlideClientConfiguration(BaseClientConfiguration):
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
-            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
             If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
-            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1468,13 +1473,15 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
             ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
-            from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
             If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
-            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive. An empty value is treated as unset.
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.

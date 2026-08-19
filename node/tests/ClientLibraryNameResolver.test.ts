@@ -49,6 +49,27 @@ describe("resolveClientLibraryName", () => {
     );
 
     it.each([
+        ["(", "libName"],
+        [")", "libName"],
+        ["(", "clientInfoTag"],
+        [")", "clientInfoTag"],
+    ] as [string, "libName" | "clientInfoTag"][])(
+        "rejects reserved delimiter %s in %s before connection setup",
+        (delimiter, fieldName) => {
+            const resolve = () =>
+                resolveClientLibraryName(
+                    fieldName === "libName" ? delimiter : undefined,
+                    fieldName === "clientInfoTag" ? delimiter : undefined,
+                );
+
+            expect(resolve).toThrow(ConfigurationError);
+            expect(resolve).toThrow(
+                `${fieldName} must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'`,
+            );
+        },
+    );
+
+    it.each([
         ["libName", "custom client"],
         ["libName", "custom\u0000client"],
         ["libName", "custom\tclient"],
@@ -76,7 +97,7 @@ describe("resolveClientLibraryName", () => {
 
             expect(resolve).toThrow(ConfigurationError);
             expect(resolve).toThrow(
-                `${fieldName} must contain only printable ASCII characters from '!' through '~'`,
+                `${fieldName} must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'`,
             );
         },
     );

@@ -38,7 +38,7 @@ public class ClientLibraryNameResolverTest {
     @Test
     public void resolvePreservesNonWhitespacePunctuation() {
         assertEquals(
-                "my-client:1.2_+/()(my-framework:1.2_+/())",
-                ClientLibraryNameResolver.resolve("my-client:1.2_+/()", "my-framework:1.2_+/()"));
+                "my-client:1.2_+/(my-framework:1.2_+/)",
+                ClientLibraryNameResolver.resolve("my-client:1.2_+/", "my-framework:1.2_+/"));
     }
 }

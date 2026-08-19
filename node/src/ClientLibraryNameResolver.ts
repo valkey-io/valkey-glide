@@ -9,9 +9,14 @@ function validateIdentificationValue(
     fieldName: "libName" | "clientInfoTag",
     value: string | undefined,
 ): void {
-    if (value && !PRINTABLE_ASCII_PATTERN.test(value)) {
+    if (
+        value &&
+        (!PRINTABLE_ASCII_PATTERN.test(value) ||
+            value.includes("(") ||
+            value.includes(")"))
+    ) {
         throw new ConfigurationError(
-            `${fieldName} must contain only printable ASCII characters from '!' through '~'`,
+            `${fieldName} must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'`,
         );
     }
 }

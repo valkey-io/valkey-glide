@@ -93,6 +93,24 @@ public class StandaloneClientTests {
                     (String) combinedClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
             assertTrue(combinedInfo.contains(" lib-name=custom-client(framework:1.2) "));
         }
+
+        IllegalArgumentException clientInfoException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> commonClientConfig().libName("custom-client").clientInfoTag("a(b)"));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
+                clientInfoException.getMessage());
+
+        IllegalArgumentException libNameException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> commonClientConfig().libName("custom-cli(en)t").clientInfoTag("ab"));
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
+                libNameException.getMessage());
     }
 
     @Test
