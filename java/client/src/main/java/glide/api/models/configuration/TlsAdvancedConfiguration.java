@@ -52,6 +52,12 @@ import lombok.Getter;
 public class TlsAdvancedConfiguration {
 
     /**
+     * Largest value that fits in an unsigned 32-bit protobuf field. Reused by validators that need to
+     * bound a value to the uint32 wire range.
+     */
+    public static final long MAX_UINT32 = 4294967295L;
+
+    /**
      * Whether to bypass TLS certificate verification.
      *
      * <p>When set to True, the client skips certificate validation. This is useful when connecting to
@@ -210,6 +216,13 @@ public class TlsAdvancedConfiguration {
             throw new ConfigurationError(
                     "`clientKey` cannot be an empty byte array; use null if not providing a client"
                             + " key.");
+        }
+
+        if (!hasCertPath && certReloadIntervalSeconds != null) {
+            throw new ConfigurationError(
+                    "`certReloadIntervalSeconds` may only be set with path-based mTLS; use a"
+                            + " `useMutualTlsWithReload` overload, which supplies the certificate and key"
+                            + " paths that are reloaded.");
         }
 
         // Enablement and interval are separate. When path-based reloading is enabled (a cert path is

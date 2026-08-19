@@ -37,6 +37,10 @@ from glide_shared.protobuf.connection_request_pb2 import (
 # (for example ``pathlib.Path``).
 StrPath = Union[str, os.PathLike[str]]
 
+# Largest value that fits in an unsigned 32-bit protobuf field. Reused by
+# validators that need to bound a value to the uint32 wire range.
+MAX_UINT32 = 2**32 - 1
+
 
 class NodeAddress:
     """
@@ -125,6 +129,12 @@ class ReadFrom(Enum):
     ALL_NODES = ProtobufReadFrom.AllNodes
     """
     Spread the read requests between all nodes (primary and replicas) in a round robin manner.
+    """
+    AZ_AFFINITY_ALL_NODES = ProtobufReadFrom.AZAffinityAllNodes
+    """
+    Spread the read requests equally among all nodes (primary and replicas) within the client's
+    Availability Zone (AZ) in a round robin manner, falling back to a round robin across all
+    nodes if no node in the client's AZ is available.
     """
 
 
@@ -540,7 +550,7 @@ class TlsAdvancedConfiguration:
 
             - Must be used together with ``client_key_path``, and cannot be combined with
               byte-based mTLS (``client_cert_pem`` / ``client_key_pem``). Invalid combinations
-              raise ``ConfigurationError`` at construction time.
+              raise ``ConfigurationError`` when the connection request is built.
 
             - Accepts a ``str`` or any ``os.PathLike`` (including ``pathlib.Path``). The file is
               read and validated by the GLIDE core when the connection is established; a missing,
@@ -562,10 +572,12 @@ class TlsAdvancedConfiguration:
         cert_reload_interval_seconds (Optional[int]): Override for the path-based mTLS reload cadence, in seconds.
 
             - Only meaningful with path-based mTLS. Setting it without both ``client_cert_path``
-              and ``client_key_path`` raises ``ConfigurationError`` at construction time.
+              and ``client_key_path`` raises ``ConfigurationError`` when the connection request
+              is built.
 
-            - Interpreted as an unsigned 32-bit integer when sent; the GLIDE core validates the
-              effective cadence.
+            - Must be a positive integer no greater than ``MAX_UINT32``.
+              Values outside that range raise ``ConfigurationError`` when the connection
+              request is built.
 
             - If None (default), the GLIDE core applies its default reload cadence (see
               ``DEFAULT_RELOAD_INTERVAL_SECONDS`` in glide-core's ``tls_reload`` module for the
@@ -701,10 +713,8 @@ class AdvancedBaseClientConfiguration:
     def _validate_mtls_config(self, tls_config: TlsAdvancedConfiguration) -> None:
         """Validate the both-or-neither pairing and mode exclusivity for mTLS on the given tls_config when the request is built.
 
-        Only the minimal presence/pairing rules that give an immediate, clear
-        error for an obviously-malformed config are enforced here, matching the
-        other clients. File contents, path readability, and the reload interval
-        value are validated by the GLIDE core at connection time.
+        Covers presence, pairing, and the reload interval's range. The GLIDE core
+        checks file contents and path readability at connection time.
         """
         has_cert_path = tls_config.client_cert_path is not None
         has_key_path = tls_config.client_key_path is not None
@@ -737,10 +747,31 @@ class AdvancedBaseClientConfiguration:
                 raise ConfigurationError(
                     "client_key_pem must not be empty; got zero-length bytes."
                 )
-        elif not has_cert_path and tls_config.cert_reload_interval_seconds is not None:
+
+        interval = tls_config.cert_reload_interval_seconds
+
+        # Only the path-based branch emits `cert_reload`.
+        if not has_cert_path and interval is not None:
             raise ConfigurationError(
                 "cert_reload_interval_seconds may only be set when path-based mTLS is "
                 "configured (both client_cert_path and client_key_path)."
+            )
+
+        # The core silently maps `0` to unset and applies its default cadence, so
+        # reject it here instead of leaving callers with a surprising fallback.
+        if interval is not None and interval <= 0:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds must be positive; omit it (None) to defer "
+                "to the GLIDE core's default reload cadence."
+            )
+
+        # The core cannot catch values above the uint32 wire field; it never
+        # sees them.
+        if interval is not None and interval > MAX_UINT32:
+            raise ConfigurationError(
+                "cert_reload_interval_seconds must be a positive integer no greater "
+                f"than {MAX_UINT32}; got {interval}. Omit it to defer "
+                "to the GLIDE core's default reload cadence."
             )
 
     def _apply_tls_config(
@@ -849,6 +880,8 @@ class BaseClientConfiguration:
             within the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
 
         lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
@@ -966,6 +999,11 @@ class BaseClientConfiguration:
         if read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY and not client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
+            )
+
+        if read_from == ReadFrom.AZ_AFFINITY_ALL_NODES and not client_az:
+            raise ValueError(
+                "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
 
     def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
@@ -1186,6 +1224,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
             nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
         compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
@@ -1200,8 +1240,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             - If no ReadFrom strategy is specified, defaults to PreferReplica
             This is useful for connecting to replica-only deployments or when you want to
             prevent accidental write operations.
-            Note: read_only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
-            read strategies.
+            Note: read_only mode is not compatible with AZAffinity, AZAffinityReplicasAndPrimary, or
+            AZAffinityAllNodes read strategies.
             Defaults to False.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
@@ -1454,6 +1494,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
             nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
         compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
@@ -1664,7 +1706,7 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
     Example usage::
 
-        from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
+        from glide import load_root_certificates_from_file, TlsAdvancedConfiguration
 
         certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
         tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
@@ -1738,7 +1780,7 @@ def load_client_certificate_and_key_from_file(
 
     Example::
 
-        from glide_shared.config import (
+        from glide import (
             TlsAdvancedConfiguration,
             load_client_certificate_and_key_from_file,
         )

@@ -23,8 +23,9 @@ pub struct SlotMapValue {
     /// The shard addresses responsible for this slot range.
     pub addrs: Arc<ShardAddrs>,
 
-    /// Index of the last used replica for round-robin load balancing when reading from replicas.
-    pub last_used_replica: Arc<AtomicUsize>,
+    /// Index of the last used node for round-robin load balancing when reading from
+    /// replicas or, in node-inclusive strategies, from all nodes (index 0 = primary).
+    pub last_used_node_index: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -44,6 +45,10 @@ pub enum ReadFromReplicaStrategy {
     AZAffinityReplicasAndPrimary(String),
     /// Spread the read requests between all nodes (primary and replicas) in a round robin manner.
     AllNodes,
+    /// Spread the read requests equally among all nodes (primary and replicas) within the client's
+    /// Availability Zone (AZ) in a round robin manner, falling back to a round robin across all
+    /// nodes if no node in the client's AZ is available.
+    AZAffinityAllNodes(String),
 }
 
 #[derive(Debug, Default)]
@@ -65,7 +70,7 @@ fn get_address_from_slot(
     }
     let round_robin_replica = || {
         let index = slot
-            .last_used_replica
+            .last_used_node_index
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             % addrs.replicas().len();
         addrs.replicas()[index].clone()
@@ -74,7 +79,7 @@ fn get_address_from_slot(
         // Round-robin across all nodes: primary + all replicas
         let total_nodes = addrs.replicas().len() + 1;
         let index = slot
-            .last_used_replica // named for replica-based strategy, but index 0 refers to primary
+            .last_used_node_index // index 0 refers to the primary
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             % total_nodes;
         if index == 0 {
@@ -91,6 +96,14 @@ fn get_address_from_slot(
         // behavior of these strategies when no local node is known.
         ReadFromReplicaStrategy::AZAffinity(_az) => round_robin_replica(),
         ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => round_robin_all_nodes(),
+        // Explicit replica routes stay in the replica rotation, matching this
+        // strategy's `lookup_route` behavior.
+        ReadFromReplicaStrategy::AZAffinityAllNodes(_az)
+            if slot_addr == SlotAddr::ReplicaRequired =>
+        {
+            round_robin_replica()
+        }
+        ReadFromReplicaStrategy::AZAffinityAllNodes(_az) => round_robin_all_nodes(),
     }
 }
 
@@ -146,7 +159,7 @@ impl SlotMap {
                 SlotMapValue {
                     addrs: shard_addrs_arc,
                     start: slot.start,
-                    last_used_replica: Arc::new(AtomicUsize::new(0)),
+                    last_used_node_index: Arc::new(AtomicUsize::new(0)),
                 },
             );
         }
@@ -318,7 +331,7 @@ impl SlotMap {
             SlotMapValue {
                 start: slot,
                 addrs: shard_addrs,
-                last_used_replica: Arc::new(AtomicUsize::new(0)),
+                last_used_node_index: Arc::new(AtomicUsize::new(0)),
             },
         )
     }
@@ -509,7 +522,7 @@ impl SlotMap {
 
                 let start: u16 = curr_slot_val.start;
                 let addrs = curr_slot_val.addrs.clone();
-                let last_used_replica = curr_slot_val.last_used_replica.clone();
+                let last_used_node_index = curr_slot_val.last_used_node_index.clone();
 
                 // Modify the current slot range to become part C: [slot + 1, end], still owned by the current shard.
                 curr_slot_val.start = slot + 1;
@@ -521,7 +534,7 @@ impl SlotMap {
                     SlotMapValue {
                         start,
                         addrs,
-                        last_used_replica,
+                        last_used_node_index,
                     },
                 );
 
@@ -924,6 +937,54 @@ mod tests_cluster_slotmap {
             .into_iter()
             .map(|s| Arc::new(s.to_string()))
             .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_all_nodes_falls_back_to_all_nodes() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityAllNodes(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec![
+                "node3:6379",
+                "replica4:6379",
+                "replica5:6379",
+                "replica6:6379"
+            ]
+            .into_iter()
+            .map(|s| Arc::new(s.to_string()))
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_all_nodes_replica_required_stays_on_replicas() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityAllNodes(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaRequired);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec!["replica4:6379", "replica5:6379", "replica6:6379"]
+                .into_iter()
+                .map(|s| Arc::new(s.to_string()))
+                .collect::<Vec<_>>()
         );
     }
 

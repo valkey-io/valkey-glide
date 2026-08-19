@@ -478,7 +478,6 @@ fn get_timeout_from_cmd_arg(
 /// Returns true for commands with user-specified blocking timeouts that
 /// should be excluded from latency tracking (they distort p99).
 /// Also used by the pool abandon monitor to skip clients executing blocking commands.
-/// Keep in sync with BLOCKING_COMMANDS in node/src/ClientPool.ts.
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
     match command.as_slice() {
@@ -2338,6 +2337,7 @@ async fn create_cluster_client(
         }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
         ReadFrom::AllNodes => ReadFromReplicaStrategy::AllNodes,
+        ReadFrom::AZAffinityAllNodes(az) => ReadFromReplicaStrategy::AZAffinityAllNodes(az),
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
     if let Some(interval_duration) = periodic_topology_checks {
@@ -2556,6 +2556,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::AZAffinityReplicasAndPrimary(_) =>
                         "Prefer replica and primary in user's availability zone",
                     ReadFrom::AllNodes => "All nodes (primary and replicas)",
+                    ReadFrom::AZAffinityAllNodes(_) =>
+                        "All nodes (primary and replicas) in user's availability zone",
                 }
             )
         })
