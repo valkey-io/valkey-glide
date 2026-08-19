@@ -462,13 +462,13 @@ jobs:
               with:
                   role-to-assume: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
                   aws-region: us-east-1
+                  role-duration-seconds: 7200
 
             - name: Trigger CodeBuild and wait for result
               shell: bash
               env:
                   PROJECT_NAME: GlideNodeWindows
                   REPORT_BUCKET: valkey-glide-win
-                  ROLE_ARN: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
               run: |
                   echo "Starting CodeBuild project ${PROJECT_NAME}..."
                   BUILD_ID=$(aws codebuild start-build \
@@ -477,27 +477,9 @@ jobs:
                     --output text)
                   echo "Build started: ${BUILD_ID}"
 
-                  # Poll until the build reaches a terminal state.
-                  # Re-assume the role every 50 minutes to avoid token expiry on long builds.
+                  # Poll until the build reaches a terminal state
                   echo "Polling for build completion..."
-                  LAST_REFRESH=$(date +%s)
                   while true; do
-                    # Refresh credentials if more than 50 minutes have passed
-                    NOW=$(date +%s)
-                    if (( NOW - LAST_REFRESH >= 3000 )); then
-                      echo "Refreshing AWS credentials..."
-                      CREDS=$(aws sts assume-role \
-                        --role-arn "${ROLE_ARN}" \
-                        --role-session-name "github-codebuild-poll" \
-                        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
-                        --output text)
-                      export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | awk '{print $1}')
-                      export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | awk '{print $2}')
-                      export AWS_SESSION_TOKEN=$(echo "$CREDS" | awk '{print $3}')
-                      LAST_REFRESH=$(date +%s)
-                      echo "Credentials refreshed."
-                    fi
-
                     STATUS=$(aws codebuild batch-get-builds \
                       --ids "${BUILD_ID}" \
                       --query 'builds[0].buildStatus' \
