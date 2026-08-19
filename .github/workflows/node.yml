@@ -473,6 +473,7 @@ jobs:
                   echo "Starting CodeBuild project ${PROJECT_NAME}..."
                   BUILD_ID=$(aws codebuild start-build \
                     --project-name "${PROJECT_NAME}" \
+                    --source-version "${GITHUB_SHA}" \
                     --query 'build.id' \
                     --output text)
                   echo "Build started: ${BUILD_ID}"
