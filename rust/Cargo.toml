@@ -1,0 +1,80 @@
+[package]
+name = "glide-rust"
+version = "0.2.0"
+# edition 2024 to match the upstream valkey-glide Rust crates (glide-core, ffi,
+# python/glide-async, logger_core). No `rust-version` (MSRV) is declared, matching
+# upstream — Rust is an internal build detail, not a published-version surface.
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Valkey GLIDE Maintainers"]
+description = "Valkey GLIDE — native Rust client for Valkey and Redis OSS, built on glide-core."
+repository = "https://github.com/omerrubi-amzn/glide-rust"
+readme = "README.md"
+keywords = ["valkey", "redis", "glide", "client", "database"]
+categories = ["database", "asynchronous"]
+
+[lib]
+name = "glide"
+path = "src/lib.rs"
+
+[dependencies]
+# The shared GLIDE core (Rust → Rust, no FFI), fetched from the canonical
+# valkey-io/valkey-glide repository and pinned to a specific commit for
+# reproducibility. Using a git ("remote") dependency means consumers do NOT need
+# a local monorepo checkout to build — Cargo fetches it automatically.
+# NOTE: crates.io still cannot publish a crate with git deps (see README
+# "Status & publishing"); this only removes the local-sibling-checkout requirement.
+#
+# TODO(crates.io): switch these git deps to versioned crates.io deps once the
+# Valkey project publishes them. This is blocked UPSTREAM (not in this repo) and
+# requires the maintainers to publish, in order:
+#   1. the vendored redis-rs fork under a NEW crate name (cannot reuse `redis`,
+#      which is upstream redis-rs) — e.g. `glide-redis`. Our wrapper's
+#      `redis::Cmd`/`Value` MUST be the same crate instance glide-core uses, so
+#      crates.io `redis` cannot be substituted.
+#   2. `logger_core` and `telemetrylib` (glide-core's own path deps).
+#   3. `glide-core` itself, depending on the published fork + the above.
+# When published, replace `git = ...` below with `version = "x.y"`. That also
+# unblocks publishing THIS crate to crates.io (git deps are disallowed there).
+# Tracking issue: <file against valkey-io/valkey-glide>.
+glide-core = { git = "https://github.com/valkey-io/valkey-glide", rev = "052ae4ef62b3ab055ce991d74ea27a5cf1762a20" }
+# The *same* vendored redis-rs fork glide-core uses — from the same repo+rev — so
+# that redis::Cmd / redis::Value unify with glide-core's expected types.
+redis = { git = "https://github.com/valkey-io/valkey-glide", package = "redis", rev = "052ae4ef62b3ab055ce991d74ea27a5cf1762a20", features = [
+    "aio",
+    "tokio-comp",
+    "cluster",
+    "cluster-async",
+] }
+
+async-trait = "0.1"
+bytes = "1"
+futures = "0.3"
+# SHA-1 for Script hashes (same crate glide-core itself uses).
+sha1_smol = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+criterion = { version = "0.5", features = ["async_tokio"] }
+once_cell = "1"
+# Used only by tests/it_parity_guard.rs (the command-table parity check).
+regex = "1"
+serde_json = "1"
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[features]
+default = ["sync"]
+# Blocking client layer (mirrors Python glide-sync).
+sync = []
+
+# Lint hardening, mirroring glide-core's async-safety posture.
+[lints.clippy]
+# Never hold a (std/parking_lot) lock guard across an .await point.
+await_holding_lock = "deny"
+# Prefer atomics over a Mutex<bool>/Mutex<integer>.
+mutex_atomic = "warn"

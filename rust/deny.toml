@@ -1,0 +1,62 @@
+# cargo-deny configuration, baselined on upstream valkey-io/valkey-glide's
+# deny.toml. Run with `cargo deny check`.
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# The lint level for crates that have been yanked from their source registry.
+yanked = "deny"
+# A list of advisory IDs to ignore.
+ignore = []
+
+[licenses]
+# List of explicitly allowed licenses (matches upstream).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "ISC",
+    "MPL-2.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+# Per-crate license exceptions (not accepted globally).
+exceptions = [
+    # Mozilla CA-root bundle (via rustls-platform-verifier -> redis).
+    { allow = ["CDLA-Permissive-2.0"], name = "webpki-root-certs", version = "*" },
+]
+
+# `ring` ships a non-machine-readable license; clarify it as upstream does.
+[[licenses.clarify]]
+name = "ring"
+version = "*"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[licenses.private]
+ignore = false
+
+[bans]
+# Duplicate versions are common via the aws-sdk/windows-sys trees.
+multiple-versions = "allow"
+# This crate (and glide-core/redis-rs/telemetrylib) are consumed via git deps
+# pinned to a rev, which cargo-deny reports as wildcard requirements — allowed,
+# as upstream does. `unknown-git` below is intentionally "deny": the one allowed
+# git source (valkey-io/valkey-glide) is a first-party dependency.
+wildcards = "allow"
+highlight = "all"
+allow = []
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# glide-core + vendored redis-rs are consumed from this first-party git source
+# (pinned by rev in Cargo.toml). Any other git source is denied.
+allow-git = ["https://github.com/valkey-io/valkey-glide"]
