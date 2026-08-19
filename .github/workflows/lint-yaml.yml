@@ -30,6 +30,9 @@ jobs:
               run: |
                   npx prettier --check .github/
 
+            - name: Install PyYAML
+              run: pip install --quiet PyYAML==6.0.3
+
             - name: Validate dependabot cooldown
               run: |
                   python3 - <<'EOF'
