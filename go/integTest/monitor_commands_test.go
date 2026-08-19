@@ -18,7 +18,7 @@ func (suite *GlideTestSuite) TestMonitorReceivesCommands() {
 	var mu sync.Mutex
 
 	monitor, err := glide.NewMonitorClient(
-		suite.defaultClientConfig(),
+		suite.monitorClientConfig(),
 		func(line glide.MonitorLine) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -53,7 +53,7 @@ func (suite *GlideTestSuite) TestMonitorReceivesCommands() {
 }
 
 func (suite *GlideTestSuite) TestMonitorQueue() {
-	monitor, err := glide.NewMonitorClient(suite.defaultClientConfig(), nil)
+	monitor, err := glide.NewMonitorClient(suite.monitorClientConfig(), nil)
 	require.NoError(suite.T(), err)
 	defer monitor.Close()
 
@@ -80,7 +80,7 @@ func (suite *GlideTestSuite) TestMonitorQueue() {
 }
 
 func (suite *GlideTestSuite) TestMonitorGetMessageBlocking() {
-	monitor, err := glide.NewMonitorClient(suite.defaultClientConfig(), nil)
+	monitor, err := glide.NewMonitorClient(suite.monitorClientConfig(), nil)
 	require.NoError(suite.T(), err)
 	defer monitor.Close()
 
@@ -105,7 +105,7 @@ func (suite *GlideTestSuite) TestMonitorGetMessageBlocking() {
 }
 
 func (suite *GlideTestSuite) TestMonitorCloseIdempotent() {
-	monitor, err := glide.NewMonitorClient(suite.defaultClientConfig(), nil)
+	monitor, err := glide.NewMonitorClient(suite.monitorClientConfig(), nil)
 	require.NoError(suite.T(), err)
 
 	monitor.Close()
@@ -113,7 +113,7 @@ func (suite *GlideTestSuite) TestMonitorCloseIdempotent() {
 }
 
 func (suite *GlideTestSuite) TestMonitorFields() {
-	monitor, err := glide.NewMonitorClient(suite.defaultClientConfig(), nil)
+	monitor, err := glide.NewMonitorClient(suite.monitorClientConfig(), nil)
 	require.NoError(suite.T(), err)
 	defer monitor.Close()
 
