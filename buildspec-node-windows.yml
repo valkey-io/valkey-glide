@@ -54,20 +54,20 @@ phases:
         node --version
         npm --version
 
-      # -- 2. Start ElastiCache creation in background -------------------------
+      # -- 2. Install Python dependencies and start ElastiCache setup in background
       # Runs in parallel with MSVC + Rust install (~10 min overlap).
       # Uses Start-Process so env vars (AWS creds, EC_SUBNET_GROUP etc) are inherited.
       # Output goes to $TEMP\ec-setup.log; PID saved to $TEMP\ec-setup.pid.
       - |
         if ($env:USE_ELASTICACHE -eq "true") {
-          Write-Host "=== Installing node deps and starting ElastiCache setup in background ==="
-          Set-Location node
-          npm ci --prefer-offline 2>&1 | Out-Null
-          Set-Location ..
+          Write-Host "=== Installing boto3 and starting ElastiCache setup in background ==="
+          python -m pip install --quiet boto3
 
-          # Write a small runner script to temp dir
-          $runner = "$env:TEMP\ec-setup-runner.js"
+          $logFile = "$env:TEMP\ec-setup.log"
           $repoRoot = (Get-Location).Path
+
+          # Run jest.globalSetup.ts via node (it calls elasticache_manager.py internally)
+          $runner = "$env:TEMP\ec-setup-runner.js"
           $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
           $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
           $setupPath = "$repoRoot\node\tests\jest.globalSetup.ts".Replace('\', '/')
@@ -78,8 +78,6 @@ phases:
           )
           $lines | Set-Content $runner -Encoding UTF8
 
-          $logFile = "$env:TEMP\ec-setup.log"
-          $repoRoot = (Get-Location).Path
           $proc = Start-Process -FilePath "node" `
             -ArgumentList $runner `
             -WorkingDirectory $repoRoot `
@@ -242,16 +240,16 @@ phases:
           $pidFile = "$env:TEMP\ec-setup.pid"
           $logFile = "$env:TEMP\ec-setup.log"
           $errFile = "$env:TEMP\ec-setup-err.log"
+          $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
 
           if (Test-Path $pidFile) {
             $setupPid = [int](Get-Content $pidFile)
-            Write-Host "Waiting for PID $setupPid (max 15 min)..."
+            Write-Host "Waiting for PID $setupPid (max 25 min)..."
             $proc = Get-Process -Id $setupPid -ErrorAction SilentlyContinue
             if ($proc) {
-              $proc.WaitForExit(900000)  # 15 min in ms
+              $proc.WaitForExit(1500000)  # 25 min in ms
             }
 
-            # Print the setup log
             if (Test-Path $logFile) {
               Write-Host "--- ElastiCache setup log ---"
               Get-Content $logFile
@@ -264,17 +262,13 @@ phases:
               }
             }
 
-            # Check exit code
             $proc = Get-Process -Id $setupPid -ErrorAction SilentlyContinue
             if ($proc -and -not $proc.HasExited) {
-              Write-Error "ElastiCache setup timed out after 15 minutes!"
+              Write-Error "ElastiCache setup timed out after 25 minutes!"
               Stop-Process -Id $setupPid -Force
               exit 1
             }
 
-            # On PS 5.1, Get-Process doesn't reliably return ExitCode after process exits.
-            # Instead verify success by checking the endpoints file was written.
-            $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
             if (-not (Test-Path $endpointsFile)) {
               Write-Error "ElastiCache setup failed - endpoints file not found at $endpointsFile"
               exit 1
@@ -283,18 +277,11 @@ phases:
             Write-Host "No PID file found - setup may not have started"
           }
 
-          # Load endpoints from file
-          $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
-          if (Test-Path $endpointsFile) {
-            $data = Get-Content $endpointsFile | ConvertFrom-Json
-            $env:STANDALONE_ENDPOINT = $data.standaloneEndpoint
-            $env:CLUSTER_ENDPOINT    = $data.clusterEndpoint
-            Write-Host "Standalone: $env:STANDALONE_ENDPOINT"
-            Write-Host "Cluster:    $env:CLUSTER_ENDPOINT"
-          } else {
-            Write-Error "Endpoints file not found: $endpointsFile"
-            exit 1
-          }
+          $data = Get-Content $endpointsFile | ConvertFrom-Json
+          $env:STANDALONE_ENDPOINT = $data.standaloneEndpoint
+          $env:CLUSTER_ENDPOINT    = $data.clusterEndpoint
+          Write-Host "Standalone: $env:STANDALONE_ENDPOINT"
+          Write-Host "Cluster:    $env:CLUSTER_ENDPOINT"
         }
 
       # -- Run integration tests -----------------------------------------------
@@ -339,20 +326,13 @@ phases:
       - |
         if ($env:USE_ELASTICACHE -eq "true") {
           Write-Host "=== Tearing down ElastiCache clusters ==="
-          $env:PATH = "C:\Program Files\nodejs;$env:PATH"
-          $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
-
-          if (Test-Path $endpointsFile) {
-            Write-Host "Found endpoints file - running teardown..."
-            Set-Location node
-            $teardownScript = "require('./node_modules/ts-node').register({ project: './tsconfig.json', transpileOnly: true }); require('./tests/jest.globalTeardown.ts').default().then(() => { console.log('[teardown] ElastiCache clusters deleted.'); }).catch(err => { console.error('[teardown] Teardown error (non-fatal):', err.message || err); });"
-            node -e $teardownScript
-            Set-Location ..
-            Remove-Item $endpointsFile -Force -ErrorAction SilentlyContinue
-            Write-Host "Endpoints file removed."
-          } else {
-            Write-Host "No endpoints file found - clusters may have been cleaned up by Jest teardown already."
-          }
+          $repoRoot = (Get-Location).Path
+          $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
+          $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
+          $teardownPath = "$repoRoot\node\tests\jest.globalTeardown.ts".Replace('\', '/')
+          $teardownScript = "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true }); const td = require('$teardownPath'); td.default().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });"
+          & node -e $teardownScript
+          Write-Host "Teardown complete."
         }
 
 cache:

@@ -1,14 +1,15 @@
 /**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
  *
- * Jest global teardown: reads cluster names from the temp file written by
- * globalSetup and deletes the ElastiCache clusters.
+ * Jest global teardown: calls utils/elasticache_manager.py stop for each
+ * cluster created by globalSetup.
  *
  * Only runs when USE_ELASTICACHE=true is set in the environment.
  */
 
+import { spawnSync } from "child_process";
 import * as fs from "fs";
-import { ElastiCacheClusterBase } from "../src/elasticache/ClusterBase";
+import * as path from "path";
 import { ELASTICACHE_ENDPOINTS_FILE, EndpointsFile } from "./jest.globalSetup";
 
 export default async function globalTeardown(): Promise<void> {
@@ -24,7 +25,6 @@ export default async function globalTeardown(): Promise<void> {
     }
 
     let data: EndpointsFile;
-
     try {
         data = JSON.parse(fs.readFileSync(ELASTICACHE_ENDPOINTS_FILE, "utf-8"));
     } catch (err) {
@@ -32,34 +32,25 @@ export default async function globalTeardown(): Promise<void> {
         return;
     }
 
-    const clusterNames = [data.cmdClusterName, data.cmeClusterName];
+    const repoRoot = path.resolve(__dirname, "..", "..");
+    const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
 
-    console.log(
-        `[globalTeardown] Deleting clusters: ${clusterNames.join(", ")}`,
-    );
+    const regionArgs = process.env.AWS_REGION ? ["--region", process.env.AWS_REGION] : [];
 
-    const allClusters = [
-        new ElastiCacheClusterBase(data.cmdClusterName),
-        new ElastiCacheClusterBase(data.cmeClusterName),
-    ];
-
-    const results = await Promise.allSettled(
-        allClusters.map((c) => c.deleteCluster()),
-    );
-
-    results.forEach((result, i) => {
-        const name = clusterNames[i];
-
-        if (result.status === "rejected") {
-            console.error(
-                `[globalTeardown] Failed to delete ${name}: ${result.reason}`,
-            );
-        } else {
-            console.log(`[globalTeardown] Delete request sent for ${name}.`);
+    for (const clusterName of [data.cmdClusterName, data.cmeClusterName]) {
+        console.log(`[globalTeardown] Deleting cluster: ${clusterName}`);
+        const result = spawnSync(
+            "python3",
+            [managerScript, ...regionArgs, "stop", "--cluster-name", clusterName],
+            { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000 },
+        );
+        if (result.error) {
+            console.error(`[globalTeardown] Failed to spawn for ${clusterName}: ${result.error.message}`);
+        } else if (result.status !== 0) {
+            console.error(`[globalTeardown] elasticache_manager.py exited with code ${result.status} for ${clusterName}`);
         }
-    });
+    }
 
-    // Clean up temp file
     try {
         fs.unlinkSync(ELASTICACHE_ENDPOINTS_FILE);
     } catch {
