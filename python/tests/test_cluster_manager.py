@@ -144,6 +144,14 @@ def test_a_certificate_that_disappeared_is_not_valid(cluster_manager):
     )
 
 
+def test_an_empty_certificate_is_not_valid(cluster_manager):
+    """A 0-byte file with a fresh mtime is not reusable, whatever the poll decided."""
+    write_fixture_file(cluster_manager.TLS_FOLDER, "server.crt", "")
+    assert (
+        cluster_manager.check_if_tls_cert_is_valid(cluster_manager.SERVER_CRT) is False
+    )
+
+
 @pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is required")
 def test_generation_recovers_from_a_stale_serial_file(cluster_manager):
     """Regeneration happens over a used folder, so leftovers must not break it."""
