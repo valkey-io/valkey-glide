@@ -25,6 +25,7 @@ func ExampleClient_GeoAdd() {
 	result, err := client.GeoAdd(context.Background(), uuid.New().String(), membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -44,6 +45,7 @@ func ExampleClusterClient_GeoAdd() {
 	result, err := client.GeoAdd(context.Background(), uuid.New().String(), membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -64,12 +66,14 @@ func ExampleClient_GeoHash() {
 	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Test getting geohash for multiple members
 	geoHashResults, err := client.GeoHash(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(geoHashResults)
 
@@ -89,12 +93,14 @@ func ExampleClusterClient_GeoHash() {
 	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Test getting geohash for multiple members
 	geoHashResults, err := client.GeoHash(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(geoHashResults)
 
@@ -112,11 +118,13 @@ func ExampleClient_GeoPos() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	positions, err := client.GeoPos(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(positions)
@@ -135,11 +143,13 @@ func ExampleClusterClient_GeoPos() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	positions, err := client.GeoPos(context.Background(), key, []string{"Palermo", "Catania"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(positions)
@@ -162,12 +172,14 @@ func ExampleClient_GeoDist() {
 	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Test getting geodist for multiple members
 	result, err := client.GeoDist(context.Background(), key, member1, member2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.Value())
 
@@ -189,11 +201,13 @@ func ExampleClusterClient_GeoDist() {
 	_, err := client.GeoAdd(context.Background(), key, membersToCoordinates)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	// Test getting geodist for multiple members
 	result, err := client.GeoDist(context.Background(), key, member1, member2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.Value())
 
@@ -216,6 +230,7 @@ func ExampleClient_GeoSearch() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -239,6 +254,7 @@ func ExampleClusterClient_GeoSearch() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -263,6 +279,7 @@ func ExampleClient_GeoSearchWithResultOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -287,6 +304,7 @@ func ExampleClusterClient_GeoSearchWithResultOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -312,6 +330,7 @@ func ExampleClient_GeoSearchWithFullOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -337,6 +356,7 @@ func ExampleClusterClient_GeoSearchWithFullOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -361,6 +381,7 @@ func ExampleClient_GeoSearchWithInfoOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -385,6 +406,7 @@ func ExampleClusterClient_GeoSearchWithInfoOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -410,6 +432,7 @@ func ExampleClient_GeoSearchStore() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -435,6 +458,7 @@ func ExampleClusterClient_GeoSearchStore() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -461,6 +485,7 @@ func ExampleClient_GeoSearchStoreWithInfoOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -487,6 +512,7 @@ func ExampleClusterClient_GeoSearchStoreWithInfoOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -513,6 +539,7 @@ func ExampleClient_GeoSearchStoreWithResultOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -539,6 +566,7 @@ func ExampleClusterClient_GeoSearchStoreWithResultOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -566,6 +594,7 @@ func ExampleClient_GeoSearchStoreWithFullOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -593,6 +622,7 @@ func ExampleClusterClient_GeoSearchStoreWithFullOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)

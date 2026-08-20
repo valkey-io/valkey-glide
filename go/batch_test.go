@@ -23,6 +23,7 @@ func ExampleClient_Exec_transaction() {
 	result, err := client.Exec(context.Background(), *batch, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -38,6 +39,7 @@ func ExampleClient_Exec_pipeline() {
 	result, err := client.Exec(context.Background(), *batch, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -55,6 +57,7 @@ func ExampleClient_ExecWithOptions_transaction() {
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -72,6 +75,7 @@ func ExampleClient_ExecWithOptions_pipeline() {
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -87,6 +91,7 @@ func ExampleClusterClient_Exec_transaction() {
 	result, err := client.Exec(context.Background(), *batch, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -102,6 +107,7 @@ func ExampleClusterClient_Exec_pipeline() {
 	result, err := client.Exec(context.Background(), *batch, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -119,6 +125,7 @@ func ExampleClusterClient_ExecWithOptions_transaction() {
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -137,6 +144,7 @@ func ExampleClusterClient_ExecWithOptions_pipeline() {
 	result, err := client.ExecWithOptions(context.Background(), *batch, false, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -163,9 +171,17 @@ func ExampleClient_Watch_changedKey() {
 	var client *Client = getExampleClient() // example helper function
 	// Example 1: key is changed before transaction and transaction didn't execute
 	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Watch result: ", result)
 
 	result, err = client.Set(context.Background(), "sampleKey", "foobar")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Set result: ", result)
 
 	transaction := pipeline.NewStandaloneBatch(true)
@@ -175,6 +191,7 @@ func ExampleClient_Watch_changedKey() {
 	result1, err := client.Exec(context.Background(), *transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	// Transaction result is `nil`, it is not executed at all
 	fmt.Printf("Transation result: %#v", result1)
@@ -189,6 +206,10 @@ func ExampleClient_Watch_unchangedKey() {
 	var client *Client = getExampleClient() // example helper function
 	// Example 2: key is unchanged before transaction
 	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Watch result: ", result)
 
 	transaction := pipeline.NewStandaloneBatch(true)
@@ -198,6 +219,7 @@ func ExampleClient_Watch_unchangedKey() {
 	result1, err := client.Exec(context.Background(), *transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Transation result: ", result1)
 
@@ -210,9 +232,17 @@ func ExampleClusterClient_Watch_changedKey() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	// Example 1: key is changed before transaction and transaction didn't execute
 	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Watch result: ", result)
 
 	result, err = client.Set(context.Background(), "sampleKey", "foobar")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Set result: ", result)
 
 	transaction := pipeline.NewClusterBatch(true)
@@ -222,6 +252,7 @@ func ExampleClusterClient_Watch_changedKey() {
 	result1, err := client.Exec(context.Background(), *transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	// Transaction result is `nil`, it is not executed at all
 	fmt.Printf("Transation result: %#v", result1)
@@ -236,6 +267,10 @@ func ExampleClusterClient_Watch_unchangedKey() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	// Example 2: key is unchanged before transaction
 	result, err := client.Watch(context.Background(), []string{"sampleKey"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println("Watch result: ", result)
 
 	transaction := pipeline.NewClusterBatch(true)
@@ -245,6 +280,7 @@ func ExampleClusterClient_Watch_unchangedKey() {
 	result1, err := client.Exec(context.Background(), *transaction, false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Transation result: ", result1)
 
@@ -258,6 +294,7 @@ func ExampleClient_Unwatch() {
 	result, err := client.Unwatch(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -270,6 +307,7 @@ func ExampleClusterClient_Unwatch() {
 	result, err := client.Unwatch(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -282,6 +320,7 @@ func ExampleClusterClient_UnwatchWithOptions() {
 	result, err := client.UnwatchWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 

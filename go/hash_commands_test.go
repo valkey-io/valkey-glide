@@ -24,6 +24,7 @@ func ExampleClient_HGet() {
 	payload2, err := client.HGet(context.Background(), "my_hash", "nonexistent_field")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(payload)
@@ -48,6 +49,7 @@ func ExampleClusterClient_HGet() {
 	payload2, err := client.HGet(context.Background(), "my_hash", "nonexistent_field")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(payload)
@@ -71,6 +73,7 @@ func ExampleClient_HGetAll() {
 	payload, err := client.HGetAll(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(payload["field1"])
@@ -95,6 +98,7 @@ func ExampleClusterClient_HGetAll() {
 	payload, err := client.HGetAll(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(payload["field1"])
@@ -119,6 +123,7 @@ func ExampleClient_HMGet() {
 	values, err := client.HMGet(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(values[0])
@@ -142,6 +147,7 @@ func ExampleClusterClient_HMGet() {
 	values, err := client.HMGet(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(values[0])
@@ -165,6 +171,7 @@ func ExampleClient_HSet() {
 	result1, err := client.HGet(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -186,6 +193,7 @@ func ExampleClusterClient_HSet() {
 	result1, err := client.HGet(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -208,6 +216,7 @@ func ExampleClient_HSetNX() {
 	payload, err := client.HGet(context.Background(), "my_hash", "field3")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -232,6 +241,7 @@ func ExampleClusterClient_HSetNX() {
 	payload, err := client.HGet(context.Background(), "my_hash", "field3")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -255,6 +265,7 @@ func ExampleClient_HDel() {
 	result1, err := client.HDel(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -276,6 +287,7 @@ func ExampleClusterClient_HDel() {
 	result1, err := client.HDel(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -297,6 +309,7 @@ func ExampleClient_HLen() {
 	result1, err := client.HLen(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -318,6 +331,7 @@ func ExampleClusterClient_HLen() {
 	result1, err := client.HLen(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -340,6 +354,7 @@ func ExampleClient_HVals() {
 	result1, err := client.HVals(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -362,6 +377,7 @@ func ExampleClusterClient_HVals() {
 	result1, err := client.HVals(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -383,6 +399,7 @@ func ExampleClient_HExists() {
 	result1, err := client.HExists(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -404,6 +421,7 @@ func ExampleClusterClient_HExists() {
 	result1, err := client.HExists(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -424,6 +442,7 @@ func ExampleClient_HKeys() {
 	result, err := client.HKeys(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -441,6 +460,7 @@ func ExampleClusterClient_HKeys() {
 	result, err := client.HKeys(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -459,6 +479,7 @@ func ExampleClient_HStrLen() {
 	result1, err := client.HStrLen(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -480,6 +501,7 @@ func ExampleClusterClient_HStrLen() {
 	result1, err := client.HStrLen(context.Background(), "my_hash", "field1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -501,6 +523,7 @@ func ExampleClient_HIncrBy() {
 	result1, err := client.HIncrBy(context.Background(), "my_hash", "field1", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -522,6 +545,7 @@ func ExampleClusterClient_HIncrBy() {
 	result1, err := client.HIncrBy(context.Background(), "my_hash", "field1", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -543,6 +567,7 @@ func ExampleClient_HIncrByFloat() {
 	result1, err := client.HIncrByFloat(context.Background(), "my_hash", "field1", 1.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -564,6 +589,7 @@ func ExampleClusterClient_HIncrByFloat() {
 	result1, err := client.HIncrByFloat(context.Background(), "my_hash", "field1", 1.5)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -586,6 +612,7 @@ func ExampleClient_HScan() {
 	result, err := client.HScan(context.Background(), "my_hash", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -608,6 +635,7 @@ func ExampleClusterClient_HScan() {
 	result, err := client.HScan(context.Background(), "my_hash", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -630,6 +658,7 @@ func ExampleClient_HRandField() {
 	result, err := client.HRandField(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -649,6 +678,7 @@ func ExampleClusterClient_HRandField() {
 	result, err := client.HRandField(context.Background(), "my_hash")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -667,6 +697,7 @@ func ExampleClient_HRandFieldWithCount() {
 	result, err := client.HRandFieldWithCount(context.Background(), "my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) == 2)
 
@@ -685,6 +716,7 @@ func ExampleClusterClient_HRandFieldWithCount() {
 	result, err := client.HRandFieldWithCount(context.Background(), "my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) == 2)
 
@@ -702,6 +734,7 @@ func ExampleClient_HRandFieldWithCountWithValues() {
 	result, err := client.HRandFieldWithCountWithValues(context.Background(), "my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) == 2)
 
@@ -720,6 +753,7 @@ func ExampleClusterClient_HRandFieldWithCountWithValues() {
 	result, err := client.HRandFieldWithCountWithValues(context.Background(), "my_hash", 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) == 2)
 
@@ -739,6 +773,7 @@ func ExampleClient_HScanWithOptions() {
 	result, err := client.HScanWithOptions(context.Background(), "my_hash", models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -762,6 +797,7 @@ func ExampleClusterClient_HScanWithOptions() {
 	result, err := client.HScanWithOptions(context.Background(), "my_hash", models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -786,6 +822,7 @@ func ExampleClient_HSetEx() {
 	result, err := client.HSetEx(context.Background(), "my_hash", fields, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -807,6 +844,7 @@ func ExampleClusterClient_HSetEx() {
 	result, err := client.HSetEx(context.Background(), "my_hash", fields, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -830,6 +868,7 @@ func ExampleClient_HGetEx() {
 	result, err := client.HGetEx(context.Background(), "my_hash", []string{"field1", "field2"}, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0].Value())
 	fmt.Println(result[1].Value())
@@ -855,6 +894,7 @@ func ExampleClusterClient_HGetEx() {
 	result, err := client.HGetEx(context.Background(), "my_hash", []string{"field1", "field2"}, options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0].Value())
 	fmt.Println(result[1].Value())
@@ -885,6 +925,7 @@ func ExampleClient_HExpire() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0]) // 1 means expiration was set
 	fmt.Println(result[1]) // 1 means expiration was set
@@ -915,6 +956,7 @@ func ExampleClusterClient_HExpire() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0]) // 1 means expiration was set
 	fmt.Println(result[1]) // 1 means expiration was set
@@ -940,6 +982,7 @@ func ExampleClient_HTtl() {
 	result, err := client.HTtl(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Field1 TTL > 0: %t\n", result[0] > 0)
 	fmt.Printf("Field2 TTL > 0: %t\n", result[1] > 0)
@@ -965,6 +1008,7 @@ func ExampleClusterClient_HTtl() {
 	result, err := client.HTtl(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Field1 TTL > 0: %t\n", result[0] > 0)
 	fmt.Printf("Field2 TTL > 0: %t\n", result[1] > 0)
@@ -990,6 +1034,7 @@ func ExampleClient_HPersist() {
 	result, err := client.HPersist(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0]) // 1 means expiration was removed
 	fmt.Println(result[1]) // 1 means expiration was removed
@@ -1015,6 +1060,7 @@ func ExampleClusterClient_HPersist() {
 	result, err := client.HPersist(context.Background(), "my_hash", []string{"field1", "field2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result[0]) // 1 means expiration was removed
 	fmt.Println(result[1]) // 1 means expiration was removed

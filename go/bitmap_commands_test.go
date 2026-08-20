@@ -17,6 +17,7 @@ func ExampleClient_SetBit() {
 	result, err := client.SetBit(context.Background(), "my_key", 1, 1) // set bit should return the previous value of bit 1
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -31,6 +32,7 @@ func ExampleClusterClient_SetBit() {
 	result, err := client.SetBit(context.Background(), "my_key", 1, 1) // set bit should return the previous value of bit 1
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -44,6 +46,7 @@ func ExampleClient_GetBit() {
 	result, err := client.GetBit(context.Background(), "my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -58,6 +61,7 @@ func ExampleClusterClient_GetBit() {
 	result, err := client.GetBit(context.Background(), "my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -72,6 +76,7 @@ func ExampleClient_BitCount() {
 	result, err := client.BitCount(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -86,6 +91,7 @@ func ExampleClusterClient_BitCount() {
 	result, err := client.BitCount(context.Background(), "my_key")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -102,6 +108,7 @@ func ExampleClient_BitCountWithOptions() {
 	result, err := client.BitCountWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -118,6 +125,7 @@ func ExampleClusterClient_BitCountWithOptions() {
 	result, err := client.BitCountWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -136,6 +144,7 @@ func ExampleClient_BitField() {
 	result, err := client.BitField(context.Background(), "mykey", commands)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -154,6 +163,7 @@ func ExampleClusterClient_BitField() {
 	result, err := client.BitField(context.Background(), "mykey", commands)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -175,6 +185,7 @@ func ExampleClient_BitFieldRO() {
 	result, err := client.BitFieldRO(context.Background(), key, commands)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -196,6 +207,7 @@ func ExampleClusterClient_BitFieldRO() {
 	result, err := client.BitFieldRO(context.Background(), key, commands)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -310,6 +322,7 @@ func ExampleClient_BitPos() {
 	result, err := client.BitPos(context.Background(), "my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -324,6 +337,7 @@ func ExampleClusterClient_BitPos() {
 	result, err := client.BitPos(context.Background(), "my_key", 1)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -342,6 +356,7 @@ func ExampleClient_BitPosWithOptions() {
 	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -361,6 +376,7 @@ func ExampleClusterClient_BitPosWithOptions() {
 	result, err := client.BitPosWithOptions(context.Background(), "my_key", 1, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 

@@ -27,6 +27,7 @@ func ExampleClient_XAdd() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	matches, _ := regexp.Match(
 		`^\d{13}-0$`,
@@ -46,6 +47,7 @@ func ExampleClusterClient_XAdd() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	matches, _ := regexp.Match(
 		`^\d{13}-0$`,
@@ -67,6 +69,7 @@ func ExampleClient_XAddWithOptions() {
 	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.Value())
 
@@ -84,6 +87,7 @@ func ExampleClusterClient_XAddWithOptions() {
 	result, err := client.XAddWithOptions(context.Background(), "mystream", values, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.Value())
 
@@ -107,6 +111,7 @@ func ExampleClient_XTrim() {
 	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -130,6 +135,7 @@ func ExampleClusterClient_XTrim() {
 	count, err := client.XTrim(context.Background(), "mystream", *options.NewXTrimOptionsWithMaxLen(0).SetExactTrimming())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -147,6 +153,7 @@ func ExampleClient_XLen() {
 	count, err := client.XLen(context.Background(), "mystream")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -164,6 +171,7 @@ func ExampleClusterClient_XLen() {
 	count, err := client.XLen(context.Background(), "mystream")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -198,6 +206,7 @@ func ExampleClient_XAutoClaim() {
 	response, err := client.XAutoClaim(context.Background(), key, group, consumer, 0, "0-1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -233,6 +242,7 @@ func ExampleClusterClient_XAutoClaim() {
 	response, err := client.XAutoClaim(context.Background(), key, group, consumer, 0, "0-1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -269,6 +279,7 @@ func ExampleClient_XAutoClaimWithOptions() {
 	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -304,6 +315,7 @@ func ExampleClusterClient_XAutoClaimWithOptions() {
 	response, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -338,6 +350,7 @@ func ExampleClient_XAutoClaimJustId() {
 	response, err := client.XAutoClaimJustId(context.Background(), key, group, consumer, 0, "0-0")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -372,6 +385,7 @@ func ExampleClusterClient_XAutoClaimJustId() {
 	response, err := client.XAutoClaimJustId(context.Background(), key, group, consumer, 0, "0-0")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -407,6 +421,7 @@ func ExampleClient_XAutoClaimJustIdWithOptions() {
 	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -442,6 +457,7 @@ func ExampleClusterClient_XAutoClaimJustIdWithOptions() {
 	response, err := client.XAutoClaimJustIdWithOptions(context.Background(), key, group, consumer, 0, "0-1", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -470,6 +486,7 @@ func ExampleClient_XReadGroup() {
 	response, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: "0"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -508,6 +525,7 @@ func ExampleClusterClient_XReadGroup() {
 	response, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key: "0"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -547,6 +565,7 @@ func ExampleClient_XReadGroupWithOptions() {
 	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -593,6 +612,7 @@ func ExampleClusterClient_XReadGroupWithOptions() {
 	response, err := client.XReadGroupWithOptions(context.Background(), group, consumer, map[string]string{key: ">"}, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -631,6 +651,7 @@ func ExampleClient_XRead() {
 	response, err := client.XRead(context.Background(), map[string]string{key: "0-0"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -669,6 +690,7 @@ func ExampleClusterClient_XRead() {
 	response, err := client.XRead(context.Background(), map[string]string{key: "0-0"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -719,6 +741,7 @@ func ExampleClient_XReadWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -769,6 +792,7 @@ func ExampleClusterClient_XReadWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Check that we have the stream with the correct name in the map
@@ -806,6 +830,7 @@ func ExampleClient_XDel() {
 	count, err := client.XDel(context.Background(), key, []string{"0-1", "0-2", "0-3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -826,6 +851,7 @@ func ExampleClusterClient_XDel() {
 	count, err := client.XDel(context.Background(), key, []string{"0-1", "0-2", "0-3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -855,6 +881,7 @@ func ExampleClient_XPending() {
 	summary, err := client.XPending(context.Background(), key, group)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -885,6 +912,7 @@ func ExampleClusterClient_XPending() {
 	summary, err := client.XPending(context.Background(), key, group)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -920,6 +948,7 @@ func ExampleClient_XPendingWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonDetails, _ := json.Marshal(details)
 
@@ -967,6 +996,7 @@ func ExampleClusterClient_XPendingWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonDetails, _ := json.Marshal(details)
 
@@ -1022,6 +1052,7 @@ func ExampleClient_XGroupSetId() {
 	) // get the pending messages, which should include the entry we previously acked
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -1065,6 +1096,7 @@ func ExampleClusterClient_XGroupSetId() {
 	) // get the pending messages, which should include the entry we previously acked
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -1119,6 +1151,7 @@ func ExampleClient_XGroupSetIdWithOptions() {
 	) // get the pending messages, which should include the entry we previously acked
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -1173,6 +1206,7 @@ func ExampleClusterClient_XGroupSetIdWithOptions() {
 	) // get the pending messages, which should include the entry we previously acked
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(summary)
 	fmt.Println(string(jsonSummary))
@@ -1196,6 +1230,7 @@ func ExampleClient_XGroupCreate() {
 	response, err := client.XGroupCreate(context.Background(), key, group, "0") // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1218,6 +1253,7 @@ func ExampleClusterClient_XGroupCreate() {
 	response, err := client.XGroupCreate(context.Background(), key, group, "0") // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1239,6 +1275,7 @@ func ExampleClient_XGroupCreateWithOptions() {
 	) // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1260,6 +1297,7 @@ func ExampleClusterClient_XGroupCreateWithOptions() {
 	) // create the group (no MKSTREAM needed)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1277,6 +1315,7 @@ func ExampleClient_XGroupDestroy() {
 	success, err := client.XGroupDestroy(context.Background(), key, group) // destroy the group
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(success)
 
@@ -1294,6 +1333,7 @@ func ExampleClusterClient_XGroupDestroy() {
 	success, err := client.XGroupDestroy(context.Background(), key, group) // destroy the group
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(success)
 
@@ -1312,6 +1352,7 @@ func ExampleClient_XGroupCreateConsumer() {
 	success, err := client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(success)
 
@@ -1330,6 +1371,7 @@ func ExampleClusterClient_XGroupCreateConsumer() {
 	success, err := client.XGroupCreateConsumer(context.Background(), key, group, consumer)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(success)
 
@@ -1356,6 +1398,7 @@ func ExampleClient_XGroupDelConsumer() {
 	count, err := client.XGroupDelConsumer(context.Background(), key, group, consumer)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Consumer deleted. Messages pending:", count)
 
@@ -1383,6 +1426,7 @@ func ExampleClusterClient_XGroupDelConsumer() {
 	count, err := client.XGroupDelConsumer(context.Background(), key, group, consumer)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Consumer deleted. Messages pending:", count)
 
@@ -1416,6 +1460,7 @@ func ExampleClient_XAck() {
 	) // ack the message and remove it from the pending list
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -1448,6 +1493,7 @@ func ExampleClusterClient_XAck() {
 	) // ack the message and remove it from the pending list
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(count)
 
@@ -1483,6 +1529,7 @@ func ExampleClient_XClaim() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1499,6 +1546,7 @@ func ExampleClient_XClaim() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
@@ -1540,6 +1588,7 @@ func ExampleClusterClient_XClaim() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1556,6 +1605,7 @@ func ExampleClusterClient_XClaim() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
@@ -1597,6 +1647,7 @@ func ExampleClient_XClaimWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1615,6 +1666,7 @@ func ExampleClient_XClaimWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
@@ -1665,6 +1717,7 @@ func ExampleClusterClient_XClaimWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1683,6 +1736,7 @@ func ExampleClusterClient_XClaimWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("Claimed %d message\n", len(response))
 
@@ -1733,6 +1787,7 @@ func ExampleClient_XClaimJustId() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1749,6 +1804,7 @@ func ExampleClient_XClaimJustId() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1784,6 +1840,7 @@ func ExampleClusterClient_XClaimJustId() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1800,6 +1857,7 @@ func ExampleClusterClient_XClaimJustId() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1835,6 +1893,7 @@ func ExampleClient_XClaimJustIdWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1853,6 +1912,7 @@ func ExampleClient_XClaimJustIdWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1888,6 +1948,7 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	if len(result) == 0 {
 		fmt.Println("No pending messages")
@@ -1906,6 +1967,7 @@ func ExampleClusterClient_XClaimJustIdWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1936,6 +1998,7 @@ func ExampleClient_XRange() {
 		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1966,6 +2029,7 @@ func ExampleClusterClient_XRange() {
 		options.NewInfiniteStreamBoundary(constants.PositiveInfinity))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -1985,6 +2049,7 @@ func ExampleClient_XRangeWithOptions() {
 		*options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(response))
 
@@ -2004,6 +2069,7 @@ func ExampleClusterClient_XRangeWithOptions() {
 		*options.NewXRangeOptions().SetCount(1))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(response))
 
@@ -2034,6 +2100,7 @@ func ExampleClient_XRevRange() {
 		options.NewStreamBoundary(streamId1, true))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -2064,6 +2131,7 @@ func ExampleClusterClient_XRevRange() {
 		options.NewStreamBoundary(streamId1, true))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -2095,6 +2163,7 @@ func ExampleClient_XRevRangeWithOptions() {
 		*options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -2126,6 +2195,7 @@ func ExampleClusterClient_XRevRangeWithOptions() {
 		*options.NewXRangeOptions().SetCount(2))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -2146,6 +2216,7 @@ func ExampleClient_XInfoStream() {
 	response, err := client.XInfoStream(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Response Structure is as follows:
@@ -2201,6 +2272,7 @@ func ExampleClusterClient_XInfoStream() {
 	response, err := client.XInfoStream(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Response Structure is as follows:
@@ -2263,6 +2335,7 @@ func ExampleClient_XInfoStreamFullWithOptions() {
 	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Print some of response values
@@ -2314,6 +2387,7 @@ func ExampleClusterClient_XInfoStreamFullWithOptions() {
 	response, err := client.XInfoStreamFullWithOptions(context.Background(), key, *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Print some of response values
@@ -2372,6 +2446,7 @@ func ExampleClient_XInfoConsumers() {
 	response, err := client.XInfoConsumers(context.Background(), key, group)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Expanded:
@@ -2421,6 +2496,7 @@ func ExampleClusterClient_XInfoConsumers() {
 	response, err := client.XInfoConsumers(context.Background(), key, group)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Expanded:
@@ -2462,6 +2538,7 @@ func ExampleClient_XInfoGroups() {
 	response, err := client.XInfoGroups(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(response)
@@ -2508,6 +2585,7 @@ func ExampleClusterClient_XInfoGroups() {
 	response, err := client.XInfoGroups(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(response)

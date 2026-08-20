@@ -21,6 +21,7 @@ func ExampleClient_Select() {
 	result, err := client.Select(context.Background(), 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -33,6 +34,7 @@ func ExampleClient_ConfigGet() {
 	result, err := client.ConfigGet(context.Background(), []string{"timeout", "maxmemory"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -48,6 +50,7 @@ func ExampleClient_ConfigSet() {
 	) // example configuration
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -62,6 +65,7 @@ func ExampleClient_DBSize() {
 	result, err := client.DBSize(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -76,6 +80,7 @@ func ExampleClient_Time() {
 	result, err := client.Time(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	serverTime, _ := strconv.ParseInt(result[0], 10, 64)
 	fmt.Println((serverTime - clientTime) < timeMargin)
@@ -91,6 +96,7 @@ func ExampleClusterClient_Time() {
 	result, err := client.Time(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	serverTime, _ := strconv.ParseInt(result[0], 10, 64)
 	fmt.Println((serverTime - clientTime) < timeMargin)
@@ -104,6 +110,7 @@ func ExampleClient_Info() {
 	response, err := client.Info(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("response is of type %T\n", response)
 
@@ -117,6 +124,7 @@ func ExampleClient_InfoWithOptions() {
 	response, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("response is of type %T\n", response)
 
@@ -129,6 +137,7 @@ func ExampleClient_FlushAll() {
 	result, err := client.FlushAll(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -141,6 +150,7 @@ func ExampleClient_FlushAllWithOptions() {
 	result, err := client.FlushAllWithOptions(context.Background(), options.ASYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -153,6 +163,7 @@ func ExampleClient_FlushDB() {
 	result, err := client.FlushDB(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -165,6 +176,7 @@ func ExampleClient_FlushDBWithOptions() {
 	result, err := client.FlushDBWithOptions(context.Background(), options.SYNC)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -217,6 +229,7 @@ func ExampleClient_LastSave() {
 	response, err := client.LastSave(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response > 0)
 
@@ -228,6 +241,7 @@ func ExampleClient_ConfigResetStat() {
 	response, err := client.ConfigResetStat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(response)
 
@@ -242,6 +256,7 @@ func ExampleClient_ConfigRewrite() {
 	response, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	lines := strings.Split(response, "\n")
 	var configFile string
