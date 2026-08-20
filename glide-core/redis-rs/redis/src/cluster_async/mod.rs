@@ -2482,7 +2482,6 @@ where
             log_warn_lazy!(
                 "topology_refresh",
                 "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)"
-                    .to_string()
             );
             return Ok(());
         }
