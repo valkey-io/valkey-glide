@@ -390,7 +390,6 @@ class TestGlideClients:
             cluster_mode=cluster_mode,
             protocol=protocol,
             lib_name="glide-py[my-framework:1.2.3]",
-
         )
         client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert b"lib-name=glide-py[my-framework:1.2.3]" in client_info
