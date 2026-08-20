@@ -66,17 +66,26 @@ phases:
           npm ci --prefer-offline 2>&1 | Out-Null
           Set-Location ..
 
-          python -m pip install --quiet boto3
+          # Resolve the exact Python executable path and install boto3 into it.
+          # We capture the path so the background runner uses the same interpreter.
+          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if (-not $pythonExe) { $pythonExe = (Get-Command python3 -ErrorAction SilentlyContinue).Source }
+          if (-not $pythonExe) { Write-Error "Python not found"; exit 1 }
+          Write-Host "Using Python: $pythonExe"
+          & $pythonExe -m pip install --quiet boto3
 
           $logFile = "$env:TEMP\ec-setup.log"
           $repoRoot = (Get-Location).Path
 
-          # Run jest.globalSetup.ts via node (it calls elasticache_manager.py internally)
+          # Pass the resolved Python path to the runner so it uses the same interpreter
+          # that has boto3 installed, regardless of PATH resolution in the child process.
           $runner = "$env:TEMP\ec-setup-runner.js"
           $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
           $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
           $setupPath = "$repoRoot\node\tests\jest.globalSetup.ts".Replace('\', '/')
+          $pythonExeForJs = $pythonExe.Replace('\', '\\')
           $lines = @(
+            "process.env.GLIDE_PYTHON_CMD = '$pythonExeForJs';",
             "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true });",
             "const setup = require('$setupPath');",
             "setup.default().then(() => { console.log('[ec-setup] Done.'); process.exit(0); }).catch(err => { console.error('[ec-setup] FAILED:', err.message || err); process.exit(1); });"

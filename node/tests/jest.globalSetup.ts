@@ -43,7 +43,7 @@ function parseManagerOutput(output: string): { name: string; endpoint: string } 
 function runManager(args: string[]): string {
     const repoRoot = path.resolve(__dirname, "..", "..");
     const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+    const pythonCmd = process.env.GLIDE_PYTHON_CMD ?? (process.platform === "win32" ? "python" : "python3");
     const result = spawnSync(pythonCmd, [managerScript, ...args], {
         encoding: "utf-8",
         env: process.env,
@@ -92,7 +92,7 @@ export default async function globalSetup(): Promise<void> {
 
     function spawnAsync(args: string[]): Promise<string> {
         return new Promise((resolve, reject) => {
-            const pythonCmd = process.platform === "win32" ? "python" : "python3";
+            const pythonCmd = process.env.GLIDE_PYTHON_CMD ?? (process.platform === "win32" ? "python" : "python3");
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
             });
