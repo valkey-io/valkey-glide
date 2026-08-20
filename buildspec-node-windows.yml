@@ -66,26 +66,26 @@ phases:
           npm ci --prefer-offline 2>&1 | Out-Null
           Set-Location ..
 
-          # Resolve the exact Python executable path and install boto3 into it.
-          # We capture the path so the background runner uses the same interpreter.
+          # Resolve the exact Python executable, install boto3, then prepend its
+          # directory to PATH so the background node process inherits the right python.
           $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
           if (-not $pythonExe) { $pythonExe = (Get-Command python3 -ErrorAction SilentlyContinue).Source }
           if (-not $pythonExe) { Write-Error "Python not found"; exit 1 }
           Write-Host "Using Python: $pythonExe"
           & $pythonExe -m pip install --quiet boto3
+          # Prepend Python dir to machine PATH so all child processes find the same python
+          $pythonDir = Split-Path $pythonExe -Parent
+          $env:PATH = "$pythonDir;$env:PATH"
+          [System.Environment]::SetEnvironmentVariable("PATH", "$pythonDir;$([System.Environment]::GetEnvironmentVariable('PATH','Machine'))", "Machine")
 
           $logFile = "$env:TEMP\ec-setup.log"
           $repoRoot = (Get-Location).Path
 
-          # Pass the resolved Python path to the runner so it uses the same interpreter
-          # that has boto3 installed, regardless of PATH resolution in the child process.
           $runner = "$env:TEMP\ec-setup-runner.js"
           $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
           $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
           $setupPath = "$repoRoot\node\tests\jest.globalSetup.ts".Replace('\', '/')
-          $pythonExeForJs = $pythonExe.Replace('\', '\\')
           $lines = @(
-            "process.env.GLIDE_PYTHON_CMD = '$pythonExeForJs';",
             "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true });",
             "const setup = require('$setupPath');",
             "setup.default().then(() => { console.log('[ec-setup] Done.'); process.exit(0); }).catch(err => { console.error('[ec-setup] FAILED:', err.message || err); process.exit(1); });"
