@@ -59,7 +59,13 @@ phases:
       # Output goes to $TEMP\ec-setup.log; PID saved to $TEMP\ec-setup.pid.
       - |
         if ($env:USE_ELASTICACHE -eq "true") {
-          Write-Host "=== Installing boto3 and starting ElastiCache setup in background ==="
+          Write-Host "=== Installing node deps, boto3, and starting ElastiCache setup in background ==="
+
+          # Install node deps first so ts-node is available for the background runner
+          Set-Location node
+          npm ci --prefer-offline 2>&1 | Out-Null
+          Set-Location ..
+
           python -m pip install --quiet boto3
 
           $logFile = "$env:TEMP\ec-setup.log"
