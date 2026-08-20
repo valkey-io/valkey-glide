@@ -170,6 +170,28 @@ def start_cluster(
         raise RuntimeError(f"[elasticache_manager] Could not determine endpoint for '{name}'")
 
     endpoint_str = f"{host}:{port}"
+
+    # Verify TCP connectivity before declaring success.
+    # ElastiCache may report 'available' before the port is actually reachable.
+    logging.info(f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}...")
+    import socket
+    tcp_deadline = time.time() + 120  # 2 minutes to become reachable
+    tcp_ok = False
+    while time.time() < tcp_deadline:
+        try:
+            with socket.create_connection((host, port), timeout=5):
+                tcp_ok = True
+                break
+        except (socket.timeout, ConnectionRefusedError, OSError):
+            logging.info(f"[elasticache_manager] Port {port} not yet reachable, retrying...")
+            time.sleep(5)
+    if not tcp_ok:
+        raise RuntimeError(
+            f"[elasticache_manager] '{name}' is available per API but TCP connection to "
+            f"{host}:{port} timed out after 2 minutes. Check VPC/subnet/security group configuration."
+        )
+    logging.info(f"[elasticache_manager] TCP connectivity to {host}:{port} confirmed.")
+
     print(f"CLUSTER_NAME={name}")
     print(f"CLUSTER_ENDPOINT={endpoint_str}")
     logging.info(f"[elasticache_manager] '{name}' is available at {endpoint_str}")

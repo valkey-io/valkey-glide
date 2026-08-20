@@ -407,8 +407,9 @@ phases:
 
       # -- Always teardown ElastiCache clusters --------------------------------
       # post_build runs even if build phase fails, so clusters are always cleaned up.
+      # Set SKIP_TEARDOWN=true in CodeBuild env vars to keep clusters alive for debugging.
       - |
-        if ($env:USE_ELASTICACHE -eq "true") {
+        if ($env:USE_ELASTICACHE -eq "true" -and $env:SKIP_TEARDOWN -ne "true") {
           Write-Host "=== Tearing down ElastiCache clusters ==="
           $repoRoot = (Get-Location).Path
           $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
