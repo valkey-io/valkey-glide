@@ -29,7 +29,6 @@ env:
     NODE_VERSION: "20.18.0"
     CARGO_TERM_COLOR: "always"
     RUSTUP_TOOLCHAIN: "1.91.1"
-    CARGO: "C:\\Users\\ContainerAdministrator\\.rustup\\toolchains\\1.91.1-x86_64-pc-windows-msvc\\bin\\cargo.exe"
     PROTOC: "C:\\Windows\\System32\\protoc.exe"
 
 phases:
@@ -118,25 +117,59 @@ phases:
       # -- 4. Rust toolchain ---------------------------------------------------
       - |
         Write-Host "=== Installing Rust 1.91.1 toolchain ==="
-        $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-        $toolchainPath = "$env:USERPROFILE\.rustup\toolchains\1.91.1-x86_64-pc-windows-msvc"
-        if (Test-Path $toolchainPath) {
+
+        # Detect whether rustup is pre-installed for the current user (on-demand runners)
+        # or absent (reserved fleet running as SYSTEM). Use fixed machine-wide paths
+        # as CARGO_HOME/RUSTUP_HOME so the same code works in both cases.
+        #
+        # On-demand (ContainerAdministrator): rustup pre-installed at default user paths.
+        # Reserved fleet (SYSTEM): rustup not installed, USERPROFILE is system32/config/systemprofile.
+        #
+        # We always normalise to C:\rustup + C:\cargo so cache paths are stable.
+        $CARGO_HOME  = "C:\cargo"
+        $RUSTUP_HOME = "C:\rustup"
+        [System.Environment]::SetEnvironmentVariable("CARGO_HOME",  $CARGO_HOME,  "Machine")
+        [System.Environment]::SetEnvironmentVariable("RUSTUP_HOME", $RUSTUP_HOME, "Machine")
+        $env:CARGO_HOME  = $CARGO_HOME
+        $env:RUSTUP_HOME = $RUSTUP_HOME
+        $env:PATH = "$CARGO_HOME\bin;$env:PATH"
+
+        # If rustup was pre-installed for the current user (on-demand), migrate its
+        # toolchain to the machine-wide location so we can use the stable paths.
+        $userRustup = "$env:USERPROFILE\.rustup"
+        $userCargo  = "$env:USERPROFILE\.cargo"
+        if ((Test-Path "$userRustup\toolchains") -and -not (Test-Path "$RUSTUP_HOME\toolchains")) {
+          Write-Host "Migrating existing rustup install from $userRustup to $RUSTUP_HOME"
+          Copy-Item -Path $userRustup -Destination $RUSTUP_HOME -Recurse -Force
+          Copy-Item -Path $userCargo  -Destination $CARGO_HOME  -Recurse -Force
+        }
+
+        $toolchainPath = "$RUSTUP_HOME\toolchains\1.91.1-x86_64-pc-windows-msvc"
+        if ((Test-Path $toolchainPath) -and (Get-Command rustup -ErrorAction SilentlyContinue)) {
           Write-Host "Rust 1.91.1 toolchain already present (cache hit), skipping install."
           rustup default 1.91.1-x86_64-pc-windows-msvc
         } else {
-          Write-Host "Rust toolchain not cached, installing..."
-          rustup toolchain install 1.91.1-x86_64-pc-windows-msvc --no-self-update
-          rustup default 1.91.1-x86_64-pc-windows-msvc
-          rustup target add x86_64-pc-windows-msvc --toolchain 1.91.1-x86_64-pc-windows-msvc
+          Write-Host "Installing rustup + Rust 1.91.1 toolchain..."
+          $rustupInit = "$env:TEMP\rustup-init.exe"
+          Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupInit
+          & $rustupInit -y --default-toolchain 1.91.1-x86_64-pc-windows-msvc --no-modify-path 2>&1
+          if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
         }
+
         $env:RUSTUP_TOOLCHAIN = "1.91.1"
         [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "1.91.1", "Machine")
-        $rustupHome = "$env:USERPROFILE\.rustup"
-        [System.Environment]::SetEnvironmentVariable("RUSTUP_HOME", $rustupHome, "Machine")
-        $cargoShim = "$env:USERPROFILE\.cargo\bin\cargo.exe"
-        $rustcShim = "$env:USERPROFILE\.cargo\bin\rustc.exe"
+
+        # Set CARGO env var to the toolchain binary (used by napi-rs build)
+        $cargoBin = "$RUSTUP_HOME\toolchains\1.91.1-x86_64-pc-windows-msvc\bin\cargo.exe"
+        [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
+        $env:CARGO = $cargoBin
+
+        # Copy shims to System32 so all subsequent steps find cargo/rustc without PATH setup
+        $cargoShim = "$CARGO_HOME\bin\cargo.exe"
+        $rustcShim  = "$CARGO_HOME\bin\rustc.exe"
         Copy-Item -Path $cargoShim -Destination "C:\Windows\System32\cargo.exe" -Force
-        Copy-Item -Path $rustcShim -Destination "C:\Windows\System32\rustc.exe" -Force
+        Copy-Item -Path $rustcShim  -Destination "C:\Windows\System32\rustc.exe"  -Force
+
         if (Test-Path "C:\Windows\System32\link.exe") {
           $linkVer = (C:\Windows\System32\link.exe --version 2>&1) -join " "
           if ($linkVer -notmatch "Microsoft") {
@@ -144,6 +177,7 @@ phases:
             Write-Host "Removed non-MSVC link.exe from System32"
           }
         }
+
         $vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
         if (Test-Path $vsWhere) {
           $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
@@ -160,6 +194,7 @@ phases:
             }
           }
         }
+
         $fallbackLinker = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
         if (Test-Path $fallbackLinker) {
           $vcVer = (Get-ChildItem $fallbackLinker | Sort-Object Name -Descending | Select-Object -First 1).Name
@@ -170,7 +205,7 @@ phases:
             Write-Host "MSVC linker fallback path added: $linkerPath"
           }
         }
-        $env:RUSTUP_HOME = $rustupHome
+
         C:\Windows\System32\cargo.exe --version
         C:\Windows\System32\rustc.exe --version
 
@@ -201,8 +236,8 @@ phases:
   pre_build:
     commands:
       - |
-        $toolchainBin = "$env:USERPROFILE\.rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
-        $env:PATH = "$toolchainBin;$env:USERPROFILE\.cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+        $toolchainBin = "C:\rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
+        $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
         $env:RUSTUP_TOOLCHAIN = "1.91.1"
         [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "1.91.1", "Machine")
 
@@ -229,8 +264,8 @@ phases:
   build:
     commands:
       - |
-        $toolchainBin = "$env:USERPROFILE\.rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
-        $env:PATH = "$toolchainBin;$env:USERPROFILE\.cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+        $toolchainBin = "C:\rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
+        $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
         $env:RUSTUP_TOOLCHAIN = "1.91.1"
 
       # -- Wait for ElastiCache background setup to complete -------------------
@@ -341,9 +376,9 @@ cache:
     - "node/rust-client/target/**/*"
     - "glide-core/src/generated/**/*"
     # Rust toolchain and registry (saves ~3-5 min on cache hit)
-    - "C:/Users/ContainerAdministrator/.rustup/toolchains/**/*"
-    - "C:/Users/ContainerAdministrator/.cargo/registry/**/*"
-    - "C:/Users/ContainerAdministrator/.cargo/git/**/*"
+    - "C:/rustup/toolchains/**/*"
+    - "C:/cargo/registry/**/*"
+    - "C:/cargo/git/**/*"
     # Node modules (saves npm ci time)
     - "node/node_modules/**/*"
     - "utils/node_modules/**/*"
