@@ -39,8 +39,9 @@ export default async function globalTeardown(): Promise<void> {
 
     for (const clusterName of [data.cmdClusterName, data.cmeClusterName]) {
         console.log(`[globalTeardown] Deleting cluster: ${clusterName}`);
+        const pythonCmd = process.platform === "win32" ? "python" : "python3";
         const result = spawnSync(
-            "python3",
+            pythonCmd,
             [managerScript, ...regionArgs, "stop", "--cluster-name", clusterName],
             { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000 },
         );
