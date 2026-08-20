@@ -195,6 +195,9 @@ impl TokioDisconnectNotifier {
     }
 }
 
+// The Err variant is large because it hands the connection back for the caller to retry
+// on. Boxing it would change the error type at every call site.
+#[allow(clippy::result_large_err)]
 async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
@@ -325,6 +328,9 @@ impl ConnectionBackend {
 }
 
 impl ReconnectingConnection {
+    // Large Err for the same reason as create_connection, and boxing it would change the
+    // error type at every call site.
+    #[allow(clippy::result_large_err)]
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn new(
         address: &NodeAddress,
