@@ -55,10 +55,11 @@ func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool
 	if response.string_value == nil {
 		return models.CreateNilStringResult(), nil
 	}
-	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
-
-	// Create Go string from byte slice (preserving null characters)
-	return models.CreateStringResult(string(byteSlice)), nil
+	// GoStringN copies once and preserves interior NULs.
+	return models.CreateStringResult(C.GoStringN(
+		response.string_value,
+		C.int(response.string_value_len),
+	)), nil
 }
 
 // Fix after merging with https://github.com/valkey-io/valkey-glide/pull/2964
@@ -156,10 +157,11 @@ func parseString(response *C.struct_CommandResponse) (any, error) {
 	if response.string_value == nil {
 		return nil, nil
 	}
-	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
-
-	// Create Go string from byte slice (preserving null characters)
-	return string(byteSlice), nil
+	// GoStringN copies once and preserves interior NULs.
+	return C.GoStringN(
+		response.string_value,
+		C.int(response.string_value_len),
+	), nil
 }
 
 func parseArray(response *C.struct_CommandResponse) (any, error) {
