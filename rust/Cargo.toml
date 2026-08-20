@@ -18,34 +18,10 @@ name = "glide"
 path = "src/lib.rs"
 
 [dependencies]
-# The shared GLIDE core (Rust → Rust, no FFI), fetched from the canonical
-# valkey-io/valkey-glide repository and pinned to a specific commit for
-# reproducibility. Using a git ("remote") dependency means consumers do NOT need
-# a local monorepo checkout to build — Cargo fetches it automatically.
-# NOTE: crates.io still cannot publish a crate with git deps (see README
-# "Status & publishing"); this only removes the local-sibling-checkout requirement.
-#
-# TODO(crates.io): switch these git deps to versioned crates.io deps once the
-# Valkey project publishes them. This is blocked UPSTREAM (not in this repo) and
-# requires the maintainers to publish, in order:
-#   1. the vendored redis-rs fork under a NEW crate name (cannot reuse `redis`,
-#      which is upstream redis-rs) — e.g. `glide-redis`. Our wrapper's
-#      `redis::Cmd`/`Value` MUST be the same crate instance glide-core uses, so
-#      crates.io `redis` cannot be substituted.
-#   2. `logger_core` and `telemetrylib` (glide-core's own path deps).
-#   3. `glide-core` itself, depending on the published fork + the above.
-# When published, replace `git = ...` below with `version = "x.y"`. That also
-# unblocks publishing THIS crate to crates.io (git deps are disallowed there).
-# Tracking issue: <file against valkey-io/valkey-glide>.
-glide-core = { git = "https://github.com/valkey-io/valkey-glide", rev = "052ae4ef62b3ab055ce991d74ea27a5cf1762a20" }
-# The *same* vendored redis-rs fork glide-core uses — from the same repo+rev — so
-# that redis::Cmd / redis::Value unify with glide-core's expected types.
-redis = { git = "https://github.com/valkey-io/valkey-glide", package = "redis", rev = "052ae4ef62b3ab055ce991d74ea27a5cf1762a20", features = [
-    "aio",
-    "tokio-comp",
-    "cluster",
-    "cluster-async",
-] }
+# TODO #6519: Add version once the dependency chain is published to crates.io.
+glide-core = { path = "../glide-core" }
+# TODO #6519: Add version once the dependency chain is published to crates.io.
+redis = { path = "../glide-core/redis-rs/redis" }
 
 async-trait = "0.1"
 bytes = "1"
