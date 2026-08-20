@@ -35,6 +35,12 @@ use tokio::sync::mpsc;
 
 const LOCALHOST: &str = "127.0.0.1";
 
+/// Slot distribution across cluster nodes.
+///
+/// Each entry describes one node as `(node_id, host, port, slot_ranges)`,
+/// where `slot_ranges` is a list of `[start, end]` inclusive slot ranges.
+type SlotDistribution = Vec<(String, String, String, Vec<Vec<u16>>)>;
+
 enum ClusterType {
     Tcp,
     TcpTls,
@@ -500,7 +506,7 @@ impl TestClusterContext {
     // Migrate half the slots from one node to another
     pub async fn migrate_slots_from_node_to_another(
         &self,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot_distribution: SlotDistribution,
     ) {
         let slots_ranges_of_node_id = slot_distribution[0].3.clone();
 
@@ -631,10 +637,7 @@ impl TestClusterContext {
 
     // Return the slots distribution of the cluster as a vector of tuples
     // where the first element is the node id, second is host, third is port and the last element is a vector of slots ranges
-    pub fn get_slots_ranges_distribution(
-        &self,
-        cluster_nodes: &str,
-    ) -> Vec<(String, String, String, Vec<Vec<u16>>)> {
+    pub fn get_slots_ranges_distribution(&self, cluster_nodes: &str) -> SlotDistribution {
         let nodes_string: Vec<String> = cluster_nodes
             .split('\n')
             .map(|s| s.to_string())
@@ -687,7 +690,7 @@ impl TestClusterContext {
 
     pub async fn kill_one_node(
         &self,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot_distribution: SlotDistribution,
         slot: Option<u16>,
     ) -> RoutingInfo {
         let mut cluster_conn = self.async_connection(None).await;
@@ -748,7 +751,7 @@ impl TestClusterContext {
     pub async fn move_specific_slot(
         &self,
         slot_to_move: u16,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot_distribution: SlotDistribution,
     ) -> RoutingInfo {
         let mut cluster_conn = self.async_connection(None).await;
         // Use a reference to the slot distribution so we don't have to clone it.
@@ -805,7 +808,7 @@ impl TestClusterContext {
     pub async fn delete_specific_slot(
         &self,
         slot_to_delete: u16,
-        slot_distribution: Option<Vec<(String, String, String, Vec<Vec<u16>>)>>,
+        slot_distribution: Option<SlotDistribution>,
     ) -> RoutingInfo {
         let mut cluster_conn = self.async_connection(None).await;
 
@@ -864,7 +867,7 @@ impl TestClusterContext {
     pub async fn migrate_slot(
         &self,
         slot_to_migrate: u16,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot_distribution: SlotDistribution,
     ) -> String {
         let mut cluster_conn = self.async_connection(None).await;
 
