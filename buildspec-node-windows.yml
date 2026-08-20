@@ -66,17 +66,54 @@ phases:
           npm ci --prefer-offline 2>&1 | Out-Null
           Set-Location ..
 
-          # Resolve the exact Python executable, install boto3, then prepend its
-          # directory to PATH so the background node process inherits the right python.
-          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
-          if (-not $pythonExe) { $pythonExe = (Get-Command python3 -ErrorAction SilentlyContinue).Source }
-          if (-not $pythonExe) { Write-Error "Python not found"; exit 1 }
+          # Find the real Python executable, bypassing pyenv shims (.bat files)
+          # which don't work correctly in child processes.
+          # Strategy: resolve the shim chain to get the actual python.exe path.
+          $pythonExe = $null
+
+          # First try: find real python.exe under pyenv versions
+          $pyenvVersions = "$env:USERPROFILE\.pyenv\pyenv-win\versions"
+          if (Test-Path $pyenvVersions) {
+            $latestPython = Get-ChildItem $pyenvVersions -Directory |
+              Sort-Object Name -Descending | Select-Object -First 1
+            if ($latestPython) {
+              $candidate = Join-Path $latestPython.FullName "python.exe"
+              if (Test-Path $candidate) { $pythonExe = $candidate }
+            }
+          }
+
+          # Second try: find any python.exe on PATH that is not a .bat shim
+          if (-not $pythonExe) {
+            $pythonExe = Get-Command python.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.Source -notlike "*.bat" } |
+              Select-Object -ExpandProperty Source -First 1
+          }
+
+          # Third try: well-known install locations
+          if (-not $pythonExe) {
+            $candidates = @(
+              "C:\Python312\python.exe",
+              "C:\Python311\python.exe",
+              "C:\Python310\python.exe",
+              "C:\Python39\python.exe"
+            )
+            foreach ($c in $candidates) {
+              if (Test-Path $c) { $pythonExe = $c; break }
+            }
+          }
+
+          if (-not $pythonExe) { Write-Error "Could not find a real python.exe"; exit 1 }
           Write-Host "Using Python: $pythonExe"
+
+          # Install boto3 into this specific interpreter
           & $pythonExe -m pip install --quiet boto3
-          # Prepend Python dir to machine PATH so all child processes find the same python
+
+          # Prepend this Python's directory to PATH (session + machine level)
+          # so child processes spawned by node resolve 'python' to the same exe.
           $pythonDir = Split-Path $pythonExe -Parent
           $env:PATH = "$pythonDir;$env:PATH"
           [System.Environment]::SetEnvironmentVariable("PATH", "$pythonDir;$([System.Environment]::GetEnvironmentVariable('PATH','Machine'))", "Machine")
+          Write-Host "Python dir prepended to PATH: $pythonDir"
 
           $logFile = "$env:TEMP\ec-setup.log"
           $repoRoot = (Get-Location).Path

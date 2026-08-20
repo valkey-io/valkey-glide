@@ -95,6 +95,7 @@ export default async function globalSetup(): Promise<void> {
             const pythonCmd = process.platform === "win32" ? "python" : "python3";
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
+                shell: process.platform === "win32",
             });
             let stdout = "";
             let stderr = "";
