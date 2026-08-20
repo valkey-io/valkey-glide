@@ -35,14 +35,13 @@ export default async function globalTeardown(): Promise<void> {
     const repoRoot = path.resolve(__dirname, "..", "..");
     const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
 
-    const regionArgs = process.env.AWS_REGION ? ["--region", process.env.AWS_REGION] : [];
-
     for (const clusterName of [data.cmdClusterName, data.cmeClusterName]) {
         console.log(`[globalTeardown] Deleting cluster: ${clusterName}`);
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
+        const regionArgs = process.env.AWS_REGION ? ["--region", process.env.AWS_REGION] : [];
         const result = spawnSync(
             pythonCmd,
-            [managerScript, ...regionArgs, "stop", "--cluster-name", clusterName],
+            [managerScript, "stop", "--cluster-name", clusterName, ...regionArgs],
             { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000 },
         );
         if (result.error) {
