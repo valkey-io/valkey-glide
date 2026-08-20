@@ -1173,6 +1173,10 @@ impl StandaloneClient {
     }
 }
 
+// Passes through the large Err from ReconnectingConnection::new. Boxing it would change
+// the error type at every call site.
+// TODO: Box the Err payload and drop this allow - https://github.com/valkey-io/valkey-glide/issues/6819
+#[allow(clippy::result_large_err)]
 #[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
