@@ -30,6 +30,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.AwsCredentials;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -57,6 +58,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -1231,13 +1233,16 @@ public class ConnectionTests {
     @SneakyThrows
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_standalone_with_custom_credentials_provider() {
+        AtomicInteger invocations = new AtomicInteger(0);
         GlideCredentialProvider provider =
-                () ->
-                        new String[] {
-                            System.getenv("AWS_ACCESS_KEY_ID"),
-                            System.getenv("AWS_SECRET_ACCESS_KEY"),
-                            System.getenv("AWS_SESSION_TOKEN")
-                        };
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
                         .clusterName(IAM_TEST_CLUSTER_NAME)
@@ -1254,6 +1259,10 @@ public class ConnectionTests {
             assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
             assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
         }
+        assertTrue(
+                invocations.get() > 0,
+                "Custom credentials provider was never invoked — JNI may have silently dropped the"
+                        + " provider");
     }
 
     @Test
@@ -1286,13 +1295,16 @@ public class ConnectionTests {
     @SneakyThrows
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_cluster_with_custom_credentials_provider() {
+        AtomicInteger invocations = new AtomicInteger(0);
         GlideCredentialProvider provider =
-                () ->
-                        new String[] {
-                            System.getenv("AWS_ACCESS_KEY_ID"),
-                            System.getenv("AWS_SECRET_ACCESS_KEY"),
-                            System.getenv("AWS_SESSION_TOKEN")
-                        };
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
                         .clusterName(IAM_TEST_CLUSTER_NAME)
@@ -1311,6 +1323,10 @@ public class ConnectionTests {
             assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
             assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
         }
+        assertTrue(
+                invocations.get() > 0,
+                "Custom credentials provider was never invoked — JNI may have silently dropped the"
+                        + " provider");
     }
 
     @SneakyThrows

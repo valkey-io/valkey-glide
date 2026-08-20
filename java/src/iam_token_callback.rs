@@ -3,11 +3,11 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use jni::objects::{GlobalRef, JMethodID, JObject, JObjectArray, JString};
+use jni::objects::{GlobalRef, JMethodID, JObject, JString};
 use jni::{JNIEnv, JavaVM};
 use log::error;
 
-/// JNI bridge to a Java `IamCredentialsProvider` instance.
+/// JNI bridge to a Java `GlideCredentialProvider` instance.
 ///
 /// Holds a `GlobalRef` to the Java object so that it is not garbage-collected
 /// while the Rust `IAMTokenManager` is alive.  The callback is invoked from a
@@ -41,17 +41,20 @@ impl JavaIamTokenCallback {
             }
         };
 
-        // The Java interface method: String[] getCredentials() throws Exception
-        let get_credentials_method_id =
-            match env.get_method_id(class, "getCredentials", "()[Ljava/lang/String;") {
-                Ok(mid) => mid,
-                Err(e) => {
-                    error!(
-                        "Failed to find 'getCredentials' method on IAM credentials callback: {e}"
-                    );
-                    return None;
-                }
-            };
+        // The Java interface method: AwsCredentials getCredentials() throws Exception
+        let get_credentials_method_id = match env.get_method_id(
+            class,
+            "getCredentials",
+            "()Lglide/api/models/configuration/AwsCredentials;",
+        ) {
+            Ok(mid) => mid,
+            Err(e) => {
+                error!(
+                    "Failed to find 'getCredentials' method on IAM credentials callback: {e}"
+                );
+                return None;
+            }
+        };
 
         Some(Self {
             jvm,
@@ -86,14 +89,24 @@ impl JavaIamTokenCallback {
                 env.exception_occurred()
                     .ok()
                     .and_then(|throwable| {
+                        // Clear the original exception — required before making further JNI calls.
                         let _ = env.exception_clear();
-                        env.call_method(throwable, "getMessage", "()Ljava/lang/String;", &[])
+                        let msg = env
+                            .call_method(throwable, "getMessage", "()Ljava/lang/String;", &[])
                             .ok()
                             .and_then(|v| v.l().ok())
                             .filter(|o| !o.is_null())
                             .and_then(|jstr| {
-                                env.get_string(&JString::from(jstr)).ok().map(|s| s.into())
-                            })
+                                env.get_string(&JString::from(jstr))
+                                    .ok()
+                                    .map(|s| s.into())
+                            });
+                        // Clear any secondary exception that getMessage() or string
+                        // conversion may have thrown, so the JNI thread is left clean.
+                        if env.exception_check().unwrap_or(false) {
+                            let _ = env.exception_clear();
+                        }
+                        msg
                     })
                     .unwrap_or_else(|| format!("(no message): {err}"))
             } else {
@@ -102,70 +115,82 @@ impl JavaIamTokenCallback {
             IamCallbackError::CallFailed(exception_msg)
         })?;
 
-        let obj = result.l().map_err(IamCallbackError::InvalidReturn)?;
-        if obj.is_null() {
+        // Unwrap the returned AwsCredentials object.
+        let creds_obj = result.l().map_err(IamCallbackError::InvalidReturn)?;
+        if creds_obj.is_null() {
             return Err(IamCallbackError::InvalidCredentials(
                 "getCredentials() returned null".to_string(),
             ));
         }
-        let array_obj: JObjectArray = obj.into();
 
-        // Expect at least 2 elements: [accessKeyId, secretAccessKey, sessionToken?]
-        let len = env
-            .get_array_length(&array_obj)
-            .map_err(IamCallbackError::InvalidReturn)?;
-        if len < 2 {
-            return Err(IamCallbackError::InvalidCredentials(format!(
-                "getCredentials() returned array of length {len}; expected at least 2"
-            )));
+        // Extract accessKeyId via AwsCredentials.getAccessKeyId()
+        let access_key_id = get_string_field(&mut env, &creds_obj, "getAccessKeyId")?;
+        if access_key_id.is_empty() {
+            return Err(IamCallbackError::InvalidCredentials(
+                "getCredentials() returned a blank accessKeyId".to_string(),
+            ));
         }
 
-        let access_key_id = get_string_element(&mut env, &array_obj, 0)?;
-        let secret_access_key = get_string_element(&mut env, &array_obj, 1)?;
-        let session_token = if len >= 3 {
-            let raw = env
-                .get_object_array_element(&array_obj, 2)
-                .map_err(IamCallbackError::InvalidReturn)?;
-            if raw.is_null() {
-                None
-            } else {
-                let jstr: JString = raw.into();
-                let s = env
-                    .get_string(&jstr)
-                    .map_err(IamCallbackError::InvalidReturn)?
-                    .to_str()
-                    .map_err(IamCallbackError::InvalidUtf8)?
-                    .to_string();
-                Some(s)
-            }
-        } else {
-            None
-        };
+        // Extract secretAccessKey via AwsCredentials.getSecretAccessKey()
+        let secret_access_key = get_string_field(&mut env, &creds_obj, "getSecretAccessKey")?;
+        if secret_access_key.is_empty() {
+            return Err(IamCallbackError::InvalidCredentials(
+                "getCredentials() returned a blank secretAccessKey".to_string(),
+            ));
+        }
+
+        // Extract optional sessionToken via AwsCredentials.getSessionToken()
+        let session_token = get_nullable_string_field(&mut env, &creds_obj, "getSessionToken")?;
 
         Ok((access_key_id, secret_access_key, session_token))
     }
 }
 
-/// Helper: extract element `idx` from a `String[]` as a Rust `String`.
-fn get_string_element(
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Call a no-arg getter on `obj` that returns a non-null `String`.
+fn get_string_field(
     env: &mut JNIEnv,
-    array: &JObjectArray,
-    idx: jni::sys::jsize,
+    obj: &JObject,
+    method_name: &str,
 ) -> Result<String, IamCallbackError> {
-    let obj = env
-        .get_object_array_element(array, idx)
+    let result = env
+        .call_method(obj, method_name, "()Ljava/lang/String;", &[])
         .map_err(IamCallbackError::InvalidReturn)?;
-    if obj.is_null() {
+    let jobj = result.l().map_err(IamCallbackError::InvalidReturn)?;
+    if jobj.is_null() {
         return Err(IamCallbackError::InvalidCredentials(format!(
-            "getCredentials() returned null at index {idx}"
+            "{}() returned null",
+            method_name
         )));
     }
-    let jstr: JString = obj.into();
+    let jstr: JString = jobj.into();
     env.get_string(&jstr)
         .map_err(IamCallbackError::InvalidReturn)?
         .to_str()
         .map_err(IamCallbackError::InvalidUtf8)
         .map(|s| s.to_string())
+}
+
+/// Call a no-arg getter on `obj` that returns a nullable `String`.
+fn get_nullable_string_field(
+    env: &mut JNIEnv,
+    obj: &JObject,
+    method_name: &str,
+) -> Result<Option<String>, IamCallbackError> {
+    let result = env
+        .call_method(obj, method_name, "()Ljava/lang/String;", &[])
+        .map_err(IamCallbackError::InvalidReturn)?;
+    let jobj = result.l().map_err(IamCallbackError::InvalidReturn)?;
+    if jobj.is_null() {
+        return Ok(None);
+    }
+    let jstr: JString = jobj.into();
+    env.get_string(&jstr)
+        .map_err(IamCallbackError::InvalidReturn)?
+        .to_str()
+        .map_err(IamCallbackError::InvalidUtf8)
+        .map(|s| Some(s.to_string()))
 }
 
 // ─── Error type ──────────────────────────────────────────────────────────────

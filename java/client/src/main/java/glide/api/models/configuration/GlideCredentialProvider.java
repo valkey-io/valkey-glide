@@ -9,24 +9,27 @@ package glide.api.models.configuration;
  * default AWS credential chain.
  *
  * <p>The callback is invoked by the native Rust layer each time a fresh IAM token needs to be
- * generated. It must return the current AWS credentials as a {@code String[]} with at least 2
- * elements:
+ * generated. Implement this interface and return an {@link AwsCredentials} instance built with the
+ * {@link AwsCredentials#builder()} — the builder ensures that required fields are present and
+ * non-blank, and makes each credential field self-documenting at the call site.
  *
- * <ol>
- *   <li>AWS Access Key ID (required, must not be {@code null})
- *   <li>AWS Secret Access Key (required, must not be {@code null})
- *   <li>AWS Session Token (optional; pass {@code null} or omit for long-term credentials)
- * </ol>
+ * <pre>{@code
+ * // Lambda with session credentials (e.g., from HashiCorp Vault):
+ * GlideCredentialProvider provider = () -> AwsCredentials.builder()
+ *     .accessKeyId(vaultClient.getAccessKeyId())
+ *     .secretAccessKey(vaultClient.getSecretAccessKey())
+ *     .sessionToken(vaultClient.getSessionToken()) // optional
+ *     .build();
  *
- * @see IamAuthConfig#getCredentialsProvider()
- * @example
- *     <pre>{@code
- * GlideCredentialProvider vaultCallback = () -> new String[]{
- *     vaultClient.getAccessKeyId(),
- *     vaultClient.getSecretAccessKey(),
- *     vaultClient.getSessionToken() // may be null
- * };
+ * // Lambda with long-term credentials (no session token):
+ * GlideCredentialProvider staticProvider = () -> AwsCredentials.builder()
+ *     .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+ *     .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+ *     .build();
  * }</pre>
+ *
+ * @see AwsCredentials
+ * @see IamAuthConfig#getCredentialsProvider()
  */
 @FunctionalInterface
 public interface GlideCredentialProvider {
@@ -34,10 +37,9 @@ public interface GlideCredentialProvider {
     /**
      * Retrieve the current AWS credentials.
      *
-     * @return a {@code String[]} with at least 2 elements: {@code [accessKeyId, secretAccessKey,
-     *     sessionToken?]}. The session token element (index 2) may be {@code null} or omitted for
-     *     non-session credentials.
+     * @return an {@link AwsCredentials} instance containing the AWS Access Key ID, Secret Access Key,
+     *     and an optional Session Token.
      * @throws Exception if credentials cannot be retrieved
      */
-    String[] getCredentials() throws Exception;
+    AwsCredentials getCredentials() throws Exception;
 }

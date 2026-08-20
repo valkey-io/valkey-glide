@@ -19,11 +19,11 @@ import lombok.NonNull;
  *     .build();
  *
  * // Custom credentials provider (e.g., from HashiCorp Vault):
- * GlideCredentialProvider vaultCallback = () -> new String[]{
- *     System.getenv("VAULT_ACCESS_KEY_ID"),
- *     System.getenv("VAULT_SECRET_ACCESS_KEY"),
- *     System.getenv("VAULT_SESSION_TOKEN")
- * };
+ * GlideCredentialProvider vaultCallback = () -> AwsCredentials.builder()
+ *     .accessKeyId(vaultClient.getAccessKeyId())
+ *     .secretAccessKey(vaultClient.getSecretAccessKey())
+ *     .sessionToken(vaultClient.getSessionToken()) // optional
+ *     .build();
  * IamAuthConfig iamConfigWithCustomProvider = IamAuthConfig.builder()
  *     .clusterName("my-cluster")
  *     .service(ServiceType.ELASTICACHE)
@@ -61,22 +61,17 @@ public class IamAuthConfig {
      * <p>When not set (null), the default AWS credential chain is used (environment variables,
      * ~/.aws/credentials, EC2/ECS metadata service, etc.).
      *
-     * <p>The provider must return a {@code String[]} with 2 or 3 elements:
-     *
-     * <ul>
-     *   <li>{@code [0]} - AWS Access Key ID (required, must not be null)
-     *   <li>{@code [1]} - AWS Secret Access Key (required, must not be null)
-     *   <li>{@code [2]} - AWS Session Token (optional, may be null for long-term credentials)
-     * </ul>
+     * <p>The provider must return a non-null {@link AwsCredentials} instance. {@code accessKeyId} and
+     * {@code secretAccessKey} must not be blank; {@code sessionToken} may be {@code null} for
+     * long-term credentials.
      *
      * @example
      *     <pre>{@code
-     * // Using a custom credentials provider with session credentials:
-     * GlideCredentialProvider provider = () -> new String[]{
-     *     myVaultClient.getAccessKeyId(),
-     *     myVaultClient.getSecretAccessKey(),
-     *     myVaultClient.getSessionToken()
-     * };
+     * GlideCredentialProvider provider = () -> AwsCredentials.builder()
+     *     .accessKeyId(myVaultClient.getAccessKeyId())
+     *     .secretAccessKey(myVaultClient.getSecretAccessKey())
+     *     .sessionToken(myVaultClient.getSessionToken())
+     *     .build();
      * IamAuthConfig iamConfig = IamAuthConfig.builder()
      *     .clusterName("my-cluster")
      *     .service(ServiceType.ELASTICACHE)

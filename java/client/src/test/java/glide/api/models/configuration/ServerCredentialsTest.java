@@ -2,6 +2,8 @@
 package glide.api.models.configuration;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -140,7 +142,12 @@ public class ServerCredentialsTest {
     @Test
     public void testIamWithCustomCredentialsProvider() throws Exception {
         GlideCredentialProvider provider =
-                () -> new String[] {"test_access_key", "test_secret_key", "test_session_token"};
+                () ->
+                        AwsCredentials.builder()
+                                .accessKeyId("test_access_key")
+                                .secretAccessKey("test_secret_key")
+                                .sessionToken("test_session_token")
+                                .build();
 
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -151,19 +158,21 @@ public class ServerCredentialsTest {
                         .build();
 
         assertNotNull(iamConfig.getCredentialsProvider());
-        // Invoke the provider and verify the returned credentials
-        String[] creds = iamConfig.getCredentialsProvider().getCredentials();
-        assertEquals(3, creds.length);
-        assertEquals("test_access_key", creds[0]);
-        assertEquals("test_secret_key", creds[1]);
-        assertEquals("test_session_token", creds[2]);
+        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials();
+        assertEquals("test_access_key", creds.getAccessKeyId());
+        assertEquals("test_secret_key", creds.getSecretAccessKey());
+        assertEquals("test_session_token", creds.getSessionToken());
     }
 
     @Test
     public void testIamWithCustomCredentialsProviderNullSessionToken() throws Exception {
         // Long-term credentials without a session token
         GlideCredentialProvider provider =
-                () -> new String[] {"test_access_key", "test_secret_key", null};
+                () ->
+                        AwsCredentials.builder()
+                                .accessKeyId("test_access_key")
+                                .secretAccessKey("test_secret_key")
+                                .build(); // sessionToken omitted → null
 
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -174,9 +183,10 @@ public class ServerCredentialsTest {
                         .build();
 
         assertNotNull(iamConfig.getCredentialsProvider());
-        String[] creds = iamConfig.getCredentialsProvider().getCredentials();
-        assertEquals(3, creds.length);
-        assertNull(creds[2]);
+        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials();
+        assertEquals("test_access_key", creds.getAccessKeyId());
+        assertEquals("test_secret_key", creds.getSecretAccessKey());
+        assertNull(creds.getSessionToken());
     }
 
     @Test
@@ -204,5 +214,23 @@ public class ServerCredentialsTest {
 
         assertNull(iamConfig.getCredentialsProvider());
         assertEquals(120, iamConfig.getRefreshIntervalSeconds());
+    }
+
+    @Test
+    public void testAwsCredentialsRejectsBlankAccessKeyId() {
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> AwsCredentials.builder().accessKeyId("").secretAccessKey("secret").build());
+        assertTrue(ex.getMessage().contains("accessKeyId"));
+    }
+
+    @Test
+    public void testAwsCredentialsRejectsBlankSecretAccessKey() {
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> AwsCredentials.builder().accessKeyId("key").secretAccessKey("").build());
+        assertTrue(ex.getMessage().contains("secretAccessKey"));
     }
 }
