@@ -474,6 +474,8 @@ impl ClusterClientBuilder {
     /// If no suitable replica is found (i.e. no replica could be found in the requested availability zone), choose any replica. Falling back to primary if needed.
     /// `ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(availability_zone)` - attempt to access nodes in the same availability zone.
     ///  prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
+    /// `ReadFromReplicaStrategy::AZAffinityAllNodes(availability_zone)` - spread read requests equally among all nodes (primary and replicas)
+    ///  in the same availability zone, falling back to a round robin across all nodes if no node is available in that zone.
     /// `ReadFromReplicaStrategy::RoundRobin` - reads are distributed across replicas for load balancing using round-robin algorithm. Falling back to primary if needed.
     /// `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries are directed to the primary node.
     ///
