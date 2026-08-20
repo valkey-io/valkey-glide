@@ -44,12 +44,13 @@ def cluster_manager(tmp_path, monkeypatch) -> ModuleType:
     monkeypatch.setattr(module, "SERVER_CRT", str(tls_folder / "server.crt"))
     monkeypatch.setattr(module, "SERVER_KEY", str(tls_folder / "server.key"))
     # The default poll budget waits 15 seconds per missing file so that a concurrent
-    # generation can finish. Nothing runs concurrently here, so drop the wait.
+    # generation can finish. Nothing runs concurrently here, so one second is plenty,
+    # and only the missing-file assertions ever wait that long.
     poll = module.check_if_tls_cert_exist
     monkeypatch.setattr(
         module,
         "check_if_tls_cert_exist",
-        lambda tls_file, timeout=0.01: poll(tls_file, timeout),
+        lambda tls_file, timeout=1: poll(tls_file, timeout),
     )
     return module
 
@@ -85,6 +86,22 @@ def test_regenerates_when_a_certificate_has_expired(cluster_manager):
     os.utime(cluster_manager.SERVER_CRT, (expired, expired))
 
     assert cluster_manager.should_generate_new_tls_certs() is True
+
+
+def test_regenerates_when_a_certificate_is_empty(cluster_manager):
+    """An interrupted openssl run leaves a 0-byte file with a fresh mtime."""
+    for name in ("ca.crt", "server.key", "server.crt"):
+        write_fixture_file(cluster_manager.TLS_FOLDER, name)
+    Path(cluster_manager.SERVER_CRT).write_text("")
+
+    assert cluster_manager.should_generate_new_tls_certs() is True
+
+
+def test_a_certificate_that_disappeared_is_not_valid(cluster_manager):
+    """A concurrent teardown between the presence poll and the read must not raise."""
+    assert (
+        cluster_manager.check_if_tls_cert_is_valid(cluster_manager.SERVER_CRT) is False
+    )
 
 
 @pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is required")

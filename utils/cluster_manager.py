@@ -112,8 +112,15 @@ def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
 
 
 def check_if_tls_cert_is_valid(tls_file: str):
-    file_creation_unix_time = os.path.getmtime(tls_file)
-    file_creation_utc = datetime.fromtimestamp(file_creation_unix_time)
+    try:
+        stats = os.stat(tls_file)
+    except OSError:
+        # A file that disappeared or cannot be read is not something to reuse.
+        return False
+    if stats.st_size == 0:
+        # An interrupted openssl run leaves a truncated file with a fresh mtime.
+        return False
+    file_creation_utc = datetime.fromtimestamp(stats.st_mtime)
     current_time_utc = datetime.utcnow()
     time_since_created = current_time_utc - file_creation_utc
     return time_since_created.days < 3650
