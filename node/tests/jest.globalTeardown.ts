@@ -42,7 +42,7 @@ export default async function globalTeardown(): Promise<void> {
         const result = spawnSync(
             pythonCmd,
             [managerScript, "stop", "--cluster-name", clusterName, ...regionArgs],
-            { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000 },
+            { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000, shell: process.platform === "win32" },
         );
         if (result.error) {
             console.error(`[globalTeardown] Failed to spawn for ${clusterName}: ${result.error.message}`);

@@ -320,7 +320,7 @@ phases:
         $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
         $env:RUSTUP_TOOLCHAIN = "1.91.1"
 
-      # -- Wait for ElastiCache background setup to complete -------------------
+      # -- Wait for ElastiCache setup, then run integration tests -------------
       - |
         if ($env:USE_ELASTICACHE -eq "true") {
           Write-Host "=== Waiting for ElastiCache cluster setup ==="
@@ -371,10 +371,8 @@ phases:
           Write-Host "Cluster:    $env:CLUSTER_ENDPOINT"
         }
 
-      # -- Run integration tests -----------------------------------------------
-      - |
+        # -- Run integration tests -------------------------------------------
         Write-Host "=== Running integration tests ==="
-        # Ensure artifact path exists even if tests don't run
         if (-not (Test-Path "node/test-report.html")) {
           "<html><body>No test report generated</body></html>" | Set-Content "node/test-report.html"
         }
@@ -393,7 +391,6 @@ phases:
           $ignorePatterns += "TlsTest"
         }
         if ($env:USE_ELASTICACHE -eq "true") {
-          # MutualTLS requires a local valkey-server which is not available on ElastiCache builds
           $ignorePatterns += "MutualTLS"
         }
         foreach ($pattern in $ignorePatterns) { $testArgs += "--testPathIgnorePatterns=$pattern" }
