@@ -577,8 +577,9 @@ public class ConnectionManager {
         return CompletableFuture.supplyAsync(
                 () -> {
                     if (poolBorrowed) {
-                        // The pool owns the native handle; releasing goes through the pool.
-                        isClosed = true;
+                        // The pool owns the native handle and the wrapper is cached and reused across
+                        // borrows, so this must not mark the manager closed. Releasing goes through the
+                        // pool.
                         return null;
                     }
                     if (!isClosed && nativeClientHandle != 0) {
@@ -602,8 +603,8 @@ public class ConnectionManager {
         }
 
         if (poolBorrowed) {
-            // The pool owns the native handle; releasing goes through the pool.
-            isClosed = true;
+            // The pool owns the native handle and the wrapper is cached and reused across borrows, so
+            // this must not mark the manager closed. Releasing goes through the pool.
             return;
         }
 
