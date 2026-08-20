@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Strip brackets from IPv6 address literals in `create_client_from_uri` so bracketed hosts (e.g. `redis://[::1]:6379`) resolve correctly. `url::Url::host_str()` returns the literal with its surrounding brackets (`[::1]`), which `tokio::net::lookup_host` cannot resolve, causing connections to IPv6 literals to hang until the connect timeout. The URI parser now uses the unbracketed canonical form via `Ipv6Addr::to_string()`.

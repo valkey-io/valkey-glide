@@ -35,6 +35,7 @@ var _ interfaces.GlideClusterClientCommands = (*ClusterClient)(nil)
 type ClusterClient struct {
 	baseClient
 	clientConfig *config.ClusterClientConfiguration // stored for scoped_connection
+	connReqBytes []byte                             // pre-serialized ConnectionRequest (set for pool-borrowed clients)
 }
 
 // Creates a new [ClusterClient] instance and establishes a connection to a Valkey Cluster.
