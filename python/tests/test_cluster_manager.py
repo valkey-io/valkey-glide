@@ -3,6 +3,7 @@
 import importlib.util
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 from types import ModuleType
@@ -27,11 +28,22 @@ def load_cluster_manager() -> ModuleType:
     return module
 
 
-def write_fixture_file(folder: str, name: str) -> None:
-    """Contents do not matter: the check under test only looks at presence and age."""
+def write_fixture_file(folder: str, name: str, contents: str = "placeholder\n") -> None:
+    """Contents are arbitrary, but an empty file means a generation is in flight."""
     path = Path(folder)
     path.mkdir(parents=True, exist_ok=True)
-    (path / name).write_text("placeholder\n")
+    (path / name).write_text(contents)
+
+
+def override_poll_budget(module, monkeypatch, timeout: float) -> None:
+    """should_generate_new_tls_certs polls with no timeout argument, so the budget can
+    only be changed by replacing the function."""
+    poll = module.check_if_tls_cert_exist
+    monkeypatch.setattr(
+        module,
+        "check_if_tls_cert_exist",
+        lambda tls_file, _timeout=timeout: poll(tls_file, _timeout),
+    )
 
 
 @pytest.fixture
@@ -43,15 +55,10 @@ def cluster_manager(tmp_path, monkeypatch) -> ModuleType:
     monkeypatch.setattr(module, "CA_CRT", str(tls_folder / "ca.crt"))
     monkeypatch.setattr(module, "SERVER_CRT", str(tls_folder / "server.crt"))
     monkeypatch.setattr(module, "SERVER_KEY", str(tls_folder / "server.key"))
-    # The default poll budget waits 15 seconds per missing file so that a concurrent
-    # generation can finish. Nothing runs concurrently here, so one second is plenty,
-    # and only the missing-file assertions ever wait that long.
-    poll = module.check_if_tls_cert_exist
-    monkeypatch.setattr(
-        module,
-        "check_if_tls_cert_exist",
-        lambda tls_file, timeout=1: poll(tls_file, timeout),
-    )
+    # The default budget waits 15 seconds per unfinished file so that a concurrent
+    # generation can complete. One second is plenty for tests that have no writer,
+    # and only the assertions that expect regeneration ever wait that long.
+    override_poll_budget(module, monkeypatch, 1)
     return module
 
 
@@ -93,6 +100,39 @@ def test_regenerates_when_a_certificate_is_empty(cluster_manager):
     for name in ("ca.crt", "server.key", "server.crt"):
         write_fixture_file(cluster_manager.TLS_FOLDER, name)
     Path(cluster_manager.SERVER_CRT).write_text("")
+
+    assert cluster_manager.should_generate_new_tls_certs() is True
+
+
+def test_waits_for_a_concurrent_generation_instead_of_starting_another(
+    cluster_manager, monkeypatch
+):
+    """A second invocation must let the first finish, not write over the same paths."""
+    names = ("ca.crt", "server.key", "server.crt")
+    for name in names:
+        write_fixture_file(cluster_manager.TLS_FOLDER, name, "")
+    override_poll_budget(cluster_manager, monkeypatch, 3)
+
+    def finish_the_generation():
+        time.sleep(0.2)
+        for name in names:
+            write_fixture_file(cluster_manager.TLS_FOLDER, name)
+
+    writer = threading.Thread(target=finish_the_generation)
+    writer.start()
+    try:
+        assert cluster_manager.should_generate_new_tls_certs() is False
+    finally:
+        writer.join()
+
+
+def test_regenerates_when_an_empty_certificate_has_no_writer(
+    cluster_manager, monkeypatch
+):
+    """Waiting for a concurrent writer must not make a stale fixture permanent."""
+    for name in ("ca.crt", "server.key", "server.crt"):
+        write_fixture_file(cluster_manager.TLS_FOLDER, name, "")
+    override_poll_budget(cluster_manager, monkeypatch, 0.05)
 
     assert cluster_manager.should_generate_new_tls_certs() is True
 

@@ -103,10 +103,15 @@ def init_logger(logfile: str):
 def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
-        if os.path.exists(tls_file):
-            return True
-        else:
-            time.sleep(0.005)
+        # openssl creates each file before it writes the contents, so an empty file
+        # means a concurrent generation is still running. Keep waiting for it within
+        # the budget rather than starting a second generation over the same paths.
+        try:
+            if os.path.getsize(tls_file) > 0:
+                return True
+        except OSError:
+            pass
+        time.sleep(0.005)
     logging.warn(f"Timed out waiting for certificate file {tls_file}")
     return False
 
