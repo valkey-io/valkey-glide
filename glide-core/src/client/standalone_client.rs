@@ -1173,6 +1173,9 @@ impl StandaloneClient {
     }
 }
 
+// Passes through the large Err from ReconnectingConnection::new. Boxing it would change
+// the error type at every call site.
+#[allow(clippy::result_large_err)]
 #[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
