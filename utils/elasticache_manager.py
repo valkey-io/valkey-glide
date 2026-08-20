@@ -195,12 +195,6 @@ def main():
         "-log", "--loglevel", dest="log", default="info",
         help="Logging level (default: %(default)s)",
     )
-    parser.add_argument(
-        "--region",
-        default=os.environ.get("AWS_REGION", DEFAULT_REGION),
-        help="AWS region (default: %(default)s)",
-    )
-
     subparsers = parser.add_subparsers(dest="action", help="Tool actions")
 
     # -- start --
@@ -248,12 +242,22 @@ def main():
         default=os.environ.get("EC_SECURITY_GROUP", DEFAULT_SECURITY_GROUP),
         help="Security group ID (default: %(default)s)",
     )
+    parser_start.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", DEFAULT_REGION),
+        help="AWS region (default: %(default)s)",
+    )
 
     # -- stop --
     parser_stop = subparsers.add_parser("stop", help="Delete an ElastiCache replication group")
     parser_stop.add_argument(
         "--cluster-name", required=True,
         help="Name of the replication group to delete",
+    )
+    parser_stop.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", DEFAULT_REGION),
+        help="AWS region (default: %(default)s)",
     )
 
     args = parser.parse_args()
