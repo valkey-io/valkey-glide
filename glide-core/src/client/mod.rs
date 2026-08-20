@@ -1599,27 +1599,35 @@ impl Client {
         let scan_state_cursor_clone = scan_state_cursor.clone();
         let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
 
-        // Check and initialize if lazy *inside* the async block
+        // Initialize a lazy client before the bound starts, as send_command does.
         let client = self.get_or_initialize_client().await?;
 
-        match client {
-            ClientWrapper::Standalone(_) => {
-                unreachable!("Cluster scan is not supported in standalone mode")
+        // Bound the scan by the client's configured request timeout, as every other
+        // command path is. The SCAN commands underneath carry no per-command response
+        // timeout, so they fall back to the connection default of Duration::MAX.
+        // tokio::time::timeout drops the inner future on expiry, which also ends the
+        // retry loop in try_scan rather than leaving it spinning.
+        run_with_timeout(Some(self.request_timeout), async move {
+            match client {
+                ClientWrapper::Standalone(_) => {
+                    unreachable!("Cluster scan is not supported in standalone mode")
+                }
+                ClientWrapper::Cluster { mut client, .. } => {
+                    let (cursor, keys) = client
+                        .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
+                        .await?;
+                    let cluster_cursor_id = if cursor.is_finished() {
+                        Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
+                    } else {
+                        Value::BulkString(insert_cluster_scan_cursor(cursor).into())
+                    };
+                    Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
+                }
+                // Lazy case is now handled by the initial check
+                ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
-            ClientWrapper::Cluster { mut client, .. } => {
-                let (cursor, keys) = client
-                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
-                    .await?;
-                let cluster_cursor_id = if cursor.is_finished() {
-                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
-                } else {
-                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
-                };
-                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
-            }
-            // Lazy case is now handled by the initial check
-            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
-        }
+        })
+        .await
     }
 
     fn get_transaction_values(
