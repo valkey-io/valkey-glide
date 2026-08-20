@@ -1960,12 +1960,12 @@ mod tests {
                 res.kind(),
                 crate::ErrorKind::InvalidClientConfig,
                 "{}",
-                &res,
+                res,
             );
             #[allow(deprecated)]
             let desc = std::error::Error::description(&res);
-            assert_eq!(desc, expected, "{}", &res);
-            assert_eq!(res.detail(), None, "{}", &res);
+            assert_eq!(desc, expected, "{}", res);
+            assert_eq!(res.detail(), None, "{}", res);
         }
     }
 

@@ -2524,8 +2524,7 @@ where
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            log_warn_lazy!("topology_refresh", format!(
-                "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)"));
+            log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
         let acquire_elapsed = acquire_start.elapsed();

@@ -2764,7 +2764,7 @@ mod cluster_async {
                 // Disable full coverage requirement
                 let _ = conn
                     .route_command(
-                        &cmd("CONFIG")
+                        cmd("CONFIG")
                             .arg("SET")
                             .arg("cluster-require-full-coverage")
                             .arg("no"),
@@ -2825,7 +2825,7 @@ mod cluster_async {
                 // key2 -> 12539 (node 2)
                 let _ = conn
                     .route_command(
-                        &cmd("GET").arg("key1"),
+                        cmd("GET").arg("key1"),
                         RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
                             get_slot("key".as_bytes()),
                             SlotAddr::Master,
@@ -6858,7 +6858,7 @@ mod cluster_async {
                 .arg("SETUSER")
                 .arg(test_user)
                 .arg("on")
-                .arg(&format!(">{}", test_password))
+                .arg(format!(">{}", test_password))
                 .arg("+subscribe")
                 .arg("+ssubscribe")
                 .arg("+sunsubscribe")
@@ -7056,7 +7056,7 @@ mod cluster_async {
                     // Periodically try GET, which might call set_cluster_param()
                     if i % 10 == 0 {
                         let _: Option<String> =
-                            connection.get(&format!("trigger:{}", i)).await.ok();
+                            connection.get(format!("trigger:{}", i)).await.ok();
                     }
 
                     Ok::<_, RedisError>(start.elapsed())
