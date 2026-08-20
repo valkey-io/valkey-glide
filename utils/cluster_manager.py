@@ -125,9 +125,16 @@ def should_generate_new_tls_certs() -> bool:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
+        if all(
+            check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)
+            for file in files_list
+        ):
+            return False
+        # Servers need all three files, so reuse takes the whole set. A partial one
+        # would otherwise be cached until someone deletes the folder by hand.
+        logging.warning(
+            f"Incomplete or expired TLS certificates in {TLS_FOLDER}, regenerating"
+        )
     return True
 
 
@@ -139,6 +146,10 @@ def generate_tls_certs():
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
+
+    # The CA below is new, so an old serial does not apply to it. openssl also
+    # aborts on a serial it cannot parse, which leaves an empty server.crt behind.
+    Path(ca_serial).unlink(missing_ok=True)
 
     f = open(ext_file, "w")
     f.write(
