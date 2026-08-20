@@ -77,8 +77,8 @@ func monitorCallback(
 	line := MonitorLine{
 		Timestamp:  float64(timestamp),
 		DB:         int64(db),
-		ClientAddr: string(C.GoBytes(clientAddr, C.int(clientAddrLen))),
-		Command:    string(C.GoBytes(command, C.int(commandLen))),
+		ClientAddr: C.GoStringN((*C.char)(clientAddr), C.int(clientAddrLen)),
+		Command:    C.GoStringN((*C.char)(command), C.int(commandLen)),
 		Args:       args,
 	}
 
