@@ -240,11 +240,10 @@ jobs:
               shell: bash
               run: |
                   npm install --global corepack@0.35.0
-                  corepack enable yarn
+                  corepack enable
                   corepack install --global yarn@4.10.3
 
             - name: Test yarn compatibility and correct typescript
-              if: ${{ steps.install-yarn.outcome == 'success' }}
               working-directory: ./node/pm-and-types-tests
               shell: bash
               run: |

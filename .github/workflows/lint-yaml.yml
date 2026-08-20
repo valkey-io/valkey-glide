@@ -47,5 +47,5 @@ jobs:
                   if missing:
                       print("ERROR: Entries not equal to 7:", missing)
                       sys.exit(1)
-                  print(f"OK: all {len(config['updates'])} entries have cooldown.default-days == 7")
+                  print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
                   EOF

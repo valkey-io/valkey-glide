@@ -354,10 +354,10 @@ updates:
       groups:
           patch-updates:
               update-types:
-                  - patch
+                  - "patch"
           minor-updates:
               update-types:
-                  - minor
+                  - "minor"
       labels:
           - "dependencies"
           - "node 🐢"
@@ -375,10 +375,10 @@ updates:
       groups:
           patch-updates:
               update-types:
-                  - patch
+                  - "patch"
           minor-updates:
               update-types:
-                  - minor
+                  - "minor"
       labels:
           - "dependencies"
           - "node 🐢"
