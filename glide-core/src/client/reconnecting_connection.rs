@@ -87,10 +87,13 @@ impl IAMTokenHandle {
                     }
                     return Some(new_token);
                 }
-                Err(err) => {
+                Err(_err) => {
+                    // Do not include err in the log message — it may contain credential
+                    // material from the user's GlideCredentialProvider implementation.
                     logger_core::log_error(
                         "IAM reconnect",
-                        format!("Failed to generate fresh IAM token, using cached token: {err}"),
+                        "Failed to generate fresh IAM token. \
+                         Using cached token. Check your GlideCredentialProvider implementation.",
                     );
                     // Fall through to return the cached (possibly expired) token
                 }
