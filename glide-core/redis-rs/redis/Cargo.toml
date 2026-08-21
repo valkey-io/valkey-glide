@@ -76,7 +76,7 @@ tokio-rustls = { version = "0.26", default-features = false }
 rustls-pki-types = { version = "1.9" }
 
 # Only needed for bignum Support
-num-bigint = "0.4"
+num-bigint = "0.5"
 
 tracing = "0.1"
 
