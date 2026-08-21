@@ -56,7 +56,7 @@ jobs:
             - name: Validate npmMinimalAgeGate
               run: |
                   python3 - <<'EOF'
-                  import yaml, sys, re
+                  import yaml, sys
                   errors = []
                   for path in [
                       "node/pm-and-types-tests/depend-on-glide-package/.yarnrc.yml",
@@ -65,13 +65,11 @@ jobs:
                       with open(path) as f:
                           config = yaml.safe_load(f)
                       gate = config.get("npmMinimalAgeGate")
-                      # Accept values like "7d", "10d", 7d (without quotes) where N >= 7
-                      match = re.fullmatch(r'(\d+)d', str(gate) if gate is not None else '')
-                      if not match or int(match.group(1)) < 7:
-                          errors.append(f"{path}: npmMinimalAgeGate = {gate!r} (expected e.g. \"7d\", got invalid or too-low value)")
+                      if gate != 10080:
+                          errors.append(f"{path}: npmMinimalAgeGate = {gate!r} (expected 10080 = 7 days in minutes)")
                   if errors:
                       for e in errors:
                           print("ERROR:", e)
                       sys.exit(1)
-                  print("OK: all .yarnrc.yml files have a valid npmMinimalAgeGate")
+                  print(f"OK: all .yarnrc.yml files have npmMinimalAgeGate == 10080")
                   EOF
