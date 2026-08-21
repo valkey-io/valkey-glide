@@ -23,7 +23,9 @@ var (
 	nextRequestID     atomic.Uint64
 )
 
-// registerRequest assigns a unique FFI request ID to resultChannel.
+// registerRequest assigns a unique FFI request ID to resultChannel. Production callers must provide a buffered
+// channel with capacity one so callbacks and failPendingRequests can deliver while client.mu is held. An unbuffered
+// channel is valid only in tests that claim the request before waiting; production use can block Close indefinitely.
 func registerRequest(resultChannel chan payload) uintptr {
 	requestRegistryMu.Lock()
 	defer requestRegistryMu.Unlock()

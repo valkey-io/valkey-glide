@@ -238,6 +238,14 @@ func (client *baseClient) failPendingRequests(err error) {
 	client.pending = nil
 }
 
+// beginRequest registers resultChannel and tracks the request for Close. The caller must hold client.mu and verify
+// that client.coreClient is non-nil.
+func (client *baseClient) beginRequest(resultChannel chan payload) uintptr {
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
+	return requestID
+}
+
 // removePendingRequest removes a completed request from the client's pending set.
 func (client *baseClient) removePendingRequest(requestID uintptr) {
 	client.mu.Lock()
@@ -399,8 +407,7 @@ func (client *baseClient) executeCommandWithRoute(
 		client.mu.Unlock()
 		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 	C.command(
 		client.coreClient,
 		C.uintptr_t(requestID),
@@ -476,13 +483,12 @@ func (client *baseClient) executeBatch(
 		client.mu.Unlock()
 		return nil, NewClosingError("ExecuteBatch failed. The client is closed.")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 
-	batchInfo := createBatchInfo(pinner, batch)
+	batchInfo := createBatchInfo(&pinner, batch)
 	var optionsPtr *C.BatchOptionsInfo
 	if options != nil {
-		batchOptionsInfo := createBatchOptionsInfo(pinner, *options)
+		batchOptionsInfo := createBatchOptionsInfo(&pinner, *options)
 		optionsPtr = &batchOptionsInfo
 	}
 
@@ -514,7 +520,7 @@ func (client *baseClient) executeBatch(
 	return batch.Convert(response)
 }
 
-func createBatchOptionsInfo(pinner pinner, options internal.BatchOptions) C.BatchOptionsInfo {
+func createBatchOptionsInfo(pinner *pinner, options internal.BatchOptions) C.BatchOptionsInfo {
 	info := C.BatchOptionsInfo{}
 	info.retry_server_error = C._Bool(false)
 	info.retry_connection_error = C._Bool(false)
@@ -539,7 +545,7 @@ func createBatchOptionsInfo(pinner pinner, options internal.BatchOptions) C.Batc
 }
 
 // TODO align with others to return struct, not a pointer
-func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
+func createRouteInfo(pinner *pinner, route config.Route) *C.RouteInfo {
 	if route != nil {
 		routeInfo := C.RouteInfo{}
 		switch r := route.(type) {
@@ -572,7 +578,7 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	return nil
 }
 
-func createBatchInfo(pinner pinner, batch internal.Batch) C.BatchInfo {
+func createBatchInfo(pinner *pinner, batch internal.Batch) C.BatchInfo {
 	numCommands := len(batch.Commands)
 	info := C.BatchInfo{}
 	info.is_atomic = C._Bool(batch.IsAtomic)
@@ -592,7 +598,7 @@ func createBatchInfo(pinner pinner, batch internal.Batch) C.BatchInfo {
 	return info
 }
 
-func createCmdInfo(pinner pinner, cmd internal.Cmd) C.CmdInfo {
+func createCmdInfo(pinner *pinner, cmd internal.Cmd) C.CmdInfo {
 	numArgs := len(cmd.Args)
 	info := C.CmdInfo{}
 	info.request_type = cmd.RequestType
@@ -633,8 +639,7 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 		client.mu.Unlock()
 		return models.DefaultStringResponse, NewClosingError("UpdatePassword failed. The client is closed.")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 
 	password_cstring := C.CString(password)
 	defer C.free(unsafe.Pointer(password_cstring))
@@ -742,8 +747,7 @@ func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, er
 		client.mu.Unlock()
 		return models.DefaultStringResponse, NewClosingError("RefreshIamToken failed. The client is closed.")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 
 	C.refresh_iam_token(
 		client.coreClient,
@@ -846,8 +850,7 @@ func (client *baseClient) submitGetCacheMetrics(
 		client.mu.Unlock()
 		return nil, NewClosingError("GetCacheMetrics failed. The client is closed.")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 
 	C.get_cache_metrics(
 		client.coreClient,
@@ -9871,8 +9874,7 @@ func (client *baseClient) executeScriptWithRoute(
 		client.mu.Unlock()
 		return nil, NewClosingError("ExecuteScript failed. The client is closed.")
 	}
-	requestID := registerRequest(resultChannel)
-	client.pending[requestID] = struct{}{}
+	requestID := client.beginRequest(resultChannel)
 	hash_cstring := C.CString(hash)
 	defer C.free(unsafe.Pointer(hash_cstring))
 	C.invoke_script(
