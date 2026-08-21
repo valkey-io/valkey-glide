@@ -156,7 +156,12 @@ fn get_string_field(
 ) -> Result<String, IamCallbackError> {
     let result = env
         .call_method(obj, method_name, "()Ljava/lang/String;", &[])
-        .map_err(IamCallbackError::InvalidReturn)?;
+        .map_err(|e| {
+            if env.exception_check().unwrap_or(false) {
+                let _ = env.exception_clear();
+            }
+            IamCallbackError::InvalidReturn(e)
+        })?;
     let jobj = result.l().map_err(IamCallbackError::InvalidReturn)?;
     if jobj.is_null() {
         return Err(IamCallbackError::InvalidCredentials(format!(
@@ -180,7 +185,12 @@ fn get_nullable_string_field(
 ) -> Result<Option<String>, IamCallbackError> {
     let result = env
         .call_method(obj, method_name, "()Ljava/lang/String;", &[])
-        .map_err(IamCallbackError::InvalidReturn)?;
+        .map_err(|e| {
+            if env.exception_check().unwrap_or(false) {
+                let _ = env.exception_clear();
+            }
+            IamCallbackError::InvalidReturn(e)
+        })?;
     let jobj = result.l().map_err(IamCallbackError::InvalidReturn)?;
     if jobj.is_null() {
         return Ok(None);

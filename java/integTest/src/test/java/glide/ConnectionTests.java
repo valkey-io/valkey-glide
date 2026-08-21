@@ -1232,6 +1232,7 @@ public class ConnectionTests {
     @Test
     @SneakyThrows
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".*")
     public void test_iam_authentication_standalone_with_custom_credentials_provider() {
         AtomicInteger invocations = new AtomicInteger(0);
         GlideCredentialProvider provider =
@@ -1294,6 +1295,7 @@ public class ConnectionTests {
     @Test
     @SneakyThrows
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".*")
     public void test_iam_authentication_cluster_with_custom_credentials_provider() {
         AtomicInteger invocations = new AtomicInteger(0);
         GlideCredentialProvider provider =
