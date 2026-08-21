@@ -3,6 +3,7 @@ package glide.internal;
 
 import glide.api.logging.Logger;
 import glide.api.models.configuration.AddressResolver;
+import glide.api.models.configuration.GlideCredentialProvider;
 import glide.ffi.resolvers.NativeUtils;
 
 /**
@@ -31,12 +32,20 @@ public class GlideNativeBridge {
      * side to prevent garbage collection while the client is alive. The resolver will be called from
      * any thread when address resolution is needed.
      *
+     * <p>If a GlideCredentialProvider is provided, it will be stored as a global reference on the
+     * native side and invoked whenever a new IAM token needs to be signed. When {@code null}, the
+     * default AWS credential chain (environment variables, {@code ~/.aws/credentials}, EC2/ECS
+     * metadata service, etc.) is used instead.
+     *
      * @param connectionRequestBytes Protobuf-encoded ConnectionRequest
      * @param addressResolver The address resolver callback, or null if not needed
+     * @param credentialsProvider Custom IAM credentials provider, or null to use default chain
      * @return Native client handle, or 0 on failure
      */
     public static native long createClient(
-            byte[] connectionRequestBytes, AddressResolver addressResolver);
+            byte[] connectionRequestBytes,
+            AddressResolver addressResolver,
+            GlideCredentialProvider credentialsProvider);
 
     /** Execute a single command asynchronously, passing parameters directly via JNI. */
     public static native void executeCommandAsync(
