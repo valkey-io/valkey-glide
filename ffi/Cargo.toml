@@ -15,7 +15,7 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 [dependencies]
 bytes = "1"
 libc = "0.2"
-dashmap = "5"
+dashmap = "6"
 protobuf = { version = "3", features = [] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
@@ -29,7 +29,7 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest = "^0.26"
-serial_test = "3"
+serial_test = "4"
 lazy_static = "1"
 
 [profile.release]
