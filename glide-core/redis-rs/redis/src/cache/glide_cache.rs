@@ -206,6 +206,13 @@ pub struct CacheCore {
     /// so an invalidation only cancels fills for that key.
     active_fills: Arc<CacheFillRegistry>,
 
+    /// Serializes server-assisted invalidations with default cache fills.
+    ///
+    /// `GlideCacheImpl` additionally uses its store lock for this purpose, but
+    /// external `GlideCache` implementations need a synchronization point that
+    /// is shared with the connection's invalidation handler.
+    fill_barrier: Mutex<()>,
+
     /// Performance statistics (None if metrics disabled)
     stats: Option<CacheMetrics>,
 }
@@ -219,6 +226,7 @@ impl CacheCore {
             config,
             current_memory: AtomicU64::new(0),
             active_fills: Arc::new(CacheFillRegistry::default()),
+            fill_barrier: Mutex::new(()),
             stats,
         }
     }
@@ -285,6 +293,10 @@ impl CacheCore {
     /// Cancels all pending fills while the cache store lock is held.
     fn invalidate_all_cache_fills(&self) {
         self.active_fills.invalidate_all();
+    }
+
+    fn lock_fill_barrier(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.fill_barrier.lock().unwrap()
     }
 
     // ==================== Metrics ====================
@@ -586,9 +598,10 @@ pub trait GlideCache: Send + Sync + Debug {
         value: Value,
         fill: CacheFillToken,
     ) {
-        // Custom cache implementations that do not receive server-assisted
-        // invalidations retain their existing cache-fill behavior. Implementations
-        // that do receive them should override this with an atomic check.
+        // Keep the claim and insertion atomic with server-assisted invalidations
+        // for custom cache implementations. GlideCacheImpl uses its store lock
+        // instead, which also serializes its override with invalidations.
+        let _fill_barrier = self.core().lock_fill_barrier();
         if fill.take_if_active() {
             self.insert(key, key_type, value);
         }
@@ -600,8 +613,24 @@ pub trait GlideCache: Send + Sync + Debug {
     /// * `key` - The key to invalidate
     fn invalidate(&self, key: &[u8]);
 
+    /// Applies a server-assisted invalidation without allowing an in-flight
+    /// default cache fill to reinsert a stale value.
+    fn invalidate_server_assisted(&self, key: &[u8]) {
+        let _fill_barrier = self.core().lock_fill_barrier();
+        self.core().invalidate_cache_fills(key);
+        self.invalidate(key);
+    }
+
     /// Removes all entries from the cache
     fn flush_all(&self);
+
+    /// Applies a server-assisted flush without allowing an in-flight default
+    /// cache fill to reinsert a stale value.
+    fn flush_all_server_assisted(&self) {
+        let _fill_barrier = self.core().lock_fill_barrier();
+        self.core().invalidate_all_cache_fills();
+        self.flush_all();
+    }
 
     // ==================== Metrics ====================
 
@@ -1058,6 +1087,11 @@ pub fn calculate_entry_size(key: &[u8], value: &Value) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        collections::HashMap,
+        sync::{Barrier, Mutex},
+        thread,
+    };
 
     fn test_cache() -> std::sync::Arc<dyn GlideCache> {
         crate::cache::lru_cache::new_lru_cache(CacheConfig {
@@ -1065,6 +1099,57 @@ mod tests {
             ttl: None,
             enable_metrics: true,
         })
+    }
+
+    #[derive(Debug)]
+    struct ExternalCache {
+        core: CacheCore,
+        entries: Mutex<HashMap<Vec<u8>, Value>>,
+        insert_started: Barrier,
+        allow_insert: Barrier,
+    }
+
+    impl ExternalCache {
+        fn new() -> Self {
+            Self {
+                core: CacheCore::new(CacheConfig {
+                    max_memory_bytes: 10_000,
+                    ttl: None,
+                    enable_metrics: false,
+                }),
+                entries: Mutex::new(HashMap::new()),
+                insert_started: Barrier::new(2),
+                allow_insert: Barrier::new(2),
+            }
+        }
+    }
+
+    impl GlideCache for ExternalCache {
+        fn core(&self) -> &CacheCore {
+            &self.core
+        }
+
+        fn get(&self, key: &[u8], _expected_type: CachedKeyType) -> Option<Value> {
+            self.entries.lock().unwrap().get(key).cloned()
+        }
+
+        fn insert(&self, key: Vec<u8>, _key_type: CachedKeyType, value: Value) {
+            self.insert_started.wait();
+            self.allow_insert.wait();
+            self.entries.lock().unwrap().insert(key, value);
+        }
+
+        fn invalidate(&self, key: &[u8]) {
+            self.entries.lock().unwrap().remove(key);
+        }
+
+        fn flush_all(&self) {
+            self.entries.lock().unwrap().clear();
+        }
+
+        fn entry_count(&self) -> u64 {
+            self.entries.lock().unwrap().len() as u64
+        }
     }
 
     // ==================== CacheMetrics ====================
@@ -1187,6 +1272,66 @@ mod tests {
             cache.get(b"second", CachedKeyType::String),
             Some(Value::BulkString(b"current second".to_vec().into()))
         );
+    }
+
+    #[test]
+    fn test_server_assisted_invalidation_blocks_default_fill_reinsertion() {
+        let cache = std::sync::Arc::new(ExternalCache::new());
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("key");
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+
+        let fill_cache = cache.clone();
+        let fill = thread::spawn(move || {
+            fill_cache
+                .complete_cached_mget(
+                    lookup,
+                    Value::Array(vec![Value::BulkString(b"stale".to_vec().into())]),
+                )
+                .unwrap();
+        });
+
+        cache.insert_started.wait();
+        let invalidation_cache = cache.clone();
+        let invalidation = thread::spawn(move || {
+            invalidation_cache.invalidate_server_assisted(b"key");
+        });
+        cache.allow_insert.wait();
+
+        fill.join().unwrap();
+        invalidation.join().unwrap();
+
+        assert_eq!(cache.get(b"key", CachedKeyType::String), None);
+    }
+
+    #[test]
+    fn test_server_assisted_flush_blocks_default_fill_reinsertion() {
+        let cache = std::sync::Arc::new(ExternalCache::new());
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("key");
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+
+        let fill_cache = cache.clone();
+        let fill = thread::spawn(move || {
+            fill_cache
+                .complete_cached_mget(
+                    lookup,
+                    Value::Array(vec![Value::BulkString(b"stale".to_vec().into())]),
+                )
+                .unwrap();
+        });
+
+        cache.insert_started.wait();
+        let flush_cache = cache.clone();
+        let flush = thread::spawn(move || {
+            flush_cache.flush_all_server_assisted();
+        });
+        cache.allow_insert.wait();
+
+        fill.join().unwrap();
+        flush.join().unwrap();
+
+        assert_eq!(cache.get(b"key", CachedKeyType::String), None);
     }
 
     #[test]

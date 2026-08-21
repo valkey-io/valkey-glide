@@ -390,14 +390,14 @@ where
                             Some(Value::Array(keys)) => {
                                 for key in keys {
                                     if let Value::BulkString(k) = key {
-                                        cache.invalidate(k);
+                                        cache.invalidate_server_assisted(k);
                                     } else if let Value::VerbatimString { text, .. } = key {
-                                        cache.invalidate(text.as_bytes());
+                                        cache.invalidate_server_assisted(text.as_bytes());
                                     }
                                 }
                             }
                             Some(Value::Nil) => {
-                                cache.flush_all();
+                                cache.flush_all_server_assisted();
                             }
                             None => { /* malformed push, ignore */ }
                             _ => {}
