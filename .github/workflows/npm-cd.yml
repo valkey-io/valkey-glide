@@ -528,6 +528,8 @@ jobs:
                       echo "Installing Valkey on macOS..."
                       brew update
                       brew install valkey || brew install redis
+                  elif [[ "${{ matrix.build_type }}" == "windows" ]]; then
+                      echo "Windows target tested via CodeBuild - skipping local Valkey install"
                   else
                       echo "::error::Unsupported target: ${{ matrix.TARGET }} (build_type: ${{ matrix.build_type }})"; exit 1
                   fi
@@ -669,6 +671,8 @@ jobs:
                         additional_suffix="-musl"
                       elif [[ "$build_type" == "gnu" ]]; then
                         additional_suffix="-gnu"
+                      elif [[ "$build_type" == "windows" ]]; then
+                        additional_suffix="-msvc"
                       fi
 
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"

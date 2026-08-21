@@ -92,7 +92,6 @@ export default async function globalSetup(): Promise<void> {
                 process.platform === "win32" ? "python" : "python3";
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
-                shell: process.platform === "win32",
             });
             const timeoutMs = 25 * 60 * 1000;
             const timer = setTimeout(() => {

@@ -25,35 +25,6 @@ beforeAll(() => {
         process.env.AWS_SESSION_TOKEN =
             process.env.AWS_SESSION_TOKEN ?? "test_session_token";
     }
-
-    // When USE_ELASTICACHE=true, read endpoints written by globalSetup
-    // and inject them into the process env of this worker.
-    // globalSetup runs in a separate process so its process.env changes
-    // do not propagate to workers automatically.
-    if (process.env.USE_ELASTICACHE === "true") {
-        try {
-            if (fs.existsSync(ELASTICACHE_ENDPOINTS_FILE)) {
-                const data = JSON.parse(
-                    fs.readFileSync(ELASTICACHE_ENDPOINTS_FILE, "utf-8"),
-                ) as EndpointsFile;
-
-                if (
-                    !process.env.STANDALONE_ENDPOINT &&
-                    data.standaloneEndpoint
-                ) {
-                    process.env.STANDALONE_ENDPOINT = data.standaloneEndpoint;
-                }
-
-                if (!process.env.CLUSTER_ENDPOINT && data.clusterEndpoint) {
-                    process.env.CLUSTER_ENDPOINT = data.clusterEndpoint;
-                }
-            }
-        } catch (err) {
-            console.warn(
-                `[setup] Could not read ElastiCache endpoints file: ${err}`,
-            );
-        }
-    }
 });
 
 // Clear all timers after each test to prevent hanging handles,
@@ -76,6 +47,32 @@ const args = minimist(process.argv.slice(2));
 // When USE_ELASTICACHE=true and no CLI args provided, fall back to env vars
 // set from the ElastiCache endpoints file.
 global.CLI_ARGS = args;
+
+// When USE_ELASTICACHE=true, synchronously read the endpoints file here at
+// module eval time so globals are populated before any test code runs.
+// (beforeAll runs after module evaluation, so reading there is too late.)
+if (process.env.USE_ELASTICACHE === "true") {
+    try {
+        if (fs.existsSync(ELASTICACHE_ENDPOINTS_FILE)) {
+            const data = JSON.parse(
+                fs.readFileSync(ELASTICACHE_ENDPOINTS_FILE, "utf-8"),
+            ) as EndpointsFile;
+
+            if (!process.env.STANDALONE_ENDPOINT && data.standaloneEndpoint) {
+                process.env.STANDALONE_ENDPOINT = data.standaloneEndpoint;
+            }
+
+            if (!process.env.CLUSTER_ENDPOINT && data.clusterEndpoint) {
+                process.env.CLUSTER_ENDPOINT = data.clusterEndpoint;
+            }
+        }
+    } catch (err) {
+        console.warn(
+            `[setup] Could not read ElastiCache endpoints file at module load: ${err}`,
+        );
+    }
+}
+
 global.CLUSTER_ENDPOINTS =
     (args["cluster-endpoints"] as string) ??
     (process.env.USE_ELASTICACHE === "true"

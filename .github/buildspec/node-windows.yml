@@ -28,7 +28,7 @@ env:
     variables:
         NODE_VERSION: "20.18.0"
         CARGO_TERM_COLOR: "always"
-        RUSTUP_TOOLCHAIN: "1.91.1"
+        RUSTUP_TOOLCHAIN: "stable"
         PROTOC: "C:\\Windows\\System32\\protoc.exe"
 
 phases:
@@ -168,7 +168,7 @@ phases:
 
             # -- 4. Rust toolchain ---------------------------------------------------
             - |
-                Write-Host "=== Installing Rust 1.91.1 toolchain ==="
+                Write-Host "=== Installing Rust stable toolchain ==="
 
                 # Detect whether rustup is pre-installed for the current user (on-demand runners)
                 # or absent (reserved fleet running as SYSTEM). Use fixed machine-wide paths
@@ -196,23 +196,23 @@ phases:
                   Copy-Item -Path $userCargo  -Destination $CARGO_HOME  -Recurse -Force
                 }
 
-                $toolchainPath = "$RUSTUP_HOME\toolchains\1.91.1-x86_64-pc-windows-msvc"
+                $toolchainPath = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc"
                 if ((Test-Path $toolchainPath) -and (Get-Command rustup -ErrorAction SilentlyContinue)) {
-                  Write-Host "Rust 1.91.1 toolchain already present (cache hit), skipping install."
-                  rustup default 1.91.1-x86_64-pc-windows-msvc
+                  Write-Host "Rust stable toolchain already present (cache hit), skipping install."
+                  rustup default stable-x86_64-pc-windows-msvc
                 } else {
-                  Write-Host "Installing rustup + Rust 1.91.1 toolchain..."
+                  Write-Host "Installing rustup + Rust stable toolchain..."
                   $rustupInit = "$env:TEMP\rustup-init.exe"
                   Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupInit
-                  & $rustupInit -y --default-toolchain 1.91.1-x86_64-pc-windows-msvc --no-modify-path 2>&1
+                  & $rustupInit -y --default-toolchain stable-x86_64-pc-windows-msvc --no-modify-path 2>&1
                   if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
                 }
 
-                $env:RUSTUP_TOOLCHAIN = "1.91.1"
-                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "1.91.1", "Machine")
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
 
                 # Set CARGO env var to the toolchain binary (used by napi-rs build)
-                $cargoBin = "$RUSTUP_HOME\toolchains\1.91.1-x86_64-pc-windows-msvc\bin\cargo.exe"
+                $cargoBin = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe"
                 [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
                 $env:CARGO = $cargoBin
 
@@ -281,11 +281,14 @@ phases:
                   Invoke-WebRequest -Uri "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip" -OutFile $protocZip
                   Expand-Archive -Path $protocZip -DestinationPath "$env:USERPROFILE\.local" -Force
                   $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
-                  $env:PROTOC = "$env:USERPROFILE\.local\bin\protoc.exe"
                   Copy-Item -Path "$env:USERPROFILE\.local\bin\protoc.exe" -Destination "C:\Windows\System32\protoc.exe" -Force
                 }
-                [System.Environment]::SetEnvironmentVariable("PROTOC", "C:\Windows\System32\protoc.exe", "Machine")
-                $env:PROTOC = "C:\Windows\System32\protoc.exe"
+                # Resolve the actual protoc path after install-or-skip
+                $protocExe = (Get-Command protoc -ErrorAction SilentlyContinue).Source
+                if (-not $protocExe) { $protocExe = "C:\Windows\System32\protoc.exe" }
+                [System.Environment]::SetEnvironmentVariable("PROTOC", $protocExe, "Machine")
+                $env:PROTOC = $protocExe
+                Write-Host "PROTOC=$env:PROTOC"
                 protoc --version
 
             # -- 6. TCP tuning -------------------------------------------------------
@@ -298,10 +301,10 @@ phases:
     pre_build:
         commands:
             - |
-                $toolchainBin = "C:\rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
+                $toolchainBin = "C:\rustup\toolchains\stable-x86_64-pc-windows-msvc\bin"
                 $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
-                $env:RUSTUP_TOOLCHAIN = "1.91.1"
-                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "1.91.1", "Machine")
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
 
             - |
                 Write-Host "Active cargo: $(Get-Command cargo | Select-Object -ExpandProperty Source)"
@@ -326,9 +329,9 @@ phases:
     build:
         commands:
             - |
-                $toolchainBin = "C:\rustup\toolchains\1.91.1-x86_64-pc-windows-msvc\bin"
+                $toolchainBin = "C:\rustup\toolchains\stable-x86_64-pc-windows-msvc\bin"
                 $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
-                $env:RUSTUP_TOOLCHAIN = "1.91.1"
+                $env:RUSTUP_TOOLCHAIN = "stable"
 
             # -- Wait for ElastiCache setup, then run integration tests -------------
             - |
@@ -376,7 +379,8 @@ phases:
                       exit 1
                     }
                   } else {
-                    Write-Host "No PID file found - setup may not have started"
+                    Write-Error "No PID file found - ElastiCache setup process did not start correctly"
+                    exit 1
                   }
 
                   $data = Get-Content $endpointsFile | ConvertFrom-Json

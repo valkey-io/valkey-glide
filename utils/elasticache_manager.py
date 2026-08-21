@@ -139,46 +139,56 @@ def start_cluster(
             f"[elasticache_manager] Timed out waiting for '{name}' to become available"
         )
 
-    # Extract endpoint
-    group = groups[0]
-    if cluster_mode:
-        endpoint = group.get("ConfigurationEndpoint", {})
-    else:
-        node_groups = group.get("NodeGroups", [])
-        endpoint = node_groups[0].get("PrimaryEndpoint", {}) if node_groups else {}
+    # Extract endpoint and verify connectivity.
+    # If anything fails here, delete the cluster before re-raising.
+    try:
+        group = groups[0]
+        if cluster_mode:
+            endpoint = group.get("ConfigurationEndpoint", {})
+        else:
+            node_groups = group.get("NodeGroups", [])
+            endpoint = node_groups[0].get("PrimaryEndpoint", {}) if node_groups else {}
 
-    host = endpoint.get("Address", "")
-    port = endpoint.get("Port", 6379)
-    if not host:
-        raise RuntimeError(
-            f"[elasticache_manager] Could not determine endpoint for '{name}'"
-        )
-
-    endpoint_str = f"{host}:{port}"
-
-    # Verify TCP connectivity before declaring success.
-    # ElastiCache may report 'available' before the port is actually reachable.
-    logging.info(
-        f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}..."
-    )
-    tcp_deadline = time.time() + 120  # 2 minutes to become reachable
-    tcp_ok = False
-    while time.time() < tcp_deadline:
-        try:
-            with socket.create_connection((host, port), timeout=5):
-                tcp_ok = True
-                break
-        except (socket.timeout, ConnectionRefusedError, OSError):
-            logging.info(
-                f"[elasticache_manager] Port {port} not yet reachable, retrying..."
+        host = endpoint.get("Address", "")
+        port = endpoint.get("Port", 6379)
+        if not host:
+            raise RuntimeError(
+                f"[elasticache_manager] Could not determine endpoint for '{name}'"
             )
-            time.sleep(5)
-    if not tcp_ok:
-        raise RuntimeError(
-            f"[elasticache_manager] '{name}' is available per API but TCP connection to "
-            f"{host}:{port} timed out after 2 minutes. Check VPC/subnet/security group configuration."
+
+        endpoint_str = f"{host}:{port}"
+
+        # Verify TCP connectivity before declaring success.
+        # ElastiCache may report 'available' before the port is actually reachable.
+        logging.info(
+            f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}..."
         )
-    logging.info(f"[elasticache_manager] TCP connectivity to {host}:{port} confirmed.")
+        tcp_deadline = time.time() + 120  # 2 minutes to become reachable
+        tcp_ok = False
+        while time.time() < tcp_deadline:
+            try:
+                with socket.create_connection((host, port), timeout=5):
+                    tcp_ok = True
+                    break
+            except (socket.timeout, ConnectionRefusedError, OSError):
+                logging.info(
+                    f"[elasticache_manager] Port {port} not yet reachable, retrying..."
+                )
+                time.sleep(5)
+        if not tcp_ok:
+            raise RuntimeError(
+                f"[elasticache_manager] '{name}' is available per API but TCP connection to "
+                f"{host}:{port} timed out after 2 minutes. Check VPC/subnet/security group configuration."
+            )
+        logging.info(
+            f"[elasticache_manager] TCP connectivity to {host}:{port} confirmed."
+        )
+    except Exception:
+        logging.error(
+            f"[elasticache_manager] Provisioning failed for '{name}', attempting cleanup..."
+        )
+        stop_cluster(name, region)
+        raise
 
     print(f"CLUSTER_NAME={name}")
     print(f"CLUSTER_ENDPOINT={endpoint_str}")
@@ -186,7 +196,8 @@ def start_cluster(
 
 
 def stop_cluster(name: str, region: str) -> None:
-    """Delete one ElastiCache replication group. Best-effort, logs errors."""
+    """Delete one ElastiCache replication group.
+    Treats already-deleted groups as success. Re-raises unexpected errors."""
     client = init_client(region)
     logging.info(f"[elasticache_manager] Deleting replication group '{name}'")
     try:
@@ -195,8 +206,13 @@ def stop_cluster(name: str, region: str) -> None:
             RetainPrimaryCluster=False,
         )
         logging.info(f"[elasticache_manager] Delete request sent for '{name}'")
+    except client.exceptions.ReplicationGroupNotFoundFault:
+        logging.info(
+            f"[elasticache_manager] '{name}' not found - already deleted or never created."
+        )
     except Exception as e:
         logging.error(f"[elasticache_manager] Failed to delete '{name}': {e}")
+        raise
 
 
 def main():

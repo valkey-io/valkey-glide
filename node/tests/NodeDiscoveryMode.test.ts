@@ -111,7 +111,7 @@ describe("NodeDiscoveryMode", () => {
                     // the first address as the "cluster" endpoint
                     if (
                         !global.DISCOVERY_NODE_ADDRESSES ||
-                        global.DISCOVERY_NODE_ADDRESSES.length < 2
+                        global.DISCOVERY_NODE_ADDRESSES.length < 4
                     ) {
                         throw new Error(
                             "[DiscoverAll] DISCOVERY_NODE_ADDRESSES not set or insufficient nodes. " +

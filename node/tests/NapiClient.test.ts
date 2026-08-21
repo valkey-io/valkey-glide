@@ -412,6 +412,7 @@ describe("NAPI Client Integration Tests", () => {
                 async () => {
                     const tempClient = await GlideClient.createClient({
                         addresses: getStandaloneAddresses(),
+                        advancedConfiguration: { connectionTimeout: 10000 },
                     });
 
                     tempClient.close();
