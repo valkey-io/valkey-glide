@@ -145,7 +145,10 @@ pub(crate) mod test_cache {
                 "{mget-cache}second",
                 "{mget-cache}third",
             ];
-            for (key, value) in keys.iter().zip(["first value", "second value", "third value"]) {
+            for (key, value) in keys
+                .iter()
+                .zip(["first value", "second value", "third value"])
+            {
                 let mut set_cmd = redis::Cmd::new();
                 set_cmd.arg("SET").arg(key).arg(value);
                 test_basics
@@ -223,10 +226,7 @@ pub(crate) mod test_cache {
                 .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(
-                result,
-                Value::BulkString(b"third value".to_vec().into())
-            );
+            assert_eq!(result, Value::BulkString(b"third value".to_vec().into()));
             assert_command_count(&mut test_basics.client, "GET", 0, use_cluster).await;
 
             let hit_rate = match test_basics.client.cache_hit_rate().unwrap() {
@@ -276,10 +276,7 @@ pub(crate) mod test_cache {
             assert_eq!(get_slot(keys[1].as_bytes()), 12182);
             assert_eq!(get_slot(keys[2].as_bytes()), 6469);
 
-            for (key, value) in keys
-                .iter()
-                .zip(["low value", "high value", "middle value"])
-            {
+            for (key, value) in keys.iter().zip(["low value", "high value", "middle value"]) {
                 let mut set_cmd = redis::cmd("SET");
                 set_cmd.arg(key).arg(value);
                 test_basics
