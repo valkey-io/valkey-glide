@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -57,6 +58,28 @@ func getClusterAddresses() []config.NodeAddress {
 	return clusterAddresses
 }
 
+// newUnavailableBaseClient returns the shared state of a client that is not connected to
+// any server: a usable mutex, no core client, and a callback-only message handler.
+//
+// Commands on such a client report "the client is closed" and GetQueue reports an error,
+// so an example that cannot reach a server fails with a readable message. Returning a nil
+// client instead would make the example panic on its first command, which aborts the whole
+// test binary and hides the result of every other example in the package.
+func newUnavailableBaseClient() baseClient {
+	return baseClient{
+		mu:             &sync.Mutex{},
+		messageHandler: NewMessageHandler(func(*models.PubSubMessage, any) {}, nil),
+	}
+}
+
+func newUnavailableClient() *Client {
+	return &Client{baseClient: newUnavailableBaseClient()}
+}
+
+func newUnavailableClusterClient() *ClusterClient {
+	return &ClusterClient{baseClient: newUnavailableBaseClient()}
+}
+
 // getExampleClient returns a Client instance for testing purposes.
 // This function is used in the examples of the Client methods.
 func getExampleClient() *Client {
@@ -70,7 +93,7 @@ func getExampleClient() *Client {
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
-		return nil
+		return newUnavailableClient()
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -95,7 +118,7 @@ func getExampleClusterClient() *ClusterClient {
 	client, err := NewClusterClient(cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
-		return nil
+		return newUnavailableClusterClient()
 	}
 
 	clusterClients = append(clusterClients, client)
@@ -127,7 +150,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
-		return nil
+		return newUnavailableClient()
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -158,7 +181,7 @@ func getExampleClusterClientWithSubscription(
 	client, err := NewClusterClient(ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
-		return nil
+		return newUnavailableClusterClient()
 	}
 
 	clusterClients = append(clusterClients, client)

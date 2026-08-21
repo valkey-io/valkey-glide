@@ -14,6 +14,7 @@ func ExampleClient_PfAdd() {
 	result, err := client.PfAdd(context.Background(), uuid.New().String(), []string{"value1", "value2", "value3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -25,6 +26,7 @@ func ExampleClusterClient_PfAdd() {
 	result, err := client.PfAdd(context.Background(), uuid.New().String(), []string{"value1", "value2", "value3"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -38,6 +40,7 @@ func ExampleClient_PfCount() {
 	result1, err := client.PfCount(context.Background(), []string{key})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -54,6 +57,7 @@ func ExampleClusterClient_PfCount() {
 	result1, err := client.PfCount(context.Background(), []string{key})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)

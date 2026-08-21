@@ -21,6 +21,7 @@ func ExampleClient_ZAdd() {
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -33,6 +34,7 @@ func ExampleClusterClient_ZAdd() {
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -51,6 +53,7 @@ func ExampleClient_ZAddWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -69,6 +72,7 @@ func ExampleClusterClient_ZAddWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -81,6 +85,7 @@ func ExampleClient_ZAddIncr() {
 	result, err := client.ZAddIncr(context.Background(), "key1", "one", 1.0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -94,6 +99,7 @@ func ExampleClusterClient_ZAddIncr() {
 	result, err := client.ZAddIncr(context.Background(), "key1", "one", 1.0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -107,6 +113,8 @@ func ExampleClient_ZAddIncrWithOptions() {
 	opts, err := options.NewZAddOptions().SetChanged(true) // should return an error
 	result, err := client.ZAddIncrWithOptions(context.Background(), "key1", "one", 1.0, *opts)
 	if err != nil {
+		// This example deliberately demonstrates the error, so it keeps going and prints
+		// the zero-value result as part of its expected output.
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
@@ -122,6 +130,8 @@ func ExampleClusterClient_ZAddIncrWithOptions() {
 	opts, err := options.NewZAddOptions().SetChanged(true) // should return an error
 	result, err := client.ZAddIncrWithOptions(context.Background(), "key1", "one", 1.0, *opts)
 	if err != nil {
+		// This example deliberately demonstrates the error, so it keeps going and prints
+		// the zero-value result as part of its expected output.
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
@@ -138,6 +148,7 @@ func ExampleClient_ZIncrBy() {
 	result1, err := client.ZIncrBy(context.Background(), "key1", 3.0, "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -154,6 +165,7 @@ func ExampleClusterClient_ZIncrBy() {
 	result1, err := client.ZIncrBy(context.Background(), "key1", 3.0, "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -170,6 +182,7 @@ func ExampleClient_ZPopMin() {
 	result1, err := client.ZPopMin(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -186,6 +199,7 @@ func ExampleClusterClient_ZPopMin() {
 	result1, err := client.ZPopMin(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -203,6 +217,7 @@ func ExampleClient_ZPopMinWithOptions() {
 	result1, err := client.ZPopMinWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -220,6 +235,7 @@ func ExampleClusterClient_ZPopMinWithOptions() {
 	result1, err := client.ZPopMinWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -236,6 +252,7 @@ func ExampleClient_ZPopMax() {
 	result1, err := client.ZPopMax(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -252,6 +269,7 @@ func ExampleClusterClient_ZPopMax() {
 	result1, err := client.ZPopMax(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -269,6 +287,7 @@ func ExampleClient_ZPopMaxWithOptions() {
 	result1, err := client.ZPopMaxWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -286,6 +305,7 @@ func ExampleClusterClient_ZPopMaxWithOptions() {
 	result1, err := client.ZPopMaxWithOptions(context.Background(), "key1", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -302,6 +322,7 @@ func ExampleClient_ZRem() {
 	result1, err := client.ZRem(context.Background(), "key1", []string{"one", "two", "nonMember"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -318,6 +339,7 @@ func ExampleClusterClient_ZRem() {
 	result1, err := client.ZRem(context.Background(), "key1", []string{"one", "two", "nonMember"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -334,6 +356,7 @@ func ExampleClient_ZCard() {
 	result1, err := client.ZCard(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -350,6 +373,7 @@ func ExampleClusterClient_ZCard() {
 	result1, err := client.ZCard(context.Background(), "key1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -367,6 +391,7 @@ func ExampleClient_BZPopMin() {
 	result1, err := client.BZPopMin(context.Background(), []string{"key1", "key2"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(zaddResult1)
 	fmt.Println(zaddResult2)
@@ -386,6 +411,7 @@ func ExampleClusterClient_BZPopMin() {
 	result1, err := client.BZPopMin(context.Background(), []string{"{key}1", "{key}2"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(zaddResult1)
 	fmt.Println(zaddResult2)
@@ -412,6 +438,7 @@ func ExampleClient_ZRange() {
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -438,6 +465,7 @@ func ExampleClusterClient_ZRange() {
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -462,6 +490,7 @@ func ExampleClient_ZRangeWithScores() {
 	result2, err := client.ZRangeWithScores(context.Background(), "key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -486,6 +515,7 @@ func ExampleClusterClient_ZRangeWithScores() {
 	result2, err := client.ZRangeWithScores(context.Background(), "key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -509,6 +539,7 @@ func ExampleClient_ZRangeStore() {
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -527,6 +558,7 @@ func ExampleClusterClient_ZRangeStore() {
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -540,6 +572,7 @@ func ExampleClient_ZRank() {
 	result1, err := client.ZRank(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -556,6 +589,7 @@ func ExampleClusterClient_ZRank() {
 	result1, err := client.ZRank(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -572,6 +606,7 @@ func ExampleClient_ZRankWithScore() {
 	res, err := client.ZRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(res.Value().Rank)
@@ -590,6 +625,7 @@ func ExampleClusterClient_ZRankWithScore() {
 	res, err := client.ZRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(res.Value().Rank)
@@ -612,6 +648,7 @@ func ExampleClient_ZRevRank() {
 	result1, err := client.ZRevRank(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -632,6 +669,7 @@ func ExampleClusterClient_ZRevRank() {
 	result1, err := client.ZRevRank(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -652,6 +690,7 @@ func ExampleClient_ZRevRankWithScore() {
 	res, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(res.Value().Rank)
@@ -674,6 +713,7 @@ func ExampleClusterClient_ZRevRankWithScore() {
 	res, err := client.ZRevRankWithScore(context.Background(), "key1", "two")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(res.Value().Rank)
@@ -696,6 +736,7 @@ func ExampleClient_ZScore() {
 	result1, err := client.ZScore(context.Background(), "key1", "three")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -716,6 +757,7 @@ func ExampleClusterClient_ZScore() {
 	result1, err := client.ZScore(context.Background(), "key1", "three")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -740,6 +782,7 @@ func ExampleClient_ZCount() {
 	result1, err := client.ZCount(context.Background(), "key1", *zCountRange)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -764,6 +807,7 @@ func ExampleClusterClient_ZCount() {
 	result1, err := client.ZCount(context.Background(), "key1", *zCountRange)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -784,6 +828,7 @@ func ExampleClient_ZScan() {
 	result, err := client.ZScan(context.Background(), "key1", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -804,6 +849,7 @@ func ExampleClusterClient_ZScan() {
 	result, err := client.ZScan(context.Background(), "key1", models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -829,6 +875,7 @@ func ExampleClient_ZScanWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -854,6 +901,7 @@ func ExampleClusterClient_ZScanWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -874,6 +922,7 @@ func ExampleClient_ZRemRangeByLex() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -894,6 +943,7 @@ func ExampleClusterClient_ZRemRangeByLex() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -910,6 +960,7 @@ func ExampleClient_ZRemRangeByRank() {
 	result1, err := client.ZRemRangeByRank(context.Background(), "key1", 1, 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -926,6 +977,7 @@ func ExampleClusterClient_ZRemRangeByRank() {
 	result1, err := client.ZRemRangeByRank(context.Background(), "key1", 1, 3)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -945,6 +997,7 @@ func ExampleClient_ZRemRangeByScore() {
 	))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -964,6 +1017,7 @@ func ExampleClusterClient_ZRemRangeByScore() {
 	))
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	fmt.Println(result1)
@@ -980,6 +1034,7 @@ func ExampleClient_BZMPop() {
 	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(result.Value())
 	fmt.Println(string(jsonSummary))
@@ -993,6 +1048,7 @@ func ExampleClusterClient_BZMPop() {
 	result, err := client.BZMPop(context.Background(), []string{"key1"}, constants.MAX, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(result.Value())
 	fmt.Println(string(jsonSummary))
@@ -1013,6 +1069,7 @@ func ExampleClient_BZMPopWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	kms := models.KeyWithArrayOfMembersAndScores{
 		Key: "key1",
@@ -1046,6 +1103,7 @@ func ExampleClusterClient_BZMPopWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	jsonSummary, _ := json.Marshal(result.Value())
 	fmt.Println(string(jsonSummary))
@@ -1060,6 +1118,7 @@ func ExampleClient_ZRandMember() {
 	result, err := client.ZRandMember(context.Background(), "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1075,6 +1134,7 @@ func ExampleClusterClient_ZRandMember() {
 	result, err := client.ZRandMember(context.Background(), "key2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1090,6 +1150,7 @@ func ExampleClient_ZRandMemberWithCount() {
 	result, err := client.ZRandMemberWithCount(context.Background(), "key1", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1105,6 +1166,7 @@ func ExampleClusterClient_ZRandMemberWithCount() {
 	result, err := client.ZRandMemberWithCount(context.Background(), "key1", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1120,6 +1182,7 @@ func ExampleClient_ZRandMemberWithCountWithScores() {
 	result, err := client.ZRandMemberWithCountWithScores(context.Background(), "key1", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1135,6 +1198,7 @@ func ExampleClusterClient_ZRandMemberWithCountWithScores() {
 	result, err := client.ZRandMemberWithCountWithScores(context.Background(), "key1", 4)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1150,6 +1214,7 @@ func ExampleClient_ZMScore() {
 	result, err := client.ZMScore(context.Background(), "key1", []string{"c", "b", "e"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1165,6 +1230,7 @@ func ExampleClusterClient_ZMScore() {
 	result, err := client.ZMScore(context.Background(), "key1", []string{"c", "b", "e"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// If the key does not exist, an empty string is returned
@@ -1184,6 +1250,7 @@ func ExampleClient_ZInter() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1201,6 +1268,7 @@ func ExampleClusterClient_ZInter() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1221,6 +1289,7 @@ func ExampleClient_ZInterWithScores() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: [{b 3.5} {c 5.5} {d 7}]
@@ -1240,6 +1309,7 @@ func ExampleClusterClient_ZInterWithScores() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1256,6 +1326,7 @@ func ExampleClient_ZInterStore() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1272,6 +1343,7 @@ func ExampleClusterClient_ZInterStore() {
 	})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1293,6 +1365,7 @@ func ExampleClient_ZInterStoreWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1314,6 +1387,7 @@ func ExampleClusterClient_ZInterStoreWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1328,6 +1402,7 @@ func ExampleClient_ZDiff() {
 	result, err := client.ZDiff(context.Background(), []string{"key1", "key2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: [a]
@@ -1341,6 +1416,7 @@ func ExampleClusterClient_ZDiff() {
 	result, err := client.ZDiff(context.Background(), []string{"{key}1", "{key}2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1355,6 +1431,7 @@ func ExampleClient_ZDiffWithScores() {
 	result, err := client.ZDiffWithScores(context.Background(), []string{"key1", "key2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: [{a 1}]
@@ -1368,6 +1445,7 @@ func ExampleClusterClient_ZDiffWithScores() {
 	result, err := client.ZDiffWithScores(context.Background(), []string{"{key}1", "{key}2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1382,6 +1460,7 @@ func ExampleClient_ZDiffStore() {
 	result, err := client.ZDiffStore(context.Background(), "dest", []string{"key1", "key2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1396,6 +1475,7 @@ func ExampleClusterClient_ZDiffStore() {
 	result, err := client.ZDiffStore(context.Background(), "{key}dest", []string{"{key}1", "{key}2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1518,6 +1598,7 @@ func ExampleClient_ZUnionStore() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(zUnionStoreResult)
@@ -1547,6 +1628,7 @@ func ExampleClusterClient_ZUnionStore() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(zUnionStoreResult)
@@ -1577,6 +1659,7 @@ func ExampleClient_ZUnionStoreWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(zUnionStoreWithOptionsResult)
@@ -1607,6 +1690,7 @@ func ExampleClusterClient_ZUnionStoreWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(zUnionStoreWithOptionsResult)
@@ -1625,6 +1709,7 @@ func ExampleClient_ZInterCard() {
 	res, err := client.ZInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(res)
 
@@ -1643,6 +1728,7 @@ func ExampleClusterClient_ZInterCard() {
 	res, err := client.ZInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(res)
 
@@ -1665,6 +1751,7 @@ func ExampleClient_ZInterCardWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(res)
 
@@ -1687,6 +1774,7 @@ func ExampleClusterClient_ZInterCardWithOptions() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(res)
 
@@ -1708,6 +1796,7 @@ func ExampleClient_ZLexCount() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -1729,6 +1818,7 @@ func ExampleClusterClient_ZLexCount() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 

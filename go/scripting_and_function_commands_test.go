@@ -28,6 +28,7 @@ func ExampleClient_FunctionLoad() {
 	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -42,6 +43,7 @@ func ExampleClusterClient_FunctionLoad() {
 	result, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -60,6 +62,7 @@ func ExampleClusterClient_FunctionLoadWithRoute() {
 	result, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -75,6 +78,7 @@ func ExampleClient_FunctionFlush() {
 	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -89,6 +93,7 @@ func ExampleClusterClient_FunctionFlush() {
 	result, err := client.FunctionFlush(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -107,6 +112,7 @@ func ExampleClusterClient_FunctionFlushWithRoute() {
 	result, err := client.FunctionFlushWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -121,6 +127,7 @@ func ExampleClient_FunctionFlushSync() {
 	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -135,6 +142,7 @@ func ExampleClusterClient_FunctionFlushSync() {
 	result, err := client.FunctionFlushSync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -153,6 +161,7 @@ func ExampleClusterClient_FunctionFlushSyncWithRoute() {
 	result, err := client.FunctionFlushSyncWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -167,6 +176,7 @@ func ExampleClient_FunctionFlushAsync() {
 	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -181,6 +191,7 @@ func ExampleClusterClient_FunctionFlushAsync() {
 	result, err := client.FunctionFlushAsync(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -196,6 +207,7 @@ func ExampleClusterClient_FunctionFlushAsyncWithRoute() {
 	result, err := client.FunctionFlushAsyncWithRoute(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -212,12 +224,14 @@ func ExampleClient_FCall() {
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	fcallResult, err := client.FCall(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(fcallResult)
@@ -233,12 +247,14 @@ func ExampleClusterClient_FCall() {
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	fcallResult, err := client.FCall(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(fcallResult)
@@ -258,12 +274,14 @@ func ExampleClusterClient_FCallWithRoute() {
 	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallWithRoute(context.Background(), "myfunc", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, value := range result.MultiValue() {
@@ -282,6 +300,7 @@ func ExampleClient_FCallWithKeysAndArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
@@ -290,6 +309,7 @@ func ExampleClient_FCallWithKeysAndArgs() {
 	result, err := client.FCallWithKeysAndArgs(context.Background(), "myfunc", []string{key1, key2}, []string{"3", "4"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -305,6 +325,7 @@ func ExampleClusterClient_FCallWithKeysAndArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
@@ -313,6 +334,7 @@ func ExampleClusterClient_FCallWithKeysAndArgs() {
 	result, err := client.FCallWithKeysAndArgs(context.Background(), "myfunc", []string{key1, key2}, []string{"3", "4"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -328,12 +350,14 @@ func ExampleClusterClient_FCallWithArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallWithArgs(context.Background(), "myfunc", []string{"1", "2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result.SingleValue())
@@ -353,12 +377,14 @@ func ExampleClusterClient_FCallWithArgsWithRoute() {
 	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCodeWithArgs, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallWithArgsWithRoute(context.Background(), "myfunc", []string{"1", "2"}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, value := range result.MultiValue() {
@@ -377,12 +403,14 @@ func ExampleClient_FCallReadOnly() {
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	fcallResult, err := client.FCallReadOnly(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(fcallResult)
@@ -398,12 +426,14 @@ func ExampleClusterClient_FCallReadOnly() {
 	_, err := client.FunctionLoad(context.Background(), libraryCode, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	fcallResult, err := client.FCallReadOnly(context.Background(), "myfunc")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(fcallResult)
@@ -423,12 +453,14 @@ func ExampleClusterClient_FCallReadOnlyWithRoute() {
 	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCode, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallReadOnlyWithRoute(context.Background(), "myfunc", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, value := range result.MultiValue() {
@@ -447,6 +479,7 @@ func ExampleClient_FCallReadOnlyWithKeysAndArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
@@ -460,6 +493,7 @@ func ExampleClient_FCallReadOnlyWithKeysAndArgs() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -475,6 +509,7 @@ func ExampleClusterClient_FCallReadOnlyWithKeysAndArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
@@ -488,6 +523,7 @@ func ExampleClusterClient_FCallReadOnlyWithKeysAndArgs() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -503,12 +539,14 @@ func ExampleClusterClient_FCallReadOnlyWithArgs() {
 	_, err := client.FunctionLoad(context.Background(), libraryCodeWithArgs, true)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallReadOnlyWithArgs(context.Background(), "myfunc", []string{"1", "2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result.SingleValue())
@@ -528,12 +566,14 @@ func ExampleClusterClient_FCallReadOnlyWithArgsWithRoute() {
 	_, err := client.FunctionLoadWithRoute(context.Background(), libraryCodeWithArgs, true, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Call function
 	result, err := client.FCallReadOnlyWithArgsWithRoute(context.Background(), "myfunc", []string{"1", "2"}, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, value := range result.MultiValue() {
@@ -662,6 +702,7 @@ func ExampleClient_FunctionDelete() {
 	result, err := client.FunctionDelete(context.Background(), "mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -684,6 +725,7 @@ func ExampleClusterClient_FunctionDelete() {
 	result, err := client.FunctionDelete(context.Background(), "mylib")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -710,6 +752,7 @@ func ExampleClusterClient_FunctionDeleteWithRoute() {
 	result, err := client.FunctionDeleteWithRoute(context.Background(), "mylib", opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(result)
@@ -779,6 +822,7 @@ func ExampleClient_FunctionList() {
 	libs, err := client.FunctionList(context.Background(), query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Printf("There are %d libraries loaded.\n", len(libs))
@@ -812,6 +856,7 @@ func ExampleClusterClient_FunctionList() {
 	libs, err := client.FunctionList(context.Background(), query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Printf("There are %d libraries loaded.\n", len(libs))

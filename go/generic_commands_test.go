@@ -18,6 +18,7 @@ func ExampleClient_CustomCommand() {
 	result, err := client.CustomCommand(context.Background(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -30,10 +31,12 @@ func ExampleClient_Move() {
 	_, err := client.Set(context.Background(), key, "hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	result, err := client.Move(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -46,10 +49,12 @@ func ExampleClusterClient_Move() {
 	_, err := client.Set(context.Background(), key, "hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	result, err := client.Move(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -63,6 +68,7 @@ func ExampleClient_Scan() {
 	result, err := client.Scan(context.Background(), models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -80,6 +86,7 @@ func ExampleClient_ScanWithOptions() {
 	result, err := client.ScanWithOptions(context.Background(), models.NewCursor(), *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println("Cursor:", result.Cursor)
 	fmt.Println("Collection:", result.Data)
@@ -96,6 +103,7 @@ func ExampleClient_RandomKey() {
 	result, err := client.RandomKey(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result.Value()) > 0)
 

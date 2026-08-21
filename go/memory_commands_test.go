@@ -15,6 +15,7 @@ func ExampleClient_MemoryDoctor() {
 	result, err := client.MemoryDoctor(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	fmt.Printf("MemoryDoctor result is of type %T\n", result)
 
@@ -27,6 +28,7 @@ func ExampleClient_MemoryMallocStats() {
 	result, err := client.MemoryMallocStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	fmt.Printf("MemoryMallocStats result is of type %T\n", result)
 
@@ -39,6 +41,7 @@ func ExampleClient_MemoryPurge() {
 	result, err := client.MemoryPurge(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -51,6 +54,7 @@ func ExampleClient_MemoryStats() {
 	result, err := client.MemoryStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 
 	fmt.Println("TotalAllocated > 0:", result.TotalAllocated > 0)
@@ -66,6 +70,7 @@ func ExampleClusterClient_MemoryDoctor() {
 	result, err := client.MemoryDoctor(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// Default routing returns multi-value (all primaries)
 	fmt.Println(result.IsMultiValue())
@@ -80,6 +85,7 @@ func ExampleClusterClient_MemoryDoctorWithOptions() {
 	result, err := client.MemoryDoctorWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// RandomRoute returns single value
 	fmt.Println(result.IsSingleValue())
@@ -93,6 +99,7 @@ func ExampleClusterClient_MemoryMallocStats() {
 	result, err := client.MemoryMallocStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// Default routing returns multi-value (all primaries)
 	fmt.Println(result.IsMultiValue())
@@ -107,6 +114,7 @@ func ExampleClusterClient_MemoryMallocStatsWithOptions() {
 	result, err := client.MemoryMallocStatsWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// RandomRoute returns single value
 	fmt.Println(result.IsSingleValue())
@@ -120,6 +128,7 @@ func ExampleClusterClient_MemoryPurge() {
 	result, err := client.MemoryPurge(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -133,6 +142,7 @@ func ExampleClusterClient_MemoryPurgeWithOptions() {
 	result, err := client.MemoryPurgeWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -145,6 +155,7 @@ func ExampleClusterClient_MemoryStats() {
 	result, err := client.MemoryStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// Default routing returns multi-value (all primaries)
 	fmt.Println(result.IsMultiValue())
@@ -159,6 +170,7 @@ func ExampleClusterClient_MemoryStatsWithOptions() {
 	result, err := client.MemoryStatsWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
+		return
 	}
 	// RandomRoute returns single value
 	fmt.Println(result.IsSingleValue())
