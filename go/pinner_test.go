@@ -24,12 +24,19 @@ func TestPinner(t *testing.T) {
 // TestCreateBatchInfoPinsWithCallerPinner verifies that the pinner released by executeBatch owns all batch pins.
 func TestCreateBatchInfoPinsWithCallerPinner(t *testing.T) {
 	p := &pinner{}
-	defer p.Unpin()
 
 	batchInfo := createBatchInfo(p, internal.Batch{
-		Commands: []internal.Cmd{{Args: []string{"PING"}}},
+		Commands: []internal.Cmd{{}},
 	})
 	if batchInfo.cmds == nil {
 		t.Fatal("expected command pointers to be pinned")
+	}
+	if got, want := p.pinCount(), 2; got != want {
+		t.Fatalf("expected caller pinner to own the command and command-array pins, got %d", got)
+	}
+
+	p.Unpin()
+	if got := p.pinCount(); got != 0 {
+		t.Fatalf("expected Unpin to release all pins, got %d remaining", got)
 	}
 }
