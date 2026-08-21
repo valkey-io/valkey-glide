@@ -1,6 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 
 use super::{NodeAddress, TlsMode};
 use futures::StreamExt;
@@ -68,9 +71,26 @@ fn parse_quoted_tokens(s: &str) -> Vec<String> {
 
 pub type MonitorLineCallback = Arc<dyn Fn(MonitorLine) + Send + Sync>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MonitorDiagnostics {
+    pub received_lines: usize,
+    pub parsed_lines: usize,
+    pub discarded_lines: usize,
+    pub stream_ended: bool,
+}
+
+#[derive(Default)]
+struct MonitorDiagnosticsState {
+    received_lines: AtomicUsize,
+    parsed_lines: AtomicUsize,
+    discarded_lines: AtomicUsize,
+    stream_ended: AtomicBool,
+}
+
 pub struct MonitorClient {
     task: Option<tokio::task::JoinHandle<()>>,
     stop_tx: Option<oneshot::Sender<()>>,
+    diagnostics: Arc<MonitorDiagnosticsState>,
 }
 
 impl MonitorClient {
@@ -106,6 +126,8 @@ impl MonitorClient {
 
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
         let (ready_tx, ready_rx) = oneshot::channel::<()>();
+        let diagnostics = Arc::new(MonitorDiagnosticsState::default());
+        let task_diagnostics = diagnostics.clone();
         let task = tokio::spawn(async move {
             let mut stream = monitor.into_on_message::<String>();
             let _ = ready_tx.send(());
@@ -115,11 +137,26 @@ impl MonitorClient {
                     _ = &mut stop_rx => break,
                     item = stream.next() => match item {
                         Some(line) => {
+                            task_diagnostics.received_lines.fetch_add(1, Ordering::Relaxed);
                             if let Some(parsed) = MonitorLine::parse(&line) {
+                                task_diagnostics.parsed_lines.fetch_add(1, Ordering::Relaxed);
                                 on_line(parsed);
+                            } else {
+                                task_diagnostics.discarded_lines.fetch_add(1, Ordering::Relaxed);
+                                logger_core::log_warn(
+                                    "MonitorClient",
+                                    format!("discarded an unparseable MONITOR line (length={})", line.len()),
+                                );
                             }
                         }
-                        None => break,
+                        None => {
+                            task_diagnostics.stream_ended.store(true, Ordering::Relaxed);
+                            logger_core::log_warn(
+                                "MonitorClient",
+                                "MONITOR stream ended unexpectedly",
+                            );
+                            break;
+                        }
                     },
                 }
             }
@@ -129,7 +166,17 @@ impl MonitorClient {
         Ok(Self {
             task: Some(task),
             stop_tx: Some(stop_tx),
+            diagnostics,
         })
+    }
+
+    pub fn diagnostics(&self) -> MonitorDiagnostics {
+        MonitorDiagnostics {
+            received_lines: self.diagnostics.received_lines.load(Ordering::Relaxed),
+            parsed_lines: self.diagnostics.parsed_lines.load(Ordering::Relaxed),
+            discarded_lines: self.diagnostics.discarded_lines.load(Ordering::Relaxed),
+            stream_ended: self.diagnostics.stream_ended.load(Ordering::Relaxed),
+        }
     }
 
     pub async fn stop_async(mut self) {
