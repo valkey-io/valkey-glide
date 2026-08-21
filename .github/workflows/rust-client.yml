@@ -50,10 +50,6 @@ jobs:
                   engine-version: "9.0"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build rust client
-              working-directory: ./rust
-              run: cargo build
-
             - name: Run rust client tests
               working-directory: ./rust
               run: cargo test
