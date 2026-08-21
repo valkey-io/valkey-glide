@@ -10,8 +10,8 @@ import socket
 import string
 import time
 
-import boto3
-from botocore.config import Config
+import boto3  # type: ignore[import-not-found]
+from botocore.config import Config  # type: ignore[import-not-found]
 
 LOG_LEVELS = {
     "critical": logging.CRITICAL,
@@ -115,7 +115,9 @@ def start_cluster(
     else:
         request["NumCacheClusters"] = num_replicas + 1
 
-    logging.info(f"[elasticache_manager] Creating replication group '{name}' (cluster_mode={cluster_mode}, version={engine_version})")
+    logging.info(
+        f"[elasticache_manager] Creating replication group '{name}' (cluster_mode={cluster_mode}, version={engine_version})"
+    )
     client.create_replication_group(**request)
 
     # Poll until available
@@ -124,14 +126,18 @@ def start_cluster(
         resp = client.describe_replication_groups(ReplicationGroupId=name)
         groups = resp.get("ReplicationGroups", [])
         if not groups:
-            raise RuntimeError(f"[elasticache_manager] Replication group '{name}' not found after creation")
+            raise RuntimeError(
+                f"[elasticache_manager] Replication group '{name}' not found after creation"
+            )
         status = groups[0].get("Status", "")
         logging.info(f"[elasticache_manager] '{name}' status: {status}")
         if status == "available":
             break
         time.sleep(POLL_INTERVAL_SECONDS)
     else:
-        raise TimeoutError(f"[elasticache_manager] Timed out waiting for '{name}' to become available")
+        raise TimeoutError(
+            f"[elasticache_manager] Timed out waiting for '{name}' to become available"
+        )
 
     # Extract endpoint
     group = groups[0]
@@ -144,13 +150,17 @@ def start_cluster(
     host = endpoint.get("Address", "")
     port = endpoint.get("Port", 6379)
     if not host:
-        raise RuntimeError(f"[elasticache_manager] Could not determine endpoint for '{name}'")
+        raise RuntimeError(
+            f"[elasticache_manager] Could not determine endpoint for '{name}'"
+        )
 
     endpoint_str = f"{host}:{port}"
 
     # Verify TCP connectivity before declaring success.
     # ElastiCache may report 'available' before the port is actually reachable.
-    logging.info(f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}...")
+    logging.info(
+        f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}..."
+    )
     tcp_deadline = time.time() + 120  # 2 minutes to become reachable
     tcp_ok = False
     while time.time() < tcp_deadline:
@@ -159,7 +169,9 @@ def start_cluster(
                 tcp_ok = True
                 break
         except (socket.timeout, ConnectionRefusedError, OSError):
-            logging.info(f"[elasticache_manager] Port {port} not yet reachable, retrying...")
+            logging.info(
+                f"[elasticache_manager] Port {port} not yet reachable, retrying..."
+            )
             time.sleep(5)
     if not tcp_ok:
         raise RuntimeError(
@@ -190,15 +202,22 @@ def stop_cluster(name: str, region: str) -> None:
 def main():
     parser = argparse.ArgumentParser(description="ElastiCache manager tool")
     parser.add_argument(
-        "-log", "--loglevel", dest="log", default="info",
+        "-log",
+        "--loglevel",
+        dest="log",
+        default="info",
         help="Logging level (default: %(default)s)",
     )
     subparsers = parser.add_subparsers(dest="action", help="Tool actions")
 
     # -- start --
-    parser_start = subparsers.add_parser("start", help="Create a new ElastiCache replication group")
+    parser_start = subparsers.add_parser(
+        "start", help="Create a new ElastiCache replication group"
+    )
     parser_start.add_argument(
-        "--cluster-mode", action="store_true", default=False,
+        "--cluster-mode",
+        action="store_true",
+        default=False,
         help="Enable cluster mode (CME). If not set, cluster-mode disabled (CMD) is created.",
     )
     parser_start.add_argument(
@@ -207,27 +226,39 @@ def main():
         help="Name prefix for the replication group. Falls back to NAME env var. A random suffix is appended.",
     )
     parser_start.add_argument(
-        "-r", "--num-replicas", type=int, default=1,
+        "-r",
+        "--num-replicas",
+        type=int,
+        default=1,
         help="Number of replicas (CMD) or replicas per shard (CME) (default: %(default)s)",
     )
     parser_start.add_argument(
-        "-n", "--num-shards", type=int, default=2,
+        "-n",
+        "--num-shards",
+        type=int,
+        default=2,
         help="Number of shards, CME only (default: %(default)s)",
     )
     parser_start.add_argument(
-        "--tls", action="store_true", default=False,
+        "--tls",
+        action="store_true",
+        default=False,
         help="Enable TLS (default: %(default)s)",
     )
     parser_start.add_argument(
-        "--multi-az", action="store_true", default=False,
+        "--multi-az",
+        action="store_true",
+        default=False,
         help="Enable Multi-AZ (default: %(default)s)",
     )
     parser_start.add_argument(
-        "--instance-type", default=DEFAULT_INSTANCE_TYPE,
+        "--instance-type",
+        default=DEFAULT_INSTANCE_TYPE,
         help="Cache node type (default: %(default)s)",
     )
     parser_start.add_argument(
-        "--engine-version", default=DEFAULT_ENGINE_VERSION,
+        "--engine-version",
+        default=DEFAULT_ENGINE_VERSION,
         help="Engine version (default: %(default)s)",
     )
     parser_start.add_argument(
@@ -247,9 +278,12 @@ def main():
     )
 
     # -- stop --
-    parser_stop = subparsers.add_parser("stop", help="Delete an ElastiCache replication group")
+    parser_stop = subparsers.add_parser(
+        "stop", help="Delete an ElastiCache replication group"
+    )
     parser_stop.add_argument(
-        "--cluster-name", required=True,
+        "--cluster-name",
+        required=True,
         help="Name of the replication group to delete",
     )
     parser_stop.add_argument(

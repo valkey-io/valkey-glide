@@ -460,7 +460,7 @@ jobs:
         name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
-        #if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         steps:
             - name: Configure AWS credentials
               uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
