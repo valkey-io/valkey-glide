@@ -208,6 +208,10 @@ phases:
                   if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
                 }
 
+                # Force update to latest stable regardless of what was cached on the AMI
+                Write-Host "Updating Rust stable toolchain to latest..."
+                rustup update stable 2>&1
+
                 $env:RUSTUP_TOOLCHAIN = "stable"
                 [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
 
