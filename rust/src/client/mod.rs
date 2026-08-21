@@ -147,7 +147,7 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
 
 fn value_to_bytes(v: Value) -> Bytes {
     match v {
-        Value::BulkString(b) => Bytes::from(b),
+        Value::BulkString(b) => b,
         Value::SimpleString(s) => Bytes::from(s.into_bytes()),
         other => Bytes::from(format!("{other:?}").into_bytes()),
     }

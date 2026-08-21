@@ -223,7 +223,10 @@ async fn xpending_summary_and_range() {
 
 #[tokio::test]
 async fn xinfo_stream_groups_consumers() {
-    let m = Mock::array(vec![Value::BulkString(b"length".to_vec().into()), Value::Int(5)]);
+    let m = Mock::array(vec![
+        Value::BulkString(b"length".to_vec().into()),
+        Value::Int(5),
+    ]);
     let info = m.xinfo_stream("s").await.unwrap();
     m.assert_args(&["XINFO", "STREAM", "s"]);
     assert_eq!(info[0].0.as_ref(), b"length");

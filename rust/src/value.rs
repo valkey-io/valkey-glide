@@ -30,7 +30,7 @@ pub fn to_bytes(value: Value) -> Result<Bytes> {
 
 fn bytes_from_value(value: Value) -> Result<Bytes> {
     match value {
-        Value::BulkString(b) => Ok(Bytes::from(b)),
+        Value::BulkString(b) => Ok(b),
         Value::SimpleString(s) => Ok(Bytes::from(s.into_bytes())),
         Value::VerbatimString { text, .. } => Ok(Bytes::from(text.into_bytes())),
         Value::Okay => Ok(Bytes::from_static(b"OK")),

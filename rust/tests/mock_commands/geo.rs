@@ -50,7 +50,10 @@ async fn geodist_encoding() {
 
 #[tokio::test]
 async fn geohash_encoding() {
-    let m = Mock::array(vec![Value::BulkString(b"sqc8b49rny0".to_vec().into()), Value::Nil]);
+    let m = Mock::array(vec![
+        Value::BulkString(b"sqc8b49rny0".to_vec().into()),
+        Value::Nil,
+    ]);
     let v = m
         .geohash("Sicily", &["Palermo", "NonExisting"])
         .await
