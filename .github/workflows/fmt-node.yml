@@ -28,6 +28,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/node.yml
         with:
+            full-matrix: true
             run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Node
