@@ -376,6 +376,128 @@ pub(crate) mod test_cache {
         });
     }
 
+    /// Verify that server-assisted invalidation refetches only the changed MGET key across shards.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_mget_cache_multi_slot_invalidation() {
+        block_on_all(async {
+            let mut cached_client = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "server_assisted_mget_multi_slot".into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut writer = setup_test_basics(
+                true,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let keys = [
+                "{user1000}server-assisted-mget-low",
+                "{foo}server-assisted-mget-high",
+            ];
+            assert_eq!(get_slot(keys[0].as_bytes()), 3443);
+            assert_eq!(get_slot(keys[1].as_bytes()), 12182);
+
+            for (key, value) in keys.iter().zip(["low value", "high value"]) {
+                let mut set_cmd = redis::cmd("SET");
+                set_cmd.arg(key).arg(value);
+                writer
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::cmd("CONFIG");
+            reset_cmd.arg("RESETSTAT");
+            cached_client
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let expected_initial = Value::Array(vec![
+                Value::BulkString(b"low value".to_vec().into()),
+                Value::BulkString(b"high value".to_vec().into()),
+            ]);
+            let mut initial_mget = redis::cmd("MGET");
+            initial_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut initial_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 2, true).await;
+
+            let mut cached_mget = redis::cmd("MGET");
+            cached_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut cached_mget, None)
+                    .await
+                    .unwrap(),
+                expected_initial
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 2, true).await;
+
+            let mut update_cmd = redis::cmd("SET");
+            update_cmd.arg(keys[0]).arg("updated low value");
+            writer
+                .client
+                .send_command(&mut update_cmd, None)
+                .await
+                .unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(1), async {
+                loop {
+                    if cached_client.client.cache_entry_count().unwrap() == Value::Int(1) {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("server-assisted invalidation must remove only the changed key");
+
+            let mut refreshed_mget = redis::cmd("MGET");
+            refreshed_mget.arg(keys[0]).arg(keys[1]);
+            assert_eq!(
+                cached_client
+                    .client
+                    .send_command(&mut refreshed_mget, None)
+                    .await
+                    .unwrap(),
+                Value::Array(vec![
+                    Value::BulkString(b"updated low value".to_vec().into()),
+                    Value::BulkString(b"high value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut cached_client.client, "MGET", 3, true).await;
+        });
+    }
+
     /// Test that server-assisted invalidation removes only the changed MGET key.
     /// The final MGET must fetch the invalidated key and merge it with the cached key.
     #[rstest]
