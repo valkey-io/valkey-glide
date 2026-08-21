@@ -223,8 +223,18 @@ phases:
         Copy-Item -Path $rustcShim  -Destination "C:\Windows\System32\rustc.exe"  -Force
 
         if (Test-Path "C:\Windows\System32\link.exe") {
-          $linkVer = (C:\Windows\System32\link.exe --version 2>&1) -join " "
-          if ($linkVer -notmatch "Microsoft") {
+          # Check if the link.exe in System32 is the MSVC linker by inspecting its path origin.
+          # MSVC link.exe prints its banner to stderr on any invocation; GNU ld prints to stdout.
+          # Use Get-Item to check the file description as a more reliable signal.
+          $linkItem = Get-Item "C:\Windows\System32\link.exe" -ErrorAction SilentlyContinue
+          $isMsvc = $false
+          if ($linkItem) {
+            $versionInfo = $linkItem.VersionInfo
+            if ($versionInfo.CompanyName -match "Microsoft" -or $versionInfo.FileDescription -match "Microsoft") {
+              $isMsvc = $true
+            }
+          }
+          if (-not $isMsvc) {
             Remove-Item "C:\Windows\System32\link.exe" -Force
             Write-Host "Removed non-MSVC link.exe from System32"
           }
@@ -330,7 +340,12 @@ phases:
           $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
 
           if (Test-Path $pidFile) {
-            $setupPid = [int](Get-Content $pidFile)
+            $pidContent = (Get-Content $pidFile -Raw).Trim()
+            if ([string]::IsNullOrWhiteSpace($pidContent)) {
+              Write-Error "PID file is empty - ElastiCache setup may have failed to start"
+              exit 1
+            }
+            $setupPid = [int]$pidContent
             Write-Host "Waiting for PID $setupPid (max 25 min)..."
             $proc = Get-Process -Id $setupPid -ErrorAction SilentlyContinue
             if ($proc) {
@@ -415,8 +430,15 @@ phases:
           $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
           $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
           $teardownPath = "$repoRoot\node\tests\jest.globalTeardown.ts".Replace('\', '/')
-          $teardownScript = "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true }); const td = require('$teardownPath'); td.default().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });"
-          & node -e $teardownScript
+          # Use a runner file instead of inline -e to avoid issues with spaces in paths
+          $teardownRunner = "$env:TEMP\ec-teardown-runner.js"
+          $teardownLines = @(
+            "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true });",
+            "const td = require('$teardownPath');",
+            "td.default().then(() => { console.log('[teardown] Done.'); process.exit(0); }).catch(err => { console.error('[teardown] Error:', err.message || err); process.exit(1); });"
+          )
+          $teardownLines | Set-Content $teardownRunner -Encoding UTF8
+          & node $teardownRunner
           Write-Host "Teardown complete."
         }
 

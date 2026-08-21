@@ -165,6 +165,8 @@ jobs:
                           then "musl"
                           elif (.TARGET | contains("gnu"))
                           then "gnu"
+                          elif (.TARGET | contains("windows"))
+                          then "windows"
                           else "mac"
                           end
                       )

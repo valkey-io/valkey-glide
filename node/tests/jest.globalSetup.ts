@@ -9,7 +9,6 @@
  * Only active when USE_ELASTICACHE=true.
  */
 
-import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -35,31 +34,11 @@ function parseManagerOutput(output: string): { name: string; endpoint: string } 
         );
     }
     return {
-        name: nameLine.split("=")[1].trim(),
-        endpoint: endpointLine.split("=")[1].trim(),
+        name: nameLine.split("=").slice(1).join("=").trim(),
+        endpoint: endpointLine.split("=").slice(1).join("=").trim(),
     };
 }
 
-function runManager(args: string[]): string {
-    const repoRoot = path.resolve(__dirname, "..", "..");
-    const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
-    const result = spawnSync(pythonCmd, [managerScript, ...args], {
-        encoding: "utf-8",
-        env: process.env,
-        timeout: 25 * 60 * 1000,
-    });
-    // Always forward logs to console
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-    if (result.error) {
-        throw new Error(`[globalSetup] Failed to spawn elasticache_manager.py: ${result.error.message}`);
-    }
-    if (result.status !== 0) {
-        throw new Error(`[globalSetup] elasticache_manager.py exited with code ${result.status}`);
-    }
-    return result.stdout ?? "";
-}
 
 export default async function globalSetup(): Promise<void> {
     if (process.env.USE_ELASTICACHE !== "true") {
@@ -97,6 +76,11 @@ export default async function globalSetup(): Promise<void> {
                 env: process.env,
                 shell: process.platform === "win32",
             });
+            const timeoutMs = 25 * 60 * 1000;
+            const timer = setTimeout(() => {
+                proc.kill();
+                reject(new Error(`[globalSetup] elasticache_manager.py timed out after ${timeoutMs / 60000} minutes`));
+            }, timeoutMs);
             let stdout = "";
             let stderr = "";
             proc.stdout.on("data", (d: Buffer) => {
@@ -110,13 +94,17 @@ export default async function globalSetup(): Promise<void> {
                 process.stderr.write(s);
             });
             proc.on("close", (code) => {
+                clearTimeout(timer);
                 if (code !== 0) {
                     reject(new Error(`[globalSetup] elasticache_manager.py exited with code ${code}\n${stderr}`));
                 } else {
                     resolve(stdout);
                 }
             });
-            proc.on("error", reject);
+            proc.on("error", (err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
         });
     }
 
