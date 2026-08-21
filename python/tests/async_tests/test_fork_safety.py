@@ -155,6 +155,23 @@ def _is_free_threaded() -> bool:
 class TestForkSafety:
     """Tests for fork() safety of the pipe transport (issue #6673)."""
 
+    @pytest.fixture(autouse=True)
+    def _skip_on_trio(self, anyio_backend):
+        """Skip fork safety tests when running under the trio backend.
+
+        Trio does not support os.fork(); its internal WaitTaskRescheduled
+        primitive breaks in forked child processes, causing RuntimeError.
+        See: https://github.com/valkey-io/valkey-glide/issues/6722
+        """
+        backend_name = (
+            anyio_backend[0] if isinstance(anyio_backend, tuple) else anyio_backend
+        )
+        if backend_name == "trio":
+            pytest.skip(
+                "fork() is unsupported under trio "
+                "(WaitTaskRescheduled breaks in forked children)"
+            )
+
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_forked_children_can_use_clients(
         self, request: Any, cluster_mode: bool
