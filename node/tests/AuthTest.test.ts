@@ -160,7 +160,9 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
                 }
             }
 
-            await deleteAclUsernameAndPassword(managementClient, USERNAME);
+            if (managementClient) {
+                await deleteAclUsernameAndPassword(managementClient, USERNAME);
+            }
 
             if (cmdCluster) {
                 await flushAndCloseClient(false, cmdCluster.getAddresses());
