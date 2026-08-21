@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn opt_bytes_bulkstring() {
-        let v = Value::BulkString(b"hello".to_vec());
+        let v = Value::BulkString(b"hello".to_vec().into());
         assert_eq!(to_opt_bytes(v).unwrap(), Some(Bytes::from_static(b"hello")));
     }
 

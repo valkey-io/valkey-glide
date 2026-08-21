@@ -8,7 +8,7 @@ use redis::Value;
 
 #[tokio::test]
 async fn hmget_vec() {
-    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec()), Value::Nil]);
+    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into()), Value::Nil]);
     let v = m.hmget("h", &["f1", "f2"]).await.unwrap();
     m.assert_args(&["HMGET", "h", "f1", "f2"]);
     assert_eq!(v, vec![Some(Bytes::from_static(b"v1")), None]);
@@ -30,13 +30,13 @@ async fn hrandfield_variants() {
     );
     m.assert_args(&["HRANDFIELD", "h"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"f1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"f1".to_vec().into())]);
     m.hrandfield_count("h", 2).await.unwrap();
     m.assert_args(&["HRANDFIELD", "h", "2"]);
 
     let m = Mock::array(vec![
-        Value::BulkString(b"f1".to_vec()),
-        Value::BulkString(b"v1".to_vec()),
+        Value::BulkString(b"f1".to_vec().into()),
+        Value::BulkString(b"v1".to_vec().into()),
     ]);
     let pairs = m.hrandfield_withvalues("h", 1).await.unwrap();
     m.assert_args(&["HRANDFIELD", "h", "1", "WITHVALUES"]);
@@ -73,7 +73,7 @@ async fn httl_and_hpersist() {
 
 #[tokio::test]
 async fn hgetex_and_hsetex() {
-    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into())]);
     let v = m
         .hgetex("h", &["f1"], Some(ExpirySet::Seconds(60)))
         .await
@@ -153,13 +153,13 @@ async fn httl_pttl_persist_expiretime() {
 
 #[tokio::test]
 async fn hgetex_encoding() {
-    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec()), Value::Nil]);
+    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into()), Value::Nil]);
     let r = m.hgetex("h", &["f1", "f2"], None).await.unwrap();
     m.assert_args(&["HGETEX", "h", "FIELDS", "2", "f1", "f2"]);
     assert_eq!(r[0].as_deref(), Some(&b"v1"[..]));
     assert_eq!(r[1], None);
 
-    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into())]);
     m.hgetex(
         "h",
         &["f1"],

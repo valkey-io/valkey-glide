@@ -9,10 +9,10 @@ use redis::Value;
 
 fn entry(id: &str, field: &str, val: &str) -> Value {
     Value::Array(vec![
-        Value::BulkString(id.as_bytes().to_vec()),
+        Value::BulkString(id.as_bytes().to_vec().into()),
         Value::Array(vec![
-            Value::BulkString(field.as_bytes().to_vec()),
-            Value::BulkString(val.as_bytes().to_vec()),
+            Value::BulkString(field.as_bytes().to_vec().into()),
+            Value::BulkString(val.as_bytes().to_vec().into()),
         ]),
     ])
 }
@@ -99,7 +99,7 @@ async fn xgroup_create_destroy_ack() {
 #[tokio::test]
 async fn xread_and_options() {
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"s".to_vec()),
+        Value::BulkString(b"s".to_vec().into()),
         Value::Array(vec![entry("1-0", "f", "v")]),
     ])]);
     let res = m.xread(&[("s", "0")], None).await.unwrap();
@@ -107,7 +107,7 @@ async fn xread_and_options() {
     assert_eq!(res.len(), 1);
 
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"s".to_vec()),
+        Value::BulkString(b"s".to_vec().into()),
         Value::Array(vec![entry("1-0", "f", "v")]),
     ])]);
     let opts = StreamReadOptions {
@@ -121,7 +121,7 @@ async fn xread_and_options() {
 #[tokio::test]
 async fn xreadgroup_encoding() {
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"s".to_vec()),
+        Value::BulkString(b"s".to_vec().into()),
         Value::Array(vec![entry("1-0", "f", "v")]),
     ])]);
     let opts = StreamReadGroupOptions {
@@ -152,7 +152,7 @@ async fn xclaim_and_justid() {
     m.xclaim("s", "g", "c", 0, &["1-0"], None).await.unwrap();
     m.assert_args(&["XCLAIM", "s", "g", "c", "0", "1-0"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"1-0".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"1-0".to_vec().into())]);
     let ids = m
         .xclaim_justid("s", "g", "c", 0, &["1-0"], None)
         .await
@@ -164,7 +164,7 @@ async fn xclaim_and_justid() {
 #[tokio::test]
 async fn xautoclaim_and_justid() {
     let m = Mock::array(vec![
-        Value::BulkString(b"0-0".to_vec()),
+        Value::BulkString(b"0-0".to_vec().into()),
         Value::Array(vec![entry("1-0", "f", "v")]),
         Value::Array(vec![]),
     ]);
@@ -178,8 +178,8 @@ async fn xautoclaim_and_justid() {
     assert!(deleted.is_empty());
 
     let m = Mock::array(vec![
-        Value::BulkString(b"0-0".to_vec()),
-        Value::Array(vec![Value::BulkString(b"1-0".to_vec())]),
+        Value::BulkString(b"0-0".to_vec().into()),
+        Value::Array(vec![Value::BulkString(b"1-0".to_vec().into())]),
         Value::Array(vec![]),
     ]);
     let (_, ids, _) = m
@@ -194,10 +194,10 @@ async fn xautoclaim_and_justid() {
 async fn xpending_summary_and_range() {
     let m = Mock::array(vec![
         Value::Int(2),
-        Value::BulkString(b"1-0".to_vec()),
-        Value::BulkString(b"2-0".to_vec()),
+        Value::BulkString(b"1-0".to_vec().into()),
+        Value::BulkString(b"2-0".to_vec().into()),
         Value::Array(vec![Value::Array(vec![
-            Value::BulkString(b"c1".to_vec()),
+            Value::BulkString(b"c1".to_vec().into()),
             Value::Int(2),
         ])]),
     ]);
@@ -207,8 +207,8 @@ async fn xpending_summary_and_range() {
     assert_eq!(summary.consumers.len(), 1);
 
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"1-0".to_vec()),
-        Value::BulkString(b"c1".to_vec()),
+        Value::BulkString(b"1-0".to_vec().into()),
+        Value::BulkString(b"c1".to_vec().into()),
         Value::Int(100),
         Value::Int(3),
     ])]);
@@ -223,22 +223,22 @@ async fn xpending_summary_and_range() {
 
 #[tokio::test]
 async fn xinfo_stream_groups_consumers() {
-    let m = Mock::array(vec![Value::BulkString(b"length".to_vec()), Value::Int(5)]);
+    let m = Mock::array(vec![Value::BulkString(b"length".to_vec().into()), Value::Int(5)]);
     let info = m.xinfo_stream("s").await.unwrap();
     m.assert_args(&["XINFO", "STREAM", "s"]);
     assert_eq!(info[0].0.as_ref(), b"length");
 
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"name".to_vec()),
-        Value::BulkString(b"g1".to_vec()),
+        Value::BulkString(b"name".to_vec().into()),
+        Value::BulkString(b"g1".to_vec().into()),
     ])]);
     let groups = m.xinfo_groups("s").await.unwrap();
     m.assert_args(&["XINFO", "GROUPS", "s"]);
     assert_eq!(groups.len(), 1);
 
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"name".to_vec()),
-        Value::BulkString(b"c1".to_vec()),
+        Value::BulkString(b"name".to_vec().into()),
+        Value::BulkString(b"c1".to_vec().into()),
     ])]);
     m.xinfo_consumers("s", "g").await.unwrap();
     m.assert_args(&["XINFO", "CONSUMERS", "s", "g"]);

@@ -33,7 +33,7 @@ async fn json_type_raw_value() {
     let m = Mock::bulk("object");
     let v = m.json_type("k", "$").await.unwrap();
     m.assert_args(&["JSON.TYPE", "k", "$"]);
-    assert_eq!(v, Value::BulkString(b"object".to_vec()));
+    assert_eq!(v, Value::BulkString(b"object".to_vec().into()));
 }
 
 #[tokio::test]
@@ -97,7 +97,7 @@ async fn json_arr_ops() {
 
 #[tokio::test]
 async fn json_obj_ops_and_toggle_clear() {
-    let m = Mock::array(vec![Value::BulkString(b"a".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"a".to_vec().into())]);
     m.json_objkeys("k", "$").await.unwrap();
     m.assert_args(&["JSON.OBJKEYS", "k", "$"]);
 
@@ -116,7 +116,7 @@ async fn json_obj_ops_and_toggle_clear() {
 
 #[tokio::test]
 async fn json_mget_and_resp_and_debug() {
-    let m = Mock::array(vec![Value::BulkString(b"[1]".to_vec()), Value::Nil]);
+    let m = Mock::array(vec![Value::BulkString(b"[1]".to_vec().into()), Value::Nil]);
     let v = m.json_mget(&["k1", "k2"], "$.a").await.unwrap();
     m.assert_args(&["JSON.MGET", "k1", "k2", "$.a"]);
     assert_eq!(v, vec![Some(Bytes::from_static(b"[1]")), None]);

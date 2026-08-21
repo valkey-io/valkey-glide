@@ -27,7 +27,7 @@ async fn ft_dropindex_with_dd() {
 
 #[tokio::test]
 async fn ft_list_returns_names() {
-    let m = Mock::array(vec![Value::BulkString(b"idx1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"idx1".to_vec().into())]);
     let names = m.ft_list().await.unwrap();
     m.assert_args(&["FT._LIST"]);
     assert_eq!(names, vec![Bytes::from_static(b"idx1")]);

@@ -50,7 +50,7 @@ async fn geodist_encoding() {
 
 #[tokio::test]
 async fn geohash_encoding() {
-    let m = Mock::array(vec![Value::BulkString(b"sqc8b49rny0".to_vec()), Value::Nil]);
+    let m = Mock::array(vec![Value::BulkString(b"sqc8b49rny0".to_vec().into()), Value::Nil]);
     let v = m
         .geohash("Sicily", &["Palermo", "NonExisting"])
         .await
@@ -64,8 +64,8 @@ async fn geohash_encoding() {
 #[tokio::test]
 async fn geopos_encoding() {
     let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"13.5".to_vec()),
-        Value::BulkString(b"38.5".to_vec()),
+        Value::BulkString(b"13.5".to_vec().into()),
+        Value::BulkString(b"38.5".to_vec().into()),
     ])]);
     let v = m.geopos("Sicily", &["Palermo"]).await.unwrap();
     m.assert_args(&["GEOPOS", "Sicily", "Palermo"]);
@@ -74,7 +74,7 @@ async fn geopos_encoding() {
 
 #[tokio::test]
 async fn geosearch_by_radius_from_member() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_by_radius_from_member("Sicily", "Palermo", 5.5, GeoUnit::Kilometers)
         .await
         .unwrap();
@@ -91,7 +91,7 @@ async fn geosearch_by_radius_from_member() {
 
 #[tokio::test]
 async fn geosearch_from_member_with_tail() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_from_member(
         "Sicily",
         "Palermo",
@@ -122,7 +122,7 @@ async fn geosearch_from_member_with_tail() {
 
 #[tokio::test]
 async fn geosearch_from_coord_bybox() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_from_coord(
         "Sicily",
         coord(15.5, 37.5),

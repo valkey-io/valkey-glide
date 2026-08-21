@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 fn numsub_count(v: &glide::Value, channel: &str) -> Option<i64> {
     use glide::Value;
     let is_chan = |k: &Value| match k {
-        Value::BulkString(b) => b.as_slice() == channel.as_bytes(),
+        Value::BulkString(b) => b.as_ref() == channel.as_bytes(),
         Value::SimpleString(s) => s == channel,
         _ => false,
     };

@@ -45,8 +45,8 @@ async fn flushall_with_mode() {
 #[tokio::test]
 async fn config_get_parses_map() {
     let m = Mock::array(vec![
-        Value::BulkString(b"maxmemory".to_vec()),
-        Value::BulkString(b"100mb".to_vec()),
+        Value::BulkString(b"maxmemory".to_vec().into()),
+        Value::BulkString(b"100mb".to_vec().into()),
     ]);
     let cfg = m.config_get("maxmemory").await.unwrap();
     m.assert_args(&["CONFIG", "GET", "maxmemory"]);
@@ -77,8 +77,8 @@ async fn config_resetstat_and_rewrite() {
 #[tokio::test]
 async fn time_parses_pair() {
     let m = Mock::array(vec![
-        Value::BulkString(b"1700000000".to_vec()),
-        Value::BulkString(b"123456".to_vec()),
+        Value::BulkString(b"1700000000".to_vec().into()),
+        Value::BulkString(b"123456".to_vec().into()),
     ]);
     assert_eq!(m.time().await.unwrap(), (1700000000, 123456));
     m.assert_args(&["TIME"]);

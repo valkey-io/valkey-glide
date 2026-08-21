@@ -43,7 +43,7 @@ impl Mock {
     }
     /// Reply with a bulk string.
     pub(crate) fn bulk(s: impl AsRef<[u8]>) -> Self {
-        Mock::new(Value::BulkString(s.as_ref().to_vec()))
+        Mock::new(Value::BulkString(s.as_ref().to_vec().into()))
     }
     /// Reply with a simple string.
     pub(crate) fn simple(s: &str) -> Self {

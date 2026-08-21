@@ -6,24 +6,24 @@ use redis::Value;
 
 #[tokio::test]
 async fn zdiff_zunion_zinter() {
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
     m.zdiff(&["z1", "z2"]).await.unwrap();
     m.assert_args(&["ZDIFF", "2", "z1", "z2"]);
 
     let m = Mock::array(vec![
-        Value::BulkString(b"m1".to_vec()),
-        Value::BulkString(b"1.5".to_vec()),
+        Value::BulkString(b"m1".to_vec().into()),
+        Value::BulkString(b"1.5".to_vec().into()),
     ]);
     m.zdiff_withscores(&["z1", "z2"]).await.unwrap();
     m.assert_args(&["ZDIFF", "2", "z1", "z2", "WITHSCORES"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
     m.zunion(&["z1", "z2"], Some(AggregationType::Sum))
         .await
         .unwrap();
     m.assert_args(&["ZUNION", "2", "z1", "z2", "AGGREGATE", "SUM"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec())]);
+    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
     m.zinter(&["z1", "z2"], None).await.unwrap();
     m.assert_args(&["ZINTER", "2", "z1", "z2"]);
 }
