@@ -2,7 +2,7 @@
 # Manual changes might be lost - proceed with caution!
 
 __metadata:
-  version: 8
+  version: 10
   cacheKey: 10c0
 
 "@colors/colors@npm:1.6.0, @colors/colors@npm:^1.6.0":
@@ -156,9 +156,9 @@ __metadata:
   linkType: soft
 
 "@tsconfig/node10@npm:^1.0.7":
-  version: 1.0.13
-  resolution: "@tsconfig/node10@npm:1.0.13"
-  checksum: 10c0/93a52ed460ac917938daaa23c1ffafa31a8b5d9f44e15d33ff20aa60c8cae5ad92fe0806d1a34fadb47be08ad5ee74273ed56dd79c76179c1a220e2fbfb72887
+  version: 1.0.12
+  resolution: "@tsconfig/node10@npm:1.0.12"
+  checksum: 10c0/7bbbd7408cfaced86387a9b1b71cebc91c6fd701a120369735734da8eab1a4773fc079abd9f40c9e0b049e12586c8ac0e13f0da596bfd455b9b4c3faa813ebc5
   languageName: node
   linkType: hard
 
@@ -202,13 +202,13 @@ __metadata:
   linkType: hard
 
 "@types/pg@npm:^8.11.11":
-  version: 8.23.1
-  resolution: "@types/pg@npm:8.23.1"
+  version: 8.21.0
+  resolution: "@types/pg@npm:8.21.0"
   dependencies:
     "@types/node": "npm:*"
     pg-protocol: "npm:*"
     pg-types: "npm:^2.2.0"
-  checksum: 10c0/0e39ff7dbe233e1e50b172d87fe84cca086a52e255adb104ef1d60619cded356c4414427ffbea58e70a5a985c3036603c8e544ca2937fc1cf4050185109973be
+  checksum: 10c0/829b1185896a722a9c802e0d3cbbe66fba9d963f759d727acd68206803e37d5c4249241abcc2a595b0e3ebc667293de722a668a016a1d4ab1bbc3f5dbe3b7c93
   languageName: node
   linkType: hard
 

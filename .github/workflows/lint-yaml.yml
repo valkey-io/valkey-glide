@@ -11,10 +11,12 @@ on:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
+            - "node/pm-and-types-tests/*/.yarnrc.yml"
     pull_request:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
+            - "node/pm-and-types-tests/*/.yarnrc.yml"
     workflow_dispatch:
 
 jobs:
@@ -57,19 +59,18 @@ jobs:
               run: |
                   python3 - <<'EOF'
                   import yaml, sys
-                  errors = []
-                  for path in [
+                  paths = [
                       "node/pm-and-types-tests/depend-on-glide-package/.yarnrc.yml",
                       "node/pm-and-types-tests/depend-on-glide-dependent/.yarnrc.yml",
-                  ]:
-                      with open(path) as f:
-                          config = yaml.safe_load(f)
-                      gate = config.get("npmMinimalAgeGate")
-                      if gate != 10080:
-                          errors.append(f"{path}: npmMinimalAgeGate = {gate!r} (expected 10080 = 7 days in minutes)")
-                  if errors:
-                      for e in errors:
-                          print("ERROR:", e)
+                  ]
+                  bad = []
+                  for p in paths:
+                      with open(p) as f:
+                          got = (yaml.safe_load(f) or {}).get("npmMinimalAgeGate")
+                      if got != "7d":
+                          bad.append(f"{p}: {got!r}")
+                  if bad:
+                      print('ERROR: npmMinimalAgeGate must be "7d" (requires Yarn 4.18.0+ for correct 7-day gate):', bad)
                       sys.exit(1)
-                  print(f"OK: all .yarnrc.yml files have npmMinimalAgeGate == 10080")
+                  print(f"OK: all {len(paths)} .yarnrc.yml files have npmMinimalAgeGate == '7d'")
                   EOF
