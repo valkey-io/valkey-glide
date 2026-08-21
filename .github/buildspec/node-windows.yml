@@ -208,7 +208,8 @@ phases:
                   if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
                 }
 
-                # Force update to latest stable regardless of what was cached on the AMI
+                # Always update to latest stable - ensures edition2024 support
+                # regardless of what version was cached on the AMI or in the cache layer.
                 Write-Host "Updating Rust stable toolchain to latest..."
                 rustup update stable 2>&1
 
@@ -220,11 +221,12 @@ phases:
                 [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
                 $env:CARGO = $cargoBin
 
-                # Copy shims to System32 so all subsequent steps find cargo/rustc without PATH setup
+                # Copy shims AFTER update so System32 has the latest cargo/rustc
                 $cargoShim = "$CARGO_HOME\bin\cargo.exe"
                 $rustcShim  = "$CARGO_HOME\bin\rustc.exe"
                 Copy-Item -Path $cargoShim -Destination "C:\Windows\System32\cargo.exe" -Force
                 Copy-Item -Path $rustcShim  -Destination "C:\Windows\System32\rustc.exe"  -Force
+                Write-Host "Cargo version after update: $(C:\Windows\System32\cargo.exe --version)"
 
                 if (Test-Path "C:\Windows\System32\link.exe") {
                   # Check if the link.exe in System32 is the MSVC linker by inspecting its path origin.
