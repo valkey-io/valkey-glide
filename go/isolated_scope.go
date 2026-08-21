@@ -4,8 +4,8 @@ package glide
 
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -147,25 +147,23 @@ func (s *IsolatedScope) cmd(ctx context.Context, command string, args ...string)
 
 	// Use async callback pattern (same as regular commands) — no thread blocking
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
+	requestID := registerRequest(resultChannel)
 
 	rc := C.glide_scope_execute_async(
 		C.uint64_t(s.scopeID),
 		(*C.uint8_t)(unsafe.Pointer(&wireData[0])),
 		C.uintptr_t(len(wireData)),
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
 		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
 	)
 
 	if rc == -1 {
+		takeRequest(requestID)
 		return "", fmt.Errorf("scope execute failed: invalid scope %d", s.scopeID)
 	}
 	if rc == -2 {
+		takeRequest(requestID)
 		return "", errors.New("scope execute failed: invalid command")
 	}
 
@@ -173,12 +171,9 @@ func (s *IsolatedScope) cmd(ctx context.Context, command string, args ...string)
 	var result payload
 	select {
 	case <-ctx.Done():
-		// Async operation is in-flight — wait for it to complete to avoid use-after-free
-		go func() {
-			if p := <-resultChannel; p.value != nil {
-				C.free_command_response(p.value)
-			}
-		}()
+		if _, claimed := takeRequest(requestID); !claimed {
+			go discardResponse(resultChannel)
+		}
 		return "", ctx.Err()
 	case result = <-resultChannel:
 	}

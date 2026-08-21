@@ -8,10 +8,52 @@ import "C"
 import (
 	"log"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
+
+// requestRegistry maps FFI request IDs to their Go result channels. FFI retains
+// an ID until it invokes a callback, so the ID must be safe to look up even
+// after the initiating Go call has returned.
+var (
+	requestRegistry   = make(map[uintptr]chan payload)
+	requestRegistryMu sync.Mutex
+	nextRequestID     atomic.Uint64
+)
+
+// registerRequest assigns a unique FFI request ID to resultChannel. Production callers must provide a buffered
+// channel with capacity one so callbacks and failPendingRequests can deliver while client.mu is held. An unbuffered
+// channel is valid only in tests that claim the request before waiting; production use can block Close indefinitely.
+func registerRequest(resultChannel chan payload) uintptr {
+	requestRegistryMu.Lock()
+	defer requestRegistryMu.Unlock()
+
+	for {
+		requestID := uintptr(nextRequestID.Add(1))
+		if requestID == 0 {
+			continue
+		}
+		if _, exists := requestRegistry[requestID]; !exists {
+			requestRegistry[requestID] = resultChannel
+			return requestID
+		}
+	}
+}
+
+// takeRequest atomically claims a request. Exactly one of a callback,
+// cancellation, or Close can claim a request ID.
+func takeRequest(requestID uintptr) (chan payload, bool) {
+	requestRegistryMu.Lock()
+	defer requestRegistryMu.Unlock()
+
+	resultChannel, ok := requestRegistry[requestID]
+	if ok {
+		delete(requestRegistry, requestID)
+	}
+	return resultChannel, ok
+}
 
 // Registry to track clients by their pointer address
 var (
@@ -40,17 +82,37 @@ func getClientByPtr(ptrValue uintptr) *baseClient {
 	return clientRegistry[ptrValue]
 }
 
+// successCallback delivers a successful FFI response to its registered request.
+//
 //export successCallback
-func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
-	response := cResponse
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
-	resultChannel <- payload{value: response, error: nil}
+func successCallback(requestID C.uintptr_t, cResponse *C.struct_CommandResponse) {
+	deliverSuccess(uintptr(requestID), cResponse)
 }
 
+// deliverSuccess sends a successful response or releases it when its request was already claimed.
+func deliverSuccess(requestID uintptr, cResponse *C.struct_CommandResponse) {
+	resultChannel, ok := takeRequest(requestID)
+	if !ok {
+		C.free_command_response(cResponse)
+		return
+	}
+	resultChannel <- payload{value: cResponse, error: nil}
+}
+
+// failureCallback delivers a failed FFI response to its registered request.
+//
 //export failureCallback
-func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
+func failureCallback(requestID C.uintptr_t, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
+	deliverFailure(uintptr(requestID), cErrorMessage, cErrorType)
+}
+
+// deliverFailure sends a copied FFI error when its request has not already been claimed.
+func deliverFailure(requestID uintptr, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
+	resultChannel, ok := takeRequest(requestID)
+	if !ok {
+		return
+	}
 	msg := C.GoString(cErrorMessage)
-	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
 	resultChannel <- payload{value: nil, error: GoError(uint32(cErrorType), msg)}
 }
 
