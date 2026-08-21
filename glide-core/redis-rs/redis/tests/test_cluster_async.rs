@@ -7055,8 +7055,7 @@ mod cluster_async {
 
                     // Periodically try GET, which might call set_cluster_param()
                     if i % 10 == 0 {
-                        let _: Option<String> =
-                            connection.get(format!("trigger:{}", i)).await.ok();
+                        let _: Option<String> = connection.get(format!("trigger:{}", i)).await.ok();
                     }
 
                     Ok::<_, RedisError>(start.elapsed())

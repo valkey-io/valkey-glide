@@ -504,10 +504,7 @@ impl TestClusterContext {
     }
 
     // Migrate half the slots from one node to another
-    pub async fn migrate_slots_from_node_to_another(
-        &self,
-        slot_distribution: SlotDistribution,
-    ) {
+    pub async fn migrate_slots_from_node_to_another(&self, slot_distribution: SlotDistribution) {
         let slots_ranges_of_node_id = slot_distribution[0].3.clone();
 
         let mut conn = self.async_connection(None).await;
