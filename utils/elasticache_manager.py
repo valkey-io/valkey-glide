@@ -10,6 +10,9 @@ import socket
 import string
 import time
 
+import boto3
+from botocore.config import Config
+
 LOG_LEVELS = {
     "critical": logging.CRITICAL,
     "error": logging.ERROR,
@@ -53,8 +56,6 @@ def generate_random_str(length: int) -> str:
 
 
 def init_client(region: str):
-    import boto3
-    from botocore.config import Config
     config = Config(
         region_name=region,
         retries={"max_attempts": 10, "mode": "standard"},

@@ -25,6 +25,7 @@ export default async function globalTeardown(): Promise<void> {
     }
 
     let data: EndpointsFile;
+
     try {
         data = JSON.parse(fs.readFileSync(ELASTICACHE_ENDPOINTS_FILE, "utf-8"));
     } catch (err) {
@@ -33,21 +34,43 @@ export default async function globalTeardown(): Promise<void> {
     }
 
     const repoRoot = path.resolve(__dirname, "..", "..");
-    const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
+    const managerScript = path.join(
+        repoRoot,
+        "utils",
+        "elasticache_manager.py",
+    );
 
     for (const clusterName of [data.cmdClusterName, data.cmeClusterName]) {
         console.log(`[globalTeardown] Deleting cluster: ${clusterName}`);
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
-        const regionArgs = process.env.AWS_REGION ? ["--region", process.env.AWS_REGION] : [];
+        const regionArgs = process.env.AWS_REGION
+            ? ["--region", process.env.AWS_REGION]
+            : [];
         const result = spawnSync(
             pythonCmd,
-            [managerScript, "stop", "--cluster-name", clusterName, ...regionArgs],
-            { stdio: "inherit", env: process.env, timeout: 10 * 60 * 1000, shell: process.platform === "win32" },
+            [
+                managerScript,
+                "stop",
+                "--cluster-name",
+                clusterName,
+                ...regionArgs,
+            ],
+            {
+                stdio: "inherit",
+                env: process.env,
+                timeout: 10 * 60 * 1000,
+                shell: process.platform === "win32",
+            },
         );
+
         if (result.error) {
-            console.error(`[globalTeardown] Failed to spawn for ${clusterName}: ${result.error.message}`);
+            console.error(
+                `[globalTeardown] Failed to spawn for ${clusterName}: ${result.error.message}`,
+            );
         } else if (result.status !== 0) {
-            console.error(`[globalTeardown] elasticache_manager.py exited with code ${result.status} for ${clusterName}`);
+            console.error(
+                `[globalTeardown] elasticache_manager.py exited with code ${result.status} for ${clusterName}`,
+            );
         }
     }
 
