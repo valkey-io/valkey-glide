@@ -132,11 +132,11 @@ func pubSubCallback(
 		return
 	}
 
-	msg := string(C.GoBytes(message, message_len))
-	cha := string(C.GoBytes(channel, channel_len))
+	msg := C.GoStringN((*C.char)(message), message_len)
+	cha := C.GoStringN((*C.char)(channel), channel_len)
 	pat := models.CreateNilStringResult()
 	if pattern_len > 0 && pattern != nil {
-		pat = models.CreateStringResult(string(C.GoBytes(pattern, pattern_len)))
+		pat = models.CreateStringResult(C.GoStringN((*C.char)(pattern), pattern_len))
 	}
 
 	go func() {
