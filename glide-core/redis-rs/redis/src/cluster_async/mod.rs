@@ -3660,6 +3660,29 @@ where
         }
     }
 
+    /// Fail all requests currently buffered in the recovery queue.
+    /// Called when escalating from RefreshingSlots to ReconnectToInitialNodes
+    /// so queued requests follow the documented fail-fast policy.
+    fn fail_recovery_queue(&mut self) {
+        let count = self.recovery_queue.len();
+        if count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "fail_recovery_queue: failing {} buffered requests on escalation to ReconnectToInitialNodes",
+                    count
+                )
+            );
+            for request in self.recovery_queue.drain(..) {
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection in recovery",
+                ))));
+            }
+        }
+    }
+
     /// Fail all pending requests immediately with ClientError.
     /// Called when entering recovery to prevent requests from waiting for slow
     /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
@@ -3721,7 +3744,10 @@ where
                         log_trace_lazy!("cluster", format!("Slot refresh failed: {:?}", e));
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
-                            // If all connections unavailable, try reconnect
+                            // If all connections unavailable, try reconnect.
+                            // Fail any requests buffered during RefreshingSlots: they must
+                            // follow the fail-fast policy of ReconnectToInitialNodes.
+                            self.fail_recovery_queue();
                             let inner = self.inner.clone();
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
@@ -3756,6 +3782,9 @@ where
                             // TODO - consider a gracefully closing of the client
                             // Since a panic indicates a bug in the refresh logic,
                             // it might be safer to close the client entirely
+                            // Fail any requests buffered during RefreshingSlots: they must
+                            // follow the fail-fast policy of ReconnectToInitialNodes.
+                            self.fail_recovery_queue();
                             let inner = self.inner.clone();
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
