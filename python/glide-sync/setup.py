@@ -33,6 +33,7 @@ import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 
+from build_utils import rust_cdylib_filename
 from setuptools import Command, setup
 from setuptools.command.build_ext import build_ext as build_ext_orig
 from setuptools.command.build_py import build_py as build_py_orig
@@ -96,7 +97,7 @@ def vendor_dependencies():
     for _name, folder in VENDORED_DEPENDENCIES.items():
         if folder.dist.exists():
             remove_existing(folder.dist)
-        print(f"[INFO] Copying {folder.source} → {folder.dist}")
+        print(f"[INFO] Copying {folder.source} -> {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
     # Vendor only the Rust build files for glide-shared (Cargo.toml + src/)
@@ -192,15 +193,14 @@ class build_ext(build_ext_orig):
             check=True,
         )
 
-        # Determine shared library path based on platform
+        # Determine shared library paths based on platform
         target_dir = "release" if release else "debug"
-        suffix = {"linux": ".so", "darwin": ".dylib", "win32": ".dll"}[sys.platform]
-        lib_name = "libglide_ffi" + suffix
+        lib_name = rust_cdylib_filename("glide_ffi", sys.platform)
 
         built_lib = ffi_path / "target" / target_dir / lib_name
         dest_dir = Path(self.build_lib) / "glide_sync"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] Copying {built_lib} → {dest_dir / lib_name}")
+        print(f"[INFO] Copying {built_lib} -> {dest_dir / lib_name}")
         shutil.copy2(built_lib, dest_dir / lib_name)
 
         # Build _fast_response native extension from glide-shared Rust crate
@@ -229,12 +229,15 @@ class build_ext(build_ext_orig):
             "EXT_SUFFIX"
         )  # e.g. .cpython-311-darwin.so
         src_lib = (
-            glide_shared_rs / "target" / target_dir / ("lib_fast_response" + suffix)
+            glide_shared_rs
+            / "target"
+            / target_dir
+            / rust_cdylib_filename("_fast_response", sys.platform)
         )
         dest_shared = Path(self.build_lib) / "glide_shared"
         dest_shared.mkdir(parents=True, exist_ok=True)
         dest_ext = dest_shared / ("_fast_response" + ext_suffix)
-        print(f"[INFO] Copying {src_lib} → {dest_ext}")
+        print(f"[INFO] Copying {src_lib} -> {dest_ext}")
         shutil.copy2(src_lib, dest_ext)
 
         super().run()
@@ -276,7 +279,7 @@ class build_py(build_py_orig):
             source = ROOT.parent / "glide-shared" / "glide_shared"
         dest = Path(self.build_lib) / "glide_shared"
 
-        print(f"[INFO] Vendoring glide_shared from {source} → {dest}")
+        print(f"[INFO] Vendoring glide_shared from {source} -> {dest}")
         shutil.copytree(source, dest, dirs_exist_ok=True)
         super().run()
 
