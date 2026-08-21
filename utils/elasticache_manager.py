@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import random
+import socket
 import string
 import time
 
@@ -26,7 +27,6 @@ DEFAULT_SECURITY_GROUP = os.environ.get("EC_SECURITY_GROUP", "")
 DEFAULT_DESCRIPTION = "Valkey GLIDE integration test cluster"
 POLL_INTERVAL_SECONDS = 10
 MAX_WAIT_SECONDS = 20 * 60  # 20 minutes
-MAX_API_RETRIES = 10
 
 ENGINE_LOG_REQUEST = {
     "LogType": "engine-log",
@@ -52,25 +52,14 @@ def generate_random_str(length: int) -> str:
     return "".join(random.choice(chars) for _ in range(length))
 
 
-def make_api_call(client, command):
-    """Send a boto3 command with retries."""
-    retries = MAX_API_RETRIES
-    while True:
-        try:
-            return client.send(command)
-        except Exception as e:
-            if retries > 0:
-                retries -= 1
-                sleep_secs = random.randint(1, 11)
-                logging.debug(f"[elasticache_manager] retrying after error ({sleep_secs}s): {e}")
-                time.sleep(sleep_secs)
-            else:
-                raise
-
-
 def init_client(region: str):
     import boto3
-    return boto3.client("elasticache", region_name=region)
+    from botocore.config import Config
+    config = Config(
+        region_name=region,
+        retries={"max_attempts": 10, "mode": "standard"},
+    )
+    return boto3.client("elasticache", config=config)
 
 
 def get_engine(version: str) -> str:
@@ -83,23 +72,6 @@ def get_engine(version: str) -> str:
     except (ValueError, IndexError):
         pass
     return "redis"
-
-
-def get_default_parameter_group(version: str, cluster_mode: bool) -> str:
-    try:
-        major = int(version.split(".")[0])
-    except (ValueError, IndexError):
-        major = 7
-    suffix = "cluster.on" if cluster_mode else None
-    if major >= 8:
-        base = "default.valkey8"
-    elif major == 7:
-        base = "default.valkey7"
-    else:
-        base = "default.redis6.x"
-    if suffix:
-        return f"{base}.{suffix}"
-    return base
 
 
 def start_cluster(
@@ -117,6 +89,10 @@ def start_cluster(
 ) -> None:
     """Create one ElastiCache replication group and wait until available.
     Prints CLUSTER_NAME= and CLUSTER_ENDPOINT= to stdout on success."""
+    if not security_group:
+        raise ValueError(
+            "[elasticache_manager] --security-group or EC_SECURITY_GROUP env var is required"
+        )
     client = init_client(region)
 
     request = {
@@ -174,7 +150,6 @@ def start_cluster(
     # Verify TCP connectivity before declaring success.
     # ElastiCache may report 'available' before the port is actually reachable.
     logging.info(f"[elasticache_manager] Verifying TCP connectivity to {host}:{port}...")
-    import socket
     tcp_deadline = time.time() + 120  # 2 minutes to become reachable
     tcp_ok = False
     while time.time() < tcp_deadline:

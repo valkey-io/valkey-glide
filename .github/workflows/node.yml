@@ -15,6 +15,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
+            - utils/elasticache_manager.py
+            - .github/buildspec/node-windows.yml
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -28,6 +30,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
+            - utils/elasticache_manager.py
+            - .github/buildspec/node-windows.yml
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -478,9 +482,15 @@ jobs:
                     --output text)
                   echo "Build started: ${BUILD_ID}"
 
-                  # Poll until the build reaches a terminal state
+                  # Poll until the build reaches a terminal state (max 90 minutes)
                   echo "Polling for build completion..."
+                  POLL_START=$(date +%s)
+                  MAX_POLL_SECONDS=5400
                   while true; do
+                    if (( $(date +%s) - POLL_START > MAX_POLL_SECONDS )); then
+                      echo "::error::CodeBuild polling timed out after ${MAX_POLL_SECONDS}s. Build ID: ${BUILD_ID}"
+                      exit 1
+                    fi
                     STATUS=$(aws codebuild batch-get-builds \
                       --ids "${BUILD_ID}" \
                       --query 'builds[0].buildStatus' \
