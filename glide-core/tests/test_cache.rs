@@ -144,10 +144,11 @@ pub(crate) mod test_cache {
                 "{mget-cache}first",
                 "{mget-cache}second",
                 "{mget-cache}third",
+                "{mget-cache}fourth",
             ];
-            for (key, value) in keys
-                .iter()
-                .zip(["first value", "second value", "third value"])
+            for (key, value) in
+                keys.iter()
+                    .zip(["first value", "second value", "third value", "fourth value"])
             {
                 let mut set_cmd = redis::Cmd::new();
                 set_cmd.arg("SET").arg(key).arg(value);
@@ -229,14 +230,40 @@ pub(crate) mod test_cache {
             assert_eq!(result, Value::BulkString(b"third value".to_vec().into()));
             assert_command_count(&mut test_basics.client, "GET", 0, use_cluster).await;
 
+            let mut uncached_get_cmd = redis::Cmd::new();
+            uncached_get_cmd.arg("GET").arg(keys[3]);
+            let result = test_basics
+                .client
+                .send_command(&mut uncached_get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::BulkString(b"fourth value".to_vec().into()));
+            assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
+
+            let mut get_warmed_mget_cmd = redis::Cmd::new();
+            get_warmed_mget_cmd.arg("MGET").arg(keys[3]).arg(keys[0]);
+            let result = test_basics
+                .client
+                .send_command(&mut get_warmed_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"fourth value".to_vec().into()),
+                    Value::BulkString(b"first value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, use_cluster).await;
+
             let hit_rate = match test_basics.client.cache_hit_rate().unwrap() {
                 Value::Double(rate) => rate,
                 value => panic!("Expected Value::Double, got {value:?}"),
             };
-            assert_eq!(hit_rate, 5.0 / 8.0);
+            assert_eq!(hit_rate, 7.0 / 11.0);
             assert_eq!(
                 test_basics.client.cache_total_lookups().unwrap(),
-                Value::Int(8)
+                Value::Int(11)
             );
         });
     }

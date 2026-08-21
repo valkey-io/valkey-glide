@@ -741,6 +741,7 @@ pub(crate) trait MGetCacheExt: GlideCache {
             match self.get(key, CachedKeyType::String) {
                 Some(value) => {
                     self.increment_hit();
+                    // Preserve this hit for the current MGET; a later invalidation affects only subsequent requests.
                     lookup.push_hit(value);
                 }
                 None => {
