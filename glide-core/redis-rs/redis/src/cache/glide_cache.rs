@@ -7,10 +7,11 @@ use crate::{
     Cmd, ErrorKind, RedisError, RedisResult, Value,
 };
 use std::{
+    collections::{HashMap, HashSet},
     fmt::Debug,
     sync::{
         atomic::{AtomicU64, Ordering},
-        RwLock,
+        Arc, Mutex, RwLock,
     },
     time::{Duration, Instant},
 };
@@ -201,6 +202,10 @@ pub struct CacheCore {
     /// Current memory usage in bytes
     current_memory: AtomicU64,
 
+    /// Fills awaiting a server response. They are scoped to the requested key
+    /// so an invalidation only cancels fills for that key.
+    active_fills: Arc<CacheFillRegistry>,
+
     /// Performance statistics (None if metrics disabled)
     stats: Option<CacheMetrics>,
 }
@@ -213,6 +218,7 @@ impl CacheCore {
         Self {
             config,
             current_memory: AtomicU64::new(0),
+            active_fills: Arc::new(CacheFillRegistry::default()),
             stats,
         }
     }
@@ -266,6 +272,21 @@ impl CacheCore {
             });
     }
 
+    /// Registers a pending cache fill for `key`.
+    fn begin_cache_fill(&self, key: &[u8]) -> CacheFillToken {
+        self.active_fills.begin(key)
+    }
+
+    /// Cancels fills for a key while the cache store lock is held.
+    fn invalidate_cache_fills(&self, key: &[u8]) {
+        self.active_fills.invalidate(key);
+    }
+
+    /// Cancels all pending fills while the cache store lock is held.
+    fn invalidate_all_cache_fills(&self) {
+        self.active_fills.invalidate_all();
+    }
+
     // ==================== Metrics ====================
 
     /// Returns a reference to the metrics if enabled
@@ -281,6 +302,80 @@ impl CacheCore {
                 "Cache metrics tracking is not enabled",
             ))
         })
+    }
+}
+
+/// Opaque handle for a cache fill that is waiting on a server response.
+/// Dropping the token cancels the fill and releases its pending state.
+#[derive(Debug)]
+pub struct CacheFillToken {
+    registry: Arc<CacheFillRegistry>,
+    key: Vec<u8>,
+    id: u64,
+    active: bool,
+}
+
+impl CacheFillToken {
+    /// Claims the fill if it has not been invalidated, releasing its pending state.
+    fn take_if_active(mut self) -> bool {
+        if !self.active {
+            return false;
+        }
+        self.active = false;
+        self.registry.remove(&self.key, self.id)
+    }
+}
+
+impl Drop for CacheFillToken {
+    fn drop(&mut self) {
+        if self.active {
+            self.registry.remove(&self.key, self.id);
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct CacheFillRegistry {
+    next_id: AtomicU64,
+    fills: Mutex<HashMap<Vec<u8>, HashSet<u64>>>,
+}
+
+impl CacheFillRegistry {
+    fn begin(self: &Arc<Self>, key: &[u8]) -> CacheFillToken {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let key = key.to_vec();
+        self.fills
+            .lock()
+            .unwrap()
+            .entry(key.clone())
+            .or_default()
+            .insert(id);
+        CacheFillToken {
+            registry: self.clone(),
+            key,
+            id,
+            active: true,
+        }
+    }
+
+    fn remove(&self, key: &[u8], id: u64) -> bool {
+        let mut fills = self.fills.lock().unwrap();
+        let Some(ids) = fills.get_mut(key) else {
+            return false;
+        };
+        let active = ids.remove(&id);
+        if ids.is_empty() {
+            fills.remove(key);
+        }
+        active
+    }
+
+    fn invalidate(&self, key: &[u8]) {
+        self.fills.lock().unwrap().remove(key);
+    }
+
+    fn invalidate_all(&self) {
+        self.fills.lock().unwrap().clear();
     }
 }
 
@@ -408,6 +503,39 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
             );
         }
     }
+
+    /// Inserts an already-sized, detached value while holding the store write lock.
+    fn insert_with_lock(
+        &self,
+        store: &mut S,
+        key: Vec<u8>,
+        key_type: CachedKeyType,
+        value: Value,
+        entry_size: u64,
+    ) {
+        if let Some(existing) = store.remove(&key) {
+            self.core.uncharge(existing.size);
+        }
+
+        self.evict_until_space_available(store, entry_size);
+
+        let expires_at = self.core.compute_expires_at();
+        let entry = CacheEntry::new(value, key_type, expires_at, entry_size);
+        store.insert(key, entry);
+        self.core.charge(entry_size);
+
+        debug!(
+            "cache_insert - [{}] Inserted entry (type={:?}, size={}B{})",
+            store.policy_name(),
+            key_type,
+            entry_size,
+            if expires_at.is_some() {
+                ", with TTL"
+            } else {
+                ""
+            }
+        );
+    }
 }
 
 // ==================== GlideCache Trait ====================
@@ -449,6 +577,22 @@ pub trait GlideCache: Send + Sync + Debug {
     /// * `key_type` - The type of the key being cached
     /// * `value` - The value to associate with the key
     fn insert(&self, key: Vec<u8>, key_type: CachedKeyType, value: Value);
+
+    /// Inserts a value only when its pending fill has not been invalidated.
+    fn insert_if_active_fill(
+        &self,
+        key: Vec<u8>,
+        key_type: CachedKeyType,
+        value: Value,
+        fill: CacheFillToken,
+    ) {
+        // Custom cache implementations that do not receive server-assisted
+        // invalidations retain their existing cache-fill behavior. Implementations
+        // that do receive them should override this with an atomic check.
+        if fill.take_if_active() {
+            self.insert(key, key_type, value);
+        }
+    }
 
     /// Invalidates a key from the cache
     ///
@@ -529,6 +673,44 @@ pub trait GlideCache: Send + Sync + Debug {
             self.insert(cmd_key.to_vec(), key_type, value);
         }
     }
+
+    /// Retrieves a cached command result and starts a fill only for a cache miss.
+    fn get_cached_cmd_with_fill(&self, cmd: &Cmd) -> (Option<Value>, Option<CacheFillToken>) {
+        let Some(cmd_name) = cmd.command() else {
+            return (None, None);
+        };
+        let Some(key_type) = cacheable_cmd_type(cmd_name.as_ref()) else {
+            return (None, None);
+        };
+        let Some(cmd_key) = RoutingInfo::key_for_command(cmd) else {
+            return (None, None);
+        };
+
+        match self.get(cmd_key, key_type) {
+            Some(value) => {
+                self.increment_hit();
+                (Some(value), None)
+            }
+            None => {
+                self.increment_miss();
+                (None, Some(self.core().begin_cache_fill(cmd_key)))
+            }
+        }
+    }
+
+    /// Completes a pending cache fill for a cacheable command.
+    fn complete_cached_cmd(&self, cmd: &Cmd, value: Value, fill: CacheFillToken) {
+        let Some(cmd_name) = cmd.command() else {
+            return;
+        };
+        let Some(key_type) = cacheable_cmd_type(cmd_name.as_ref()) else {
+            return;
+        };
+        let Some(cmd_key) = RoutingInfo::key_for_command(cmd) else {
+            return;
+        };
+        self.insert_if_active_fill(cmd_key.to_vec(), key_type, value, fill);
+    }
 }
 
 /// Internal MGET cache operations used by the native connection path.
@@ -563,7 +745,7 @@ pub(crate) trait MGetCacheExt: GlideCache {
                 }
                 None => {
                     self.increment_miss();
-                    lookup.push_miss(key.to_vec());
+                    lookup.push_miss(key.to_vec(), self.core().begin_cache_fill(key));
                 }
             }
         }
@@ -594,9 +776,9 @@ pub(crate) trait MGetCacheExt: GlideCache {
         }
 
         let missing_keys = std::mem::take(&mut lookup.missing_keys);
-        for ((index, key), value) in missing_keys.into_iter().zip(miss_values) {
+        for ((index, key, fill), value) in missing_keys.into_iter().zip(miss_values) {
             if value != Value::Nil {
-                self.insert(key, CachedKeyType::String, value.clone());
+                self.insert_if_active_fill(key, CachedKeyType::String, value.clone(), fill);
             }
             lookup.values[index] = Some(value);
         }
@@ -610,7 +792,7 @@ impl<T: GlideCache + ?Sized> MGetCacheExt for T {}
 /// Cached MGET values and the original positions of keys that were not cached.
 pub(crate) struct MGetCacheLookup {
     values: Vec<Option<Value>>,
-    missing_keys: Vec<(usize, Vec<u8>)>,
+    missing_keys: Vec<(usize, Vec<u8>, CacheFillToken)>,
 }
 
 impl MGetCacheLookup {
@@ -625,8 +807,8 @@ impl MGetCacheLookup {
         self.values.push(Some(value));
     }
 
-    fn push_miss(&mut self, key: Vec<u8>) {
-        self.missing_keys.push((self.values.len(), key));
+    fn push_miss(&mut self, key: Vec<u8>, fill: CacheFillToken) {
+        self.missing_keys.push((self.values.len(), key, fill));
         self.values.push(None);
     }
 
@@ -639,7 +821,7 @@ impl MGetCacheLookup {
     }
 
     pub(crate) fn missing_keys(&self) -> impl Iterator<Item = &[u8]> {
-        self.missing_keys.iter().map(|(_, key)| key.as_slice())
+        self.missing_keys.iter().map(|(_, key, _)| key.as_slice())
     }
 
     pub(crate) fn into_value(self) -> RedisResult<Value> {
@@ -717,36 +899,40 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
 
         let mut store = self.store.write().unwrap();
 
-        // Remove existing entry if present
-        if let Some(existing) = store.remove(&key) {
-            self.core.uncharge(existing.size);
+        self.insert_with_lock(&mut store, key, key_type, value, entry_size);
+    }
+
+    fn insert_if_active_fill(
+        &self,
+        key: Vec<u8>,
+        key_type: CachedKeyType,
+        value: Value,
+        fill: CacheFillToken,
+    ) {
+        // Cached values outlive the request; deep-copy so they don't pin the
+        // connection read buffers their BulkStrings were zero-copy sliced from.
+        let value = value.detach_buffers();
+        let entry_size = calculate_entry_size(&key, &value);
+
+        if self.core.entry_too_big(entry_size) {
+            warn!(
+                "cache_insert - Entry too large for cache: {}B > {}B (max), skipping",
+                entry_size,
+                self.core.max_memory()
+            );
+            return;
         }
 
-        // Evict until space available
-        self.evict_until_space_available(&mut store, entry_size);
-
-        // Insert new entry
-        let expires_at = self.core.compute_expires_at();
-        let entry = CacheEntry::new(value, key_type, expires_at, entry_size);
-
-        store.insert(key, entry);
-        self.core.charge(entry_size);
-
-        debug!(
-            "cache_insert - [{}] Inserted entry (type={:?}, size={}B{})",
-            store.policy_name(),
-            key_type,
-            entry_size,
-            if expires_at.is_some() {
-                ", with TTL"
-            } else {
-                ""
-            }
-        );
+        let mut store = self.store.write().unwrap();
+        if !fill.take_if_active() {
+            return;
+        }
+        self.insert_with_lock(&mut store, key, key_type, value, entry_size);
     }
 
     fn invalidate(&self, key: &[u8]) {
         let mut store = self.store.write().unwrap();
+        self.core.invalidate_cache_fills(key);
 
         if let Some(entry) = store.remove(key) {
             self.core.uncharge(entry.size);
@@ -767,6 +953,7 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
 
     fn flush_all(&self) {
         let mut store = self.store.write().unwrap();
+        self.core.invalidate_all_cache_fills();
         while let Some(entry) = store.evict_one() {
             self.core.uncharge(entry.size);
             if let Some(stats) = self.core.stats() {
@@ -974,6 +1161,58 @@ mod tests {
         assert_eq!(second_lookup.missing_count(), 1);
         assert_eq!(cache.entry_count(), 0);
         assert_eq!(cache.metrics().unwrap().misses(), 2);
+    }
+
+    #[test]
+    fn test_mget_invalidation_cancels_only_the_matching_fill() {
+        let cache = test_cache();
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("first").arg("second");
+
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        cache.invalidate(b"first");
+        cache
+            .complete_cached_mget(
+                lookup,
+                Value::Array(vec![
+                    Value::BulkString(b"stale first".to_vec().into()),
+                    Value::BulkString(b"current second".to_vec().into()),
+                ]),
+            )
+            .unwrap();
+
+        assert_eq!(cache.get(b"first", CachedKeyType::String), None);
+        assert_eq!(
+            cache.get(b"second", CachedKeyType::String),
+            Some(Value::BulkString(b"current second".to_vec().into()))
+        );
+    }
+
+    #[test]
+    fn test_dropped_cache_fill_releases_pending_state() {
+        let cache = test_cache();
+        let fill = cache.core().begin_cache_fill(b"key");
+        assert_eq!(cache.core().active_fills.fills.lock().unwrap().len(), 1);
+
+        drop(fill);
+
+        assert!(cache.core().active_fills.fills.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_flush_all_cancels_pending_cache_fills() {
+        let cache = test_cache();
+        let fill = cache.core().begin_cache_fill(b"key");
+
+        cache.flush_all();
+        cache.insert_if_active_fill(
+            b"key".to_vec(),
+            CachedKeyType::String,
+            Value::BulkString(b"stale".to_vec().into()),
+            fill,
+        );
+
+        assert_eq!(cache.entry_count(), 0);
     }
 
     #[test]
