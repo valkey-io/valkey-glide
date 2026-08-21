@@ -238,6 +238,7 @@ func (client *baseClient) failPendingRequests(err error) {
 	client.pending = nil
 }
 
+// removePendingRequest removes a completed request from the client's pending set.
 func (client *baseClient) removePendingRequest(requestID uintptr) {
 	client.mu.Lock()
 	if client.pending != nil {
@@ -246,12 +247,14 @@ func (client *baseClient) removePendingRequest(requestID uintptr) {
 	client.mu.Unlock()
 }
 
+// discardResponse waits for and releases a response that its original caller no longer needs.
 func discardResponse(resultChannel chan payload) {
 	if result := <-resultChannel; result.value != nil {
 		C.free_command_response(result.value)
 	}
 }
 
+// waitForResponse returns a response or handles cancellation without retaining an FFI response.
 func (client *baseClient) waitForResponse(
 	ctx context.Context,
 	requestID uintptr,

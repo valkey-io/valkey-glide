@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// TestRequestRegistryClaimsEachRequestOnce verifies that claimed IDs cannot be claimed again.
 func TestRequestRegistryClaimsEachRequestOnce(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)
@@ -27,6 +28,7 @@ func TestRequestRegistryClaimsEachRequestOnce(t *testing.T) {
 	}
 }
 
+// TestRequestRegistryConcurrentClaimsHaveOneWinner verifies atomic request ownership.
 func TestRequestRegistryConcurrentClaimsHaveOneWinner(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)
@@ -50,6 +52,7 @@ func TestRequestRegistryConcurrentClaimsHaveOneWinner(t *testing.T) {
 	}
 }
 
+// TestLateSuccessCallbackAfterCancellationIsDropped verifies that cancelled requests discard late successes.
 func TestLateSuccessCallbackAfterCancellationIsDropped(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)
@@ -72,6 +75,7 @@ func TestLateSuccessCallbackAfterCancellationIsDropped(t *testing.T) {
 	deliverSuccess(requestID, nil)
 }
 
+// TestLateFailureCallbackAfterCancellationIsDropped verifies that cancelled requests discard late failures.
 func TestLateFailureCallbackAfterCancellationIsDropped(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)
@@ -83,6 +87,7 @@ func TestLateFailureCallbackAfterCancellationIsDropped(t *testing.T) {
 	deliverFailure(requestID, nil, 0)
 }
 
+// TestWaitForResponseDiscardsCallbackWinningCancellation verifies cleanup when a callback claims first.
 func TestWaitForResponseDiscardsCallbackWinningCancellation(t *testing.T) {
 	resultChannel := make(chan payload)
 	requestID := registerRequest(resultChannel)
@@ -112,6 +117,7 @@ func TestWaitForResponseDiscardsCallbackWinningCancellation(t *testing.T) {
 	}
 }
 
+// TestLateSuccessCallbackAfterClientCloseIsDropped verifies that Close discards late successes.
 func TestLateSuccessCallbackAfterClientCloseIsDropped(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)
@@ -133,6 +139,7 @@ func TestLateSuccessCallbackAfterClientCloseIsDropped(t *testing.T) {
 	deliverSuccess(requestID, nil)
 }
 
+// TestDuplicateSuccessCallbackIsDropped verifies that only the first callback response is delivered.
 func TestDuplicateSuccessCallbackIsDropped(t *testing.T) {
 	resultChannel := make(chan payload, 1)
 	requestID := registerRequest(resultChannel)

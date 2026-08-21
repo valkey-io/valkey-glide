@@ -23,6 +23,7 @@ var (
 	nextRequestID     atomic.Uint64
 )
 
+// registerRequest assigns a unique FFI request ID to resultChannel.
 func registerRequest(resultChannel chan payload) uintptr {
 	requestRegistryMu.Lock()
 	defer requestRegistryMu.Unlock()
@@ -79,11 +80,14 @@ func getClientByPtr(ptrValue uintptr) *baseClient {
 	return clientRegistry[ptrValue]
 }
 
+// successCallback delivers a successful FFI response to its registered request.
+//
 //export successCallback
 func successCallback(requestID C.uintptr_t, cResponse *C.struct_CommandResponse) {
 	deliverSuccess(uintptr(requestID), cResponse)
 }
 
+// deliverSuccess sends a successful response or releases it when its request was already claimed.
 func deliverSuccess(requestID uintptr, cResponse *C.struct_CommandResponse) {
 	resultChannel, ok := takeRequest(requestID)
 	if !ok {
@@ -93,11 +97,14 @@ func deliverSuccess(requestID uintptr, cResponse *C.struct_CommandResponse) {
 	resultChannel <- payload{value: cResponse, error: nil}
 }
 
+// failureCallback delivers a failed FFI response to its registered request.
+//
 //export failureCallback
 func failureCallback(requestID C.uintptr_t, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	deliverFailure(uintptr(requestID), cErrorMessage, cErrorType)
 }
 
+// deliverFailure sends a copied FFI error when its request has not already been claimed.
 func deliverFailure(requestID uintptr, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	resultChannel, ok := takeRequest(requestID)
 	if !ok {
