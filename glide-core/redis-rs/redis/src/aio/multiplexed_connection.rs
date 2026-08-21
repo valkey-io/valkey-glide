@@ -1,7 +1,7 @@
 use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
-use crate::cache::glide_cache::GlideCache;
+use crate::cache::glide_cache::{GlideCache, MGetCacheExt};
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
@@ -390,14 +390,14 @@ where
                             Some(Value::Array(keys)) => {
                                 for key in keys {
                                     if let Value::BulkString(k) = key {
-                                        cache.invalidate(k);
+                                        cache.invalidate_server_assisted(k);
                                     } else if let Value::VerbatimString { text, .. } = key {
-                                        cache.invalidate(text.as_bytes());
+                                        cache.invalidate_server_assisted(text.as_bytes());
                                     }
                                 }
                             }
                             Some(Value::Nil) => {
-                                cache.flush_all();
+                                cache.flush_all_server_assisted();
                             }
                             None => { /* malformed push, ignore */ }
                             _ => {}
@@ -1086,12 +1086,57 @@ impl MultiplexedConnection {
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
-        // First try to get from cache
-        if let Some(cache) = &self.cache {
-            if let Some(value) = cache.get_cached_cmd(cmd) {
-                return Ok(value);
+        let cache = self.cache.clone();
+
+        if let Some(cache) = &cache {
+            if let Some(lookup) = cache.get_cached_mget(cmd) {
+                if lookup.is_complete() {
+                    return lookup.into_value();
+                }
+
+                let mut misses_cmd = Cmd::with_capacity(lookup.missing_count() + 1, 4);
+                misses_cmd.arg("MGET");
+                for key in lookup.missing_keys() {
+                    misses_cmd.arg(key);
+                }
+                misses_cmd
+                    .set_span(cmd.span())
+                    .set_fenced(cmd.is_fenced())
+                    .set_is_blocking(cmd.is_blocking());
+                misses_cmd.set_response_timeout(cmd.response_timeout());
+
+                let response = self.send_packed_command_inner(&misses_cmd).await?;
+                return cache.complete_cached_mget(lookup, response);
             }
         }
+
+        // First try to get from cache. A cache miss registers a fill for this
+        // key before the request is sent, so only that key's invalidation can
+        // prevent the response from populating the cache.
+        let cache_fill = if let Some(cache) = &cache {
+            let (value, fill) = cache.get_cached_cmd_with_fill(cmd);
+            if let Some(value) = value {
+                return Ok(value);
+            }
+            fill
+        } else {
+            None
+        };
+
+        let result = self.send_packed_command_inner(cmd).await;
+
+        // Store in cache if applicable
+        if let (Some(cache), Some(fill)) = (&cache, cache_fill) {
+            if let Ok(value) = &result {
+                if *value != Value::Nil {
+                    cache.complete_cached_cmd(cmd, value.clone(), fill);
+                }
+            }
+        }
+        result
+    }
+
+    async fn send_packed_command_inner(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
@@ -1116,15 +1161,6 @@ impl MultiplexedConnection {
                         kind: PushKind::Disconnection,
                         data: vec![],
                     });
-                }
-            }
-        }
-
-        // Store in cache if applicable
-        if let Some(cache) = &self.cache {
-            if let Ok(value) = &result {
-                if *value != Value::Nil {
-                    cache.set_cached_cmd(cmd, value.clone());
                 }
             }
         }
@@ -1407,6 +1443,7 @@ impl MultiplexedConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::{glide_cache::CacheConfig, lru_cache::new_lru_cache};
     use futures::channel::mpsc as futures_mpsc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::task::{Context, Poll};
@@ -1469,6 +1506,160 @@ mod tests {
                 RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
             })
         }
+    }
+
+    struct ResponseSink {
+        command_tx: mpsc::UnboundedSender<crate::cmd::SendBuf>,
+        response_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+    }
+
+    impl Stream for ResponseSink {
+        type Item = RedisResult<Value>;
+
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.response_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<crate::cmd::SendBuf> for ResponseSink {
+        type Error = RedisError;
+
+        fn poll_ready(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn start_send(self: Pin<&mut Self>, item: crate::cmd::SendBuf) -> Result<(), Self::Error> {
+            self.command_tx.send(item).map_err(|error| {
+                RedisError::from((
+                    crate::ErrorKind::IoError,
+                    "mock send error",
+                    error.to_string(),
+                ))
+            })
+        }
+
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    async fn assert_response_followed_by_invalidation_does_not_cache(
+        command: Cmd,
+        response: Value,
+        invalidated_key: &'static [u8],
+        expected_entry_count: u64,
+    ) {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: true,
+        });
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (mut response_tx, response_rx) = futures_mpsc::channel(2);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, Some(cache.clone()));
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .with_cache(Some(cache.clone()))
+            .build()
+            .await
+            .unwrap();
+
+        let request = tokio::spawn(async move {
+            let mut connection = connection;
+            connection.send_packed_command(&command).await
+        });
+        command_rx.recv().await.expect("command must be sent");
+
+        // Queue both frames before waking the driver. `poll_read` drains them in
+        // one turn, so this reproduces an invalidation processed before the
+        // waiting command task can populate the cache.
+        response_tx.try_send(Ok(response)).unwrap();
+        response_tx
+            .try_send(Ok(Value::Push {
+                kind: PushKind::Invalidate,
+                data: vec![Value::Array(vec![Value::BulkString(
+                    invalidated_key.to_vec().into(),
+                )])],
+            }))
+            .unwrap();
+
+        request.await.unwrap().unwrap();
+        assert_eq!(
+            cache.entry_count(),
+            expected_entry_count,
+            "cache fill did not match the invalidation scope"
+        );
+
+        driver.abort();
+    }
+
+    #[tokio::test]
+    async fn test_get_response_followed_by_invalidation_does_not_cache_stale_value() {
+        let mut command = crate::cmd("GET");
+        command.arg("key");
+        assert_response_followed_by_invalidation_does_not_cache(
+            command,
+            Value::BulkString(b"stale".to_vec().into()),
+            b"key",
+            0,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_mget_response_followed_by_invalidation_does_not_cache_stale_value() {
+        let mut command = crate::cmd("MGET");
+        command.arg("key");
+        assert_response_followed_by_invalidation_does_not_cache(
+            command,
+            Value::Array(vec![Value::BulkString(b"stale".to_vec().into())]),
+            b"key",
+            0,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_get_response_followed_by_unrelated_invalidation_caches_value() {
+        let mut command = crate::cmd("GET");
+        command.arg("key");
+        assert_response_followed_by_invalidation_does_not_cache(
+            command,
+            Value::BulkString(b"current".to_vec().into()),
+            b"other-key",
+            1,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_mget_response_followed_by_unrelated_invalidation_caches_value() {
+        let mut command = crate::cmd("MGET");
+        command.arg("key");
+        assert_response_followed_by_invalidation_does_not_cache(
+            command,
+            Value::Array(vec![Value::BulkString(b"current".to_vec().into())]),
+            b"other-key",
+            1,
+        )
+        .await;
     }
 
     /// A mock connection used to benchmark the pipeline buffer in isolation,
