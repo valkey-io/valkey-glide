@@ -252,7 +252,11 @@ func discardResponse(resultChannel chan payload) {
 	}
 }
 
-func (client *baseClient) waitForResponse(ctx context.Context, requestID uintptr, resultChannel chan payload) (payload, error) {
+func (client *baseClient) waitForResponse(
+	ctx context.Context,
+	requestID uintptr,
+	resultChannel chan payload,
+) (payload, error) {
 	select {
 	case <-ctx.Done():
 		client.removePendingRequest(requestID)

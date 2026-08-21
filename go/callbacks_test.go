@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestRequestRegistryClaimsEachRequestOnce(t *testing.T) {
@@ -80,6 +81,35 @@ func TestLateFailureCallbackAfterCancellationIsDropped(t *testing.T) {
 
 	// A late failure callback must not attempt to resolve an obsolete request.
 	deliverFailure(requestID, nil, 0)
+}
+
+func TestWaitForResponseDiscardsCallbackWinningCancellation(t *testing.T) {
+	resultChannel := make(chan payload)
+	requestID := registerRequest(resultChannel)
+	if _, ok := takeRequest(requestID); !ok {
+		t.Fatal("expected callback to claim the registered request")
+	}
+
+	client := &baseClient{mu: &sync.Mutex{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+
+	delivered := make(chan struct{})
+	go func() {
+		resultChannel <- payload{}
+		close(delivered)
+	}()
+
+	select {
+	case <-delivered:
+	case <-time.After(time.Second):
+		t.Fatal("expected cancellation cleanup to drain the callback response")
+	}
 }
 
 func TestLateSuccessCallbackAfterClientCloseIsDropped(t *testing.T) {
