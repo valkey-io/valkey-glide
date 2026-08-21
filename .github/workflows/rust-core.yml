@@ -1,4 +1,4 @@
-name: Rust tests
+name: Rust core tests
 
 permissions:
     contents: read
@@ -15,7 +15,7 @@ on:
             - glide-core/redis-rs/redis/src/**
             - ffi/**
             - utils/cluster_manager.py
-            - .github/workflows/rust.yml
+            - .github/workflows/rust-core.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -30,7 +30,7 @@ on:
             - glide-core/redis-rs/redis/src/**
             - ffi/**
             - utils/cluster_manager.py
-            - .github/workflows/rust.yml
+            - .github/workflows/rust-core.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -77,7 +77,7 @@ on:
                 default: false
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    group: rust-core-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 env:
