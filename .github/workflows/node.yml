@@ -462,7 +462,7 @@ jobs:
         permissions:
             id-token: write
             contents: read
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        #if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         timeout-minutes: 120
         steps:
             - name: Configure AWS credentials
