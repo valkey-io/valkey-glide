@@ -892,24 +892,24 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
-        test_az_affinity_helper(StrategyVariant::AZAffinity).await;
+        test_az_affinity_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_replicas_and_primary_strategy_to_half_replicas(
     ) {
-        test_az_affinity_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
+        test_az_affinity_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_all_nodes_strategy_to_half_replicas()
     {
-        test_az_affinity_helper(StrategyVariant::AZAffinityAllNodes).await;
+        test_az_affinity_helper(StrategyVariant::AllNodes).await;
     }
     enum StrategyVariant {
-        AZAffinity,
-        AZAffinityReplicasAndPrimary,
-        AZAffinityAllNodes,
+        Replicas,
+        ReplicasAndPrimary,
+        AllNodes,
     }
 
     async fn test_az_affinity_helper(strategy_variant: StrategyVariant) {
@@ -949,15 +949,15 @@ mod cluster_async {
                 .unwrap();
         }
         let strategy = match strategy_variant {
-            StrategyVariant::AZAffinity => {
+            StrategyVariant::Replicas => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(az.clone())
             }
-            StrategyVariant::AZAffinityReplicasAndPrimary => {
+            StrategyVariant::ReplicasAndPrimary => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
                     az.clone(),
                 )
             }
-            StrategyVariant::AZAffinityAllNodes => {
+            StrategyVariant::AllNodes => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
             }
         };
@@ -1014,17 +1014,17 @@ mod cluster_async {
 
     #[tokio::test]
     async fn test_az_affinity_strategy_to_all_replicas() {
-        test_all_replicas_helper(StrategyVariant::AZAffinity).await;
+        test_all_replicas_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
     async fn test_az_affinity_replicas_and_primary_to_all_replicas() {
-        test_all_replicas_helper(StrategyVariant::AZAffinityReplicasAndPrimary).await;
+        test_all_replicas_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
     async fn test_az_affinity_all_nodes_to_all_nodes() {
-        test_all_replicas_helper(StrategyVariant::AZAffinityAllNodes).await;
+        test_all_replicas_helper(StrategyVariant::AllNodes).await;
     }
 
     async fn test_all_replicas_helper(strategy_variant: StrategyVariant) {
@@ -1060,15 +1060,15 @@ mod cluster_async {
 
         // Strategy-specific client configuration
         let strategy = match strategy_variant {
-            StrategyVariant::AZAffinity => {
+            StrategyVariant::Replicas => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(az.clone())
             }
-            StrategyVariant::AZAffinityReplicasAndPrimary => {
+            StrategyVariant::ReplicasAndPrimary => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
                     az.clone(),
                 )
             }
-            StrategyVariant::AZAffinityAllNodes => {
+            StrategyVariant::AllNodes => {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
             }
         };
@@ -1080,9 +1080,9 @@ mod cluster_async {
             .await
             .unwrap();
 
-        // For AZAffinityAllNodes the primary is an equal member of the rotation
+        // For AllNodes the primary is an equal member of the rotation
         let expected_az_nodes = match strategy_variant {
-            StrategyVariant::AZAffinityAllNodes => replica_num + 1,
+            StrategyVariant::AllNodes => replica_num + 1,
             _ => replica_num,
         };
 
