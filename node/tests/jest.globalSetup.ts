@@ -25,20 +25,28 @@ export interface EndpointsFile {
     clusterEndpoint: string;
 }
 
-function parseManagerOutput(output: string): { name: string; endpoint: string } {
-    const nameLine = output.split("\n").find((l) => l.startsWith("CLUSTER_NAME="));
-    const endpointLine = output.split("\n").find((l) => l.startsWith("CLUSTER_ENDPOINT="));
+function parseManagerOutput(output: string): {
+    name: string;
+    endpoint: string;
+} {
+    const nameLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_NAME="));
+    const endpointLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_ENDPOINT="));
+
     if (!nameLine || !endpointLine) {
         throw new Error(
             `[globalSetup] Could not parse elasticache_manager.py output:\n${output}`,
         );
     }
+
     return {
         name: nameLine.split("=").slice(1).join("=").trim(),
         endpoint: endpointLine.split("=").slice(1).join("=").trim(),
     };
 }
-
 
 export default async function globalSetup(): Promise<void> {
     if (process.env.USE_ELASTICACHE !== "true") {
@@ -50,14 +58,19 @@ export default async function globalSetup(): Promise<void> {
 
     // Build common args from environment
     const commonArgs: string[] = [];
-    if (process.env.AWS_REGION) commonArgs.push("--region", process.env.AWS_REGION);
+    if (process.env.AWS_REGION)
+        commonArgs.push("--region", process.env.AWS_REGION);
 
     const startArgs = (extra: string[]): string[] => [
         "start",
         ...commonArgs,
         ...(process.env.NAME ? ["--name", process.env.NAME] : []),
-        ...(process.env.EC_SUBNET_GROUP ? ["--subnet-group", process.env.EC_SUBNET_GROUP] : []),
-        ...(process.env.EC_SECURITY_GROUP ? ["--security-group", process.env.EC_SECURITY_GROUP] : []),
+        ...(process.env.EC_SUBNET_GROUP
+            ? ["--subnet-group", process.env.EC_SUBNET_GROUP]
+            : []),
+        ...(process.env.EC_SECURITY_GROUP
+            ? ["--security-group", process.env.EC_SECURITY_GROUP]
+            : []),
         ...extra,
     ];
 
@@ -67,11 +80,16 @@ export default async function globalSetup(): Promise<void> {
     // but spawnSync is blocking. Use child_process.spawn + Promise wrappers instead.
     const { spawn } = await import("child_process");
     const repoRoot = path.resolve(__dirname, "..", "..");
-    const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
+    const managerScript = path.join(
+        repoRoot,
+        "utils",
+        "elasticache_manager.py",
+    );
 
     function spawnAsync(args: string[]): Promise<string> {
         return new Promise((resolve, reject) => {
-            const pythonCmd = process.platform === "win32" ? "python" : "python3";
+            const pythonCmd =
+                process.platform === "win32" ? "python" : "python3";
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
                 shell: process.platform === "win32",
@@ -79,7 +97,11 @@ export default async function globalSetup(): Promise<void> {
             const timeoutMs = 25 * 60 * 1000;
             const timer = setTimeout(() => {
                 proc.kill();
-                reject(new Error(`[globalSetup] elasticache_manager.py timed out after ${timeoutMs / 60000} minutes`));
+                reject(
+                    new Error(
+                        `[globalSetup] elasticache_manager.py timed out after ${timeoutMs / 60000} minutes`,
+                    ),
+                );
             }, timeoutMs);
             let stdout = "";
             let stderr = "";
@@ -95,8 +117,13 @@ export default async function globalSetup(): Promise<void> {
             });
             proc.on("close", (code) => {
                 clearTimeout(timer);
+
                 if (code !== 0) {
-                    reject(new Error(`[globalSetup] elasticache_manager.py exited with code ${code}\n${stderr}`));
+                    reject(
+                        new Error(
+                            `[globalSetup] elasticache_manager.py exited with code ${code}\n${stderr}`,
+                        ),
+                    );
                 } else {
                     resolve(stdout);
                 }
@@ -109,8 +136,8 @@ export default async function globalSetup(): Promise<void> {
     }
 
     const [cmdOutput, cmeOutput] = await Promise.all([
-        spawnAsync(startArgs([])),                          // CMD: no --cluster-mode
-        spawnAsync(startArgs(["--cluster-mode"])),          // CME: cluster mode enabled
+        spawnAsync(startArgs([])), // CMD: no --cluster-mode
+        spawnAsync(startArgs(["--cluster-mode"])), // CME: cluster mode enabled
     ]);
 
     const cmd = parseManagerOutput(cmdOutput);
@@ -135,7 +162,13 @@ export default async function globalSetup(): Promise<void> {
     process.env.STANDALONE_ENDPOINT = standaloneEndpoint;
     process.env.CLUSTER_ENDPOINT = clusterEndpoint;
 
-    console.log(`[globalSetup] CMD standalone: ${cmd.name} -> ${standaloneEndpoint}`);
-    console.log(`[globalSetup] CME cluster:    ${cme.name} -> ${clusterEndpoint}`);
-    console.log(`[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`);
+    console.log(
+        `[globalSetup] CMD standalone: ${cmd.name} -> ${standaloneEndpoint}`,
+    );
+    console.log(
+        `[globalSetup] CME cluster:    ${cme.name} -> ${clusterEndpoint}`,
+    );
+    console.log(
+        `[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`,
+    );
 }

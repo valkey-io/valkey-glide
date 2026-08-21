@@ -15,7 +15,6 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
-    retryWithBackoff,
 } from "./TestUtilities";
 const TIMEOUT = 50000;
 const CLUSTER_CREATION_TIMEOUT = 120000; // Increased timeout for TLS cluster creation

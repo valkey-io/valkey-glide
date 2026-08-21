@@ -880,7 +880,10 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "migrate multi-key success test_%p",
         async (protocol) => {
             let destCluster: ValkeyCluster | null = null;
@@ -1226,7 +1229,10 @@ describe("GlideClient", () => {
         },
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "function kill RO func %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
@@ -1328,7 +1334,10 @@ describe("GlideClient", () => {
         FUNCTION_TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
             // Create a client configuration with a generous request timeout
@@ -1398,7 +1407,10 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "should respect connection timeout duration (protocol: %p)",
         async (protocol) => {
             // Create a client configuration
