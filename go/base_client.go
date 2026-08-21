@@ -14,8 +14,8 @@ package glide
 // #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-apple-darwin
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 // void pubSubCallback(void *clientPtr, enum PushKind kind,
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
@@ -62,7 +62,7 @@ type clientConfiguration interface {
 }
 
 type baseClient struct {
-	pending        map[unsafe.Pointer]struct{}
+	pending        map[uintptr]struct{}
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
@@ -163,7 +163,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
-	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
+	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}}
 
 	// Determine resolver callback and client ID
 	var resolverCallback C.AddressResolverCallback
@@ -225,13 +225,45 @@ func (client *baseClient) Close() {
 		client.resolverID = 0
 	}
 
-	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
-	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
-	for channelPtr := range client.pending {
-		resultChannel := *(*chan payload)(channelPtr)
-		resultChannel <- payload{value: nil, error: NewClosingError("ExecuteCommand failed: the client is closed")}
+	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the client is closed"))
+}
+
+// failPendingRequests must be called while client.mu is held.
+func (client *baseClient) failPendingRequests(err error) {
+	for requestID := range client.pending {
+		if resultChannel, ok := takeRequest(requestID); ok {
+			resultChannel <- payload{value: nil, error: err}
+		}
 	}
 	client.pending = nil
+}
+
+func (client *baseClient) removePendingRequest(requestID uintptr) {
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, requestID)
+	}
+	client.mu.Unlock()
+}
+
+func discardResponse(resultChannel chan payload) {
+	if result := <-resultChannel; result.value != nil {
+		C.free_command_response(result.value)
+	}
+}
+
+func (client *baseClient) waitForResponse(ctx context.Context, requestID uintptr, resultChannel chan payload) (payload, error) {
+	select {
+	case <-ctx.Done():
+		client.removePendingRequest(requestID)
+		if _, claimed := takeRequest(requestID); !claimed {
+			go discardResponse(resultChannel)
+		}
+		return payload{}, ctx.Err()
+	case result := <-resultChannel:
+		client.removePendingRequest(requestID)
+		return result, nil
+	}
 }
 
 func (client *baseClient) executeCommand(
@@ -354,21 +386,17 @@ func (client *baseClient) executeCommandWithRoute(
 	}
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
 
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 	C.command(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		uint32(requestType),
 		C.size_t(len(args)),
 		cArgsPtr,
@@ -378,32 +406,10 @@ func (client *baseClient) executeCommandWithRoute(
 		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return nil, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return nil, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error
@@ -454,10 +460,8 @@ func (client *baseClient) executeBatch(
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
 
 	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
 	client.mu.Lock()
@@ -465,7 +469,8 @@ func (client *baseClient) executeBatch(
 		client.mu.Unlock()
 		return nil, NewClosingError("ExecuteBatch failed. The client is closed.")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 
 	batchInfo := createBatchInfo(pinner, batch)
 	var optionsPtr *C.BatchOptionsInfo
@@ -476,7 +481,7 @@ func (client *baseClient) executeBatch(
 
 	C.batch(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		&batchInfo,
 		C._Bool(raiseOnError),
 		optionsPtr,
@@ -484,32 +489,10 @@ func (client *baseClient) executeBatch(
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return nil, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return nil, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error
@@ -637,55 +620,29 @@ func (client *baseClient) submitConnectionPasswordUpdate(
 
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
 
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		return models.DefaultStringResponse, NewClosingError("UpdatePassword failed. The client is closed.")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 
 	password_cstring := C.CString(password)
 	defer C.free(unsafe.Pointer(password_cstring))
 	C.update_connection_password(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		password_cstring,
 		C._Bool(immediateAuth),
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return models.DefaultStringResponse, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return models.DefaultStringResponse, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return models.DefaultStringResponse, payload.error
@@ -772,51 +729,25 @@ func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, er
 
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
 
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		return models.DefaultStringResponse, NewClosingError("RefreshIamToken failed. The client is closed.")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 
 	C.refresh_iam_token(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return models.DefaultStringResponse, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return models.DefaultStringResponse, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return models.DefaultStringResponse, payload.error
@@ -902,52 +833,26 @@ func (client *baseClient) submitGetCacheMetrics(
 
 	// Create a channel to receive the result
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
 
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
 		return nil, NewClosingError("GetCacheMetrics failed. The client is closed.")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 
 	C.get_cache_metrics(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		C.int(metricsType),
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return nil, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return nil, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error
@@ -9943,11 +9848,6 @@ func (client *baseClient) executeScriptWithRoute(
 
 	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
 	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
 
 	// Create span if OpenTelemetry is enabled and sampling is configured
 	var spanPtr uint64
@@ -9964,12 +9864,13 @@ func (client *baseClient) executeScriptWithRoute(
 		client.mu.Unlock()
 		return nil, NewClosingError("ExecuteScript failed. The client is closed.")
 	}
-	client.pending[resultChannelPtr] = struct{}{}
+	requestID := registerRequest(resultChannel)
+	client.pending[requestID] = struct{}{}
 	hash_cstring := C.CString(hash)
 	defer C.free(unsafe.Pointer(hash_cstring))
 	C.invoke_script(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
+		C.uintptr_t(requestID),
 		hash_cstring,
 		C.size_t(len(keys)),
 		cKeysPtr,
@@ -9983,32 +9884,10 @@ func (client *baseClient) executeScriptWithRoute(
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return nil, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return nil, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error
