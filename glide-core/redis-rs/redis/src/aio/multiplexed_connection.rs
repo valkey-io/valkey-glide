@@ -1,7 +1,7 @@
 use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
-use crate::cache::glide_cache::GlideCache;
+use crate::cache::glide_cache::{GlideCache, MGetCacheExt};
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
@@ -1086,12 +1086,51 @@ impl MultiplexedConnection {
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+        let cache = self.cache.clone();
+
+        if let Some(cache) = &cache {
+            if let Some(lookup) = cache.get_cached_mget(cmd) {
+                if lookup.is_complete() {
+                    return lookup.into_value();
+                }
+
+                let mut misses_cmd = Cmd::with_capacity(lookup.missing_count() + 1, 4);
+                misses_cmd.arg("MGET");
+                for key in lookup.missing_keys() {
+                    misses_cmd.arg(key);
+                }
+                misses_cmd
+                    .set_span(cmd.span())
+                    .set_fenced(cmd.is_fenced())
+                    .set_is_blocking(cmd.is_blocking());
+                misses_cmd.set_response_timeout(cmd.response_timeout());
+
+                let response = self.send_packed_command_inner(&misses_cmd).await?;
+                return cache.complete_cached_mget(lookup, response);
+            }
+        }
+
         // First try to get from cache
-        if let Some(cache) = &self.cache {
+        if let Some(cache) = &cache {
             if let Some(value) = cache.get_cached_cmd(cmd) {
                 return Ok(value);
             }
         }
+
+        let result = self.send_packed_command_inner(cmd).await;
+
+        // Store in cache if applicable
+        if let Some(cache) = &cache {
+            if let Ok(value) = &result {
+                if *value != Value::Nil {
+                    cache.set_cached_cmd(cmd, value.clone());
+                }
+            }
+        }
+        result
+    }
+
+    async fn send_packed_command_inner(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
@@ -1116,15 +1155,6 @@ impl MultiplexedConnection {
                         kind: PushKind::Disconnection,
                         data: vec![],
                     });
-                }
-            }
-        }
-
-        // Store in cache if applicable
-        if let Some(cache) = &self.cache {
-            if let Ok(value) = &result {
-                if *value != Value::Nil {
-                    cache.set_cached_cmd(cmd, value.clone());
                 }
             }
         }

@@ -3,7 +3,7 @@ use tracing::{debug, warn};
 
 use crate::{
     cluster_routing::{Routable, RoutingInfo},
-    cmd::cacheable_cmd_type,
+    cmd::{cacheable_cmd_type, Arg},
     Cmd, ErrorKind, RedisError, RedisResult, Value,
 };
 use std::{
@@ -531,6 +531,128 @@ pub trait GlideCache: Send + Sync + Debug {
     }
 }
 
+/// Internal MGET cache operations used by the native connection path.
+pub(crate) trait MGetCacheExt: GlideCache {
+    /// Looks up the individual keys of an MGET command in the cache.
+    ///
+    /// Returns `None` when `cmd` is not a valid MGET command, leaving the
+    /// caller to execute it unchanged. Metrics are recorded once per key.
+    fn get_cached_mget(&self, cmd: &Cmd) -> Option<MGetCacheLookup> {
+        let mut args = cmd.args_iter();
+        match args.next()? {
+            Arg::Simple(command) if command.eq_ignore_ascii_case(b"MGET") => {}
+            _ => return None,
+        }
+
+        let keys: Vec<&[u8]> = args
+            .map(|arg| match arg {
+                Arg::Simple(key) => Some(key),
+                Arg::Cursor => None,
+            })
+            .collect::<Option<_>>()?;
+        if keys.is_empty() {
+            return None;
+        }
+
+        let mut lookup = MGetCacheLookup::with_capacity(keys.len());
+        for key in keys {
+            match self.get(key, CachedKeyType::String) {
+                Some(value) => {
+                    self.increment_hit();
+                    lookup.push_hit(value);
+                }
+                None => {
+                    self.increment_miss();
+                    lookup.push_miss(key.to_vec());
+                }
+            }
+        }
+        Some(lookup)
+    }
+
+    /// Merges an MGET response for cache misses into a previous lookup and
+    /// stores the non-nil values returned by the server.
+    fn complete_cached_mget(
+        &self,
+        mut lookup: MGetCacheLookup,
+        response: Value,
+    ) -> RedisResult<Value> {
+        let Value::Array(miss_values) = response else {
+            return Err((
+                ErrorKind::TypeError,
+                "expected array of values as MGET response",
+            )
+                .into());
+        };
+
+        if miss_values.len() != lookup.missing_keys.len() {
+            return Err((
+                ErrorKind::TypeError,
+                "MGET response length does not match requested cache misses",
+            )
+                .into());
+        }
+
+        let missing_keys = std::mem::take(&mut lookup.missing_keys);
+        for ((index, key), value) in missing_keys.into_iter().zip(miss_values) {
+            if value != Value::Nil {
+                self.insert(key, CachedKeyType::String, value.clone());
+            }
+            lookup.values[index] = Some(value);
+        }
+
+        lookup.into_value()
+    }
+}
+
+impl<T: GlideCache + ?Sized> MGetCacheExt for T {}
+
+/// Cached MGET values and the original positions of keys that were not cached.
+pub(crate) struct MGetCacheLookup {
+    values: Vec<Option<Value>>,
+    missing_keys: Vec<(usize, Vec<u8>)>,
+}
+
+impl MGetCacheLookup {
+    fn with_capacity(key_count: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(key_count),
+            missing_keys: Vec::new(),
+        }
+    }
+
+    fn push_hit(&mut self, value: Value) {
+        self.values.push(Some(value));
+    }
+
+    fn push_miss(&mut self, key: Vec<u8>) {
+        self.missing_keys.push((self.values.len(), key));
+        self.values.push(None);
+    }
+
+    pub(crate) fn is_complete(&self) -> bool {
+        self.missing_keys.is_empty()
+    }
+
+    pub(crate) fn missing_count(&self) -> usize {
+        self.missing_keys.len()
+    }
+
+    pub(crate) fn missing_keys(&self) -> impl Iterator<Item = &[u8]> {
+        self.missing_keys.iter().map(|(_, key)| key.as_slice())
+    }
+
+    pub(crate) fn into_value(self) -> RedisResult<Value> {
+        self.values
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .map(Value::Array)
+            .ok_or_else(|| {
+                RedisError::from((ErrorKind::TypeError, "incomplete MGET cache lookup result"))
+            })
+    }
+}
+
 // ==================== GlideCache for GlideCacheImpl ====================
 
 impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
@@ -749,6 +871,14 @@ pub fn calculate_entry_size(key: &[u8], value: &Value) -> u64 {
 mod tests {
     use super::*;
 
+    fn test_cache() -> std::sync::Arc<dyn GlideCache> {
+        crate::cache::lru_cache::new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: true,
+        })
+    }
+
     // ==================== CacheMetrics ====================
     #[test]
     fn test_metrics_default() {
@@ -788,6 +918,81 @@ mod tests {
         metrics.record_hit();
         assert_eq!(metrics.hits(), 3);
         assert_eq!(cloned.hits(), 2);
+    }
+
+    #[test]
+    fn test_mget_lookup_merges_misses_and_caches_non_nil_values() {
+        let cache = test_cache();
+        cache.insert(
+            b"cached".to_vec(),
+            CachedKeyType::String,
+            Value::BulkString(b"cached value".to_vec().into()),
+        );
+
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("cached").arg("missing").arg("cached");
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert_eq!(lookup.missing_count(), 1);
+
+        let result = cache
+            .complete_cached_mget(
+                lookup,
+                Value::Array(vec![Value::BulkString(b"missing value".to_vec().into())]),
+            )
+            .unwrap();
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::BulkString(b"cached value".to_vec().into()),
+                Value::BulkString(b"missing value".to_vec().into()),
+                Value::BulkString(b"cached value".to_vec().into()),
+            ])
+        );
+        assert_eq!(
+            cache.get(b"missing", CachedKeyType::String),
+            Some(Value::BulkString(b"missing value".to_vec().into()))
+        );
+
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 1);
+    }
+
+    #[test]
+    fn test_mget_does_not_cache_nil_misses() {
+        let cache = test_cache();
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("missing");
+
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        let result = cache
+            .complete_cached_mget(lookup, Value::Array(vec![Value::Nil]))
+            .unwrap();
+        assert_eq!(result, Value::Array(vec![Value::Nil]));
+
+        let second_lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert_eq!(second_lookup.missing_count(), 1);
+        assert_eq!(cache.entry_count(), 0);
+        assert_eq!(cache.metrics().unwrap().misses(), 2);
+    }
+
+    #[test]
+    fn test_mget_rejects_response_length_mismatch() {
+        let cache = test_cache();
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("first").arg("second");
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+
+        let error = cache
+            .complete_cached_mget(
+                lookup,
+                Value::Array(vec![Value::BulkString(b"first value".to_vec().into())]),
+            )
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("MGET response length does not match requested cache misses"));
+        assert_eq!(cache.entry_count(), 0);
     }
 
     #[test]

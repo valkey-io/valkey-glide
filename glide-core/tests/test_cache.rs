@@ -121,6 +121,129 @@ pub(crate) mod test_cache {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_mget_cache_uses_hits_and_fetches_only_misses(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: format!("test_cache_mget_{use_cluster}").into(),
+                        max_cache_kb: 1,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let keys = [
+                "{mget-cache}first",
+                "{mget-cache}second",
+                "{mget-cache}third",
+            ];
+            for (key, value) in keys.iter().zip(["first value", "second value", "third value"]) {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd.arg("SET").arg(key).arg(value);
+                test_basics
+                    .client
+                    .send_command(&mut set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+
+            let mut mget_cmd = redis::Cmd::new();
+            mget_cmd.arg("MGET").arg(keys[0]).arg(keys[1]);
+            let result = test_basics
+                .client
+                .send_command(&mut mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"second value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 1, use_cluster).await;
+
+            let mut cached_mget_cmd = redis::Cmd::new();
+            cached_mget_cmd.arg("MGET").arg(keys[0]).arg(keys[1]);
+            let result = test_basics
+                .client
+                .send_command(&mut cached_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"second value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 1, use_cluster).await;
+
+            let mut mixed_mget_cmd = redis::Cmd::new();
+            mixed_mget_cmd
+                .arg("MGET")
+                .arg(keys[0])
+                .arg(keys[2])
+                .arg(keys[0]);
+            let result = test_basics
+                .client
+                .send_command(&mut mixed_mget_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::BulkString(b"first value".to_vec().into()),
+                    Value::BulkString(b"third value".to_vec().into()),
+                    Value::BulkString(b"first value".to_vec().into()),
+                ])
+            );
+            assert_command_count(&mut test_basics.client, "MGET", 2, use_cluster).await;
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(keys[2]);
+            let result = test_basics
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result,
+                Value::BulkString(b"third value".to_vec().into())
+            );
+            assert_command_count(&mut test_basics.client, "GET", 0, use_cluster).await;
+
+            let hit_rate = match test_basics.client.cache_hit_rate().unwrap() {
+                Value::Double(rate) => rate,
+                value => panic!("Expected Value::Double, got {value:?}"),
+            };
+            assert_eq!(hit_rate, 5.0 / 8.0);
+            assert_eq!(
+                test_basics.client.cache_total_lookups().unwrap(),
+                Value::Int(8)
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cache_without_metrics(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
