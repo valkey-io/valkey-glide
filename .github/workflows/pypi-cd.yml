@@ -12,6 +12,12 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/workflows/pypi-cd.yml
             - .github/workflows/start-self-hosted-runner/action.yml
+            - ffi/**
+            - glide-core/**
+            - python/glide-async/**
+            - python/glide-shared/**
+            - python/glide-sync/**
+            - python/tests/windows_wheel_smoke.py
     push:
         tags:
             - "v*.*"
@@ -46,6 +52,7 @@ jobs:
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
             TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
+            WINDOWS_MATRIX: ${{ steps.load-platform-matrix.outputs.WINDOWS_MATRIX }}
         steps:
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,6 +78,37 @@ jobs:
                       )
                   )' | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    AMD64_PYTHON_VERSIONS='["3.14"]'
+                    ARM64_PYTHON_VERSIONS='["3.14"]'
+                  else
+                    AMD64_PYTHON_VERSIONS='["3.9","3.10","3.11","3.12","3.13","3.14"]'
+                    ARM64_PYTHON_VERSIONS='["3.11","3.12","3.13","3.14"]'
+                  fi
+                  WINDOWS_MATRIX=$(jq -cn \
+                    --argjson amd64_versions "$AMD64_PYTHON_VERSIONS" \
+                    --argjson arm64_versions "$ARM64_PYTHON_VERSIONS" \
+                    '[
+                      $amd64_versions[] | {
+                        RUNNER: "windows-latest",
+                        ARCH: "AMD64",
+                        PYTHON_ARCH: "x64",
+                        TARGET: "x86_64-pc-windows-msvc",
+                        WHEEL_TAG: "win_amd64",
+                        PYTHON_VERSION: .
+                      }
+                    ] + [
+                      $arm64_versions[] | {
+                        RUNNER: "windows-11-arm",
+                        ARCH: "ARM64",
+                        PYTHON_ARCH: "arm64",
+                        TARGET: "aarch64-pc-windows-msvc",
+                        WHEEL_TAG: "win_arm64",
+                        PYTHON_VERSION: .
+                      }
+                    ]')
+                  echo "WINDOWS_MATRIX=${WINDOWS_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
@@ -493,12 +531,198 @@ jobs:
                   path: python/glide-sync/wheels
                   if-no-files-found: error
 
+    build-windows-wheels:
+        needs: load-platform-matrix
+        if: github.repository_owner == 'valkey-io'
+        name: Build Python ${{ matrix.build.PYTHON_VERSION }} wheels for Windows ${{ matrix.build.ARCH }}
+        runs-on: ${{ matrix.build.RUNNER }}
+        timeout-minutes: 120
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.WINDOWS_MATRIX) }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  submodules: "true"
+
+            - name: Set the release version
+              shell: pwsh
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+              run: |
+                  if ($env:EVENT_NAME -eq "pull_request") {
+                      $releaseVersion = "0.1.0"
+                  } elseif ($env:EVENT_NAME -eq "workflow_dispatch") {
+                      $releaseVersion = $env:INPUT_VERSION
+                  } else {
+                      $releaseVersion = $env:GITHUB_REF -replace "^refs/tags/v", ""
+                  }
+                  "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_ENV
+
+            - name: Install native build dependencies
+              uses: ./.github/actions/install-shared-dependencies
+              with:
+                  os: windows
+                  target: ${{ matrix.build.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Set up target Python ${{ matrix.build.PYTHON_VERSION }}
+              id: target_python
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+              with:
+                  python-version: ${{ matrix.build.PYTHON_VERSION }}
+                  architecture: ${{ matrix.build.PYTHON_ARCH }}
+
+            - name: Set up Python 3.14 build environment
+              id: build_python
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+              with:
+                  python-version: "3.14"
+                  architecture: ${{ matrix.build.PYTHON_ARCH }}
+
+            - name: Install Python build dependencies
+              shell: pwsh
+              run: |
+                  & "$env:TARGET_PYTHON" -m pip install --upgrade pip build mypy-protobuf
+                  & "$env:BUILD_PYTHON" -m pip install --upgrade pip "cibuildwheel>=4.0.0"
+              env:
+                  BUILD_PYTHON: ${{ steps.build_python.outputs.python-path }}
+                  TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
+
+            - name: Generate protobuf files
+              shell: pwsh
+              run: |
+                  $protoSource = (Resolve-Path "glide-core\src\protobuf").Path
+                  $protoDestination = (Resolve-Path "python\glide-shared\glide_shared").Path
+                  $mypyPlugin = Join-Path (Split-Path "$env:TARGET_PYTHON") "protoc-gen-mypy.exe"
+                  $protoFiles = Get-ChildItem "$protoSource\*.proto" | ForEach-Object { $_.FullName }
+
+                  & protoc "--plugin=protoc-gen-mypy=$mypyPlugin" "--proto_path=protobuf=$protoSource" "--python_out=$protoDestination" "--mypy_out=$protoDestination" @protoFiles
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "Failed to generate Python protobuf files"
+                  }
+              env:
+                  TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
+
+            - name: Prepare Python packages
+              shell: pwsh
+              run: |
+                  foreach ($package in @("glide-async", "glide-sync", "glide-shared")) {
+                      $pyproject = "python\$package\pyproject.toml"
+                      $content = Get-Content $pyproject -Raw
+                      $versionDeclaration = "version = `"$env:RELEASE_VERSION`""
+                      $content = $content.Replace('dynamic = ["version"]', $versionDeclaration)
+                      if (-not $content.Contains($versionDeclaration)) {
+                          throw "Failed to set the release version in $pyproject"
+                      }
+                      [IO.File]::WriteAllText((Resolve-Path $pyproject), $content)
+                  }
+
+                  Get-Content "python\.gitignore" |
+                      Where-Object { $_ -notmatch "\*_pb2\.(py|pyi)" } |
+                      Set-Content "python\glide-sync\.gitignore"
+                  Copy-Item "python\glide-sync\.gitignore" "python\glide-async\.gitignore"
+                  Copy-Item "python\README.md" "python\glide-sync\README.md"
+                  Copy-Item "python\README.md" "python\glide-async\README.md"
+                  Copy-Item "python\glide-shared\glide_shared" "python\glide-async\python" -Recurse -Force
+
+            - name: Test CommandResponse ABI
+              if: matrix.build.PYTHON_VERSION == '3.14'
+              run: cargo test --manifest-path ffi\Cargo.toml --test test_command_response_layout
+              env:
+                  GLIDE_NAME: GlidePySync
+                  GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
+
+            - name: Build native dependencies for the async client
+              shell: pwsh
+              run: |
+                  cargo build --manifest-path ffi\Cargo.toml --release
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "Failed to build glide-ffi"
+                  }
+                  Copy-Item "ffi\target\release\glide_ffi.dll" "python\glide-async\python\glide_shared"
+
+                  $sharedWheels = Join-Path $env:RUNNER_TEMP "glide-shared-wheels"
+                  & "$env:TARGET_PYTHON" -m build --wheel --outdir $sharedWheels "python\glide-shared"
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "Failed to build glide-shared"
+                  }
+                  $sharedWheel = Get-ChildItem "$sharedWheels\*.whl"
+                  & "$env:TARGET_PYTHON" -c "import sys, zipfile; wheel, dest = sys.argv[1:]; archive = zipfile.ZipFile(wheel); [archive.extract(name, dest) for name in archive.namelist() if name.startswith('glide_shared/_fast_response') and name.endswith('.pyd')]" $sharedWheel.FullName "python\glide-async\python"
+              env:
+                  GLIDE_NAME: GlidePy
+                  GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
+                  TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
+
+            - name: Build Python Async client wheel
+              shell: pwsh
+              run: '& "$env:TARGET_PYTHON" -m build --wheel --outdir python\glide-async\wheels python\glide-async'
+              env:
+                  GLIDE_NAME: GlidePy
+                  GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
+                  TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
+
+            - name: Build Python Sync client wheel
+              shell: pwsh
+              run: |
+                  $pythonTag = "cp$($env:PYTHON_VERSION.Replace('.', ''))"
+                  $env:CIBW_BUILD = "$pythonTag-$env:WHEEL_TAG"
+                  & "$env:BUILD_PYTHON" -m cibuildwheel python\glide-sync --output-dir python\glide-sync\wheels
+              env:
+                  BUILD_PYTHON: ${{ steps.build_python.outputs.python-path }}
+                  CIBW_ARCHS_WINDOWS: ${{ matrix.build.ARCH }}
+                  GLIDE_NAME: GlidePySync
+                  GLIDE_VERSION: ${{ env.RELEASE_VERSION }}
+                  PYTHON_VERSION: ${{ matrix.build.PYTHON_VERSION }}
+                  WHEEL_TAG: ${{ matrix.build.WHEEL_TAG }}
+
+            - name: Smoke test wheels
+              shell: pwsh
+              run: |
+                  $pythonTag = "cp$($env:PYTHON_VERSION.Replace('.', ''))"
+                  $asyncWheel = Get-ChildItem "python\glide-async\wheels\*$pythonTag*$env:WHEEL_TAG.whl"
+                  $syncWheel = Get-ChildItem "python\glide-sync\wheels\*$pythonTag*$env:WHEEL_TAG.whl"
+                  if ($asyncWheel.Count -ne 1 -or $syncWheel.Count -ne 1) {
+                      throw "Expected one async and one sync wheel for $pythonTag-$env:WHEEL_TAG"
+                  }
+
+                  & "$env:TARGET_PYTHON" -m venv "$env:RUNNER_TEMP\smoke-async"
+                  & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pip install $asyncWheel.FullName
+                  & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" "python\tests\windows_wheel_smoke.py" --client async
+
+                  & "$env:TARGET_PYTHON" -m venv "$env:RUNNER_TEMP\smoke-sync"
+                  & "$env:RUNNER_TEMP\smoke-sync\Scripts\python.exe" -m pip install $syncWheel.FullName
+                  & "$env:RUNNER_TEMP\smoke-sync\Scripts\python.exe" "python\tests\windows_wheel_smoke.py" --client sync
+              env:
+                  PYTHON_VERSION: ${{ matrix.build.PYTHON_VERSION }}
+                  TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
+                  WHEEL_TAG: ${{ matrix.build.WHEEL_TAG }}
+
+            - name: Upload Python Async client wheel
+              if: github.event_name != 'pull_request'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-py${{ matrix.build.PYTHON_VERSION }}-async
+                  path: python/glide-async/wheels
+                  if-no-files-found: error
+
+            - name: Upload Python Sync client wheel
+              if: github.event_name != 'pull_request'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-py${{ matrix.build.PYTHON_VERSION }}-sync
+                  path: python/glide-sync/wheels
+                  if-no-files-found: error
+
     publish-async-to-pypi:
         if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
         name: Publish the async PyPi package
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
-        needs: publish-binaries
+        needs: [publish-binaries, build-windows-wheels]
         steps:
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -572,7 +796,7 @@ jobs:
         name: Publish the sync PyPi package
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
-        needs: publish-binaries
+        needs: [publish-binaries, build-windows-wheels]
         steps:
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5

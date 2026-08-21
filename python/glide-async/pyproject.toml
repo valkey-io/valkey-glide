@@ -40,4 +40,5 @@ include = [
     "glide_shared/*.so",
     "glide_shared/*.dylib",
     "glide_shared/*.dll",
+    "glide_shared/*.pyd",
 ]

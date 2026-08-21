@@ -214,6 +214,7 @@ _async_pipe_registered: bool = False
 _async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
     None  # loop that owns the reader
 )
+_windows_pipe_thread: Optional[threading.Thread] = None
 # Identity of the trio.run() that owns the reader system task.  A given
 # reader lives for exactly one trio.run(); the token is set eagerly (under
 # _async_pipe_lock, before the spawned task starts) so registration is
@@ -231,6 +232,7 @@ _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 # Response parsing runs on the event loop thread for correctness. Under free-threading,
 # the _FREE_THREADED flag enables explicit locking on shared data structures.
 _FREE_THREADED: bool = hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()
+_PENDING_FUTURES_REQUIRE_LOCK = _FREE_THREADED or os.name == "nt"
 
 # Thread pool for parallel response parsing on free-threaded builds.
 # Large responses (MGET, LRANGE) benefit from parsing across cores.
@@ -315,7 +317,7 @@ def _handle_pipe_success(client, request_id, response_ptr, arena_or_err):
     finally:
         if arena_or_err:
             client._lib.free_response_arena(client._ffi.cast("void*", arena_or_err))
-    if _FREE_THREADED:
+    if _PENDING_FUTURES_REQUIRE_LOCK:
         with client._lock:
             fut = client._pending_futures.pop(request_id, None)
     else:
@@ -344,7 +346,7 @@ def _handle_pipe_error(client, request_id, arena_or_err):
         finally:
             client._lib.free_pipe_error_string(client._ffi.cast("char*", err_ptr))
     exc = get_request_error_class(error_type)(msg)
-    if _FREE_THREADED:
+    if _PENDING_FUTURES_REQUIRE_LOCK:
         with client._lock:
             fut = client._pending_futures.pop(request_id, None)
     else:
@@ -451,7 +453,7 @@ def _drain_stale_pipe_frames():
             break
 
 
-def _on_async_pipe_readable() -> None:  # noqa: C901
+def _on_async_pipe_readable() -> bool:  # noqa: C901
     # Free-threading optimization: when GIL is disabled, dispatch response parsing
     # to a thread pool for parallel execution across cores. With GIL enabled,
     # parse serially on the event loop thread (thread pool overhead not worth it).
@@ -459,9 +461,9 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
     try:
         data = os.read(_async_pipe_read_fd, 32 * 512)
     except (BlockingIOError, OSError):
-        return
+        return False
     if not data:
-        return
+        return False
     if _pipe_remainder:
         data = _pipe_remainder + data
         _pipe_remainder = b""
@@ -514,6 +516,13 @@ def _on_async_pipe_readable() -> None:  # noqa: C901
                 _handle_pipe_error(client, request_id, arena_or_err)
     if offset < len(data):
         _pipe_remainder = data[offset:]
+    return True
+
+
+def _windows_pipe_reader(pipe_fd: int) -> None:
+    """Read response frames on a dedicated thread because Windows event loops cannot watch pipes."""
+    while pipe_fd == _async_pipe_read_fd and _on_async_pipe_readable():
+        pass
 
 
 async def _trio_pipe_reader(pipe_fd: int, token: object) -> None:
@@ -655,11 +664,12 @@ class BaseClient(CoreCommands):
 
         return self
 
-    def _setup_pipe(self) -> None:
+    def _setup_pipe(self) -> None:  # noqa: C901
         """Initialize and register the shared response pipe."""
         global _async_pipe_read_fd, _async_pipe_write_fd
         global _async_pipe_registered, _async_pipe_loop
         global _pipe_remainder, _trio_pipe_token, _async_pipe_init_pid
+        global _windows_pipe_thread
         # Identify the current trio.run() up front (outside the lock).  The
         # token uniquely names this run, so it both makes registration
         # idempotent within a run and tells a fresh run that a prior run's
@@ -676,7 +686,8 @@ class BaseClient(CoreCommands):
             if _async_pipe_read_fd < 0:
                 try:
                     _async_pipe_read_fd, pw = os.pipe()
-                    os.set_blocking(_async_pipe_read_fd, False)
+                    if os.name != "nt":
+                        os.set_blocking(_async_pipe_read_fd, False)
                     if _async_pipe_init_pid > 0 and current_pid != _async_pipe_init_pid:
                         self._lib.reinit_async_pipe(pw)
                     else:
@@ -689,7 +700,11 @@ class BaseClient(CoreCommands):
             # Detect stale registration: the loop that originally called
             # add_reader has been closed/destroyed (e.g. between anyio.run()
             # calls in benchmarks).  Reset so we re-register below.
-            if _async_pipe_registered and _async_pipe_loop is not None:
+            if (
+                os.name != "nt"
+                and _async_pipe_registered
+                and _async_pipe_loop is not None
+            ):
                 if _async_pipe_loop.is_closed():
                     _async_pipe_registered = False
                     _async_pipe_loop = None
@@ -703,7 +718,8 @@ class BaseClient(CoreCommands):
             # from spawning a duplicate reader on the shared fd, which is what
             # triggered BusyResourceError.
             if (
-                not self._is_asyncio
+                os.name != "nt"
+                and not self._is_asyncio
                 and _async_pipe_registered
                 and _async_pipe_loop is None
                 and _trio_pipe_token is not trio_token
@@ -715,7 +731,16 @@ class BaseClient(CoreCommands):
             if _async_pipe_read_fd >= 0 and self._pipe_client_id:
                 _client_registry[self._pipe_client_id] = self
                 if not _async_pipe_registered:
-                    if self._is_asyncio:
+                    if os.name == "nt":
+                        _windows_pipe_thread = threading.Thread(
+                            target=_windows_pipe_reader,
+                            args=(_async_pipe_read_fd,),
+                            name="glide-response-pipe",
+                            daemon=True,
+                        )
+                        _windows_pipe_thread.start()
+                        _async_pipe_loop = None
+                    elif self._is_asyncio:
                         assert self._loop is not None
                         self._loop.add_reader(
                             _async_pipe_read_fd, _on_async_pipe_readable
@@ -741,8 +766,8 @@ class BaseClient(CoreCommands):
         return next(self._callback_id_gen)
 
     def _register_future(self, callback_id: int, fut: "TFuture") -> None:
-        """Register a pending future (thread-safe for free-threading)."""
-        if _FREE_THREADED:
+        """Register a pending future when responses may complete off-loop."""
+        if _PENDING_FUTURES_REQUIRE_LOCK:
             with self._lock:
                 self._pending_futures[callback_id] = fut
         else:

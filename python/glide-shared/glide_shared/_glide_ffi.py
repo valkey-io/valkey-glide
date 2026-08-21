@@ -57,7 +57,8 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef("""
+        self._ffi.cdef(
+            """
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -86,18 +87,18 @@ class _GlideFFI:
 
             typedef struct CommandResponse {
                 int response_type;
-                long int_value;
+                int64_t int_value;
                 double float_value;
                 bool bool_value;
                 char* string_value;
-                long string_value_len;
+                int64_t string_value_len;
                 struct CommandResponse* array_value;
-                long array_value_len;
+                int64_t array_value_len;
                 struct CommandResponse* map_key;
                 struct CommandResponse* map_value;
                 struct CommandResponse* sets_value;
-                long sets_value_len;
-                void* user_data;
+                int64_t sets_value_len;
+                void* arena_ptr;
             } CommandResponse;
 
             typedef struct {
@@ -465,7 +466,8 @@ class _GlideFFI:
                 size_t connection_request_len,
                 uint32_t min_idle
             );
-            """)
+            """
+        )
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
