@@ -1,7 +1,0 @@
-# Code owners for this repository.
-#
-# The repository owner is the code owner for all paths. This takes effect as an
-# enforced review requirement only once branch protection (or a ruleset) enables
-# "Require review from Code Owners" on `main` — which needs the repo to be public
-# or on a GitHub Pro/Team plan.
-* @omerrubi-amzn
