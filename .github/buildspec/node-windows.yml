@@ -182,22 +182,36 @@ phases:
                 $env:RUSTUP_HOME = $RUSTUP_HOME
                 $env:PATH = "$CARGO_HOME\bin;$env:PATH"
 
-                # Remove Chocolatey-installed Rust if present - it shadows our rustup install
-                # because C:\ProgramData\chocolatey\bin appears in PATH before C:\cargo\bin.
+                # Remove ALL pre-installed Rust instances that shadow our rustup install.
+                # The AMI has Rust in multiple locations; we must clear them all.
+
+                # 1. Chocolatey Rust
                 if (Get-Command choco -ErrorAction SilentlyContinue) {
                   $chocoRust = choco list --local-only 2>$null | Select-String '^rust '
                   if ($chocoRust) {
-                    Write-Host "Uninstalling Chocolatey Rust to avoid PATH shadowing..."
+                    Write-Host "Uninstalling Chocolatey Rust..."
                     choco uninstall rust -y --no-progress 2>&1 | Out-Null
                   }
                 }
-                # Also remove any stale cargo.exe from chocolatey bin dir
-                if (Test-Path "C:\ProgramData\chocolatey\bin\cargo.exe") {
-                  Remove-Item "C:\ProgramData\chocolatey\bin\cargo.exe" -Force -ErrorAction SilentlyContinue
-                  Remove-Item "C:\ProgramData\chocolatey\bin\rustc.exe" -Force -ErrorAction SilentlyContinue
-                  Remove-Item "C:\ProgramData\chocolatey\bin\rustup.exe" -Force -ErrorAction SilentlyContinue
-                  Write-Host "Removed stale Chocolatey Rust shims."
+                foreach ($binName in @('cargo.exe','rustc.exe','rustup.exe')) {
+                  Remove-Item "C:\ProgramData\chocolatey\bin\$binName" -Force -ErrorAction SilentlyContinue
                 }
+
+                # 2. User-level rustup (ContainerAdministrator) - remove cargo/rustc shims
+                # so they can't shadow C:\cargo\bin in PATH.
+                foreach ($binName in @('cargo.exe','rustc.exe','rustup.exe')) {
+                  Remove-Item "$env:USERPROFILE\.cargo\bin\$binName" -Force -ErrorAction SilentlyContinue
+                }
+
+                # 3. Strip all known old Rust bin dirs from the current session PATH
+                # so nothing from the AMI leaks through.
+                $pathEntriesToRemove = @(
+                  "$env:USERPROFILE\.cargo\bin",
+                  "C:\Users\ContainerAdministrator\.cargo\bin",
+                  "C:\ProgramData\chocolatey\bin"
+                )
+                $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notin $pathEntriesToRemove }) -join ';'
+                Write-Host "Cleaned old Rust locations from PATH."
 
                 # Download and run rustup-init each time to ensure the proxy in C:\cargo\bin
                 # is created fresh and points to the correct stable toolchain.
