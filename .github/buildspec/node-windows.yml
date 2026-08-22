@@ -343,6 +343,10 @@ phases:
 
             # -- Build test utilities ------------------------------------------------
             - |
+                $env:PATH = "C:\cargo\bin;" + [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                $env:RUSTUP_TOOLCHAIN = "stable"
                 Write-Host "=== Building test utilities ==="
                 Set-Location utils
                 npm ci
@@ -351,6 +355,14 @@ phases:
 
             # -- Build Node client ---------------------------------------------------
             - |
+                # Ensure C:\cargo\bin is on PATH for this process - each CodeBuild
+                # command block is a new process that doesn't inherit session PATH changes.
+                $env:PATH = "C:\cargo\bin;" + [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
+                Write-Host "Cargo: $(& 'C:\cargo\bin\cargo.exe' --version)"
                 Write-Host "=== Building Node client ==="
                 Set-Location node
                 npm ci
