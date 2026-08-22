@@ -240,6 +240,13 @@ phases:
                 [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
                 $env:CARGO = $cargoBin
 
+                # Add C:\cargo\bin to machine PATH so it persists to pre_build and build phases
+                $currentMachinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                if ($currentMachinePath -notlike "*C:\cargo\bin*") {
+                  [System.Environment]::SetEnvironmentVariable('PATH', "C:\cargo\bin;$currentMachinePath", 'Machine')
+                  Write-Host "Added C:\cargo\bin to machine PATH."
+                }
+
                 # Verify the proxy works and reports the updated version
                 Write-Host "Cargo version: $(& "$CARGO_HOME\bin\cargo.exe" --version)"
                 Write-Host "Rustc version: $(& "$CARGO_HOME\bin\rustc.exe" --version)"
@@ -320,6 +327,9 @@ phases:
                 $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
                 $env:RUSTUP_TOOLCHAIN = "stable"
                 [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
+                Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
+                Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
+                Write-Host "Machine PATH: $([System.Environment]::GetEnvironmentVariable('PATH', 'Machine') | Select-String 'cargo')"
 
             - |
                 Write-Host "Active cargo: $(Get-Command cargo | Select-Object -ExpandProperty Source)"
@@ -346,6 +356,10 @@ phases:
             - |
                 $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
                 $env:RUSTUP_TOOLCHAIN = "stable"
+                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
+                Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
+                Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
+                Write-Host "Machine PATH: $([System.Environment]::GetEnvironmentVariable('PATH', 'Machine') | Select-String 'cargo')"
 
             # -- Wait for ElastiCache setup, then run integration tests -------------
             - |
