@@ -203,15 +203,20 @@ phases:
                   Remove-Item "$env:USERPROFILE\.cargo\bin\$binName" -Force -ErrorAction SilentlyContinue
                 }
 
-                # 3. Strip all known old Rust bin dirs from the current session PATH
-                # so nothing from the AMI leaks through.
+                # 3. Strip all known old Rust bin dirs from BOTH session and machine PATH
+                # so new processes (pre_build, build phases) also get the clean PATH.
                 $pathEntriesToRemove = @(
                   "$env:USERPROFILE\.cargo\bin",
                   "C:\Users\ContainerAdministrator\.cargo\bin",
                   "C:\ProgramData\chocolatey\bin"
                 )
+                # Session PATH
                 $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notin $pathEntriesToRemove }) -join ';'
-                Write-Host "Cleaned old Rust locations from PATH."
+                # Machine PATH - persists to all subsequent CodeBuild phase processes
+                $machinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $cleanMachinePath = ($machinePath -split ';' | Where-Object { $_ -notin $pathEntriesToRemove }) -join ';'
+                [System.Environment]::SetEnvironmentVariable('PATH', $cleanMachinePath, 'Machine')
+                Write-Host "Cleaned old Rust locations from session and machine PATH."
 
                 # Download and run rustup-init each time to ensure the proxy in C:\cargo\bin
                 # is created fresh and points to the correct stable toolchain.
