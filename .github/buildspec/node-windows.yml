@@ -63,7 +63,8 @@ phases:
 
                   # Install node deps first so ts-node is available for the background runner
                   Set-Location node
-                  npm ci --prefer-offline 2>&1 | Out-Null
+                  npm ci --prefer-offline
+                  if ($LASTEXITCODE -ne 0) { Write-Error "npm ci failed in node/"; Set-Location ..; exit 1 }
                   Set-Location ..
 
                   # Find the real Python executable, bypassing pyenv shims (.bat files)

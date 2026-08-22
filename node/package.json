@@ -31,7 +31,6 @@
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
     "dependencies": {
-        "dotenv": "^16.4.5",
         "long": "5",
         "protobufjs": "^7.6.3"
     },
