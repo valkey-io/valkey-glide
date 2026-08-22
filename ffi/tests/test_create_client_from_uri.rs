@@ -786,6 +786,8 @@ fn test_create_client_from_uri_valid_formats(#[case] uri_format: &str) {
 // #[case("LowestLatency")] // TODO: Not yet implemented in glide-core
 #[case("AZAffinity")]
 #[case("AZAffinityReplicasAndPrimary")]
+#[case("AllNodes")]
+#[case("AZAffinityAllNodes")]
 fn test_create_client_from_uri_all_read_from_values(#[case] read_from: &str) {
     let server = Server::new();
     let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();

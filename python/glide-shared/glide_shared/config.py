@@ -130,6 +130,12 @@ class ReadFrom(Enum):
     """
     Spread the read requests between all nodes (primary and replicas) in a round robin manner.
     """
+    AZ_AFFINITY_ALL_NODES = ProtobufReadFrom.AZAffinityAllNodes
+    """
+    Spread the read requests equally among all nodes (primary and replicas) within the client's
+    Availability Zone (AZ) in a round robin manner, falling back to a round robin across all
+    nodes if no node in the client's AZ is available.
+    """
 
 
 class ProtocolVersion(Enum):
@@ -857,12 +863,17 @@ class BaseClientConfiguration:
             during connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
             command during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default (e.g. ``GlidePy`` for the
-            async client, ``GlidePySync`` for the sync client) is used.
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default (e.g. ``GlidePy`` for the async client,
+            ``GlidePySync`` for the sync client) is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
-            the default library name or a configured ``lib_name``. Must not contain whitespace.
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -874,6 +885,8 @@ class BaseClientConfiguration:
             within the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
 
         lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
@@ -980,8 +993,20 @@ class BaseClientConfiguration:
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
 
-        if client_info_tag is not None and any(c.isspace() for c in client_info_tag):
-            raise ValueError("client_info_tag must not contain whitespace characters")
+        if client_info_tag is not None and any(
+            not "!" <= character <= "~" or character in "()"
+            for character in client_info_tag
+        ):
+            raise ValueError(
+                "client_info_tag must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
+            )
+
+        if lib_name is not None and any(
+            not "!" <= character <= "~" or character in "()" for character in lib_name
+        ):
+            raise ValueError(
+                "lib_name must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
+            )
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -991,6 +1016,11 @@ class BaseClientConfiguration:
         if read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY and not client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
+            )
+
+        if read_from == ReadFrom.AZ_AFFINITY_ALL_NODES and not client_az:
+            raise ValueError(
+                "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
 
     def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
@@ -1192,11 +1222,16 @@ class GlideClientConfiguration(BaseClientConfiguration):
             connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
-            the default library name or a configured ``lib_name``. Must not contain whitespace.
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1211,6 +1246,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
             nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
         compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
@@ -1225,8 +1262,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             - If no ReadFrom strategy is specified, defaults to PreferReplica
             This is useful for connecting to replica-only deployments or when you want to
             prevent accidental write operations.
-            Note: read_only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
-            read strategies.
+            Note: read_only mode is not compatible with AZAffinity, AZAffinityReplicasAndPrimary, or
+            AZAffinityAllNodes read strategies.
             Defaults to False.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
@@ -1450,11 +1487,16 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             connection establishment.
         lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
             during connection establishment. Useful for identifying a wrapping library or framework in
-            ``CLIENT INFO``/``CLIENT LIST`` output. If not set, a client-specific default is used.
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default is used.
         client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
             (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
             attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
-            the default library name or a configured ``lib_name``. Must not contain whitespace.
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -1479,6 +1521,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             the specified AZ if exits.
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to
             nodes (first replicas then primary) within the specified AZ if they exist.
+            If ReadFrom strategy is AZAffinityAllNodes, this setting ensures that readonly commands are spread equally
+            among all nodes (primary and replicas) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
         compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     BaseClient,
+    BaseClientConfiguration,
     ConfigurationError,
     GlideClusterClientConfiguration,
     Logger,
@@ -136,6 +137,46 @@ describe("GlideClusterClientConfiguration", () => {
 
         expect(config.recoveryRequestsQueueSize).toBeUndefined();
     });
+});
+
+describe("Client library identification requests", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: BaseClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    it.each([
+        [undefined, undefined, "GlideJS"],
+        ["custom-client", undefined, "custom-client"],
+        [undefined, "framework:1.2", "GlideJS(framework:1.2)"],
+        ["custom-client", "framework:1.2", "custom-client(framework:1.2)"],
+        ["", "", "GlideJS"],
+        [
+            "custom/client+v2",
+            "framework:@1.2!",
+            "custom/client+v2(framework:@1.2!)",
+        ],
+    ])(
+        "populates ordinary request for libName=%p and clientInfoTag=%p",
+        (libName, clientInfoTag, expected) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                libName,
+                clientInfoTag,
+            };
+
+            expect(new TestBaseClient().buildRequest(config).libName).toBe(
+                expected,
+            );
+        },
+    );
 });
 
 describe("BaseClient response handling", () => {

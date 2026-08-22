@@ -1095,7 +1095,7 @@ mod tests {
         // Every recursive RESP3 aggregate type must reject nesting beyond
         // MAX_RECURSE_DEPTH with the same graceful parse error the array guard
         // produces, rather than crashing the host via stack exhaustion.
-        for agg in [b'*', b'%', b'|', b'~', b'>'] {
+        for agg in *b"*%|~>" {
             let bytes = nested_aggregate_headers(agg, MAX_RECURSE_DEPTH + 5);
             match parse_redis_value(&bytes) {
                 Ok(_) => panic!("Expected parse error for aggregate {:?}", agg as char),
@@ -1120,7 +1120,7 @@ mod tests {
     fn test_nesting_within_recursion_depth_parses() {
         // Legally nested structures within the depth limit must still parse.
         // Arrays and sets nest cleanly with one element per level.
-        for agg in [b'*', b'~'] {
+        for agg in *b"*~" {
             let bytes = nested_aggregate_headers(agg, MAX_RECURSE_DEPTH);
             assert!(
                 parse_redis_value(&bytes).is_ok(),
@@ -1136,7 +1136,7 @@ mod tests {
     #[test]
     fn test_codec_max_recursion_depth_all_aggregate_types() {
         use tokio_util::codec::Decoder;
-        for agg in [b'*', b'%', b'|', b'~', b'>'] {
+        for agg in *b"*%|~>" {
             let mut codec = ValueCodec::default();
             let mut bytes =
                 bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH + 5)[..]);
@@ -1154,7 +1154,7 @@ mod tests {
     #[test]
     fn test_codec_nesting_within_recursion_depth_parses() {
         use tokio_util::codec::Decoder;
-        for agg in [b'*', b'~'] {
+        for agg in *b"*~" {
             let mut codec = ValueCodec::default();
             let mut bytes =
                 bytes::BytesMut::from(&nested_aggregate_headers(agg, MAX_RECURSE_DEPTH)[..]);

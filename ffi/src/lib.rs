@@ -1639,7 +1639,7 @@ pub unsafe extern "C-unwind" fn create_client(
 ///   - `cluster_mode_enabled`: Boolean for cluster mode (bool)
 ///   - `refresh_topology_from_initial_nodes`: When cluster mode is enabled, refresh topology using only the initial seed nodes (bool)
 ///   - `protocol`: Protocol version - "RESP2" or "RESP3" (string)
-///   - `read_from`: Read routing - "Primary", "PreferReplica", "LowestLatency", "AZAffinity", or "AZAffinityReplicasAndPrimary" (string)
+///   - `read_from`: Read routing - "Primary", "PreferReplica", "LowestLatency", "AZAffinity", "AZAffinityReplicasAndPrimary", "AllNodes", or "AZAffinityAllNodes" (string)
 ///   - `connection_retry_strategy`: Retry configuration with `number_of_retries`, `factor`, `exponent_base`, and optional `jitter_percent` (object)
 ///   - `root_certs`: Array of PEM-encoded CA certificates for TLS (array of strings)
 ///   - `client_az`: Client availability zone for AZ affinity routing (string)
@@ -2214,6 +2214,8 @@ fn apply_json_options(
             "AZAffinityReplicasAndPrimary" => {
                 connection_request::ReadFrom::AZAffinityReplicasAndPrimary
             }
+            "AllNodes" => connection_request::ReadFrom::AllNodes,
+            "AZAffinityAllNodes" => connection_request::ReadFrom::AZAffinityAllNodes,
             _ => return Err(format!("Unknown read_from value: {}", read_from_str)),
         };
         request.read_from = ::protobuf::EnumOrUnknown::new(read_from_enum);

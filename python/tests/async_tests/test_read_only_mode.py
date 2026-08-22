@@ -128,6 +128,32 @@ class TestReadOnlyMode:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_read_only_rejects_az_affinity_all_nodes(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """Test that read-only mode rejects AZAffinityAllNodes strategy."""
+        with pytest.raises((RequestError, Exception)) as exc_info:
+            await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                request_timeout=2000,
+                read_only=True,
+                read_from=ReadFrom.AZ_AFFINITY_ALL_NODES,
+                client_az="us-east-1a",
+            )
+
+        # Verify the error message contains the expected text
+        assert (
+            "read-only mode is not compatible with azaffinity"
+            in str(exc_info.value).lower()
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_read_only_accepts_prefer_replica(
         self,
         request,

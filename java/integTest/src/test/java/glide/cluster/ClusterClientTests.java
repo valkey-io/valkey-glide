@@ -63,6 +63,55 @@ public class ClusterClientTests {
 
     @Test
     @SneakyThrows
+    public void register_custom_client_info_names() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        try (GlideClusterClient overrideOnlyClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().libName("custom-client").build())
+                        .get()) {
+            assertClientInfoLibNameOnAllNodes(overrideOnlyClient, "custom-client");
+        }
+
+        try (GlideClusterClient tagOnlyClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().clientInfoTag("framework:1.2").build())
+                        .get()) {
+            assertClientInfoLibNameOnAllNodes(tagOnlyClient, "GlideJava(framework:1.2)");
+        }
+
+        try (GlideClusterClient combinedClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .libName("custom-client")
+                                        .clientInfoTag("framework:1.2")
+                                        .build())
+                        .get()) {
+            assertClientInfoLibNameOnAllNodes(combinedClient, "custom-client(framework:1.2)");
+        }
+    }
+
+    private static void assertClientInfoLibNameOnAllNodes(
+            GlideClusterClient client, String expectedLibName)
+            throws ExecutionException, InterruptedException {
+        glide.api.models.ClusterValue<Object> clientInfo =
+                client
+                        .customCommand(
+                                new String[] {"CLIENT", "INFO"},
+                                glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute
+                                        .ALL_NODES)
+                        .get();
+        assertTrue(clientInfo.hasMultiData());
+        for (Object info : clientInfo.getMultiValue().values()) {
+            assertTrue(((String) info).contains(" lib-name=" + expectedLibName + " "));
+        }
+    }
+
+    @Test
+    @SneakyThrows
     public void can_connect_with_auth_requirepass() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();

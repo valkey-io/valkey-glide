@@ -12,6 +12,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
+import glide.internal.ClientLibraryNameResolver;
 import glide.internal.GlideNativeBridge;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -239,6 +240,7 @@ public class ClientPool implements AutoCloseable {
 
     private static byte[] serializeConnectionRequest(BaseClientConfiguration config) {
         ConnectionRequest.Builder b = ConnectionRequest.newBuilder();
+        b.setLibName(ClientLibraryNameResolver.resolve(config.getLibName(), config.getClientInfoTag()));
 
         for (glide.api.models.configuration.NodeAddress addr : config.getAddresses()) {
             b.addAddresses(
