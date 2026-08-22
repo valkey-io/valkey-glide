@@ -481,7 +481,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: aho-corasick:1.1.4
+Package: aho-corasick:1.1.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -762,7 +762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: android_system_properties:0.1.5
+Package: android_system_properties:0.1.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -1499,7 +1499,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: async-trait:0.1.91
+Package: async-trait:0.1.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2373,7 +2373,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.17.3
+Package: aws-lc-rs:1.18.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2595,7 +2595,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.43.0
+Package: aws-lc-sys:0.44.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11879,7 +11879,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: either:1.17.0
+Package: either:1.18.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13531,7 +13531,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures:0.3.33
+Package: futures:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13760,7 +13760,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-channel:0.3.33
+Package: futures-channel:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13989,7 +13989,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-core:0.3.33
+Package: futures-core:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14218,7 +14218,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-executor:0.3.33
+Package: futures-executor:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14676,7 +14676,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-io:0.3.33
+Package: futures-io:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14905,7 +14905,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-macro:0.3.33
+Package: futures-macro:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15134,7 +15134,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-sink:0.3.33
+Package: futures-sink:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15363,7 +15363,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-task:0.3.33
+Package: futures-task:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15592,7 +15592,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: futures-util:0.3.33
+Package: futures-util:0.3.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16762,7 +16762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: h2:0.4.15
+Package: h2:0.4.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19127,7 +19127,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: http-body-util:0.1.4
+Package: http-body-util:0.1.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20628,7 +20628,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_collections:2.2.0
+Package: icu_collections:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20704,7 +20704,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_locale_core:2.2.0
+Package: icu_locale_core:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20780,7 +20780,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_normalizer:2.2.0
+Package: icu_normalizer:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20856,7 +20856,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_normalizer_data:2.2.0
+Package: icu_normalizer_data:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20932,7 +20932,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_properties:2.2.0
+Package: icu_properties:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21008,7 +21008,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_properties_data:2.2.0
+Package: icu_properties_data:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21084,7 +21084,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: icu_provider:2.2.0
+Package: icu_provider:2.3.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22292,7 +22292,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ipnet:2.12.0
+Package: ipnet:2.12.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23895,7 +23895,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.103
+Package: js-sys:0.3.104
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24582,7 +24582,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libredox:0.1.18
+Package: libredox:0.1.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24607,7 +24607,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: litemap:0.8.2
+Package: litemap:0.8.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26780,7 +26780,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: num-integer:0.1.46
+Package: num-integer:0.1.47
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30973,7 +30973,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: potential_utf:0.1.5
+Package: potential_utf:0.1.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35789,7 +35789,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex-automata:0.4.16
+Package: regex-automata:0.4.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38100,7 +38100,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-webpki:0.103.13
+Package: rustls-webpki:0.103.15
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43198,7 +43198,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror:2.0.19
+Package: thiserror:2.0.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43656,7 +43656,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror-impl:2.0.19
+Package: thiserror-impl:2.0.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44343,7 +44343,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.54
+Package: time:0.3.55
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -45488,7 +45488,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tinystr:0.8.3
+Package: tinystr:0.8.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47223,7 +47223,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.24.0
+Package: uuid:1.24.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48899,7 +48899,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.126
+Package: wasm-bindgen:0.2.127
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49128,7 +49128,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-futures:0.4.76
+Package: wasm-bindgen-futures:0.4.77
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49357,7 +49357,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.126
+Package: wasm-bindgen-macro:0.2.127
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49586,7 +49586,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.126
+Package: wasm-bindgen-macro-support:0.2.127
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49815,7 +49815,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.126
+Package: wasm-bindgen-shared:0.2.127
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50044,7 +50044,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: web-sys:0.3.103
+Package: web-sys:0.3.104
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57167,7 +57167,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: writeable:0.6.3
+Package: writeable:0.6.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57510,7 +57510,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.55
+Package: zerocopy:0.8.56
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57762,7 +57762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.55
+Package: zerocopy-derive:0.8.56
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -58319,7 +58319,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerotrie:0.2.4
+Package: zerotrie:0.2.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -58357,7 +58357,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerovec:0.11.6
+Package: zerovec:0.11.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -58395,7 +58395,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerovec-derive:0.11.3
+Package: zerovec-derive:0.11.6
 
 The following copyrights and licenses were found in the source code of this package:
 
