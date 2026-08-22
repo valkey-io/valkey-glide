@@ -120,28 +120,31 @@ def start_cluster(
     )
     client.create_replication_group(**request)
 
-    # Poll until available
-    deadline = time.time() + MAX_WAIT_SECONDS
-    while time.time() < deadline:
-        resp = client.describe_replication_groups(ReplicationGroupId=name)
-        groups = resp.get("ReplicationGroups", [])
-        if not groups:
-            raise RuntimeError(
-                f"[elasticache_manager] Replication group '{name}' not found after creation"
-            )
-        status = groups[0].get("Status", "")
-        logging.info(f"[elasticache_manager] '{name}' status: {status}")
-        if status == "available":
-            break
-        time.sleep(POLL_INTERVAL_SECONDS)
-    else:
-        raise TimeoutError(
-            f"[elasticache_manager] Timed out waiting for '{name}' to become available"
-        )
+    # Print cluster name immediately so callers can track it for cleanup
+    # even if provisioning fails during polling or connectivity checks.
+    print(f"CLUSTER_NAME={name}")
 
-    # Extract endpoint and verify connectivity.
-    # If anything fails here, delete the cluster before re-raising.
+    # Poll, extract endpoint, and verify connectivity.
+    # Wrap everything in a try/except so ANY failure triggers cleanup.
     try:
+        deadline = time.time() + MAX_WAIT_SECONDS
+        while time.time() < deadline:
+            resp = client.describe_replication_groups(ReplicationGroupId=name)
+            groups = resp.get("ReplicationGroups", [])
+            if not groups:
+                raise RuntimeError(
+                    f"[elasticache_manager] Replication group '{name}' not found after creation"
+                )
+            status = groups[0].get("Status", "")
+            logging.info(f"[elasticache_manager] '{name}' status: {status}")
+            if status == "available":
+                break
+            time.sleep(POLL_INTERVAL_SECONDS)
+        else:
+            raise TimeoutError(
+                f"[elasticache_manager] Timed out waiting for '{name}' to become available"
+            )
+
         group = groups[0]
         if cluster_mode:
             endpoint = group.get("ConfigurationEndpoint", {})
@@ -190,7 +193,6 @@ def start_cluster(
         stop_cluster(name, region)
         raise
 
-    print(f"CLUSTER_NAME={name}")
     print(f"CLUSTER_ENDPOINT={endpoint_str}")
     logging.info(f"[elasticache_manager] '{name}' is available at {endpoint_str}")
 

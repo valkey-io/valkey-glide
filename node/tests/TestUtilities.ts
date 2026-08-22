@@ -2550,17 +2550,15 @@ export async function getServerVersion(
         const glideClusterClient = await GlideClusterClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
-            advancedConfiguration: { connectionTimeout: 10000 },
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
-        await flushAndCloseClient(
-            clusterMode,
-            addresses,
-            glideClusterClient,
-            tlsConfig,
-        );
+        glideClusterClient.close();
     } else {
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
@@ -2572,12 +2570,7 @@ export async function getServerVersion(
             },
         });
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(
-            clusterMode,
-            addresses,
-            glideClient,
-            tlsConfig,
-        );
+        glideClient.close();
     }
 
     let version = "";
