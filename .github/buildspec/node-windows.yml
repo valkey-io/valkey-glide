@@ -182,6 +182,23 @@ phases:
                 $env:RUSTUP_HOME = $RUSTUP_HOME
                 $env:PATH = "$CARGO_HOME\bin;$env:PATH"
 
+                # Remove Chocolatey-installed Rust if present - it shadows our rustup install
+                # because C:\ProgramData\chocolatey\bin appears in PATH before C:\cargo\bin.
+                if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  $chocoRust = choco list --local-only 2>$null | Select-String '^rust '
+                  if ($chocoRust) {
+                    Write-Host "Uninstalling Chocolatey Rust to avoid PATH shadowing..."
+                    choco uninstall rust -y --no-progress 2>&1 | Out-Null
+                  }
+                }
+                # Also remove any stale cargo.exe from chocolatey bin dir
+                if (Test-Path "C:\ProgramData\chocolatey\bin\cargo.exe") {
+                  Remove-Item "C:\ProgramData\chocolatey\bin\cargo.exe" -Force -ErrorAction SilentlyContinue
+                  Remove-Item "C:\ProgramData\chocolatey\bin\rustc.exe" -Force -ErrorAction SilentlyContinue
+                  Remove-Item "C:\ProgramData\chocolatey\bin\rustup.exe" -Force -ErrorAction SilentlyContinue
+                  Write-Host "Removed stale Chocolatey Rust shims."
+                }
+
                 # Download and run rustup-init each time to ensure the proxy in C:\cargo\bin
                 # is created fresh and points to the correct stable toolchain.
                 # rustup-init is fast when the toolchain is already present (cache hit).
