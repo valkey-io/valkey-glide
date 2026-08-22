@@ -14,43 +14,60 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
+const requestRegistryShardCount = 64
+
+type requestRegistryShard struct {
+	mu       sync.Mutex
+	requests map[uintptr]chan payload
+}
+
 // requestRegistry maps FFI request IDs to their Go result channels. FFI retains
 // an ID until it invokes a callback, so the ID must be safe to look up even
-// after the initiating Go call has returned.
+// after the initiating Go call has returned. Sharding avoids serializing every
+// command from every client through one process-wide mutex.
 var (
-	requestRegistry   = make(map[uintptr]chan payload)
-	requestRegistryMu sync.Mutex
-	nextRequestID     atomic.Uint64
+	requestRegistry [requestRegistryShardCount]requestRegistryShard
+	nextRequestID   atomic.Uint64
 )
+
+func requestRegistryShardFor(requestID uintptr) *requestRegistryShard {
+	return &requestRegistry[requestID&(requestRegistryShardCount-1)]
+}
 
 // registerRequest assigns a unique FFI request ID to resultChannel. Production callers must provide a buffered
 // channel with capacity one so callbacks and failPendingRequests can deliver while client.mu is held. An unbuffered
 // channel is valid only in tests that claim the request before waiting; production use can block Close indefinitely.
 func registerRequest(resultChannel chan payload) uintptr {
-	requestRegistryMu.Lock()
-	defer requestRegistryMu.Unlock()
-
 	for {
 		requestID := uintptr(nextRequestID.Add(1))
 		if requestID == 0 {
 			continue
 		}
-		if _, exists := requestRegistry[requestID]; !exists {
-			requestRegistry[requestID] = resultChannel
+
+		shard := requestRegistryShardFor(requestID)
+		shard.mu.Lock()
+		if shard.requests == nil {
+			shard.requests = make(map[uintptr]chan payload)
+		}
+		if _, exists := shard.requests[requestID]; !exists {
+			shard.requests[requestID] = resultChannel
+			shard.mu.Unlock()
 			return requestID
 		}
+		shard.mu.Unlock()
 	}
 }
 
 // takeRequest atomically claims a request. Exactly one of a callback,
 // cancellation, or Close can claim a request ID.
 func takeRequest(requestID uintptr) (chan payload, bool) {
-	requestRegistryMu.Lock()
-	defer requestRegistryMu.Unlock()
+	shard := requestRegistryShardFor(requestID)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
 
-	resultChannel, ok := requestRegistry[requestID]
+	resultChannel, ok := shard.requests[requestID]
 	if ok {
-		delete(requestRegistry, requestID)
+		delete(shard.requests, requestID)
 	}
 	return resultChannel, ok
 }

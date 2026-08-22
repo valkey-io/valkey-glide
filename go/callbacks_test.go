@@ -79,6 +79,45 @@ func TestRequestRegistryConcurrentClaimsHaveOneWinner(t *testing.T) {
 	}
 }
 
+func TestRequestRegistryConcurrentRegistrationsAreDistinct(t *testing.T) {
+	const registrations = 256
+	requestIDs := make(chan uintptr, registrations)
+	var wg sync.WaitGroup
+
+	for range registrations {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			requestIDs <- registerRequest(make(chan payload, 1))
+		}()
+	}
+	wg.Wait()
+	close(requestIDs)
+
+	seen := make(map[uintptr]struct{}, registrations)
+	for requestID := range requestIDs {
+		if _, exists := seen[requestID]; exists {
+			t.Fatalf("duplicate request ID %d", requestID)
+		}
+		seen[requestID] = struct{}{}
+		if _, ok := takeRequest(requestID); !ok {
+			t.Fatalf("request ID %d was not claimable", requestID)
+		}
+	}
+}
+
+func BenchmarkRequestRegistryParallel(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			requestID := registerRequest(make(chan payload, 1))
+			if _, ok := takeRequest(requestID); !ok {
+				b.Fatal("registered request was not claimable")
+			}
+		}
+	})
+}
+
 // TestLateSuccessCallbackAfterCancellationIsDropped verifies that cancelled requests discard late successes.
 func TestLateSuccessCallbackAfterCancellationIsDropped(t *testing.T) {
 	resultChannel := make(chan payload, 1)
