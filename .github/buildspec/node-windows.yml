@@ -324,12 +324,18 @@ phases:
     pre_build:
         commands:
             - |
-                $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+                # Rebuild PATH from machine registry so PowerShell picks up C:\cargo\bin
+                # that was added in the install phase. Simple prepend is not enough because
+                # PowerShell caches the command table at process start.
+                $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ";" + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
                 $env:RUSTUP_TOOLCHAIN = "stable"
-                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                # Set CARGO to the rustup proxy so napi-rs delegates to the correct toolchain
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
                 Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
                 Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
-                Write-Host "Machine PATH: $([System.Environment]::GetEnvironmentVariable('PATH', 'Machine') | Select-String 'cargo')"
+                Write-Host "Cargo version: $(& 'C:\cargo\bin\cargo.exe' --version)"
 
             - |
                 Write-Host "Active cargo: $(Get-Command cargo | Select-Object -ExpandProperty Source)"
@@ -354,12 +360,18 @@ phases:
     build:
         commands:
             - |
-                $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+                # Rebuild PATH from machine registry so PowerShell picks up C:\cargo\bin
+                # that was added in the install phase. Simple prepend is not enough because
+                # PowerShell caches the command table at process start.
+                $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ";" + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
                 $env:RUSTUP_TOOLCHAIN = "stable"
-                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                # Set CARGO to the rustup proxy so napi-rs delegates to the correct toolchain
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
                 Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
                 Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
-                Write-Host "Machine PATH: $([System.Environment]::GetEnvironmentVariable('PATH', 'Machine') | Select-String 'cargo')"
+                Write-Host "Cargo version: $(& 'C:\cargo\bin\cargo.exe' --version)"
 
             # -- Wait for ElastiCache setup, then run integration tests -------------
             - |
