@@ -29,6 +29,7 @@ import {
     getRandomKey,
     getServerVersion,
     parseEndpoints,
+    retryWithBackoff,
 } from "./TestUtilities";
 import {
     Mode,
@@ -176,8 +177,8 @@ describe("PubSub", () => {
     ): BaseClientConfiguration => {
         if (clusterMode) {
             return {
-                addresses: cmeCluster.ports().map((port) => ({
-                    host: "localhost",
+                addresses: cmeCluster.getAddresses().map(([host, port]) => ({
+                    host,
                     port,
                 })),
                 protocol,
@@ -185,8 +186,8 @@ describe("PubSub", () => {
         }
 
         return {
-            addresses: cmdCluster.ports().map((port) => ({
-                host: "localhost",
+            addresses: cmdCluster.getAddresses().map(([host, port]) => ({
+                host,
                 port,
             })),
             protocol,
@@ -1093,10 +1094,9 @@ describe("PubSub", () => {
                         context,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     // Lazy/Blocking mode: create client with callback but no initial subscriptions
@@ -1112,10 +1112,9 @@ describe("PubSub", () => {
                             context,
                             undefined,
                             undefined,
-                            cmeCluster.ports().map((port) => ({
-                                host: "localhost",
-                                port,
-                            })),
+                            cmeCluster
+                                .getAddresses()
+                                .map(([host, port]) => ({ host, port })),
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -1128,10 +1127,9 @@ describe("PubSub", () => {
                             undefined,
                             undefined,
                             undefined,
-                            cmeCluster.ports().map((port) => ({
-                                host: "localhost",
-                                port,
-                            })),
+                            cmeCluster
+                                .getAddresses()
+                                .map(([host, port]) => ({ host, port })),
                         );
                     }
 
@@ -1162,10 +1160,9 @@ describe("PubSub", () => {
                     undefined,
                     undefined,
                     undefined,
-                    cmeCluster.ports().map((port) => ({
-                        host: "localhost",
-                        port,
-                    })),
+                    cmeCluster
+                        .getAddresses()
+                        .map(([host, port]) => ({ host, port })),
                 );
 
                 const result = await (
@@ -1249,10 +1246,9 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     // Lazy/Blocking mode: create client without subscriptions
@@ -1265,10 +1261,9 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     );
 
                     // Subscribe dynamically
@@ -1298,10 +1293,9 @@ describe("PubSub", () => {
                     undefined,
                     undefined,
                     undefined,
-                    cmeCluster.ports().map((port) => ({
-                        host: "localhost",
-                        port,
-                    })),
+                    cmeCluster
+                        .getAddresses()
+                        .map(([host, port]) => ({ host, port })),
                 );
 
                 let result = await (
@@ -1419,10 +1413,9 @@ describe("PubSub", () => {
                         context,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     // Lazy/Blocking mode: create client with callback but no initial subscriptions
@@ -1438,10 +1431,9 @@ describe("PubSub", () => {
                             context,
                             undefined,
                             undefined,
-                            cmeCluster.ports().map((port) => ({
-                                host: "localhost",
-                                port,
-                            })),
+                            cmeCluster
+                                .getAddresses()
+                                .map(([host, port]) => ({ host, port })),
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -1454,10 +1446,9 @@ describe("PubSub", () => {
                             undefined,
                             undefined,
                             undefined,
-                            cmeCluster.ports().map((port) => ({
-                                host: "localhost",
-                                port,
-                            })),
+                            cmeCluster
+                                .getAddresses()
+                                .map(([host, port]) => ({ host, port })),
                         );
                     }
 
@@ -1488,10 +1479,9 @@ describe("PubSub", () => {
                     undefined,
                     undefined,
                     undefined,
-                    cmeCluster.ports().map((port) => ({
-                        host: "localhost",
-                        port,
-                    })),
+                    cmeCluster
+                        .getAddresses()
+                        .map(([host, port]) => ({ host, port })),
                 );
 
                 // Publish messages to each channel
@@ -5960,23 +5950,28 @@ describe("PubSub", () => {
                     undefined,
                     undefined,
                     clusterMode
-                        ? cmeCluster.ports().map((port) => ({
-                              host: "localhost",
-                              port,
-                          }))
-                        : cmdCluster.ports().map((port) => ({
-                              host: "localhost",
-                              port,
-                          })),
+                        ? cmeCluster
+                              .getAddresses()
+                              .map(([host, port]) => ({ host, port }))
+                        : cmdCluster
+                              .getAddresses()
+                              .map(([host, port]) => ({ host, port })),
                 );
 
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -6110,14 +6105,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     listeningClient = await createPubsubClient(
@@ -6130,14 +6123,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                     await subscribeByMethod(
                         listeningClient,
@@ -6147,12 +6138,19 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -6180,7 +6178,12 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                    ),
+                );
 
                 // Wait for subscriptions to be re-established
                 await waitForSubscriptionState(
@@ -6259,14 +6262,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     listeningClient = await createPubsubClient(
@@ -6279,14 +6280,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                     await psubscribeByMethod(
                         listeningClient,
@@ -6296,12 +6295,19 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -6331,7 +6337,12 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                    ),
+                );
 
                 await waitForSubscriptionState(
                     listeningClient,
@@ -6386,9 +6397,14 @@ describe("PubSub", () => {
     )(
         "test_resubscribe_after_connection_kill_sharded_%p_%p_%p",
         async (clusterMode, method, subscriptionMethod) => {
-            const version = await getServerVersion([
-                cmeCluster.getAddresses()[0],
-            ]);
+            // Use readOnly=true so the standalone client skips INFO REPLICATION primary
+            // detection — avoids 'No primary node found' when a node is recovering.
+            const version = await getServerVersion(
+                [cmeCluster.getAddresses()[0]],
+                false,
+                undefined,
+                true,
+            );
 
             if (version < "7.0.0") {
                 return;
@@ -6420,10 +6436,9 @@ describe("PubSub", () => {
                         context,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     )) as GlideClusterClient;
                 } else {
                     listeningClient = (await createPubsubClient(
@@ -6435,10 +6450,9 @@ describe("PubSub", () => {
                         context,
                         undefined,
                         undefined,
-                        cmeCluster.ports().map((port) => ({
-                            host: "localhost",
-                            port,
-                        })),
+                        cmeCluster
+                            .getAddresses()
+                            .map(([host, port]) => ({ host, port })),
                     )) as GlideClusterClient;
                     await ssubscribeByMethod(
                         listeningClient,
@@ -6447,8 +6461,13 @@ describe("PubSub", () => {
                     );
                 }
 
-                publishingClient = await GlideClusterClient.createClient(
-                    getOptions(clusterMode),
+                publishingClient = await retryWithBackoff(
+                    () =>
+                        GlideClusterClient.createClient(
+                            getOptions(clusterMode),
+                        ),
+                    5,
+                    2000,
                 );
 
                 await waitForSubscriptionStateIfNeeded(
@@ -6477,7 +6496,12 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                    ),
+                );
 
                 await waitForSubscriptionState(
                     listeningClient,
@@ -6558,14 +6582,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                 } else {
                     listeningClient = await createPubsubClient(
@@ -6578,14 +6600,12 @@ describe("PubSub", () => {
                         undefined,
                         undefined,
                         clusterMode
-                            ? cmeCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              }))
-                            : cmdCluster.ports().map((port) => ({
-                                  host: "localhost",
-                                  port,
-                              })),
+                            ? cmeCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port }))
+                            : cmdCluster
+                                  .getAddresses()
+                                  .map(([host, port]) => ({ host, port })),
                     );
                     await subscribeByMethod(
                         listeningClient,
@@ -6595,12 +6615,19 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -6614,7 +6641,12 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give time for reconnect
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                    ),
+                );
 
                 // Wait for resubscription
                 await waitForSubscriptionState(
@@ -6630,7 +6662,12 @@ describe("PubSub", () => {
                     await publishingClient.publish(messageAfter, channel);
                 }
 
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                    ),
+                );
 
                 // Verify all messages received
                 const receivedChannels = new Set<string>();
@@ -6687,7 +6724,10 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([true, false])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        true,
+        false,
+    ])(
         "test_subscription_metrics_on_acl_failure_%p",
         async (clusterMode) => {
             let listeningClient: TGlideClient | null = null;
@@ -6873,7 +6913,10 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([true, false])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        true,
+        false,
+    ])(
         "test_subscription_metrics_repeated_reconciliation_failures_%p",
         async (clusterMode) => {
             let listeningClient: TGlideClient | null = null;
@@ -7059,12 +7102,19 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -7168,7 +7218,10 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([true, false])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        true,
+        false,
+    ])(
         "test_lazy_vs_blocking_timeout_%p",
         async (clusterMode) => {
             let client: TGlideClient | null = null;
@@ -7328,14 +7381,12 @@ describe("PubSub", () => {
                     : null;
 
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 // Create client with Config subscriptions
                 listeningClient = await createPubsubClient(
@@ -7354,12 +7405,19 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -7571,14 +7629,12 @@ describe("PubSub", () => {
                     undefined, // default protocol
                     undefined, // default timeout
                     clusterMode
-                        ? cmeCluster.ports().map((port) => ({
-                              host: "localhost",
-                              port,
-                          }))
-                        : cmdCluster.ports().map((port) => ({
-                              host: "localhost",
-                              port,
-                          })),
+                        ? cmeCluster
+                              .getAddresses()
+                              .map(([host, port]) => ({ host, port }))
+                        : cmdCluster
+                              .getAddresses()
+                              .map(([host, port]) => ({ host, port })),
                 );
 
                 // Verify client was created successfully and state is empty
@@ -7653,14 +7709,12 @@ describe("PubSub", () => {
                 const message = "test_message";
 
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 // Create client with Config subscriptions (so we have something to unsubscribe from)
                 listeningClient = await createPubsubClient(
@@ -7677,12 +7731,19 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -7796,14 +7857,12 @@ describe("PubSub", () => {
 
             try {
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 // Create client without subscriptions
                 client = await createPubsubClient(
@@ -7903,14 +7962,12 @@ describe("PubSub", () => {
                 const pollIntervalMs = 100; // 100ms polling
 
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 // Create client with configured reconciliation interval
                 if (clusterMode) {
@@ -8041,14 +8098,12 @@ describe("PubSub", () => {
                 const message = "lazy_preconfigured_message";
 
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 // Create pubsub subscription config
                 const pubsubSubscriptions = createPubSubSubscription(
@@ -8094,12 +8149,19 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () =>
+                            GlideClusterClient.createClient(
+                                getOptions(clusterMode),
+                            ),
+                        5,
+                        2000,
                     );
                 } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
+                    publishingClient = await retryWithBackoff(
+                        () => GlideClient.createClient(getOptions(clusterMode)),
+                        5,
+                        2000,
                     );
                 }
 
@@ -8142,14 +8204,12 @@ describe("PubSub", () => {
 
             try {
                 const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
+                    ? cmeCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }))
+                    : cmdCluster
+                          .getAddresses()
+                          .map(([host, port]) => ({ host, port }));
 
                 const channel = getRandomKey();
                 const pattern = `${getRandomKey()}*`;

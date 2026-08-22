@@ -379,7 +379,10 @@ describe("Scan GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `GlideClusterClient scan with allowNonCoveredSlots %p`,
         async (protocol) => {
             const testCluster = await ValkeyCluster.createCluster(

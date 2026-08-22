@@ -165,6 +165,8 @@ jobs:
                           then "musl"
                           elif (.TARGET | contains("gnu"))
                           then "gnu"
+                          elif (.TARGET | contains("windows"))
+                          then "windows"
                           else "mac"
                           end
                       )
@@ -204,7 +206,8 @@ jobs:
                       ${{ matrix.TARGET }}-cargo-cache
                       cargo-cache
 
-            # You might ask why we don't use the common action for installing Rust, the reason is many targets to install, and caching will be more efficient
+            # We don't use the common action for installing Rust because of the many targets;
+            # caching is more efficient this way.
             - name: Install Rust with the required target
               uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
               with:
@@ -217,24 +220,10 @@ jobs:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: mkdir for js and d.ts
+            - name: Install platform dependencies
+              if: ${{ matrix.OS != 'windows' }}
               shell: bash
               run: |
-                  # Create a build directory js, and d.ts
-                  mkdir -p ./node/build-ts
-
-            - name: Build Native Modules
-              working-directory: ./node/rust-client
-              id: build-action
-              run: |
-                  npm ci
-
-                  # Set up the env parameters for the build
-                  if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--cross-compile"
-                  fi
-
-                  # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev
@@ -248,34 +237,51 @@ jobs:
                     brew install tree
                   fi
 
-                  # Build the native module
+            - name: Build Native Module
+              shell: bash
+              working-directory: ./node/rust-client
+              run: |
+                  mkdir -p ../build-ts
+                  npm ci
 
-                  # For GNU targets, use the NAPI v3 cargo-zigbuild path from package.json.
-                  if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
+                  if [[ "${{ matrix.OS }}" == "windows" ]]; then
+                    # Windows: native build, no cross-compilation needed
+                    npx napi build --release --strip --platform --target "${{ matrix.TARGET }}" \
+                      --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
+                      --js-package-name @valkey/valkey-glide
+
+                  elif [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
+                    # Linux GNU: use cargo-zigbuild for cross-compilation
                     npm run build:release:gnu
 
-                  # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
-                    npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    # macOS ARM: native build on arm64 runner, no --target needed
+                    npx napi build --release --strip --platform \
+                      --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
+                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
 
-                  # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
                   else
-                    npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    # macOS x86 or musl: may need zig for cross-compilation
+                    additional_param=""
+                    if [[ "${{ matrix.build_type }}" == "musl" ]]; then
+                      additional_param="--cross-compile"
+                    fi
+                    npx napi build --platform --release $additional_param --strip \
+                      --target "${{ matrix.TARGET }}" \
+                      --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
+                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi
 
-                  # Create directory for this target's node file
                   mkdir -p ../${{ matrix.TARGET }}
+                  cp -r *.node ../${{ matrix.TARGET }}/
 
-                  # Copy just the node file to the target directory
-                  cp -r *.node ../${{ matrix.TARGET }}
-
-                  # Report what we've built
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
 
             - name: Smoke test native module
+              if: ${{ matrix.OS != 'windows' }}
               working-directory: ./node
-              run: file ${{ matrix.TARGET }}/*.node | grep -qi "shared object\|dynamic\|mach-o"
+              run: file "${{ matrix.TARGET }}"/*.node | grep -qi "shared object\|dynamic\|mach-o"
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
@@ -522,6 +528,8 @@ jobs:
                       echo "Installing Valkey on macOS..."
                       brew update
                       brew install valkey || brew install redis
+                  elif [[ "${{ matrix.build_type }}" == "windows" ]]; then
+                      echo "Windows target tested via CodeBuild - skipping local Valkey install"
                   else
                       echo "::error::Unsupported target: ${{ matrix.TARGET }} (build_type: ${{ matrix.build_type }})"; exit 1
                   fi
@@ -663,6 +671,8 @@ jobs:
                         additional_suffix="-musl"
                       elif [[ "$build_type" == "gnu" ]]; then
                         additional_suffix="-gnu"
+                      elif [[ "$build_type" == "windows" ]]; then
+                        additional_suffix="-msvc"
                       fi
 
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"

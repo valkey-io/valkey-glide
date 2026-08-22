@@ -44,7 +44,6 @@ import {
     convertRecordToGlideRecord,
 } from "../build-ts";
 import { runBaseTests } from "./SharedTests";
-import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertClientTrackingInfo,
     assertConnected,
@@ -602,7 +601,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -650,7 +649,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `config get with wildcard and multi node route %p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -893,7 +895,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -939,7 +941,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -1190,7 +1192,10 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "migrate test_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -1872,7 +1877,7 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
-                    it(
+                    (process.env.USE_ELASTICACHE === "true" ? it.skip : it)(
                         "function kill with route",
                         async () => {
                             if (cluster.checkIfServerVersionLessThan("7.0.0"))
@@ -2621,7 +2626,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
             // Create a client configuration with a generous request timeout
@@ -2683,7 +2691,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "should respect connection timeout duration (protocol: %p)",
         async (protocol) => {
             // Create a client configuration
@@ -2844,7 +2855,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -2885,7 +2896,10 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "batch with retry configurations using protocol %p",
         async (protocol) => {
             const client = await GlideClusterClient.createClient(
@@ -3549,7 +3563,10 @@ describe("GlideClusterClient", () => {
             // Test explicit true
             const clientTrue = await GlideClusterClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: true },
+                advancedConfiguration: {
+                    tcpNoDelay: true,
+                    connectionTimeout: 10000,
+                },
             });
             expect(await clientTrue.ping()).toBe("PONG");
             expect(await clientTrue.set("key2", "value2")).toBe("OK");
@@ -3559,7 +3576,10 @@ describe("GlideClusterClient", () => {
             // Test explicit false
             const clientFalse = await GlideClusterClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: false },
+                advancedConfiguration: {
+                    tcpNoDelay: false,
+                    connectionTimeout: 10000,
+                },
             });
             expect(await clientFalse.ping()).toBe("PONG");
             expect(await clientFalse.set("key3", "value3")).toBe("OK");
@@ -3569,7 +3589,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyHistory with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -3613,7 +3636,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyLatest with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -3661,7 +3687,10 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyReset with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -3848,8 +3877,8 @@ describe("GlideClusterClient", () => {
         "should connect with IPv4 address",
         async () => {
             const address = {
-                host: IP_ADDRESS_V4,
-                port: cluster.ports()[0],
+                host: cluster.getAddresses()[0][0],
+                port: cluster.getAddresses()[0][1],
             };
             const client = await GlideClusterClient.createClient({
                 addresses: [address],
@@ -3861,12 +3890,12 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip : it)(
         "should connect with IPv6 address",
         async () => {
             const address = {
-                host: IP_ADDRESS_V6,
-                port: cluster.ports()[0],
+                host: cluster.getAddresses()[0][0],
+                port: cluster.getAddresses()[0][1],
             };
             const client = await GlideClusterClient.createClient({
                 addresses: [address],

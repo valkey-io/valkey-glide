@@ -4,6 +4,8 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     ClusterBatch,
@@ -75,7 +77,7 @@ function readAndParseSpanFile(path: string): {
 }
 
 const TIMEOUT = 50000;
-const VALID_ENDPOINT_TRACES = "/tmp/spans.json";
+const VALID_ENDPOINT_TRACES = path.join(os.tmpdir(), "spans.json");
 const VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
 const VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
 

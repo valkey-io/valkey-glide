@@ -2542,6 +2542,7 @@ export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
+    readOnly = false,
 ): Promise<string> {
     let info = "";
 
@@ -2549,28 +2550,27 @@ export async function getServerVersion(
         const glideClusterClient = await GlideClusterClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
-        await flushAndCloseClient(
-            clusterMode,
-            addresses,
-            glideClusterClient,
-            tlsConfig,
-        );
+        glideClusterClient.close();
     } else {
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            readOnly,
+            advancedConfiguration: {
+                connectionTimeout: 10000,
+                ...(tlsConfig?.advancedConfiguration ?? {}),
+            },
         });
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(
-            clusterMode,
-            addresses,
-            glideClient,
-            tlsConfig,
-        );
+        glideClient.close();
     }
 
     let version = "";
@@ -2737,4 +2737,39 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Retries an async operation with linear backoff.
+ * Useful for flaky network operations like TLS connections on Windows/WSL.
+ * Each retry waits `delayMs * (attempt + 1)` ms (linear, not exponential).
+ *
+ * @param fn - Async function to retry
+ * @param retries - Number of retry attempts (default: 3)
+ * @param delayMs - Base delay between retries in ms (default: 1000)
+ * @returns Result of the function
+ * @throws Last error if all retries exhausted
+ */
+export async function retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    retries = 3,
+    delayMs = 1000,
+): Promise<T> {
+    let lastError: Error | unknown;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastError = e;
+
+            if (attempt < retries) {
+                await new Promise((r) =>
+                    setTimeout(r, delayMs * (attempt + 1)),
+                );
+            }
+        }
+    }
+
+    throw lastError;
 }

@@ -98,146 +98,182 @@ describe("NodeDiscoveryMode", () => {
         10000,
     );
 
-    describe("DiscoverAll", () => {
-        let discoveryCluster: ValkeyCluster;
+    (process.env.USE_ELASTICACHE === "true" ? describe.skip : describe)(
+        "DiscoverAll",
+        () => {
+            let discoveryCluster: ValkeyCluster;
 
-        beforeAll(async () => {
-            discoveryCluster = await ValkeyCluster.createCluster(
-                false,
-                1,
-                3,
-                getServerVersion,
+            beforeAll(async () => {
+                if (process.env.USE_ELASTICACHE === "true") {
+                    // Use the pre-created ElastiCache discovery cluster
+                    // global.DISCOVERY_NODE_ADDRESSES contains [host, port] pairs
+                    // We create a dummy ValkeyCluster from existing addresses using
+                    // the first address as the "cluster" endpoint
+                    if (
+                        !global.DISCOVERY_NODE_ADDRESSES ||
+                        global.DISCOVERY_NODE_ADDRESSES.length < 4
+                    ) {
+                        throw new Error(
+                            "[DiscoverAll] DISCOVERY_NODE_ADDRESSES not set or insufficient nodes. " +
+                                "Ensure globalSetup created a discovery cluster with 3 replicas.",
+                        );
+                    }
+
+                    discoveryCluster =
+                        await ValkeyCluster.initFromExistingCluster(
+                            false,
+                            global.DISCOVERY_NODE_ADDRESSES,
+                            getServerVersion,
+                        );
+                } else {
+                    discoveryCluster = await ValkeyCluster.createCluster(
+                        false,
+                        1,
+                        3,
+                        getServerVersion,
+                    );
+                }
+            }, 120000);
+
+            afterAll(async () => {
+                if (process.env.USE_ELASTICACHE !== "true") {
+                    await discoveryCluster.close();
+                }
+            });
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "discover replicas from primary_%p",
+                async (protocol) => {
+                    const addresses = discoveryCluster.getAddresses();
+                    const primaryAddr = addresses[0];
+                    const replicaAddr = addresses[1];
+                    const uniqueName = `discovery_t4_${Date.now()}`;
+
+                    const discoveryClient = await GlideClient.createClient({
+                        addresses: [
+                            { host: primaryAddr[0], port: primaryAddr[1] },
+                        ],
+                        protocol,
+                        clientName: uniqueName,
+                        nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
+                    });
+
+                    const probe = await GlideClient.createClient({
+                        addresses: [
+                            { host: replicaAddr[0], port: replicaAddr[1] },
+                        ],
+                        protocol,
+                        readOnly: true,
+                    });
+
+                    const clientList = await probe.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    expect(clientList?.toString()).toContain(uniqueName);
+
+                    probe.close();
+                    discoveryClient.close();
+                },
+                30000,
             );
-        }, 40000);
 
-        afterAll(async () => {
-            await discoveryCluster.close();
-        });
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "discover replicas from replica_%p",
+                async (protocol) => {
+                    const addresses = discoveryCluster.getAddresses();
+                    const replicaAddr = addresses[1];
+                    const uniqueName = `discovery_t5_${Date.now()}`;
 
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "discover replicas from primary_%p",
-            async (protocol) => {
-                const addresses = discoveryCluster.getAddresses();
-                const primaryAddr = addresses[0];
-                const replicaAddr = addresses[1];
-                const uniqueName = `discovery_t4_${Date.now()}`;
+                    const discoveryClient = await GlideClient.createClient({
+                        addresses: [
+                            { host: replicaAddr[0], port: replicaAddr[1] },
+                        ],
+                        protocol,
+                        clientName: uniqueName,
+                        nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
+                    });
 
-                const discoveryClient = await GlideClient.createClient({
-                    addresses: [{ host: primaryAddr[0], port: primaryAddr[1] }],
-                    protocol,
-                    clientName: uniqueName,
-                    nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
-                });
+                    const key = `t5_key_${Date.now()}`;
+                    await discoveryClient.set(key, "value");
+                    const result = await discoveryClient.get(key);
+                    expect(result).toBe("value");
+                    await discoveryClient.del([key]);
 
-                const probe = await GlideClient.createClient({
-                    addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
-                    protocol,
-                    readOnly: true,
-                });
+                    const probe = await GlideClient.createClient({
+                        addresses: [
+                            { host: replicaAddr[0], port: replicaAddr[1] },
+                        ],
+                        protocol,
+                        readOnly: true,
+                    });
 
-                const clientList = await probe.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList?.toString()).toContain(uniqueName);
+                    const clientList = await probe.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    expect(clientList?.toString()).toContain(uniqueName);
 
-                probe.close();
-                discoveryClient.close();
-            },
-            30000,
-        );
+                    probe.close();
+                    discoveryClient.close();
+                },
+                30000,
+            );
 
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "discover replicas from replica_%p",
-            async (protocol) => {
-                const addresses = discoveryCluster.getAddresses();
-                const replicaAddr = addresses[1];
-                const uniqueName = `discovery_t5_${Date.now()}`;
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "discover replicas partial addresses_%p",
+                async (protocol) => {
+                    const addresses = discoveryCluster.getAddresses();
+                    const primaryAddr = addresses[0];
+                    const replica0Addr = addresses[1];
+                    const replica1Addr = addresses[2];
+                    const replica2Addr = addresses[3];
+                    const uniqueName = `discovery_t6_${Date.now()}`;
 
-                const discoveryClient = await GlideClient.createClient({
-                    addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
-                    protocol,
-                    clientName: uniqueName,
-                    nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
-                });
+                    const discoveryClient = await GlideClient.createClient({
+                        addresses: [
+                            { host: primaryAddr[0], port: primaryAddr[1] },
+                            { host: replica0Addr[0], port: replica0Addr[1] },
+                        ],
+                        protocol,
+                        clientName: uniqueName,
+                        nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
+                    });
 
-                const key = `t5_key_${Date.now()}`;
-                await discoveryClient.set(key, "value");
-                const result = await discoveryClient.get(key);
-                expect(result).toBe("value");
-                await discoveryClient.del([key]);
+                    const probe1 = await GlideClient.createClient({
+                        addresses: [
+                            { host: replica1Addr[0], port: replica1Addr[1] },
+                        ],
+                        protocol,
+                        readOnly: true,
+                    });
 
-                const probe = await GlideClient.createClient({
-                    addresses: [{ host: replicaAddr[0], port: replicaAddr[1] }],
-                    protocol,
-                    readOnly: true,
-                });
+                    const probe2 = await GlideClient.createClient({
+                        addresses: [
+                            { host: replica2Addr[0], port: replica2Addr[1] },
+                        ],
+                        protocol,
+                        readOnly: true,
+                    });
 
-                const clientList = await probe.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList?.toString()).toContain(uniqueName);
+                    const clientList1 = await probe1.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    expect(clientList1?.toString()).toContain(uniqueName);
 
-                probe.close();
-                discoveryClient.close();
-            },
-            30000,
-        );
+                    const clientList2 = await probe2.customCommand([
+                        "CLIENT",
+                        "LIST",
+                    ]);
+                    expect(clientList2?.toString()).toContain(uniqueName);
 
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "discover replicas partial addresses_%p",
-            async (protocol) => {
-                const addresses = discoveryCluster.getAddresses();
-                const primaryAddr = addresses[0];
-                const replica0Addr = addresses[1];
-                const replica1Addr = addresses[2];
-                const replica2Addr = addresses[3];
-                const uniqueName = `discovery_t6_${Date.now()}`;
-
-                const discoveryClient = await GlideClient.createClient({
-                    addresses: [
-                        { host: primaryAddr[0], port: primaryAddr[1] },
-                        { host: replica0Addr[0], port: replica0Addr[1] },
-                    ],
-                    protocol,
-                    clientName: uniqueName,
-                    nodeDiscoveryMode: NodeDiscoveryMode.DiscoverAll,
-                });
-
-                const probe1 = await GlideClient.createClient({
-                    addresses: [
-                        { host: replica1Addr[0], port: replica1Addr[1] },
-                    ],
-                    protocol,
-                    readOnly: true,
-                });
-
-                const probe2 = await GlideClient.createClient({
-                    addresses: [
-                        { host: replica2Addr[0], port: replica2Addr[1] },
-                    ],
-                    protocol,
-                    readOnly: true,
-                });
-
-                const clientList1 = await probe1.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList1?.toString()).toContain(uniqueName);
-
-                const clientList2 = await probe2.customCommand([
-                    "CLIENT",
-                    "LIST",
-                ]);
-                expect(clientList2?.toString()).toContain(uniqueName);
-
-                probe1.close();
-                probe2.close();
-                discoveryClient.close();
-            },
-            30000,
-        );
-    });
+                    probe1.close();
+                    probe2.close();
+                    discoveryClient.close();
+                },
+                30000,
+            );
+        },
+    );
 });
