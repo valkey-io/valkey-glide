@@ -281,7 +281,7 @@ jobs:
             - name: Smoke test native module
               if: ${{ matrix.OS != 'windows' }}
               working-directory: ./node
-              run: file ${{ matrix.TARGET }}/*.node | grep -qi "shared object\|dynamic\|mach-o"
+              run: file "${{ matrix.TARGET }}"/*.node | grep -qi "shared object\|dynamic\|mach-o"
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules

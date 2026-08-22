@@ -77,22 +77,32 @@ export default async function globalSetup(): Promise<void> {
     console.log("[globalSetup] Launching CMD and CME clusters in parallel...");
 
     // Track created cluster names so we can write a partial cleanup file on failure
-    const createdClusters: { name: string; endpoint?: string; role: string }[] = [];
+    const createdClusters: { name: string; endpoint?: string; role: string }[] =
+        [];
 
     const { spawn } = await import("child_process");
     const repoRoot = path.resolve(__dirname, "..", "..");
-    const managerScript = path.join(repoRoot, "utils", "elasticache_manager.py");
+    const managerScript = path.join(
+        repoRoot,
+        "utils",
+        "elasticache_manager.py",
+    );
 
     function spawnAsync(args: string[], role: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            const pythonCmd = process.platform === "win32" ? "python" : "python3";
+            const pythonCmd =
+                process.platform === "win32" ? "python" : "python3";
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
             });
             const timeoutMs = 40 * 60 * 1000; // 40 minutes
             const timer = setTimeout(() => {
                 proc.kill();
-                reject(new Error(`[globalSetup] elasticache_manager.py timed out after ${timeoutMs / 60000} minutes`));
+                reject(
+                    new Error(
+                        `[globalSetup] elasticache_manager.py timed out after ${timeoutMs / 60000} minutes`,
+                    ),
+                );
             }, timeoutMs);
             let stdout = "";
             let stderr = "";
@@ -102,6 +112,7 @@ export default async function globalSetup(): Promise<void> {
                 process.stdout.write(s);
                 // Track cluster name as soon as it's printed so we can clean up on failure
                 const nameMatch = s.match(/^CLUSTER_NAME=(.+)$/m);
+
                 if (nameMatch) {
                     createdClusters.push({ name: nameMatch[1].trim(), role });
                 }
@@ -113,8 +124,13 @@ export default async function globalSetup(): Promise<void> {
             });
             proc.on("close", (code) => {
                 clearTimeout(timer);
+
                 if (code !== 0) {
-                    reject(new Error(`[globalSetup] elasticache_manager.py exited with code ${code}\n${stderr}`));
+                    reject(
+                        new Error(
+                            `[globalSetup] elasticache_manager.py exited with code ${code}\n${stderr}`,
+                        ),
+                    );
                 } else {
                     resolve(stdout);
                 }
@@ -139,14 +155,22 @@ export default async function globalSetup(): Promise<void> {
         // so that post_build teardown can delete them even if globalSetup failed.
         if (createdClusters.length > 0) {
             const partialData = {
-                cmdClusterName: createdClusters.find((c) => c.role === "cmd")?.name ?? "",
-                cmeClusterName: createdClusters.find((c) => c.role === "cme")?.name ?? "",
+                cmdClusterName:
+                    createdClusters.find((c) => c.role === "cmd")?.name ?? "",
+                cmeClusterName:
+                    createdClusters.find((c) => c.role === "cme")?.name ?? "",
                 standaloneEndpoint: "",
                 clusterEndpoint: "",
             };
-            fs.writeFileSync(ELASTICACHE_ENDPOINTS_FILE, JSON.stringify(partialData, null, 2));
-            console.error(`[globalSetup] Wrote partial cleanup file for ${createdClusters.length} cluster(s): ${createdClusters.map((c) => c.name).join(", ")}`);
+            fs.writeFileSync(
+                ELASTICACHE_ENDPOINTS_FILE,
+                JSON.stringify(partialData, null, 2),
+            );
+            console.error(
+                `[globalSetup] Wrote partial cleanup file for ${createdClusters.length} cluster(s): ${createdClusters.map((c) => c.name).join(", ")}`,
+            );
         }
+
         throw err;
     }
 
@@ -172,7 +196,13 @@ export default async function globalSetup(): Promise<void> {
     process.env.STANDALONE_ENDPOINT = standaloneEndpoint;
     process.env.CLUSTER_ENDPOINT = clusterEndpoint;
 
-    console.log(`[globalSetup] CMD standalone: ${cmd.name} -> ${standaloneEndpoint}`);
-    console.log(`[globalSetup] CME cluster:    ${cme.name} -> ${clusterEndpoint}`);
-    console.log(`[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`);
+    console.log(
+        `[globalSetup] CMD standalone: ${cmd.name} -> ${standaloneEndpoint}`,
+    );
+    console.log(
+        `[globalSetup] CME cluster:    ${cme.name} -> ${clusterEndpoint}`,
+    );
+    console.log(
+        `[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`,
+    );
 }

@@ -2551,6 +2551,7 @@ export async function getServerVersion(
         const glideClusterClient = await GlideClusterClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
+            advancedConfiguration: { connectionTimeout: 10000 },
         });
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
@@ -2747,12 +2748,13 @@ export function assertMemoryStatsFields(
 }
 
 /**
- * Retries an async operation with exponential backoff.
+ * Retries an async operation with linear backoff.
  * Useful for flaky network operations like TLS connections on Windows/WSL.
+ * Each retry waits `delayMs * (attempt + 1)` ms (linear, not exponential).
  *
  * @param fn - Async function to retry
  * @param retries - Number of retry attempts (default: 3)
- * @param delayMs - Initial delay between retries in ms (default: 1000)
+ * @param delayMs - Base delay between retries in ms (default: 1000)
  * @returns Result of the function
  * @throws Last error if all retries exhausted
  */
