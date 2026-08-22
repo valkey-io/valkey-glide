@@ -28,7 +28,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from glide_shared._glide_ffi import _GlideFFI
-from glide_shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
+from glide_shared.config import BaseClientConfiguration
+from glide_shared.connection_request import _create_sync_connection_request
 
 from .glide_client import BaseClient, GlideClient
 
@@ -139,11 +140,10 @@ class ClientPool:
         # Lock for _client_cache under free-threading (concurrent get_or_create_client)
         self._cache_lock = threading.Lock()
 
-        # Serialize the connection request protobuf
-        is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
-        conn_req = client_config._create_a_protobuf_conn_request(
-            cluster_mode=is_cluster
-        )
+        # Serialize the connection request protobuf. Route through the shared
+        # helper so pooled clients honour lib_name / client_info_tag exactly
+        # like direct GlideClient.create() clients do.
+        conn_req = _create_sync_connection_request(client_config)
         self._conn_req_bytes = conn_req.SerializeToString()
 
         # Create the Rust pool via FFI (SyncClient type)

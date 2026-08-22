@@ -18,6 +18,7 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClusterClientConfiguration,
 )
+from glide_shared.connection_request import _create_async_connection_request
 
 from .glide_client import (
     _ASYNC_FFI,
@@ -120,11 +121,11 @@ class AsyncClientPool:
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
 
-        # Serialize connection request
-        conn_req = client_config._create_a_protobuf_conn_request(
-            cluster_mode=self._is_cluster
-        )
-        conn_req.lib_name = "GlidePyAsync"
+        # Serialize connection request. Route through the shared helper so
+        # pooled clients honour lib_name / client_info_tag exactly like direct
+        # GlideClient.create() clients do (default "GlidePy", user-configured
+        # lib_name, and the "(client_info_tag)" suffix).
+        conn_req = _create_async_connection_request(client_config)
         self._conn_req_bytes = conn_req.SerializeToString()
 
         # Initialize the shared async pipe BEFORE creating pool clients.

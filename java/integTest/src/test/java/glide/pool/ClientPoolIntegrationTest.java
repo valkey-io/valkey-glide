@@ -3,15 +3,19 @@ package glide.pool;
 
 import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.api.GlideClusterClient;
+import glide.api.models.ClusterValue;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -101,6 +105,164 @@ public class ClientPoolIntegrationTest {
         while (pool.getIdleCount() < minIdle && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
+    }
+
+    private ClientPoolConfig clientInfoPoolConfig(
+            boolean clusterMode, String libName, String clientInfoTag, String clientName) {
+        assumeMode(clusterMode);
+
+        glide.api.models.configuration.BaseClientConfiguration clientConfig;
+        if (clusterMode) {
+            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                    GlideClusterClientConfiguration.builder();
+            for (String host : CLUSTER_HOSTS) {
+                String[] parts = host.split(":");
+                builder.address(
+                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+            }
+            builder.requestTimeout(5000).clientName(clientName);
+            if (libName != null) {
+                builder.libName(libName);
+            }
+            if (clientInfoTag != null) {
+                builder.clientInfoTag(clientInfoTag);
+            }
+            clientConfig = builder.build();
+        } else {
+            String[] parts = STANDALONE_HOSTS[0].split(":");
+            GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder =
+                    GlideClientConfiguration.builder()
+                            .address(
+                                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                            .requestTimeout(5000)
+                            .clientName(clientName);
+            if (libName != null) {
+                builder.libName(libName);
+            }
+            if (clientInfoTag != null) {
+                builder.clientInfoTag(clientInfoTag);
+            }
+            clientConfig = builder.build();
+        }
+
+        return ClientPoolConfig.builder()
+                .maxSize(1)
+                .minIdle(1)
+                .acquireTimeout(Duration.ofSeconds(10))
+                .clientConfig(clientConfig)
+                .build();
+    }
+
+    private void assertPooledClientLibName(
+            boolean clusterMode, String libName, String clientInfoTag, String expectedLibName)
+            throws Exception {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                glide.TestConfiguration.SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String clientName = "pool-lib-name-" + UUID.randomUUID();
+        try (ClientPool pool =
+                ClientPool.create(clientInfoPoolConfig(clusterMode, libName, clientInfoTag, clientName))) {
+            waitForPoolReady(pool, 1);
+            assertTrue(pool.getIdleCount() >= 1, "Should have at least 1 idle client");
+
+            try (glide.api.models.pool.PooledGlideClient client =
+                    pool.acquire().get(10, TimeUnit.SECONDS)) {
+                if (clusterMode) {
+                    assertClusterPoolConnectionsLibName(clientName, expectedLibName);
+                } else {
+                    Object response =
+                            client
+                                    .unwrap()
+                                    .customCommand(new String[] {"CLIENT", "INFO"})
+                                    .get(5, TimeUnit.SECONDS);
+                    assertInstanceOf(String.class, response);
+                    String clientInfo = (String) response;
+                    assertTrue(
+                            hasClientInfoField(clientInfo, "lib-name", expectedLibName),
+                            () ->
+                                    "Expected pooled client lib-name="
+                                            + expectedLibName
+                                            + ", but CLIENT INFO returned: "
+                                            + clientInfo);
+                }
+            }
+        }
+    }
+
+    private void assertClusterPoolConnectionsLibName(String clientName, String expectedLibName)
+            throws Exception {
+        try (GlideClusterClient observer =
+                GlideClusterClient.createClient(glide.TestUtilities.commonClusterClientConfig().build())
+                        .get(10, TimeUnit.SECONDS)) {
+            ClusterValue<Object> clientLists =
+                    observer
+                            .customCommand(new String[] {"CLIENT", "LIST"}, ALL_NODES)
+                            .get(5, TimeUnit.SECONDS);
+            assertTrue(clientLists.hasMultiData(), "Expected CLIENT LIST responses from all nodes");
+
+            int totalPoolConnections = 0;
+            for (Map.Entry<String, Object> node : clientLists.getMultiValue().entrySet()) {
+                int nodePoolConnections = 0;
+                for (String clientInfo : ((String) node.getValue()).split("\\R")) {
+                    if (!hasClientInfoField(clientInfo, "name", clientName)) {
+                        continue;
+                    }
+                    nodePoolConnections++;
+                    assertTrue(
+                            hasClientInfoField(clientInfo, "lib-name", expectedLibName),
+                            () ->
+                                    "Expected pooled connection on "
+                                            + node.getKey()
+                                            + " to report lib-name="
+                                            + expectedLibName
+                                            + ", but CLIENT LIST returned: "
+                                            + clientInfo);
+                }
+                assertTrue(
+                        nodePoolConnections > 0,
+                        () -> "Expected a pooled connection on cluster node " + node.getKey());
+                totalPoolConnections += nodePoolConnections;
+            }
+            assertTrue(totalPoolConnections > 0, "Expected at least one pooled cluster connection");
+        }
+    }
+
+    private static boolean hasClientInfoField(
+            String clientInfo, String fieldName, String expectedValue) {
+        String expectedField = fieldName + "=" + expectedValue;
+        for (String field : clientInfo.trim().split("\\s+")) {
+            if (field.equals(expectedField)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsDefaultLibraryName(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, null, null, "GlideJava");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsConfiguredLibraryName(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, "custom-client", null, "custom-client");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsClientInfoTag(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(clusterMode, null, "framework:1.2", "GlideJava(framework:1.2)");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPooledClientReportsCombinedLibraryMetadata(boolean clusterMode) throws Exception {
+        assertPooledClientLibName(
+                clusterMode, "custom-client", "framework:1.2", "custom-client(framework:1.2)");
     }
 
     @ParameterizedTest
