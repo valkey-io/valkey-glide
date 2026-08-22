@@ -213,6 +213,16 @@ phases:
                 Write-Host "Updating Rust stable toolchain to latest..."
                 rustup update stable 2>&1
 
+                # Explicitly copy the updated binaries from the toolchain dir into CARGO_HOME.
+                # The migration step copies the old cargo shim into C:\cargo\bin, and rustup
+                # update only refreshes C:\rustup\toolchains\...\bin\cargo.exe. We need to
+                # overwrite the shim with the real updated binary so all PATH lookups get 1.98+.
+                $updatedCargo = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe"
+                $updatedRustc  = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\rustc.exe"
+                Copy-Item -Path $updatedCargo -Destination "$CARGO_HOME\bin\cargo.exe" -Force
+                Copy-Item -Path $updatedRustc  -Destination "$CARGO_HOME\bin\rustc.exe"  -Force
+                Write-Host "Refreshed C:\cargo\bin with updated binaries."
+
                 $env:RUSTUP_TOOLCHAIN = "stable"
                 [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
 
