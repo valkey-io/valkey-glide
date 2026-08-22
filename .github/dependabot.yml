@@ -8,6 +8,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -27,6 +29,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -46,6 +50,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -65,6 +71,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -84,6 +92,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -104,6 +114,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -124,6 +136,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -144,6 +158,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -164,6 +180,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -183,6 +201,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -202,6 +222,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -221,6 +243,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -240,6 +264,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -259,6 +285,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -278,6 +306,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -297,6 +327,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 5
       groups:
           patch-updates:
@@ -308,3 +340,45 @@ updates:
       labels:
           - "dependencies"
           - "github-actions"
+
+    # Enable version updates for npm (Node pm-and-types-tests/depend-on-glide-package)
+    - package-ecosystem: npm
+      directory: /node/pm-and-types-tests/depend-on-glide-package
+      schedule:
+          interval: weekly
+          day: monday
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "node 🐢"
+
+    # Enable version updates for npm (Node pm-and-types-tests/depend-on-glide-dependent)
+    - package-ecosystem: npm
+      directory: /node/pm-and-types-tests/depend-on-glide-dependent
+      schedule:
+          interval: weekly
+          day: monday
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "node 🐢"
