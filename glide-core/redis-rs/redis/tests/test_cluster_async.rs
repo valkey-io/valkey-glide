@@ -7136,6 +7136,11 @@ mod cluster_async {
         );
     }
 
+    /// Per-command timeout for the concurrent harness.
+    /// Must stay well above the injected recovery delays (≤ 30 ms) so that
+    /// a slow drain is not counted as an error in `total_errors == 0` tests.
+    const CONCURRENT_CMD_TIMEOUT: Duration = Duration::from_secs(5);
+
     /// Shared harness for concurrent-request tests.
     /// Creates a multi-thread runtime, builds a cluster client pointing to `redis://{name}`,
     /// spawns `concurrency` tasks each running `pipeline_iterations * pipeline_size` SET commands,
@@ -7181,7 +7186,7 @@ mod cluster_async {
                                 .arg("value")
                                 .clone();
                             match tokio::time::timeout(
-                                std::time::Duration::from_secs(5),
+                                CONCURRENT_CMD_TIMEOUT,
                                 conn.req_packed_command(&cmd),
                             )
                             .await
@@ -7192,7 +7197,7 @@ mod cluster_async {
                                     errors += 1;
                                 }
                                 Err(_elapsed) => {
-                                    println!("[T{task_id}][iter {iter}][k {k}] cmd timeout (>5s)");
+                                    println!("[T{task_id}][iter {iter}][k {k}] cmd timeout (>{CONCURRENT_CMD_TIMEOUT:?})");
                                     errors += 1;
                                 }
                             }
@@ -7815,7 +7820,6 @@ mod cluster_async {
         let moved_fired_cluster = moved_fired.clone();
         let escalation_fired = Arc::new(atomic::AtomicBool::new(false));
         let escalation_fired_cluster = escalation_fired.clone();
-        let escalation_fired_other = escalation_fired.clone();
         let name_handler = name.to_string();
 
         let _handler = MockConnectionBehavior::register_new(
@@ -7874,11 +7878,9 @@ mod cluster_async {
             }),
         );
 
-        // Register other_host so the client can resolve it if it attempts to connect
-        // before the CLUSTER SLOTS topology update is applied.
-        // During the escalation window (moved_fired && !escalation_fired) it also returns
-        // AllConnectionsUnavailable so the topology refresh task sees the error on ALL nodes,
-        // ensuring the permanent error propagates to poll_recover.
+        // Register other_host so the client can resolve it if it attempts to connect.
+        // Once MOVED fires, other_host returns AllConnectionsUnavailable for all CLUSTER SLOTS
+        // queries, ensuring all_failed=true is deterministic regardless of query ordering.
         let other_host_name = "other_host";
         let name_for_other_handler = name.to_string();
         let moved_fired_other = moved_fired.clone();
@@ -7895,17 +7897,18 @@ mod cluster_async {
                     return Err(Ok(Value::SimpleString("OK".into())));
                 }
                 if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
-                    // During the escalation window: both nodes unavailable so the refresh
-                    // task's `all_failed` check triggers and propagates AllConnectionsUnavailable.
-                    if moved_fired_other.load(atomic::Ordering::SeqCst)
-                        && !escalation_fired_other.load(atomic::Ordering::SeqCst)
-                    {
+                    // From MOVED onwards, return AllConnectionsUnavailable for every CLUSTER SLOTS query.
+                    // The name handler returns it exactly once (on first post-MOVED call); other_host
+                    // returns it unconditionally so all_failed=true is guaranteed regardless of which
+                    // node's response the topology task reads first. After escalation, ReconnectToInitialNodes
+                    // reconnects to the seed node (name), so other_host is never queried during recovery.
+                    if moved_fired_other.load(atomic::Ordering::SeqCst) {
                         return Err(Err(RedisError::from((
                             ErrorKind::AllConnectionsUnavailable,
                             "all connections unavailable (test-injected, other_host)",
                         ))));
                     }
-                    // Post-escalation: return normal topology so ReconnectToInitialNodes succeeds.
+                    // Pre-MOVED: return normal topology
                     return Err(Ok(Value::Array(vec![Value::Array(vec![
                         Value::Int(0),
                         Value::Int(16383),
@@ -7927,6 +7930,11 @@ mod cluster_async {
         println!(
             "RefreshingSlots escalation fail-fast: {} errors, {} successes out of {} expected (total SETs: {})",
             total_errors, total_successes, expected_cmds, total_sets,
+        );
+        assert!(
+            escalation_fired.load(atomic::Ordering::SeqCst),
+            "AllConnectionsUnavailable escalation never fired — CLUSTER SLOTS never returned \
+             the injected error; the fail_recovery_queue() path was not exercised",
         );
         assert_eq!(
             total_successes + total_errors,
@@ -8076,6 +8084,11 @@ mod cluster_async {
         println!(
             "RefreshingSlots escalation fail-fast: {} errors, {} successes out of {} expected (total SETs: {})",
             total_errors, total_successes, expected_cmds, total_sets,
+        );
+        assert!(
+            escalation_fired.load(atomic::Ordering::SeqCst),
+            "Slot-refresh task-panic escalation never fired — CLUSTER SLOTS never returned \
+             Ok(()) to trigger the mock panic; the fail_recovery_queue() path was not exercised",
         );
         assert_eq!(
             total_successes + total_errors,
