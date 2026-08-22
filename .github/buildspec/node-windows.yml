@@ -307,8 +307,7 @@ phases:
     pre_build:
         commands:
             - |
-                $toolchainBin = "C:\rustup\toolchains\stable-x86_64-pc-windows-msvc\bin"
-                $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+                $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
                 $env:RUSTUP_TOOLCHAIN = "stable"
                 [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
 
@@ -335,8 +334,7 @@ phases:
     build:
         commands:
             - |
-                $toolchainBin = "C:\rustup\toolchains\stable-x86_64-pc-windows-msvc\bin"
-                $env:PATH = "$toolchainBin;C:\cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
+                $env:PATH = "C:\cargo\bin;C:\Windows\System32;$env:USERPROFILE\.local\bin;C:\Program Files\nodejs;$env:PATH"
                 $env:RUSTUP_TOOLCHAIN = "stable"
 
             # -- Wait for ElastiCache setup, then run integration tests -------------
