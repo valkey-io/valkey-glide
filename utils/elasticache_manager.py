@@ -29,7 +29,7 @@ DEFAULT_SUBNET_GROUP = "client-testing"
 DEFAULT_SECURITY_GROUP = os.environ.get("EC_SECURITY_GROUP", "")
 DEFAULT_DESCRIPTION = "Valkey GLIDE integration test cluster"
 POLL_INTERVAL_SECONDS = 10
-MAX_WAIT_SECONDS = 20 * 60  # 20 minutes
+MAX_WAIT_SECONDS = 35 * 60  # 35 minutes
 
 ENGINE_LOG_REQUEST = {
     "LogType": "engine-log",
