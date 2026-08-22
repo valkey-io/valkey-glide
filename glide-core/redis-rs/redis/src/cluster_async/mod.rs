@@ -4584,6 +4584,25 @@ where
         };
     }
 
+    // If all queried nodes failed and at least one returned AllConnectionsUnavailable,
+    // propagate it as a permanent error. This ensures the caller (poll_recover) can
+    // distinguish "no connections left" from a transient topology-parse failure and
+    // take the appropriate escalation path (fail_recovery_queue + ReconnectToInitialNodes)
+    // instead of endlessly retrying the slot refresh.
+    let all_failed = topology_join_results.iter().all(|(_, res)| res.is_err());
+    if all_failed {
+        if let Some(all_conn_err) = topology_join_results.iter().find_map(|(_, res)| {
+            res.as_ref()
+                .err()
+                .filter(|err| err.kind() == ErrorKind::AllConnectionsUnavailable)
+        }) {
+            return TopologyQueryResult {
+                topology_result: Err(all_conn_err.clone_mostly("")),
+                failed_connections: Some(failed_addresses),
+            };
+        }
+    }
+
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
             .ok()
