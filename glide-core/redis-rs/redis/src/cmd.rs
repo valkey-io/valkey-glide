@@ -1158,8 +1158,8 @@ mod tests {
         #[test]
         fn simple_command() {
             assert_segments_match_packed(&crate::cmd("PING"));
-            assert_segments_match_packed(&crate::cmd("SET").arg("key").arg("value"));
-            assert_segments_match_packed(&crate::cmd("SET").arg("key").arg(42));
+            assert_segments_match_packed(crate::cmd("SET").arg("key").arg("value"));
+            assert_segments_match_packed(crate::cmd("SET").arg("key").arg(42));
         }
 
         #[test]

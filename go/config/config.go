@@ -226,6 +226,34 @@ const (
 // during connection and topology refresh.
 type AddressResolver func(host string, port int) (string, int)
 
+// resolveLibName validates and composes the library name reported to the server.
+func resolveLibName(libName, clientInfoTag string) (string, error) {
+	for _, value := range []struct {
+		field string
+		value string
+	}{
+		{field: "libName", value: libName},
+		{field: "clientInfoTag", value: clientInfoTag},
+	} {
+		for _, r := range value.value {
+			if r < '!' || r > '~' || r == '(' || r == ')' {
+				return "", fmt.Errorf(
+					"%s must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
+					value.field,
+				)
+			}
+		}
+	}
+
+	if libName == "" {
+		libName = "GlideGo"
+	}
+	if clientInfoTag != "" {
+		libName += "(" + clientInfoTag + ")"
+	}
+	return libName, nil
+}
+
 type baseClientConfiguration struct {
 	addresses             []NodeAddress
 	useTLS                bool
@@ -234,6 +262,8 @@ type baseClientConfiguration struct {
 	requestTimeout        time.Duration
 	clientName            string
 	clientAZ              string
+	libName               string
+	clientInfoTag         string
 	reconnectStrategy     *BackoffStrategy
 	lazyConnect           bool
 	DatabaseId            *int `json:"database_id,omitempty"`
@@ -276,6 +306,12 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	if config.clientAZ != "" {
 		request.ClientAz = config.clientAZ
 	}
+
+	libName, err := resolveLibName(config.libName, config.clientInfoTag)
+	if err != nil {
+		return nil, err
+	}
+	request.LibName = libName
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
@@ -579,6 +615,29 @@ func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfigur
 	return config
 }
 
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at
+// client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClientConfiguration) WithLibName(libName string) *ClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
+	config.clientInfoTag = clientInfoTag
+	return config
+}
+
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
 func (config *ClientConfiguration) WithReconnectStrategy(strategy *BackoffStrategy) *ClientConfiguration {
@@ -837,6 +896,29 @@ func (config *ClusterClientConfiguration) WithClientName(clientName string) *Clu
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at
+// client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
+	config.clientInfoTag = clientInfoTag
 	return config
 }
 

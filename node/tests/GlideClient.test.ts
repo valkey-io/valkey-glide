@@ -17,6 +17,7 @@ import {
     Batch,
     ClientPauseMode,
     ClientSideCache,
+    ConfigurationError,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -167,6 +168,129 @@ describe("GlideClient", () => {
         expect(dec_msg2.singleCommand?.argsArray?.args).toEqual(
             convertStringArrayToBuffer(["bar3", "bar4"]),
         );
+    });
+
+    it(
+        "register_custom_client_info_names",
+        async () => {
+            if (cluster.checkIfServerVersionLessThan("7.2.0")) return;
+
+            // Test default library name
+            const defaultClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            try {
+                const defaultInfo = (await defaultClient.customCommand([
+                    "CLIENT",
+                    "INFO",
+                ])) as string;
+                expect(defaultInfo).toContain("lib-name=GlideJS");
+            } finally {
+                defaultClient.close();
+            }
+
+            // Test libName override only
+            const overrideOnlyClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { libName: "custom-client" },
+                ),
+            );
+
+            try {
+                const overrideOnlyInfo =
+                    (await overrideOnlyClient.customCommand([
+                        "CLIENT",
+                        "INFO",
+                    ])) as string;
+                expect(overrideOnlyInfo).toContain("lib-name=custom-client");
+            } finally {
+                overrideOnlyClient.close();
+            }
+
+            // Test clientInfoTag only (appended to default GlideJS)
+            const tagOnlyClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "framework:1.2" },
+                ),
+            );
+
+            try {
+                const tagOnlyInfo = (await tagOnlyClient.customCommand([
+                    "CLIENT",
+                    "INFO",
+                ])) as string;
+                expect(tagOnlyInfo).toContain(
+                    "lib-name=GlideJS(framework:1.2)",
+                );
+            } finally {
+                tagOnlyClient.close();
+            }
+
+            // Test combined libName + clientInfoTag
+            const combinedClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    {
+                        libName: "custom-client",
+                        clientInfoTag: "framework:1.2",
+                    },
+                ),
+            );
+
+            try {
+                const combinedInfo = (await combinedClient.customCommand([
+                    "CLIENT",
+                    "INFO",
+                ])) as string;
+                expect(combinedInfo).toContain(
+                    "lib-name=custom-client(framework:1.2)",
+                );
+            } finally {
+                combinedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it("clientInfoTag_rejects_whitespace", async () => {
+        await expect(
+            GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has space" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
+
+        await expect(
+            GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has\ttab" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
+
+        await expect(
+            GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientInfoTag: "has\nnewline" },
+                ),
+            ),
+        ).rejects.toThrow(ConfigurationError);
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

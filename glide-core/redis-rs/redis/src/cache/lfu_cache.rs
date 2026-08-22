@@ -604,7 +604,7 @@ mod tests {
 
         // Verify frequency increased by checking internal state
         let inner_lock = cache.store.read().unwrap();
-        let entry = inner_lock.cache.get(&b"key1".to_vec()).unwrap();
+        let entry = inner_lock.cache.get(b"key1".as_slice()).unwrap();
         assert_eq!(entry.frequency, 6); // 1 initial + 5 gets
     }
 

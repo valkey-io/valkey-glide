@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
+    BaseClientConfiguration,
     GlideClient,
     GlideMonitorClient,
     MonitorLine,
@@ -13,6 +14,47 @@ import {
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
+
+function getClientInfoField(
+    clientInfo: string,
+    fieldName: string,
+): string | undefined {
+    const prefix = `${fieldName}=`;
+    return clientInfo
+        .trim()
+        .split(/\s+/u)
+        .find((field) => field.startsWith(prefix))
+        ?.slice(prefix.length);
+}
+
+function isMonitorClient(clientInfo: string): boolean {
+    const command = getClientInfoField(clientInfo, "cmd");
+    const flags = getClientInfoField(clientInfo, "flags");
+    return (
+        command?.toLowerCase() === "monitor" || Boolean(flags?.includes("O"))
+    );
+}
+
+function getMonitorClientIds(clientList: string): Set<string> {
+    return new Set(
+        clientList
+            .split(/\r?\n/u)
+            .filter(isMonitorClient)
+            .map((clientInfo) => getClientInfoField(clientInfo, "id"))
+            .filter((id): id is string => id !== undefined),
+    );
+}
+
+function findNewMonitorClient(
+    clientList: string,
+    baselineMonitorIds: Set<string>,
+): string | undefined {
+    return clientList.split(/\r?\n/u).find((clientInfo) => {
+        if (!isMonitorClient(clientInfo)) return false;
+        const id = getClientInfoField(clientInfo, "id");
+        return id !== undefined && !baselineMonitorIds.has(id);
+    });
+}
 
 describe("GlideMonitorClient", () => {
     let cluster: ValkeyCluster;
@@ -120,6 +162,82 @@ describe("GlideMonitorClient", () => {
             await monitor.close();
         }
     });
+
+    it.each([
+        ["default", {}, "GlideJS"],
+        ["override", { libName: "custom-client" }, "custom-client"],
+        ["tag", { clientInfoTag: "framework:1.2" }, "GlideJS(framework:1.2)"],
+        [
+            "combined",
+            { libName: "custom-client", clientInfoTag: "framework:1.2" },
+            "custom-client(framework:1.2)",
+        ],
+    ] as [string, Partial<BaseClientConfiguration>, string][])(
+        "monitor reports %s library identification",
+        async (_caseName, overrides, expectedLibName) => {
+            if (cluster.checkIfServerVersionLessThan("7.2.0")) return;
+
+            const observerConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP2,
+            );
+            const monitorConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP2,
+                overrides,
+            );
+            const observer = await GlideClient.createClient(observerConfig);
+
+            try {
+                const baselineClientList = String(
+                    await observer.customCommand(["CLIENT", "LIST"]),
+                );
+                const baselineMonitorIds =
+                    getMonitorClientIds(baselineClientList);
+                const monitor = await GlideMonitorClient.create(
+                    monitorConfig,
+                    () => undefined,
+                );
+
+                try {
+                    let monitorInfo: string | undefined;
+                    let latestClientList = "";
+                    const deadline = Date.now() + 5000;
+
+                    while (!monitorInfo && Date.now() < deadline) {
+                        latestClientList = String(
+                            await observer.customCommand(["CLIENT", "LIST"]),
+                        );
+                        monitorInfo = findNewMonitorClient(
+                            latestClientList,
+                            baselineMonitorIds,
+                        );
+
+                        if (!monitorInfo) {
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 50),
+                            );
+                        }
+                    }
+
+                    if (!monitorInfo) {
+                        throw new Error(
+                            `Expected a new dedicated monitor connection, but CLIENT LIST returned: ${latestClientList}`,
+                        );
+                    }
+
+                    expect(getClientInfoField(monitorInfo, "lib-name")).toBe(
+                        expectedLibName,
+                    );
+                } finally {
+                    await monitor.close();
+                }
+            } finally {
+                observer.close();
+            }
+        },
+        10000,
+    );
 
     it("monitor close is idempotent", async () => {
         const config = getClientConfigurationOption(

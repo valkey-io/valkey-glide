@@ -2601,6 +2601,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                 port: addr_proto.port as u16,
             };
 
+            let lib_name = if proto_request.lib_name.is_empty() {
+                None
+            } else {
+                Some(proto_request.lib_name.to_string())
+            };
+
             // Build RedisConnectionInfo from protobuf auth fields
             let redis_connection_info =
                 if let Some(auth) = proto_request.authentication_info.as_ref() {
@@ -2623,7 +2629,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                             _ => redis::ProtocolVersion::RESP2,
                         },
                         client_name: None,
-                        lib_name: None,
+                        lib_name: lib_name.clone(),
                         cache: None,
                         server_assisted_cache: false,
                     }
@@ -2639,7 +2645,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                             _ => redis::ProtocolVersion::RESP2,
                         },
                         client_name: None,
-                        lib_name: None,
+                        lib_name,
                         cache: None,
                         server_assisted_cache: false,
                     }

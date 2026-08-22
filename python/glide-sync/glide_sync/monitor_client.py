@@ -8,6 +8,7 @@ from typing import Callable, List, Optional
 from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
+from glide_shared.connection_request import _create_sync_connection_request
 
 
 class MonitorClient:
@@ -15,6 +16,8 @@ class MonitorClient:
     A client that streams all commands processed by the server via the MONITOR command.
 
     Must be used with a standalone (non-cluster) configuration.
+    The configuration's ``lib_name`` and ``client_info_tag`` identify the dedicated
+    monitor connection, using ``GlidePySync`` as the default library name.
 
     Warning: MONITOR is a debugging tool with performance implications.
     Do not use in production environments.
@@ -42,6 +45,8 @@ class MonitorClient:
 
         Args:
             config: Standalone client configuration (must be GlideClientConfiguration).
+                    Its library-name override and client information tag are applied
+                    to the dedicated monitor connection.
             callback: Optional callback invoked for each MonitorMsg. If None, messages
                       are queued and retrievable via get_monitor_message().
 
@@ -54,7 +59,7 @@ class MonitorClient:
             )
         instance = cls()
         instance._user_callback = callback
-        conn_req = config._create_a_protobuf_conn_request(cluster_mode=False)
+        conn_req = _create_sync_connection_request(config)
         conn_req_bytes = conn_req.SerializeToString()
 
         @instance._ffi.callback("MonitorCallback")
