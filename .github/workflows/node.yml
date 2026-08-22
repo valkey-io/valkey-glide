@@ -488,6 +488,7 @@ jobs:
 
                   # Poll until the build reaches a terminal state (max 90 minutes)
                   echo "Polling for build completion..."
+                  echo "CODEBUILD_BUILD_ID=${BUILD_ID}" >> "$GITHUB_ENV"
                   POLL_START=$(date +%s)
                   MAX_POLL_SECONDS=5400
                   while true; do
@@ -545,6 +546,17 @@ jobs:
                     # Fallback: try the build-id prefix directly
                     aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html \
                       || echo "Warning: could not download test report from S3"
+                  fi
+
+            - name: Stop CodeBuild on cancellation
+              if: cancelled()
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+              run: |
+                  if [[ -n "${CODEBUILD_BUILD_ID}" ]]; then
+                    echo "Job cancelled - stopping CodeBuild build ${CODEBUILD_BUILD_ID}"
+                    aws codebuild stop-build --id "${CODEBUILD_BUILD_ID}" || true
                   fi
 
             - name: Upload Windows test report
