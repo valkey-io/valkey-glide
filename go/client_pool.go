@@ -248,6 +248,8 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 			pending:    make(map[unsafe.Pointer]struct{}),
 			mu:         &sync.Mutex{},
 		},
+		clientConfig: p.clientConf,
+		connReqBytes: p.connReq,
 	}
 	client.setMessageHandler(NewMessageHandler(nil, nil))
 
