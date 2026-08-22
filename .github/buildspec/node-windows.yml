@@ -170,14 +170,10 @@ phases:
             - |
                 Write-Host "=== Installing Rust stable toolchain ==="
 
-                # Detect whether rustup is pre-installed for the current user (on-demand runners)
-                # or absent (reserved fleet running as SYSTEM). Use fixed machine-wide paths
-                # as CARGO_HOME/RUSTUP_HOME so the same code works in both cases.
-                #
-                # On-demand (ContainerAdministrator): rustup pre-installed at default user paths.
-                # Reserved fleet (SYSTEM): rustup not installed, USERPROFILE is system32/config/systemprofile.
-                #
-                # We always normalise to C:\rustup + C:\cargo so cache paths are stable.
+                # Always use machine-wide CARGO_HOME/RUSTUP_HOME for stable cache paths.
+                # We never migrate the user-level rustup because the migration copies stale
+                # proxies into C:\cargo\bin that break after rustup update.
+                # Instead, always run rustup-init into the machine-wide locations.
                 $CARGO_HOME  = "C:\cargo"
                 $RUSTUP_HOME = "C:\rustup"
                 [System.Environment]::SetEnvironmentVariable("CARGO_HOME",  $CARGO_HOME,  "Machine")
@@ -186,42 +182,19 @@ phases:
                 $env:RUSTUP_HOME = $RUSTUP_HOME
                 $env:PATH = "$CARGO_HOME\bin;$env:PATH"
 
-                # If rustup was pre-installed for the current user (on-demand), migrate its
-                # toolchain to the machine-wide location so we can use the stable paths.
-                $userRustup = "$env:USERPROFILE\.rustup"
-                $userCargo  = "$env:USERPROFILE\.cargo"
-                if ((Test-Path "$userRustup\toolchains") -and -not (Test-Path "$RUSTUP_HOME\toolchains")) {
-                  Write-Host "Migrating existing rustup install from $userRustup to $RUSTUP_HOME"
-                  Copy-Item -Path $userRustup -Destination $RUSTUP_HOME -Recurse -Force
-                  Copy-Item -Path $userCargo  -Destination $CARGO_HOME  -Recurse -Force
-                }
+                # Download and run rustup-init each time to ensure the proxy in C:\cargo\bin
+                # is created fresh and points to the correct stable toolchain.
+                # rustup-init is fast when the toolchain is already present (cache hit).
+                Write-Host "Running rustup-init to set up stable toolchain..."
+                $rustupInit = "$env:TEMP\rustup-init.exe"
+                Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupInit
+                $env:RUSTUP_INIT_SKIP_PATH_CHECK = "yes"
+                & $rustupInit -y --default-toolchain stable --no-modify-path 2>&1
+                if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
 
-                $toolchainPath = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc"
-                if ((Test-Path $toolchainPath) -and (Get-Command rustup -ErrorAction SilentlyContinue)) {
-                  Write-Host "Rust stable toolchain already present (cache hit), skipping install."
-                  rustup default stable-x86_64-pc-windows-msvc
-                } else {
-                  Write-Host "Installing rustup + Rust stable toolchain..."
-                  $rustupInit = "$env:TEMP\rustup-init.exe"
-                  Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupInit
-                  & $rustupInit -y --default-toolchain stable-x86_64-pc-windows-msvc --no-modify-path 2>&1
-                  if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
-                }
-
-                # Always update to latest stable - ensures edition2024 support
-                # regardless of what version was cached on the AMI or in the cache layer.
+                # Force update to latest stable to ensure edition2024 support
                 Write-Host "Updating Rust stable toolchain to latest..."
-                rustup update stable 2>&1
-
-                # Explicitly copy the updated binaries from the toolchain dir into CARGO_HOME.
-                # The migration step copies the old cargo shim into C:\cargo\bin, and rustup
-                # update only refreshes C:\rustup\toolchains\...\bin\cargo.exe. We need to
-                # overwrite the shim with the real updated binary so all PATH lookups get 1.98+.
-                $updatedCargo = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe"
-                $updatedRustc  = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\rustc.exe"
-                Copy-Item -Path $updatedCargo -Destination "$CARGO_HOME\bin\cargo.exe" -Force
-                Copy-Item -Path $updatedRustc  -Destination "$CARGO_HOME\bin\rustc.exe"  -Force
-                Write-Host "Refreshed C:\cargo\bin with updated binaries."
+                & "$CARGO_HOME\bin\rustup.exe" update stable 2>&1
 
                 $env:RUSTUP_TOOLCHAIN = "stable"
                 [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
@@ -231,17 +204,11 @@ phases:
                 [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
                 $env:CARGO = $cargoBin
 
-                # Copy shims AFTER update so System32 has the latest cargo/rustc
-                $cargoShim = "$CARGO_HOME\bin\cargo.exe"
-                $rustcShim  = "$CARGO_HOME\bin\rustc.exe"
-                Copy-Item -Path $cargoShim -Destination "C:\Windows\System32\cargo.exe" -Force
-                Copy-Item -Path $rustcShim  -Destination "C:\Windows\System32\rustc.exe"  -Force
-                Write-Host "Cargo version after update: $(C:\Windows\System32\cargo.exe --version)"
+                # Verify the proxy works and reports the updated version
+                Write-Host "Cargo version: $(& "$CARGO_HOME\bin\cargo.exe" --version)"
+                Write-Host "Rustc version: $(& "$CARGO_HOME\bin\rustc.exe" --version)"
 
                 if (Test-Path "C:\Windows\System32\link.exe") {
-                  # Check if the link.exe in System32 is the MSVC linker by inspecting its path origin.
-                  # MSVC link.exe prints its banner to stderr on any invocation; GNU ld prints to stdout.
-                  # Use Get-Item to check the file description as a more reliable signal.
                   $linkItem = Get-Item "C:\Windows\System32\link.exe" -ErrorAction SilentlyContinue
                   $isMsvc = $false
                   if ($linkItem) {
@@ -283,9 +250,6 @@ phases:
                     Write-Host "MSVC linker fallback path added: $linkerPath"
                   }
                 }
-
-                C:\Windows\System32\cargo.exe --version
-                C:\Windows\System32\rustc.exe --version
 
             # -- 5. protoc -----------------------------------------------------------
             - |
