@@ -1,15 +1,26 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import time
-from typing import List
+from typing import List, Optional
 
 import pytest
 from glide_shared.commands.core_options import MonitorMsg
-from glide_shared.config import GlideClusterClientConfiguration
+from glide_shared.config import (
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from glide_sync import MonitorClient
 
 from tests.sync_tests.conftest import create_sync_client
-from tests.utils.utils import create_sync_client_config
+from tests.utils.utils import create_sync_client_config, sync_wait_for
+
+
+def _client_list_contains_monitor(client_list: bytes, expected_lib_name: str) -> bool:
+    expected_field = f"lib-name={expected_lib_name}".encode()
+    return any(
+        b"cmd=monitor" in line.lower() and expected_field in line
+        for line in client_list.splitlines()
+    )
 
 
 class TestMonitorSync:
@@ -32,6 +43,53 @@ class TestMonitorSync:
 
         commands = [m.command.upper() for m in received]
         assert "SET" in commands
+
+    @pytest.mark.skip_if_version_below("7.2.0")
+    @pytest.mark.parametrize(
+        ("lib_name", "client_info_tag", "expected"),
+        [
+            (None, None, "GlidePySync"),
+            ("sync-monitor", None, "sync-monitor"),
+            (None, "monitor-tag:1.0", "GlidePySync(monitor-tag:1.0)"),
+            (
+                "sync-monitor",
+                "monitor-tag:1.0",
+                "sync-monitor(monitor-tag:1.0)",
+            ),
+        ],
+    )
+    def test_monitor_client_library_identification(
+        self,
+        request,
+        lib_name: Optional[str],
+        client_info_tag: Optional[str],
+        expected: str,
+    ) -> None:
+        config = create_sync_client_config(
+            request,
+            cluster_mode=False,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
+        )
+        assert isinstance(config, GlideClientConfiguration)
+        monitor = MonitorClient.create(config)
+        try:
+            observer = create_sync_client(request, cluster_mode=False)
+            try:
+
+                def _monitor_is_visible() -> bool:
+                    client_list = observer.custom_command(["CLIENT", "LIST"])
+                    assert isinstance(client_list, bytes)
+                    return _client_list_contains_monitor(client_list, expected)
+
+                sync_wait_for(
+                    _monitor_is_visible,
+                    f"Monitor client with lib-name={expected} was not observed",
+                )
+            finally:
+                observer.close()
+        finally:
+            monitor.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     def test_monitor_queue(self, request, cluster_mode):

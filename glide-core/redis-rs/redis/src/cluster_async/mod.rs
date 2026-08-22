@@ -1564,6 +1564,7 @@ where
             cluster_params.read_from_replicas,
             crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
                 | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
+                | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(_)
         );
 
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
@@ -2170,13 +2171,17 @@ where
             convert_result(receiver.await)
         };
 
-        // Sanity check: if there are no receivers at all, this is a client‐error
+        // No receivers means we reached no node for this fan-out. Either a
+        // concurrent remove_node drained the connection map after the outer
+        // is_empty check, or the slot map lists primaries or routes that the
+        // connection map does not have, which can persist outside any race.
+        // Both are connectivity failures, so classify as retryable to trigger
+        // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
             return Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Client internal error",
-                "Failed to aggregate results for multi-slot command. Maybe a malformed command?"
-                    .to_string(),
+                ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found for route",
+                "No connections available for multi-node fan-out".to_string(),
             )));
         }
 
@@ -2519,8 +2524,7 @@ where
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            log_warn_lazy!("topology_refresh",
-                "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
+            log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
         let acquire_elapsed = acquire_start.elapsed();
@@ -3063,6 +3067,20 @@ where
                         .map(|tuple| Some((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
+                    // multi_shard never emits an empty slots vec, so an empty
+                    // one here is a caller bug rather than the topology race
+                    // aggregate_results retries on. Return a non-retryable
+                    // ClientError to keep those two paths distinct.
+                    if slots.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            (
+                                ErrorKind::ClientError,
+                                "MultiSlot routing plan is empty; no routes to fan out to",
+                            )
+                                .into(),
+                        ));
+                    }
                     into_channels(slots.iter().map(|(route, indices)| {
                         connections_container
                             .connection_for_route(route)
@@ -4987,6 +5005,50 @@ mod pipeline_routing_tests {
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
+    }
+
+    // Regression for #6759. Neither path into the empty branch (a remove_node
+    // race, or a slot map listing nodes the connection map lacks) is easy to
+    // force in an integration test, so call aggregate_results with an empty
+    // receivers vec directly and check it returns ConnectionNotFoundForRoute
+    // with RetryMethod::Reconnect and a connectivity message.
+    #[test]
+    fn empty_receivers_is_retryable_connection_not_found() {
+        use crate::{types::RetryMethod, ErrorKind};
+
+        for routing in [
+            MultipleNodeRoutingInfo::AllNodes,
+            MultipleNodeRoutingInfo::AllMasters,
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![(Route::new(0, SlotAddr::Master), vec![1usize])],
+                MultiSlotArgPattern::KeysOnly,
+            )),
+        ] {
+            let err = block_on(
+                ClusterConnInner::<MultiplexedConnection>::aggregate_results(
+                    Vec::new(),
+                    &routing,
+                    None,
+                ),
+            )
+            .expect_err("empty receivers must fail");
+
+            assert_eq!(
+                err.kind(),
+                ErrorKind::ConnectionNotFoundForRoute,
+                "kind mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert_eq!(
+                err.retry_method(),
+                RetryMethod::Reconnect,
+                "retry_method mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert!(
+                err.to_string()
+                    .contains("No connections available for multi-node fan-out"),
+                "message mismatch for routing {routing:?}: {err}",
+            );
+        }
     }
 }
 

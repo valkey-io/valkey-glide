@@ -519,6 +519,111 @@ mod standalone_client_tests {
         });
     }
 
+    // AZAffinityAllNodes: same-AZ primary and replica share reads equally.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_az_match_mixed() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 2,
+            expected_replica_reads: vec![0, 0, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1b".to_string(),
+                "us-east-1b".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: only the primary matches the client AZ, so it gets all reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_az_match_primary() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            expected_primary_reads: 3,
+            expected_replica_reads: vec![0, 0, 0],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: when there are no local nodes, distribute reads evenly across all nodes.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_no_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 1,
+            expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1c".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: the primary is an equal member of the in-AZ rotation; out-of-AZ replicas get no reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_most_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 6,
+            expected_primary_reads: 2,
+            expected_replica_reads: vec![0, 2, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: a disconnected in-AZ node is skipped; the remaining in-AZ nodes serve all reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_skips_disconnected_nodes() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 6,
+            expected_primary_reads: 3,
+            expected_replica_reads: vec![0, 3],
+            number_of_replicas_dropped_after_connection: 1,
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
@@ -1325,6 +1430,35 @@ mod standalone_client_tests {
             assert!(
                 result.is_err(),
                 "AZAffinityReplicasAndPrimary should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity_all_nodes() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinityAllNodes.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinityAllNodes should be rejected with read_only mode"
             );
             let err = format!("{:?}", result.unwrap_err());
             assert!(

@@ -73,10 +73,25 @@ public abstract class BaseClientConfiguration {
     private final String clientName;
 
     /**
-     * Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
-     * during connection establishment.
+     * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
+     * establishment. If null or empty, {@code GlideJava} is used. When {@link #clientInfoTag} is
+     * present, it is appended to the effective library name in parentheses. Every character in a
+     * non-empty override must be printable ASCII from {@code !} (U+0021) through {@code ~} (U+007E),
+     * inclusive, excluding {@code (} and {@code )}. Dedicated standalone monitor clients also apply
+     * this option. See: validateClientAttr in
+     * https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
      */
     private final String libName;
+
+    /**
+     * Optional attribution tag appended to the effective library name in parentheses. For example,
+     * {@code GlideJava(my-framework:1.2.3)}. Every character in a non-empty tag must be printable
+     * ASCII from {@code !} (U+0021) through {@code ~} (U+007E), inclusive, excluding {@code (} and
+     * {@code )}. If null or empty, no tag is appended. Dedicated standalone monitor clients also
+     * apply this option. See: validateClientAttr in
+     * https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+     */
+    private final String clientInfoTag;
 
     /**
      * Serialization protocol to be used with the server. If not set, {@link ProtocolVersion#RESP3}
@@ -189,6 +204,57 @@ public abstract class BaseClientConfiguration {
      * @see CompressionConfiguration
      */
     private final CompressionConfiguration compressionConfiguration;
+
+    /** Abstract builder class for {@link BaseClientConfiguration}. */
+    public abstract static class BaseClientConfigurationBuilder<
+            C extends BaseClientConfiguration, B extends BaseClientConfigurationBuilder<C, B>> {
+
+        /**
+         * Sets the optional library-name override.
+         *
+         * @param libName library-name override; null or empty means absent
+         * @return this builder
+         * @throws IllegalArgumentException if a non-empty override contains a character outside
+         *     printable ASCII U+0021 through U+007E or contains {@code (} or {@code )}. See:
+         *     validateClientAttr in
+         *     https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+         */
+        public B libName(String libName) {
+            validatePrintableAscii("libName", libName);
+            this.libName = libName;
+            return self();
+        }
+
+        /**
+         * Sets the optional client information tag.
+         *
+         * @param clientInfoTag attribution tag; null or empty means absent
+         * @return this builder
+         * @throws IllegalArgumentException if a non-empty tag contains a character outside printable
+         *     ASCII U+0021 through U+007E or contains {@code (} or {@code )}. See: validateClientAttr
+         *     in
+         *     https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+         */
+        public B clientInfoTag(String clientInfoTag) {
+            validatePrintableAscii("clientInfoTag", clientInfoTag);
+            this.clientInfoTag = clientInfoTag;
+            return self();
+        }
+
+        private static void validatePrintableAscii(String fieldName, String value) {
+            if (value != null
+                    && value
+                            .codePoints()
+                            .anyMatch(
+                                    codePoint ->
+                                            codePoint < '!' || codePoint > '~' || codePoint == '(' || codePoint == ')')) {
+                throw new IllegalArgumentException(
+                        fieldName
+                                + " must contain only printable ASCII characters from '!' through '~', excluding"
+                                + " '(' and ')'");
+            }
+        }
+    }
 
     public List<NodeAddress> getAddresses() {
         return Collections.unmodifiableList(new ArrayList<>(addresses));
