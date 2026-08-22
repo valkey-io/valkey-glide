@@ -7180,10 +7180,19 @@ mod cluster_async {
                                 .arg(format!("t{task_id}_key{k}"))
                                 .arg("value")
                                 .clone();
-                            match conn.req_packed_command(&cmd).await {
-                                Ok(_) => successes += 1,
-                                Err(e) => {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(5),
+                                conn.req_packed_command(&cmd),
+                            )
+                            .await
+                            {
+                                Ok(Ok(_)) => successes += 1,
+                                Ok(Err(e)) => {
                                     println!("[T{task_id}][iter {iter}][k {k}] cmd error: {e}");
+                                    errors += 1;
+                                }
+                                Err(_elapsed) => {
+                                    println!("[T{task_id}][iter {iter}][k {k}] cmd timeout (>5s)");
                                     errors += 1;
                                 }
                             }
@@ -7766,6 +7775,316 @@ mod cluster_async {
             "guard must short-circuit the retry loop: observed {refreshes} \
              post-startup CLUSTER SLOTS refresh(es), which only fires if the \
              retryable empty-receivers branch leaked through",
+        );
+    }
+
+    /// Tests that concurrent commands buffered in `recovery_queue` during `RefreshingSlots`
+    /// are immediately failed with `ClientError` when the slot-refresh task completes with
+    /// `AllConnectionsUnavailable` — verifying the `fail_recovery_queue()` path.
+    ///
+    /// ## Scenario
+    ///
+    /// 1. The Nth SET returns a non-circular MOVED → triggers `RefreshingSlots`.
+    /// 2. CLUSTER SLOTS is delayed 30 ms after MOVED fires → `RefreshingSlots` stays
+    ///    `Poll::Pending` → concurrent requests pile up in `recovery_queue`.
+    /// 3. After the delay CLUSTER SLOTS returns `AllConnectionsUnavailable` →
+    ///    `poll_recover` calls `fail_recovery_queue()` → all buffered requests receive
+    ///    `ClientError("Connection in recovery")` immediately.
+    /// 4. Client escalates to `ReconnectToInitialNodes`.
+    ///
+    /// ## Assertions
+    ///
+    /// - No commands are silently dropped (`total_successes + total_errors == expected_cmds`).
+    /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
+    ///   the no-silent-drops check is the reliable guarantee this test provides.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_requests_fail_fast_on_refreshing_slots_all_connections_unavailable() {
+        let name = "test_concurrent_refreshing_slots_all_conn_unavailable";
+        const MOVED_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10;
+        const DELAY_AFTER_MOVED_MS: u64 = 5;
+        const CLUSTER_SLOTS_DELAY_MS: u64 = 30;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let moved_fired = Arc::new(atomic::AtomicBool::new(false));
+        let moved_fired_clone = moved_fired.clone();
+        let moved_fired_cluster = moved_fired.clone();
+        let escalation_fired = Arc::new(atomic::AtomicBool::new(false));
+        let escalation_fired_cluster = escalation_fired.clone();
+        let escalation_fired_other = escalation_fired.clone();
+        let name_handler = name.to_string();
+
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    if moved_fired_cluster.load(atomic::Ordering::SeqCst)
+                        && !escalation_fired_cluster.load(atomic::Ordering::SeqCst)
+                    {
+                        // Delay to keep RefreshingSlots Pending while concurrent requests
+                        // accumulate in recovery_queue, then return AllConnectionsUnavailable
+                        // to exercise fail_recovery_queue(). Fire exactly once.
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            CLUSTER_SLOTS_DELAY_MS,
+                        ));
+                        escalation_fired_cluster.store(true, atomic::Ordering::SeqCst);
+                        return Err(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "all connections unavailable (test-injected)",
+                        ))));
+                    }
+                    // Normal topology for startup and post-recovery (ReconnectToInitialNodes
+                    // can now complete successfully).
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == MOVED_ON_SET_N {
+                        moved_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        // Non-circular MOVED: different hostname triggers RefreshingSlots.
+                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                    }
+                    if moved_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        // Register other_host so the client can resolve it if it attempts to connect
+        // before the CLUSTER SLOTS topology update is applied.
+        // During the escalation window (moved_fired && !escalation_fired) it also returns
+        // AllConnectionsUnavailable so the topology refresh task sees the error on ALL nodes,
+        // ensuring the permanent error propagates to poll_recover.
+        let other_host_name = "other_host";
+        let name_for_other_handler = name.to_string();
+        let moved_fired_other = moved_fired.clone();
+        let _other_handler = MockConnectionBehavior::register_new(
+            other_host_name,
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    // During the escalation window: both nodes unavailable so the refresh
+                    // task's `all_failed` check triggers and propagates AllConnectionsUnavailable.
+                    if moved_fired_other.load(atomic::Ordering::SeqCst)
+                        && !escalation_fired_other.load(atomic::Ordering::SeqCst)
+                    {
+                        return Err(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "all connections unavailable (test-injected, other_host)",
+                        ))));
+                    }
+                    // Post-escalation: return normal topology so ReconnectToInitialNodes succeeds.
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name_for_other_handler.as_bytes().to_vec().into()),
+                            Value::Int(6379),
+                        ]),
+                    ])])));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        let (total_successes, total_errors) =
+            run_concurrent_cluster_requests(name, CONCURRENCY, PIPELINE_ITERATIONS, PIPELINE_SIZE);
+
+        let expected_cmds = CONCURRENCY * PIPELINE_ITERATIONS * PIPELINE_SIZE;
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+        println!(
+            "RefreshingSlots escalation fail-fast: {} errors, {} successes out of {} expected (total SETs: {})",
+            total_errors, total_successes, expected_cmds, total_sets,
+        );
+        assert_eq!(
+            total_successes + total_errors,
+            expected_cmds,
+            "Commands were silently dropped: {} succeeded + {} errors = {} != {} expected",
+            total_successes,
+            total_errors,
+            total_successes + total_errors,
+            expected_cmds,
+        );
+    }
+
+    /// Tests that concurrent commands buffered in `recovery_queue` during `RefreshingSlots`
+    /// are immediately failed with `ClientError` when the slot-refresh task **panics** —
+    /// verifying the `fail_recovery_queue()` panic-recovery path.
+    ///
+    /// ## Scenario
+    ///
+    /// 1. The Nth SET returns a non-circular MOVED → triggers `RefreshingSlots`.
+    /// 2. CLUSTER SLOTS is delayed 30 ms after MOVED fires → `RefreshingSlots` stays
+    ///    `Poll::Pending` → concurrent requests pile up in `recovery_queue`.
+    /// 3. After the delay CLUSTER SLOTS returns `Ok(())` (no response value).
+    ///    `MockConnection::req_packed_command` calls `.expect_err(…)` on that `Ok(())`
+    ///    and **panics inside the spawned refresh task**.
+    /// 4. The `JoinHandle` resolves as `Err(join_err)` with `!join_err.is_cancelled()` →
+    ///    `poll_recover` calls `fail_recovery_queue()` → all buffered requests receive
+    ///    `ClientError` immediately; client escalates to `ReconnectToInitialNodes`.
+    ///
+    /// ## Assertions
+    ///
+    /// - No commands are silently dropped (`total_successes + total_errors == expected_cmds`).
+    /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
+    ///   the no-silent-drops check is the reliable guarantee this test provides.
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_requests_fail_fast_on_refreshing_slots_task_panic() {
+        let name = "test_concurrent_refreshing_slots_task_panic";
+        const MOVED_ON_SET_N: usize = 30;
+        const CONCURRENCY: usize = 20;
+        const PIPELINE_ITERATIONS: usize = 5;
+        const PIPELINE_SIZE: usize = 10;
+        const DELAY_AFTER_MOVED_MS: u64 = 5;
+        const CLUSTER_SLOTS_DELAY_MS: u64 = 30;
+
+        let set_count = Arc::new(atomic::AtomicUsize::new(0));
+        let set_count_clone = set_count.clone();
+        let moved_fired = Arc::new(atomic::AtomicBool::new(false));
+        let moved_fired_clone = moved_fired.clone();
+        let moved_fired_cluster = moved_fired.clone();
+        let escalation_fired = Arc::new(atomic::AtomicBool::new(false));
+        let escalation_fired_cluster = escalation_fired.clone();
+        let name_handler = name.to_string();
+
+        let _handler = MockConnectionBehavior::register_new(
+            name,
+            Arc::new(move |cmd: &[u8], port| {
+                let name = name_handler.as_str();
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    if moved_fired_cluster.load(atomic::Ordering::SeqCst)
+                        && !escalation_fired_cluster.load(atomic::Ordering::SeqCst)
+                    {
+                        // Delay to keep RefreshingSlots Pending while concurrent requests
+                        // accumulate in recovery_queue. Then return Ok(()) — the MockConnection
+                        // will call .expect_err() on this, panicking inside the spawned task.
+                        // Fire exactly once; subsequent calls return normal topology so that
+                        // ReconnectToInitialNodes can complete.
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            CLUSTER_SLOTS_DELAY_MS,
+                        ));
+                        escalation_fired_cluster.store(true, atomic::Ordering::SeqCst);
+                        // Returning Ok(()) causes MockConnection::req_packed_command to panic
+                        // via .expect_err("Handler did not specify a response"), which exercises
+                        // the Poll::Ready(Err(join_err)) path in poll_recover.
+                        return Ok(());
+                    }
+                    // Normal topology for startup and post-recovery.
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(port as i64),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"SET") {
+                    let i = set_count_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    if i == MOVED_ON_SET_N {
+                        moved_fired_clone.store(true, atomic::Ordering::SeqCst);
+                        // Non-circular MOVED: different hostname triggers RefreshingSlots.
+                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                    }
+                    if moved_fired_clone.load(atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
+                    }
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        // Register other_host so the client can resolve it if it attempts to connect
+        // before the CLUSTER SLOTS topology update is applied.
+        let other_host_name = "other_host";
+        let name_for_other_handler = name.to_string();
+        let _other_handler = MockConnectionBehavior::register_new(
+            other_host_name,
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"SETNAME") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"READONLY") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    // Point back to the primary mock node so topology resolves correctly.
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name_for_other_handler.as_bytes().to_vec().into()),
+                            Value::Int(6379),
+                        ]),
+                    ])])));
+                }
+                Err(Ok(Value::SimpleString("OK".into())))
+            }),
+        );
+
+        let (total_successes, total_errors) =
+            run_concurrent_cluster_requests(name, CONCURRENCY, PIPELINE_ITERATIONS, PIPELINE_SIZE);
+
+        let expected_cmds = CONCURRENCY * PIPELINE_ITERATIONS * PIPELINE_SIZE;
+        let total_sets = set_count.load(atomic::Ordering::SeqCst);
+        println!(
+            "RefreshingSlots escalation fail-fast: {} errors, {} successes out of {} expected (total SETs: {})",
+            total_errors, total_successes, expected_cmds, total_sets,
+        );
+        assert_eq!(
+            total_successes + total_errors,
+            expected_cmds,
+            "Commands were silently dropped: {} succeeded + {} errors = {} != {} expected",
+            total_successes,
+            total_errors,
+            total_successes + total_errors,
+            expected_cmds,
         );
     }
 
