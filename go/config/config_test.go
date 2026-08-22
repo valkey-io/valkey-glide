@@ -22,6 +22,7 @@ const (
 func TestDefaultStandaloneConfig(t *testing.T) {
 	config := NewClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: false,
 		ReadFrom:           protobuf.ReadFrom_Primary,
@@ -38,6 +39,7 @@ func TestDefaultStandaloneConfig(t *testing.T) {
 func TestDefaultClusterConfig(t *testing.T) {
 	config := NewClusterClientConfiguration()
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_NoTls,
 		ClusterModeEnabled: true,
 		ReadFrom:           protobuf.ReadFrom_Primary,
@@ -71,6 +73,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 		WithDatabaseId(databaseId)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_PreferReplica,
 		ClusterModeEnabled: false,
@@ -120,6 +123,7 @@ func TestGlideClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	j := uint32(jitter)
 	expected := &protobuf.ConnectionRequest{
+		LibName: "GlideGo",
 		Addresses: []*protobuf.NodeAddress{
 			{Host: host, Port: uint32(port)},
 		},
@@ -154,6 +158,7 @@ func TestGlideClusterClient_BackoffStrategy_withJitter(t *testing.T) {
 
 	j := uint32(jitter)
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		ClusterModeEnabled: true,
 		Addresses: []*protobuf.NodeAddress{
 			{Host: host, Port: uint32(port)},
@@ -274,6 +279,7 @@ func TestConfig_AzAffinity(t *testing.T) {
 		WithClientAZ(az)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_AZAffinity,
 		ClusterModeEnabled: false,
@@ -1226,6 +1232,7 @@ func TestConfig_AllFieldsSetWithCompression(t *testing.T) {
 		WithCompressionConfiguration(compressionConfig)
 
 	expected := &protobuf.ConnectionRequest{
+		LibName:            "GlideGo",
 		TlsMode:            protobuf.TlsMode_SecureTls,
 		ReadFrom:           protobuf.ReadFrom_PreferReplica,
 		ClusterModeEnabled: false,
@@ -1511,4 +1518,130 @@ func TestClusterClientConfiguration_WithRecoveryRequestsQueueSize_zero_disables_
 	assert.NoError(t, err)
 	assert.NotNil(t, result.RecoveryRequestsQueueSize)
 	assert.Equal(t, uint32(0), *result.RecoveryRequestsQueueSize) // 0 = disabled
+}
+
+// --- LibName and ClientInfoTag tests ---
+
+type resolveLibNameTestCase struct {
+	name           string
+	libName        string
+	clientInfoTag  string
+	expected       string
+	errorFieldName string
+}
+
+func resolveLibNameTestCases() []resolveLibNameTestCase {
+	return []resolveLibNameTestCase{
+		{name: "default", expected: "GlideGo"},
+		{name: "override", libName: "custom-client", expected: "custom-client"},
+		{name: "tag", clientInfoTag: "framework:1.2", expected: "GlideGo(framework:1.2)"},
+		{
+			name: "combined", libName: "custom-client", clientInfoTag: "framework:1.2",
+			expected: "custom-client(framework:1.2)",
+		},
+		{name: "empty override", libName: "", clientInfoTag: "tag", expected: "GlideGo(tag)"},
+		{name: "empty tag", libName: "custom-client", clientInfoTag: "", expected: "custom-client"},
+		{name: "both empty", libName: "", clientInfoTag: "", expected: "GlideGo"},
+		{
+			name: "punctuation", libName: "custom/client@2.0", clientInfoTag: "framework:1.2+beta",
+			expected: "custom/client@2.0(framework:1.2+beta)",
+		},
+		{name: "lib name lower boundary", libName: "!", expected: "!"},
+		{name: "lib name upper boundary", libName: "~", expected: "~"},
+		{name: "tag lower boundary", clientInfoTag: "!", expected: "GlideGo(!)"},
+		{name: "tag upper boundary", clientInfoTag: "~", expected: "GlideGo(~)"},
+		{name: "lib name opening parenthesis", libName: "(", errorFieldName: "libName"},
+		{name: "lib name closing parenthesis", libName: ")", errorFieldName: "libName"},
+		{name: "tag opening parenthesis", clientInfoTag: "(", errorFieldName: "clientInfoTag"},
+		{name: "tag closing parenthesis", clientInfoTag: ")", errorFieldName: "clientInfoTag"},
+		{name: "lib name ASCII space", libName: "custom client", errorFieldName: "libName"},
+		{name: "lib name null control", libName: "custom\x00client", errorFieldName: "libName"},
+		{name: "lib name unit separator", libName: "custom\x1fclient", errorFieldName: "libName"},
+		{name: "lib name tab", libName: "custom\tclient", errorFieldName: "libName"},
+		{name: "lib name newline", libName: "custom\nclient", errorFieldName: "libName"},
+		{name: "lib name DEL", libName: "custom\x7fclient", errorFieldName: "libName"},
+		{name: "lib name non-ASCII whitespace", libName: "custom\u00a0client", errorFieldName: "libName"},
+		{name: "lib name printable non-ASCII", libName: "customéclient", errorFieldName: "libName"},
+		{name: "tag ASCII space", clientInfoTag: "client tag", errorFieldName: "clientInfoTag"},
+		{name: "tag null control", clientInfoTag: "client\x00tag", errorFieldName: "clientInfoTag"},
+		{name: "tag unit separator", clientInfoTag: "client\x1ftag", errorFieldName: "clientInfoTag"},
+		{name: "tag tab", clientInfoTag: "client\ttag", errorFieldName: "clientInfoTag"},
+		{name: "tag newline", clientInfoTag: "client\ntag", errorFieldName: "clientInfoTag"},
+		{name: "tag DEL", clientInfoTag: "client\x7ftag", errorFieldName: "clientInfoTag"},
+		{
+			name: "tag non-ASCII whitespace", clientInfoTag: "client\u00a0tag",
+			errorFieldName: "clientInfoTag",
+		},
+		{name: "tag printable non-ASCII", clientInfoTag: "clientétag", errorFieldName: "clientInfoTag"},
+	}
+}
+
+func TestResolveLibName(t *testing.T) {
+	for _, testCase := range resolveLibNameTestCases() {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := resolveLibName(testCase.libName, testCase.clientInfoTag)
+			if testCase.errorFieldName != "" {
+				require.EqualError(
+					t,
+					err,
+					testCase.errorFieldName+
+						" must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
+				)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
+}
+
+func TestClientConfigurationsResolveLibName(t *testing.T) {
+	configurationTypes := []struct {
+		name       string
+		toProtobuf func(string, string) (*protobuf.ConnectionRequest, error)
+	}{
+		{
+			name: "standalone",
+			toProtobuf: func(libName, clientInfoTag string) (*protobuf.ConnectionRequest, error) {
+				return NewClientConfiguration().
+					WithLibName(libName).
+					WithClientInfoTag(clientInfoTag).
+					ToProtobuf()
+			},
+		},
+		{
+			name: "cluster",
+			toProtobuf: func(libName, clientInfoTag string) (*protobuf.ConnectionRequest, error) {
+				return NewClusterClientConfiguration().
+					WithLibName(libName).
+					WithClientInfoTag(clientInfoTag).
+					ToProtobuf()
+			},
+		},
+	}
+
+	for _, configurationType := range configurationTypes {
+		t.Run(configurationType.name, func(t *testing.T) {
+			for _, testCase := range resolveLibNameTestCases() {
+				t.Run(testCase.name, func(t *testing.T) {
+					request, err := configurationType.toProtobuf(testCase.libName, testCase.clientInfoTag)
+					if testCase.errorFieldName != "" {
+						require.EqualError(
+							t,
+							err,
+							testCase.errorFieldName+
+								" must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
+						)
+						assert.Nil(t, request)
+						return
+					}
+
+					require.NoError(t, err)
+					assert.Equal(t, testCase.expected, request.LibName)
+				})
+			}
+		})
+	}
 }

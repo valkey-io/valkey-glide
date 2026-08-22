@@ -445,10 +445,13 @@ mod tests {
         Map,
     }
 
+    /// A list of nodes: (address, port, metadata)
+    type Nodes<'a> = Vec<(&'a str, u16, Option<Vec<(&'a str, &'a str)>>)>;
+
     fn slot_value_with_metadata(
         start: u16,
         end: u16,
-        nodes: Vec<(&str, u16, Option<Vec<(&str, &str)>>)>, // (address, port, metadata)
+        nodes: Nodes,
         format: MetadataFormat,
     ) -> Value {
         let node_values: Vec<Value> = nodes
@@ -1045,7 +1048,7 @@ mod tests {
     fn test_topology_calculator_4_nodes_queried_has_a_majority_success() {
         // 4 nodes queried (1 error): Has a majority, single_node_view should be chosen
         let queried_nodes: usize = 4;
-        let topology_results = vec![
+        let topology_results = [
             get_view(&ViewType::SingleNodeViewFullCoverage),
             get_view(&ViewType::SingleNodeViewFullCoverage),
             get_view(&ViewType::TwoNodesViewFullCoverage),
@@ -1070,7 +1073,7 @@ mod tests {
     fn test_topology_calculator_3_nodes_queried_no_majority_has_more_retries_raise_error() {
         // 3 nodes queried: No majority, should return an error
         let queried_nodes = 3;
-        let topology_results = vec![
+        let topology_results = [
             get_view(&ViewType::SingleNodeViewFullCoverage),
             get_view(&ViewType::TwoNodesViewFullCoverage),
             get_view(&ViewType::TwoNodesViewMissingSlots),
@@ -1090,7 +1093,7 @@ mod tests {
     fn test_topology_calculator_3_nodes_queried_no_majority_last_retry_success() {
         // 3 nodes queried:: No majority, last retry, should get the view that has a full slot coverage
         let queried_nodes = 3;
-        let topology_results = vec![
+        let topology_results = [
             get_view(&ViewType::SingleNodeViewMissingSlots),
             get_view(&ViewType::TwoNodesViewFullCoverage),
             get_view(&ViewType::TwoNodesViewMissingSlots),
@@ -1164,7 +1167,7 @@ mod tests {
     fn test_topology_calculator_3_nodes_queried_no_full_coverage_prefer_majority() {
         //  2 nodes queried: No majority, no full slot coverage, should return error
         let queried_nodes = 2;
-        let topology_results = vec![
+        let topology_results = [
             get_view(&ViewType::SingleNodeViewMissingSlots),
             get_view(&ViewType::TwoNodesViewMissingSlots),
             get_view(&ViewType::SingleNodeViewMissingSlots),

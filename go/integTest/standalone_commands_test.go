@@ -56,6 +56,45 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	assert.True(suite.T(), strings.Contains(strResult, fmt.Sprintf("name=%s", clientName)))
 }
 
+func (suite *GlideTestSuite) TestRegisterCustomClientInfoTag() {
+	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
+
+	testCases := []struct {
+		name          string
+		libName       string
+		clientInfoTag string
+		expected      string
+	}{
+		{name: "default", expected: "GlideGo"},
+		{name: "override", libName: "custom-client", expected: "custom-client"},
+		{name: "tag", clientInfoTag: "framework:1.2", expected: "GlideGo(framework:1.2)"},
+		{
+			name: "combined", libName: "custom-client", clientInfoTag: "framework:1.2",
+			expected: "custom-client(framework:1.2)",
+		},
+	}
+
+	for _, testCase := range testCases {
+		suite.Run(testCase.name, func() {
+			clientConfig := config.NewClientConfiguration().
+				WithAddress(&suite.standaloneHosts[0])
+			if testCase.libName != "" {
+				clientConfig.WithLibName(testCase.libName)
+			}
+			if testCase.clientInfoTag != "" {
+				clientConfig.WithClientInfoTag(testCase.clientInfoTag)
+			}
+			client, err := suite.client(clientConfig)
+			require.NoError(suite.T(), err)
+			defer client.Close()
+
+			result, err := client.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+			require.NoError(suite.T(), err)
+			assert.Contains(suite.T(), result.(string), "lib-name="+testCase.expected)
+		})
+	}
+}
+
 func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()

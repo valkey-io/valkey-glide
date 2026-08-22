@@ -14,6 +14,7 @@ from glide_shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
 )
+from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
     ClosingError,
@@ -96,16 +97,7 @@ class BaseClient(CoreCommands):
         # client already closed, and recreate it anyway.
         if self._is_closed:
             return
-        conn_req = self._config._create_a_protobuf_conn_request(
-            cluster_mode=type(self._config) is GlideClusterClientConfiguration
-        )
-        # Preserve a user-configured lib_name; otherwise fall back to the sync default.
-        if not conn_req.lib_name:
-            conn_req.lib_name = "GlidePySync"
-        # Optionally append a client info tag, preserving the library identity
-        # (e.g. "GlidePySync(my-framework:1.2.3)").
-        if self._config.client_info_tag:
-            conn_req.lib_name = f"{conn_req.lib_name}({self._config.client_info_tag})"
+        conn_req = _create_sync_connection_request(self._config)
         conn_req_bytes = conn_req.SerializeToString()
         client_type = self._ffi.new(
             "ClientType*",

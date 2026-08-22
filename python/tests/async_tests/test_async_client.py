@@ -378,10 +378,10 @@ class TestGlideClients:
             request,
             cluster_mode=cluster_mode,
             protocol=protocol,
-            lib_name="glide-py(my-framework:1.2.3)",
+            lib_name="glide-py[my-framework:1.2.3]",
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
-        assert b"lib-name=glide-py(my-framework:1.2.3)" in client_info
+        assert b"lib-name=glide-py[my-framework:1.2.3]" in client_info
         await glide_client.close()
 
     @pytest.mark.skip_if_version_below("7.2.0")

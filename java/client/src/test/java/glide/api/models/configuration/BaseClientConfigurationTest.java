@@ -54,6 +54,121 @@ public class BaseClientConfigurationTest {
     }
 
     @Test
+    public void testIdentificationFieldsDefaultToNull() {
+        TestClientConfiguration config = TestClientConfiguration.builder().build();
+        assertNull(config.getLibName());
+        assertNull(config.getClientInfoTag());
+    }
+
+    @Test
+    public void testIdentificationFieldsAreInheritedByStandaloneAndClusterConfigurations() {
+        GlideClientConfiguration standalone =
+                GlideClientConfiguration.builder()
+                        .libName("standalone-client")
+                        .clientInfoTag("standalone-framework")
+                        .build();
+        assertEquals("standalone-client", standalone.getLibName());
+        assertEquals("standalone-framework", standalone.getClientInfoTag());
+
+        GlideClusterClientConfiguration cluster =
+                GlideClusterClientConfiguration.builder()
+                        .libName("cluster-client")
+                        .clientInfoTag("cluster-framework")
+                        .build();
+        assertEquals("cluster-client", cluster.getLibName());
+        assertEquals("cluster-framework", cluster.getClientInfoTag());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "!", "~", "client!#$%&'*+,-./:;=?@[]^_`{|}~"})
+    public void testClientInfoTagAcceptsEmptyAndPrintableAscii(String clientInfoTag) {
+        TestClientConfiguration config =
+                TestClientConfiguration.builder().clientInfoTag(clientInfoTag).build();
+        assertEquals(clientInfoTag, config.getClientInfoTag());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "!", "~", "client!#$%&'*+,-./:;=?@[]^_`{|}~"})
+    public void testLibNameAcceptsEmptyAndPrintableAscii(String libName) {
+        TestClientConfiguration config = TestClientConfiguration.builder().libName(libName).build();
+        assertEquals(libName, config.getLibName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"(", ")"})
+    public void testClientInfoTagRejectsReservedParentheses(String clientInfoTag) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"(", ")"})
+    public void testLibNameRejectsReservedParentheses(String libName) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().libName(libName));
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "a b",
+                "a\tb",
+                "a\nb",
+                "a\u0000b",
+                "a\u001Fb",
+                "a\u007Fb",
+                "a\u00A0b",
+                "aéb",
+                "a中b"
+            })
+    public void testClientInfoTagRejectsCharactersOutsidePrintableAscii(String clientInfoTag) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().clientInfoTag(clientInfoTag));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
+                exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "a b",
+                "a\tb",
+                "a\nb",
+                "a\u0000b",
+                "a\u001Fb",
+                "a\u007Fb",
+                "a\u00A0b",
+                "aéb",
+                "a中b"
+            })
+    public void testLibNameRejectsCharactersOutsidePrintableAscii(String libName) {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> TestClientConfiguration.builder().libName(libName));
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
+                exception.getMessage());
+    }
+
+    @Test
     public void testDatabaseIdDefault() {
         // Test that databaseId defaults to null when not specified
         TestClientConfiguration config = TestClientConfiguration.builder().build();

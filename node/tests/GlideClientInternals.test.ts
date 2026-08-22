@@ -10,11 +10,13 @@ import os from "os";
 import path from "path";
 import { Reader } from "protobufjs/minimal";
 import {
+    BaseClient,
     BaseClientConfiguration,
     ClientPauseMode,
     ClosingError,
     ClusterBatch,
     ClusterTransaction,
+    ConfigurationError,
     convertGlideRecordToRecord,
     Decoder,
     GlideClient,
@@ -1111,6 +1113,87 @@ describe("GlideClusterClientConfiguration", () => {
         };
 
         expect(config.recoveryRequestsQueueSize).toBeUndefined();
+    });
+});
+
+describe("Client library identification requests", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: BaseClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    it.each([
+        [undefined, undefined, "GlideJS"],
+        ["custom-client", undefined, "custom-client"],
+        [undefined, "framework:1.2", "GlideJS(framework:1.2)"],
+        ["custom-client", "framework:1.2", "custom-client(framework:1.2)"],
+        ["", "", "GlideJS"],
+        [
+            "custom/client+v2",
+            "framework:@1.2!",
+            "custom/client+v2(framework:@1.2!)",
+        ],
+    ])(
+        "populates ordinary request for libName=%p and clientInfoTag=%p",
+        (libName, clientInfoTag, expected) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                libName,
+                clientInfoTag,
+            };
+
+            expect(new TestBaseClient().buildRequest(config).libName).toBe(
+                expected,
+            );
+        },
+    );
+});
+
+describe("BaseClient response handling", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+    }
+
+    it("continues draining responses after a handler exception", () => {
+        const responses = [{ callbackIdx: 1 }, { callbackIdx: 2 }];
+        const client = new TestBaseClient() as unknown as {
+            clientHandle: { drainResponses: () => unknown[] };
+            handleResponse: ReturnType<typeof jest.fn>;
+            handleResponsesAvailable: () => void;
+        };
+        const logSpy = jest
+            .spyOn(Logger, "log")
+            .mockImplementation(() => undefined);
+
+        client.clientHandle = {
+            drainResponses: () => responses,
+        };
+        client.handleResponse = jest
+            .fn()
+            .mockImplementationOnce(() => {
+                throw new Error("handler failed");
+            })
+            .mockImplementationOnce(() => undefined);
+
+        expect(() => client.handleResponsesAvailable()).not.toThrow();
+        expect(client.handleResponse).toHaveBeenCalledTimes(2);
+        expect(client.handleResponse).toHaveBeenNthCalledWith(2, responses[1]);
+        expect(logSpy).toHaveBeenCalledWith(
+            "error",
+            "Response handling",
+            expect.stringContaining("handler failed"),
+        );
+
+        logSpy.mockRestore();
     });
 });
 

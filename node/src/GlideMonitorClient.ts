@@ -3,6 +3,7 @@
 import { closeMonitorClient, createMonitorClient } from "../build-ts/native";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { BaseClientConfiguration } from "./BaseClient.js";
+import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 
 export interface MonitorLine {
     timestamp: number;
@@ -129,6 +130,10 @@ export class GlideMonitorClient {
                     : undefined,
             databaseId: options.databaseId ?? 0,
             clientName: options.clientName,
+            libName: resolveClientLibraryName(
+                options.libName,
+                options.clientInfoTag,
+            ),
         });
     }
 }
