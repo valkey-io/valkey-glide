@@ -43,8 +43,9 @@ runs:
               GH_TARGET: ${{ inputs.target }}
           run: |
               apk update
-              RUSTUP_INIT=$(mktemp)
-              trap "rm -f $RUSTUP_INIT" EXIT
+              RUSTUP_DIR=$(mktemp -d)
+              RUSTUP_INIT="$RUSTUP_DIR/rustup-init"
+              trap "rm -rf $RUSTUP_DIR" EXIT
               case "$GH_TARGET" in
                 x86_64-unknown-linux-musl)
                   RUSTUP_URL="https://static.rust-lang.org/rustup/archive/1.28.1/x86_64-unknown-linux-musl/rustup-init"
