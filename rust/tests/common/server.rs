@@ -60,6 +60,8 @@ impl TestServer {
     }
 
     /// Start a standalone server with extra CLI arguments (e.g. `--requirepass`).
+    // TODO #6877: returning None here makes a missing/broken server a silent skip.
+    // It should fail instead; also retry on a port collision.
     pub fn start_with_args(extra: &[&str]) -> Option<TestServer> {
         let bin = server_binary()?;
         let port = free_port();
