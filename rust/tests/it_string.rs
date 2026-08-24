@@ -161,6 +161,9 @@ matrix_test!(getex_sets_expiry, c, {
     let _: () = c.set(&k, "v").await.unwrap();
     let v: Option<String> = c.get_ex(&k, redis::Expiry::EX(100)).await.unwrap();
     assert_eq!(v.as_deref(), Some("v"));
+
+    let ttl: i64 = c.ttl(&k).await.unwrap();
+    assert!(ttl > 0 && ttl <= 100);
 });
 
 matrix_test!(set_nx_does_not_overwrite, c, {
@@ -203,6 +206,9 @@ matrix_test!(set_with_expiry, c, {
     let _: Option<String> = c.set_options(&k, "v", opts).await.unwrap();
     let v: Option<String> = c.get(&k).await.unwrap();
     assert_eq!(v.as_deref(), Some("v"));
+
+    let ttl: i64 = c.ttl(&k).await.unwrap();
+    assert!(ttl > 0 && ttl <= 100);
 });
 
 matrix_test!(get_wrong_type_errors, c, {
