@@ -662,12 +662,7 @@ impl<C> Dispose for ClusterConnInner<C> {
         }
 
         // Fail any requests buffered in the recovery queue
-        for request in self.recovery_queue.drain(..) {
-            let _ = request.sender.send(Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Connection dropped",
-            ))));
-        }
+        fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
 
         // Reduce the number of clients
         Telemetry::decr_total_clients(1);
@@ -1511,6 +1506,26 @@ enum ConnectionCheck<C> {
     Found((String, ConnectionFuture<C>)),
     OnlyAddress(String),
     RandomConnection,
+}
+
+/// Drain a recovery queue, failing every buffered request with a
+/// `ClientError` carrying `message`, and return the number failed.
+///
+/// Shared by the recovery-queue teardown paths (`fail_recovery_queue` on
+/// escalation to `ReconnectToInitialNodes`, and the `Drop` impl on client
+/// teardown) so the drain-and-fail behavior is defined once.
+fn fail_queued_senders<C>(
+    queue: &mut std::collections::VecDeque<PendingRequest<C>>,
+    message: &'static str,
+) -> usize {
+    let mut failed = 0;
+    for request in queue.drain(..) {
+        let _ = request
+            .sender
+            .send(Err(RedisError::from((ErrorKind::ClientError, message))));
+        failed += 1;
+    }
+    failed
 }
 
 impl<C> ClusterConnInner<C>
@@ -3651,12 +3666,7 @@ where
                     count
                 )
             );
-            for request in self.recovery_queue.drain(..) {
-                let _ = request.sender.send(Err(RedisError::from((
-                    ErrorKind::ClientError,
-                    "Connection in recovery",
-                ))));
-            }
+            fail_queued_senders(&mut self.recovery_queue, "Connection in recovery");
         }
     }
 
@@ -5059,6 +5069,69 @@ mod pipeline_routing_tests {
                 "message mismatch for routing {routing:?}: {err}",
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod recovery_queue_tests {
+    use super::{fail_queued_senders, CmdArg, Operation, PendingRequest, RequestInfo, Response};
+    use crate::{aio::MultiplexedConnection, ErrorKind};
+    use std::collections::VecDeque;
+    use tokio::sync::oneshot;
+
+    // A PendingRequest whose command needs no routing or live connection, so the
+    // queue can be built in isolation. fail_queued_senders only touches `sender`.
+    fn dummy_request() -> (
+        PendingRequest<MultiplexedConnection>,
+        oneshot::Receiver<crate::RedisResult<Response>>,
+    ) {
+        let (sender, receiver) = oneshot::channel();
+        let request = PendingRequest {
+            retry: 0,
+            sender,
+            info: RequestInfo {
+                cmd: CmdArg::OperationRequest(Operation::GetUsername),
+            },
+        };
+        (request, receiver)
+    }
+
+    // Locks in the drain behavior both escalation tests miss (PR #6770 review):
+    // fail_queued_senders must fail every buffered request with a ClientError
+    // carrying the given message and leave the queue empty. If the drain call is
+    // ever removed or turned into a no-op, this fails deterministically.
+    #[tokio::test]
+    async fn fail_queued_senders_fails_all_with_client_error_and_empties() {
+        let mut queue: VecDeque<PendingRequest<MultiplexedConnection>> = VecDeque::new();
+        let mut receivers = Vec::new();
+        for _ in 0..5 {
+            let (req, rx) = dummy_request();
+            queue.push_back(req);
+            receivers.push(rx);
+        }
+
+        let failed = fail_queued_senders(&mut queue, "Connection in recovery");
+
+        assert_eq!(failed, 5, "should report every buffered request as failed");
+        assert!(queue.is_empty(), "queue must be drained");
+
+        for rx in receivers {
+            let result = rx.await.expect("sender should have sent, not dropped");
+            let err = result.expect_err("buffered request must fail");
+            assert_eq!(err.kind(), ErrorKind::ClientError);
+            assert!(
+                err.to_string().contains("Connection in recovery"),
+                "unexpected message: {err}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fail_queued_senders_on_empty_queue_is_noop() {
+        let mut queue: VecDeque<PendingRequest<MultiplexedConnection>> = VecDeque::new();
+        let failed = fail_queued_senders(&mut queue, "Connection in recovery");
+        assert_eq!(failed, 0);
+        assert!(queue.is_empty());
     }
 }
 
