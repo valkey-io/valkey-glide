@@ -3595,7 +3595,9 @@ where
         Ok((address, conn))
     }
 
-    /// Buffer incoming requests into the recovery queue while reconnect is in progress.
+    /// Buffer incoming requests into the recovery queue while recovery is in progress.
+    /// This covers both fast reconnect and slot refresh (the `Reconnect` and
+    /// `RefreshingSlots` states); the `ReconnectToInitialNodes` state fails fast instead.
     /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
     /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
     fn buffer_pending_requests_to_recovery_queue(&mut self) {
@@ -3703,7 +3705,9 @@ where
 
     /// Fail all pending requests immediately with ClientError.
     /// Called when entering recovery to prevent requests from waiting for slow
-    /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
+    /// reconnection cycles (e.g., ReconnectToInitialNodes). Requests during
+    /// `RefreshingSlots` are buffered into the recovery queue instead, so this
+    /// runs only for the non-buffered states.
     fn fail_pending_requests(inner: &Core<C>) {
         let mut rx_guard = inner
             .pending_requests_rx
