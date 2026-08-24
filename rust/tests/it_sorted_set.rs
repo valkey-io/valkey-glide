@@ -3,6 +3,7 @@
 
 mod common;
 
+use glide::commands::options::Limit;
 use glide::commands::sorted_set::{LexBound, ScoreBound};
 use glide::{AsyncCommands, SortedSetCommands};
 
@@ -226,7 +227,7 @@ matrix_test!(zset_wrong_type_errors, c, {
     assert!(res.is_err());
 });
 
-matrix_test!(zrangestore_by_score_stores_count, c, {
+matrix_test!(zrangestore_by_score, c, {
     let src = common::tkey("zrss", "src");
     let dst = common::tkey("zrss", "dst");
     let _: i64 = c
@@ -245,8 +246,69 @@ matrix_test!(zrangestore_by_score_stores_count, c, {
         .await
         .unwrap();
     assert_eq!(n, 2);
+
     let card: i64 = c.zcard(&dst).await.unwrap();
     assert_eq!(card, 2);
+
+    let members: Vec<String> = c.zrange(&dst, 0, -1).await.unwrap();
+    assert_eq!(members, vec!["a".to_string(), "b".to_string()]);
+});
+
+matrix_test!(zrangestore_by_score_rev, c, {
+    let src = common::tkey("zrssrev", "src");
+    let dst = common::tkey("zrssrev", "dst");
+    let _: i64 = c
+        .zadd_multiple(&src, &[(1.0, "a"), (2.0, "b"), (3.0, "c")])
+        .await
+        .unwrap();
+    let n = c
+        .zrangestore_by_score(
+            &dst,
+            &src,
+            ScoreBound::Inclusive(1.0),
+            ScoreBound::Inclusive(2.0),
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(n, 2);
+
+    let card: i64 = c.zcard(&dst).await.unwrap();
+    assert_eq!(card, 2);
+
+    let members: Vec<String> = c.zrange(&dst, 0, -1).await.unwrap();
+    assert_eq!(members, vec!["a".to_string(), "b".to_string()]);
+});
+
+matrix_test!(zrangestore_by_score_limit, c, {
+    let src = common::tkey("zrsslim", "src");
+    let dst = common::tkey("zrsslim", "dst");
+    let _: i64 = c
+        .zadd_multiple(&src, &[(1.0, "a"), (2.0, "b"), (3.0, "c")])
+        .await
+        .unwrap();
+    let n = c
+        .zrangestore_by_score(
+            &dst,
+            &src,
+            ScoreBound::Inclusive(1.0),
+            ScoreBound::Inclusive(3.0),
+            false,
+            Some(Limit {
+                offset: 0,
+                count: 2,
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(n, 2);
+
+    let card: i64 = c.zcard(&dst).await.unwrap();
+    assert_eq!(card, 2);
+
+    let members: Vec<String> = c.zrange(&dst, 0, -1).await.unwrap();
+    assert_eq!(members, vec!["a".to_string(), "b".to_string()]);
 });
 
 matrix_test!(zrangestore_by_lex_stores_count, c, {
