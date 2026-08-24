@@ -102,6 +102,7 @@ macro_rules! implement_glide_commands {
     // owned-send path — no connection-object machinery, no per-page copies.
 
     /// Cursor-driven `SCAN` over the whole keyspace.
+    // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
     fn scan<'s, RV: FromRedisValue + Send + 's>(
         &'s self,
@@ -114,6 +115,7 @@ macro_rules! implement_glide_commands {
     }
 
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
+    // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
     fn scan_match<'s, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
         &'s self,
@@ -244,6 +246,7 @@ macro_rules! implement_glide_commands {
     // `SyncScanIter` implements `Iterator`, so `for` loops work as before.
 
     /// Cursor-driven `SCAN` over the whole keyspace.
+    // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
     fn scan<RV: FromRedisValue>(
         &self,
@@ -252,6 +255,7 @@ macro_rules! implement_glide_commands {
     }
 
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
+    // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
     fn scan_match<P: ToRedisArgs, RV: FromRedisValue>(
         &self,
