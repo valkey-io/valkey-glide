@@ -74,8 +74,7 @@ func (suite *GlideTestSuite) TestRegisterCustomClientInfoTag() {
 
 	for _, testCase := range testCases {
 		suite.Run(testCase.name, func() {
-			clientConfig := config.NewClientConfiguration().
-				WithAddress(&suite.standaloneHosts[0])
+			clientConfig := clientConfigFor(suite.standaloneHosts[0])
 			if testCase.libName != "" {
 				clientConfig.WithLibName(testCase.libName)
 			}
