@@ -53,7 +53,7 @@ fn start_server() -> Option<Server> {
         .local_addr()
         .ok()?
         .port();
-    let child = Command::new(&bin)
+    let mut child = Command::new(&bin)
         .args([
             "--port",
             &port.to_string(),
@@ -74,6 +74,11 @@ fn start_server() -> Option<Server> {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+
+    // Kill process on timeout.
+    let _ = child.kill();
+    let _ = child.wait();
+
     None
 }
 
