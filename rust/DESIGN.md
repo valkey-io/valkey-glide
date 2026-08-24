@@ -1,23 +1,23 @@
 # DESIGN — `glide-rust`
 
 ## Dependency strategy
-The crate declares **git ("remote") dependencies** on both `glide-core` and its
-*vendored* `redis` (the redis-rs fork, v0.25.2 — predating the upstream
-license change), pinned to the same commit of the canonical
-`valkey-io/valkey-glide` repository:
+The crate lives in the `valkey-io/valkey-glide` monorepo under `rust/` and
+declares in-repo **path dependencies** on both `glide-core` and its *vendored*
+`redis` (the redis-rs fork, v0.25.2 — predating the upstream license change),
+which sit alongside it in the same tree:
 
 ```toml
-glide-core = { git = "https://github.com/valkey-io/valkey-glide", rev = "..." }
-redis      = { git = "https://github.com/valkey-io/valkey-glide", package = "redis", rev = "...", features = [
+glide-core = { path = "../glide-core" }
+redis      = { path = "../glide-core/redis-rs/redis", package = "redis", features = [
     "aio", "tokio-comp", "cluster", "cluster-async",
 ] }
 ```
 
-Because both point at the **same git source + rev**, Cargo unifies our
+Because both resolve to the **same in-repo source**, Cargo unifies our
 `redis::Cmd` / `redis::Value` with the exact types `glide-core` expects — no type
-mismatch, no re-wrapping — and consumers don't need a local monorepo checkout.
-(Previously these were local `path` deps; the git form removes the
-sibling-checkout requirement but still does not enable a crates.io publish.)
+mismatch, no re-wrapping. Building the crate therefore requires a checkout of the
+monorepo, and the path deps mean it is not yet publishable to crates.io (see the
+README's *Status & publishing* section).
 
 ## Dispatch seam — `CommandExecutor`
 ```rust

@@ -2,5 +2,6 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 Copyright 2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 redis-rs code copyright 2022 by redis-rs contributors, licensed under
-BSD-3-Clause. The fork is consumed as a git dependency (not vendored here);
-its license text accompanies the crate source fetched by cargo.
+BSD-3-Clause. The fork is consumed as an in-repo path dependency from the
+surrounding valkey-glide monorepo; its license text accompanies that source at
+glide-core/redis-rs/LICENSE.
