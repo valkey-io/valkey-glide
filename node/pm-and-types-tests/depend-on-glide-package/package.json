@@ -3,12 +3,18 @@
     "version": "1.0.0",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "files": [
+        "src",
+        "dist",
+        "tsconfig.json"
+    ],
+    "packageManager": "yarn@4.18.0+sha512.fcb8716fe7cd0eece141ffc18b92193a9df9204c1ba83189c288835223fc0bbe64af473bab0d5e9927a7daeb5caf2bb07eb2787cc9338ca040ea125f2a1f2f7e",
     "scripts": {
         "build": "tsc"
     },
     "dependencies": {
         "@types/pg": "^8.11.11",
-        "@valkey/valkey-glide": "next",
+        "@valkey/valkey-glide": "2.5.0",
         "decimal.js": "^10.5.0",
         "pg": "^8.14.1",
         "winston": "^3.17.0"
