@@ -298,8 +298,7 @@ impl From<ServiceType> for CoreServiceType {
 
 /// AWS IAM authentication configuration for ElastiCache/MemoryDB.
 ///
-/// The core resolves AWS credentials, signs a SigV4 auth token, and refreshes it
-/// automatically (default every 14 minutes). Mirrors Python's IAM config.
+/// The core resolves AWS credentials, signs a SigV4 auth token, and refreshes it automatically.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IamAuthConfig {
     /// AWS ElastiCache or MemoryDB cluster name.
@@ -308,8 +307,8 @@ pub struct IamAuthConfig {
     pub region: String,
     /// Which AWS service backs the cluster.
     pub service_type: ServiceType,
-    /// Token refresh interval in seconds (1s–12h). `None` uses the core default
-    /// (14 minutes).
+    /// Token refresh interval in seconds (1s–12h).
+    /// `None` uses the core default.
     pub refresh_interval_seconds: Option<u32>,
 }
 
