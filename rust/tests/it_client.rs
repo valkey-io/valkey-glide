@@ -192,21 +192,33 @@ timed_tokio_test!(
             None => return,
         };
 
-        // PING to all primaries.
-        let mut ping = Cmd::new();
-        ping.arg("PING");
+        // ECHO to all primaries returns reply per primary node.
+        let msg = "glide-route-probe";
+        let mut echo = Cmd::new();
+        echo.arg("ECHO").arg(msg);
         let r = client
-            .route_command(ping, Route::AllPrimaries)
+            .route_command(echo, Route::AllPrimaries)
             .await
             .unwrap();
-        // Multi-node PING returns a per-node aggregation; just assert success shape.
-        assert!(!matches!(r, redis::Value::Nil));
+
+        let echoed = match &r {
+            redis::Value::Map(pairs) => pairs
+                .iter()
+                .filter(|(_, v)| glide::value::to_string(v.clone()).ok().as_deref() == Some(msg))
+                .count(),
+            _ => 0,
+        };
+        assert_eq!(
+            echoed,
+            cluster.primary_ports.len(),
+            "expected one echo reply per primary, got {r:?}"
+        );
 
         // PING to a random node returns PONG.
-        let mut ping2 = Cmd::new();
-        ping2.arg("PING");
+        let mut ping = Cmd::new();
+        ping.arg("PING");
         let r2 = client
-            .route_command(ping2, Route::RandomNode)
+            .route_command(ping, Route::RandomNode)
             .await
             .unwrap();
         assert_eq!(glide::value::to_string(r2).unwrap(), "PONG");
