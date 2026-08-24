@@ -70,12 +70,21 @@ impl StreamTrimOptions {
 /// Options for `XADD`.
 ///
 /// Mirrors Python `StreamAddOptions`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StreamAddOptions {
     /// If `false`, do not create the stream if it does not exist (`NOMKSTREAM`).
     pub make_stream: bool,
     /// Optional trim to apply as part of the add.
     pub trim: Option<StreamTrimOptions>,
+}
+
+impl Default for StreamAddOptions {
+    fn default() -> Self {
+        Self {
+            make_stream: true,
+            trim: None,
+        }
+    }
 }
 
 impl StreamAddOptions {
@@ -975,6 +984,17 @@ mod tests {
         let mut cmd = Cmd::new();
         StreamTrimOptions::min_id(false, "1526985054069-0", None).add_to(&mut cmd);
         assert_eq!(args_of(&cmd), vec!["MINID", "~", "1526985054069-0"]);
+    }
+
+    #[test]
+    fn add_options_default() {
+        let opts = StreamAddOptions::default();
+        assert!(opts.make_stream);
+        assert!(opts.trim.is_none());
+
+        let mut cmd = Cmd::new();
+        opts.add_to(&mut cmd);
+        assert!(args_of(&cmd).is_empty());
     }
 
     #[test]
