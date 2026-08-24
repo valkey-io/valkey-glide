@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
