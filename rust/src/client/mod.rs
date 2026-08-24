@@ -160,6 +160,7 @@ fn value_to_bytes(v: Value) -> Bytes {
 /// next iteration until [`ClusterScanCursor::is_finished`] returns `true`.
 ///
 /// Mirrors Python's `ClusterScanCursor`.
+// TODO #6875: intermediate cursor ids are never released.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClusterScanCursor(String);
 
