@@ -195,36 +195,32 @@ pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), 
         return Ok(());
     };
 
-    let mut has_open_parenthesis = false;
-    let mut has_closed_parenthesis = false;
-
-    for character in lib_name.chars() {
-        if !('!'..='~').contains(&character) {
-            return Err(
-                "library name must contain only printable ASCII characters from '!' through '~'"
-                    .to_string(),
-            );
-        }
-
-        match character {
-            '(' if has_open_parenthesis || has_closed_parenthesis => {
-                return Err(
-                    "library name may contain at most one matched pair of parentheses".to_string(),
-                );
-            }
-            '(' => has_open_parenthesis = true,
-            ')' if !has_open_parenthesis || has_closed_parenthesis => {
-                return Err(
-                    "library name may contain at most one matched pair of parentheses".to_string(),
-                );
-            }
-            ')' => has_closed_parenthesis = true,
-            _ => {}
-        }
+    if !lib_name
+        .chars()
+        .all(|character| ('!'..='~').contains(&character))
+    {
+        return Err(
+            "library name must contain only printable ASCII characters from '!' through '~'"
+                .to_string(),
+        );
     }
 
-    if has_open_parenthesis != has_closed_parenthesis {
-        return Err("library name may contain at most one matched pair of parentheses".to_string());
+    let Some(open_parenthesis_index) = lib_name.find('(') else {
+        return if lib_name.contains(')') {
+            Err("library name parentheses must form a non-empty trailing '(tag)'".to_string())
+        } else {
+            Ok(())
+        };
+    };
+
+    if !lib_name.ends_with(')') {
+        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
+    }
+
+    let base = &lib_name[..open_parenthesis_index];
+    let tag = &lib_name[open_parenthesis_index + 1..lib_name.len() - 1];
+    if base.is_empty() || tag.is_empty() || base.contains(['(', ')']) || tag.contains(['(', ')']) {
+        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
     }
 
     Ok(())
@@ -3126,6 +3122,9 @@ mod tests {
             ")GlideRust(",
             "GlideRust((tag))",
             "GlideRust(tag)(second)",
+            "GlideRust(tag)suffix",
+            "(tag)",
+            "GlideRust()",
         ] {
             assert!(
                 validate_effective_lib_name(Some(lib_name)).is_err(),
