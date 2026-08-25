@@ -62,7 +62,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -1554,6 +1554,24 @@ fn fail_queued_senders<C>(
     failed
 }
 
+/// Holds `SlotRefreshState::in_progress` for the duration of a slot refresh and
+/// clears it on drop.
+///
+/// The refresh awaits network I/O while holding the flag, so its future can be
+/// dropped part-way through -- `cluster_scan` bounds it by the client's request
+/// timeout. Clearing the flag on drop keeps a cancelled refresh from leaving it
+/// set, which would make every later refresh return early as though another one
+/// were still running.
+struct SlotRefreshInProgressGuard<'a> {
+    in_progress: &'a AtomicBool,
+}
+
+impl Drop for SlotRefreshInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::Relaxed);
+    }
+}
+
 impl<C> ClusterConnInner<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -2542,6 +2560,7 @@ where
             log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
+        let _in_progress_guard = SlotRefreshInProgressGuard { in_progress };
         let acquire_elapsed = acquire_start.elapsed();
         if acquire_elapsed > Duration::from_millis(100) {
             log_warn_lazy!(
@@ -2608,7 +2627,6 @@ where
             })
             .await;
         }
-        in_progress.store(false, Ordering::Relaxed);
         res
     }
 
@@ -5307,5 +5325,39 @@ mod is_circular_moved_redirect_tests {
             ),
             "Without resolver, IP vs hostname won't be detected as circular"
         );
+    }
+}
+
+#[cfg(test)]
+mod slot_refresh_in_progress_guard_tests {
+    use super::{AtomicBool, Ordering, SlotRefreshInProgressGuard};
+
+    #[test]
+    fn clears_the_flag_when_the_scope_ends() {
+        let in_progress = AtomicBool::new(true);
+        {
+            let _guard = SlotRefreshInProgressGuard {
+                in_progress: &in_progress,
+            };
+            assert!(in_progress.load(Ordering::Relaxed));
+        }
+        assert!(!in_progress.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn clears_the_flag_when_the_scope_ends_early() {
+        let in_progress = AtomicBool::new(true);
+        let run = |cancel: bool| {
+            let _guard = SlotRefreshInProgressGuard {
+                in_progress: &in_progress,
+            };
+            if cancel {
+                // Stands in for the refresh future being dropped part-way through.
+                return "cancelled";
+            }
+            "completed"
+        };
+        assert_eq!(run(true), "cancelled");
+        assert!(!in_progress.load(Ordering::Relaxed));
     }
 }
