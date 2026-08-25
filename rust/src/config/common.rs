@@ -106,6 +106,9 @@ pub enum ReadFrom {
     AZAffinity(String),
     /// Read from a replica in the given AZ, else the primary in that AZ, else any.
     AZAffinityReplicasAndPrimary(String),
+    /// Spread reads across all nodes (primaries and replicas) in the
+    /// given AZ, falling back to all nodes if none in the AZ are available.
+    AZAffinityAllNodes(String),
     /// Spread reads across all nodes.
     AllNodes,
 }
@@ -119,6 +122,7 @@ impl From<ReadFrom> for CoreReadFrom {
             ReadFrom::AZAffinityReplicasAndPrimary(az) => {
                 CoreReadFrom::AZAffinityReplicasAndPrimary(az)
             }
+            ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az),
             ReadFrom::AllNodes => CoreReadFrom::AllNodes,
         }
     }

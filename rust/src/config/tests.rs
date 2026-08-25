@@ -244,6 +244,17 @@ fn read_from_az_affinity_replicas_and_primary_carries_az() {
 }
 
 #[test]
+fn read_from_az_affinity_all_nodes_carries_az() {
+    let req = GlideClientConfiguration::with_address("h", 1)
+        .read_from(ReadFrom::AZAffinityAllNodes("eu-central-1c".into()))
+        .to_request();
+    assert_eq!(
+        req.read_from,
+        Some(CoreReadFrom::AZAffinityAllNodes("eu-central-1c".into()))
+    );
+}
+
+#[test]
 fn read_from_from_conversions() {
     assert_eq!(CoreReadFrom::from(ReadFrom::Primary), CoreReadFrom::Primary);
     assert_eq!(
@@ -261,6 +272,10 @@ fn read_from_from_conversions() {
     assert_eq!(
         CoreReadFrom::from(ReadFrom::AZAffinityReplicasAndPrimary("z".into())),
         CoreReadFrom::AZAffinityReplicasAndPrimary("z".into())
+    );
+    assert_eq!(
+        CoreReadFrom::from(ReadFrom::AZAffinityAllNodes("z".into())),
+        CoreReadFrom::AZAffinityAllNodes("z".into())
     );
 }
 
