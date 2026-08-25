@@ -474,6 +474,33 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
 
 #[test]
 fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
+    unsafe extern "C-unwind" fn no_op_pubsub_callback(
+        _client_ptr: usize,
+        _kind: PushKind,
+        _message: *const u8,
+        _message_len: i64,
+        _channel: *const u8,
+        _channel_len: i64,
+        _pattern: *const u8,
+        _pattern_len: i64,
+    ) {
+    }
+
+    unsafe extern "C-unwind" fn no_op_address_resolver(
+        _client_ptr: usize,
+        _host: *const u8,
+        _host_len: usize,
+        _port: u16,
+        _resolved_host_buf: *mut u8,
+        _resolved_host_buf_len: usize,
+        resolved_host_len: *mut usize,
+    ) -> u16 {
+        if !resolved_host_len.is_null() {
+            unsafe { *resolved_host_len = 0 };
+        }
+        0
+    }
+
     let mut request = ConnectionRequest::new();
     request.tls_mode = TlsMode::NoTls.into();
     request.lazy_connect = true;
@@ -490,31 +517,8 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
             request_bytes.as_ptr(),
             request_bytes.len(),
             &client_type,
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    kind: PushKind,
-                    message: *const u8,
-                    message_len: i64,
-                    channel: *const u8,
-                    channel_len: i64,
-                    pattern: *const u8,
-                    pattern_len: i64,
-                ),
-            >(std::ptr::null_mut()),
-            std::mem::transmute::<
-                *mut c_void,
-                unsafe extern "C-unwind" fn(
-                    client_ptr: usize,
-                    host: *const u8,
-                    host_len: usize,
-                    port: u16,
-                    resolved_host_buf: *mut u8,
-                    resolved_host_buf_len: usize,
-                    resolved_host_len: *mut usize,
-                ) -> u16,
-            >(std::ptr::null_mut()),
+            no_op_pubsub_callback,
+            no_op_address_resolver,
             0,
         );
 
