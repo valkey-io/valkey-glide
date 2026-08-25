@@ -217,10 +217,7 @@ timed_tokio_test!(
         // PING to a random node returns PONG.
         let mut ping = Cmd::new();
         ping.arg("PING");
-        let r2 = client
-            .route_command(ping, Route::RandomNode)
-            .await
-            .unwrap();
+        let r2 = client.route_command(ping, Route::RandomNode).await.unwrap();
         assert_eq!(glide::value::to_string(r2).unwrap(), "PONG");
 
         // A key-routed SET then GET through the slot-key route.
