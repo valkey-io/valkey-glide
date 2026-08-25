@@ -25,6 +25,7 @@ async fn compressed_roundtrip_placeholder() {
     eprintln!("SKIP: compressed value round-trip pending compression config support");
 }
 
+// TODO #6878: replace with a real compressed/plain interop test.
 #[tokio::test]
 async fn compression_interop_placeholder() {
     eprintln!("SKIP: compressed/plain interop pending compression config support");
