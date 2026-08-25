@@ -125,7 +125,10 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
 
     let mut data = push.data.into_iter();
     let message = (|| {
-        let mut next = || value_to_bytes(data.next()?);
+        let mut next = || match data.next()? {
+            Value::BulkString(b) => Some(b),
+            _ => None,
+        };
         let pattern = if has_pattern { Some(next()?) } else { None };
         let channel = next()?;
         let payload = next()?;
@@ -144,15 +147,6 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
         );
     }
     message
-}
-
-/// Extract the bytes of a pub/sub push element.
-fn value_to_bytes(v: Value) -> Option<Bytes> {
-    match v {
-        Value::BulkString(b) => Some(b),
-        Value::SimpleString(s) => Some(Bytes::from(s.into_bytes())),
-        _ => None,
-    }
 }
 
 /// A cursor for an in-progress cluster `SCAN`.
