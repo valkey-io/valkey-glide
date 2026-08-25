@@ -122,34 +122,36 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
         PushKind::PMessage => (PubSubMessageKind::PMessage, true),
         _ => return None,
     };
+
     let mut data = push.data.into_iter();
-    if has_pattern {
-        let pattern = value_to_bytes(data.next()?);
-        let channel = value_to_bytes(data.next()?);
-        let payload = value_to_bytes(data.next()?);
+    let message = (|| {
+        let mut next = || value_to_bytes(data.next()?);
+        let pattern = if has_pattern { Some(next()?) } else { None };
+        let channel = next()?;
+        let payload = next()?;
         Some(PubSubMessage {
             kind,
             channel,
             payload,
-            pattern: Some(pattern),
+            pattern,
         })
-    } else {
-        let channel = value_to_bytes(data.next()?);
-        let payload = value_to_bytes(data.next()?);
-        Some(PubSubMessage {
-            kind,
-            channel,
-            payload,
-            pattern: None,
-        })
+    })();
+
+    if message.is_none() {
+        logger_core::log_warn(
+            "pubsub",
+            format!("skipping malformed {kind:?} push: missing or non-string channel/payload"),
+        );
     }
+    message
 }
 
-fn value_to_bytes(v: Value) -> Bytes {
+/// Extract the bytes of a pub/sub push element.
+fn value_to_bytes(v: Value) -> Option<Bytes> {
     match v {
-        Value::BulkString(b) => b,
-        Value::SimpleString(s) => Bytes::from(s.into_bytes()),
-        other => Bytes::from(format!("{other:?}").into_bytes()),
+        Value::BulkString(b) => Some(b),
+        Value::SimpleString(s) => Some(Bytes::from(s.into_bytes())),
+        _ => None,
     }
 }
 
@@ -496,5 +498,69 @@ impl crate::commands::core::AsyncCommands for GlideClusterClient {
         // Routing is decided by glide-core from the command's keys.
         let mut client = self.inner.clone();
         Box::pin(async move { client.send_command(&mut cmd, None).await })
+    }
+}
+
+#[cfg(test)]
+mod push_tests {
+    use super::*;
+
+    fn bulk(s: &str) -> Value {
+        Value::BulkString(Bytes::copy_from_slice(s.as_bytes()))
+    }
+
+    #[test]
+    fn message_push_parses_channel_and_payload() {
+        let push = PushInfo {
+            kind: PushKind::Message,
+            data: vec![bulk("chan"), bulk("hello")],
+        };
+        let msg = push_to_message(push).expect("message should parse");
+        assert_eq!(msg.kind, PubSubMessageKind::Message);
+        assert_eq!(msg.channel, Bytes::from_static(b"chan"));
+        assert_eq!(msg.payload, Bytes::from_static(b"hello"));
+        assert_eq!(msg.pattern, None);
+    }
+
+    #[test]
+    fn pmessage_push_parses_pattern() {
+        let push = PushInfo {
+            kind: PushKind::PMessage,
+            data: vec![bulk("ch.*"), bulk("chan"), bulk("hello")],
+        };
+        let msg = push_to_message(push).expect("pmessage should parse");
+        assert_eq!(msg.kind, PubSubMessageKind::PMessage);
+        assert_eq!(msg.pattern, Some(Bytes::from_static(b"ch.*")));
+        assert_eq!(msg.channel, Bytes::from_static(b"chan"));
+        assert_eq!(msg.payload, Bytes::from_static(b"hello"));
+    }
+
+    #[test]
+    fn non_message_kind_is_skipped() {
+        let push = PushInfo {
+            kind: PushKind::Subscribe,
+            data: vec![bulk("chan"), Value::Int(1)],
+        };
+        assert!(push_to_message(push).is_none());
+    }
+
+    #[test]
+    fn non_string_payload_is_skipped_not_fabricated() {
+        // A non-string payload element must not be stringified into the payload;
+        // the malformed push is skipped (and logged).
+        let push = PushInfo {
+            kind: PushKind::Message,
+            data: vec![bulk("chan"), Value::Int(5)],
+        };
+        assert!(push_to_message(push).is_none());
+    }
+
+    #[test]
+    fn short_message_push_is_skipped() {
+        let push = PushInfo {
+            kind: PushKind::Message,
+            data: vec![bulk("chan")],
+        };
+        assert!(push_to_message(push).is_none());
     }
 }

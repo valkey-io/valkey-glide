@@ -1199,6 +1199,7 @@ dependencies = [
  "criterion",
  "futures",
  "glide-core",
+ "logger_core",
  "once_cell",
  "redis",
  "regex",

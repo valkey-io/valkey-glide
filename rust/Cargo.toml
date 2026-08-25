@@ -22,6 +22,8 @@ path = "src/lib.rs"
 glide-core = { path = "../glide-core" }
 # TODO #6519: Add version once the dependency chain is published to crates.io.
 redis = { path = "../glide-core/redis-rs/redis" }
+# TODO #6519: Add version once the dependency chain is published to crates.io.
+logger_core = { path = "../logger_core" }
 
 async-trait = "0.1"
 bytes = "1"
