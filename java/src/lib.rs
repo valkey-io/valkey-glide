@@ -2358,16 +2358,30 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                     }
                     let scan_args = scan_args_builder.build();
 
-                    // Execute cluster scan
+                    // Execute cluster scan.
+                    //
+                    // A timeout is passed through as it is. `RedisError::is_timeout` reads the
+                    // error's inner representation rather than its `ErrorKind`, so rebuilding a
+                    // timeout drops the marker whichever kind is used, and `error_type` reports
+                    // `RequestErrorType::Unspecified` -- Java then raises `RequestException`
+                    // rather than `TimeoutException`.
+                    //
+                    // Every other error keeps the `ClientError` mapping. Passing those through
+                    // would sort the unrecoverable kinds into `RequestErrorType::Disconnect`,
+                    // which Java raises as `ClosingException`, and that closes the client.
                     let result = client
                         .cluster_scan(&scan_state_cursor, scan_args)
                         .await
                         .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Cluster scan execution failed",
-                                e.to_string(),
-                            ))
+                            if e.is_timeout() {
+                                e
+                            } else {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Cluster scan execution failed",
+                                    e.to_string(),
+                                ))
+                            }
                         });
 
                     // binary_mode = !expect_utf8
