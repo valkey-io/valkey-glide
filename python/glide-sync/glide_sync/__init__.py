@@ -173,9 +173,15 @@ from glide_shared import (
     VectorFieldAttributesHnsw,
     VectorType,
     json_batch,
+    load_client_certificate_and_key_from_file,
+    load_client_certificate_from_file,
+    load_client_key_from_file,
+    load_root_certificates_from_file,
 )
 
+from .client_pool import ClientPool, PoolConfig
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from .isolated_scope import IsolatedScope
 from .logger import Level as LogLevel
 from .logger import Logger
 from .monitor_client import MonitorClient
@@ -193,6 +199,11 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Pool
+    "ClientPool",
+    "PoolConfig",
+    # Scope
+    "IsolatedScope",
     # Internal utilities
     "get_min_compressed_size",
     "Batch",
@@ -224,6 +235,10 @@ __all__ = [
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
     "TlsAdvancedConfiguration",
+    "load_client_certificate_and_key_from_file",
+    "load_client_certificate_from_file",
+    "load_client_key_from_file",
+    "load_root_certificates_from_file",
     # Response
     "OK",
     "TClusterResponse",

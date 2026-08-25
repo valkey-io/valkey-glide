@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -16,6 +17,10 @@ const (
 	DefaultHost = "localhost"
 	DefaultPort = 6379
 )
+
+// MaxUint32 is the largest value that fits in an unsigned 32-bit protobuf field.
+// Reused by validators that need to bound a value to the uint32 wire range.
+const MaxUint32 = math.MaxUint32
 
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
@@ -221,21 +226,52 @@ const (
 // during connection and topology refresh.
 type AddressResolver func(host string, port int) (string, int)
 
+// resolveLibName validates and composes the library name reported to the server.
+func resolveLibName(libName, clientInfoTag string) (string, error) {
+	for _, value := range []struct {
+		field string
+		value string
+	}{
+		{field: "libName", value: libName},
+		{field: "clientInfoTag", value: clientInfoTag},
+	} {
+		for _, r := range value.value {
+			if r < '!' || r > '~' || r == '(' || r == ')' {
+				return "", fmt.Errorf(
+					"%s must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'",
+					value.field,
+				)
+			}
+		}
+	}
+
+	if libName == "" {
+		libName = "GlideGo"
+	}
+	if clientInfoTag != "" {
+		libName += "(" + clientInfoTag + ")"
+	}
+	return libName, nil
+}
+
 type baseClientConfiguration struct {
-	addresses            []NodeAddress
-	useTLS               bool
-	credentials          *ServerCredentials
-	readFrom             ReadFrom
-	requestTimeout       time.Duration
-	clientName           string
-	clientAZ             string
-	reconnectStrategy    *BackoffStrategy
-	lazyConnect          bool
-	DatabaseId           *int `json:"database_id,omitempty"`
-	compressionConfig    *CompressionConfiguration
-	clientSideCache      *ClientSideCache
-	addressResolver      AddressResolver
-	clientCircuitBreaker *ClientCircuitBreakerConfiguration
+	addresses             []NodeAddress
+	useTLS                bool
+	credentials           *ServerCredentials
+	readFrom              ReadFrom
+	requestTimeout        time.Duration
+	clientName            string
+	clientAZ              string
+	libName               string
+	clientInfoTag         string
+	reconnectStrategy     *BackoffStrategy
+	lazyConnect           bool
+	DatabaseId            *int `json:"database_id,omitempty"`
+	compressionConfig     *CompressionConfiguration
+	clientSideCache       *ClientSideCache
+	addressResolver       AddressResolver
+	inflightRequestsLimit uint32
+	clientCircuitBreaker  *ClientCircuitBreakerConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -270,6 +306,12 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	if config.clientAZ != "" {
 		request.ClientAz = config.clientAZ
 	}
+
+	libName, err := resolveLibName(config.libName, config.clientInfoTag)
+	if err != nil {
+		return nil, err
+	}
+	request.LibName = libName
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
@@ -308,6 +350,10 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 			return nil, fmt.Errorf("invalid circuit breaker configuration: %w", err)
 		}
 		request.ClientCircuitBreaker = cbPb
+	}
+
+	if config.inflightRequestsLimit != 0 {
+		request.InflightRequestsLimit = config.inflightRequestsLimit
 	}
 
 	return &request, nil
@@ -387,6 +433,63 @@ func NewClientConfiguration() *ClientConfiguration {
 	return &ClientConfiguration{}
 }
 
+// applyClientCertAndKey copies mTLS client cert/key state from tlsConfig onto request.
+// The WithMutualTLS* methods validate their inputs, so this function trusts them:
+// at most one of (bytes, paths) is set, and byte pairs are never empty.
+//
+// Byte mode sets request.ClientCert and ClientKey (proto fields 22/23).
+// Path mode sets request.ClientCertPath and ClientKeyPath (fields 31/32) plus
+// request.CertReload with Enabled=true and an optional IntervalSeconds (field 33).
+func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) {
+	if len(tlsConfig.clientCertificate) > 0 {
+		request.ClientCert = tlsConfig.clientCertificate
+		request.ClientKey = tlsConfig.clientKey
+		return
+	}
+
+	if len(tlsConfig.clientCertPath) > 0 {
+		certPath := tlsConfig.clientCertPath
+		keyPath := tlsConfig.clientKeyPath
+		request.ClientCertPath = &certPath
+		request.ClientKeyPath = &keyPath
+
+		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
+		if tlsConfig.certReloadInterval > 0 {
+			// certReloadInterval is a uint32 seconds value validated by
+			// WithMutualTLSFromFiles; forward it straight to the wire field.
+			s := tlsConfig.certReloadInterval
+			reload.IntervalSeconds = &s
+		}
+		request.CertReload = reload
+	}
+}
+
+// applyTlsConfig copies TLS state onto request: insecure-TLS mode, root certificates,
+// and (through applyClientCertAndKey) the mTLS client cert/key. Both ToProtobuf sites
+// call it, so the standalone and cluster paths stay in sync.
+func applyTlsConfig(tlsConfig *TlsConfiguration, request *protobuf.ConnectionRequest) error {
+	// Handle insecure TLS mode
+	if tlsConfig.UseInsecureTLS {
+		if request.TlsMode == protobuf.TlsMode_NoTls {
+			return errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
+		}
+		// Override SecureTls mode to InsecureTls when user explicitly requests it
+		request.TlsMode = protobuf.TlsMode_InsecureTls
+	}
+
+	// Handle root certificates
+	if tlsConfig.RootCertificates != nil {
+		if len(tlsConfig.RootCertificates) == 0 {
+			return errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
+		}
+		request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+	}
+
+	// Handle client certificate and key for mutual TLS
+	applyClientCertAndKey(tlsConfig, request)
+	return nil
+}
+
 func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
@@ -433,23 +536,8 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 
 	// Handle TLS configuration
 	if config.AdvancedClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
-		}
-
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		if err := applyTlsConfig(config.AdvancedClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
 	}
 
@@ -524,6 +612,29 @@ func (config *ClientConfiguration) WithClientName(clientName string) *ClientConf
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfiguration {
 	config.clientAZ = clientAZ
+	return config
+}
+
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at
+// client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClientConfiguration) WithLibName(libName string) *ClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClientConfiguration {
+	config.clientInfoTag = clientInfoTag
 	return config
 }
 
@@ -611,6 +722,14 @@ func (config *ClientConfiguration) WithClientCircuitBreaker(
 	return config
 }
 
+// WithInflightRequestsLimit sets the maximum number of concurrent requests allowed to be in-flight (sent but not yet
+// completed). This limit is used to control memory usage and prevent the client from overwhelming the server or getting
+// stuck in case of a queue backlog. If not set, a default value of 1000 will be used.
+func (config *ClientConfiguration) WithInflightRequestsLimit(limit uint32) *ClientConfiguration {
+	config.inflightRequestsLimit = limit
+	return config
+}
+
 func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
@@ -631,7 +750,8 @@ func (config *ClientConfiguration) GetSubscription() *StandaloneSubscriptionConf
 // used.
 type ClusterClientConfiguration struct {
 	baseClientConfiguration
-	subscriptionConfig *ClusterSubscriptionConfig
+	subscriptionConfig        *ClusterSubscriptionConfig
+	recoveryRequestsQueueSize *uint32
 	AdvancedClusterClientConfiguration
 }
 
@@ -694,24 +814,13 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	// Handle TLS configuration
 	if config.AdvancedClusterClientConfiguration.tlsConfig != nil {
-		tlsConfig := config.AdvancedClusterClientConfiguration.tlsConfig
-
-		// Handle insecure TLS mode
-		if tlsConfig.UseInsecureTLS {
-			if request.TlsMode == protobuf.TlsMode_NoTls {
-				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
-			}
-			// Override SecureTls mode to InsecureTls when user explicitly requests it
-			request.TlsMode = protobuf.TlsMode_InsecureTls
+		if err := applyTlsConfig(config.AdvancedClusterClientConfiguration.tlsConfig, request); err != nil {
+			return nil, err
 		}
+	}
 
-		// Handle root certificates
-		if tlsConfig.RootCertificates != nil {
-			if len(tlsConfig.RootCertificates) == 0 {
-				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
-			}
-			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
-		}
+	if config.recoveryRequestsQueueSize != nil {
+		request.RecoveryRequestsQueueSize = config.recoveryRequestsQueueSize
 	}
 
 	return request, nil
@@ -790,6 +899,29 @@ func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *Cluster
 	return config
 }
 
+// WithLibName sets an optional library-name override sent with CLIENT SETINFO LIB-NAME during connection
+// establishment. An empty value uses the default "GlideGo". When [WithClientInfoTag] is also configured, the tag
+// is appended in parentheses (for example, "custom-lib(my-tag)"). Every character in a non-empty value must be
+// printable ASCII from '!' (U+0021) through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at
+// client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClusterClientConfiguration) WithLibName(libName string) *ClusterClientConfiguration {
+	config.libName = libName
+	return config
+}
+
+// WithClientInfoTag sets an optional attribution tag appended to the effective library name in parentheses.
+// For example, configuring the tag "framework:1.2" results in the library name "GlideGo(framework:1.2)".
+// An empty value adds no suffix. Every character in a non-empty value must be printable ASCII from '!' (U+0021)
+// through '~' (U+007E), inclusive, excluding '(' and ')'; validation occurs at client creation time.
+// See [validateClientAttr].
+// [validateClientAttr]: https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+func (config *ClusterClientConfiguration) WithClientInfoTag(clientInfoTag string) *ClusterClientConfiguration {
+	config.clientInfoTag = clientInfoTag
+	return config
+}
+
 // WithReconnectStrategy sets the [BackoffStrategy] used to determine how and when to reconnect, in case of connection
 // failures. If not set, a default backoff strategy will be used.
 func (config *ClusterClientConfiguration) WithReconnectStrategy(
@@ -857,6 +989,24 @@ func (config *ClusterClientConfiguration) WithClientCircuitBreaker(
 	return config
 }
 
+// WithInflightRequestsLimit sets the maximum number of concurrent requests allowed to be in-flight (sent but not yet
+// completed). This limit is used to control memory usage and prevent the client from overwhelming the server or getting
+// stuck in case of a queue backlog. If not set, a default value of 1000 will be used.
+func (config *ClusterClientConfiguration) WithInflightRequestsLimit(limit uint32) *ClusterClientConfiguration {
+	config.inflightRequestsLimit = limit
+	return config
+}
+
+// WithRecoveryRequestsQueueSize sets the maximum number of requests to buffer in the
+// recovery queue when a cluster reconnect is in progress. Buffered requests are retried
+// transparently after reconnection. Requests beyond this limit are failed immediately.
+// Set to 0 to disable the recovery queue and use fail-fast behavior.
+// If not set, a default value of 1000 will be used.
+func (config *ClusterClientConfiguration) WithRecoveryRequestsQueueSize(size uint32) *ClusterClientConfiguration {
+	config.recoveryRequestsQueueSize = &size
+	return config
+}
+
 func (config *ClusterClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -904,6 +1054,39 @@ func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientC
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.
+//
+// Use RootCertificates and UseInsecureTLS to control server verification.
+//
+// For mutual TLS, pick one of [TlsConfiguration.WithMutualTLS] (in-memory PEM
+// bytes) or [TlsConfiguration.WithMutualTLSFromFiles] (paths on disk; the GLIDE
+// core re-reads them periodically to pick up rotated material).
+//
+// Example: static byte-based mTLS loaded once at startup.
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/etc/glide/client.pem", "/etc/glide/client.key")
+//	if err != nil {
+//	    return err
+//	}
+//	tls, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+//	advCfg := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tls)
+//	cfg := config.NewClientConfiguration().
+//	    WithAddress(&config.NodeAddress{Host: "cache.example", Port: 6379}).
+//	    WithUseTLS(true).
+//	    WithAdvancedConfiguration(advCfg)
+//	client, err := glide.NewClient(cfg)
+//
+// Example: path-based mTLS with automatic reload every 60 seconds.
+//
+//	tls, err := config.NewTlsConfiguration().WithMutualTLSFromFiles(
+//	    "/etc/glide/client.pem", "/etc/glide/client.key",
+//	    config.WithReloadInterval(60))
+//	if err != nil {
+//	    return err
+//	}
 type TlsConfiguration struct {
 	// RootCertificates contains custom root certificate data for TLS connections in PEM format.
 	//
@@ -928,6 +1111,21 @@ type TlsConfiguration struct {
 	//
 	// Default: false (verification is enforced).
 	UseInsecureTLS bool
+
+	// Unexported mTLS state. Only the WithMutualTLS* methods write these fields, and
+	// each writes a consistent pair, so callers cannot reach an invalid combination.
+	//
+	// State 1 (no mTLS): all five fields zero.
+	// State 2 (static bytes): clientCertificate and clientKey are non-nil and non-empty;
+	//                         path fields empty; certReloadInterval zero.
+	// State 3 (path + reload): clientCertPath and clientKeyPath non-empty; byte fields nil;
+	//                          certReloadInterval is zero (core default cadence) or a
+	//                          positive uint32 seconds value from WithReloadInterval.
+	clientCertificate  []byte
+	clientKey          []byte
+	clientCertPath     string
+	clientKeyPath      string
+	certReloadInterval uint32
 }
 
 // NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
@@ -958,6 +1156,129 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 	return config
 }
 
+// MutualTLSOption is an optional argument to [TlsConfiguration.WithMutualTLSFromFiles].
+// Options are variadic and applied in order.
+//
+// The only way to get one is through the exported constructors (currently
+// [WithReloadInterval]). applyMutualTLS is unexported, so packages outside
+// this one cannot implement the interface.
+type MutualTLSOption interface {
+	applyMutualTLS(*mtlsSettings)
+}
+
+// mtlsSettings collects option values before they are validated and applied
+// to the TlsConfiguration.
+type mtlsSettings struct {
+	// reloadInterval is a pointer so we can tell "option not passed" (nil,
+	// use the core default cadence) apart from an explicit
+	// WithReloadInterval(0) (a value we then validate and reject).
+	reloadInterval *uint32
+}
+
+// reloadIntervalOption is the concrete option produced by [WithReloadInterval].
+type reloadIntervalOption struct{ interval uint32 }
+
+func (o reloadIntervalOption) applyMutualTLS(s *mtlsSettings) {
+	d := o.interval
+	s.reloadInterval = &d
+}
+
+// WithReloadInterval overrides the cert reload cadence for
+// [TlsConfiguration.WithMutualTLSFromFiles]. The value is a whole number of
+// seconds and must be positive; WithMutualTLSFromFiles rejects zero.
+//
+// The protobuf field is uint32 seconds, so the parameter is uint32. That
+// removes any risk of rounding or truncation at the API boundary and makes
+// the [MaxUint32] upper bound and non-negativity guaranteed by the type.
+func WithReloadInterval(seconds uint32) MutualTLSOption {
+	return reloadIntervalOption{interval: seconds}
+}
+
+// WithMutualTLS enables mutual TLS with an in-memory PEM cert and key loaded
+// once at connection time. The material is static; nothing is reloaded later.
+// For automatic rotation of on-disk material, use
+// [TlsConfiguration.WithMutualTLSFromFiles].
+//
+// Both clientCert and clientKey must be non-empty PEM byte slices. If either
+// is nil or empty, this returns an error and leaves the receiver unchanged.
+//
+// Use [LoadClientCertificateAndKeyFromFile] to read PEM material off disk:
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/path/to/client-cert.pem", "/path/to/client-key.pem")
+//	if err != nil {
+//	    return err
+//	}
+//	tls, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+//
+// Calling this after [TlsConfiguration.WithMutualTLSFromFiles] replaces the
+// path-based state with the new byte-based state.
+func (config *TlsConfiguration) WithMutualTLS(clientCert, clientKey []byte) (*TlsConfiguration, error) {
+	if len(clientCert) == 0 {
+		return nil, fmt.Errorf("WithMutualTLS: clientCert must be non-empty; got %d-byte slice", len(clientCert))
+	}
+	if len(clientKey) == 0 {
+		return nil, fmt.Errorf("WithMutualTLS: clientKey must be non-empty; got %d-byte slice", len(clientKey))
+	}
+	config.clientCertificate = clientCert
+	config.clientKey = clientKey
+	config.clientCertPath = ""
+	config.clientKeyPath = ""
+	config.certReloadInterval = 0
+	return config, nil
+}
+
+// WithMutualTLSFromFiles enables mutual TLS by pointing at cert and key files
+// on disk. The GLIDE core reads them at connect time and re-reads them
+// periodically so rotated material is picked up. If no [WithReloadInterval]
+// option is passed, the cadence is the core's default (currently 300 seconds).
+// Pass [WithReloadInterval](seconds) to override it.
+//
+// Both certPath and keyPath must be non-empty. A reload interval, if passed,
+// must be positive. The value is uint32 seconds; the underlying protobuf field
+// cannot represent sub-second cadences.
+//
+// Calling this after [TlsConfiguration.WithMutualTLS] replaces the byte-based
+// state with the new path-based state.
+func (config *TlsConfiguration) WithMutualTLSFromFiles(
+	certPath, keyPath string, opts ...MutualTLSOption,
+) (*TlsConfiguration, error) {
+	if len(certPath) == 0 {
+		return nil, fmt.Errorf("WithMutualTLSFromFiles: certPath must be non-empty; got %q", certPath)
+	}
+	if len(keyPath) == 0 {
+		return nil, fmt.Errorf("WithMutualTLSFromFiles: keyPath must be non-empty; got %q", keyPath)
+	}
+
+	var settings mtlsSettings
+	for _, opt := range opts {
+		opt.applyMutualTLS(&settings)
+	}
+
+	// interval is zero when the caller did not pass WithReloadInterval; any
+	// user-supplied value is validated to be positive.
+	// applyClientCertAndKey relies on that: it treats certReloadInterval == 0
+	// as "not specified" and only emits IntervalSeconds when the value is > 0.
+	var interval uint32
+	if settings.reloadInterval != nil {
+		if *settings.reloadInterval == 0 {
+			return nil, fmt.Errorf(
+				"WithMutualTLSFromFiles: reload interval must be positive; got 0")
+		}
+		interval = *settings.reloadInterval
+	}
+
+	config.clientCertificate = nil
+	config.clientKey = nil
+	config.clientCertPath = certPath
+	config.clientKeyPath = keyPath
+	config.certReloadInterval = interval
+	return config, nil
+}
+
 // LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.
 // This is a convenience function for loading custom root certificates from disk.
 //
@@ -977,16 +1298,54 @@ func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration
 //	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certs)
 //	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
 func LoadRootCertificatesFromFile(path string) ([]byte, error) {
+	return loadPEMFile(path, "certificate")
+}
+
+// loadPEMFile reads a PEM-encoded file and returns its contents. label is used
+// in error messages ("certificate", "client certificate", "client key") so
+// callers can report which file failed.
+func loadPEMFile(path, label string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		return nil, fmt.Errorf("failed to read %s file: %w", label, err)
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("certificate file is empty: %s", path)
+		return nil, fmt.Errorf("%s file is empty: %s", label, path)
 	}
 
 	return data, nil
+}
+
+// LoadClientCertificateAndKeyFromFile reads PEM-encoded client cert and key
+// files and returns their contents as byte slices, ready to pass to
+// [TlsConfiguration.WithMutualTLS]. It mirrors [crypto/tls.LoadX509KeyPair]:
+// one call reads both files with a single error path.
+//
+// If either file is missing, unreadable, or empty, both return slices are nil
+// and the error names the file that failed.
+//
+// Example:
+//
+//	cert, key, err := config.LoadClientCertificateAndKeyFromFile(
+//	    "/path/to/client-cert.pem", "/path/to/client-key.pem")
+//	if err != nil {
+//	    return err
+//	}
+//	tlsConfig, err := config.NewTlsConfiguration().WithMutualTLS(cert, key)
+//	if err != nil {
+//	    return err
+//	}
+func LoadClientCertificateAndKeyFromFile(certPath, keyPath string) (cert, key []byte, err error) {
+	cert, err = loadPEMFile(certPath, "client certificate")
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err = loadPEMFile(keyPath, "client key")
+	if err != nil {
+		return nil, nil, err
+	}
+	return cert, key, nil
 }
 
 // Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].

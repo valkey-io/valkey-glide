@@ -29,6 +29,8 @@ use std::sync::{Arc, OnceLock};
 mod address_resolver;
 mod errors;
 mod jni_client;
+mod jni_pool;
+mod jni_scope;
 mod linked_hashmap;
 mod routing;
 
@@ -265,7 +267,7 @@ fn resp_value_to_java<'local>(
         }
         Value::BulkString(data) => {
             if encoding_utf8 {
-                match String::from_utf8(data) {
+                match String::from_utf8(data.to_vec()) {
                     Ok(utf8_str) => Ok(JObject::from(env.new_string(utf8_str)?)),
                     Err(err) => {
                         let bytes = err.into_bytes();
@@ -1228,7 +1230,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 let handle_table = get_handle_table();
 
                 // Store in handle table
-                handle_table.insert(safe_handle, client);
+                handle_table.insert(safe_handle, client.clone());
+
+                // Register in scope client registry for scope command execution
+                glide_core::scope::register_client(safe_handle, client);
 
                 // Always spawn push forwarder to deliver pushes to Java
                 let jvm_arc = jni_client::JVM.get().cloned();
@@ -1268,6 +1273,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
 
         // DashMap operations are sync and lock-free
         if let Some((_, client)) = handle_table.remove(&handle_id) {
+            // Unregister from the scope client registry
+            glide_core::scope::unregister_client(handle_id);
+
             // Schedule async cleanup
             let runtime = get_runtime();
             runtime.spawn(async move {
@@ -1397,6 +1405,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         };
 
         let handle_id = client_ptr as u64;
+
+        // Refresh pool activity for batch dispatch and get pool_id for blocking protection
+        let batch_pool_id: Option<u64> =
+            if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
+                let pool_id = *entry.value();
+                glide_core::pool::refresh_client_activity(pool_id, handle_id);
+                Some(pool_id)
+            } else {
+                None
+            };
 
         // Extract request types
         let cmd_count = match env.get_array_length(&request_types) {
@@ -1548,6 +1566,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             ))
                         })?;
 
+                        // Mark as blocking for duration of batch/script execution
+                        if let Some(pid) = batch_pool_id {
+                            glide_core::pool::mark_client_blocking(pid, handle_id, true);
+                        }
+
                         // Execute
                         let exec_res = if is_atomic_bool {
                             client
@@ -1572,6 +1595,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 )
                                 .await
                         };
+
+                        // Unmark blocking after batch completes
+                        if let Some(pid) = batch_pool_id {
+                            glide_core::pool::mark_client_blocking(pid, handle_id, false);
+                        }
 
                         // Decompress if needed
                         match exec_res {
@@ -1794,7 +1822,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     ))
                 })?;
 
-                client.send_command(&mut cmd, routing).await
+                // Abandon monitor integration: for pool-borrowed clients refresh the
+                // inactivity timer on every command, and mark blocking commands so the
+                // monitor skips them while they are in flight.
+                let blocking_flag = crate::jni_pool::get_pool_client_map()
+                    .get(&handle_id)
+                    .map(|entry| *entry.value())
+                    .and_then(|pool_id| {
+                        glide_core::pool::refresh_client_activity(pool_id, handle_id);
+                        if glide_core::client::is_blocking_command(&cmd)
+                            && glide_core::pool::mark_client_blocking(pool_id, handle_id, true)
+                        {
+                            Some(pool_id)
+                        } else {
+                            None
+                        }
+                    });
+
+                let result = client.send_command(&mut cmd, routing).await;
+
+                // Unmark blocking after command completes
+                if let Some(pool_id) = blocking_flag {
+                    glide_core::pool::mark_client_blocking(pool_id, handle_id, false);
+                }
+
+                result
             }
             .await;
 
@@ -1837,6 +1889,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
         else {
             return Some(());
         };
+
+        // Refresh pool activity for script dispatch and get pool_id for blocking protection
+        let script_pool_id: Option<u64> =
+            if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&(handle_id as u64)) {
+                let pool_id = *entry.value();
+                glide_core::pool::refresh_client_activity(pool_id, handle_id as u64);
+                Some(pool_id)
+            } else {
+                None
+            };
 
         // Extract script hash
         let hash_str = match env.get_string(&hash) {
@@ -2009,6 +2071,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         }
                     };
 
+                    // Mark as blocking for duration of script execution
+                    if let Some(pid) = script_pool_id {
+                        glide_core::pool::mark_client_blocking(pid, handle_id as u64, true);
+                    }
+
                     let result = client
                         .invoke_script(
                             &hash_str,
@@ -2024,6 +2091,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 e.to_string(),
                             ))
                         });
+
+                    // Unmark blocking after script completes
+                    if let Some(pid) = script_pool_id {
+                        glide_core::pool::mark_client_blocking(pid, handle_id as u64, false);
+                    }
 
                     let binary_mode = expect_utf8 == 0;
                     complete_callback(jvm, callback_id, result, binary_mode);
@@ -2529,6 +2601,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                 port: addr_proto.port as u16,
             };
 
+            let lib_name = if proto_request.lib_name.is_empty() {
+                None
+            } else {
+                Some(proto_request.lib_name.to_string())
+            };
+
             // Build RedisConnectionInfo from protobuf auth fields
             let redis_connection_info =
                 if let Some(auth) = proto_request.authentication_info.as_ref() {
@@ -2551,7 +2629,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                             _ => redis::ProtocolVersion::RESP2,
                         },
                         client_name: None,
-                        lib_name: None,
+                        lib_name: lib_name.clone(),
                         cache: None,
                         server_assisted_cache: false,
                     }
@@ -2567,7 +2645,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                             _ => redis::ProtocolVersion::RESP2,
                         },
                         client_name: None,
-                        lib_name: None,
+                        lib_name,
                         cache: None,
                         server_assisted_cache: false,
                     }

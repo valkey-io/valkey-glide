@@ -34,6 +34,19 @@ EXCLUDED_TESTS = {
         "test_async_context_manager",
         "test_client_recreation_after_close",
         "test_mixed_async_sync_client_lib_names",
+        # Free-threading tests — async-only (tests async thread pool dispatch)
+        "test_concurrent_commands_single_client",
+        "test_high_concurrency_pipeline",
+        "test_multiple_clients_concurrent",
+        "client_worker",
+        "get_and_store",
+        "get_standalone_config",
+        # Pool metrics (async has individual properties as tests)
+        "test_pool_metrics",
+        # Pool helper functions (async-only patterns)
+        "blocking",
+        # Scope DB test with different naming
+        "test_scope_inherits_runtime_select",
         # Dynamic PubSub tests helper functions
         "unsubscribe_by_method",
         "psubscribe_by_method",
@@ -56,6 +69,12 @@ EXCLUDED_TESTS = {
         "test_inflight_commands_get_closing_error_on_close",
         "test_pubsub_callback_with_closed_client_no_crash",
         "test_client_death_mid_command",
+        # Async-only: _CompatFuture is the trio/anyio future shim, which has no
+        # sync counterpart (the sync client blocks on FFI calls instead).
+        "test_set_result_from_worker_thread_wakes_waiter",
+        "test_set_exception_from_worker_thread_wakes_waiter",
+        # Backend-pinning fixture override for the _CompatFuture tests above
+        "anyio_backend",
         # Nested helper functions in lifecycle tests
         "client_workload",
         "blocking_cmd",
@@ -65,8 +84,18 @@ EXCLUDED_TESTS = {
         "close_after_dispatch",
         "kill_after_delay",
         "cb",
+        "waiter",
         # Async-only pubsub pointer-mode test
         "test_pubsub_large_message_does_not_block_other_clients",
+        # Module-scoped fixture overrides declared in test_auth.py; the sync
+        # twins are named *_sync_client in test_sync_auth.py and cannot share
+        # a name because async fixtures need an async generator body.
+        "acl_glide_client",
+        "glide_client",
+        "management_client",
+        # Abandon detection tests — async-only (monitor runs on tokio runtime)
+        "test_pool_abandon_detection",
+        "test_pool_abandon_detection_disabled",
     ],
     "sync_only": [
         "test_sync_fork",
@@ -88,8 +117,15 @@ EXCLUDED_TESTS = {
         "test_sync_mget_buffers_length_mismatch_raises",
         "test_sync_mget_into_buffers_non_byte_format",
         "test_sync_mget_into_buffers_cross_slot",
-        # Script invocation span — async tracked in #5601
-        "test_sync_span_script_invocation",
+        # Pool blocking test nested helper functions (sync-only threading pattern)
+        "blocking_worker",
+        "fast_worker",
+        # Module-scoped fixture overrides declared in test_sync_auth.py; the
+        # async twins live in the shared async conftest.py, which the scanner
+        # skips via filename_prefix="test".
+        "acl_glide_sync_client",
+        "glide_sync_client",
+        "management_sync_client",
     ],
 }
 
@@ -97,9 +133,12 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
+        "test_async_freethreading.py",
+        "test_fork_safety.py",
     ],
     "sync_only": [
         "test_sync_client_side_cache.py",
+        "test_sync_freethreading.py",
     ],
 }
 

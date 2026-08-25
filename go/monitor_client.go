@@ -77,8 +77,8 @@ func monitorCallback(
 	line := MonitorLine{
 		Timestamp:  float64(timestamp),
 		DB:         int64(db),
-		ClientAddr: string(C.GoBytes(clientAddr, C.int(clientAddrLen))),
-		Command:    string(C.GoBytes(command, C.int(commandLen))),
+		ClientAddr: C.GoStringN((*C.char)(clientAddr), C.int(clientAddrLen)),
+		Command:    C.GoStringN((*C.char)(command), C.int(commandLen)),
 		Args:       args,
 	}
 
@@ -132,6 +132,8 @@ func (c *MonitorClient) startDispatcher() {
 // NewMonitorClient creates a new MonitorClient connected to a standalone server.
 // If callback is non-nil, it is called for each received MonitorLine; otherwise messages
 // are queued and can be retrieved with GetMonitorMessage or TryGetMonitorMessage.
+// Library identification configured with [config.ClientConfiguration.WithLibName] and
+// [config.ClientConfiguration.WithClientInfoTag] is propagated to the monitor connection.
 func NewMonitorClient(cfg *config.ClientConfiguration, callback func(MonitorLine)) (*MonitorClient, error) {
 	request, err := cfg.ToProtobuf()
 	if err != nil {

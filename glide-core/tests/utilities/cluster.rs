@@ -478,13 +478,14 @@ impl PubSubTestSetup {
             .expect("Failed to build cluster client for topology test");
 
         let connection = client
-            .get_async_connection(None, Some(synchronizer.clone()), None)
+            .get_async_connection(None, Some(synchronizer.clone()), None, None)
             .await
             .expect("Failed to get async connection for topology test");
 
         // Create the real client wrapper
         let client_wrapper = ClientWrapper::Cluster {
             client: connection.clone(),
+            _cert_material_manager: None,
         };
         let client_arc = Arc::new(TokioRwLock::new(client_wrapper));
 

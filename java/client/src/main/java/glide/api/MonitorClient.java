@@ -157,6 +157,9 @@ public class MonitorClient implements AutoCloseable {
 
     private static byte[] serializeConfig(GlideClientConfiguration config) {
         ConnectionRequest.Builder builder = ConnectionRequest.newBuilder();
+        builder.setLibName(
+                glide.internal.ClientLibraryNameResolver.resolve(
+                        config.getLibName(), config.getClientInfoTag()));
 
         for (glide.api.models.configuration.NodeAddress addr : config.getAddresses()) {
             builder.addAddresses(

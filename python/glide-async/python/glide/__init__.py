@@ -177,6 +177,10 @@ from glide_shared import (
     VectorFieldAttributesHnsw,
     VectorType,
     json_batch,
+    load_client_certificate_and_key_from_file,
+    load_client_certificate_from_file,
+    load_client_key_from_file,
+    load_root_certificates_from_file,
 )
 from glide_shared._glide_ffi import _GlideFFI as _FFI
 
@@ -184,7 +188,9 @@ from .async_commands import (
     ft,
     glide_json,
 )
+from .client_pool import AsyncClientPool, PoolConfig
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from .isolated_scope import AsyncIsolatedScope
 from .logger import Level as LogLevel
 from .logger import Logger
 from .monitor_client import MonitorClient
@@ -250,6 +256,11 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Pool
+    "AsyncClientPool",
+    "PoolConfig",
+    # Scope
+    "AsyncIsolatedScope",
     # Internal utilities
     "get_min_compressed_size",
     "Batch",
@@ -285,6 +296,10 @@ __all__ = [
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
     "TlsAdvancedConfiguration",
+    "load_client_certificate_and_key_from_file",
+    "load_client_certificate_from_file",
+    "load_client_key_from_file",
+    "load_root_certificates_from_file",
     # Response
     "OK",
     "TClusterResponse",

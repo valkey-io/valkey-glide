@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod pool;
+
 use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::compression::process_command_args_for_compression;
@@ -249,6 +251,9 @@ struct WorkerPoolState {
 
 static WORKER_POOL_STATE: OnceLock<PLMutex2<WorkerPoolState>> = OnceLock::new();
 
+/// Global counter for unique client IDs (used for scope registry).
+static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
+
 fn get_worker_pool_state() -> &'static PLMutex2<WorkerPoolState> {
     WORKER_POOL_STATE.get_or_init(|| {
         PLMutex2::new(WorkerPoolState {
@@ -308,6 +313,9 @@ struct SingleCommandMessage {
     callback_idx: u32,
     cmd: redis::Cmd,
     routing: Option<RoutingInfo>,
+    /// If this command was marked as blocking for pool abandon detection,
+    /// contains the client_id to unmark after completion.
+    pool_blocking_ids: Option<u64>,
 }
 
 /// Batch command message for pipeline or transaction execution.
@@ -321,6 +329,8 @@ struct BatchCommandMessage {
     retry_connection_error: bool,
     routing: Option<RoutingInfo>,
     command_span: Option<GlideSpan>,
+    /// Pool client_id for blocking protection during batch execution.
+    pool_ids: Option<u64>,
 }
 
 /// Script invocation message (EVALSHA with auto-LOAD fallback)
@@ -330,6 +340,8 @@ struct ScriptInvocationMessage {
     keys: Vec<Bytes>,
     args: Vec<Bytes>,
     routing: Option<RoutingInfo>,
+    /// Pool client_id for blocking protection during script execution.
+    pool_ids: Option<u64>,
 }
 
 /// Cluster scan message
@@ -759,6 +771,9 @@ pub struct GlideClientHandle {
     /// Wake-up callback to notify JS when responses are available.
     /// Wrapped in Option to allow explicit drop during close(), which allows Node.js to exit.
     wake_callback: Option<Arc<ThreadsafeFunction<(), (), (), Status, false>>>,
+    /// Unique client ID registered in the glide-core scope registry.
+    /// Used for scope operations (try_acquire, execute, release).
+    client_id: u64,
 }
 
 /// Creates a new direct NAPI client connection with response buffering.
@@ -873,11 +888,18 @@ pub fn create_direct_client<'a>(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
+        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+
+        // Register client in scope registry so scoped connections can find
+        // their parent client for compression, timeout, IAM, and CB checks.
+        glide_core::scope::register_client(client_id, client.clone());
+
         let handle = GlideClientHandle {
             command_tx: Some(command_tx_for_handle),
             inflight_requests: inflight_counter.clone(),
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
+            client_id,
         };
 
         // Resolve the promise with the handle
@@ -924,6 +946,7 @@ pub fn create_direct_client<'a>(
                     let mut cmd = cmd_msg.cmd;
                     let callback_idx = cmd_msg.callback_idx;
                     let routing = cmd_msg.routing;
+                    let pool_blocking_ids = cmd_msg.pool_blocking_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
@@ -941,6 +964,10 @@ pub fn create_direct_client<'a>(
                             Ok(()) => client_clone.send_command(&mut cmd, routing).await,
                             Err(err) => Err(err),
                         };
+                        // Unmark blocking after command completes
+                        if let Some(client_id) = pool_blocking_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, cmd.span());
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -953,12 +980,19 @@ pub fn create_direct_client<'a>(
                 WorkerMessage::Batch(batch_msg) => {
                     let mut client_clone = client.clone();
                     let callback_idx = batch_msg.callback_idx;
+                    let pool_ids = batch_msg.pool_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
 
                     // Spawn local task for batch execution
                     task::spawn_local(async move {
+                        // Mark as blocking for duration of batch execution.
+                        // Conservative: prevents abandon monitor from discarding a client
+                        // mid-batch even if abandon_timeout < batch execution time.
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, true);
+                        }
                         let command_span = batch_msg.command_span.clone();
                         let result = execute_batch(
                             &mut client_clone,
@@ -972,6 +1006,10 @@ pub fn create_direct_client<'a>(
                             batch_msg.command_span,
                         )
                         .await;
+                        // Unmark blocking after batch completes
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, command_span);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -984,16 +1022,27 @@ pub fn create_direct_client<'a>(
                 WorkerMessage::ScriptInvocation(script_msg) => {
                     let mut client_clone = client.clone();
                     let callback_idx = script_msg.callback_idx;
+                    let pool_ids = script_msg.pool_ids;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
                     let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
+                        // Mark as blocking for duration of script execution.
+                        // Conservative: prevents abandon monitor from discarding a client
+                        // mid-script even if abandon_timeout < script execution time.
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, true);
+                        }
                         let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
                         let args: Vec<&[u8]> = script_msg.args.iter().map(|a| a.as_ref()).collect();
                         let result = client_clone
                             .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                             .await;
+                        // Unmark blocking after script completes
+                        if let Some(client_id) = pool_ids {
+                            pool::mark_blocking(client_id, false);
+                        }
                         let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
@@ -1226,11 +1275,28 @@ impl GlideClientHandle {
         };
         let command_span_for_error = cmd.span();
 
+        // Pool abandon detection: refresh activity and mark blocking commands
+        let pool_blocking_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
+            pool::refresh_activity(self.client_id);
+            if glide_core::client::is_blocking_command(&cmd)
+                && pool::mark_blocking(self.client_id, true)
+            {
+                Some(self.client_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Send command to the pinned worker thread via channel
         let msg = WorkerMessage::Command(SingleCommandMessage {
             callback_idx,
             cmd,
             routing,
+            pool_blocking_ids,
         });
 
         // Send via channel (non-blocking)
@@ -1241,6 +1307,10 @@ impl GlideClientHandle {
         if send_failed {
             // Channel closed - client was shut down
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            // Release blocking mark — the worker will never run
+            if let Some(client_id) = pool_blocking_ids {
+                pool::mark_blocking(client_id, false);
+            }
             mark_span_error(&command_span_for_error, "Client connection closed");
             let response = CommandResponse {
                 callback_idx,
@@ -1275,6 +1345,9 @@ impl GlideClientHandle {
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
 
+        // Unregister from scope registry
+        glide_core::scope::unregister_client(self.client_id);
+
         // Free any leaked Value pointers in pending responses that were never consumed by JS
         self.response_buffer.free_leaked_values();
 
@@ -1297,6 +1370,13 @@ impl GlideClientHandle {
     #[napi]
     pub fn available_inflight_slots(&self) -> i32 {
         self.inflight_requests.load(Ordering::Relaxed) as i32
+    }
+
+    /// Returns the client ID registered in the scope registry.
+    /// Used by IsolatedScope to acquire/execute/release scoped connections.
+    #[napi(getter)]
+    pub fn client_id(&self) -> i64 {
+        self.client_id as i64
     }
 
     /// Sends a batch of commands to the Valkey/Redis server.
@@ -1411,6 +1491,16 @@ impl GlideClientHandle {
         };
         let command_span_for_error = command_span.clone();
 
+        // Pool abandon detection: refresh activity for batch duration
+        let pool_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
+            pool::refresh_activity(self.client_id);
+            Some(self.client_id)
+        } else {
+            None
+        };
+
         // Send batch message to worker
         let msg = WorkerMessage::Batch(BatchCommandMessage {
             callback_idx,
@@ -1422,6 +1512,7 @@ impl GlideClientHandle {
             retry_connection_error: retry_connection_error.unwrap_or(false),
             routing,
             command_span,
+            pool_ids,
         });
 
         let send_failed = match &self.command_tx {
@@ -1500,12 +1591,23 @@ impl GlideClientHandle {
             None => None,
         };
 
+        // Pool abandon detection: refresh activity for script execution
+        let pool_ids = if pool::any_pool_clients()
+            && pool::get_client_pool_map().contains_key(&self.client_id)
+        {
+            pool::refresh_activity(self.client_id);
+            Some(self.client_id)
+        } else {
+            None
+        };
+
         let msg = WorkerMessage::ScriptInvocation(ScriptInvocationMessage {
             callback_idx,
             hash,
             keys,
             args,
             routing,
+            pool_ids,
         });
 
         let send_failed = match &self.command_tx {
@@ -1559,6 +1661,11 @@ impl GlideClientHandle {
             object_type,
             allow_non_covered_slots: allow_non_covered_slots.unwrap_or(false),
         });
+
+        // Pool abandon detection: refresh activity for scan
+        if pool::any_pool_clients() && pool::get_client_pool_map().contains_key(&self.client_id) {
+            pool::refresh_activity(self.client_id);
+        }
 
         let send_failed = match &self.command_tx {
             Some(tx) => tx.send(msg).is_err(),
@@ -2565,6 +2672,11 @@ pub fn create_monitor_client<'a>(
         // MONITOR streams plain-text inline responses, which are incompatible with RESP3 push
         // messages. RESP2 must always be used for monitor connections regardless of user config.
         protocol: redis::ProtocolVersion::RESP2,
+        lib_name: if conn_req.lib_name.is_empty() {
+            None
+        } else {
+            Some(conn_req.lib_name.to_string())
+        },
         ..Default::default()
     };
     let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it

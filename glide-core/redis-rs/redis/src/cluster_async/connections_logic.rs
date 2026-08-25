@@ -180,6 +180,7 @@ where
         params.read_from_replicas,
         crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
             | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
+            | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(_)
     );
 
     match create_connection::<C>(
@@ -196,6 +197,7 @@ where
             tcp_nodelay: params.tcp_nodelay,
             pubsub_synchronizer: None,
             iam_token_provider: None,
+            cert_params_provider: None,
         },
     )
     .await

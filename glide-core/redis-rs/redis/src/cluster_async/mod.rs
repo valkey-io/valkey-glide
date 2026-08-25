@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -185,11 +185,20 @@ where
     false
 }
 
+/// Default maximum number of requests to buffer during a cluster reconnect window.
+pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
 #[derive(Clone)]
-pub struct ClusterConnection<C = MultiplexedConnection>(mpsc::Sender<Message<C>>);
+pub struct ClusterConnection<C = MultiplexedConnection> {
+    sender: mpsc::Sender<Message<C>>,
+    /// Direct access to the cluster's slot map for address resolution.
+    /// Used by isolated execution to determine which node
+    /// to open a scoped connection to.
+    inner_core: Arc<InnerCore<C>>,
+}
 
 impl<C> ClusterConnection<C>
 where
@@ -201,6 +210,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
         iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+        cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
@@ -208,9 +218,11 @@ where
             push_sender,
             pubsub_synchronizer,
             iam_token_provider,
+            cert_params_provider,
         )
         .await
         .map(|inner| {
+            let inner_core = inner.inner.clone();
             let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
             let stream = async move {
                 let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
@@ -220,7 +232,10 @@ where
             };
             #[cfg(feature = "tokio-comp")]
             tokio::spawn(stream);
-            ClusterConnection(tx)
+            ClusterConnection {
+                sender: tx,
+                inner_core,
+            }
         })
     }
 
@@ -253,7 +268,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -288,7 +303,7 @@ where
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<(ScanStateRC, Vec<Value>)> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
@@ -322,7 +337,7 @@ where
     ) -> RedisResult<Value> {
         log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
                     cmd: Arc::new(cmd.clone()),
@@ -367,7 +382,7 @@ where
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Pipeline {
                     pipeline: Arc::new(pipeline.clone()),
@@ -460,13 +475,22 @@ where
         self.route_operation_request(Operation::GetUsername).await
     }
 
+    /// Get the primary node address for a given hash slot.
+    /// Used by isolated execution to open scoped connections to the correct node.
+    /// Returns None if the slot is not mapped to any known node.
+    pub fn address_for_slot(&self, slot: u16) -> Option<String> {
+        use crate::cluster_routing::{Route, SlotAddr};
+        let route = Route::new(slot, SlotAddr::Master);
+        self.inner_core.conn_lock.read().address_for_route(&route)
+    }
+
     /// Routes an operation request to the appropriate handler.
     async fn route_operation_request(
         &mut self,
         operation_request: Operation,
     ) -> RedisResult<Value> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,
@@ -635,10 +659,14 @@ pub(crate) struct ClusterConnInner<C> {
     periodic_checks_handler: Option<JoinHandle<()>>,
     // Handler of fast connection validation task
     connections_validation_handler: Option<JoinHandle<()>>,
+    /// Requests buffered during a reconnect/recovery window.
+    /// Drained to `in_flight_requests` once recovery completes.
+    /// Bounded by `recovery_requests_queue_size` cluster param (default 1000).
+    recovery_queue: std::collections::VecDeque<PendingRequest<C>>,
 }
 
 impl<C> Dispose for ClusterConnInner<C> {
-    fn dispose(self) {
+    fn dispose(mut self) {
         if let Some(conn_lock) = self.inner.conn_lock.try_read() {
             // Each node may contain user and *maybe* a management connection
             let mut count = 0usize;
@@ -656,6 +684,14 @@ impl<C> Dispose for ClusterConnInner<C> {
         if let Some(handle) = self.connections_validation_handler {
             #[cfg(feature = "tokio-comp")]
             handle.abort()
+        }
+
+        // Fail any requests buffered in the recovery queue
+        for request in self.recovery_queue.drain(..) {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Connection dropped",
+            ))));
         }
 
         // Reduce the number of clients
@@ -1103,6 +1139,7 @@ mod iam_token_refresh_tests {
             tcp_nodelay: false,
             pubsub_synchronizer: None,
             iam_token_provider: provider,
+            cert_params_provider: None,
         }
     }
 
@@ -1512,6 +1549,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
         iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+        cert_params_provider: Option<Arc<dyn crate::client::CertParamsProvider>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1526,6 +1564,7 @@ where
             cluster_params.read_from_replicas,
             crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
                 | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_)
+                | crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(_)
         );
 
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
@@ -1539,6 +1578,7 @@ where
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
             iam_token_provider,
+            cert_params_provider,
         };
 
         let connections = Self::create_initial_connections(
@@ -1573,6 +1613,7 @@ where
             state: ConnectionState::PollComplete,
             periodic_checks_handler: None,
             connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
         };
         // Initial slots and subscriptions refresh
         Self::refresh_slots_and_subscriptions_with_retries(
@@ -1742,6 +1783,20 @@ where
         }
     }
 
+    /// If mTLS certificate reload is configured, refresh the client TLS params in
+    /// `cluster_params` so that any subsequent connection attempts use the freshest
+    /// (last-known-good) certificate/key. Mirrors
+    /// [`Self::refresh_iam_token_in_cluster_params`] for the cert-rotation case.
+    async fn refresh_cert_params_in_cluster_params(inner: &Arc<InnerCore<C>>) {
+        if let Some(ref cert_provider) = inner.glide_connection_options.cert_params_provider {
+            if let Some(params) = cert_provider.current_tls_params().await {
+                inner.set_cluster_param(|cluster_params| {
+                    cluster_params.tls_params = Some(params);
+                });
+            }
+        }
+    }
+
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
@@ -1749,6 +1804,7 @@ where
         let inner = inner.clone();
         Box::pin(async move {
             Self::refresh_iam_token_in_cluster_params(&inner).await;
+            Self::refresh_cert_params_in_cluster_params(&inner).await;
             let cluster_params = inner.get_cluster_param(|params| params.clone());
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
@@ -1960,6 +2016,7 @@ where
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
                     Self::refresh_iam_token_in_cluster_params(&inner_clone).await;
+                    Self::refresh_cert_params_in_cluster_params(&inner_clone).await;
 
                     let cluster_params = inner_clone.get_cluster_param(|params| params.clone());
 
@@ -2114,13 +2171,17 @@ where
             convert_result(receiver.await)
         };
 
-        // Sanity check: if there are no receivers at all, this is a client‐error
+        // No receivers means we reached no node for this fan-out. Either a
+        // concurrent remove_node drained the connection map after the outer
+        // is_empty check, or the slot map lists primaries or routes that the
+        // connection map does not have, which can persist outside any race.
+        // Both are connectivity failures, so classify as retryable to trigger
+        // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
             return Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Client internal error",
-                "Failed to aggregate results for multi-slot command. Maybe a malformed command?"
-                    .to_string(),
+                ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found for route",
+                "No connections available for multi-node fan-out".to_string(),
             )));
         }
 
@@ -2354,7 +2415,7 @@ where
                             "No address provided for response in Special or None response policy",
                         ))),
                     };
-                    pairs.push((Value::BulkString(key_bytes), value));
+                    pairs.push((Value::BulkString(key_bytes.into()), value));
                 }
                 Ok(Value::Map(pairs))
             }
@@ -2463,8 +2524,7 @@ where
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            log_warn_lazy!("topology_refresh", format!(
-                "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)"));
+            log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
         let acquire_elapsed = acquire_start.elapsed();
@@ -2678,8 +2738,9 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
-        // Ensure cluster_params has a fresh IAM token before creating connections
+        // Ensure cluster_params has a fresh IAM token and reloaded cert before creating connections
         Self::refresh_iam_token_in_cluster_params(&inner).await;
+        Self::refresh_cert_params_in_cluster_params(&inner).await;
         let cluster_params = inner.get_cluster_param(|params| params.clone());
         let glide_connection_options = &inner.glide_connection_options;
 
@@ -3006,6 +3067,20 @@ where
                         .map(|tuple| Some((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
+                    // multi_shard never emits an empty slots vec, so an empty
+                    // one here is a caller bug rather than the topology race
+                    // aggregate_results retries on. Return a non-retryable
+                    // ClientError to keep those two paths distinct.
+                    if slots.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            (
+                                ErrorKind::ClientError,
+                                "MultiSlot routing plan is empty; no routes to fan out to",
+                            )
+                                .into(),
+                        ));
+                    }
                     into_channels(slots.iter().map(|(route, indices)| {
                         connections_container
                             .connection_for_route(route)
@@ -3521,8 +3596,92 @@ where
     }
 
     /// Fail all pending requests immediately with ClientError.
+    /// Buffer incoming requests into the recovery queue while reconnect is in progress.
+    /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
+    /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
+    fn buffer_pending_requests_to_recovery_queue(&mut self) {
+        let cap = self
+            .inner
+            .get_cluster_param(|p| p.recovery_requests_queue_size)
+            .unwrap_or(DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE) as usize;
+
+        let mut rx_guard = self
+            .inner
+            .pending_requests_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        // Pre-emptively reclaim slots held by requests whose callers have already
+        // given up (e.g. timed out), freeing space before we try to enqueue new ones.
+        if self.recovery_queue.len() >= cap {
+            self.recovery_queue
+                .retain(|queued| !queued.sender.is_closed());
+        }
+
+        let mut overflow_count = 0usize;
+        while let Ok(request) = rx_guard.try_recv() {
+            if request.sender.is_closed() {
+                continue; // caller already gave up (e.g. client-side timeout)
+            }
+            if self.recovery_queue.len() < cap {
+                self.recovery_queue.push_back(request);
+            } else {
+                // Fail inline to avoid accumulating an unbounded overflow Vec.
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection in recovery",
+                ))));
+                overflow_count += 1;
+            }
+        }
+        drop(rx_guard);
+
+        if overflow_count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "buffer_pending_requests_to_recovery_queue: recovery queue full (cap={}), \
+                     failed {} overflow requests",
+                    cap, overflow_count
+                )
+            );
+        }
+    }
+
+    /// Drain the recovery queue into `in_flight_requests` now that recovery is complete.
+    /// Requests are dispatched in FIFO order (the order they arrived while recovering).
+    fn drain_recovery_queue_to_inflight(&mut self) {
+        if self.recovery_queue.is_empty() {
+            return;
+        }
+        let retry_params = self.inner.cluster_params.read().retry_params.clone();
+        let count = self.recovery_queue.len();
+        log_info_rate_limited!(
+            "cluster",
+            10,
+            format!(
+                "drain_recovery_queue_to_inflight: dispatching {} queued requests after recovery",
+                count
+            )
+        );
+        while let Some(request) = self.recovery_queue.pop_front() {
+            if request.sender.is_closed() {
+                continue; // caller gave up
+            }
+            let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
+            self.in_flight_requests.push(Request {
+                retry_params: retry_params.clone(),
+                request: Some(request),
+                core: self.inner.clone(),
+                future: RequestState::Future { future },
+            });
+        }
+    }
+
+    /// Fail all pending requests immediately with ClientError.
     /// Called when entering recovery to prevent requests from waiting for slow
-    /// reconnection cycles.
+    /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
     fn fail_pending_requests(inner: &Core<C>) {
         let mut rx_guard = inner
             .pending_requests_rx
@@ -3599,7 +3758,8 @@ where
                             self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
                                 new_handle,
                             ));
-                            Poll::Ready(Ok(()))
+                            cx.waker().wake_by_ref(); // ensure we are polled again to check the new handle
+                            Poll::Pending // stay in recovery, do NOT drain the queue yet
                         }
                     }
                     Poll::Ready(Err(join_err)) => {
@@ -3940,16 +4100,35 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Fail any requests queued while in recovery
-                ClusterConnInner::fail_pending_requests(&self.inner);
+                // Only buffer during fast reconnects (circular MOVED path).
+                // For ReconnectToInitialNodes and RefreshingSlots, fail fast to preserve throughput.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                ) {
+                    self.buffer_pending_requests_to_recovery_queue();
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
+                }
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
+                // Same: only buffer during fast Reconnect path.
+                if matches!(
+                    &self.state,
+                    ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                ) {
+                    self.buffer_pending_requests_to_recovery_queue();
+                } else {
+                    ClusterConnInner::fail_pending_requests(&self.inner);
+                }
                 self.refresh_error = Some(err);
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
-            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Ok(())) => {
+                self.drain_recovery_queue_to_inflight();
+            }
         }
 
         match ready!(self.poll_complete(cx)) {
@@ -4056,6 +4235,13 @@ where
         // If we no longer have any requests in flight we are done (skips any reconnection
         // attempts)
         if self.in_flight_requests.is_empty() {
+            // Fail any requests buffered during recovery — we are closing, they won't be retried.
+            for request in self.recovery_queue.drain(..) {
+                let _ = request.sender.send(Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Connection closed",
+                ))));
+            }
             return Poll::Ready(Ok(()));
         }
 
@@ -4545,7 +4731,7 @@ mod pipeline_routing_tests {
             ],
             vec![(
                 Some("node3".to_string()),
-                Value::BulkString(b"unchanged".to_vec()),
+                Value::BulkString(b"unchanged".to_vec().into()),
             )],
             vec![
                 (Some("node1".to_string()), Value::Int(5)),
@@ -4581,7 +4767,7 @@ mod pipeline_routing_tests {
             responses,
             vec![
                 Value::Int(10),
-                Value::BulkString(b"unchanged".to_vec()),
+                Value::BulkString(b"unchanged".to_vec().into()),
                 Value::Int(5)
             ],
             "{responses:?}"
@@ -4675,7 +4861,7 @@ mod pipeline_routing_tests {
             ],
             vec![(
                 Some("node3".to_string()),
-                Value::BulkString(b"unchanged".to_vec()),
+                Value::BulkString(b"unchanged".to_vec().into()),
             )],
         ];
         let mut response_policies = HashMap::new();
@@ -4701,7 +4887,7 @@ mod pipeline_routing_tests {
                     kind: ServerErrorKind::Moved,
                     detail: Some("An error was signalled by the server: 127.0.0.1".to_string()),
                 }),
-                Value::BulkString(b"unchanged".to_vec()),
+                Value::BulkString(b"unchanged".to_vec().into()),
             ]
         );
     }
@@ -4819,6 +5005,50 @@ mod pipeline_routing_tests {
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
+    }
+
+    // Regression for #6759. Neither path into the empty branch (a remove_node
+    // race, or a slot map listing nodes the connection map lacks) is easy to
+    // force in an integration test, so call aggregate_results with an empty
+    // receivers vec directly and check it returns ConnectionNotFoundForRoute
+    // with RetryMethod::Reconnect and a connectivity message.
+    #[test]
+    fn empty_receivers_is_retryable_connection_not_found() {
+        use crate::{types::RetryMethod, ErrorKind};
+
+        for routing in [
+            MultipleNodeRoutingInfo::AllNodes,
+            MultipleNodeRoutingInfo::AllMasters,
+            MultipleNodeRoutingInfo::MultiSlot((
+                vec![(Route::new(0, SlotAddr::Master), vec![1usize])],
+                MultiSlotArgPattern::KeysOnly,
+            )),
+        ] {
+            let err = block_on(
+                ClusterConnInner::<MultiplexedConnection>::aggregate_results(
+                    Vec::new(),
+                    &routing,
+                    None,
+                ),
+            )
+            .expect_err("empty receivers must fail");
+
+            assert_eq!(
+                err.kind(),
+                ErrorKind::ConnectionNotFoundForRoute,
+                "kind mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert_eq!(
+                err.retry_method(),
+                RetryMethod::Reconnect,
+                "retry_method mismatch for routing {routing:?}: err={err:?}",
+            );
+            assert!(
+                err.to_string()
+                    .contains("No connections available for multi-node fan-out"),
+                "message mismatch for routing {routing:?}: {err}",
+            );
+        }
     }
 }
 

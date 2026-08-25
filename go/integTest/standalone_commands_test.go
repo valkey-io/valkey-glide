@@ -56,6 +56,45 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	assert.True(suite.T(), strings.Contains(strResult, fmt.Sprintf("name=%s", clientName)))
 }
 
+func (suite *GlideTestSuite) TestRegisterCustomClientInfoTag() {
+	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
+
+	testCases := []struct {
+		name          string
+		libName       string
+		clientInfoTag string
+		expected      string
+	}{
+		{name: "default", expected: "GlideGo"},
+		{name: "override", libName: "custom-client", expected: "custom-client"},
+		{name: "tag", clientInfoTag: "framework:1.2", expected: "GlideGo(framework:1.2)"},
+		{
+			name: "combined", libName: "custom-client", clientInfoTag: "framework:1.2",
+			expected: "custom-client(framework:1.2)",
+		},
+	}
+
+	for _, testCase := range testCases {
+		suite.Run(testCase.name, func() {
+			clientConfig := config.NewClientConfiguration().
+				WithAddress(&suite.standaloneHosts[0])
+			if testCase.libName != "" {
+				clientConfig.WithLibName(testCase.libName)
+			}
+			if testCase.clientInfoTag != "" {
+				clientConfig.WithClientInfoTag(testCase.clientInfoTag)
+			}
+			client, err := suite.client(clientConfig)
+			require.NoError(suite.T(), err)
+			defer client.Close()
+
+			result, err := client.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
+			require.NoError(suite.T(), err)
+			assert.Contains(suite.T(), result.(string), "lib-name="+testCase.expected)
+		})
+	}
+}
+
 func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
 	client := suite.defaultClient()
 	key := uuid.New().String()
@@ -1405,9 +1444,12 @@ func (suite *GlideTestSuite) TestScriptExists() {
 }
 
 func (suite *GlideTestSuite) TestScriptKill() {
-	invokeClient, err := suite.client(suite.defaultClientConfig())
-	require.NoError(suite.T(), err)
 	killClient := suite.defaultClient()
+
+	// Use a longer request timeout so InvokeScript blocks until killed
+	invokeConfig := suite.defaultClientConfig().WithRequestTimeout(12 * time.Second)
+	invokeClient, err := suite.client(invokeConfig)
+	require.NoError(suite.T(), err)
 
 	// Ensure no script is running at the beginning
 	_, err = killClient.ScriptKill(context.Background())
@@ -1415,43 +1457,33 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
-	code := CreateLongRunningLuaScript(5, true)
+	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScript(context.Background(), *script)
+	// Start InvokeScript in a goroutine so it begins executing immediately
+	var invokeErr error
+	invokeDone := make(chan struct{})
+	go func() {
+		defer close(invokeDone)
+		_, invokeErr = invokeClient.InvokeScript(context.Background(), *script)
+	}()
 
-	timeout := time.After(4 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
+	// Poll ScriptKill on the main goroutine until the script is running and killed
+	var killErr error
 	var result string
-	killed := false
+	require.Eventually(suite.T(), func() bool {
+		result, killErr = killClient.ScriptKill(context.Background())
+		return killErr == nil
+	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
 
-	for !killed {
-		select {
-		case <-timeout:
-			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 4 seconds")
-		case <-ticker.C:
-			result, err = killClient.ScriptKill(context.Background())
-			if err == nil {
-				killed = true
-				// No 'break' needed here; select already exits after one case
-				continue // Or simply let it fall through
-			}
+	// Wait for invoke to complete after kill
+	<-invokeDone
 
-			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
-				assert.NoError(suite.T(), err) // Will fail the test if there's an unexpected error
-				killed = true                  // Stop polling on unexpected errors
-			}
-			// If it was "notbusy", loop continues naturally
-		}
-	}
-
-	assert.NoError(suite.T(), err) // This now checks the final error state after the loop
+	require.Error(suite.T(), invokeErr)
+	assert.Contains(suite.T(), strings.ToLower(invokeErr.Error()), "script killed")
+	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
-
-	time.Sleep(1 * time.Second)
 
 	// Ensure no script is running at the end
 	_, err = killClient.ScriptKill(context.Background())

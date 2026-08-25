@@ -148,7 +148,7 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+            - uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
             - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -207,6 +207,7 @@ jobs:
               working-directory: java
               shell: bash
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   export AWS_ACCESS_KEY_ID=test_access_key 
                   export AWS_SECRET_ACCESS_KEY=test_secret_key 
                   export AWS_SESSION_TOKEN=test_session_token
@@ -569,6 +570,7 @@ jobs:
               env:
                   GLIDE_CONTAINER_BUILD: true
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then
                           # Use JDK 11 to run Gradle (required by Spotless 7.x / Gradle 8.x)

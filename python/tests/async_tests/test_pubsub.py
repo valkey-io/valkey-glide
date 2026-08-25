@@ -41,7 +41,7 @@ from tests.utils.pubsub_test_utils import (
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
-from tests.utils.utils import kill_connections, wait_for
+from tests.utils.utils import kill_connections_tolerant, wait_for
 
 
 @pytest.mark.anyio
@@ -4016,19 +4016,30 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # Check that timestamp was updated
-            stats_after_first = await listening_client.get_statistics()
-            timestamp_after_first = int(
-                stats_after_first.get("subscription_last_sync_timestamp", "0")
+            async def _timestamp_advanced() -> bool:
+                return (
+                    int(
+                        (await listening_client.get_statistics()).get(
+                            "subscription_last_sync_timestamp", "0"
+                        )
+                    )
+                    > initial_timestamp
+                )
+
+            await wait_for(
+                _timestamp_advanced,
+                "Timestamp should increase after subscription",
             )
 
-            assert (
-                timestamp_after_first > initial_timestamp
-            ), f"Timestamp should increase after subscription: {initial_timestamp} -> {timestamp_after_first}"
+            timestamp_after_first_sub = int(
+                (await listening_client.get_statistics()).get(
+                    "subscription_last_sync_timestamp", "0"
+                )
+            )
 
             # Verify the timestamp is greater than or equal to when we started the subscription
-            assert timestamp_after_first >= time_before_first_sub, (
-                f"Timestamp {timestamp_after_first} should be >= "
+            assert timestamp_after_first_sub >= time_before_first_sub, (
+                f"Timestamp {timestamp_after_first_sub} should be >= "
                 f"{time_before_first_sub} (time before subscription)"
             )
 
@@ -4214,7 +4225,7 @@ class TestPubSub:
             assert msg_before.channel == channel
 
             # Kill connections - this should trigger reconnection
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4301,7 +4312,7 @@ class TestPubSub:
             assert msg_before.pattern == pattern
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4389,7 +4400,7 @@ class TestPubSub:
             assert msg_before.channel == channel
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
 
             # give some time for connection to reconnect
             await anyio.sleep(2)
@@ -4465,7 +4476,7 @@ class TestPubSub:
             )
 
             # Kill connections
-            await kill_connections(publishing_client, None)
+            await kill_connections_tolerant(publishing_client, kill_type=None)
             #  give time for reconnect
             await anyio.sleep(2)
 

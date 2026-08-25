@@ -19,6 +19,47 @@ use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
 
+/// Build a [`crate::tls_reload::CertReloadManager`] when path-based mTLS is
+/// configured, starting its background reload task if reload is enabled. Returns
+/// `Ok(None)` when no cert paths are configured. The manager performs the initial
+/// parse + validation, so a bad initial cert/key surfaces here as an error.
+/// `root_cert` is the already-combined-and-validated root material (see
+/// [`super::combine_root_certs`]).
+async fn build_cert_material_manager(
+    connection_request: &ConnectionRequest,
+    root_cert: Option<Vec<u8>>,
+) -> Result<Option<Arc<crate::tls_reload::CertReloadManager>>, String> {
+    let (Some(cert_path), Some(key_path)) = (
+        connection_request.client_cert_path.as_ref(),
+        connection_request.client_key_path.as_ref(),
+    ) else {
+        return Ok(None);
+    };
+
+    let interval_seconds = connection_request
+        .cert_reload
+        .as_ref()
+        .filter(|cfg| cfg.enabled)
+        .map(|cfg| cfg.interval_seconds);
+
+    let mut manager = crate::tls_reload::CertReloadManager::new(
+        cert_path.into(),
+        key_path.into(),
+        root_cert,
+        interval_seconds.flatten(),
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+
+    // Only spin up the background re-read task when reload is explicitly enabled;
+    // otherwise the path-based config behaves like static (load-once) mTLS.
+    if interval_seconds.is_some() {
+        manager.start_reload_task();
+    }
+
+    Ok(Some(Arc::new(manager)))
+}
+
 #[derive(Debug)]
 enum ReadFrom {
     Primary,
@@ -34,7 +75,11 @@ enum ReadFrom {
     },
     AZAffinityReplicasAndPrimary {
         client_az: String,
-        last_read_replica_index: Arc<AtomicUsize>,
+        latest_read_node_index: Arc<AtomicUsize>,
+    },
+    AZAffinityAllNodes {
+        client_az: String,
+        latest_read_node_index: Arc<AtomicUsize>,
     },
 }
 
@@ -46,6 +91,10 @@ struct DropWrapper {
     read_from: ReadFrom,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
+    /// Owns the background mTLS certificate reload task, when path-based reload is
+    /// configured. Held here so the task lives for the client's lifetime and is
+    /// shut down when the client is dropped.
+    _cert_material_manager: Option<Arc<crate::tls_reload::CertReloadManager>>,
 }
 
 impl Drop for DropWrapper {
@@ -133,6 +182,7 @@ impl StandaloneClient {
                 connection_request.read_from,
                 Some(ClientReadFrom::AZAffinity(_))
                     | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
+                    | Some(ClientReadFrom::AZAffinityAllNodes(_))
             )
         {
             return Err(StandaloneClientConnectionError::FailedConnection(vec![(
@@ -175,6 +225,7 @@ impl StandaloneClient {
             connection_request.read_from,
             Some(ClientReadFrom::AZAffinity(_))
                 | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
+                | Some(ClientReadFrom::AZAffinityAllNodes(_))
         );
 
         let connection_timeout = connection_request.get_connection_timeout();
@@ -184,17 +235,42 @@ impl StandaloneClient {
         let has_root_certs = !connection_request.root_certs.is_empty();
         let has_client_cert = !connection_request.client_cert.is_empty();
         let has_client_key = !connection_request.client_key.is_empty();
-        if has_client_cert != has_client_key {
-            return Err(StandaloneClientConnectionError::FailedConnection(vec![(
-                None,
-                RedisError::from((
-                    redis::ErrorKind::InvalidClientConfig,
-                    "client_cert and client_key must both be provided or both be empty",
-                )),
-            )]));
-        }
+        let has_cert_path = connection_request.client_cert_path.is_some();
+        let has_key_path = connection_request.client_key_path.is_some();
+        super::validate_client_cert_config(
+            has_client_cert,
+            has_client_key,
+            has_cert_path,
+            has_key_path,
+        )
+        .map_err(|err| StandaloneClientConnectionError::FailedConnection(vec![(None, err)]))?;
 
-        let tls_params = if has_root_certs || has_client_cert || has_client_key {
+        // Combine + validate the root certs first (fail fast on an empty entry) so the
+        // cert-reload manager, built next, never sees unvalidated root material.
+        let root_cert_bytes = super::combine_root_certs(&connection_request.root_certs)
+            .map_err(|err| StandaloneClientConnectionError::FailedConnection(vec![(None, err)]))?;
+
+        // Build the certificate reload manager when path-based mTLS is configured.
+        // It performs the initial parse + validation and, if reload is enabled,
+        // drives the background re-read task. The resulting handle is shared with
+        // every node's reconnection loop.
+        let cert_material_manager =
+            build_cert_material_manager(&connection_request, root_cert_bytes.clone())
+                .await
+                .map_err(|err| {
+                    StandaloneClientConnectionError::FailedConnection(vec![(
+                        None,
+                        RedisError::from((
+                            redis::ErrorKind::InvalidClientConfig,
+                            "TLS certificate reload configuration error",
+                            err,
+                        )),
+                    )])
+                })?;
+        let cert_material_handle = cert_material_manager.as_ref().map(|m| m.get_handle());
+
+        let tls_params = if let Some(manager) = &cert_material_manager {
+            // Path-based mTLS: seed the initial params from the (validated) manager.
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
@@ -204,16 +280,17 @@ impl StandaloneClient {
                     )),
                 )]));
             }
-
-            let root_cert = if has_root_certs {
-                let mut combined_certs = Vec::new();
-                for cert in &connection_request.root_certs {
-                    combined_certs.extend_from_slice(cert);
-                }
-                Some(combined_certs)
-            } else {
-                None
-            };
+            Some(manager.get_params().await)
+        } else if has_root_certs || has_client_cert || has_client_key {
+            if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
+                return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                    None,
+                    RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "TLS certificates provided but TLS is disabled",
+                    )),
+                )]));
+            }
 
             let client_tls = if has_client_cert && has_client_key {
                 Some(redis::ClientTlsConfig {
@@ -226,7 +303,7 @@ impl StandaloneClient {
 
             let tls_certificates = redis::TlsCertificates {
                 client_tls,
-                root_cert,
+                root_cert: root_cert_bytes,
             };
             Some(
                 redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
@@ -250,6 +327,7 @@ impl StandaloneClient {
         let discovery_tls_params = tls_params.clone();
         let discovery_pubsub_sync = pubsub_synchronizer.clone();
         let discovery_iam_handle = iam_token_handle.clone();
+        let discovery_cert_handle = cert_material_handle.clone();
         let discovery_resolver = connection_request.address_resolver.clone();
 
         let mut stream = stream::iter(addresses)
@@ -267,6 +345,7 @@ impl StandaloneClient {
                     read_only || node_discovery_mode == NodeDiscoveryMode::Static;
                 let resolver = connection_request.address_resolver.clone();
                 let iam_handle = iam_token_handle.clone();
+                let cert_handle = cert_material_handle.clone();
                 async move {
                     get_connection_and_replication_info(
                         &address,
@@ -282,6 +361,7 @@ impl StandaloneClient {
                         skip_replication,
                         resolver.as_ref(),
                         iam_handle,
+                        cert_handle,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -326,7 +406,8 @@ impl StandaloneClient {
                         primary_index = Some(nodes.len().saturating_sub(1));
                     }
                 }
-                Err((address, (connection, err))) => {
+                Err((address, boxed_err)) => {
+                    let (connection, err) = *boxed_err;
                     nodes.push(connection);
                     replication_infos.push(None);
                     addresses_and_errors.push((Some(address), err));
@@ -386,6 +467,7 @@ impl StandaloneClient {
                     let params = discovery_tls_params.clone();
                     let sync = discovery_pubsub_sync.clone();
                     let iam_handle = discovery_iam_handle.clone();
+                    let cert_handle = discovery_cert_handle.clone();
                     let resolver = discovery_resolver.clone();
                     async move {
                         let result = get_connection_and_replication_info(
@@ -402,6 +484,7 @@ impl StandaloneClient {
                             false,
                             resolver.as_ref(),
                             iam_handle,
+                            cert_handle,
                         )
                         .await;
                         (address, result)
@@ -434,7 +517,8 @@ impl StandaloneClient {
                             }
                         }
                     }
-                    Err((_connection, err)) => {
+                    Err(boxed_err) => {
+                        let (_connection, err) = *boxed_err;
                         log_warn(
                             "topology discovery",
                             format!(
@@ -456,6 +540,7 @@ impl StandaloneClient {
                         let params = discovery_tls_params.clone();
                         let sync = discovery_pubsub_sync.clone();
                         let iam_handle = discovery_iam_handle.clone();
+                        let cert_handle = discovery_cert_handle.clone();
                         let resolver = discovery_resolver.clone();
                         async move {
                             let result = get_connection_and_replication_info(
@@ -472,6 +557,7 @@ impl StandaloneClient {
                                 false,
                                 resolver.as_ref(),
                                 iam_handle,
+                                cert_handle,
                             )
                             .await;
                             (address, result)
@@ -482,7 +568,8 @@ impl StandaloneClient {
                 while let Some((addr, result)) = phase3_stream.next().await {
                     match result {
                         Ok((conn, _)) => nodes.push(conn),
-                        Err((_conn, err)) => {
+                        Err(boxed_err) => {
+                            let (_conn, err) = *boxed_err;
                             log_warn(
                                 "topology discovery",
                                 format!(
@@ -570,6 +657,7 @@ impl StandaloneClient {
                 nodes,
                 read_from,
                 read_only,
+                _cert_material_manager: cert_material_manager,
             }),
         })
     }
@@ -641,43 +729,46 @@ impl StandaloneClient {
         }
     }
 
-    /// Round-robins through replicas (skipping the primary) and returns the first one
-    /// whose availability zone matches `client_az`. Returns `None` if no match is found.
-    async fn get_next_local_replica(
+    /// Round-robins through nodes and returns the first one whose availability zone
+    /// matches `client_az`. Skips the primary unless `include_primary` is set.
+    /// Nodes that are not currently connected are skipped rather than awaited.
+    /// Returns `None` if no match is found.
+    async fn get_next_local_node(
         &self,
-        latest_read_replica_index: &Arc<AtomicUsize>,
+        latest_read_node_index: &Arc<AtomicUsize>,
         client_az: &str,
+        include_primary: bool,
     ) -> Option<&ReconnectingConnection> {
-        let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
+        let initial_index = latest_read_node_index.load(Ordering::Relaxed);
         let mut retries = 0usize;
 
         loop {
             retries = retries.saturating_add(1);
-            // Looped through all replicas; no connected replica found in the same AZ.
+            // Looped through all nodes; no connected node found in the same AZ.
             if retries > self.inner.nodes.len() {
                 return None;
             }
 
             // Calculate index based on initial index and check count.
             let index = (initial_index + retries) % self.inner.nodes.len();
-            if index == self.inner.primary_index {
+            if !include_primary && index == self.inner.primary_index {
                 continue;
             }
-            let replica = &self.inner.nodes[index];
+            let node = &self.inner.nodes[index];
 
-            // Attempt to get a connection and retrieve the replica's AZ.
-            if let Ok(connection) = replica.get_connection().await
-                && let Some(replica_az) = connection.get_az().as_deref()
-                && replica_az == client_az
+            // Skip nodes that are not currently connected instead of awaiting their recovery.
+            if let Some(connection) = node.try_get_connection().await
+                && let Some(node_az) = connection.get_az().as_deref()
+                && node_az == client_az
             {
-                // Update `latest_used_replica` with the index of this replica.
-                let _ = latest_read_replica_index.compare_exchange_weak(
+                // Update `latest_read_node_index` with the index of this node.
+                let _ = latest_read_node_index.compare_exchange_weak(
                     initial_index,
                     index,
                     Ordering::Relaxed,
                     Ordering::Relaxed,
                 );
-                return Some(replica);
+                return Some(node);
             }
         }
     }
@@ -689,7 +780,7 @@ impl StandaloneClient {
         client_az: &str,
     ) -> &ReconnectingConnection {
         if let Some(replica) = self
-            .get_next_local_replica(latest_read_replica_index, client_az)
+            .get_next_local_node(latest_read_replica_index, client_az, false)
             .await
         {
             return replica;
@@ -700,19 +791,19 @@ impl StandaloneClient {
     /// AZAffinityReplicasAndPrimary strategy: same-AZ replica → same-AZ primary → any node (round-robin).
     async fn round_robin_read_from_replica_az_awareness_replicas_and_primary(
         &self,
-        latest_read_replica_index: &Arc<AtomicUsize>,
+        latest_read_node_index: &Arc<AtomicUsize>,
         client_az: &str,
     ) -> &ReconnectingConnection {
         if let Some(replica) = self
-            .get_next_local_replica(latest_read_replica_index, client_az)
+            .get_next_local_node(latest_read_node_index, client_az, false)
             .await
         {
             return replica;
         }
 
-        // Step 2: Check if primary is in the same AZ
+        // Step 2: Check if primary is in the same AZ, skipping it if not currently connected.
         let primary = self.get_primary_connection();
-        if let Ok(connection) = primary.get_connection().await
+        if let Some(connection) = primary.try_get_connection().await
             && let Some(primary_az) = connection.get_az().as_deref()
             && primary_az == client_az
         {
@@ -720,7 +811,25 @@ impl StandaloneClient {
         }
 
         // Step 3: Fall back to any available node using round-robin
-        self.round_robin_read_from_all_nodes(latest_read_replica_index)
+        self.round_robin_read_from_all_nodes(latest_read_node_index)
+    }
+
+    /// AZAffinityAllNodes strategy: same-AZ node (primary or replica, equal round-robin)
+    /// → any node (round-robin).
+    async fn round_robin_read_from_all_nodes_az_awareness(
+        &self,
+        latest_read_node_index: &Arc<AtomicUsize>,
+        client_az: &str,
+    ) -> &ReconnectingConnection {
+        if let Some(node) = self
+            .get_next_local_node(latest_read_node_index, client_az, true)
+            .await
+        {
+            return node;
+        }
+
+        // Fall back to any available node using round-robin
+        self.round_robin_read_from_all_nodes(latest_read_node_index)
     }
 
     async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
@@ -745,13 +854,20 @@ impl StandaloneClient {
             }
             ReadFrom::AZAffinityReplicasAndPrimary {
                 client_az,
-                last_read_replica_index,
+                latest_read_node_index,
             } => {
                 self.round_robin_read_from_replica_az_awareness_replicas_and_primary(
-                    last_read_replica_index,
+                    latest_read_node_index,
                     client_az,
                 )
                 .await
+            }
+            ReadFrom::AZAffinityAllNodes {
+                client_az,
+                latest_read_node_index,
+            } => {
+                self.round_robin_read_from_all_nodes_az_awareness(latest_read_node_index, client_az)
+                    .await
             }
         }
     }
@@ -1060,6 +1176,10 @@ impl StandaloneClient {
     }
 }
 
+// Passes through the large Err from ReconnectingConnection::new. Boxing it would change
+// the error type at every call site.
+// TODO: Box the Err payload and drop this allow - https://github.com/valkey-io/valkey-glide/issues/6819
+#[allow(clippy::result_large_err)]
 #[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
@@ -1075,7 +1195,8 @@ async fn get_connection_and_replication_info(
     skip_replication_check: bool,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
-) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
+    cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
+) -> Result<(ReconnectingConnection, Option<Value>), Box<(ReconnectingConnection, RedisError)>> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
         *retry_strategy,
@@ -1089,6 +1210,7 @@ async fn get_connection_and_replication_info(
         pubsub_synchronizer.clone(),
         address_resolver,
         iam_token_handle,
+        cert_material_handle,
     )
     .await?;
 
@@ -1096,7 +1218,7 @@ async fn get_connection_and_replication_info(
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-            return Err((reconnecting_connection, err));
+            return Err(Box::new((reconnecting_connection, err)));
         }
     };
 
@@ -1110,7 +1232,7 @@ async fn get_connection_and_replication_info(
         .await
     {
         Ok(replication_status) => Ok((reconnecting_connection, Some(replication_status))),
-        Err(err) => Err((reconnecting_connection, err)),
+        Err(err) => Err(Box::new((reconnecting_connection, err))),
     }
 }
 
@@ -1130,9 +1252,13 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::AZAffinityReplicasAndPrimary(az)) => {
             ReadFrom::AZAffinityReplicasAndPrimary {
                 client_az: az,
-                last_read_replica_index: Default::default(),
+                latest_read_node_index: Default::default(),
             }
         }
+        Some(super::ReadFrom::AZAffinityAllNodes(az)) => ReadFrom::AZAffinityAllNodes {
+            client_az: az,
+            latest_read_node_index: Default::default(),
+        },
         None => ReadFrom::Primary,
     }
 }

@@ -1204,8 +1204,8 @@ mod compression_tests {
 
         // Test with array of uncompressed values (should return as-is)
         let array_response = Value::Array(vec![
-            Value::BulkString(b"value1".to_vec()),
-            Value::BulkString(b"value2".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
+            Value::BulkString(b"value2".to_vec().into()),
             Value::Nil,
         ]);
         let result = decompress_batch_response(array_response.clone(), &manager);
@@ -1214,8 +1214,8 @@ mod compression_tests {
         match decompressed {
             Value::Array(values) => {
                 assert_eq!(values.len(), 3);
-                assert_eq!(values[0], Value::BulkString(b"value1".to_vec()));
-                assert_eq!(values[1], Value::BulkString(b"value2".to_vec()));
+                assert_eq!(values[0], Value::BulkString(b"value1".to_vec().into()));
+                assert_eq!(values[1], Value::BulkString(b"value2".to_vec().into()));
                 assert_eq!(values[2], Value::Nil);
             }
             _ => panic!("Expected array response"),
@@ -1225,8 +1225,8 @@ mod compression_tests {
         let test_data = b"test data for compression that is long enough to be compressed";
         let compressed = manager.compress_value(test_data).into_owned();
         let array_with_compressed = Value::Array(vec![
-            Value::BulkString(compressed.clone()),
-            Value::BulkString(b"uncompressed".to_vec()),
+            Value::BulkString(compressed.clone().into()),
+            Value::BulkString(b"uncompressed".to_vec().into()),
         ]);
         let result = decompress_batch_response(array_with_compressed, &manager);
         assert!(result.is_ok());
@@ -1235,19 +1235,22 @@ mod compression_tests {
             Value::Array(values) => {
                 assert_eq!(values.len(), 2);
                 // First value should be decompressed
-                assert_eq!(values[0], Value::BulkString(test_data.to_vec()));
+                assert_eq!(values[0], Value::BulkString(test_data.to_vec().into()));
                 // Second value should remain unchanged
-                assert_eq!(values[1], Value::BulkString(b"uncompressed".to_vec()));
+                assert_eq!(
+                    values[1],
+                    Value::BulkString(b"uncompressed".to_vec().into())
+                );
             }
             _ => panic!("Expected array response"),
         }
 
         // Test with non-array response (single value)
-        let single_response = Value::BulkString(compressed.clone());
+        let single_response = Value::BulkString(compressed.clone().into());
         let result = decompress_batch_response(single_response, &manager);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
-        assert_eq!(decompressed, Value::BulkString(test_data.to_vec()));
+        assert_eq!(decompressed, Value::BulkString(test_data.to_vec().into()));
 
         // Test with disabled compression manager
         let disabled_config = CompressionConfig {
@@ -1261,7 +1264,8 @@ mod compression_tests {
         let disabled_manager = CompressionManager::new(disabled_backend, disabled_config).unwrap();
 
         // With disabled manager, compressed data should NOT be decompressed
-        let array_with_compressed = Value::Array(vec![Value::BulkString(compressed.clone())]);
+        let array_with_compressed =
+            Value::Array(vec![Value::BulkString(compressed.clone().into())]);
         let result = decompress_batch_response(array_with_compressed, &disabled_manager);
         assert!(result.is_ok());
         let not_decompressed = result.unwrap();
@@ -1269,7 +1273,7 @@ mod compression_tests {
             Value::Array(values) => {
                 assert_eq!(values.len(), 1);
                 // Value should remain compressed since manager is disabled
-                assert_eq!(values[0], Value::BulkString(compressed));
+                assert_eq!(values[0], Value::BulkString(compressed.into()));
             }
             _ => panic!("Expected array response"),
         }
@@ -1304,9 +1308,9 @@ mod compression_tests {
             Value::SimpleString("OK".to_string()),
             // MGET result - nested array with compressed values
             Value::Array(vec![
-                Value::BulkString(compressed1.clone()),
-                Value::BulkString(compressed2.clone()),
-                Value::BulkString(compressed3.clone()),
+                Value::BulkString(compressed1.clone().into()),
+                Value::BulkString(compressed2.clone().into()),
+                Value::BulkString(compressed3.clone().into()),
             ]),
         ]);
 
@@ -1325,9 +1329,18 @@ mod compression_tests {
                 match &values[1] {
                     Value::Array(mget_values) => {
                         assert_eq!(mget_values.len(), 3);
-                        assert_eq!(mget_values[0], Value::BulkString(test_data1.to_vec()));
-                        assert_eq!(mget_values[1], Value::BulkString(test_data2.to_vec()));
-                        assert_eq!(mget_values[2], Value::BulkString(test_data3.to_vec()));
+                        assert_eq!(
+                            mget_values[0],
+                            Value::BulkString(test_data1.to_vec().into())
+                        );
+                        assert_eq!(
+                            mget_values[1],
+                            Value::BulkString(test_data2.to_vec().into())
+                        );
+                        assert_eq!(
+                            mget_values[2],
+                            Value::BulkString(test_data3.to_vec().into())
+                        );
                     }
                     _ => panic!("Expected nested array for MGET result"),
                 }
@@ -1337,7 +1350,7 @@ mod compression_tests {
 
         // Test with deeply nested arrays (edge case)
         let deeply_nested = Value::Array(vec![Value::Array(vec![Value::Array(vec![
-            Value::BulkString(compressed1.clone()),
+            Value::BulkString(compressed1.clone().into()),
         ])])]);
 
         let result = decompress_batch_response(deeply_nested, &manager);
@@ -1349,7 +1362,7 @@ mod compression_tests {
             Value::Array(level1) => match &level1[0] {
                 Value::Array(level2) => match &level2[0] {
                     Value::Array(level3) => {
-                        assert_eq!(level3[0], Value::BulkString(test_data1.to_vec()));
+                        assert_eq!(level3[0], Value::BulkString(test_data1.to_vec().into()));
                     }
                     _ => panic!("Expected array at level 3"),
                 },
@@ -1360,10 +1373,10 @@ mod compression_tests {
 
         // Test with mixed nested and non-nested values
         let mixed_response = Value::Array(vec![
-            Value::BulkString(compressed1.clone()), // Direct compressed value
+            Value::BulkString(compressed1.clone().into()), // Direct compressed value
             Value::Array(vec![
                 // Nested array with compressed values
-                Value::BulkString(compressed2.clone()),
+                Value::BulkString(compressed2.clone().into()),
                 Value::Nil,
             ]),
             Value::SimpleString("OK".to_string()), // Simple string
@@ -1377,12 +1390,12 @@ mod compression_tests {
             Value::Array(values) => {
                 assert_eq!(values.len(), 3);
                 // First value should be decompressed
-                assert_eq!(values[0], Value::BulkString(test_data1.to_vec()));
+                assert_eq!(values[0], Value::BulkString(test_data1.to_vec().into()));
                 // Second value should be nested array with decompressed values
                 match &values[1] {
                     Value::Array(nested) => {
                         assert_eq!(nested.len(), 2);
-                        assert_eq!(nested[0], Value::BulkString(test_data2.to_vec()));
+                        assert_eq!(nested[0], Value::BulkString(test_data2.to_vec().into()));
                         assert_eq!(nested[1], Value::Nil);
                     }
                     _ => panic!("Expected nested array"),

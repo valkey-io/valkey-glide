@@ -50,12 +50,12 @@ from tests.utils.utils import (
 )
 
 
-def exec_batch(
+def _exec_batch_once(
     glide_sync_client: TGlideClient,
     batch: BaseBatch,
-    route: Optional[TSingleNodeRoute] = None,
-    timeout: Optional[int] = None,
-    raise_on_error: bool = False,
+    route: Optional[TSingleNodeRoute],
+    timeout: Optional[int],
+    raise_on_error: bool,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_sync_client, GlideClient):
         batch_options = BatchOptions(timeout=timeout)
@@ -74,8 +74,63 @@ def exec_batch(
         )
 
 
+def exec_batch(
+    glide_sync_client: TGlideClient,
+    batch: BaseBatch,
+    route: Optional[TSingleNodeRoute] = None,
+    timeout: Optional[int] = None,
+    raise_on_error: bool = False,
+    allow_null_result: bool = False,
+) -> Optional[List[TResult]]:
+    """Sync twin: retry once on None for atomic cluster batches. Tests that
+    legitimately expect None (WATCH-abort transactions) must pass
+    allow_null_result=True to opt out of the retry."""
+    result = _exec_batch_once(glide_sync_client, batch, route, timeout, raise_on_error)
+    if allow_null_result:
+        return result
+    is_atomic_cluster = isinstance(glide_sync_client, GlideClusterClient) and getattr(
+        batch, "is_atomic", False
+    )
+    if result is None and is_atomic_cluster and not raise_on_error:
+        result = _exec_batch_once(
+            glide_sync_client, batch, route, timeout, raise_on_error
+        )
+    return result
+
+
 @pytest.mark.anyio
 class TestSyncBatch:
+    @pytest.fixture(autouse=True)
+    def _evict_pooled_sync_client_before_test(self, request):
+        """Sync twin: evict the shared pooled GlideClusterClient for the
+        RESP3+cluster axis before every TestSyncBatch test. See the async
+        twin (test_batch.py::TestBatch._evict_pooled_client_before_test)
+        for rationale."""
+        try:
+            protocol = request.getfixturevalue("protocol")
+            cluster_mode = request.getfixturevalue("cluster_mode")
+        except Exception:
+            yield
+            return
+
+        should_evict = cluster_mode is True and protocol == ProtocolVersion.RESP3
+        if should_evict:
+            import contextlib
+
+            from tests.sync_tests.conftest import (
+                _get_worker_id,
+                _sync_client_pool,
+                _sync_client_pool_lock,
+            )
+
+            cache_key = (_get_worker_id(), True, protocol)
+            with _sync_client_pool_lock:
+                evicted = _sync_client_pool.pop(cache_key, None)
+            if evicted is not None:
+                with contextlib.suppress(Exception):
+                    evicted.close()
+        yield
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_batch_set_with_bytearray_and_memoryview(
@@ -239,7 +294,7 @@ class TestSyncBatch:
         result2 = client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = exec_batch(glide_sync_client, transaction)
+        result3 = exec_batch(glide_sync_client, transaction, allow_null_result=True)
         assert result3 is None
 
         client2.close()

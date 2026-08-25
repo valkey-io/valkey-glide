@@ -305,12 +305,12 @@ pub(crate) mod shared_client_tests {
                 result,
                 Value::Map(vec![
                     (
-                        Value::BulkString("foo".as_bytes().to_vec()),
-                        Value::BulkString("baz".as_bytes().to_vec())
+                        Value::BulkString("foo".as_bytes().to_vec().into()),
+                        Value::BulkString("baz".as_bytes().to_vec().into())
                     ),
                     (
-                        Value::BulkString("bar".as_bytes().to_vec()),
-                        Value::BulkString("foobar".as_bytes().to_vec())
+                        Value::BulkString("bar".as_bytes().to_vec().into()),
+                        Value::BulkString("foobar".as_bytes().to_vec().into())
                     )
                 ])
             );
@@ -709,7 +709,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -805,7 +805,7 @@ pub(crate) mod shared_client_tests {
                                 client.send_command(redis::cmd("GET").arg(&key), None).await;
                             assert_eq!(
                                 get_result.unwrap(),
-                                Value::BulkString("test_value".as_bytes().to_vec())
+                                Value::BulkString("test_value".as_bytes().to_vec().into())
                             );
                         }
                         Err(err) => {
@@ -1019,7 +1019,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the set value"
                     );
 
@@ -1041,7 +1041,7 @@ pub(crate) mod shared_client_tests {
                         .await;
                     assert_eq!(
                         get_after_reconnect.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET after reconnection should return the same value"
                     );
                 }
@@ -1380,7 +1380,7 @@ pub(crate) mod shared_client_tests {
                     );
                     assert_eq!(
                         get_result.unwrap(),
-                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        Value::BulkString(test_value.as_bytes().to_vec().into()),
                         "GET should return the same value after reconnection"
                     );
 
@@ -1682,12 +1682,12 @@ pub(crate) mod shared_client_tests {
                     Value::Int(1),
                     Value::Map(vec![
                         (
-                            Value::BulkString(field.as_bytes().to_vec()),
-                            Value::BulkString(value.as_bytes().to_vec())
+                            Value::BulkString(field.as_bytes().to_vec().into()),
+                            Value::BulkString(value.as_bytes().to_vec().into())
                         ),
                         (
-                            Value::BulkString(field2.as_bytes().to_vec()),
-                            Value::BulkString(value2.as_bytes().to_vec())
+                            Value::BulkString(field2.as_bytes().to_vec().into()),
+                            Value::BulkString(value2.as_bytes().to_vec().into())
                         )
                     ])
                 ]),
@@ -1747,7 +1747,10 @@ pub(crate) mod shared_client_tests {
                     };
                     assert_eq!(
                         &res[..2],
-                        &[Value::Okay, Value::BulkString(value.as_bytes().to_vec()),],
+                        &[
+                            Value::Okay,
+                            Value::BulkString(value.as_bytes().to_vec().into()),
+                        ],
                         "Pipeline result: {res:?}"
                     );
 
@@ -1823,7 +1826,7 @@ pub(crate) mod shared_client_tests {
                 result,
                 Value::Array(vec![
                     Value::Okay,
-                    Value::BulkString(b"value1".to_vec()),
+                    Value::BulkString(b"value1".to_vec().into()),
                     Value::Nil,
                     Value::Nil,
                 ]),
@@ -1928,7 +1931,7 @@ pub(crate) mod shared_client_tests {
                 res,
                 Value::Array(vec![
                     Value::Okay,
-                    Value::BulkString(b"value1".to_vec()),
+                    Value::BulkString(b"value1".to_vec().into()),
                     Value::Nil,
                     Value::Nil,
                 ]),
@@ -2030,9 +2033,9 @@ pub(crate) mod shared_client_tests {
 
             let expected = Value::Array(vec![
                 Value::Okay,
-                Value::BulkString(value.as_bytes().to_vec()),
+                Value::BulkString(value.as_bytes().to_vec().into()),
                 Value::Okay,
-                Value::BulkString(value2.as_bytes().to_vec()),
+                Value::BulkString(value2.as_bytes().to_vec().into()),
             ]);
 
             assert_eq!(res, expected, "Pipeline result: {res:?}");
@@ -2187,9 +2190,9 @@ pub(crate) mod shared_client_tests {
 
             let expected = Value::Array(vec![
                 Value::Okay,
-                Value::BulkString("value1".as_bytes().to_vec()),
+                Value::BulkString("value1".as_bytes().to_vec().into()),
                 Value::Okay,
-                Value::BulkString("value2".as_bytes().to_vec()),
+                Value::BulkString("value2".as_bytes().to_vec().into()),
             ]);
 
             assert_eq!(res, expected, "Pipeline result: {res:?}");
@@ -2252,7 +2255,7 @@ pub(crate) mod shared_client_tests {
             let items = keys.iter().map(|key| (key, key)).collect::<Vec<_>>();
             let expected = keys
                 .iter()
-                .map(|key| Value::BulkString(key.as_bytes().to_vec()))
+                .map(|key| Value::BulkString(key.as_bytes().to_vec().into()))
                 .collect::<Vec<_>>();
             let mut pipeline = Pipeline::new();
             pipeline.mset(&items);
@@ -2322,8 +2325,8 @@ pub(crate) mod shared_client_tests {
                 Value::Array(vec![
                     Value::Okay,
                     Value::Map(vec![(
-                        Value::BulkString(b"appendonly".to_vec()),
-                        Value::BulkString(b"no".to_vec()),
+                        Value::BulkString(b"appendonly".to_vec().into()),
+                        Value::BulkString(b"no".to_vec().into()),
                     )])
                 ]),
                 "Pipeline result: {result:?}"
@@ -2565,8 +2568,8 @@ pub(crate) mod shared_client_tests {
                 Ok(Value::Array(vec![
                     Value::Int(1),
                     Value::Map(vec![(
-                        Value::BulkString(b"bar".to_vec()),
-                        Value::BulkString(b"vaz".to_vec()),
+                        Value::BulkString(b"bar".to_vec().into()),
+                        Value::BulkString(b"vaz".to_vec().into()),
                     )]),
                     Value::Boolean(true),
                     Value::Int(1),
@@ -3576,6 +3579,160 @@ pub(crate) mod shared_client_tests {
 
             // Unpause so we don't affect other tests
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_mtls_cert_rotation_reconnect(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            // TODO(#6532): the cluster arm is skipped because cluster_manager.py
+            // hard-codes `--tls-auth-clients no`, so a cluster-through-cluster_manager
+            // cannot enforce client-cert auth. Once #6532 teaches cluster_manager.py to
+            // optionally require client certs, run the full rotation+reconnect flow here
+            // for use_cluster == true instead of returning early.
+            if use_cluster {
+                println!(
+                    "Skipping cluster arm: cluster_manager.py does not support \
+                     --tls-auth-clients yes; cluster mTLS cert rotation is exercised \
+                     in redis-rs test_cluster_async::mtls_test"
+                );
+                return;
+            }
+
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
+            let client_cert = tempdir.path().join("client.crt");
+            let client_key = tempdir.path().join("client.key");
+
+            rotate_client_cert_and_key(&tls_paths, &client_cert, &client_key);
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let configuration = TestConfiguration {
+                use_tls: true,
+                shared_server: false,
+                client_cert_path: Some(client_cert.to_string_lossy().to_string()),
+                client_key_path: Some(client_key.to_string_lossy().to_string()),
+                root_certs: vec![ca_cert_bytes],
+                cert_reload_interval_seconds: Some(1),
+                ..Default::default()
+            };
+
+            let connection_request =
+                create_connection_request(std::slice::from_ref(&server_addr), &configuration);
+
+            let client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create mTLS client");
+            let mut test_basics = TestBasics {
+                server: BackingServer::Standalone(Some(server)),
+                client,
+            };
+
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg("mtls_test_key").arg("value_before_rotation");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .expect("SET should succeed pre-rotation");
+
+            let mut get_cmd = redis::cmd("GET");
+            get_cmd.arg("mtls_test_key");
+            let get_result = test_basics
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .expect("GET should succeed pre-rotation");
+            assert_eq!(
+                get_result,
+                Value::BulkString(b"value_before_rotation".to_vec().into())
+            );
+
+            let mut client_info_cmd = redis::Cmd::new();
+            client_info_cmd.arg("CLIENT").arg("INFO");
+            let initial_info_response = test_basics
+                .client
+                .send_command(&mut client_info_cmd, None)
+                .await
+                .expect("CLIENT INFO should succeed");
+            let initial_info = match initial_info_response {
+                Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response: {:?}",
+                    initial_info_response
+                ),
+            };
+            let initial_client_id =
+                extract_client_id(&initial_info).expect("Failed to extract initial client ID");
+
+            rotate_client_cert_and_key(&tls_paths, &client_cert, &client_key);
+
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+            kill_connection(&mut test_basics.client).await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            let post_rotation_info = retry(|| async {
+                let mut client = test_basics.client.clone();
+                let mut cmd = redis::Cmd::new();
+                cmd.arg("CLIENT").arg("INFO");
+                let response = client.send_command(&mut cmd, None).await.ok()?;
+                match response {
+                    Value::BulkString(bytes) => Some(String::from_utf8_lossy(&bytes).to_string()),
+                    Value::VerbatimString { text, .. } => Some(text),
+                    _ => None,
+                }
+            })
+            .await;
+
+            let new_client_id =
+                extract_client_id(&post_rotation_info).expect("Failed to extract new client ID");
+            assert_ne!(
+                initial_client_id, new_client_id,
+                "Client ID should differ after reconnect (was {}, now {})",
+                initial_client_id, new_client_id
+            );
+
+            let mut set_cmd2 = redis::cmd("SET");
+            set_cmd2.arg("mtls_test_key").arg("value_after_rotation");
+            test_basics
+                .client
+                .send_command(&mut set_cmd2, None)
+                .await
+                .expect("SET should succeed after rotation + reconnect");
+
+            let mut get_cmd2 = redis::cmd("GET");
+            get_cmd2.arg("mtls_test_key");
+            let get_result2 = test_basics
+                .client
+                .send_command(&mut get_cmd2, None)
+                .await
+                .expect("GET should succeed after rotation + reconnect");
+            assert_eq!(
+                get_result2,
+                Value::BulkString(b"value_after_rotation".to_vec().into())
+            );
         });
     }
 }

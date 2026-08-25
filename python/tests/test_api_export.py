@@ -91,9 +91,8 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/config.py
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
-    "load_root_certificates_from_file",  # FunctionDef
-    "load_client_certificate_from_file",  # FunctionDef
-    "load_client_key_from_file",  # FunctionDef
+    "StrPath",  # Assignment (type alias used in TlsAdvancedConfiguration + loader signatures)
+    "MAX_UINT32",  # Assignment (uint32 wire bound reused by validators)
     # python/glide-shared/glide_shared/protobuf_codec.py
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception

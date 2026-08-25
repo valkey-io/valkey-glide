@@ -153,12 +153,12 @@ mod cluster {
             result,
             Value::Map(vec![
                 (
-                    Value::BulkString("foo".as_bytes().to_vec()),
-                    Value::BulkString("baz".as_bytes().to_vec())
+                    Value::BulkString("foo".as_bytes().to_vec().into()),
+                    Value::BulkString("baz".as_bytes().to_vec().into())
                 ),
                 (
-                    Value::BulkString("bar".as_bytes().to_vec()),
-                    Value::BulkString("foobar".as_bytes().to_vec())
+                    Value::BulkString("bar".as_bytes().to_vec().into()),
+                    Value::BulkString("foobar".as_bytes().to_vec().into())
                 )
             ])
         );
@@ -276,7 +276,7 @@ mod cluster {
                     Value::Int(0),
                     Value::Int(16383),
                     Value::Array(vec![
-                        Value::BulkString("".as_bytes().to_vec()),
+                        Value::BulkString("".as_bytes().to_vec().into()),
                         Value::Int(6379),
                     ]),
                 ])])))
@@ -330,7 +330,7 @@ mod cluster {
                         Value::Int(0),
                         Value::Int(7000),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(6379),
                         ]),
                     ]),
@@ -338,7 +338,7 @@ mod cluster {
                         Value::Int(7001),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString("?".as_bytes().to_vec()),
+                            Value::BulkString("?".as_bytes().to_vec().into()),
                             Value::Int(6380),
                         ]),
                     ]),
@@ -431,7 +431,7 @@ mod cluster {
 
                 match requests.fetch_add(1, atomic::Ordering::SeqCst) {
                     0..=4 => Err(parse_redis_value(b"-TRYAGAIN mock\r\n")),
-                    _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                 }
             },
         );
@@ -509,7 +509,7 @@ mod cluster {
                         Value::Int(0),
                         Value::Int(1),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(6379),
                         ]),
                     ]),
@@ -517,7 +517,7 @@ mod cluster {
                         Value::Int(2),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec()),
+                            Value::BulkString(name.as_bytes().to_vec().into()),
                             Value::Int(6380),
                         ]),
                     ]),
@@ -525,7 +525,7 @@ mod cluster {
                 _ => {
                     // Check that the correct node receives the request after rebuilding
                     assert_eq!(port, 6380);
-                    Err(Ok(Value::BulkString(b"123".to_vec())))
+                    Err(Ok(Value::BulkString(b"123".to_vec().into())))
                 }
             }
         });
@@ -565,7 +565,7 @@ mod cluster {
                             }
                             2 => {
                                 assert!(contains_slice(cmd, b"GET"));
-                                Err(Ok(Value::BulkString(b"123".to_vec())))
+                                Err(Ok(Value::BulkString(b"123".to_vec().into())))
                             }
                             _ => panic!("Node should not be called now"),
                         },
@@ -617,7 +617,7 @@ mod cluster {
                 2 => {
                     assert_eq!(port, 6380);
                     assert!(contains_slice(cmd, b"GET"));
-                    Err(Ok(Value::BulkString(b"123".to_vec())))
+                    Err(Ok(Value::BulkString(b"123".to_vec().into())))
                 }
                 _ => {
                     panic!("Unexpected request: {cmd:?}");
@@ -649,7 +649,7 @@ mod cluster {
                 respond_startup_with_replica(name, cmd)?;
 
                 match port {
-                    6380 => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    6380 => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Wrong node"),
                 }
             },
@@ -721,7 +721,7 @@ mod cluster {
                         },
                         6380 => match count {
                             // Retry arrives at correct node and succeeds
-                            1 => Err(Ok(Value::BulkString(b"value".to_vec()))),
+                            1 => Err(Ok(Value::BulkString(b"value".to_vec().into()))),
                             _ => panic!("node:6380 should only be called once"),
                         },
                         _ => panic!("Unexpected port {port}"),
@@ -762,7 +762,7 @@ mod cluster {
                             std::io::ErrorKind::ConnectionReset,
                             "mock-io-error",
                         )))),
-                        _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     },
                 }
             },
@@ -821,7 +821,7 @@ mod cluster {
                         )
                             .into())),
                         // After slot refresh, retry succeeds
-                        _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     }
                 }
             },
@@ -995,7 +995,7 @@ mod cluster {
                     .filter_map(|expected_key| {
                         if cmd_str.contains(expected_key) {
                             Some(Value::BulkString(
-                                format!("{expected_key}-{port}").into_bytes(),
+                                format!("{expected_key}-{port}").into_bytes().into(),
                             ))
                         } else {
                             None
@@ -1031,12 +1031,12 @@ mod cluster {
                 respond_startup_with_replica_using_config(name, received_cmd, None)?;
                 if port == 6381 {
                     let results = vec![
-                        Value::BulkString("OK".as_bytes().to_vec()),
-                        Value::BulkString("QUEUED".as_bytes().to_vec()),
-                        Value::BulkString("QUEUED".as_bytes().to_vec()),
+                        Value::BulkString("OK".as_bytes().to_vec().into()),
+                        Value::BulkString("QUEUED".as_bytes().to_vec().into()),
+                        Value::BulkString("QUEUED".as_bytes().to_vec().into()),
                         Value::Array(vec![
-                            Value::BulkString("OK".as_bytes().to_vec()),
-                            Value::BulkString("bar".as_bytes().to_vec()),
+                            Value::BulkString("OK".as_bytes().to_vec().into()),
+                            Value::BulkString("bar".as_bytes().to_vec().into()),
                         ]),
                     ];
                     return Err(Ok(Value::Array(results)));
@@ -1054,8 +1054,8 @@ mod cluster {
         assert_eq!(
             result,
             vec![
-                Value::BulkString("OK".as_bytes().to_vec()),
-                Value::BulkString("bar".as_bytes().to_vec()),
+                Value::BulkString("OK".as_bytes().to_vec().into()),
+                Value::BulkString("bar".as_bytes().to_vec().into()),
             ]
         );
     }
@@ -1068,12 +1068,12 @@ mod cluster {
         pipeline.atomic().set("foo", "bar").get("foo");
         let packed_pipeline = pipeline.get_packed_pipeline();
         let results = vec![
-            Value::BulkString("OK".as_bytes().to_vec()),
-            Value::BulkString("QUEUED".as_bytes().to_vec()),
-            Value::BulkString("QUEUED".as_bytes().to_vec()),
+            Value::BulkString("OK".as_bytes().to_vec().into()),
+            Value::BulkString("QUEUED".as_bytes().to_vec().into()),
+            Value::BulkString("QUEUED".as_bytes().to_vec().into()),
             Value::Array(vec![
-                Value::BulkString("OK".as_bytes().to_vec()),
-                Value::BulkString("bar".as_bytes().to_vec()),
+                Value::BulkString("OK".as_bytes().to_vec().into()),
+                Value::BulkString("bar".as_bytes().to_vec().into()),
             ]),
         ];
         let expected_result = Value::Array(results);

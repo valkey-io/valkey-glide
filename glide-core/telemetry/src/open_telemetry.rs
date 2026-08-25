@@ -628,6 +628,10 @@ static MOVED_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock:
 static SUBSCRIPTION_OUT_OF_SYNC_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> =
     OnceLock::new();
 static SUBSCRIPTION_LAST_SYNC_GAUGE: OnceLock<opentelemetry::metrics::Gauge<u64>> = OnceLock::new();
+static POOL_HIT_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static POOL_MISS_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static SCOPE_ACQUIRE_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static SCOPE_RELEASE_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 
 /// Holds the tracer provider so it can be flushed/shut down explicitly.
 /// `opentelemetry::global::shutdown_tracer_provider` was removed in 0.32, so
@@ -1029,6 +1033,42 @@ impl GlideOpenTelemetry {
                 )
             })?;
 
+        // Pool hit counter
+        let _ = POOL_HIT_COUNTER.set(
+            meter
+                .u64_counter("glide.pool.hits")
+                .with_description("Number of pool acquire hits (client found in idle)")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Pool miss counter
+        let _ = POOL_MISS_COUNTER.set(
+            meter
+                .u64_counter("glide.pool.misses")
+                .with_description("Number of pool acquire misses (no idle client)")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Scope acquire counter
+        let _ = SCOPE_ACQUIRE_COUNTER.set(
+            meter
+                .u64_counter("glide.scope.acquires")
+                .with_description("Number of scope connections acquired")
+                .with_unit("1")
+                .build(),
+        );
+
+        // Scope release counter
+        let _ = SCOPE_RELEASE_COUNTER.set(
+            meter
+                .u64_counter("glide.scope.releases")
+                .with_description("Number of scope connections released")
+                .with_unit("1")
+                .build(),
+        );
+
         Ok(())
     }
 
@@ -1098,6 +1138,46 @@ impl GlideOpenTelemetry {
                     )
                 })?
                 .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a pool acquire hit (client found in idle list).
+    pub fn record_pool_hit() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = POOL_HIT_COUNTER.get()
+        {
+            counter.add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a pool acquire miss (no idle client available).
+    pub fn record_pool_miss() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = POOL_MISS_COUNTER.get()
+        {
+            counter.add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a scope connection acquire.
+    pub fn record_scope_acquire() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = SCOPE_ACQUIRE_COUNTER.get()
+        {
+            counter.add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record a scope connection release.
+    pub fn record_scope_release() -> Result<(), GlideOTELError> {
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = SCOPE_RELEASE_COUNTER.get()
+        {
+            counter.add(1, &[]);
         }
         Ok(())
     }

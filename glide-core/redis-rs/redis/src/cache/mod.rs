@@ -380,13 +380,16 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value1".to_vec().into()),
         );
         assert_eq!(cache.entry_count(), 1);
 
         let result = cache.get(b"key1", CachedKeyType::String);
         assert!(result.is_some());
-        assert_eq!(result.unwrap(), Value::BulkString(b"value1".to_vec()));
+        assert_eq!(
+            result.unwrap(),
+            Value::BulkString(b"value1".to_vec().into())
+        );
 
         cache.invalidate(b"key1");
         assert_eq!(cache.entry_count(), 0);
@@ -406,7 +409,7 @@ mod tests {
             cache.insert(
                 format!("key{i}").into_bytes(),
                 CachedKeyType::String,
-                crate::Value::BulkString(format!("val{i}").into_bytes()),
+                crate::Value::BulkString(format!("val{i}").into_bytes().into()),
             );
         }
 
@@ -432,7 +435,7 @@ mod tests {
                     c.insert(
                         key.into_bytes(),
                         CachedKeyType::String,
-                        crate::Value::BulkString(b"new_val".to_vec()),
+                        crate::Value::BulkString(b"new_val".to_vec().into()),
                     );
                 }
             }));
@@ -505,7 +508,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            crate::Value::BulkString(b"val".to_vec()),
+            crate::Value::BulkString(b"val".to_vec().into()),
         );
         let result = query_cache_metric(cache_id, CacheMetricType::EntryCount);
         assert_eq!(result.unwrap(), crate::Value::Int(1));
@@ -552,7 +555,7 @@ mod tests {
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
-            crate::Value::BulkString(b"val".to_vec()),
+            crate::Value::BulkString(b"val".to_vec().into()),
         );
         cache.increment_miss();
         cache.increment_hit();

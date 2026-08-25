@@ -167,6 +167,7 @@ async def _async_pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> 
         batch.custom_command(["CONFIG", "SET", "timeout", "0"])
         if not cluster_mode:
             batch.custom_command(["SELECT", "0"])
+        batch.custom_command(["UNWATCH"])
         batch.custom_command(["FLUSHALL", "ASYNC"])
         await client.exec(batch, raise_on_error=True)
     except Exception:
@@ -326,7 +327,12 @@ async def create_client(
         return await GlideClient.create(config)
 
 
-async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+async def test_teardown(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+):
     """
     Perform teardown tasks such as flushing all data from the cluster.
 
@@ -335,6 +341,10 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     This function is made robust to handle connection timeouts and other transient
     errors that can occur after password changes and connection kills.
+
+    ``valkey_cluster`` routes the teardown client to a non-default cluster
+    (e.g. the dedicated auth-test cluster); when ``None`` the ambient
+    ``pytest.valkey_cluster`` / ``pytest.standalone_cluster`` is used.
     """
     # Add a small delay to allow server to stabilize after password/connection changes
     await anyio.sleep(0.5)
@@ -345,7 +355,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     for attempt in range(max_retries):
         try:
-            await _attempt_teardown(request, cluster_mode, protocol)
+            await _attempt_teardown(request, cluster_mode, protocol, valkey_cluster)
             return  # Success, exit the function
         except (ClosingError, TimeoutError) as e:
             if attempt == max_retries - 1:
@@ -367,7 +377,12 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 await anyio.sleep(delay)
 
 
-async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+async def _attempt_teardown(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+):
     """
     Single attempt at teardown operations. This function may raise exceptions
     which will be handled by the retry logic in test_teardown.
@@ -381,6 +396,7 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
             protocol=protocol,
             request_timeout=5000,  # Increased from 2000ms
             connection_timeout=5000,  # Increased from default 1000ms
+            valkey_cluster=valkey_cluster,
         )
         await client.custom_command(["FLUSHALL"])
         await client.close()
@@ -396,6 +412,7 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
                 request_timeout=5000,  # Increased timeout
                 connection_timeout=5000,  # Increased timeout
                 credentials=credentials,
+                valkey_cluster=valkey_cluster,
             )
             try:
                 await auth_client(client, NEW_PASSWORD)
