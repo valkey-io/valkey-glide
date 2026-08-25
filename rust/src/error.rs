@@ -82,24 +82,17 @@ impl GlideError {
 impl From<RedisError> for GlideError {
     fn from(err: RedisError) -> Self {
         let msg = err.to_string();
-        match err.kind() {
-            ErrorKind::IoError | ErrorKind::ClientError => {
-                if err.is_timeout() {
-                    GlideError::Timeout(msg)
-                } else {
-                    GlideError::Connection(msg)
-                }
-            }
-            ErrorKind::ExecAbortError => GlideError::ExecAbort(msg),
-            ErrorKind::CircuitBreakerOpen => GlideError::CircuitBreaker(msg),
-            ErrorKind::InvalidClientConfig => GlideError::Configuration(msg),
-            _ => {
-                // The fork reports pure timeouts via io error kind, but guard anyway.
-                if err.is_timeout() {
-                    GlideError::Timeout(msg)
-                } else {
-                    GlideError::Request(msg)
-                }
+        // Mirror glide-core's `error_type` classifier (glide-core/src/errors.rs).
+        if err.is_timeout() {
+            GlideError::Timeout(msg)
+        } else if err.is_unrecoverable_error() {
+            GlideError::Connection(msg)
+        } else {
+            match err.kind() {
+                ErrorKind::ExecAbortError => GlideError::ExecAbort(msg),
+                ErrorKind::CircuitBreakerOpen => GlideError::CircuitBreaker(msg),
+                ErrorKind::InvalidClientConfig => GlideError::Configuration(msg),
+                _ => GlideError::Request(msg),
             }
         }
     }
@@ -168,11 +161,20 @@ mod tests {
 
     #[test]
     fn redis_io_error_maps_to_connection() {
-        // Tuple-constructed IoError is not a real timeout, so it maps to Connection.
-        let err = RedisError::from((ErrorKind::IoError, "socket error"));
+        let io_err = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        let err: RedisError = io_err.into();
+        assert!(err.is_unrecoverable_error());
         let g = GlideError::from(err);
         assert!(matches!(g, GlideError::Connection(_)));
         assert_eq!(g.class_name(), "ConnectionError");
+    }
+
+    #[test]
+    fn redis_client_error_maps_to_request() {
+        let err = RedisError::from((ErrorKind::ClientError, "inflight limit reached"));
+        let g = GlideError::from(err);
+        assert!(matches!(g, GlideError::Request(_)));
+        assert_eq!(g.class_name(), "RequestError");
     }
 
     #[test]
