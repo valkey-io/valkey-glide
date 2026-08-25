@@ -47,4 +47,35 @@ mod tests {
         ));
         assert_eq!(error_type(&err), RequestErrorType::CircuitBreakerOpen);
     }
+
+    #[test]
+    fn request_timeout_error_type() {
+        let err: redis::RedisError = std::io::Error::from(std::io::ErrorKind::TimedOut).into();
+        assert_eq!(error_type(&err), RequestErrorType::Timeout);
+    }
+
+    /// A connection-class error mapped to `ClientError` reports as `Unspecified`, which
+    /// keeps it out of the `Disconnect` bucket. Java raises `Disconnect` as
+    /// `ClosingException` and closes the client on it, so a binding that remaps an error
+    /// to `ClientError` is choosing not to trigger that.
+    #[test]
+    fn client_error_is_unspecified_not_disconnect() {
+        let err = redis::RedisError::from((
+            redis::ErrorKind::ClientError,
+            "Cluster scan execution failed",
+            "connection reset".to_string(),
+        ));
+        assert_eq!(error_type(&err), RequestErrorType::Unspecified);
+    }
+
+    /// `is_timeout` reads the error's inner representation, not its `ErrorKind`, so a
+    /// timeout that is rebuilt through `RedisError::from((kind, ..))` stops reporting as
+    /// one. A binding that bridges a timeout must pass it through rather than rebuild it.
+    #[test]
+    fn rebuilding_a_timeout_loses_its_type() {
+        let err: redis::RedisError = std::io::Error::from(std::io::ErrorKind::TimedOut).into();
+        let rebuilt =
+            redis::RedisError::from((err.kind(), "Cluster scan execution failed", err.to_string()));
+        assert_eq!(error_type(&rebuilt), RequestErrorType::Unspecified);
+    }
 }
