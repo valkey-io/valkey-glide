@@ -553,7 +553,7 @@ jobs:
             - name: Async client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
-              uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+              uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
               with:
                   packages-dir: python/glide-async/dist
                   skip-existing: true
@@ -631,7 +631,7 @@ jobs:
             - name: Sync client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
-              uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+              uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
               with:
                   packages-dir: python/glide-sync/dist
                   skip-existing: true
