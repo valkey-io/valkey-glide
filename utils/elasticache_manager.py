@@ -24,7 +24,7 @@ LOG_LEVELS = {
 
 DEFAULT_REGION = "us-east-1"
 DEFAULT_INSTANCE_TYPE = "cache.t4g.small"
-DEFAULT_ENGINE_VERSION = "7.2"
+DEFAULT_ENGINE_VERSION = "9.0"
 DEFAULT_SUBNET_GROUP = "client-testing"
 DEFAULT_SECURITY_GROUP = os.environ.get("EC_SECURITY_GROUP", "")
 DEFAULT_DESCRIPTION = "Valkey GLIDE integration test cluster"
