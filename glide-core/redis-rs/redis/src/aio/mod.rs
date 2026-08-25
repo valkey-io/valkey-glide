@@ -269,6 +269,80 @@ where
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct UnsupportedClientSetInfoConnection {
+        attempted_set_info: bool,
+    }
+
+    impl ConnectionLike for UnsupportedClientSetInfoConnection {
+        fn req_packed_command<'a>(&'a mut self, command: &'a Cmd) -> RedisFuture<'a, Value> {
+            let packed_command = command.get_packed_command();
+            let packed_command = String::from_utf8_lossy(&packed_command);
+            assert!(
+                packed_command.contains("SETINFO"),
+                "setup should attempt CLIENT SETINFO, got {packed_command:?}"
+            );
+            self.attempted_set_info = true;
+            Box::pin(async {
+                Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "unknown command 'CLIENT SETINFO'",
+                )))
+            })
+        }
+
+        fn req_packed_commands<'a>(
+            &'a mut self,
+            pipeline: &'a crate::Pipeline,
+            _offset: usize,
+            _count: usize,
+            _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
+        ) -> RedisFuture<'a, Vec<Value>> {
+            let packed_pipeline = pipeline.get_packed_pipeline();
+            assert!(
+                String::from_utf8_lossy(&packed_pipeline).contains("SETINFO"),
+                "setup should attempt CLIENT SETINFO"
+            );
+            self.attempted_set_info = true;
+            Box::pin(async {
+                Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "unknown command 'CLIENT SETINFO'",
+                )))
+            })
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn is_closed(&self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn test_setup_ignores_unsupported_client_set_info() {
+        let connection_info = RedisConnectionInfo {
+            protocol: ProtocolVersion::RESP2,
+            lib_name: Some("GlideRust(framework:1.2)".to_string()),
+            ..Default::default()
+        };
+        let mut connection = UnsupportedClientSetInfoConnection {
+            attempted_set_info: false,
+        };
+
+        let result =
+            futures::executor::block_on(setup_connection(&connection_info, &mut connection, false));
+
+        assert_eq!(result, Ok(()));
+        assert!(connection.attempted_set_info);
+    }
+}
+
 mod connection;
 pub use connection::*;
 mod multiplexed_connection;

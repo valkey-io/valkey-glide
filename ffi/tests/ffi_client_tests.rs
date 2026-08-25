@@ -473,6 +473,64 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
 }
 
 #[test]
+fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    request.lazy_connect = true;
+    request.lib_name = "invalid name".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
+                    kind: PushKind,
+                    message: *const u8,
+                    message_len: i64,
+                    channel: *const u8,
+                    channel_len: i64,
+                    pattern: *const u8,
+                    pattern_len: i64,
+                ),
+            >(std::ptr::null_mut()),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
+                    host: *const u8,
+                    host_len: usize,
+                    port: u16,
+                    resolved_host_buf: *mut u8,
+                    resolved_host_buf_len: usize,
+                    resolved_host_len: *mut usize,
+                ) -> u16,
+            >(std::ptr::null_mut()),
+            0,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("configuration error"), "{error}");
+        assert!(error.contains("library name"), "{error}");
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[test]
 fn test_create_otel_span_with_parent() {
     // Test creating a parent span
     let parent_span_ptr = create_otel_span(RequestType::Set);
