@@ -20,10 +20,17 @@ pub struct MockedRequest {
     pub response: String,
 }
 
+#[derive(Clone, Copy)]
+pub enum SetInfoResponse {
+    Ok,
+    Unsupported,
+}
+
 pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
+    received_setinfo_commands: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
     closing_completed_signal: Arc<ManualResetEvent>,
@@ -74,6 +81,8 @@ fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
     received_commands: &Arc<AtomicU16>,
+    received_setinfo_commands: &Arc<AtomicU16>,
+    setinfo_response: SetInfoResponse,
     constant_responses: &HashMap<String, Value>,
     closing_signal: &Arc<ManualResetEvent>,
 ) -> bool {
@@ -89,9 +98,15 @@ fn receive_and_respond_to_next_message(
 
     let setinfo_count = message.matches("SETINFO").count();
     if setinfo_count > 0 {
+        received_setinfo_commands.fetch_add(setinfo_count as u16, Ordering::AcqRel);
         let mut buffer = Vec::new();
         for _ in 0..setinfo_count {
-            super::encode_value(&Value::Okay, &mut buffer).unwrap();
+            match setinfo_response {
+                SetInfoResponse::Ok => super::encode_value(&Value::Okay, &mut buffer).unwrap(),
+                SetInfoResponse::Unsupported => {
+                    buffer.extend_from_slice(b"-ERR unknown command 'CLIENT SETINFO'\r\n")
+                }
+            }
         }
         socket.write_all(&buffer).unwrap();
         return true;
@@ -140,13 +155,35 @@ impl ServerMock {
         Self::new_with_listener(constant_responses, listener)
     }
 
+    pub fn new_with_setinfo_response(
+        constant_responses: HashMap<String, Value>,
+        setinfo_response: SetInfoResponse,
+    ) -> Self {
+        let listener = super::get_listener_on_available_port();
+        Self::new_with_listener_and_setinfo_response(constant_responses, listener, setinfo_response)
+    }
+
     pub fn new_with_listener(
         constant_responses: HashMap<String, Value>,
         listener: TcpListener,
     ) -> Self {
+        Self::new_with_listener_and_setinfo_response(
+            constant_responses,
+            listener,
+            SetInfoResponse::Ok,
+        )
+    }
+
+    fn new_with_listener_and_setinfo_response(
+        constant_responses: HashMap<String, Value>,
+        listener: TcpListener,
+        setinfo_response: SetInfoResponse,
+    ) -> Self {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
         let received_commands_clone = received_commands.clone();
+        let received_setinfo_commands = Arc::new(AtomicU16::new(0));
+        let received_setinfo_commands_clone = received_setinfo_commands.clone();
         let address = ConnectionAddr::Tcp(
             "localhost".to_string(),
             listener.local_addr().unwrap().port(),
@@ -165,6 +202,8 @@ impl ServerMock {
                 &mut receiver,
                 &mut socket,
                 &received_commands_clone,
+                &received_setinfo_commands_clone,
+                setinfo_response,
                 &constant_responses,
                 &closing_signal_clone,
             ) {}
@@ -185,10 +224,15 @@ impl ServerMock {
             request_sender,
             address,
             received_commands,
+            received_setinfo_commands,
             runtime: None,
             closing_signal,
             closing_completed_signal,
         }
+    }
+
+    pub fn get_number_of_received_setinfo_commands(&self) -> u16 {
+        self.received_setinfo_commands.load(Ordering::Acquire)
     }
 
     pub async fn close(self) {
