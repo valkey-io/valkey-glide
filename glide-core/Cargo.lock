@@ -1304,7 +1304,7 @@ dependencies = [
  "sha2",
  "socket2",
  "strum 0.26.3",
- "strum_macros 0.26.4",
+ "strum_macros",
  "telemetrylib",
  "tempfile",
  "thiserror 2.0.20",
@@ -2601,7 +2601,7 @@ dependencies = [
  "ryu",
  "socket2",
  "strum 0.28.0",
- "strum_macros 0.28.0",
+ "strum_macros",
  "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
@@ -3112,19 +3112,6 @@ name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "strum_macros"
