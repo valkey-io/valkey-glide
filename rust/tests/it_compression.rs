@@ -13,11 +13,13 @@
 
 mod common;
 
+// TODO #6878: replace with a real test once compression config is exposed.
 #[tokio::test]
 async fn compression_config_not_yet_exposed() {
     eprintln!("SKIP: compression config not exposed by GlideClientConfiguration yet");
 }
 
+// TODO #6878: replace with a real compressed round-trip test.
 #[tokio::test]
 async fn compressed_roundtrip_placeholder() {
     eprintln!("SKIP: compressed value round-trip pending compression config support");
