@@ -687,12 +687,7 @@ impl<C> Dispose for ClusterConnInner<C> {
         }
 
         // Fail any requests buffered in the recovery queue
-        for request in self.recovery_queue.drain(..) {
-            let _ = request.sender.send(Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Connection dropped",
-            ))));
-        }
+        fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
 
         // Reduce the number of clients
         Telemetry::decr_total_clients(1);
@@ -1537,6 +1532,26 @@ enum ConnectionCheck<C> {
     Found((String, ConnectionFuture<C>)),
     OnlyAddress(String),
     RandomConnection,
+}
+
+/// Drain a recovery queue, failing every buffered request with a
+/// `ClientError` carrying `message`, and return the number failed.
+///
+/// Shared by the recovery-queue teardown paths (`fail_recovery_queue` on
+/// escalation to `ReconnectToInitialNodes`, and the `Drop` impl on client
+/// teardown) so the drain-and-fail behavior is defined once.
+fn fail_queued_senders<C>(
+    queue: &mut std::collections::VecDeque<PendingRequest<C>>,
+    message: &'static str,
+) -> usize {
+    let mut failed = 0;
+    for request in queue.drain(..) {
+        let _ = request
+            .sender
+            .send(Err(RedisError::from((ErrorKind::ClientError, message))));
+        failed += 1;
+    }
+    failed
 }
 
 impl<C> ClusterConnInner<C>
@@ -2524,8 +2539,7 @@ where
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            log_warn_lazy!("topology_refresh", format!(
-                "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)"));
+            log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
         let acquire_elapsed = acquire_start.elapsed();
@@ -3596,8 +3610,9 @@ where
         Ok((address, conn))
     }
 
-    /// Fail all pending requests immediately with ClientError.
-    /// Buffer incoming requests into the recovery queue while reconnect is in progress.
+    /// Buffer incoming requests into the recovery queue while recovery is in progress.
+    /// This covers both fast reconnect and slot refresh (the `Reconnect` and
+    /// `RefreshingSlots` states); the `ReconnectToInitialNodes` state fails fast instead.
     /// Requests beyond the queue cap are immediately failed to provide bounded memory usage.
     /// The cap is configured via `recovery_requests_queue_size` in `ClusterParams` (default 1000).
     fn buffer_pending_requests_to_recovery_queue(&mut self) {
@@ -3680,9 +3695,29 @@ where
         }
     }
 
+    /// Fail all requests currently buffered in the recovery queue.
+    /// Called when escalating from RefreshingSlots to ReconnectToInitialNodes
+    /// so queued requests follow the documented fail-fast policy.
+    fn fail_recovery_queue(&mut self) {
+        let count = self.recovery_queue.len();
+        if count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "fail_recovery_queue: failing {} buffered requests on escalation to ReconnectToInitialNodes",
+                    count
+                )
+            );
+            fail_queued_senders(&mut self.recovery_queue, "Connection in recovery");
+        }
+    }
+
     /// Fail all pending requests immediately with ClientError.
     /// Called when entering recovery to prevent requests from waiting for slow
-    /// reconnection cycles (e.g., ReconnectToInitialNodes, RefreshingSlots).
+    /// reconnection cycles (e.g., ReconnectToInitialNodes). Requests during
+    /// `RefreshingSlots` are buffered into the recovery queue instead, so this
+    /// runs only for the non-buffered states.
     fn fail_pending_requests(inner: &Core<C>) {
         let mut rx_guard = inner
             .pending_requests_rx
@@ -3741,7 +3776,10 @@ where
                         log_trace_lazy!("cluster", format!("Slot refresh failed: {:?}", e));
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
-                            // If all connections unavailable, try reconnect
+                            // If all connections unavailable, try reconnect.
+                            // Fail any requests buffered during RefreshingSlots: they must
+                            // follow the fail-fast policy of ReconnectToInitialNodes.
+                            self.fail_recovery_queue();
                             let inner = self.inner.clone();
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
@@ -3776,6 +3814,9 @@ where
                             // TODO - consider a gracefully closing of the client
                             // Since a panic indicates a bug in the refresh logic,
                             // it might be safer to close the client entirely
+                            // Fail any requests buffered during RefreshingSlots: they must
+                            // follow the fail-fast policy of ReconnectToInitialNodes.
+                            self.fail_recovery_queue();
                             let inner = self.inner.clone();
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
@@ -4101,11 +4142,12 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
-                // Only buffer during fast reconnects (circular MOVED path).
-                // For ReconnectToInitialNodes and RefreshingSlots, fail fast to preserve throughput.
+                // Buffer during fast reconnects (circular MOVED) and slot refresh paths.
+                // For ReconnectToInitialNodes, fail fast to preserve throughput.
                 if matches!(
                     &self.state,
                     ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
                 ) {
                     self.buffer_pending_requests_to_recovery_queue();
                 } else {
@@ -4114,10 +4156,11 @@ where
                 return Poll::Pending;
             }
             Poll::Ready(Err(err)) => {
-                // Same: only buffer during fast Reconnect path.
+                // Same: only buffer during fast Reconnect or RefreshingSlots paths.
                 if matches!(
                     &self.state,
                     ConnectionState::Recover(RecoverFuture::Reconnect(_))
+                        | ConnectionState::Recover(RecoverFuture::RefreshingSlots(_))
                 ) {
                     self.buffer_pending_requests_to_recovery_queue();
                 } else {
@@ -4571,6 +4614,25 @@ where
             topology_result: Err(noperm_err.clone_mostly("")),
             failed_connections: Some(failed_addresses),
         };
+    }
+
+    // If all queried nodes failed and at least one returned AllConnectionsUnavailable,
+    // propagate it as a permanent error. This ensures the caller (poll_recover) can
+    // distinguish "no connections left" from a transient topology-parse failure and
+    // take the appropriate escalation path (fail_recovery_queue + ReconnectToInitialNodes)
+    // instead of endlessly retrying the slot refresh.
+    let all_failed = topology_join_results.iter().all(|(_, res)| res.is_err());
+    if all_failed {
+        if let Some(all_conn_err) = topology_join_results.iter().find_map(|(_, res)| {
+            res.as_ref()
+                .err()
+                .filter(|err| err.kind() == ErrorKind::AllConnectionsUnavailable)
+        }) {
+            return TopologyQueryResult {
+                topology_result: Err(all_conn_err.clone_mostly("")),
+                failed_connections: Some(failed_addresses),
+            };
+        }
     }
 
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
@@ -5050,6 +5112,69 @@ mod pipeline_routing_tests {
                 "message mismatch for routing {routing:?}: {err}",
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod recovery_queue_tests {
+    use super::{fail_queued_senders, CmdArg, Operation, PendingRequest, RequestInfo, Response};
+    use crate::{aio::MultiplexedConnection, ErrorKind};
+    use std::collections::VecDeque;
+    use tokio::sync::oneshot;
+
+    // A PendingRequest whose command needs no routing or live connection, so the
+    // queue can be built in isolation. fail_queued_senders only touches `sender`.
+    fn dummy_request() -> (
+        PendingRequest<MultiplexedConnection>,
+        oneshot::Receiver<crate::RedisResult<Response>>,
+    ) {
+        let (sender, receiver) = oneshot::channel();
+        let request = PendingRequest {
+            retry: 0,
+            sender,
+            info: RequestInfo {
+                cmd: CmdArg::OperationRequest(Operation::GetUsername),
+            },
+        };
+        (request, receiver)
+    }
+
+    // Locks in the drain behavior both escalation tests miss (PR #6770 review):
+    // fail_queued_senders must fail every buffered request with a ClientError
+    // carrying the given message and leave the queue empty. If the drain call is
+    // ever removed or turned into a no-op, this fails deterministically.
+    #[tokio::test]
+    async fn fail_queued_senders_fails_all_with_client_error_and_empties() {
+        let mut queue: VecDeque<PendingRequest<MultiplexedConnection>> = VecDeque::new();
+        let mut receivers = Vec::new();
+        for _ in 0..5 {
+            let (req, rx) = dummy_request();
+            queue.push_back(req);
+            receivers.push(rx);
+        }
+
+        let failed = fail_queued_senders(&mut queue, "Connection in recovery");
+
+        assert_eq!(failed, 5, "should report every buffered request as failed");
+        assert!(queue.is_empty(), "queue must be drained");
+
+        for rx in receivers {
+            let result = rx.await.expect("sender should have sent, not dropped");
+            let err = result.expect_err("buffered request must fail");
+            assert_eq!(err.kind(), ErrorKind::ClientError);
+            assert!(
+                err.to_string().contains("Connection in recovery"),
+                "unexpected message: {err}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fail_queued_senders_on_empty_queue_is_noop() {
+        let mut queue: VecDeque<PendingRequest<MultiplexedConnection>> = VecDeque::new();
+        let failed = fail_queued_senders(&mut queue, "Connection in recovery");
+        assert_eq!(failed, 0);
+        assert!(queue.is_empty());
     }
 }
 

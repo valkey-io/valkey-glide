@@ -10,7 +10,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 bytes = "1"
-dashmap = "5"
+dashmap = "6"
 futures = "^0.3"
 redis = { path = "./redis-rs/redis", features = [
     "aio",
@@ -77,7 +77,7 @@ rsevents = "0.3.1"
 socket2 = "0.6"
 tempfile = "3.3.0"
 rstest = "^0.26"
-serial_test = "3"
+serial_test = "4"
 criterion = { version = "^0.8", features = ["html_reports", "async_tokio"] }
 which = "8"
 ctor = "0.10"

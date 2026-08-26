@@ -1144,40 +1144,40 @@ impl GlideOpenTelemetry {
 
     /// Record a pool acquire hit (client found in idle list).
     pub fn record_pool_hit() -> Result<(), GlideOTELError> {
-        if GlideOpenTelemetry::is_initialized() {
-            if let Some(counter) = POOL_HIT_COUNTER.get() {
-                counter.add(1, &[]);
-            }
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = POOL_HIT_COUNTER.get()
+        {
+            counter.add(1, &[]);
         }
         Ok(())
     }
 
     /// Record a pool acquire miss (no idle client available).
     pub fn record_pool_miss() -> Result<(), GlideOTELError> {
-        if GlideOpenTelemetry::is_initialized() {
-            if let Some(counter) = POOL_MISS_COUNTER.get() {
-                counter.add(1, &[]);
-            }
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = POOL_MISS_COUNTER.get()
+        {
+            counter.add(1, &[]);
         }
         Ok(())
     }
 
     /// Record a scope connection acquire.
     pub fn record_scope_acquire() -> Result<(), GlideOTELError> {
-        if GlideOpenTelemetry::is_initialized() {
-            if let Some(counter) = SCOPE_ACQUIRE_COUNTER.get() {
-                counter.add(1, &[]);
-            }
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = SCOPE_ACQUIRE_COUNTER.get()
+        {
+            counter.add(1, &[]);
         }
         Ok(())
     }
 
     /// Record a scope connection release.
     pub fn record_scope_release() -> Result<(), GlideOTELError> {
-        if GlideOpenTelemetry::is_initialized() {
-            if let Some(counter) = SCOPE_RELEASE_COUNTER.get() {
-                counter.add(1, &[]);
-            }
+        if GlideOpenTelemetry::is_initialized()
+            && let Some(counter) = SCOPE_RELEASE_COUNTER.get()
+        {
+            counter.add(1, &[]);
         }
         Ok(())
     }

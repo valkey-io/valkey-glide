@@ -91,7 +91,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -122,7 +122,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
                 node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -140,7 +140,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: ${{ matrix.node }}
 
@@ -194,7 +194,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 25
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output job information
               run: |
@@ -214,7 +214,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: 26.x
 
@@ -235,31 +235,25 @@ jobs:
                   npm ci
                   npm run build:release
 
-            - name: Install Yarn
+            - name: Enable Corepack for Yarn Berry
               id: install-yarn
               shell: bash
               run: |
-                  curl -o- -L https://yarnpkg.com/install.sh | bash
-
-            - name: Add Yarn to PATH
-              id: add-yarn-to-path
-              if: ${{ steps.install-yarn.outcome == 'success' }}
-              run: |
-                  echo "$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin" >> $GITHUB_PATH
-                  echo "Yarn PATH configured"
+                  npm install --global corepack@0.35.0
+                  corepack enable
+                  corepack install --global yarn@4.18.0
 
             - name: Test yarn compatibility and correct typescript
-              if: ${{ steps.add-yarn-to-path.outcome == 'success' }}
               working-directory: ./node/pm-and-types-tests
               shell: bash
               run: |
                   cd depend-on-glide-package
-                  yarn install
+                  yarn install --immutable
                   rm -rf node_modules/@valkey/valkey-glide/build-ts/*
                   cp -r ../../build-ts ./node_modules/@valkey/valkey-glide/
                   yarn run build
                   cd ../depend-on-glide-dependent
-                  yarn install
+                  yarn install --immutable
                   yarn run build
 
             # Test hybrid node modules - commonjs
@@ -281,7 +275,8 @@ jobs:
 
             # Test pnpm pubsub pointer handling
             - name: Install pnpm
-              run: npm install -g pnpm
+              shell: bash
+              run: corepack install --global pnpm@10.34.5
 
             - name: Test pointer handling with npm (util.Long=null simulation)
               run: |
@@ -316,7 +311,7 @@ jobs:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: lint node rust
               uses: ./.github/workflows/lint-rust
@@ -333,7 +328,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -373,7 +368,7 @@ jobs:
               run: mkdir -p $GITHUB_WORKSPACE
 
             - name: Checkout code
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
@@ -401,7 +396,7 @@ jobs:
                   echo "Current PATH: $PATH"
 
             - name: Setup Node
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: ${{ matrix.node }}
 
