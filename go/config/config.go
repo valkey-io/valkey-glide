@@ -92,7 +92,7 @@ func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
 	}
 
 	if config.refreshIntervalSeconds != nil {
-		iamCreds.RefreshIntervalSeconds = proto.Uint32(*config.refreshIntervalSeconds)
+		iamCreds.RefreshIntervalSeconds = config.refreshIntervalSeconds
 	}
 
 	return iamCreds
