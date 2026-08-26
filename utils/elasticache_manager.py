@@ -75,50 +75,6 @@ def get_engine(version: str) -> str:
     return "redis"
 
 
-def ensure_cluster_databases_parameter_group(
-    client, engine_version: str, num_databases: int = 16
-) -> str:
-    """Create or reuse a parameter group with cluster-databases set.
-    Only applicable for cluster-mode on Valkey 9.0+.
-    Returns the parameter group name."""
-    # Determine the base parameter group family for Valkey 9.0
-    try:
-        major = int(engine_version.split(".")[0])
-    except (ValueError, IndexError):
-        major = 9
-    # Cluster-mode parameter groups require the .cluster.on family suffix
-    family = f"valkey{major}.cluster.on"
-    pg_name = f"glide-cluster-databases-valkey{major}"
-
-    # Try to describe existing group first
-    try:
-        client.describe_cache_parameter_groups(CacheParameterGroupName=pg_name)
-        logging.info(
-            f"[elasticache_manager] Reusing existing parameter group '{pg_name}'"
-        )
-    except client.exceptions.CacheParameterGroupNotFoundFault:
-        # Create it
-        logging.info(
-            f"[elasticache_manager] Creating parameter group '{pg_name}' with cluster-databases={num_databases}"
-        )
-        client.create_cache_parameter_group(
-            CacheParameterGroupName=pg_name,
-            CacheParameterGroupFamily=family,
-            Description=f"GLIDE test parameter group: cluster-databases={num_databases}",
-        )
-        client.modify_cache_parameter_group(
-            CacheParameterGroupName=pg_name,
-            ParameterNameValues=[
-                {"ParameterName": "cluster-databases", "ParameterValue": str(num_databases)},
-            ],
-        )
-        logging.info(
-            f"[elasticache_manager] Parameter group '{pg_name}' created with cluster-databases={num_databases}"
-        )
-
-    return pg_name
-
-
 def start_cluster(
     name: str,
     cluster_mode: bool,
@@ -156,15 +112,18 @@ def start_cluster(
     if cluster_mode:
         request["NumNodeGroups"] = num_shards
         request["ReplicasPerNodeGroup"] = num_replicas
-        # On Valkey 9.0+, use a parameter group with cluster-databases=16
-        # so that SELECT and multi-database features work in cluster mode.
+        # On Valkey 9.0+, use the AWS-managed default cluster.on parameter group
+        # which has cluster-enabled=yes and cluster-databases=16 pre-configured.
         try:
             major = int(engine_version.split(".")[0])
         except (ValueError, IndexError):
             major = 0
         if major >= 9:
-            pg_name = ensure_cluster_databases_parameter_group(client, engine_version)
+            pg_name = f"default.valkey{major}.cluster.on"
             request["CacheParameterGroupName"] = pg_name
+            logging.info(
+                f"[elasticache_manager] Using parameter group '{pg_name}' for multi-database cluster mode"
+            )
     else:
         request["NumCacheClusters"] = num_replicas + 1
 
