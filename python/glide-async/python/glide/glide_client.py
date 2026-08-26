@@ -36,6 +36,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ServerCredentials,
 )
+from glide_shared.connection_request import _create_async_connection_request
 from glide_shared.constants import (
     OK,
     TEncodable,
@@ -520,10 +521,7 @@ class BaseClient(CoreCommands):
         self._loop = asyncio.get_running_loop() if self._is_asyncio else None
 
         # Build connection request
-        conn_req = config._create_a_protobuf_conn_request(
-            cluster_mode=isinstance(config, GlideClusterClientConfiguration)
-        )
-        conn_req.lib_name = "GlidePy"
+        conn_req = _create_async_connection_request(config)
         conn_req_bytes = conn_req.SerializeToString()
 
         # Create AsyncClient type

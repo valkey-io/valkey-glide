@@ -746,6 +746,8 @@ def create_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -787,6 +789,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -813,6 +817,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -863,6 +869,8 @@ def create_sync_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -904,6 +912,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -929,6 +939,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,

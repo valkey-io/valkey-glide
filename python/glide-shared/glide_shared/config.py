@@ -726,6 +726,19 @@ class BaseClientConfiguration:
             Must be a non-negative integer.If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME
+            command during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default (e.g. ``GlidePy`` for the async client,
+            ``GlidePySync`` for the sync client) is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
             (sent but not yet completed).
@@ -820,6 +833,8 @@ class BaseClientConfiguration:
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -829,6 +844,8 @@ class BaseClientConfiguration:
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
         self.client_name = client_name
+        self.lib_name = lib_name
+        self.client_info_tag = client_info_tag
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
@@ -838,6 +855,21 @@ class BaseClientConfiguration:
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
+
+        if client_info_tag is not None and any(
+            not "!" <= character <= "~" or character in "()"
+            for character in client_info_tag
+        ):
+            raise ValueError(
+                "client_info_tag must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
+            )
+
+        if lib_name is not None and any(
+            not "!" <= character <= "~" or character in "()" for character in lib_name
+        ):
+            raise ValueError(
+                "lib_name must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
+            )
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -964,6 +996,8 @@ class BaseClientConfiguration:
 
         if self.client_name:
             request.client_name = self.client_name
+        if self.lib_name:
+            request.lib_name = self.lib_name
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_circuit_breaker:
@@ -1044,6 +1078,18 @@ class GlideClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
                 client.
@@ -1150,6 +1196,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1160,6 +1208,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
@@ -1291,6 +1341,18 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): Index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
+        lib_name (Optional[str]): Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+            during connection establishment. Useful for identifying a wrapping library or framework in
+            ``CLIENT INFO``/``CLIENT LIST`` output. Every character in a non-empty value must be printable ASCII
+            from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
+            If not set, a client-specific default is used.
+        client_info_tag (Optional[str]): Optional tag appended to the library name in parentheses
+            (e.g. ``GlidePy(my-framework:1.2.3)``), preserving the underlying GLIDE library identity while
+            attributing a wrapping library or framework in ``CLIENT INFO``/``CLIENT LIST`` output. Applied on top of
+            the default library name or a configured ``lib_name``. Every character in a non-empty value must be
+            printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
+            An empty value is treated as unset.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -1402,6 +1464,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1412,6 +1476,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,

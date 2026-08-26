@@ -53,10 +53,64 @@ public class StandaloneClientTests {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
         String info = (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get();
-        assertTrue(info.contains("lib-name=GlideJava"));
+        assertTrue(info.contains(" lib-name=GlideJava "));
         assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
 
         client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void register_custom_client_info_names() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        try (GlideClient overrideOnlyClient =
+                GlideClient.createClient(commonClientConfig().libName("custom-client").build()).get()) {
+            String overrideOnlyInfo =
+                    (String) overrideOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(overrideOnlyInfo.contains(" lib-name=custom-client "));
+        }
+
+        try (GlideClient tagOnlyClient =
+                GlideClient.createClient(commonClientConfig().clientInfoTag("framework:1.2").build())
+                        .get()) {
+            String tagOnlyInfo =
+                    (String) tagOnlyClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(tagOnlyInfo.contains(" lib-name=GlideJava(framework:1.2) "));
+        }
+
+        try (GlideClient combinedClient =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .libName("custom-client")
+                                        .clientInfoTag("framework:1.2")
+                                        .build())
+                        .get()) {
+            String combinedInfo =
+                    (String) combinedClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+            assertTrue(combinedInfo.contains(" lib-name=custom-client(framework:1.2) "));
+        }
+
+        IllegalArgumentException clientInfoException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> commonClientConfig().libName("custom-client").clientInfoTag("a(b)"));
+        assertEquals(
+                "clientInfoTag must contain only printable ASCII characters from '!' through '~', excluding"
+                        + " '(' and ')'",
+                clientInfoException.getMessage());
+
+        IllegalArgumentException libNameException =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> commonClientConfig().libName("custom-cli(en)t").clientInfoTag("ab"));
+        assertEquals(
+                "libName must contain only printable ASCII characters from '!' through '~', excluding '('"
+                        + " and ')'",
+                libNameException.getMessage());
     }
 
     @Test

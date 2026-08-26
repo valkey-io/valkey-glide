@@ -326,7 +326,8 @@ impl StandaloneClient {
                         primary_index = Some(nodes.len().saturating_sub(1));
                     }
                 }
-                Err((address, (connection, err))) => {
+                Err((address, boxed_err)) => {
+                    let (connection, err) = *boxed_err;
                     nodes.push(connection);
                     replication_infos.push(None);
                     addresses_and_errors.push((Some(address), err));
@@ -434,7 +435,8 @@ impl StandaloneClient {
                             }
                         }
                     }
-                    Err((_connection, err)) => {
+                    Err(boxed_err) => {
+                        let (_connection, err) = *boxed_err;
                         log_warn(
                             "topology discovery",
                             format!(
@@ -482,7 +484,8 @@ impl StandaloneClient {
                 while let Some((addr, result)) = phase3_stream.next().await {
                     match result {
                         Ok((conn, _)) => nodes.push(conn),
-                        Err((_conn, err)) => {
+                        Err(boxed_err) => {
+                            let (_conn, err) = *boxed_err;
                             log_warn(
                                 "topology discovery",
                                 format!(
@@ -1078,7 +1081,7 @@ async fn get_connection_and_replication_info(
     skip_replication_check: bool,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
-) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
+) -> Result<(ReconnectingConnection, Option<Value>), Box<(ReconnectingConnection, RedisError)>> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
         *retry_strategy,
@@ -1099,7 +1102,7 @@ async fn get_connection_and_replication_info(
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-            return Err((reconnecting_connection, err));
+            return Err(Box::new((reconnecting_connection, err)));
         }
     };
 
@@ -1113,7 +1116,7 @@ async fn get_connection_and_replication_info(
         .await
     {
         Ok(replication_status) => Ok((reconnecting_connection, Some(replication_status))),
-        Err(err) => Err((reconnecting_connection, err)),
+        Err(err) => Err(Box::new((reconnecting_connection, err))),
     }
 }
 

@@ -960,6 +960,11 @@ pub fn create_monitor_client(
         // MONITOR streams plain-text inline responses, which are incompatible with RESP3 push
         // messages. RESP2 must always be used for monitor connections regardless of user config.
         protocol: redis::ProtocolVersion::RESP2,
+        lib_name: if conn_req.lib_name.is_empty() {
+            None
+        } else {
+            Some(conn_req.lib_name.to_string())
+        },
         ..Default::default()
     };
     let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it

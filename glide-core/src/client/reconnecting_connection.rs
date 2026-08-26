@@ -206,7 +206,7 @@ async fn create_connection(
     connection_timeout: Duration,
     tcp_nodelay: bool,
     pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
-) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
+) -> Result<ReconnectingConnection, Box<(ReconnectingConnection, RedisError)>> {
     let client = {
         let guard = connection_backend
             .connection_info
@@ -296,7 +296,7 @@ async fn create_connection(
                 connection_options,
             };
             connection.reconnect(ReconnectReason::CreateError);
-            Err((connection, err))
+            Err(Box::new((connection, err)))
         }
     }
 }
@@ -345,7 +345,7 @@ impl ReconnectingConnection {
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
         address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
         iam_token_handle: Option<IAMTokenHandle>,
-    ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
+    ) -> Result<ReconnectingConnection, Box<(ReconnectingConnection, RedisError)>> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
