@@ -250,23 +250,22 @@ func resolveLibName(libName, clientInfoTag string) (string, error) {
 }
 
 type baseClientConfiguration struct {
-	addresses             []NodeAddress
-	useTLS                bool
-	credentials           *ServerCredentials
-	readFrom              ReadFrom
-	requestTimeout        time.Duration
-	clientName            string
-	clientAZ              string
-	libName               string
-	clientInfoTag         string
-	reconnectStrategy     *BackoffStrategy
-	lazyConnect           bool
-	DatabaseId            *int `json:"database_id,omitempty"`
-	compressionConfig     *CompressionConfiguration
-	clientSideCache       *ClientSideCache
-	addressResolver       AddressResolver
-	inflightRequestsLimit uint32
-	clientCircuitBreaker  *ClientCircuitBreakerConfiguration
+	addresses            []NodeAddress
+	useTLS               bool
+	credentials          *ServerCredentials
+	readFrom             ReadFrom
+	requestTimeout       time.Duration
+	clientName           string
+	clientAZ             string
+	libName              string
+	clientInfoTag        string
+	reconnectStrategy    *BackoffStrategy
+	lazyConnect          bool
+	DatabaseId           *int `json:"database_id,omitempty"`
+	compressionConfig    *CompressionConfiguration
+	clientSideCache      *ClientSideCache
+	addressResolver      AddressResolver
+	clientCircuitBreaker *ClientCircuitBreakerConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {

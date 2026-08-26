@@ -345,7 +345,6 @@ impl ReconnectingConnection {
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
         address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
         iam_token_handle: Option<IAMTokenHandle>,
-        cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
     ) -> Result<ReconnectingConnection, Box<(ReconnectingConnection, RedisError)>> {
         log_debug(
             "connection creation",

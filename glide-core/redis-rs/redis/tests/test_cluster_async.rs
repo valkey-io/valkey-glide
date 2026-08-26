@@ -901,15 +901,9 @@ mod cluster_async {
         test_az_affinity_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
-    #[tokio::test]
-    async fn test_routing_by_slot_to_replica_with_az_affinity_all_nodes_strategy_to_half_replicas()
-    {
-        test_az_affinity_helper(StrategyVariant::AllNodes).await;
-    }
     enum StrategyVariant {
         Replicas,
         ReplicasAndPrimary,
-        AllNodes,
     }
 
     async fn test_az_affinity_helper(strategy_variant: StrategyVariant) {
@@ -956,9 +950,6 @@ mod cluster_async {
                 redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
                     az.clone(),
                 )
-            }
-            StrategyVariant::AllNodes => {
-                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
             }
         };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
@@ -1022,11 +1013,6 @@ mod cluster_async {
         test_all_replicas_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
-    #[tokio::test]
-    async fn test_az_affinity_all_nodes_to_all_nodes() {
-        test_all_replicas_helper(StrategyVariant::AllNodes).await;
-    }
-
     async fn test_all_replicas_helper(strategy_variant: StrategyVariant) {
         // Skip test if version is less then Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1068,9 +1054,6 @@ mod cluster_async {
                     az.clone(),
                 )
             }
-            StrategyVariant::AllNodes => {
-                redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinityAllNodes(az.clone())
-            }
         };
         let mut client = ClusterClient::builder(cluster_addresses.clone())
             .read_from(strategy)
@@ -1080,13 +1063,7 @@ mod cluster_async {
             .await
             .unwrap();
 
-        // For AllNodes the primary is an equal member of the rotation
-        let expected_az_nodes = match strategy_variant {
-            StrategyVariant::AllNodes => replica_num + 1,
-            _ => replica_num,
-        };
-
-        // Each in-AZ node will return the value of foo n times
+        // Each replica will return the value of foo n times
         let n = 4;
         for _ in 0..(n * replica_num) {
             let mut cmd = redis::cmd("GET");
@@ -7657,7 +7634,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name_for_other_handler.as_bytes().to_vec().into()),
+                            Value::BulkString(name_for_other_handler.as_bytes().to_vec()),
                             Value::Int(6379),
                         ]),
                     ])])));
@@ -7880,7 +7857,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::BulkString(name.as_bytes().to_vec()),
                             Value::Int(port as i64),
                         ]),
                     ])])));
@@ -7936,7 +7913,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name_for_other_handler.as_bytes().to_vec().into()),
+                            Value::BulkString(name_for_other_handler.as_bytes().to_vec()),
                             Value::Int(6379),
                         ]),
                     ])])));
@@ -8047,7 +8024,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::BulkString(name.as_bytes().to_vec()),
                             Value::Int(port as i64),
                         ]),
                     ])])));
@@ -8090,7 +8067,7 @@ mod cluster_async {
                         Value::Int(0),
                         Value::Int(16383),
                         Value::Array(vec![
-                            Value::BulkString(name_for_other_handler.as_bytes().to_vec().into()),
+                            Value::BulkString(name_for_other_handler.as_bytes().to_vec()),
                             Value::Int(6379),
                         ]),
                     ])])));

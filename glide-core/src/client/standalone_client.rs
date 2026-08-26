@@ -1081,7 +1081,6 @@ async fn get_connection_and_replication_info(
     skip_replication_check: bool,
     address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
-    cert_material_handle: Option<crate::tls_reload::CertReloadHandle>,
 ) -> Result<(ReconnectingConnection, Option<Value>), Box<(ReconnectingConnection, RedisError)>> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
