@@ -86,12 +86,9 @@ def ensure_cluster_databases_parameter_group(
         major = int(engine_version.split(".")[0])
     except (ValueError, IndexError):
         major = 9
-    if major >= 9:
-        family = f"valkey{major}"
-    else:
-        family = f"valkey{major}"
-
-    pg_name = f"glide-cluster-databases-{family}"
+    # Cluster-mode parameter groups require the .cluster.on family suffix
+    family = f"valkey{major}.cluster.on"
+    pg_name = f"glide-cluster-databases-valkey{major}"
 
     # Try to describe existing group first
     try:
