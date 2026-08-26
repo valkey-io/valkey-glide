@@ -1024,6 +1024,7 @@ describe("GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lolwut test_%p`,
         async (protocol) => {
+            if (process.env.USE_ELASTICACHE === "true") return; // lolwut version format differs on ElastiCache
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -1220,6 +1221,7 @@ describe("GlideClusterClient", () => {
         "select test %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+            if (process.env.USE_ELASTICACHE === "true") return; // ElastiCache cluster mode does not support multiple databases
 
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -1247,6 +1249,7 @@ describe("GlideClusterClient", () => {
         "copy with DB test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+            if (process.env.USE_ELASTICACHE === "true") return; // ElastiCache cluster mode does not support multiple databases
 
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -3471,6 +3474,7 @@ describe("GlideClusterClient", () => {
         async (protocol) => {
             // Skip test if version is below 9.0.0 (Valkey 9)
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+            if (process.env.USE_ELASTICACHE === "true") return; // ElastiCache cluster mode does not support multiple databases
 
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
@@ -3493,6 +3497,7 @@ describe("GlideClusterClient", () => {
         async (protocol) => {
             // Skip test if version is below 9.0.0 (Valkey 9)
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+            if (process.env.USE_ELASTICACHE === "true") return; // ElastiCache cluster mode does not support multiple databases
 
             const client_db0 = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
