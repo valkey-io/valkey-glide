@@ -1191,7 +1191,10 @@ export async function batchTest(
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
-    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+    if (
+        !cluster.checkIfServerVersionLessThan("9.0.0") &&
+        process.env.USE_ELASTICACHE !== "true"
+    ) {
         baseBatch.set(key28, foo);
         responseData.push(['set(key1, "foo")', "OK"]);
         baseBatch.move(key28, 1);

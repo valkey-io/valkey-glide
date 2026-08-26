@@ -112,18 +112,6 @@ def start_cluster(
     if cluster_mode:
         request["NumNodeGroups"] = num_shards
         request["ReplicasPerNodeGroup"] = num_replicas
-        # On Valkey 9.0+, use the AWS-managed default cluster.on parameter group
-        # which has cluster-enabled=yes and cluster-databases=16 pre-configured.
-        try:
-            major = int(engine_version.split(".")[0])
-        except (ValueError, IndexError):
-            major = 0
-        if major >= 9:
-            pg_name = f"default.valkey{major}.cluster.on"
-            request["CacheParameterGroupName"] = pg_name
-            logging.info(
-                f"[elasticache_manager] Using parameter group '{pg_name}' for multi-database cluster mode"
-            )
     else:
         request["NumCacheClusters"] = num_replicas + 1
 

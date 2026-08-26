@@ -724,6 +724,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "lolwut test_%p",
         async (protocol) => {
+            if (process.env.USE_ELASTICACHE === "true") return; // lolwut version format differs on ElastiCache
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
