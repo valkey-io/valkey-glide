@@ -961,8 +961,6 @@ class BaseClientConfiguration:
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
@@ -972,6 +970,8 @@ class BaseClientConfiguration:
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -1328,8 +1328,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
@@ -1342,6 +1340,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1596,8 +1596,6 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
-        lib_name: Optional[str] = None,
-        client_info_tag: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
@@ -1612,6 +1610,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
+        lib_name: Optional[str] = None,
+        client_info_tag: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
