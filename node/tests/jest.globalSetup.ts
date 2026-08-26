@@ -1,12 +1,12 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
  *
- * Jest global setup: calls utils/elasticache_manager.py start twice in parallel
- * (once for CMD standalone, once for CME cluster), then writes their endpoints
- * to a shared temp file. setup.ts reads that file to expose endpoints as globals
- * to test workers.
+ * Jest global setup:
+ * - When USE_ELASTICACHE=true: provisions ElastiCache clusters via elasticache_manager.py
+ * - When USE_EC2=true: provisions a Linux EC2 instance via cluster_manager.py provision-ec2,
+ *   then starts standalone + cluster Valkey servers on it via cluster_manager.py start --remote
  *
- * Only active when USE_ELASTICACHE=true.
+ * Only active when USE_ELASTICACHE=true or USE_EC2=true.
  */
 
 import * as fs from "fs";
@@ -23,9 +23,13 @@ export interface EndpointsFile {
     cmeClusterName: string;
     standaloneEndpoint: string;
     clusterEndpoint: string;
+    // EC2 path only
+    ec2InstanceId?: string;
+    standaloneClusterFolder?: string;
+    clusterClusterFolder?: string;
 }
 
-function parseManagerOutput(output: string): {
+function parseElastiCacheOutput(output: string): {
     name: string;
     endpoint: string;
 } {
@@ -48,15 +52,241 @@ function parseManagerOutput(output: string): {
     };
 }
 
+function parseClusterManagerOutput(output: string): {
+    nodes: string;
+    folder: string;
+} {
+    const nodesLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_NODES="));
+    const folderLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_FOLDER="));
+
+    if (!nodesLine || !folderLine) {
+        throw new Error(
+            `[globalSetup] Could not parse cluster_manager.py output:\n${output}`,
+        );
+    }
+
+    return {
+        nodes: nodesLine.split("=").slice(1).join("=").trim(),
+        folder: folderLine.split("=").slice(1).join("=").trim(),
+    };
+}
+
 export default async function globalSetup(): Promise<void> {
-    if (process.env.USE_ELASTICACHE !== "true") {
+    if (
+        process.env.USE_ELASTICACHE !== "true" &&
+        process.env.USE_EC2 !== "true"
+    ) {
         console.log(
-            "[globalSetup] USE_ELASTICACHE is not set - skipping ElastiCache cluster creation.",
+            "[globalSetup] Neither USE_ELASTICACHE nor USE_EC2 is set - skipping cloud cluster creation.",
         );
         return;
     }
 
-    // Build common args from environment
+    const { spawn } = await import("child_process");
+    const repoRoot = path.resolve(__dirname, "..", "..");
+    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+
+    function spawnAsync(
+        script: string,
+        args: string[],
+        label: string,
+        timeoutMs = 40 * 60 * 1000,
+    ): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const proc = spawn(pythonCmd, [script, ...args], {
+                env: process.env,
+            });
+            const timer = setTimeout(() => {
+                proc.kill();
+                reject(
+                    new Error(
+                        `[globalSetup] ${label} timed out after ${timeoutMs / 60000} minutes`,
+                    ),
+                );
+            }, timeoutMs);
+            let stdout = "";
+            let stderr = "";
+            proc.stdout.on("data", (d: Buffer) => {
+                const s = d.toString();
+                stdout += s;
+                process.stdout.write(s);
+            });
+            proc.stderr.on("data", (d: Buffer) => {
+                const s = d.toString();
+                stderr += s;
+                process.stderr.write(s);
+            });
+            proc.on("close", (code) => {
+                clearTimeout(timer);
+
+                if (code !== 0) {
+                    reject(
+                        new Error(
+                            `[globalSetup] ${label} exited with code ${code}\n${stderr}`,
+                        ),
+                    );
+                } else {
+                    resolve(stdout);
+                }
+            });
+            proc.on("error", (err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // USE_EC2 path
+    // -------------------------------------------------------------------------
+    if (process.env.USE_EC2 === "true") {
+        const clusterManagerScript = path.join(
+            repoRoot,
+            "utils",
+            "cluster_manager.py",
+        );
+        const region = process.env.AWS_REGION ?? "us-east-1";
+
+        // Step 1: provision EC2
+        console.log("[globalSetup] Provisioning EC2 instance...");
+        const provisionArgs = ["provision-ec2", "--region", region];
+        if (process.env.EC2_AMI_ID)
+            provisionArgs.push("--ami-id", process.env.EC2_AMI_ID);
+        if (process.env.EC2_SUBNET_ID)
+            provisionArgs.push("--subnet-id", process.env.EC2_SUBNET_ID);
+        if (process.env.EC2_SECURITY_GROUP)
+            provisionArgs.push(
+                "--security-group-id",
+                process.env.EC2_SECURITY_GROUP,
+            );
+        if (process.env.EC2_INSTANCE_PROFILE)
+            provisionArgs.push(
+                "--instance-profile",
+                process.env.EC2_INSTANCE_PROFILE,
+            );
+        if (process.env.EC2_INSTANCE_TYPE)
+            provisionArgs.push(
+                "--instance-type",
+                process.env.EC2_INSTANCE_TYPE,
+            );
+
+        const provisionOutput = await spawnAsync(
+            clusterManagerScript,
+            provisionArgs,
+            "provision-ec2",
+            10 * 60 * 1000, // 10 min
+        );
+
+        const instanceIdLine = provisionOutput
+            .split("\n")
+            .find((l) => l.startsWith("EC2_INSTANCE_ID="));
+        const privateIpLine = provisionOutput
+            .split("\n")
+            .find((l) => l.startsWith("EC2_PRIVATE_IP="));
+
+        if (!instanceIdLine || !privateIpLine) {
+            throw new Error(
+                `[globalSetup] Could not parse EC2 provision output:\n${provisionOutput}`,
+            );
+        }
+
+        const instanceId = instanceIdLine.split("=").slice(1).join("=").trim();
+        const privateIp = privateIpLine.split("=").slice(1).join("=").trim();
+        console.log(
+            `[globalSetup] EC2 instance ready: ${instanceId} (${privateIp})`,
+        );
+
+        // Write partial file immediately so teardown can terminate EC2 on failure
+        const partialData: EndpointsFile = {
+            cmdClusterName: "",
+            cmeClusterName: "",
+            standaloneEndpoint: "",
+            clusterEndpoint: "",
+            ec2InstanceId: instanceId,
+        };
+        fs.writeFileSync(
+            ELASTICACHE_ENDPOINTS_FILE,
+            JSON.stringify(partialData, null, 2),
+        );
+
+        // Step 2: start standalone + cluster Valkey on EC2 in parallel
+        console.log(
+            "[globalSetup] Starting Valkey servers on EC2 in parallel...",
+        );
+        const baseRemoteArgs = [
+            "--remote",
+            instanceId,
+            "--remote-ip",
+            privateIp,
+            "--remote-region",
+            region,
+        ];
+
+        const [standaloneOutput, clusterOutput] = await Promise.all([
+            spawnAsync(
+                clusterManagerScript,
+                ["start", ...baseRemoteArgs],
+                "start standalone",
+                15 * 60 * 1000,
+            ),
+            spawnAsync(
+                clusterManagerScript,
+                ["start", "--cluster-mode", ...baseRemoteArgs],
+                "start cluster",
+                15 * 60 * 1000,
+            ),
+        ]);
+
+        const standalone = parseClusterManagerOutput(standaloneOutput);
+        const cluster = parseClusterManagerOutput(clusterOutput);
+
+        // CLUSTER_NODES format: host:port,host:port — use first node as endpoint
+        const standaloneEndpoint = standalone.nodes.split(",")[0];
+        const clusterEndpoint = cluster.nodes.split(",")[0];
+
+        const data: EndpointsFile = {
+            cmdClusterName: "",
+            cmeClusterName: "",
+            standaloneEndpoint,
+            clusterEndpoint,
+            ec2InstanceId: instanceId,
+            standaloneClusterFolder: standalone.folder,
+            clusterClusterFolder: cluster.folder,
+        };
+
+        fs.writeFileSync(
+            ELASTICACHE_ENDPOINTS_FILE,
+            JSON.stringify(data, null, 2),
+        );
+
+        process.env.STANDALONE_ENDPOINT = standaloneEndpoint;
+        process.env.CLUSTER_ENDPOINT = clusterEndpoint;
+
+        console.log(
+            `[globalSetup] Standalone: ${standaloneEndpoint} (folder: ${standalone.folder})`,
+        );
+        console.log(
+            `[globalSetup] Cluster:    ${clusterEndpoint} (folder: ${cluster.folder})`,
+        );
+        console.log(
+            `[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`,
+        );
+        return;
+    }
+
+    // -------------------------------------------------------------------------
+    // USE_ELASTICACHE path (unchanged)
+    // -------------------------------------------------------------------------
+    const managerScript = path.join(
+        repoRoot,
+        "utils",
+        "elasticache_manager.py",
+    );
+
     const commonArgs: string[] = [];
     if (process.env.AWS_REGION)
         commonArgs.push("--region", process.env.AWS_REGION);
@@ -76,26 +306,15 @@ export default async function globalSetup(): Promise<void> {
 
     console.log("[globalSetup] Launching CMD and CME clusters in parallel...");
 
-    // Track created cluster names so we can write a partial cleanup file on failure
     const createdClusters: { name: string; endpoint?: string; role: string }[] =
         [];
 
-    const { spawn } = await import("child_process");
-    const repoRoot = path.resolve(__dirname, "..", "..");
-    const managerScript = path.join(
-        repoRoot,
-        "utils",
-        "elasticache_manager.py",
-    );
-
-    function spawnAsync(args: string[], role: string): Promise<string> {
+    function spawnElastiCache(args: string[], role: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            const pythonCmd =
-                process.platform === "win32" ? "python" : "python3";
             const proc = spawn(pythonCmd, [managerScript, ...args], {
                 env: process.env,
             });
-            const timeoutMs = 40 * 60 * 1000; // 40 minutes
+            const timeoutMs = 40 * 60 * 1000;
             const timer = setTimeout(() => {
                 proc.kill();
                 reject(
@@ -110,7 +329,6 @@ export default async function globalSetup(): Promise<void> {
                 const s = d.toString();
                 stdout += s;
                 process.stdout.write(s);
-                // Track cluster name as soon as it's printed so we can clean up on failure
                 const nameMatch = s.match(/^CLUSTER_NAME=(.+)$/m);
 
                 if (nameMatch) {
@@ -147,12 +365,10 @@ export default async function globalSetup(): Promise<void> {
 
     try {
         [cmdOutput, cmeOutput] = await Promise.all([
-            spawnAsync(startArgs([]), "cmd"),
-            spawnAsync(startArgs(["--cluster-mode"]), "cme"),
+            spawnElastiCache(startArgs([]), "cmd"),
+            spawnElastiCache(startArgs(["--cluster-mode"]), "cme"),
         ]);
     } catch (err) {
-        // Write a partial cleanup file with whatever clusters were successfully created
-        // so that post_build teardown can delete them even if globalSetup failed.
         if (createdClusters.length > 0) {
             const partialData = {
                 cmdClusterName:
@@ -174,8 +390,8 @@ export default async function globalSetup(): Promise<void> {
         throw err;
     }
 
-    const cmd = parseManagerOutput(cmdOutput);
-    const cme = parseManagerOutput(cmeOutput);
+    const cmd = parseElastiCacheOutput(cmdOutput);
+    const cme = parseElastiCacheOutput(cmeOutput);
 
     const standaloneEndpoint = cmd.endpoint.includes(":")
         ? cmd.endpoint

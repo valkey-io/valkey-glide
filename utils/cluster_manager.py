@@ -12,6 +12,7 @@ import signal
 import socket
 import string
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1119,6 +1120,142 @@ def stop_cluster(
         remove_folder(cluster_folder)
 
 
+# ---------------------------------------------------------------------------
+# EC2 remote execution helpers
+# ---------------------------------------------------------------------------
+
+
+def provision_ec2(
+    ami_id: str,
+    instance_type: str,
+    subnet_id: str,
+    security_group_id: str,
+    instance_profile: str,
+    region: str,
+    name_tag: str = "glide-ci-valkey",
+) -> Tuple[str, str]:
+    """
+    Launch an EC2 instance and wait for SSM to become ready.
+    Returns (instance_id, private_ip).
+    """
+    import boto3  # type: ignore[import-not-found]
+
+    ec2 = boto3.client("ec2", region_name=region)
+    ssm = boto3.client("ssm", region_name=region)
+
+    logging.info(f"[ec2] Launching EC2 instance (ami={ami_id}, type={instance_type})")
+    resp = ec2.run_instances(
+        ImageId=ami_id,
+        InstanceType=instance_type,
+        MinCount=1,
+        MaxCount=1,
+        SubnetId=subnet_id,
+        SecurityGroupIds=[security_group_id],
+        IamInstanceProfile={"Name": instance_profile},
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [{"Key": "Name", "Value": name_tag}],
+            }
+        ],
+    )
+    instance_id = resp["Instances"][0]["InstanceId"]
+    private_ip = resp["Instances"][0]["PrivateIpAddress"]
+    logging.info(
+        f"[ec2] Launched {instance_id} ({private_ip}), waiting for running state..."
+    )
+
+    # Wait until running
+    waiter = ec2.get_waiter("instance_running")
+    waiter.wait(InstanceIds=[instance_id])
+    logging.info(f"[ec2] {instance_id} is running, waiting for SSM agent...")
+
+    # Wait for SSM agent to register (up to 5 minutes)
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        info = ssm.describe_instance_information(
+            Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
+        )
+        if info.get("InstanceInformationList"):
+            logging.info(f"[ec2] SSM agent ready on {instance_id}")
+            break
+        time.sleep(10)
+    else:
+        raise TimeoutError(
+            f"[ec2] SSM agent did not become ready on {instance_id} within 5 minutes"
+        )
+
+    print(f"EC2_INSTANCE_ID={instance_id}")
+    print(f"EC2_PRIVATE_IP={private_ip}")
+    return instance_id, private_ip
+
+
+def teardown_ec2(instance_id: str, region: str) -> None:
+    """Terminate an EC2 instance."""
+    import boto3  # type: ignore[import-not-found]
+
+    ec2 = boto3.client("ec2", region_name=region)
+    logging.info(f"[ec2] Terminating instance {instance_id}")
+    try:
+        ec2.terminate_instances(InstanceIds=[instance_id])
+        logging.info(f"[ec2] Termination request sent for {instance_id}")
+    except Exception as e:
+        logging.error(f"[ec2] Failed to terminate {instance_id}: {e}")
+        raise
+
+
+def run_remote_command(
+    instance_id: str,
+    command: str,
+    region: str,
+    timeout_seconds: int = 600,
+) -> str:
+    """
+    Run a shell command on an EC2 instance via SSM Run Command.
+    Returns the combined stdout+stderr output.
+    Raises on non-zero exit code.
+    """
+    import boto3  # type: ignore[import-not-found]
+
+    ssm = boto3.client("ssm", region_name=region)
+    logging.info(
+        f"[ec2] Running remote command on {instance_id}: {command[:120]}"
+    )
+
+    resp = ssm.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={"commands": [command]},
+        TimeoutSeconds=timeout_seconds,
+    )
+    command_id = resp["Command"]["CommandId"]
+
+    # Poll until done
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        result = ssm.get_command_invocation(
+            CommandId=command_id,
+            InstanceId=instance_id,
+        )
+        status = result["Status"]
+        if status in ("Success", "Failed", "Cancelled", "TimedOut"):
+            stdout = result.get("StandardOutputContent", "")
+            stderr = result.get("StandardErrorContent", "")
+            output = stdout + stderr
+            if status != "Success":
+                raise RuntimeError(
+                    f"[ec2] Remote command failed with status={status}\n"
+                    f"stdout: {stdout}\nstderr: {stderr}"
+                )
+            logging.debug(f"[ec2] Remote command output: {output[:500]}")
+            return output
+        time.sleep(5)
+
+    raise TimeoutError(
+        f"[ec2] Remote command timed out after {timeout_seconds}s"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
     parser.add_argument(
@@ -1254,6 +1391,27 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--remote",
+        type=str,
+        default=None,
+        metavar="INSTANCE_ID",
+        help="Run cluster_manager.py on a remote EC2 instance via SSM. "
+        "Pass the EC2 instance ID. Also requires --remote-ip.",
+    )
+    parser_start.add_argument(
+        "--remote-ip",
+        type=str,
+        default=None,
+        help="Private IP of the remote EC2 instance (used as host for Valkey servers).",
+    )
+    parser_start.add_argument(
+        "--remote-region",
+        type=str,
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region for SSM (default: us-east-1)",
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1293,6 +1451,70 @@ def main():
         default="",
     )
 
+    parser_stop.add_argument(
+        "--remote",
+        type=str,
+        default=None,
+        metavar="INSTANCE_ID",
+        help="Run stop on a remote EC2 instance via SSM.",
+    )
+    parser_stop.add_argument(
+        "--remote-region",
+        type=str,
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region for SSM (default: us-east-1)",
+    )
+
+    # provision-ec2 parser
+    parser_provision = subparsers.add_parser(
+        "provision-ec2", help="Launch an EC2 instance for remote Valkey hosting"
+    )
+    parser_provision.add_argument(
+        "--ami-id",
+        default=os.environ.get("EC2_AMI_ID"),
+        help="AMI ID for the Linux EC2 instance (default: EC2_AMI_ID env var)",
+    )
+    parser_provision.add_argument(
+        "--instance-type",
+        default=os.environ.get("EC2_INSTANCE_TYPE", "t3.small"),
+        help="EC2 instance type (default: t3.small)",
+    )
+    parser_provision.add_argument(
+        "--subnet-id",
+        default=os.environ.get("EC2_SUBNET_ID"),
+        help="Subnet ID (default: EC2_SUBNET_ID env var)",
+    )
+    parser_provision.add_argument(
+        "--security-group-id",
+        default=os.environ.get("EC2_SECURITY_GROUP"),
+        help="Security group ID (default: EC2_SECURITY_GROUP env var)",
+    )
+    parser_provision.add_argument(
+        "--instance-profile",
+        default=os.environ.get("EC2_INSTANCE_PROFILE"),
+        help="IAM instance profile name (default: EC2_INSTANCE_PROFILE env var)",
+    )
+    parser_provision.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region (default: us-east-1)",
+    )
+
+    # teardown-ec2 parser
+    parser_teardown = subparsers.add_parser(
+        "teardown-ec2", help="Terminate an EC2 instance"
+    )
+    parser_teardown.add_argument(
+        "--instance-id",
+        required=True,
+        help="EC2 instance ID to terminate",
+    )
+    parser_teardown.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION", "us-east-1"),
+        help="AWS region (default: us-east-1)",
+    )
+
     args = parser.parse_args()
     # Check logging level
 
@@ -1306,6 +1528,49 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if args.action == "start":
+        if getattr(args, "remote", None):
+            # Build the equivalent local command to run on the remote EC2
+            remote_ip = args.remote_ip
+            if not remote_ip:
+                parser.error("--remote-ip is required when using --remote")
+            cmd_parts = [
+                "python3",
+                "/tmp/cluster_manager.py",
+                "--loglevel",
+                args.log,
+            ]
+            if args.tls:
+                cmd_parts.append("--tls")
+            cmd_parts += [
+                "start",
+                "-H",
+                remote_ip,
+                "-n",
+                str(args.shard_count if args.cluster_mode else 1),
+                "-r",
+                str(args.replica_count),
+            ]
+            if args.cluster_mode:
+                cmd_parts.append("--cluster-mode")
+            if args.ports:
+                cmd_parts += ["-p"] + [str(p) for p in args.ports]
+            # First copy cluster_manager.py to the remote instance
+            script_path = os.path.abspath(__file__)
+            with open(script_path, "r") as f:
+                script_content = f.read().replace("'", "'\"'\"'")
+            copy_cmd = (
+                f"cat > /tmp/cluster_manager.py << 'GLIDE_EOF'\n"
+                f"{script_content}\nGLIDE_EOF"
+            )
+            run_remote_command(args.remote, copy_cmd, args.remote_region)
+            # Run the start command remotely
+            remote_cmd = " ".join(cmd_parts)
+            output = run_remote_command(
+                args.remote, remote_cmd, args.remote_region, timeout_seconds=300
+            )
+            # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
+            print(output)
+            sys.exit(0)
         if not args.cluster_mode:
             args.shard_count = 1
         if args.ports and len(args.ports) != args.shard_count * (
@@ -1371,6 +1636,26 @@ def main():
         print(f"CLUSTER_NODES={servers_str}")
 
     elif args.action == "stop":
+        if getattr(args, "remote", None):
+            cmd_parts = [
+                "python3",
+                "/tmp/cluster_manager.py",
+                "--loglevel",
+                args.log,
+                "stop",
+            ]
+            if args.cluster_folder:
+                cmd_parts += ["--cluster-folder", args.cluster_folder]
+            if getattr(args, "prefix", None):
+                cmd_parts += ["--prefix", args.prefix]
+            if getattr(args, "keep_folder", False):
+                cmd_parts.append("--keep-folder")
+            remote_cmd = " ".join(cmd_parts)
+            output = run_remote_command(
+                args.remote, remote_cmd, args.remote_region, timeout_seconds=120
+            )
+            print(output)
+            sys.exit(0)
         if args.cluster_folder and args.prefix:
             raise parser.error(
                 "--cluster-folder cannot be passed together with --prefix"
@@ -1398,6 +1683,32 @@ def main():
         )
         toc = time.perf_counter()
         logging.info(f"Cluster stopped in {toc - tic:0.4f} seconds")
+
+    elif args.action == "provision-ec2":
+        if not args.ami_id:
+            parser.error("--ami-id or EC2_AMI_ID env var is required")
+        if not args.subnet_id:
+            parser.error("--subnet-id or EC2_SUBNET_ID env var is required")
+        if not args.security_group_id:
+            parser.error("--security-group-id or EC2_SECURITY_GROUP env var is required")
+        if not args.instance_profile:
+            parser.error(
+                "--instance-profile or EC2_INSTANCE_PROFILE env var is required"
+            )
+        provision_ec2(
+            ami_id=args.ami_id,
+            instance_type=args.instance_type,
+            subnet_id=args.subnet_id,
+            security_group_id=args.security_group_id,
+            instance_profile=args.instance_profile,
+            region=args.region,
+        )
+
+    elif args.action == "teardown-ec2":
+        teardown_ec2(
+            instance_id=args.instance_id,
+            region=args.region,
+        )
 
 
 if __name__ == "__main__":
