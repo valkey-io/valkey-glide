@@ -2863,6 +2863,7 @@ describe("GlideClusterClient", () => {
     ])(
         "should handle route batch using protocol %p and isAtomic=%p",
         async (protocol, isAtomic) => {
+            if (process.env.USE_ELASTICACHE === "true") return; // CONFIG RESETSTAT not supported on ElastiCache
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
                     requestTimeout: 2000,
@@ -2902,6 +2903,7 @@ describe("GlideClusterClient", () => {
     ])(
         "batch with retry configurations using protocol %p",
         async (protocol) => {
+            if (process.env.USE_ELASTICACHE === "true") return; // CONFIG RESETSTAT not supported on ElastiCache
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
                     requestTimeout: 2000,
@@ -2948,6 +2950,7 @@ describe("GlideClusterClient", () => {
             async (protocol) => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+                if (process.env.USE_ELASTICACHE === "true") return; // CONFIG SET availability-zone not supported on ElastiCache
 
                 const az = "us-east-1a";
                 let client_for_config_set;
@@ -3039,6 +3042,7 @@ describe("GlideClusterClient", () => {
             async (protocol) => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+                if (process.env.USE_ELASTICACHE === "true") return; // CONFIG SET availability-zone not supported on ElastiCache
 
                 const az = "us-east-1a";
                 const get_calls = 3;
@@ -3127,6 +3131,7 @@ describe("GlideClusterClient", () => {
             async (protocol) => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+                if (process.env.USE_ELASTICACHE === "true") return; // CONFIG SET availability-zone not supported on ElastiCache
 
                 const get_calls = 4;
                 const replica_calls = 1;
@@ -3185,6 +3190,7 @@ describe("GlideClusterClient", () => {
             async (protocol) => {
                 // Skip test if version is below 8.0.0
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+                if (process.env.USE_ELASTICACHE === "true") return; // CONFIG SET availability-zone not supported on ElastiCache
 
                 const az = "us-east-1a";
                 const other_az = "us-east-1b";
@@ -3291,6 +3297,7 @@ describe("GlideClusterClient", () => {
             "should route GET commands to all nodes (primary and replicas) with allNodes strategy using protocol %p",
             async (protocol) => {
                 if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+                if (process.env.USE_ELASTICACHE === "true") return; // CONFIG SET availability-zone not supported on ElastiCache
 
                 let client;
 

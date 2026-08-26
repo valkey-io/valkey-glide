@@ -511,6 +511,8 @@ export function runBaseTests(config: {
                         return;
                     }
 
+                    if (process.env.USE_ELASTICACHE === "true") return; // BGSAVE CANCEL not supported on ElastiCache
+
                     await waitForSaveNotInProgress(client);
 
                     // When no save is in progress, BGSAVE CANCEL should return an error
