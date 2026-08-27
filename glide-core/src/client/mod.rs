@@ -23,10 +23,11 @@ use redis::{
     AddressResolver, ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy,
     PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
+use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -185,45 +186,29 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
     }
 }
 
+static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\A[\x21-\x27\x2A-\x7E]+(?:\([\x21-\x27\x2A-\x7E]+\))?\z")
+        .expect("library name regex must be valid")
+});
+
 /// Validate a binding-composed runtime library name before client creation.
 ///
 /// Empty values are treated as absent. Non-empty values must contain only printable ASCII
 /// characters and may contain at most one ordered, matched pair of parentheses introduced by
 /// binding-local `base(tag)` composition.
 pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), String> {
-    let Some(lib_name) = lib_name.filter(|name| !name.is_empty()) else {
+    let Some(lib_name) = lib_name else {
         return Ok(());
     };
 
-    if !lib_name
-        .chars()
-        .all(|character| ('!'..='~').contains(&character))
-    {
-        return Err(
-            "library name must contain only printable ASCII characters from '!' through '~'"
+    if lib_name.is_empty() || LIB_NAME_PATTERN.is_match(lib_name) {
+        Ok(())
+    } else {
+        Err(
+            "library name must contain only printable ASCII characters from '!' through '~' and parentheses must form a non-empty trailing '(tag)'"
                 .to_string(),
-        );
+        )
     }
-
-    let Some(open_parenthesis_index) = lib_name.find('(') else {
-        return if lib_name.contains(')') {
-            Err("library name parentheses must form a non-empty trailing '(tag)'".to_string())
-        } else {
-            Ok(())
-        };
-    };
-
-    if !lib_name.ends_with(')') {
-        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
-    }
-
-    let base = &lib_name[..open_parenthesis_index];
-    let tag = &lib_name[open_parenthesis_index + 1..lib_name.len() - 1];
-    if base.is_empty() || tag.is_empty() || base.contains(['(', ')']) || tag.contains(['(', ')']) {
-        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
-    }
-
-    Ok(())
 }
 
 /// Get Valkey connection info with IAM token integration

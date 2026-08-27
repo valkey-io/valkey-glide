@@ -1293,6 +1293,7 @@ dependencies = [
  "protobuf-codegen",
  "rand 0.8.6",
  "redis",
+ "regex",
  "rsevents",
  "rstest",
  "rustls",
