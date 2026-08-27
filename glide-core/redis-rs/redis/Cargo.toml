@@ -61,7 +61,7 @@ crc16 = { version = "0.4", optional = true }
 rand = { version = "0.9", optional = true }
 
 # Only needed for async cluster
-dashmap = { version = "=6.2.1", optional = true }
+dashmap = { version = "~6.2.1", optional = true }
 parking_lot = { version = "0.12", optional = true }
 
 async-trait = { version = "0.1", optional = true }
