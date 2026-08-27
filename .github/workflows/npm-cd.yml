@@ -231,7 +231,7 @@ jobs:
 
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--zig"
+                    additional_param="--cross-compile"
                   fi
 
                   # Install needed dependencies
@@ -250,7 +250,7 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, we use the zig abi param set in the package.json to 2.17
+                  # For GNU targets, we use --cross-compile via the package.json script for GLIBC 2.17 compatibility
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm run build:release:gnu
 
@@ -258,7 +258,7 @@ jobs:
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
                     npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
 
-                  # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
+                  # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use --cross-compile
                   else
                     npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi

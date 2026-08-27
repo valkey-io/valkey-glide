@@ -1,5 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// We intentionally use napi v3 with compat-mode, which keeps v2 APIs available
+// but marks them as deprecated. Suppress those deprecation warnings until the
+// follow-up migration to native v3 APIs is complete.
+#![allow(deprecated)]
+#![allow(clippy::type_complexity)]
+
 use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
 use glide_core::connection_request;
 use glide_core::errors::error_message;
@@ -28,8 +34,9 @@ use glide_core::client::get_or_init_runtime;
 use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
+use napi::bindgen_prelude::JsObjectValue;
 use napi::bindgen_prelude::Uint8Array;
-use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
+use napi::{Env, Error, JsObject, JsValue, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
 use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
@@ -166,7 +173,9 @@ impl AsyncClient {
             }
         });
 
-        Ok(promise)
+        Ok(unsafe {
+            <napi::JsObject as napi::NapiValue>::from_raw_unchecked(env.raw(), promise.raw())
+        })
     }
 
     #[napi(ts_return_type = "Promise<string | Buffer | \"OK\" | null>")]
@@ -183,7 +192,9 @@ impl AsyncClient {
             }
         });
 
-        Ok(promise)
+        Ok(unsafe {
+            <napi::JsObject as napi::NapiValue>::from_raw_unchecked(env.raw(), promise.raw())
+        })
     }
 }
 
@@ -198,7 +209,11 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
         };
     });
 
-    Ok(promise)
+    Ok(
+        unsafe {
+            <napi::JsObject as napi::NapiValue>::from_raw_unchecked(env.raw(), promise.raw())
+        },
+    )
 }
 
 #[napi(js_name = "InitOpenTelemetry")]
@@ -307,33 +322,48 @@ pub fn log(log_level: Level, log_identifier: String, message: String) {
 }
 
 #[napi(js_name = "InitInternalLogger")]
-pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
-    let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
+pub fn init(level: Option<Level>, file_name: Option<String>) -> Level {
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name.as_deref());
     logger_level.into()
 }
 
-fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
+fn resp_value_to_js(
+    val: Value,
+    js_env: Env,
+    string_decoder: bool,
+) -> Result<napi::sys::napi_value> {
+    use napi::bindgen_prelude::ToNapiValue;
+    let raw_env = js_env.raw();
+    macro_rules! to_napi {
+        ($v:expr) => {
+            unsafe { ToNapiValue::to_napi_value(raw_env, $v) }
+        };
+    }
     match val {
-        Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
+        Value::Nil => {
+            let mut ptr = std::ptr::null_mut();
+            napi::check_status!(unsafe { napi::sys::napi_get_null(raw_env, &mut ptr) })?;
+            Ok(ptr)
+        }
         Value::SimpleString(str) => {
             if string_decoder {
-                Ok(js_env
-                    .create_string_from_std(str)
-                    .map(|val| val.into_unknown())?)
+                to_napi!(js_env.create_string_from_std(str)?)
             } else {
-                Ok(js_env
-                    .create_buffer_with_data(str.as_bytes().to_vec())?
-                    .into_unknown())
+                to_napi!(
+                    js_env
+                        .create_buffer_with_data(str.as_bytes().to_vec())?
+                        .into_unknown()
+                )
             }
         }
-        Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
-        Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
+        Value::Okay => to_napi!(js_env.create_string("OK")?),
+        Value::Int(num) => to_napi!(js_env.create_int64(num)?),
         Value::BulkString(data) => {
             if string_decoder {
                 let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
-                Ok(js_env.create_string(str).map(|val| val.into_unknown())?)
+                to_napi!(js_env.create_string(str)?)
             } else {
-                Ok(js_env.create_buffer_with_data(data)?.into_unknown())
+                to_napi!(js_env.create_buffer_with_data(data)?.into_unknown())
             }
         }
         Value::Array(array) => {
@@ -344,7 +374,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
-            Ok(js_array_view.into_unknown())
+            to_napi!(js_array_view)
         }
         Value::Map(map) => {
             // Convert map to array of key-value pairs instead of a `Record` (object),
@@ -355,34 +385,32 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
                 let mut obj = js_env.create_object()?;
                 obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
                 obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
-                js_array.set_element(idx, obj)?;
+                js_array.set_element(idx, to_napi!(obj)?)?;
             }
-            Ok(js_array.into_unknown())
+            to_napi!(js_array)
         }
-        Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
-        Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
+        Value::Double(float) => to_napi!(js_env.create_double(float)?),
+        Value::Boolean(bool) => to_napi!(js_env.get_boolean(bool)?),
         // format is ignored, as per the RESP3 recommendations -
         // "Normal client libraries may ignore completely the difference between this"
         // "type and the String type, and return a string in both cases.""
         // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
         Value::VerbatimString { format: _, text } => {
             if string_decoder {
-                Ok(js_env
-                    .create_string_from_std(text)
-                    .map(|val| val.into_unknown())?)
+                to_napi!(js_env.create_string_from_std(text)?)
             } else {
                 // VerbatimString is binary safe -> convert it into such
-                Ok(js_env
-                    .create_buffer_with_data(text.as_bytes().to_vec())?
-                    .into_unknown())
+                to_napi!(
+                    js_env
+                        .create_buffer_with_data(text.as_bytes().to_vec())?
+                        .into_unknown()
+                )
             }
         }
         Value::BigNumber(num) => {
             let sign = num.is_negative();
             let words = num.iter_u64_digits().collect();
-            js_env
-                .create_bigint_from_words(sign, words)
-                .and_then(|val| val.into_unknown())
+            to_napi!(js_env.create_bigint_from_words(sign, words)?)
         }
         Value::Set(array) => {
             // TODO - return a set object instead of an array object
@@ -393,7 +421,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
-            Ok(js_array_view.into_unknown())
+            to_napi!(js_array_view)
         }
         Value::Attribute { data, attributes } => {
             let mut obj = js_env.create_object()?;
@@ -403,7 +431,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             let value = resp_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
-            Ok(obj.into_unknown())
+            to_napi!(obj)
         }
         Value::Push { kind, data } => {
             let mut obj = js_env.create_object()?;
@@ -413,14 +441,14 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
                 .map(|item| resp_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
-            Ok(obj.into_unknown())
+            to_napi!(obj)
         }
         Value::ServerError(error) => {
             let err_msg = error_message(&error.into());
             let err = Error::new(Status::Ok, err_msg);
             let mut js_error = js_env.create_error(err)?;
             js_error.set_named_property("name", "RequestError")?;
-            Ok(js_error.into_unknown())
+            to_napi!(js_error)
         }
     }
 }
@@ -440,7 +468,7 @@ pub fn value_from_pointer(
     js_env: Env,
     pointer_number: i64,
     string_decoder: bool,
-) -> Result<JsUnknown> {
+) -> Result<napi::sys::napi_value> {
     let value = unsafe { Box::from_raw(pointer_number as *mut Value) };
     resp_value_to_js(*value, js_env, string_decoder)
 }
@@ -760,7 +788,12 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
 struct NodeAddressResolver {
     tsfn: napi::threadsafe_function::ThreadsafeFunction<
         ResolveRequest,
-        napi::threadsafe_function::ErrorStrategy::Fatal,
+        (),
+        (),
+        napi::Status,
+        false,
+        false,
+        0,
     >,
 }
 
@@ -771,25 +804,7 @@ struct ResolveRequest {
     tx: std::sync::mpsc::SyncSender<(String, u16)>,
 }
 
-/// A Send+Sync wrapper around napi::Ref<()> for use in TSFN closures.
-/// napi::Ref<()> is !Send, but we only access it from the JS thread via the TSFN resolve closure.
-/// On drop, we use std::mem::forget to avoid napi-rs's assertion that ref count == 0.
-/// The reference is cleaned up when removeAddressResolver is called (which drops the TSFN,
-/// causing N-API to release the closure and its captured data).
-struct CallbackRef(Option<napi::Ref<()>>);
-
-unsafe impl Send for CallbackRef {}
-unsafe impl Sync for CallbackRef {}
-
-impl Drop for CallbackRef {
-    fn drop(&mut self) {
-        // Use mem::forget to avoid napi-rs's panic assertion on Ref drop.
-        // The N-API reference will be cleaned up by the runtime at process exit.
-        if let Some(r) = self.0.take() {
-            std::mem::forget(r);
-        }
-    }
-}
+// In napi v3, FunctionRef (which is Send+Sync natively) is used instead of a custom wrapper.
 
 impl std::fmt::Debug for NodeAddressResolver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -845,57 +860,95 @@ impl redis::AddressResolver for NodeAddressResolver {
 pub fn register_address_resolver(
     env: Env,
     #[napi(ts_arg_type = "(host: string, port: number) => [string, number]")]
-    callback: napi::JsFunction,
+    callback: napi::bindgen_prelude::FunctionRef<
+        napi::bindgen_prelude::Unknown<'static>,
+        napi::bindgen_prelude::Unknown<'static>,
+    >,
 ) -> Result<String> {
-    // Create a persistent reference to the user's callback so it won't be GC'd.
-    // Wrap it in CallbackRef (which is Send+Sync) for use in the TSFN closure.
-    let callback_ref = CallbackRef(Some(env.create_reference(&callback)?));
+    // FunctionRef is Send+Sync and 'static — use it directly in the TSFN closure.
+    let callback_ref = callback;
 
     // Create a no-op JS function as the "original" function for the TSFN.
     // All actual work happens in the resolve closure below.
-    let noop_fn = env.create_function_from_closure("noop", |_ctx| Ok(()))?;
+    let noop_fn: napi::bindgen_prelude::Function<'_, (), ()> = env.create_function_from_closure(
+        "noop",
+        |_ctx: napi::bindgen_prelude::FunctionCallContext| Ok(()),
+    )?;
+    // Get the raw napi_value of noop_fn to construct a JsFunction for the compat TSFN API.
+    let raw_env = env.raw();
+    let noop_raw = unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, noop_fn)? };
+    let noop_js_fn =
+        unsafe { <napi::JsFunction as napi::NapiValue>::from_raw_unchecked(raw_env, noop_raw) };
 
-    let mut tsfn = noop_fn.create_threadsafe_function(
-        0,
-        move |ctx: napi::threadsafe_function::ThreadSafeCallContext<ResolveRequest>| {
+    let mut tsfn = noop_js_fn.create_threadsafe_function(
+        move |ctx: napi::threadsafe_function::ThreadsafeCallContext<ResolveRequest>| {
             let request = ctx.value;
+            let raw_env = ctx.env.raw();
 
-            // Get the user's callback from the reference
-            let user_callback: napi::JsFunction = ctx
-                .env
-                .get_reference_value(callback_ref.0.as_ref().unwrap())?;
+            // Borrow the callback on the JS thread
+            let user_fn = callback_ref.borrow_back(&ctx.env)?;
 
             // Create JS arguments for the user's callback
             let js_host = ctx.env.create_string(&request.host)?;
             let js_port = ctx.env.create_uint32(request.port as u32)?;
+            let host_raw =
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, js_host)? };
+            let port_raw =
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, js_port)? };
 
-            // Call the user's resolver function
-            let result =
-                user_callback.call(None, &[js_host.into_unknown(), js_port.into_unknown()]);
+            // Call the user's resolver function via raw N-API call
+            let mut recv = std::ptr::null_mut();
+            unsafe { napi::sys::napi_get_undefined(raw_env, &mut recv) };
+            let args = [host_raw, port_raw];
+            let mut result = std::ptr::null_mut();
+            let status = unsafe {
+                napi::sys::napi_call_function(
+                    raw_env,
+                    recv,
+                    napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, user_fn)?,
+                    args.len(),
+                    args.as_ptr(),
+                    &mut result,
+                )
+            };
 
             // Extract the resolved address from the return value
-            let resolved = match result {
-                Ok(value) => (|| -> napi::Result<(String, u16)> {
-                    let obj = value.coerce_to_object()?;
-                    let h: napi::JsString = obj.get_element(0)?;
-                    let p: napi::JsNumber = obj.get_element(1)?;
-                    Ok((h.into_utf8()?.into_owned()?, p.get_uint32()? as u16))
+            let resolved = if status == napi::sys::Status::napi_ok && !result.is_null() {
+                (|| -> napi::Result<(String, u16)> {
+                    let mut h_raw = std::ptr::null_mut();
+                    let mut p_raw = std::ptr::null_mut();
+                    unsafe {
+                        napi::sys::napi_get_element(raw_env, result, 0, &mut h_raw);
+                        napi::sys::napi_get_element(raw_env, result, 1, &mut p_raw);
+                    }
+                    let h_str: napi::JsString<'_> = unsafe {
+                        napi::bindgen_prelude::FromNapiValue::from_napi_value(raw_env, h_raw)?
+                    };
+                    let h_utf8 = h_str.into_utf8()?;
+                    let host = h_utf8.as_str()?.to_owned();
+                    let p_num: napi::JsNumber<'_> = unsafe {
+                        napi::bindgen_prelude::FromNapiValue::from_napi_value(raw_env, p_raw)?
+                    };
+                    let port = p_num.get_uint32()? as u16;
+                    Ok((host, port))
                 })()
-                .unwrap_or((request.host.clone(), request.port)),
-                Err(e) => {
-                    log_warn_lazy!(
-                        "address_resolver",
-                        format!("Address resolver failed, falling back to original address: {e}")
-                    );
-                    (request.host.clone(), request.port)
-                }
+                .unwrap_or((request.host.clone(), request.port))
+            } else {
+                // Clear any pending JS exception so it doesn't propagate out of the TSFN closure
+                let mut exception = std::ptr::null_mut();
+                unsafe { napi::sys::napi_get_and_clear_last_exception(raw_env, &mut exception) };
+                log_warn_lazy!(
+                    "address_resolver",
+                    "Address resolver failed, falling back to original address"
+                );
+                (request.host.clone(), request.port)
             };
 
             // Send the result back to the waiting Rust thread
             let _ = request.tx.send(resolved);
 
             // Return empty args for the no-op function (it does nothing)
-            Ok(Vec::<napi::JsUnknown>::new())
+            Ok(())
         },
     )?;
 
@@ -928,9 +981,19 @@ pub fn create_monitor_client(
     #[napi(
         ts_arg_type = "(timestamp: number, db: number, clientAddr: string, command: string, args: string[]) => void"
     )]
-    callback: napi::JsFunction,
+    callback: napi::bindgen_prelude::Function<
+        '_,
+        napi::bindgen_prelude::Unknown<'_>,
+        napi::bindgen_prelude::Unknown<'_>,
+    >,
 ) -> Result<JsObject> {
     let (deferred, promise) = env.create_deferred()?;
+    // Convert the new-style Function to old-style JsFunction for create_threadsafe_function
+    let raw_env = env.raw();
+    let callback_raw =
+        unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, callback)? };
+    let callback =
+        unsafe { <napi::JsFunction as napi::NapiValue>::from_raw_unchecked(raw_env, callback_raw) };
     let conn_req =
         connection_request::ConnectionRequest::parse_from_bytes(&connection_request_bytes)
             .map_err(|e| napi::Error::new(Status::InvalidArg, e.to_string()))?;
@@ -970,10 +1033,20 @@ pub fn create_monitor_client(
     let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it
     let mut tsfn: napi::threadsafe_function::ThreadsafeFunction<
         MonitorLine,
-        napi::threadsafe_function::ErrorStrategy::Fatal,
-    > = callback.create_threadsafe_function(
+        (),
+        napi::bindgen_prelude::FnArgs<(
+            napi::sys::napi_value,
+            napi::sys::napi_value,
+            napi::sys::napi_value,
+            napi::sys::napi_value,
+            napi::sys::napi_value,
+        )>,
+        napi::Status,
+        false,
+        false,
         0,
-        |ctx: napi::threadsafe_function::ThreadSafeCallContext<MonitorLine>| {
+    > = callback.create_threadsafe_function(
+        |ctx: napi::threadsafe_function::ThreadsafeCallContext<MonitorLine>| {
             let line = ctx.value;
             let ts = ctx.env.create_double(line.timestamp)?;
             let db = ctx.env.create_int64(line.db)?;
@@ -983,13 +1056,14 @@ pub fn create_monitor_client(
             for (i, arg) in line.args.iter().enumerate() {
                 args_arr.set_element(i as u32, ctx.env.create_string(arg)?)?;
             }
-            Ok(vec![
-                ts.into_unknown(),
-                db.into_unknown(),
-                addr.into_unknown(),
-                cmd.into_unknown(),
-                args_arr.into_unknown(),
-            ])
+            let raw_env = ctx.env.raw();
+            Ok(napi::bindgen_prelude::FnArgs::from((
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, ts)? },
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, db)? },
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, addr)? },
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, cmd)? },
+                unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(raw_env, args_arr)? },
+            )))
         },
     )?;
     // Unref so the TSFN does not prevent the Node.js event loop from exiting naturally.
@@ -1011,7 +1085,11 @@ pub fn create_monitor_client(
             Err(e) => deferred.reject(napi::Error::new(Status::Unknown, e.to_string())),
         }
     });
-    Ok(promise)
+    Ok(
+        unsafe {
+            <napi::JsObject as napi::NapiValue>::from_raw_unchecked(env.raw(), promise.raw())
+        },
+    )
 }
 
 #[napi(js_name = "closeMonitorClient", ts_return_type = "Promise<void>")]
@@ -1025,5 +1103,9 @@ pub fn close_monitor_client(env: Env, handle_id: i64) -> Result<JsObject> {
         }
         deferred.resolve(|_| Ok(()));
     });
-    Ok(promise)
+    Ok(
+        unsafe {
+            <napi::JsObject as napi::NapiValue>::from_raw_unchecked(env.raw(), promise.raw())
+        },
+    )
 }
