@@ -43,7 +43,7 @@
 * Go: add mTLS client certificates with automatic reloading ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
 * Node: add mTLS client certificate/key support with automatic certificate reloading ([#6383](https://github.com/valkey-io/valkey-glide/pull/6383))
 * Python: add automatic mTLS client certificate/key reload ([#6596](https://github.com/valkey-io/valkey-glide/pull/6596))
-* Core: Validate client library names ([#6891]((https://github.com/valkey-io/valkey-glide/pull/6891))))
+* Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 
 ## 2.5
 
