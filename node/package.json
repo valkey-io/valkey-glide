@@ -86,7 +86,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29",
-        "@napi-rs/cli": "^2.18.4",
+        "@napi-rs/cli": "^3.8.6",
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/node": "24",
@@ -130,17 +130,14 @@
         "node": ">=16"
     },
     "napi": {
-        "name": "valkey-glide",
-        "triples": {
-            "defaults": false,
-            "additional": [
-                "x86_64-apple-darwin",
-                "aarch64-apple-darwin",
-                "x86_64-unknown-linux-gnu",
-                "aarch64-unknown-linux-gnu",
-                "x86_64-unknown-linux-musl",
-                "aarch64-unknown-linux-musl"
-            ]
-        }
+        "binaryName": "valkey-glide",
+        "targets": [
+            "x86_64-apple-darwin",
+            "aarch64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-unknown-linux-musl"
+        ]
     }
 }

@@ -229,20 +229,19 @@ jobs:
               run: |
                   npm ci
 
-                  # Set up the env parameters for the build
-                  if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--zig"
-                  fi
-
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev
-                    # Install zig via direct binary download (works on all runners without snap/pip)
+                    # Install zig for cross-compilation (gnu targets use --zig, musl uses cargo-zigbuild with zig)
                     ZIG_VERSION="0.13.0"
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
+                    # Install cargo-zigbuild for musl targets (>= 0.23.0 filters --fix-cortex-a53-843419)
+                    if [[ "${{ matrix.build_type }}" == "musl" ]]; then
+                      cargo install cargo-zigbuild --version "=0.23.2" --locked
+                    fi
                   else
                     brew update
                     brew install tree
@@ -250,7 +249,7 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, we use the zig abi param set in the package.json to 2.17
+                  # For GNU targets, use --zig which pins glibc to 2.17
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm run build:release:gnu
 
@@ -258,9 +257,13 @@ jobs:
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
                     npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
 
-                  # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
+                  # For darwin x86_64: cross-compile from arm64 host using Rust's built-in macOS cross-compilation support (no zig needed)
+                  elif [[ "${{ matrix.TARGET }}" == "x86_64-apple-darwin" ]]; then
+                    npx napi build --platform --release --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+
+                  # For musl targets, use -x which delegates to cargo-zigbuild (pinned to avoid unpinned auto-install)
                   else
-                    npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    npx napi build --platform --release -x --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi
 
                   # Create directory for this target's node file

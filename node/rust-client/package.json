@@ -14,10 +14,10 @@
         "format:rs": "cargo fmt"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2.18.4",
+        "@napi-rs/cli": "^3.8.6",
         "prettier": "3"
     },
     "napi": {
-        "name": "valkey-glide"
+        "binaryName": "valkey-glide"
     }
 }
