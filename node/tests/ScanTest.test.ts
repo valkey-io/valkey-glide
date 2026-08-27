@@ -74,7 +74,7 @@ describe("Scan GlideClusterClient", () => {
             ]);
             let cursor = new ClusterScanCursor();
             const allKeys: GlideString[] = [];
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
 
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, { count: 10 });
@@ -143,7 +143,7 @@ describe("Scan GlideClusterClient", () => {
             );
 
             let cursor = new ClusterScanCursor();
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             while (!cursor.isFinished()) {
@@ -186,7 +186,7 @@ describe("Scan GlideClusterClient", () => {
                 expect(await client.set(key3, "value")).toEqual("OK");
 
             let cursor = new ClusterScanCursor();
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             while (!cursor.isFinished()) {
@@ -223,8 +223,8 @@ describe("Scan GlideClusterClient", () => {
                 expect(await client.set(key, "value")).toEqual("OK");
 
             let cursor = new ClusterScanCursor();
-            let keysOf1: GlideString[] = [];
-            let keysOf100: GlideString[] = [];
+            let keysOf1: GlideString[];
+            let keysOf100: GlideString[];
             const allKeys: GlideString[] = [];
             let successfulComparedScans = 0;
 
@@ -271,7 +271,7 @@ describe("Scan GlideClusterClient", () => {
             );
 
             let cursor = new ClusterScanCursor();
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             while (!cursor.isFinished()) {
@@ -348,7 +348,7 @@ describe("Scan GlideClusterClient", () => {
             const encodedStreamKeys = streamKeys.map((key) => Buffer.from(key));
 
             let cursor = new ClusterScanCursor();
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             while (!cursor.isFinished()) {
@@ -590,7 +590,7 @@ describe("Scan GlideClient", () => {
             ]);
             let cursor: GlideString = "0";
             const allKeys: GlideString[] = [];
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
 
             do {
                 [cursor, keys] = await client.scan(cursor, { count: 10 });
@@ -660,7 +660,7 @@ describe("Scan GlideClient", () => {
             );
 
             let cursor: GlideString = "0";
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             do {
@@ -703,7 +703,7 @@ describe("Scan GlideClient", () => {
                 expect(await client.set(key3, "value")).toEqual("OK");
 
             let cursor: GlideString = "0";
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             do {
@@ -740,8 +740,8 @@ describe("Scan GlideClient", () => {
                 expect(await client.set(key, "value")).toEqual("OK");
 
             let cursor: GlideString = "0";
-            let keysOf1: GlideString[] = [];
-            let keysOf100: GlideString[] = [];
+            let keysOf1: GlideString[];
+            let keysOf100: GlideString[];
             const allKeys: GlideString[] = [];
             let successfulComparedScans = 0;
 
@@ -788,7 +788,7 @@ describe("Scan GlideClient", () => {
             );
 
             let cursor: GlideString = "0";
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeysEncoded: GlideString[] = [];
 
             do {
@@ -865,7 +865,7 @@ describe("Scan GlideClient", () => {
             const encodedStreamKeys = streamKeys.map((key) => Buffer.from(key));
 
             let cursor: GlideString = "0";
-            let keys: GlideString[] = [];
+            let keys: GlideString[];
             const allKeys: GlideString[] = [];
 
             do {
