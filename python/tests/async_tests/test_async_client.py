@@ -11297,6 +11297,26 @@ async def script_kill_tests(
 
 @pytest.mark.anyio
 class TestScripts:
+    @pytest.fixture(autouse=True)
+    def _flush_pending_script_finalizers(self):
+        """Force gc.collect() before every TestScripts case so any pending
+        Script finalizers from prior parametrizations decrement the
+        process-global scripts_container ref count BEFORE the current
+        parametrization adds fresh entries.
+
+        Without this, on the trio backend the last parametrization can
+        observe the container entry it just created being wiped by a
+        delayed finalizer from an earlier iteration, causing
+        invoke_script's NoScript fallback to miss its get_script lookup
+        and surface NoScriptError to the caller (see failing job
+        30298869080 for reference).
+        """
+        import gc
+
+        gc.collect()
+        yield
+        gc.collect()
+
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

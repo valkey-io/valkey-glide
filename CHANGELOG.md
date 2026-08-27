@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Python: Fix trio pub/sub BusyResourceError from duplicate shared-pipe reader ([#6605](https://github.com/valkey-io/valkey-glide/pull/6605))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Release response payload buffers when parking a `ResponseArena` in the thread-local reuse pool. `free_response_arena` (reached via `free_command_response` from all language bindings) parked arenas with their `strings` payload buffers still populated, but the pool is only drained on the Rust worker threads that build responses — arenas freed on consumer threads (e.g. Go OS threads) were never reused and never cleared, pinning up to 16 full response payloads per thread and leaking roughly one payload per command. Large-value workloads could OOM within minutes. Fixed on `main` as part of [#6559](https://github.com/valkey-io/valkey-glide/pull/6559); this backports the arena-release fix. ([#6740](https://github.com/valkey-io/valkey-glide/issues/6740))
 * Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
