@@ -232,16 +232,14 @@ jobs:
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
-                    sudo apt install -y gcc pkg-config openssl libssl-dev clang
-                    if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                      # Install zig and cargo-zigbuild for musl cross-compilation
-                      # cargo-zigbuild >= 0.23.0 filters --fix-cortex-a53-843419 (rust-cross/cargo-zigbuild#452)
-                      ZIG_VERSION="0.13.0"
-                      ZIG_ARCH="$(uname -m)"
-                      curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
-                      sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                      cargo install cargo-zigbuild --version "=0.23.2" --locked
-                    fi
+                    sudo apt install -y gcc pkg-config openssl libssl-dev
+                    # Install zig for cross-compilation (both gnu and musl targets use cargo-zigbuild)
+                    ZIG_VERSION="0.13.0"
+                    ZIG_ARCH="$(uname -m)"
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
+                    sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
+                    # cargo-zigbuild >= 0.23.0 filters --fix-cortex-a53-843419 (rust-cross/cargo-zigbuild#452)
+                    cargo install cargo-zigbuild --version "=0.23.2" --locked
                   else
                     brew update
                     brew install tree
@@ -249,11 +247,30 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, use --zig which pins glibc to 2.17
+                  # For GNU targets: use cargo-zigbuild directly with glibc 2.17 floor.
+                  # napi-rs v3 bug #3176 breaks --target triple.2.17 in napi build (wrong artifact path),
+                  # so we invoke cargo-zigbuild directly and copy the .so as the .node file.
+                  # zig bundles its own stdatomic.h so aws-lc-sys compiles cleanly.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
-                    # TARGET_CC=clang overrides GCC 4.8.5 from the napi-rs cross-toolchain,
-                    # which lacks stdatomic.h needed by aws-lc-sys on aarch64.
-                    TARGET_CC=clang npm run build:release:gnu
+                    cargo zigbuild --release --target "${{ matrix.TARGET }}.2.17"
+                    # Map target triple to napi-rs v3 platform .node filename
+                    if [[ "${{ matrix.TARGET }}" == "aarch64-unknown-linux-gnu" ]]; then
+                      NODE_FILENAME="valkey-glide.linux-arm64-gnu.node"
+                    else
+                      NODE_FILENAME="valkey-glide.linux-x64-gnu.node"
+                    fi
+                    cp "target/${{ matrix.TARGET }}/release/libvalkey_glide.so" "${NODE_FILENAME}"
+                    # x86_64 also needs to generate native.js / native.d.ts for the js-files artifact.
+                    # This is a native build on an x86_64 host so no cross-compilation constraints apply.
+                    if [[ "${{ matrix.TARGET }}" == "x86_64-unknown-linux-gnu" ]]; then
+                      npx napi build --platform --release \
+                        --target "${{ matrix.TARGET }}" \
+                        --js ../build-ts/native.js \
+                        --dts ../build-ts/native.d.ts \
+                        --js-package-name @valkey/valkey-glide
+                      # Overwrite napi's .node with the zigbuild glibc-2.17 version
+                      cp "${NODE_FILENAME}" .
+                    fi
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
