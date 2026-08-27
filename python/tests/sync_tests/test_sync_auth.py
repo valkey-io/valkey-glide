@@ -23,12 +23,7 @@ from tests.constants import (
     IAM_USERNAME,
 )
 from tests.sync_tests import conftest as _sync_conftest
-from tests.sync_tests.conftest import (
-    _get_worker_id,
-    _sync_client_pool,
-    _sync_client_pool_lock,
-    create_sync_client,
-)
+from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
     INITIAL_PASSWORD,
     NEW_PASSWORD,
