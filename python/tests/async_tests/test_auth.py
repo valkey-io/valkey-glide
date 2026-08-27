@@ -18,9 +18,6 @@ from glide_shared.exceptions import RequestError
 
 from tests.async_tests import conftest as _async_conftest
 from tests.async_tests.conftest import (
-    _client_pool,
-    _client_pool_lock,
-    _get_worker_id,
     create_client,
 )
 from tests.constants import (
