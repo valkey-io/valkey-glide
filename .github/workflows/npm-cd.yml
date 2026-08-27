@@ -229,17 +229,20 @@ jobs:
               run: |
                   npm ci
 
+                  # Set up the env parameters for the build
+                  if [[ "${{ matrix.build_type }}" == "musl" ]]; then
+                    additional_param="--cross-compile"
+                  fi
+
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev
-                    # Install zig for cross-compilation (both gnu and musl targets use cargo-zigbuild)
+                    # Install zig via direct binary download (works on all runners without snap/pip)
                     ZIG_VERSION="0.13.0"
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                    # cargo-zigbuild >= 0.23.0 filters --fix-cortex-a53-843419 (rust-cross/cargo-zigbuild#452)
-                    cargo install cargo-zigbuild --version "=0.23.2" --locked
                   else
                     brew update
                     brew install tree
@@ -247,42 +250,17 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets: use cargo-zigbuild directly with glibc 2.17 floor.
-                  # napi-rs v3 bug #3176 breaks --target triple.2.17 in napi build (wrong artifact path),
-                  # so we invoke cargo-zigbuild directly and copy the .so as the .node file.
-                  # zig bundles its own stdatomic.h so aws-lc-sys compiles cleanly.
+                  # For GNU targets, we use --cross-compile via the package.json script for GLIBC 2.17 compatibility
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
-                    cargo zigbuild --release --target "${{ matrix.TARGET }}.2.17"
-                    # Map target triple to napi-rs v3 platform .node filename
-                    if [[ "${{ matrix.TARGET }}" == "aarch64-unknown-linux-gnu" ]]; then
-                      NODE_FILENAME="valkey-glide.linux-arm64-gnu.node"
-                    else
-                      NODE_FILENAME="valkey-glide.linux-x64-gnu.node"
-                    fi
-                    cp "target/${{ matrix.TARGET }}/release/libvalkey_glide.so" "${NODE_FILENAME}"
-                    # x86_64 also needs to generate native.js / native.d.ts for the js-files artifact.
-                    # This is a native build on an x86_64 host so no cross-compilation constraints apply.
-                    if [[ "${{ matrix.TARGET }}" == "x86_64-unknown-linux-gnu" ]]; then
-                      npx napi build --platform --release \
-                        --target "${{ matrix.TARGET }}" \
-                        --js ../build-ts/native.js \
-                        --dts ../build-ts/native.d.ts \
-                        --js-package-name @valkey/valkey-glide
-                      # Overwrite napi's .node with the zigbuild glibc-2.17 version
-                      cp "${NODE_FILENAME}" .
-                    fi
+                    npm run build:release:gnu
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
                     npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
 
-                  # For darwin x86_64: cross-compile from arm64 host using Rust's built-in macOS cross-compilation support (no zig needed)
-                  elif [[ "${{ matrix.TARGET }}" == "x86_64-apple-darwin" ]]; then
-                    npx napi build --platform --release --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
-
-                  # For musl targets, use -x which delegates to cargo-zigbuild (pinned to avoid unpinned auto-install)
+                  # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use --cross-compile
                   else
-                    npx napi build --platform --release -x --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi
 
                   # Create directory for this target's node file
