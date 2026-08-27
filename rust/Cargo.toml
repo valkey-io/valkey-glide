@@ -20,8 +20,10 @@ path = "src/lib.rs"
 [dependencies]
 # TODO #6519: Add version once the dependency chain is published to crates.io.
 glide-core = { path = "../glide-core" }
+
 # TODO #6519: Add version once the dependency chain is published to crates.io.
-redis = { path = "../glide-core/redis-rs/redis" }
+redis = {path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+
 # TODO #6519: Add version once the dependency chain is published to crates.io.
 logger_core = { path = "../logger_core" }
 
