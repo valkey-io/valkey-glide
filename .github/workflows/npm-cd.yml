@@ -232,14 +232,14 @@ jobs:
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
-                    sudo apt install -y gcc pkg-config openssl libssl-dev
-                    # Install zig for cross-compilation (gnu targets use --zig, musl uses cargo-zigbuild with zig)
-                    ZIG_VERSION="0.13.0"
-                    ZIG_ARCH="$(uname -m)"
-                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
-                    sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                    # Install cargo-zigbuild for musl targets (>= 0.23.0 filters --fix-cortex-a53-843419)
+                    sudo apt install -y gcc pkg-config openssl libssl-dev clang
                     if [[ "${{ matrix.build_type }}" == "musl" ]]; then
+                      # Install zig and cargo-zigbuild for musl cross-compilation
+                      # cargo-zigbuild >= 0.23.0 filters --fix-cortex-a53-843419 (rust-cross/cargo-zigbuild#452)
+                      ZIG_VERSION="0.13.0"
+                      ZIG_ARCH="$(uname -m)"
+                      curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
+                      sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
                       cargo install cargo-zigbuild --version "=0.23.2" --locked
                     fi
                   else
@@ -251,7 +251,9 @@ jobs:
 
                   # For GNU targets, use --zig which pins glibc to 2.17
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
-                    npm run build:release:gnu
+                    # TARGET_CC=clang overrides GCC 4.8.5 from the napi-rs cross-toolchain,
+                    # which lacks stdatomic.h needed by aws-lc-sys on aarch64.
+                    TARGET_CC=clang npm run build:release:gnu
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
