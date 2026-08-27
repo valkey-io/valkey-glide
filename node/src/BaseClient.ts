@@ -296,6 +296,7 @@ import {
     connection_request,
     response,
 } from "../build-ts/ProtobufMessage";
+import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -906,6 +907,9 @@ export enum NodeDiscoveryMode {
  * ### Client Identification
  *
  * - **Client Name**: Set `clientName` to identify the client connection.
+ * - **Library Name**: Set `libName` to override the default library name (`GlideJS`) reported by `CLIENT INFO`; an empty value uses the default.
+ * - **Client Info Tag**: Set `clientInfoTag` to append an attribution tag to the library name (e.g., `GlideJS(my-framework:1.0)`); an empty value adds no tag.
+ * - Both options apply to ordinary standalone and cluster clients and to dedicated monitor clients. Every character in a non-empty value must be printable ASCII from `!` (U+0021) through `~` (U+007E), inclusive, excluding `(` and `)`, which are reserved as composition delimiters; otherwise a `ConfigurationError` is thrown.
  *
  * ### Read Strategy
  *
@@ -1044,6 +1048,38 @@ export interface BaseClientConfiguration {
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
     clientName?: string;
+    /**
+     * Optional library-name override sent with {@code CLIENT SETINFO LIB-NAME} during connection
+     * establishment. If omitted or empty, the default {@code GlideJS} is used. When
+     * {@link clientInfoTag} is present and non-empty, it is appended to the effective library name
+     * in parentheses.
+     *
+     * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
+     * Every character in a non-empty override must be printable ASCII from {@code !} (U+0021)
+     * through {@code ~} (U+007E), inclusive, excluding {@code (} and {@code )}, which are
+     * reserved as composition delimiters; all other in-range punctuation is preserved.
+     *
+     * @throws ConfigurationError if a non-empty override contains a character outside printable
+     * ASCII U+0021 through U+007E or contains the reserved {@code (} or {@code )} delimiter.
+     * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+     */
+    libName?: string;
+    /**
+     * Optional attribution tag appended to the effective library name in parentheses.
+     * For example, setting this to {@code "my-framework:1.2.3"} results in a lib-name of
+     * {@code GlideJS(my-framework:1.2.3)} (or {@code custom-lib(my-framework:1.2.3)} if
+     * {@link libName} is also set). An empty tag is treated as absent.
+     *
+     * This option applies to ordinary standalone and cluster clients and dedicated monitor clients.
+     * Every character in a non-empty tag must be printable ASCII from {@code !} (U+0021) through
+     * {@code ~} (U+007E), inclusive, excluding {@code (} and {@code )}, which are reserved as
+     * composition delimiters; all other in-range punctuation is preserved.
+     *
+     * @throws ConfigurationError if a non-empty tag contains a character outside printable ASCII
+     * U+0021 through U+007E or contains the reserved {@code (} or {@code )} delimiter.
+     * See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+     */
+    clientInfoTag?: string;
     /**
      * Default decoder when decoder is not set per command.
      * If not set, 'Decoder.String' will be used.
@@ -9895,6 +9931,10 @@ export class BaseClient {
         const request: connection_request.IConnectionRequest = {
             protocol,
             clientName: options.clientName,
+            libName: resolveClientLibraryName(
+                options.libName,
+                options.clientInfoTag,
+            ),
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls

@@ -1676,7 +1676,7 @@ mod tests_routing {
             )))
         );
 
-        for cmd in vec![
+        for cmd in [
             cmd("SCAN"),
             cmd("SHUTDOWN"),
             cmd("SLAVEOF"),

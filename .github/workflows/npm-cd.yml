@@ -45,7 +45,7 @@ jobs:
             should_publish: ${{ steps.get-params.outputs.should_publish }}
         steps:
             - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
@@ -183,12 +183,12 @@ jobs:
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: latest
 
@@ -307,7 +307,7 @@ jobs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
             - name: Checkout repository
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
             - name: Create Build Directory
@@ -331,7 +331,7 @@ jobs:
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -475,7 +475,7 @@ jobs:
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   fetch-depth: 0
 
@@ -495,7 +495,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: latest
 
@@ -598,7 +598,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
