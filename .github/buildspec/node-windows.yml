@@ -194,38 +194,53 @@ phases:
 
             # -- 3. MSVC Build Tools -------------------------------------------------
             - |
-                Write-Host "=== Setting up MSVC linker ==="
-                # Check if link.exe is already available (cache hit or pre-installed)
-                $searchPaths = @(
-                  "C:\Program Files (x86)\Microsoft Visual Studio",
-                  "C:\Program Files\Microsoft Visual Studio",
-                  "C:\BuildTools"
-                )
-                $msvcLink = Get-ChildItem -Path $searchPaths -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "Hostx64" } | Select-Object -First 1
+                Write-Host "=== Setting up MSVC Build Tools ==="
+                # Check if link.exe is already available (any version)
+                $msvcLink = Get-ChildItem -Path `
+                  "C:\Program Files (x86)\Microsoft Visual Studio", `
+                  "C:\Program Files\Microsoft Visual Studio", `
+                  "C:\BuildTools" `
+                  -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | `
+                  Where-Object { $_.FullName -match "Hostx64" } | Select-Object -First 1
 
                 if (-not $msvcLink) {
-                  Write-Host "MSVC VC++ tools not found - installing into existing VS 2019..."
-                  # Use vswhere to find the VS installer
+                  # Try to add VC++ workload to existing VS 2019 installation
+                  # Find actual VS 2019 install path using vswhere
                   $vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-                  $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+                  $vs2019Path = $null
+                  if (Test-Path $vsWhere) {
+                    $vs2019Path = & $vsWhere -version "[16.0,17.0)" -property installationPath 2>$null
+                  }
 
-                  if (Test-Path $vsInstaller) {
-                    # Use existing VS 2019 installer to add VC++ workload (faster than installing VS 2022 Build Tools)
-                    Write-Host "Using existing VS installer to add VC++ workload..."
+                  if ($vs2019Path -and (Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe")) {
+                    Write-Host "Found VS 2019 at: $vs2019Path - adding VC++ workload..."
+                    $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
                     & $vsInstaller modify `
-                      --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community" `
+                      --installPath $vs2019Path `
                       --add Microsoft.VisualStudio.Workload.VCTools `
                       --includeRecommended `
                       --quiet --norestart 2>&1
+                    Write-Host "VS 2019 modify exit code: $LASTEXITCODE"
                     $global:LASTEXITCODE = 0
-                  } else {
-                    Write-Host "VS installer not found - falling back to VS 2022 Build Tools via Chocolatey..."
-                    choco install visualstudio2022buildtools -y --no-progress --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet"
+                    # Re-check
+                    $msvcLink = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio" `
+                      -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | `
+                      Where-Object { $_.FullName -match "Hostx64" } | Select-Object -First 1
                   }
 
-                  # Re-search after install
-                  $msvcLink = Get-ChildItem -Path $searchPaths -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "Hostx64" } | Select-Object -First 1
+                  if (-not $msvcLink) {
+                    Write-Host "Installing VS 2022 Build Tools via Chocolatey..."
+                    choco install visualstudio2022buildtools -y --no-progress --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet"
+                    Write-Host "VS 2022 Build Tools installed."
+                  }
                 }
+
+                $msvcLink = Get-ChildItem -Path `
+                  "C:\Program Files (x86)\Microsoft Visual Studio", `
+                  "C:\Program Files\Microsoft Visual Studio", `
+                  "C:\BuildTools" `
+                  -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | `
+                  Where-Object { $_.FullName -match "Hostx64.x64" } | Select-Object -First 1
 
                 if ($msvcLink) {
                   $linkerDir = $msvcLink.DirectoryName
@@ -236,7 +251,7 @@ phases:
                   $global:LASTEXITCODE = 0
                   Write-Host $linkVersion
                 } else {
-                  Write-Error "MSVC linker not found after install attempt."
+                  Write-Error "ERROR: MSVC link.exe not found after installation."
                   exit 1
                 }
 
