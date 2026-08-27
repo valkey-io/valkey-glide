@@ -7,7 +7,6 @@
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Strip brackets from IPv6 address literals in `create_client_from_uri` so bracketed hosts (e.g. `redis://[::1]:6379`) resolve correctly. `url::Url::host_str()` returns the literal with its surrounding brackets (`[::1]`), which `tokio::net::lookup_host` cannot resolve, causing connections to IPv6 literals to hang until the connect timeout. The URI parser now uses the unbracketed canonical form via `Ipv6Addr::to_string()`.
-
 * Python: Make async pipe transport fork-safe. After `fork()`, the flush thread is gone but `OnceLock` prevented reinitialization, causing commands in forked child processes (e.g. PySpark workers) to hang indefinitely. Now detects fork via PID comparison and reinitializes the pipe. Using a parent's client object in a forked child now raises `ClosingError` on command paths and skips the FFI call on `close()`, instead of silently hanging. ([#6673](https://github.com/valkey-io/valkey-glide/issues/6673))
 * fix: bound mTLS cert reload interval and align Node field names across SDKs ([#6678](https://github.com/valkey-io/valkey-glide/pull/6678))
 * Core/FFI: Percent-decode userinfo in `create_client_from_uri` so credentials containing URI-reserved characters (`@`, `:`, `/`, `?`, `#`, `%`, `+`, space, non-ASCII) authenticate correctly ([#6659](https://github.com/valkey-io/valkey-glide/issues/6659))
@@ -23,6 +22,7 @@
 * Core: fix(core): enforce RESP3 recursion-depth guard for all aggregate types ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
+* Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 
 ### Changes
 
@@ -43,7 +43,6 @@
 * Go: add mTLS client certificates with automatic reloading ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
 * Node: add mTLS client certificate/key support with automatic certificate reloading ([#6383](https://github.com/valkey-io/valkey-glide/pull/6383))
 * Python: add automatic mTLS client certificate/key reload ([#6596](https://github.com/valkey-io/valkey-glide/pull/6596))
-* Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 
 ## 2.5
 
