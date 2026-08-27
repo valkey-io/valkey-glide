@@ -62,7 +62,7 @@ pub use redis::Value;
 // GLIDE's unified command traits are source-compatible with the fork's
 // command surface, and their signatures reference fork types
 // (`ToRedisArgs`, `FromRedisValue`, `SetOptions`, ...). Downstream crates
-// depend on `glide-rust` only — the vendored `redis` fork is a transitive git
+// depend on `glide-rust` only — the vendored `redis` fork is a transitive path
 // dependency they cannot name — so re-export everything a migrating codebase
 // needs:
 //
@@ -93,7 +93,7 @@ pub use commands::scan::ScanIter;
 #[cfg(feature = "sync")]
 pub use commands::scan::SyncScanIter;
 /// The **whole vendored `redis` crate**, re-exported. Downstream crates cannot
-/// name the git-dep fork directly, and the curated flat re-exports above are
+/// name the path-dep fork directly, and the curated flat re-exports above are
 /// deliberately incomplete where names collide with other exported types
 /// (`redis::SetOptions`, `redis::Expiry`, ...). Everything is reachable as
 /// `glide::redis::…` with zero collision risk:
@@ -108,7 +108,7 @@ pub use commands::scan::SyncScanIter;
 /// [`CustomCommand::custom_command`] instead.
 ///
 /// **Semver note:** this makes the fork's API part of this crate's public
-/// surface — bumping the pinned fork rev is a breaking change.
+/// surface — changing the vendored fork's API is a breaking change.
 pub use redis;
 /// Connection-description types, accepted by
 /// [`GlideClientConfiguration::from_connection_info`] and

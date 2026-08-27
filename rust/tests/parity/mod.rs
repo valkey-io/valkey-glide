@@ -17,8 +17,8 @@
 //! (minus GLIDE's deliberate `&self`-receiver / lifetime / `Send` additions),
 //! present in both the async and blocking flavors.
 //!
-//! The fork checkout is resolved via `cargo metadata` (Cargo's local clone of
-//! the git dependency), exactly like the Python script did.
+//! The fork source is resolved via `cargo metadata` (the in-tree path
+//! dependency), exactly like the Python script did.
 
 use regex::Regex;
 use std::collections::BTreeMap;

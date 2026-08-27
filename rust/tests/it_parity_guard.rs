@@ -5,7 +5,7 @@
 //!    `implement_commands!` table (names, generic order, argument lists), and
 //!    the scan-iterator methods against the fork's `commands/macros.rs`
 //!    definitions. Pure Rust — no external interpreter needed. The fork source
-//!    is resolved through `cargo metadata` (the git dependency checkout).
+//!    is resolved through `cargo metadata` (the in-tree path dependency).
 //!  * `fork_trait_escape_path_*` — locks the compatibility promise that the
 //!    *literal* fork traits (`glide::redis::AsyncCommands` / `Commands`)
 //!    still work on the clients, including generic code bounded on them.
