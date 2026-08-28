@@ -299,8 +299,8 @@ and its vendored `redis-rs` via in-repo **path** dependencies (see
 ## Contributing
 
 Contributions are welcome — bug reports, feature requests, and pull requests.
-See the [Contributing Guidelines](./CONTRIBUTING.md) to get started and
-[DEVELOPER.md](./DEVELOPER.md) for the development workflow.
+See the repo-root [Contributing Guidelines](../CONTRIBUTING.md) to get started
+and [DEVELOPER.md](./DEVELOPER.md) for the development workflow.
 
 ## License
 
