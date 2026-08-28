@@ -7,6 +7,10 @@
 //! Every async command is reachable from sync code via [`SyncGlideClient::run`]
 //! (and the cluster equivalent), and the most common commands also have direct
 //! blocking methods.
+//!
+//! The blocking methods here must not be called from within an async context
+//! (a running Tokio runtime) — doing so panics with tokio's "cannot block the
+//! current thread from within a runtime".
 
 use crate::client::{GlideClient, GlideClusterClient};
 use crate::commands::prelude::*;
@@ -32,6 +36,9 @@ fn runtime() -> &'static Runtime {
 }
 
 /// Block on an arbitrary future using the shared runtime.
+///
+/// Must not be called from within an async context (a running Tokio runtime) –
+/// doing so panics with "cannot block the current thread from within a runtime".
 pub fn block_on<F: Future>(future: F) -> F::Output {
     runtime().block_on(future)
 }
