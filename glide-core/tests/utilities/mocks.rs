@@ -28,6 +28,13 @@ pub enum SetInfoResponse {
     Unsupported,
 }
 
+type ResponseContext<'a> = (
+    &'a Arc<AtomicU16>,
+    &'a Arc<AtomicU16>,
+    SetInfoResponse,
+    &'a HashMap<String, Value>,
+);
+
 pub struct ServerMock {
     request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
@@ -97,13 +104,13 @@ fn is_command(value: &Value, expected_tokens: &[&[u8]]) -> bool {
 fn respond_to_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
-    received_commands: &Arc<AtomicU16>,
-    received_setinfo_commands: &Arc<AtomicU16>,
-    setinfo_response: SetInfoResponse,
-    constant_responses: &HashMap<String, Value>,
+    response_context: ResponseContext<'_>,
     message: String,
     value: Value,
 ) {
+    let (received_commands, received_setinfo_commands, setinfo_response, constant_responses) =
+        response_context;
+
     log_resp_message(&message);
 
     if is_command(&value, &[b"CLIENT", b"SETINFO"]) {
@@ -150,10 +157,7 @@ fn respond_to_message(
 fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
-    received_commands: &Arc<AtomicU16>,
-    received_setinfo_commands: &Arc<AtomicU16>,
-    setinfo_response: SetInfoResponse,
-    constant_responses: &HashMap<String, Value>,
+    response_context: ResponseContext<'_>,
     closing_signal: &Arc<ManualResetEvent>,
     pending: &mut BytesMut,
     codec: &mut ValueCodec,
@@ -172,16 +176,7 @@ fn receive_and_respond_to_next_message(
         };
         let consumed = buffered.len() - pending.len();
         let message = from_utf8(&buffered[..consumed]).unwrap().to_string();
-        respond_to_message(
-            receiver,
-            socket,
-            received_commands,
-            received_setinfo_commands,
-            setinfo_response,
-            constant_responses,
-            message,
-            value.unwrap(),
-        );
+        respond_to_message(receiver, socket, response_context, message, value.unwrap());
     }
 }
 
@@ -247,10 +242,12 @@ impl ServerMock {
             while receive_and_respond_to_next_message(
                 &mut receiver,
                 &mut socket,
-                &received_commands_clone,
-                &received_setinfo_commands_clone,
-                setinfo_response,
-                &constant_responses,
+                (
+                    &received_commands_clone,
+                    &received_setinfo_commands_clone,
+                    setinfo_response,
+                    &constant_responses,
+                ),
                 &closing_signal_clone,
                 &mut pending,
                 &mut codec,
