@@ -21,7 +21,7 @@ logger_core = { path = "../../logger_core" }
 telemetrylib = { path = "../../glide-core/telemetry" }
 byteorder = "1"
 bytes = "1"
-dashmap = "5"
+dashmap = "~6.2.1"
 num-traits = "0.2"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"

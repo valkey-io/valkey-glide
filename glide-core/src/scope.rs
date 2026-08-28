@@ -317,6 +317,10 @@ pub async fn create_scope_connection(
             return;
         }
     };
+    if crate::client::validate_effective_lib_name(Some(proto.lib_name.as_ref())).is_err() {
+        pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+        return;
+    }
     let use_tls = proto.tls_mode.value() != 0;
     let scheme = if use_tls { "rediss" } else { "redis" };
 
@@ -581,4 +585,119 @@ pub fn register_client(client_id: u64, client: Client) {
 /// Unregister a Client from the global registry (called on client close).
 pub fn unregister_client(client_id: u64) {
     get_client_registry().remove(&client_id);
+}
+
+#[cfg(all(test, feature = "proto"))]
+mod tests {
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc::{self, Sender};
+    use std::thread::JoinHandle;
+
+    use protobuf::Message as _;
+    use tokio::sync::Mutex as TokioMutex;
+
+    use super::create_scope_connection;
+    use crate::connection_request::{ConnectionRequest, NodeAddress};
+    use crate::pool::{ScopePool, ScopePoolConfig};
+
+    fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
+        let mut request = ConnectionRequest::new();
+        request.addresses.push(NodeAddress {
+            host: "127.0.0.1".into(),
+            port: port.into(),
+            ..Default::default()
+        });
+        request.lib_name = lib_name.into();
+        request.write_to_bytes().expect("serialize scope request")
+    }
+
+    fn reserved_pool(request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
+        let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes, 1);
+        pool.total_count.store(1, Ordering::Release);
+        Arc::new(TokioMutex::new(pool))
+    }
+
+    fn listening_endpoint() -> TcpListener {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        listener
+            .set_nonblocking(true)
+            .expect("configure test listener");
+        listener
+    }
+
+    async fn assert_invalid_name_is_rejected(lib_name: &str) {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes(lib_name, port);
+        let pool = reserved_pool(request_bytes.clone());
+
+        create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+
+        let pool = pool.lock().await;
+        assert_eq!(pool.total_count.load(Ordering::Acquire), 0, "{lib_name}");
+        assert!(pool.idle.is_empty(), "{lib_name}");
+        assert!(pool.in_use.is_empty(), "{lib_name}");
+        assert_eq!(
+            listener
+                .accept()
+                .expect_err("invalid name must not connect")
+                .kind(),
+            ErrorKind::WouldBlock,
+            "{lib_name}"
+        );
+    }
+
+    fn responsive_endpoint() -> (u16, Sender<()>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let port = listener.local_addr().expect("listener address").port();
+        let (shutdown_sender, shutdown_receiver) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept scope connection");
+            let mut request = [0_u8; 1024];
+            let bytes_read = stream.read(&mut request).expect("read startup commands");
+            assert!(bytes_read > 0, "startup commands must not be empty");
+            stream
+                .write_all(b"+OK\r\n+OK\r\n")
+                .expect("respond to startup commands");
+            shutdown_receiver.recv().expect("receive server shutdown");
+        });
+        (port, shutdown_sender, server)
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_library_name_before_network_activity() {
+        assert_invalid_name_is_rejected("invalid name").await;
+    }
+
+    #[tokio::test]
+    async fn rejects_malformed_library_name_compositions_before_network_activity() {
+        for lib_name in ["GlideRust()", "GlideRust(tag)suffix"] {
+            assert_invalid_name_is_rejected(lib_name).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn accepts_supported_library_names() {
+        // The protobuf scalar represents both an omitted and explicitly empty value as "".
+        for lib_name in ["", "GlideRust", "GlideRust(framework:1.2)"] {
+            let (port, shutdown_sender, server) = responsive_endpoint();
+            let request_bytes = request_bytes(lib_name, port);
+            let pool = reserved_pool(request_bytes.clone());
+
+            create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+
+            {
+                let pool = pool.lock().await;
+                assert_eq!(pool.total_count.load(Ordering::Acquire), 1, "{lib_name}");
+                assert_eq!(pool.idle.len(), 1, "{lib_name}");
+                assert!(pool.in_use.is_empty(), "{lib_name}");
+            }
+
+            shutdown_sender.send(()).expect("stop mock server");
+            server.join().expect("mock server exits cleanly");
+        }
+    }
 }

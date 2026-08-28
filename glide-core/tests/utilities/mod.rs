@@ -129,18 +129,8 @@ pub fn get_available_port() -> u16 {
 }
 
 pub fn get_listener_on_available_port() -> TcpListener {
-    let port = get_available_port();
-    let addr = &format!("{}:{}", IP_ADDRESS_V4, port)
-        .parse::<SocketAddr>()
-        .unwrap()
-        .into();
-
-    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
-    socket.set_reuse_address(true).unwrap();
-    socket.bind(addr).unwrap();
-    socket.listen(1).unwrap();
-
-    TcpListener::from(socket)
+    TcpListener::bind((IP_ADDRESS_V4, 0))
+        .expect("failed to bind test listener to an ephemeral port")
 }
 
 impl RedisServer {
