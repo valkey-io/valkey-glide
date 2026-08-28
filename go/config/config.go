@@ -174,6 +174,10 @@ const (
 	AzAffinityReplicaAndPrimary
 	// ReadFromAllNodes - Spread the read requests between all nodes (primary and replicas) in a round-robin manner.
 	ReadFromAllNodes
+	// AzAffinityAllNodes - Spread read requests round-robin across ALL nodes (primary and replicas) in the client's
+	// Availability Zone (AZ). Falls back to round-robin across all nodes when no in-AZ node is available. Unlike
+	// AzAffinityReplicaAndPrimary, this strategy does not prioritize replicas over the primary within the AZ.
+	AzAffinityAllNodes
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
@@ -191,6 +195,10 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 
 	if readFrom == ReadFromAllNodes {
 		return protobuf.ReadFrom_AllNodes
+	}
+
+	if readFrom == AzAffinityAllNodes {
+		return protobuf.ReadFrom_AZAffinityAllNodes
 	}
 
 	return protobuf.ReadFrom_Primary
@@ -314,9 +322,12 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	request.LibName = libName
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
-		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary ||
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
 		if config.clientAZ == "" {
-			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
+			return nil, errors.New(
+				"client AZ must be set when using AZ affinity, AZ affinity with replicas and primary, or AZ affinity across all nodes",
+			)
 		}
 	}
 
@@ -501,7 +512,8 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	if config.readOnly {
 		// Validate that read-only mode is not combined with AZAffinity strategies
 		if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
-			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary ||
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
 			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
 		}
 		request.ReadOnly = &config.readOnly
@@ -681,9 +693,9 @@ func (config *ClientConfiguration) WithSubscriptionConfig(
 // When enabled, the client will skip primary node detection during connection initialization
 // and will reject write commands. This is useful for connecting to replica-only deployments.
 //
-// Note: Read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
-// read strategies. Attempting to use these combinations will result in an error during
-// client creation.
+// Note: Read-only mode is not compatible with AzAffinity, AzAffinityReplicaAndPrimary, or
+// AzAffinityAllNodes read strategies. Attempting to use these combinations will result in an
+// error during client creation.
 func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfiguration {
 	config.readOnly = readOnly
 	return config

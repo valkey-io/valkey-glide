@@ -1740,6 +1740,41 @@ func TestConfig_ReadOnly_RejectsAzAffinityReplicasAndPrimary(t *testing.T) {
 	assert.Contains(t, err.Error(), "read-only mode is not compatible with AZAffinity")
 }
 
+func TestConfig_AzAffinityAllNodes_RequiresClientAZ(t *testing.T) {
+	// AzAffinityAllNodes without ClientAZ must return a validation error
+	config := NewClientConfiguration().
+		WithReadFrom(AzAffinityAllNodes)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client AZ must be set")
+}
+
+func TestConfig_AzAffinityAllNodes_MapsToProtobuf(t *testing.T) {
+	// AzAffinityAllNodes with ClientAZ must map to ReadFrom_AZAffinityAllNodes
+	az := "us-east-1a"
+	config := NewClientConfiguration().
+		WithReadFrom(AzAffinityAllNodes).
+		WithClientAZ(az)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.ReadFrom_AZAffinityAllNodes, result.ReadFrom)
+	assert.Equal(t, az, result.ClientAz)
+}
+
+func TestConfig_ReadOnly_RejectsAzAffinityAllNodes(t *testing.T) {
+	// read_only with AzAffinityAllNodes must return an incompatibility error
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(AzAffinityAllNodes).
+		WithClientAZ("us-east-1a")
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read-only mode is not compatible with AZAffinity")
+}
+
 func TestConfig_ReadOnly_AcceptsPreferReplica(t *testing.T) {
 	// Test that read_only with PreferReplica is valid
 	config := NewClientConfiguration().
