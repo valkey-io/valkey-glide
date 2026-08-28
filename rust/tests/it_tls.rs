@@ -115,6 +115,9 @@ fn start_tls_server() -> Option<TlsServer> {
     None
 }
 
+// TODO #6932: only the InsecureTls path is covered. Add SecureTls tests — a
+// negative case (self-signed cert must be rejected) and a positive roundtrip
+// that trusts the generated CA — so cert validation is exercised.
 #[tokio::test]
 async fn tls_insecure_roundtrip() {
     let server = match start_tls_server() {
