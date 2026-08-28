@@ -12,6 +12,7 @@ on:
         paths:
             - rust/**
             - glide-core/**
+            - logger_core/**
             - utils/cluster_manager.py
             - .github/workflows/rust-client.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -20,6 +21,7 @@ on:
         paths:
             - rust/**
             - glide-core/**
+            - logger_core/**
             - utils/cluster_manager.py
             - .github/workflows/rust-client.yml
             - .github/actions/install-shared-dependencies/action.yml
