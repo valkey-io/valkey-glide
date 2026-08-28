@@ -20,6 +20,7 @@ func ExampleClusterClient_CustomCommand() {
 	result, err := client.CustomCommand(context.Background(), []string{"ping"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.SingleValue().(string))
 
@@ -30,7 +31,11 @@ func ExampleClusterClient_CustomCommandWithRoute() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	route := config.SimpleNodeRoute(config.RandomRoute)
-	result, _ := client.CustomCommandWithRoute(context.Background(), []string{"ping"}, route)
+	result, err := client.CustomCommandWithRoute(context.Background(), []string{"ping"}, route)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+		return
+	}
 	fmt.Println(result.SingleValue().(string))
 
 	// Output: PONG
@@ -48,6 +53,7 @@ func ExampleClusterClient_Scan() {
 	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	cursor := models.NewClusterScanCursor()
@@ -82,11 +88,13 @@ func ExampleClusterClient_ScanWithOptions_match() {
 	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	cursor := models.NewClusterScanCursor()
@@ -121,11 +129,13 @@ func ExampleClusterClient_ScanWithOptions_matchNonUTF8() {
 	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	cursor := models.NewClusterScanCursor()
@@ -160,6 +170,7 @@ func ExampleClusterClient_ScanWithOptions_count() {
 	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	cursor := models.NewClusterScanCursor()
@@ -194,11 +205,13 @@ func ExampleClusterClient_ScanWithOptions_type() {
 	_, err := client.MSet(context.Background(), keysToSet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	_, err = client.SAdd(context.Background(), "someKey", []string{"value"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	cursor := models.NewClusterScanCursor()
@@ -226,6 +239,7 @@ func ExampleClusterClient_RandomKey() {
 	result, err := client.RandomKey(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(len(result.Value()) > 0)
@@ -241,6 +255,7 @@ func ExampleClusterClient_RandomKeyWithRoute() {
 	result, err := client.RandomKeyWithRoute(context.Background(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(len(result.Value()) > 0)

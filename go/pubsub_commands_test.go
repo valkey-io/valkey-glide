@@ -30,6 +30,7 @@ func ExampleClient_Publish() {
 	result, err := publisher.Publish(context.Background(), "my_channel", "Hello, World!")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -61,6 +62,7 @@ func ExampleClusterClient_Publish() {
 	result, err := publisher.Publish(context.Background(), "my_channel", "Hello, World!", false)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -86,6 +88,7 @@ func ExampleClient_PubSubChannels() {
 	result, err := publisher.PubSubChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -105,6 +108,7 @@ func ExampleClusterClient_PubSubChannels() {
 	result, err := publisher.PubSubChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -127,6 +131,7 @@ func ExampleClient_PubSubChannelsWithPattern() {
 	result, err := publisher.PubSubChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	sort.Strings(result)
@@ -150,6 +155,7 @@ func ExampleClusterClient_PubSubChannelsWithPattern() {
 	result, err := publisher.PubSubChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	sort.Strings(result)
@@ -171,6 +177,7 @@ func ExampleClusterClient_PubSubShardChannels() {
 	result, err := publisher.PubSubShardChannels(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -192,6 +199,7 @@ func ExampleClusterClient_PubSubShardChannelsWithPattern() {
 	result, err := publisher.PubSubShardChannelsWithPattern(context.Background(), "news.*")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	sort.Strings(result)
@@ -214,6 +222,7 @@ func ExampleClient_PubSubNumPat() {
 	result, err := publisher.PubSubNumPat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -234,6 +243,7 @@ func ExampleClusterClient_PubSubNumPat() {
 	result, err := publisher.PubSubNumPat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -258,6 +268,7 @@ func ExampleClient_PubSubNumSub() {
 	result, err := publisher.PubSubNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Sort the channels for consistent output
@@ -296,6 +307,7 @@ func ExampleClusterClient_PubSubNumSub() {
 	result, err := publisher.PubSubNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Sort the channels for consistent output
@@ -334,6 +346,7 @@ func ExampleClusterClient_PubSubShardNumSub() {
 	result, err := publisher.PubSubShardNumSub(context.Background(), "news.sports", "news.weather", "events.local")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	// Sort the channels for consistent output

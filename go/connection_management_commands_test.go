@@ -15,6 +15,7 @@ func ExampleClient_ClientPause() {
 	result, err := client.ClientPause(context.Background(), 0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -26,6 +27,7 @@ func ExampleClient_ClientPauseWithMode() {
 	result, err := client.ClientPauseWithMode(context.Background(), 0, options.ClientPauseModeWrite)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -37,6 +39,7 @@ func ExampleClient_ClientUnpause() {
 	result, err := client.ClientUnpause(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -48,6 +51,7 @@ func ExampleClient_Ping() {
 	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -60,6 +64,7 @@ func ExampleClient_PingWithOptions() {
 	result, err := client.PingWithOptions(context.Background(), options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -71,6 +76,7 @@ func ExampleClient_Echo() {
 	result, err := client.Echo(context.Background(), "Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -82,6 +88,7 @@ func ExampleClient_ClientId() {
 	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	assert := result > 0
 	fmt.Println(assert)
@@ -94,6 +101,7 @@ func ExampleClient_ClientSetName() {
 	result, err := client.ClientSetName(context.Background(), "ConnectionName")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -107,6 +115,7 @@ func ExampleClient_ClientGetName() {
 	result, err := client.ClientGetName(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.Value() == connectionName)
 

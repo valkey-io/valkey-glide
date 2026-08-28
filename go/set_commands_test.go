@@ -18,6 +18,7 @@ func ExampleClient_SAdd() {
 	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -31,6 +32,7 @@ func ExampleClusterClient_SAdd() {
 	result, err := client.SAdd(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -45,6 +47,7 @@ func ExampleClient_SRem() {
 	result, err := client.SRem(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -59,6 +62,7 @@ func ExampleClusterClient_SRem() {
 	result, err := client.SRem(context.Background(), key, []string{"member1", "member2"})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -74,6 +78,7 @@ func ExampleClient_SMembers() {
 	result, err := client.SMembers(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -89,6 +94,7 @@ func ExampleClusterClient_SMembers() {
 	result, err := client.SMembers(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -104,6 +110,7 @@ func ExampleClient_SCard() {
 	result, err := client.SCard(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 2
@@ -118,6 +125,7 @@ func ExampleClusterClient_SCard() {
 	result, err := client.SCard(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 2
@@ -132,6 +140,7 @@ func ExampleClient_SIsMember() {
 	result, err := client.SIsMember(context.Background(), key, "member1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: true
@@ -146,6 +155,7 @@ func ExampleClusterClient_SIsMember() {
 	result, err := client.SIsMember(context.Background(), key, "member1")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: true
@@ -162,6 +172,7 @@ func ExampleClient_SDiff() {
 	result, err := client.SDiff(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member1:{}]
@@ -178,6 +189,7 @@ func ExampleClusterClient_SDiff() {
 	result, err := client.SDiff(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member1:{}]
@@ -195,6 +207,7 @@ func ExampleClient_SDiffStore() {
 	result, err := client.SDiffStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -212,6 +225,7 @@ func ExampleClusterClient_SDiffStore() {
 	result, err := client.SDiffStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -228,6 +242,7 @@ func ExampleClient_SInter() {
 	result, err := client.SInter(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member2:{}]
@@ -244,6 +259,7 @@ func ExampleClusterClient_SInter() {
 	result, err := client.SInter(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member2:{}]
@@ -261,6 +277,7 @@ func ExampleClient_SInterStore() {
 	result, err := client.SInterStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -278,6 +295,7 @@ func ExampleClusterClient_SInterStore() {
 	result, err := client.SInterStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -294,6 +312,7 @@ func ExampleClient_SInterCard() {
 	result, err := client.SInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -310,6 +329,7 @@ func ExampleClusterClient_SInterCard() {
 	result, err := client.SInterCard(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -327,6 +347,7 @@ func ExampleClient_SInterCardLimit() {
 	result, err := client.SInterCardLimit(context.Background(), []string{key1, key2}, limit)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -344,6 +365,7 @@ func ExampleClusterClient_SInterCardLimit() {
 	result, err := client.SInterCardLimit(context.Background(), []string{key1, key2}, limit)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 1
@@ -358,6 +380,7 @@ func ExampleClient_SRandMember() {
 	result, err := client.SRandMember(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsNil()) // Unable to test for a random value so just check if it is not nil
 
@@ -373,6 +396,7 @@ func ExampleClusterClient_SRandMember() {
 	result, err := client.SRandMember(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsNil()) // Unable to test for a random value so just check if it is not nil
 
@@ -389,6 +413,7 @@ func ExampleClient_SRandMemberCount() {
 	result, err := client.SRandMemberCount(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result)) // Cannot test exact values as they are random
 
@@ -405,6 +430,7 @@ func ExampleClusterClient_SRandMemberCount() {
 	result, err := client.SRandMemberCount(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result)) // Cannot test exact values as they are random
 
@@ -420,6 +446,7 @@ func ExampleClient_SPop() {
 	result, err := client.SPop(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsNil())
 	// Output: false
@@ -434,6 +461,7 @@ func ExampleClusterClient_SPop() {
 	result, err := client.SPop(context.Background(), key)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsNil())
 	// Output: false
@@ -448,6 +476,7 @@ func ExampleClient_SPopCount() {
 	result, err := client.SPopCount(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result))
 	// Output: 2
@@ -462,6 +491,7 @@ func ExampleClusterClient_SPopCount() {
 	result, err := client.SPopCount(context.Background(), key, 2)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result))
 	// Output: 2
@@ -478,6 +508,7 @@ func ExampleClient_SMIsMember() {
 	result, err := client.SMIsMember(context.Background(), key, memberTest)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: [true true false]
@@ -494,6 +525,7 @@ func ExampleClusterClient_SMIsMember() {
 	result, err := client.SMIsMember(context.Background(), key, memberTest)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: [true true false]
@@ -511,6 +543,7 @@ func ExampleClient_SUnionStore() {
 	result, err := client.SUnionStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 3
@@ -528,6 +561,7 @@ func ExampleClusterClient_SUnionStore() {
 	result, err := client.SUnionStore(context.Background(), destination, []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: 3
@@ -544,6 +578,7 @@ func ExampleClient_SUnion() {
 	result, err := client.SUnion(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member1:{} member2:{} member3:{}]
@@ -560,6 +595,7 @@ func ExampleClusterClient_SUnion() {
 	result, err := client.SUnion(context.Background(), []string{key1, key2})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: map[member1:{} member2:{} member3:{}]
@@ -572,6 +608,7 @@ func ExampleClient_SScan() {
 	result, err := client.SScan(context.Background(), key, models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	sort.Strings(result.Data) // Sort for consistent comparison
 	fmt.Println("Cursor:", result.Cursor)
@@ -589,6 +626,7 @@ func ExampleClusterClient_SScan() {
 	result, err := client.SScan(context.Background(), key, models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	sort.Strings(result.Data) // Sort for consistent comparison
 	fmt.Println("Cursor:", result.Cursor)
@@ -607,6 +645,7 @@ func ExampleClient_SScanWithOptions() {
 	result, err := client.SScanWithOptions(context.Background(), key, models.NewCursor(), *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	sort.Strings(result.Data) // Sort for consistent comparison
 	fmt.Println("Cursor:", result.Cursor)
@@ -625,6 +664,7 @@ func ExampleClusterClient_SScanWithOptions() {
 	result, err := client.SScanWithOptions(context.Background(), key, models.NewCursor(), *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	sort.Strings(result.Data) // Sort for consistent comparison
 	fmt.Println("Cursor:", result.Cursor)
@@ -646,6 +686,7 @@ func ExampleClient_SMove() {
 	result, err := client.SMove(context.Background(), source, destination, member)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: true
@@ -662,6 +703,7 @@ func ExampleClusterClient_SMove() {
 	result, err := client.SMove(context.Background(), source, destination, member)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 	// Output: true

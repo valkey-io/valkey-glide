@@ -43,6 +43,7 @@ func ExampleClient_LatencyReset() {
 	resetCount, err := client.LatencyReset(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("LatencyReset count: %v\n", resetCount)
 
@@ -56,6 +57,7 @@ func ExampleClient_LatencyReset_withEvents() {
 	resetCount, err := client.LatencyReset(context.Background(), "command")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("LatencyReset count: %v\n", resetCount)
 
@@ -97,6 +99,7 @@ func ExampleClusterClient_LatencyReset() {
 	resetCount, err := client.LatencyReset(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("LatencyReset count: %v\n", resetCount)
 
@@ -110,6 +113,7 @@ func ExampleClusterClient_LatencyResetWithOptions() {
 	resetCount, err := client.LatencyResetWithOptions(context.Background(), options.RouteOption{})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Printf("LatencyReset count: %v\n", resetCount)
 

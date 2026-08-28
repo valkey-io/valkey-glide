@@ -36,11 +36,13 @@ func Example_clusterFtCreate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	result, err := glideft.ClusterFtList(ctx, client)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) > 0)
 
@@ -75,6 +77,7 @@ func Example_clusterFtSearch() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world", "score": "10"})
@@ -86,6 +89,7 @@ func Example_clusterFtSearch() {
 	result, err := glideft.ClusterFtSearch(ctx, client, index, "@score:[10 10]", nil)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.TotalResults)
 
@@ -119,6 +123,7 @@ func Example_clusterFtAggregate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	client.HSet(ctx, prefix+"1", map[string]string{"score": "10"})
@@ -136,6 +141,7 @@ func Example_clusterFtAggregate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(rows))
 
@@ -169,11 +175,13 @@ func Example_ftCreate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	result, err := glideft.FtList(ctx, client)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(result) > 0)
 
@@ -208,6 +216,7 @@ func Example_ftSearch() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world", "score": "10"})
@@ -219,6 +228,7 @@ func Example_ftSearch() {
 	result, err := glideft.FtSearch(ctx, client, index, "@score:[10 10]", nil)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.TotalResults)
 
@@ -252,6 +262,7 @@ func Example_ftAggregate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	client.HSet(ctx, prefix+"1", map[string]string{"score": "10"})
@@ -269,6 +280,7 @@ func Example_ftAggregate() {
 	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(len(rows))
 

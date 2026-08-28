@@ -21,6 +21,7 @@ func ExampleClusterClient_Info() {
 	response, err := client.Info(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	for _, data := range response {
 		if strings.Contains(data, "cluster_enabled:1") {
@@ -42,6 +43,7 @@ func ExampleClusterClient_InfoWithOptions() {
 	response, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, data := range response.MultiValue() {
@@ -63,6 +65,7 @@ func ExampleClusterClient_TimeWithOptions() {
 	clusterResponse, err := client.TimeWithOptions(context.Background(), opts) // gives: {1 [1738714595 942076] map[]}
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	fmt.Println(len(clusterResponse.SingleValue()) == 2)
@@ -79,6 +82,7 @@ func ExampleClusterClient_DBSizeWithOptions() {
 	result, err := client.DBSizeWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -91,6 +95,7 @@ func ExampleClusterClient_FlushAll() {
 	result, err := client.FlushAll(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -102,6 +107,7 @@ func ExampleClusterClient_FlushDB() {
 	result, err := client.FlushDB(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -126,6 +132,7 @@ func ExampleClusterClient_FlushAllWithOptions() {
 	result, err := client.FlushAllWithOptions(context.Background(), flushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -150,6 +157,7 @@ func ExampleClusterClient_FlushDBWithOptions() {
 	result, err := client.FlushDBWithOptions(context.Background(), flushOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -186,6 +194,7 @@ func ExampleClusterClient_LolwutWithOptions() {
 	result, err := client.LolwutWithOptions(context.Background(), randomRouteOptions)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	if len(result.SingleValue()) > 0 {
@@ -201,6 +210,7 @@ func ExampleClusterClient_LastSave() {
 	result, err := client.LastSave(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsSingleValue())
 
@@ -215,6 +225,7 @@ func ExampleClusterClient_LastSaveWithOptions() {
 	result, err := client.LastSaveWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.IsSingleValue())
 
@@ -226,6 +237,7 @@ func ExampleClusterClient_ConfigResetStat() {
 	result, err := client.ConfigResetStat(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -238,6 +250,7 @@ func ExampleClusterClient_ConfigResetStatWithOptions() {
 	result, err := client.ConfigResetStatWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -250,6 +263,7 @@ func ExampleClusterClient_ConfigSet() {
 	result, err := client.ConfigSet(context.Background(), configParam)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -264,6 +278,7 @@ func ExampleClusterClient_ConfigSetWithOptions() {
 	result, err := client.ConfigSetWithOptions(context.Background(), configParam, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -279,6 +294,7 @@ func ExampleClusterClient_ConfigGet() {
 	result, err := client.ConfigGet(context.Background(), configParamGet)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result)
 
@@ -295,6 +311,7 @@ func ExampleClusterClient_ConfigGetWithOptions() {
 	result, err := client.ConfigGetWithOptions(context.Background(), configParamGet, opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	fmt.Println(result.SingleValue())
 
@@ -311,6 +328,7 @@ func ExampleClusterClient_ConfigRewrite() {
 	res, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	for _, data := range res.MultiValue() {
 		lines := strings.Split(data, "\n")
@@ -352,6 +370,7 @@ func ExampleClusterClient_ConfigRewriteWithOptions() {
 	response, err := client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 
 	for _, data := range response.MultiValue() {
@@ -383,6 +402,7 @@ func ExampleClusterClient_ConfigRewriteWithOptions() {
 	response, err = client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	lines := strings.Split(response.SingleValue(), "\n")
 	var configFile string
@@ -410,6 +430,7 @@ func ExampleClusterClient_ConfigRewriteWithOptions() {
 	response, err = client.InfoWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
+		return
 	}
 	for _, data := range response.MultiValue() {
 		lines := strings.Split(data, "\n")

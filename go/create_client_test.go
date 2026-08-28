@@ -26,6 +26,7 @@ func ExampleNewClient() {
 	client, err := NewClient(clientConf)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
+		return
 	}
 	fmt.Printf("Client created and connected: %T", client)
 
@@ -48,6 +49,7 @@ func ExampleNewClusterClient() {
 	client, err := NewClusterClient(clientConf)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
+		return
 	}
 	fmt.Printf("Client created and connected: %T", client)
 
@@ -72,6 +74,7 @@ func ExampleNewClusterClient_withDatabaseId() {
 	client, err := NewClusterClient(clientConf)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
+		return
 	}
 	fmt.Printf("Client created and connected: %T", client)
 
