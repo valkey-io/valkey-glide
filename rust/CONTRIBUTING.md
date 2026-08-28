@@ -46,4 +46,4 @@ cargo deny check                                    # advisories/licenses/bans/s
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[Apache-2.0](LICENSE) license.
+[Apache-2.0](../LICENSE) license.

@@ -122,6 +122,6 @@ cargo test --test it_parity_guard   # pure Rust; resolves the fork via cargo met
 
 When the pinned fork rev is bumped, run the verifier to see what changed in
 the fork's surface, update the table deliberately, and refresh the pinned rev
-references (`NOTICE`). Commands beyond the fork's surface belong
+references. Commands beyond the fork's surface belong
 in the per-family extension traits (`src/commands/<family>.rs`), not in the
 table.

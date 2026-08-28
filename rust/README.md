@@ -1,7 +1,6 @@
 # Valkey GLIDE for Rust (`glide`)
 
 [![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
 A first-class, native **Rust** client for [Valkey](https://valkey.io) and Redis OSS,
@@ -303,11 +302,6 @@ Contributions are welcome — bug reports, feature requests, and pull requests.
 See the [Contributing Guidelines](./CONTRIBUTING.md) to get started and
 [DEVELOPER.md](./DEVELOPER.md) for the development workflow.
 
-## Security
-
-To report a security vulnerability, please see the [Security Policy](./SECURITY.md).
-
 ## License
 
-Licensed under the Apache License, Version 2.0. See the `LICENSE` file at the
-repository root for the full text.
+Licensed under the Apache License, Version 2.0. See the [`LICENSE`](../LICENSE) for the full text.
