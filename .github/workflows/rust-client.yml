@@ -77,4 +77,4 @@ jobs:
 
             - name: cargo deny check
               working-directory: ./rust
-              run: cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
+              run: cargo deny --config ${GITHUB_WORKSPACE}/deny.toml check
