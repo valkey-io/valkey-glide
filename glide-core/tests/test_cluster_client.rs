@@ -943,4 +943,78 @@ mod cluster_client_tests {
             );
         });
     }
+
+    /// `cluster_scan` must be bounded by the client's `request_timeout`, the way
+    /// every other command path is.
+    ///
+    /// Two things beneath it are unbounded. `send_scan` builds its `SCAN` command
+    /// without calling `set_response_timeout`, so the command inherits the
+    /// connection default, which is `Duration::MAX`; and the retry loop in
+    /// `try_scan` has neither a deadline nor a retry counter. A primary that
+    /// stops answering while still in the slot map therefore leaves the caller
+    /// waiting, with no error returned.
+    ///
+    /// This test blocks every primary with a busy script. Without the bound the
+    /// call does not settle and rstest kills the test at its own limit; with it,
+    /// the call returns a timeout error at `request_timeout`.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_scan_is_bounded_by_request_timeout() {
+        const REQUEST_TIMEOUT_MS: u32 = 500;
+
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(REQUEST_TIMEOUT_MS),
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+
+            // Block every primary, so no scan iteration can be answered. The
+            // script keeps running server-side after this command times out,
+            // which is what leaves the nodes unresponsive for the scan below.
+            let mut blocking_client = test_basics.client.clone();
+            tokio::spawn(async move {
+                let mut cmd = redis::cmd("EVAL");
+                cmd.arg(
+                    r#"
+                    while (true)
+                    do
+                    redis.call('ping')
+                    end
+                "#,
+                )
+                .arg("0");
+                let _ = blocking_client
+                    .send_command(
+                        &mut cmd,
+                        Some(RoutingInfo::MultiNode((
+                            MultipleNodeRoutingInfo::AllMasters,
+                            None,
+                        ))),
+                    )
+                    .await;
+            });
+
+            // Let the scripts take hold before scanning.
+            tokio::time::sleep(Duration::from_millis(200)).await;
+
+            let cursor = redis::ScanStateRC::new();
+            let args = redis::ClusterScanArgs::builder().build();
+
+            let started = std::time::Instant::now();
+            let result = test_basics.client.cluster_scan(&cursor, args).await;
+            let elapsed = started.elapsed();
+
+            let err = result.expect_err("cluster_scan should fail while every primary is blocked");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+            assert!(
+                elapsed < Duration::from_millis(REQUEST_TIMEOUT_MS as u64) * 4,
+                "cluster_scan took {elapsed:?}, which is not bounded by the \
+                 {REQUEST_TIMEOUT_MS}ms request timeout",
+            );
+        });
+    }
 }
