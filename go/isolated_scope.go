@@ -256,14 +256,20 @@ func (client *Client) ScopedConnection(ctx context.Context, timeout time.Duratio
 	clientID := uint64(uintptr(client.coreClient))
 	client.mu.Unlock()
 
-	// Get connection request bytes
-	request, err := client.getConnectionRequest()
-	if err != nil {
-		return nil, err
-	}
-	connReqBytes, err := proto.Marshal(request)
-	if err != nil {
-		return nil, err
+	// Use pre-serialized connection request bytes if available (pool-borrowed clients),
+	// otherwise serialize from the client configuration.
+	var connReqBytes []byte
+	if client.connReqBytes != nil {
+		connReqBytes = client.connReqBytes
+	} else {
+		request, err := client.getConnectionRequest()
+		if err != nil {
+			return nil, err
+		}
+		connReqBytes, err = proto.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	routingSlot := uint16(0)
@@ -350,14 +356,20 @@ func (client *ClusterClient) ScopedConnection(
 	clientID := uint64(uintptr(client.coreClient))
 	client.mu.Unlock()
 
-	// Get connection request bytes
-	request, err := client.getConnectionRequest()
-	if err != nil {
-		return nil, err
-	}
-	connReqBytes, err := proto.Marshal(request)
-	if err != nil {
-		return nil, err
+	// Use pre-serialized connection request bytes if available (pool-borrowed clients),
+	// otherwise serialize from the client configuration.
+	var connReqBytes []byte
+	if client.connReqBytes != nil {
+		connReqBytes = client.connReqBytes
+	} else {
+		request, err := client.getConnectionRequest()
+		if err != nil {
+			return nil, err
+		}
+		connReqBytes, err = proto.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	routingSlot := uint16(0)

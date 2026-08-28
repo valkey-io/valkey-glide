@@ -1247,3 +1247,76 @@ func TestScopeConcurrentMultiple(t *testing.T) {
 		})
 	}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Pool + Scope combination test (regression for #6763)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TestPoolBorrowedClientScopedConnection verifies that a pool-borrowed client can open a
+// ScopedConnection and execute a full WATCH/GET/MULTI/SET/EXEC cycle. This is the regression
+// test for #6763: GetClient did not propagate clientConfig/connReqBytes, causing
+// ScopedConnection to fail with "client configuration not available for scoped connections".
+//
+// Standalone-only: cluster-aware pool wrappers (GetClient returning *ClusterClient) are not
+// yet supported — tracked as a separate enhancement.
+func TestPoolBorrowedClientScopedConnection(t *testing.T) {
+	if standaloneHosts == nil || *standaloneHosts == "" {
+		t.Skip("No --standalone-endpoints provided")
+	}
+
+	pool := newPool(t, false, glide.PoolConfig{
+		MaxSize:        2,
+		MinIdle:        1,
+		AcquireTimeout: 10 * time.Second,
+	})
+	defer pool.Close()
+
+	waitForPoolReady(t, pool, 1)
+
+	ctx := context.Background()
+	clientID, err := pool.Acquire(ctx)
+	require.NoError(t, err)
+
+	client, err := pool.GetClient(clientID)
+	require.NoError(t, err)
+	defer client.Close()
+
+	key := scopeTestKey("pool-scope-combo", false)
+
+	// Seed a counter via the pooled client
+	_, err = client.Set(ctx, key, "10")
+	require.NoError(t, err)
+
+	// Open a scoped connection on the pool-borrowed client
+	scope, err := client.ScopedConnection(ctx, 10*time.Second, "")
+	require.NoError(t, err, "ScopedConnection on pool-borrowed client should succeed (fix for #6763)")
+	defer scope.Close()
+
+	assert.False(t, scope.IsReleased())
+
+	// Full OCC cycle: WATCH → GET → MULTI → SET → EXEC
+	_, err = scope.Watch(ctx, key)
+	require.NoError(t, err)
+
+	val, err := scope.Get(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, "10", val)
+
+	_, err = scope.Multi(ctx)
+	require.NoError(t, err)
+
+	_, err = scope.Set(ctx, key, "11")
+	require.NoError(t, err)
+
+	result, err := scope.Exec(ctx)
+	require.NoError(t, err)
+	assert.NotEmpty(t, result, "EXEC should commit (no conflict)")
+
+	// Verify via the pooled client
+	finalVal, err := client.Get(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, "11", finalVal.Value())
+
+	// Cleanup
+	client.Client.Del(ctx, []string{key})
+}
