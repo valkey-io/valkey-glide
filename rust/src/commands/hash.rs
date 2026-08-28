@@ -219,6 +219,9 @@ pub trait HashCommands: CommandExecutor {
         collect_i64(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #6934: hgetex and hsetex share ExpirySet, which allows options each
+    // command rejects at runtime (HGETEX + KEEPTTL, HSETEX + PERSIST). Split
+    // into distinct expiry types so invalid combinations are unrepresentable.
     /// Get the values of hash fields, optionally changing their expiry
     /// (`HGETEX`).
     async fn hgetex<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
