@@ -600,6 +600,8 @@ struct DeadlineEntry {
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
+    /// PID of the process that built this instance.
+    owner_pid: i32,
 }
 
 /// Global singleton watchdog instance. Uses an atomic pointer so the read path
@@ -607,67 +609,73 @@ pub struct TimeoutWatchdog {
 static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
+#[inline]
+fn current_pid() -> i32 {
+    std::process::id() as i32
+}
+
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
+        let curr_pid = current_pid();
         let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
-        if !ptr.is_null() {
-            // Safety: once installed as non-null, the pointer is never freed
-            // until process exit (reinit_global intentionally leaks the prior
-            // instance rather than dropping it).
-            return unsafe { &*ptr };
+
+        match unsafe { ptr.as_ref() } {
+            Some(watchdog) if watchdog.owner_pid == curr_pid => watchdog,
+            // Catch all, either from None or from when the pid check failed.
+            _ => Self::init_global(ptr, curr_pid),
         }
-        Self::init_global()
     }
 
-    /// Initialize the global watchdog (first call or after reinit).
-    /// Uses compare_exchange so only one caller wins the race.
-    fn init_global() -> &'static Self {
-        let ptr = Box::into_raw(Box::new(Self::start_global()));
+    /// Install a fresh global watchdog in place of `prev`.
+    ///
+    /// `prev` is whatever `global()` observed: null on first use, or an instance
+    /// owned by a different process after a `fork()`. Either way the replaced
+    /// instance is leaked on purpose; the success arm explains why.
+    fn init_global(prev: *mut Self, curr_pid: i32) -> &'static Self {
+        let new = Box::into_raw(Box::new(Self::start_global(curr_pid)));
         match GLOBAL_WATCHDOG.compare_exchange(
-            std::ptr::null_mut(),
-            ptr,
+            prev,
+            new,
             std::sync::atomic::Ordering::AcqRel,
             std::sync::atomic::Ordering::Acquire,
         ) {
-            Ok(_) => unsafe { &*ptr },
-            Err(existing) => {
-                // Another thread won the race — drop ours (the Sender drop
-                // causes the spawned thread to exit via Disconnected).
-                unsafe {
-                    drop(Box::from_raw(ptr));
-                    &*existing
-                }
+            Ok(_) => {
+                // The old TimeoutWatchdog struct is not freed for 2 reasons:
+                //
+                // 1. `global()` returns `&'static Self` and nothing tracks those
+                //    readers, so another thread may be dereferencing this pointer
+                //    right now, even just to compare `owner_pid`. Freeing it
+                //    turns that read into a use-after-free.
+                // 2. After a `fork()` the replaced instance is the parent's, and
+                //    its `mpsc::Sender` refers to a thread that only ever existed
+                //    in the parent. Dropping a `Sender` notifies the parked
+                //    receiver through the same code path that crashes in a child.
+                //
+                // The cost is bounded and small: 24 bytes plus one channel block,
+                // at most one instance per fork generation. The inherited one
+                // stays a copy-on-write page we never write, so it costs no
+                // additional physical memory. Reclaiming it is unsound, not
+                // merely unfinished, so this is deliberate and not a TODO.
+                PUBLISHED_PENDING.store(0, Ordering::Relaxed);
+                unsafe { &*new }
+            }
+            // Lost the race. Clean ours up and use whichever is already there.
+            Err(current) => {
+                unsafe { drop(Box::from_raw(new)) };
+                unsafe { &*current }
             }
         }
     }
 
-    /// Reinitialize the global watchdog after fork().
-    ///
-    /// After fork(), the watchdog thread is dead but the AtomicPtr still points
-    /// to the old instance. This replaces it with a fresh one. The old instance
-    /// is intentionally leaked — its internal Mutex/Condvar are in undefined
-    /// state post-fork and cannot be safely dropped.
-    ///
-    /// Must only be called in a forked child process where the previous
-    /// watchdog thread is no longer running.
-    pub fn reinit_global() {
-        let w = Box::new(Self::start_global());
-        let w_ref: &'static Self = Box::leak(w);
-        let ptr = w_ref as *const Self as *mut Self;
-        GLOBAL_WATCHDOG.store(ptr, std::sync::atomic::Ordering::Release);
-        // Reset the published pending count — the old watchdog's entries are gone.
-        PUBLISHED_PENDING.store(0, Ordering::Relaxed);
-    }
-
     /// Start the global watchdog instance (publishes pending count).
-    fn start_global() -> Self {
+    fn start_global(owner_pid: i32) -> Self {
         let (tx, rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
             .spawn(move || Self::run(rx, true))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        Self { tx, owner_pid }
     }
 
     /// Start a watchdog instance. Spawns a dedicated OS thread.
@@ -678,7 +686,10 @@ impl TimeoutWatchdog {
             .name("glide-timeout-watchdog".into())
             .spawn(move || Self::run(rx, false))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        Self {
+            tx,
+            owner_pid: current_pid(),
+        }
     }
 
     /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
@@ -987,8 +998,6 @@ mod tests {
         blocker.abort();
     }
 
-    // ── cmd_name_from_bytes ──────────────────────────────────────────────
-
     #[tokio::test]
     async fn cmd_name_from_bytes_resolves_common_commands() {
         assert_eq!(cmd_name_from_bytes(b"GET"), "GET");
@@ -1011,24 +1020,189 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"unknowncmd"), "UNKNOWN");
     }
 
-    // ── Fork Safety (reinit) ─────────────────────────────────────────────
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn global_replaces_an_instance_owned_by_another_process() {
+        // -1 is never a real pid, so this can only ever look foreign.
+        let foreign = Box::into_raw(Box::new(TimeoutWatchdog::start_global(-1)));
+        // Both this and whatever it displaces are leaked, exactly as in
+        // production — see `init_global`.
+        GLOBAL_WATCHDOG.swap(foreign, Ordering::AcqRel);
+
+        let healed = TimeoutWatchdog::global();
+        assert!(
+            !std::ptr::eq(healed, unsafe { &*foreign }),
+            "global() must not hand out an instance owned by another process"
+        );
+        assert_eq!(
+            healed.owner_pid,
+            current_pid(),
+            "the replacement must be owned by this process"
+        );
+
+        let rx = healed.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "the replacement watchdog must fire"
+        );
+    }
 
     #[tokio::test]
-    async fn reinit_global_spawns_new_working_watchdog() {
-        // Ensure the global watchdog is initialized.
-        let _pre = TimeoutWatchdog::global();
-
-        // Simulate post-fork reinit: replace the global with a fresh instance.
-        TimeoutWatchdog::reinit_global();
-
-        // The new watchdog must be functional — register and await a timeout.
-        let watchdog = TimeoutWatchdog::global();
-        let rx = watchdog.register(Duration::from_millis(50), Instant::now());
-        let result = tokio::time::timeout(Duration::from_millis(500), rx).await;
+    #[serial_test::serial]
+    async fn repeated_calls_reuse_the_same_instance() {
+        let before = TimeoutWatchdog::global();
+        let after = TimeoutWatchdog::global();
         assert!(
-            result.is_ok(),
-            "watchdog must fire after reinit_global (simulating post-fork)"
+            std::ptr::eq(before, after),
+            "an instance owned by this process must not be replaced"
         );
-        assert!(result.unwrap().is_ok());
+        assert_eq!(after.owner_pid, current_pid());
+
+        let rx = after.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "watchdog must still fire"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn concurrent_global_calls_converge_on_one_instance() {
+        const THREADS: usize = 8;
+
+        // -1 is never a real pid, so every thread takes the install path.
+        let foreign = Box::into_raw(Box::new(TimeoutWatchdog::start_global(-1)));
+        GLOBAL_WATCHDOG.swap(foreign, Ordering::AcqRel);
+
+        let barrier = Arc::new(std::sync::Barrier::new(THREADS));
+        // Addresses rather than pointers: `*const T` is not `Send`.
+        let handed_out: Vec<usize> = (0..THREADS)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    TimeoutWatchdog::global() as *const TimeoutWatchdog as usize
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|worker| worker.join().expect("worker panicked"))
+            .collect();
+
+        let elected = handed_out[0];
+        assert!(
+            handed_out.iter().all(|got| *got == elected),
+            "concurrent global() calls handed out more than one instance"
+        );
+        assert_ne!(
+            elected, foreign as usize,
+            "global() must not hand out an instance owned by another process"
+        );
+
+        let elected = unsafe { &*(elected as *const TimeoutWatchdog) };
+        assert_eq!(elected.owner_pid, current_pid());
+        let rx = elected.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "the elected watchdog must fire"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn forked_child_gets_a_working_watchdog() {
+        // Initialize the global watchdog in the parent so the child inherits a
+        // pointer to an instance whose thread is not in the child.
+        let parent = TimeoutWatchdog::global();
+        parent.register(Duration::from_secs(1), Instant::now());
+
+        // Give the watchdog time to complete.
+        std::thread::sleep(Duration::from_secs(2));
+
+        let outcome = run_in_forked_child(|| {
+            let watchdog = TimeoutWatchdog::global();
+            let mut rx = watchdog.register(Duration::from_millis(50), Instant::now());
+            poll_until_fired(&mut rx, Duration::from_secs(2))
+        });
+
+        match outcome {
+            ChildOutcome::Exited(0) => {}
+            ChildOutcome::Exited(_) => panic!("the watchdog did not fire in the forked child"),
+            ChildOutcome::Signaled(sig) => {
+                panic!("child killed by signal {sig} — it used the inherited watchdog")
+            }
+        }
+    }
+
+    /// How a forked child terminated.
+    #[cfg(unix)]
+    #[derive(Debug)]
+    enum ChildOutcome {
+        Exited(i32),
+        /// Killed by a signal.
+        Signaled(i32),
+    }
+
+    /// Run `child` in a forked process and report how it terminated. `child`
+    /// returns whether its assertion held.
+    ///
+    /// The child `_exit`s rather than returning, which skips atexit handlers and
+    /// the test harness's teardown — neither is safe to run in a process that has
+    /// lost every thread but the one that called `fork()`.
+    #[cfg(unix)]
+    fn run_in_forked_child(child: impl FnOnce() -> bool) -> ChildOutcome {
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork() failed");
+
+        // `fork()` returns 0 in the child, the child's pid in the parent.
+        if pid == 0 {
+            let held = child();
+            unsafe { libc::_exit(if held { 0 } else { 1 }) };
+        }
+
+        let mut status: libc::c_int = 0;
+        assert_eq!(
+            unsafe { libc::waitpid(pid, &mut status, 0) },
+            pid,
+            "waitpid failed"
+        );
+
+        if libc::WIFEXITED(status) {
+            ChildOutcome::Exited(libc::WEXITSTATUS(status))
+        } else if libc::WIFSIGNALED(status) {
+            ChildOutcome::Signaled(libc::WTERMSIG(status))
+        } else {
+            panic!("child neither exited nor was signaled (raw status {status})")
+        }
+    }
+
+    /// Block until the deadline fires, or until `limit` elapses.
+    ///
+    /// Polls rather than awaits for two reasons: this is a plain `#[test]`, so
+    /// there is no runtime to await on, and a forked child should do as little as
+    /// possible before `_exit` — building a runtime allocates and spawns threads,
+    /// and the allocator's lock may have been inherited held.
+    ///
+    /// Note this is hygiene, not a platform limit: a *fresh* runtime does work in
+    /// a forked child, which is exactly what the bindings rely on when they
+    /// rebuild a client. It is the *inherited* runtime that is unusable.
+    #[cfg(unix)]
+    fn poll_until_fired(rx: &mut oneshot::Receiver<()>, limit: Duration) -> bool {
+        let give_up_at = Instant::now() + limit;
+        loop {
+            match rx.try_recv() {
+                Ok(()) => return true,
+                Err(oneshot::error::TryRecvError::Empty) if Instant::now() < give_up_at => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                _ => return false,
+            }
+        }
     }
 }
