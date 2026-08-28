@@ -658,75 +658,48 @@ func (client *ClusterClient) clusterScan(
 		// Continue with execution
 	}
 
-	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
-	resultChannel := make(chan payload, 1)
-	resultChannelPtr := unsafe.Pointer(&resultChannel)
-
-	pinner := pinner{}
-	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
-	defer pinner.Unpin()
-
-	client.mu.Lock()
-	if client.coreClient == nil {
-		client.mu.Unlock()
-		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
-	}
-	client.pending[resultChannelPtr] = struct{}{}
-
-	c_cursor := C.CString(cursor.GetCursor())
-	// These will be run in LIFO order; make sure not to free c_cursor before remove_cluster_scan_cursor
-	defer C.free(unsafe.Pointer(c_cursor))
-	defer C.remove_cluster_scan_cursor(c_cursor)
-
 	args, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
 	}
 
-	var cArgsPtr *C.uintptr_t = nil
-	var argLengthsPtr *C.ulong = nil
+	var cArgsPtr *C.uintptr_t
+	var argLengthsPtr *C.ulong
 	if len(args) > 0 {
 		cArgs, argLengths := toCStrings(args)
 		cArgsPtr = &cArgs[0]
 		argLengthsPtr = &argLengths[0]
 	}
 
+	// make the channel buffered, so that we don't need to acquire the client.mu in the successCallback and failureCallback.
+	resultChannel := make(chan payload, 1)
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, NewClosingError("Cluster Scan failed. The client is closed.")
+	}
+	requestID := client.beginRequest(resultChannel)
+
+	cCursor := C.CString(cursor.GetCursor())
+	// These will be run in LIFO order; make sure not to free cCursor before remove_cluster_scan_cursor.
+	defer C.free(unsafe.Pointer(cCursor))
+	defer C.remove_cluster_scan_cursor(cCursor)
+
 	C.request_cluster_scan(
 		client.coreClient,
-		C.uintptr_t(pinnedChannelPtr),
-		c_cursor,
+		C.uintptr_t(requestID),
+		cCursor,
 		C.size_t(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
 	)
 	client.mu.Unlock()
 
-	// Wait for result or context cancellation
-	var payload payload
-	select {
-	case <-ctx.Done():
-		client.mu.Lock()
-		if client.pending != nil {
-			delete(client.pending, resultChannelPtr)
-		}
-		client.mu.Unlock()
-		// Start cleanup goroutine
-		go func() {
-			// Wait for payload on separate channel
-			if payload := <-resultChannel; payload.value != nil {
-				C.free_command_response(payload.value)
-			}
-		}()
-		return nil, ctx.Err()
-	case payload = <-resultChannel:
-		// Continue with normal processing
+	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
+	if err != nil {
+		return nil, err
 	}
-
-	client.mu.Lock()
-	if client.pending != nil {
-		delete(client.pending, resultChannelPtr)
-	}
-	client.mu.Unlock()
 
 	if payload.error != nil {
 		return nil, payload.error

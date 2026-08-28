@@ -4,8 +4,8 @@ package glide
 
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -248,7 +248,7 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 	client := &Client{
 		baseClient: baseClient{
 			coreClient: unsafe.Pointer(adapterPtr),
-			pending:    make(map[unsafe.Pointer]struct{}),
+			pending:    make(map[uintptr]struct{}),
 			mu:         &sync.Mutex{},
 		},
 		connReqBytes: p.connReq,
