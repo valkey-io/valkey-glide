@@ -392,6 +392,71 @@ func (suite *GlideTestSuite) TestAzAffinityAllNodesSplitsBetweenPrimaryAndReplic
 	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
 }
 
+func (suite *GlideTestSuite) TestAzAffinityAllNodesFallsBackToAllNodesWhenNoInAzNode() {
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
+
+	const nGetCalls = 6
+	otherAz := "us-east-1b"
+
+	// Client used only to set AZ and reset stats.
+	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
+
+	// Put every node in a different AZ so the client's AZ has no match.
+	suite.verifyOK(
+		clientForConfigSet.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
+		map[string]string{"availability-zone": otherAz}, options.RouteOption{Route: config.AllNodes})
+	assert.NoError(suite.T(), err)
+	clientForConfigSet.Close()
+
+	// Use a client AZ that no node belongs to, triggering the all-nodes fallback.
+	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second).
+		WithReadFrom(config.AzAffinityAllNodes).
+		WithClientAZ("non-existing-az"))
+	require.NoError(suite.T(), err)
+	defer clientForTestingAz.Close()
+
+	for i := 0; i < nGetCalls; i++ {
+		_, err = clientForTestingAz.Get(context.Background(), "foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	// Fallback: reads should spread across multiple nodes (primary + replicas), not
+	// concentrate on one node. At least two distinct nodes must have received GETs.
+	nodesWithGets := 0
+	totalGetCalls := 0
+	for _, value := range infoResult.MultiValue() {
+		if !strings.Contains(value, "cmdstat_get:calls=") {
+			continue
+		}
+		nodesWithGets++
+		startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+		endIndex := strings.Index(value[startIndex:], ",") + startIndex
+		calls, convErr := strconv.Atoi(value[startIndex:endIndex])
+		assert.NoError(suite.T(), convErr)
+		totalGetCalls += calls
+	}
+	assert.Greater(suite.T(), nodesWithGets, 1, "fallback should spread reads across multiple nodes")
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
+}
+
 func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 
