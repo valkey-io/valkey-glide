@@ -7,7 +7,7 @@ mod utilities;
 mod standalone_client_tests {
     use super::*;
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
-    use crate::utilities::mocks::{Mock, ServerMock};
+    use crate::utilities::mocks::{Mock, ServerMock, SetInfoResponse};
     use glide_core::{
         client::{Client as GlideClient, ConnectionError, StandaloneClient},
         connection_request::{ProtocolVersion, ReadFrom},
@@ -1259,6 +1259,66 @@ mod standalone_client_tests {
 
             assert_connected(&mut client).await;
         });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_unsupported_client_setinfo_does_not_prevent_connection() {
+        let mut responses = create_primary_responses();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::SimpleString("PONG".to_string()),
+        );
+        let server = ServerMock::new_with_setinfo_response(responses, SetInfoResponse::Unsupported);
+        let addresses = server.get_addresses();
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.lib_name = "GlideRust(framework:1.2)".into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("unsupported CLIENT SETINFO should not prevent client creation");
+
+            assert_connected(&mut client).await;
+        });
+
+        assert_eq!(
+            server.get_number_of_received_setinfo_commands(),
+            2,
+            "connection setup should send CLIENT SETINFO for LIB-NAME and LIB-VER"
+        );
+    }
+
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_setinfo_in_library_name_keeps_setup_responses_synchronized() {
+        let mut responses = create_primary_responses();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::SimpleString("PONG".to_string()),
+        );
+        let server = ServerMock::new(responses);
+        let addresses = server.get_addresses();
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.lib_name = "GlideSETINFOClient".into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("SETINFO in the library name should not desynchronize setup responses");
+
+            assert_connected(&mut client).await;
+        });
+
+        assert_eq!(
+            server.get_number_of_received_setinfo_commands(),
+            2,
+            "only CLIENT SETINFO command frames should be counted"
+        );
     }
 
     // ==================== Read-Only Mode Tests ====================

@@ -473,6 +473,113 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
 }
 
 #[test]
+fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
+    unsafe extern "C-unwind" fn no_op_pubsub_callback(
+        _client_ptr: usize,
+        _kind: PushKind,
+        _message: *const u8,
+        _message_len: i64,
+        _channel: *const u8,
+        _channel_len: i64,
+        _pattern: *const u8,
+        _pattern_len: i64,
+    ) {
+    }
+
+    unsafe extern "C-unwind" fn no_op_address_resolver(
+        _client_ptr: usize,
+        _host: *const u8,
+        _host_len: usize,
+        _port: u16,
+        _resolved_host_buf: *mut u8,
+        _resolved_host_buf_len: usize,
+        resolved_host_len: *mut usize,
+    ) -> u16 {
+        if !resolved_host_len.is_null() {
+            unsafe { *resolved_host_len = 0 };
+        }
+        0
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    request.lazy_connect = true;
+    request.lib_name = "invalid name".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            no_op_pubsub_callback,
+            no_op_address_resolver,
+            0,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("configuration error"), "{error}");
+        assert!(error.contains("library name"), "{error}");
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[test]
+fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    request.lib_name = "invalid name".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response_ptr = create_monitor_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            no_op_monitor_callback,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(
+            error.to_ascii_lowercase().contains("library name"),
+            "{error}"
+        );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[test]
 fn test_create_otel_span_with_parent() {
     // Test creating a parent span
     let parent_span_ptr = create_otel_span(RequestType::Set);

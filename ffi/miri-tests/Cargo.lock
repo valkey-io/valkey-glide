@@ -990,6 +990,7 @@ dependencies = [
  "protobuf-codegen",
  "rand 0.8.6",
  "redis",
+ "regex",
  "rustls",
  "rustls-pki-types",
  "serde",
