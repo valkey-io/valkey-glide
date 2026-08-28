@@ -41,9 +41,15 @@ Integration tests each boot their own ephemeral server on a free port and tear i
 down on drop. When no server binary is found, they print `SKIP` and pass.
 
 ## Lint & format
+
+Recommended checks before opening a PR:
+
 ```bash
-cargo clippy --all-targets
-cargo fmt
+cargo fmt --all -- --check
+cargo clippy --all-features --all-targets -- -D warnings
+cargo clippy --all-targets -- -D warnings
+cargo deny --config ../deny.toml check
+cargo doc --no-deps --document-private-items
 ```
 
 ## Benchmarks
