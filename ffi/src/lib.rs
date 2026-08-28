@@ -2677,26 +2677,6 @@ pub unsafe extern "C" fn free_connection_response(
     }
 }
 
-/// Provides the string mapping for the ResponseType enum.
-///
-/// Important: the returned pointer is a pointer to a constant string and should not be freed.
-#[unsafe(no_mangle)]
-pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
-    let c_str = match response_type {
-        ResponseType::Null => c"Null",
-        ResponseType::Int => c"Int",
-        ResponseType::Float => c"Float",
-        ResponseType::Bool => c"Bool",
-        ResponseType::String => c"String",
-        ResponseType::Array => c"Array",
-        ResponseType::Map => c"Map",
-        ResponseType::Sets => c"Sets",
-        ResponseType::Ok => c"Ok",
-        ResponseType::Error => c"Error",
-    };
-    c_str.as_ptr()
-}
-
 /// Deallocates a `CommandResponse`.
 ///
 /// This function also frees the contained string_value and array_value. If the string_value and array_value are null pointers, the function returns and only the `CommandResponse` is freed.
