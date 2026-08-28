@@ -19,6 +19,8 @@ mod parity;
 fn command_table_matches_fork() {
     match parity::check() {
         Ok(summary) => println!("{summary}"),
+        // TODO #6904: a failure currently prints SKIP and passes (fail-open).
+        // Revisit whether this should fail loudly.
         Err(parity::ParityError::Skip(reason)) => eprintln!("SKIP: {reason}"),
         Err(parity::ParityError::Violations(problems)) => panic!(
             "command table diverges from the fork — PARITY VIOLATIONS ({}):\n - {}",

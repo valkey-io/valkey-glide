@@ -19,6 +19,11 @@
 //!
 //! The fork source is resolved via `cargo metadata` (the in-tree path
 //! dependency), exactly like the Python script did.
+//!
+//! TODO #6904: This guard verifies our command table against the *in-repo*
+//! redis-rs fork, not upstream redis-rs. The client's real goal is
+//! compatibility with actual redis-rs, which the fork may diverge from —
+//! revisit as part of the API-compatibility work.
 
 use regex::Regex;
 use std::collections::BTreeMap;
