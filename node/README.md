@@ -88,8 +88,9 @@ const client = await GlideClient.createClient({
     requestTimeout: 500,
     clientName: "test_standalone_client",
 });
-// The empty array signifies that there are no additional arguments.
+
 try {
+    // Pass the command and its arguments as an array.
     const pong = await client.customCommand(["PING"]);
     Logger.log("info", "app", `PING response: ${pong}`);
 
@@ -127,8 +128,9 @@ const client = await GlideClusterClient.createClient({
     requestTimeout: 500,
     clientName: "test_cluster_client",
 });
-// The empty array signifies that there are no additional arguments.
+
 try {
+    // Pass the command and its arguments as an array.
     const pong = await client.customCommand(["PING"], {
         route: "randomNode",
     });
