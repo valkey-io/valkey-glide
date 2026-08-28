@@ -1,7 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use bytes::BytesMut;
 use futures_intrusive::sync::ManualResetEvent;
-use redis::{Cmd, ConnectionAddr, Value};
+use redis::{Cmd, ConnectionAddr, Value, ValueCodec};
 use std::collections::HashMap;
 use std::io;
 use std::io::Read;
@@ -14,6 +15,7 @@ use std::sync::{
     atomic::{AtomicU16, Ordering},
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tokio_util::codec::Decoder;
 
 pub struct MockedRequest {
     pub expected_message: String,
@@ -77,42 +79,47 @@ fn log_resp_message(msg: &str) {
     );
 }
 
-fn receive_and_respond_to_next_message(
+fn is_command(value: &Value, expected_tokens: &[&[u8]]) -> bool {
+    let Value::Array(tokens) = value else {
+        return false;
+    };
+
+    tokens.len() >= expected_tokens.len()
+        && tokens
+            .iter()
+            .zip(expected_tokens)
+            .all(|(token, expected)| match token {
+                Value::BulkString(token) => token.eq_ignore_ascii_case(expected),
+                _ => false,
+            })
+}
+
+fn respond_to_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
     socket: &mut StdTcpStream,
     received_commands: &Arc<AtomicU16>,
     received_setinfo_commands: &Arc<AtomicU16>,
     setinfo_response: SetInfoResponse,
     constant_responses: &HashMap<String, Value>,
-    closing_signal: &Arc<ManualResetEvent>,
-) -> bool {
-    let mut buffer = vec![0; 1024];
-    let size = match read_from_socket(&mut buffer, socket, closing_signal) {
-        Some(size) => size,
-        None => {
-            return false;
-        }
-    };
-    let message = from_utf8(&buffer[..size]).unwrap().to_string();
+    message: String,
+    value: Value,
+) {
     log_resp_message(&message);
 
-    let setinfo_count = message.matches("SETINFO").count();
-    if setinfo_count > 0 {
-        received_setinfo_commands.fetch_add(setinfo_count as u16, Ordering::AcqRel);
+    if is_command(&value, &[b"CLIENT", b"SETINFO"]) {
+        received_setinfo_commands.fetch_add(1, Ordering::AcqRel);
         let mut buffer = Vec::new();
-        for _ in 0..setinfo_count {
-            match setinfo_response {
-                SetInfoResponse::Ok => super::encode_value(&Value::Okay, &mut buffer).unwrap(),
-                SetInfoResponse::Unsupported => {
-                    buffer.extend_from_slice(b"-ERR unknown command 'CLIENT SETINFO'\r\n")
-                }
+        match setinfo_response {
+            SetInfoResponse::Ok => super::encode_value(&Value::Okay, &mut buffer).unwrap(),
+            SetInfoResponse::Unsupported => {
+                buffer.extend_from_slice(b"-ERR unknown command 'CLIENT SETINFO'\r\n")
             }
         }
         socket.write_all(&buffer).unwrap();
-        return true;
+        return;
     }
 
-    if message.contains("HELLO") {
+    if is_command(&value, &[b"HELLO"]) {
         let mut buffer = Vec::new();
         let response = Value::Map(vec![
             (Value::BulkString(b"proto".to_vec().into()), Value::Int(3)),
@@ -123,14 +130,14 @@ fn receive_and_respond_to_next_message(
         ]);
         super::encode_value(&response, &mut buffer).unwrap();
         socket.write_all(&buffer).unwrap();
-        return true;
+        return;
     }
 
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
         super::encode_value(response, &mut buffer).unwrap();
         socket.write_all(&buffer).unwrap();
-        return true;
+        return;
     }
     let Ok(request) = receiver.try_recv() else {
         panic!("Received unexpected message: {message}");
@@ -138,7 +145,44 @@ fn receive_and_respond_to_next_message(
     received_commands.fetch_add(1, Ordering::AcqRel);
     assert_eq!(message, request.expected_message);
     socket.write_all(request.response.as_bytes()).unwrap();
-    true
+}
+
+fn receive_and_respond_to_next_message(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
+    socket: &mut StdTcpStream,
+    received_commands: &Arc<AtomicU16>,
+    received_setinfo_commands: &Arc<AtomicU16>,
+    setinfo_response: SetInfoResponse,
+    constant_responses: &HashMap<String, Value>,
+    closing_signal: &Arc<ManualResetEvent>,
+    pending: &mut BytesMut,
+    codec: &mut ValueCodec,
+) -> bool {
+    let mut buffer = [0; 1024];
+    let size = match read_from_socket(&mut buffer, socket, closing_signal) {
+        Some(size) => size,
+        None => return false,
+    };
+    pending.extend_from_slice(&buffer[..size]);
+
+    loop {
+        let buffered = pending.clone();
+        let Some(value) = codec.decode(pending).unwrap() else {
+            return true;
+        };
+        let consumed = buffered.len() - pending.len();
+        let message = from_utf8(&buffered[..consumed]).unwrap().to_string();
+        respond_to_message(
+            receiver,
+            socket,
+            received_commands,
+            received_setinfo_commands,
+            setinfo_response,
+            constant_responses,
+            message,
+            value.unwrap(),
+        );
+    }
 }
 
 pub trait Mock {
@@ -197,6 +241,8 @@ impl ServerMock {
             logger_core::log_info("Test", format!("ServerMock started on: {address_clone}"));
             let mut socket: StdTcpStream = listener.accept().unwrap().0;
             let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
+            let mut pending = BytesMut::new();
+            let mut codec = ValueCodec::default();
 
             while receive_and_respond_to_next_message(
                 &mut receiver,
@@ -206,6 +252,8 @@ impl ServerMock {
                 setinfo_response,
                 &constant_responses,
                 &closing_signal_clone,
+                &mut pending,
+                &mut codec,
             ) {}
 
             // Terminate the connection

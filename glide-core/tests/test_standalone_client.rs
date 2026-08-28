@@ -1291,6 +1291,36 @@ mod standalone_client_tests {
         );
     }
 
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_setinfo_in_library_name_keeps_setup_responses_synchronized() {
+        let mut responses = create_primary_responses();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::SimpleString("PONG".to_string()),
+        );
+        let server = ServerMock::new(responses);
+        let addresses = server.get_addresses();
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.lib_name = "GlideSETINFOClient".into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("SETINFO in the library name should not desynchronize setup responses");
+
+            assert_connected(&mut client).await;
+        });
+
+        assert_eq!(
+            server.get_number_of_received_setinfo_commands(),
+            2,
+            "only CLIENT SETINFO command frames should be counted"
+        );
+    }
+
     // ==================== Read-Only Mode Tests ====================
 
     /// Creates mock responses for a replica-only server (no primary detection needed)
