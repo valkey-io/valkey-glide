@@ -2,32 +2,33 @@ version: 0.2
 
 # node-windows-ec2.yml
 # AWS CodeBuild buildspec - EC2-orchestrated Windows CI
+# Runs on: Linux CodeBuild (cheap orchestrator - BUILD_GENERAL1_SMALL)
 #
-# Architecture:
-#   CodeBuild (Linux, cheap) acts as orchestrator only:
-#     1. Launches a Linux EC2 (Valkey AMI) and starts valkey-server via cluster_manager.py
-#     2. Launches a Windows EC2 (build AMI) with user-data that:
-#          - clones the repo at GITHUB_SHA
-#          - builds the native node module
-#          - runs npm test against the Linux EC2 Valkey endpoints
-#          - uploads test-report.html + status.json to S3
-#          - terminates itself
-#     3. Polls S3 for status.json (completion signal)
-#     4. Downloads test-report.html from S3
-#     5. Tears down the Linux EC2
+# CodeBuild only orchestrates: it launches Linux + Windows EC2s,
+# polls S3 for the build result, and downloads the test report.
+# All actual building and testing happens on the EC2 instances.
 #
-# Required environment variables (set in CodeBuild project):
-#   EC2_WINDOWS_AMI_ID     - Windows Server 2022 AMI with Node/Rust/MSVC pre-installed
-#   EC2_LINUX_AMI_ID       - Amazon Linux 2023 AMI with Valkey pre-installed
-#   EC2_SUBNET_ID          - Subnet ID (same VPC as CodeBuild)
-#   EC2_SECURITY_GROUP     - Security group ID
-#   EC2_INSTANCE_PROFILE   - IAM instance profile for Linux EC2 (SSM access)
-#   EC2_WINDOWS_INSTANCE_PROFILE - IAM instance profile for Windows EC2 (S3 write + SSM)
-#   EC2_WINDOWS_INSTANCE_TYPE    - Windows instance type (default: c5.2xlarge)
-#   EC2_LINUX_INSTANCE_TYPE      - Linux instance type (default: t3.small)
-#   REPORT_BUCKET          - S3 bucket for test reports (e.g. valkey-glide-win)
-#   AWS_REGION             - AWS region (default: us-east-1)
-#   NODE_VERSION           - Node.js version (e.g. 20.18.0)
+# See utils/ec2_orchestrator.py for the orchestration logic.
+# See docs/windows-ci-linux-ec2-ami-guide.md and
+#     docs/windows-ci-codebuild-ami-guide.md for AMI creation.
+#
+# Required CodeBuild project settings:
+#   Environment type: LINUX_CONTAINER
+#   Image: aws/codebuild/standard:7.0
+#   Compute: BUILD_GENERAL1_SMALL
+#
+# Required environment variables (CodeBuild project):
+#   EC2_WINDOWS_AMI_ID           - Windows AMI with Node/Rust/MSVC/protoc pre-installed
+#   EC2_LINUX_AMI_ID             - Linux AMI with Valkey pre-installed
+#   EC2_SUBNET_ID                - Subnet in the same VPC as CodeBuild
+#   EC2_SECURITY_GROUP           - Security group ID
+#   EC2_INSTANCE_PROFILE         - IAM instance profile for Linux EC2
+#   EC2_WINDOWS_INSTANCE_PROFILE - IAM instance profile for Windows EC2
+#   EC2_WINDOWS_INSTANCE_TYPE    - default c5.2xlarge
+#   EC2_LINUX_INSTANCE_TYPE      - default t3.small
+#   REPORT_BUCKET                - S3 bucket for test reports
+#   AWS_REGION                   - default us-east-1
+#   NODE_VERSION                 - Node.js version (informational)
 
 env:
     variables:
@@ -39,161 +40,19 @@ env:
 phases:
     install:
         commands:
-            - |
-                Write-Host "=== Installing Python boto3 for EC2 orchestration ==="
-                python -m pip install --quiet boto3
-                Write-Host "boto3 installed."
-
-            # Write all Python helper scripts from base64. Scripts receive runtime
-            # values via environment variables prefixed with _GLIDE_ to avoid
-            # conflicts with CodeBuild's own env vars.
-            - |
-                function Write-PyScript($name, $b64) {
-                    $bytes = [System.Convert]::FromBase64String($b64)
-                    [System.IO.File]::WriteAllBytes("$env:TEMP\$name.py", $bytes)
-                    Write-Host "Wrote $name.py"
-                }
-                Write-PyScript "launch_linux" "aW1wb3J0IGJvdG8zLCBvcwplYzIgPSBib3RvMy5jbGllbnQoJ2VjMicsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKcmVzcCA9IGVjMi5ydW5faW5zdGFuY2VzKAogICAgSW1hZ2VJZD1vcy5lbnZpcm9uWydFQzJfTElOVVhfQU1JX0lEJ10sCiAgICBJbnN0YW5jZVR5cGU9b3MuZW52aXJvblsnRUMyX0xJTlVYX0lOU1RBTkNFX1RZUEUnXSwKICAgIE1pbkNvdW50PTEsIE1heENvdW50PTEsCiAgICBTdWJuZXRJZD1vcy5lbnZpcm9uWydFQzJfU1VCTkVUX0lEJ10sCiAgICBTZWN1cml0eUdyb3VwSWRzPVtvcy5lbnZpcm9uWydFQzJfU0VDVVJJVFlfR1JPVVAnXV0sCiAgICBJYW1JbnN0YW5jZVByb2ZpbGU9eydOYW1lJzogb3MuZW52aXJvblsnRUMyX0lOU1RBTkNFX1BST0ZJTEUnXX0sCiAgICBUYWdTcGVjaWZpY2F0aW9ucz1beydSZXNvdXJjZVR5cGUnOiAnaW5zdGFuY2UnLCAnVGFncyc6IFsKICAgICAgICB7J0tleSc6ICdOYW1lJywgJ1ZhbHVlJzogJ2dsaWRlLWNpLXZhbGtleS0nICsgb3MuZW52aXJvblsnX0JVSUxEX0lEJ119CiAgICBdfV0KKQpwcmludChyZXNwWydJbnN0YW5jZXMnXVswXVsnSW5zdGFuY2VJZCddKQo="
-                Write-PyScript "get_linux_ip" "aW1wb3J0IGJvdG8zLCBvcwplYzIgPSBib3RvMy5jbGllbnQoJ2VjMicsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKd2FpdGVyID0gZWMyLmdldF93YWl0ZXIoJ2luc3RhbmNlX3J1bm5pbmcnKQp3YWl0ZXIud2FpdChJbnN0YW5jZUlkcz1bb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ11dKQpyZXNwID0gZWMyLmRlc2NyaWJlX2luc3RhbmNlcyhJbnN0YW5jZUlkcz1bb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ11dKQpwcmludChyZXNwWydSZXNlcnZhdGlvbnMnXVswXVsnSW5zdGFuY2VzJ11bMF1bJ1ByaXZhdGVJcEFkZHJlc3MnXSkK"
-                Write-PyScript "wait_ssm" "aW1wb3J0IGJvdG8zLCB0aW1lLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10KZGVhZGxpbmUgPSB0aW1lLnRpbWUoKSArIDMwMAp3aGlsZSB0aW1lLnRpbWUoKSA8IGRlYWRsaW5lOgogICAgaW5mbyA9IHNzbS5kZXNjcmliZV9pbnN0YW5jZV9pbmZvcm1hdGlvbihGaWx0ZXJzPVt7J0tleSc6ICdJbnN0YW5jZUlkcycsICdWYWx1ZXMnOiBbaWlkXX1dKQogICAgaWYgaW5mby5nZXQoJ0luc3RhbmNlSW5mb3JtYXRpb25MaXN0Jyk6CiAgICAgICAgYnJlYWsKICAgIHRpbWUuc2xlZXAoMTApCmVsc2U6CiAgICByYWlzZSBUaW1lb3V0RXJyb3IoJ1NTTSBub3QgcmVhZHkgb24gTGludXggRUMyJykKcHJpbnQoJ1NTTSByZWFkeScpCg=="
-                Write-PyScript "copy_cluster_mgr" "aW1wb3J0IGJvdG8zLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10Kc2NyaXB0ID0gb3BlbigndXRpbHMvY2x1c3Rlcl9tYW5hZ2VyLnB5JykucmVhZCgpLnJlcGxhY2UoIiciLCAiJyInIiciKQpzc20uc2VuZF9jb21tYW5kKAogICAgSW5zdGFuY2VJZHM9W2lpZF0sCiAgICBEb2N1bWVudE5hbWU9J0FXUy1SdW5TaGVsbFNjcmlwdCcsCiAgICBQYXJhbWV0ZXJzPXsnY29tbWFuZHMnOiBbZiJjYXQgPiAvdG1wL2NsdXN0ZXJfbWFuYWdlci5weSA8PCAnR0xJREVfRU9GJ1xue3NjcmlwdH1cbkdMSURFX0VPRiJdfSwKICAgIFRpbWVvdXRTZWNvbmRzPTMwCikKcHJpbnQoJ1NjcmlwdCBjb3BpZWQnKQo="
-                Write-PyScript "start_standalone" "aW1wb3J0IGJvdG8zLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10KaXAgPSBvcy5lbnZpcm9uWydfTElOVVhfUFJJVkFURV9JUCddCnJlc3AgPSBzc20uc2VuZF9jb21tYW5kKAogICAgSW5zdGFuY2VJZHM9W2lpZF0sCiAgICBEb2N1bWVudE5hbWU9J0FXUy1SdW5TaGVsbFNjcmlwdCcsCiAgICBQYXJhbWV0ZXJzPXsnY29tbWFuZHMnOiBbCiAgICAgICAgZidweXRob24zIC90bXAvY2x1c3Rlcl9tYW5hZ2VyLnB5IHN0YXJ0IC1IIHtpcH0gPiAvdG1wL3N0YW5kYWxvbmUtb3V0LnR4dCAyPiYxOyBlY2hvIEVYSVRfQ09ERT0kPycKICAgIF19LAogICAgVGltZW91dFNlY29uZHM9MTIwCikKcHJpbnQocmVzcFsnQ29tbWFuZCddWydDb21tYW5kSWQnXSkK"
-                Write-PyScript "start_cluster" "aW1wb3J0IGJvdG8zLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10KaXAgPSBvcy5lbnZpcm9uWydfTElOVVhfUFJJVkFURV9JUCddCnJlc3AgPSBzc20uc2VuZF9jb21tYW5kKAogICAgSW5zdGFuY2VJZHM9W2lpZF0sCiAgICBEb2N1bWVudE5hbWU9J0FXUy1SdW5TaGVsbFNjcmlwdCcsCiAgICBQYXJhbWV0ZXJzPXsnY29tbWFuZHMnOiBbCiAgICAgICAgZidweXRob24zIC90bXAvY2x1c3Rlcl9tYW5hZ2VyLnB5IHN0YXJ0IC0tY2x1c3Rlci1tb2RlIC1IIHtpcH0gPiAvdG1wL2NsdXN0ZXItb3V0LnR4dCAyPiYxOyBlY2hvIEVYSVRfQ09ERT0kPycKICAgIF19LAogICAgVGltZW91dFNlY29uZHM9MTgwCikKcHJpbnQocmVzcFsnQ29tbWFuZCddWydDb21tYW5kSWQnXSkK"
-                Write-PyScript "get_standalone_ep" "aW1wb3J0IGJvdG8zLCB0aW1lLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10KY21kX2lkID0gb3MuZW52aXJvblsnX1NUQU5EQUxPTkVfQ01EX0lEJ10KZGVhZGxpbmUgPSB0aW1lLnRpbWUoKSArIDE4MAp3aGlsZSB0aW1lLnRpbWUoKSA8IGRlYWRsaW5lOgogICAgciA9IHNzbS5nZXRfY29tbWFuZF9pbnZvY2F0aW9uKENvbW1hbmRJZD1jbWRfaWQsIEluc3RhbmNlSWQ9aWlkKQogICAgaWYgclsnU3RhdHVzJ10gaW4gKCdTdWNjZXNzJywgJ0ZhaWxlZCcsICdDYW5jZWxsZWQnKToKICAgICAgICBicmVhawogICAgdGltZS5zbGVlcCg1KQpyMiA9IHNzbS5zZW5kX2NvbW1hbmQoCiAgICBJbnN0YW5jZUlkcz1baWlkXSwgRG9jdW1lbnROYW1lPSdBV1MtUnVuU2hlbGxTY3JpcHQnLAogICAgUGFyYW1ldGVycz17J2NvbW1hbmRzJzogWydjYXQgL3RtcC9zdGFuZGFsb25lLW91dC50eHQnXX0sIFRpbWVvdXRTZWNvbmRzPTEwCikKdGltZS5zbGVlcCg1KQpmb3IgXyBpbiByYW5nZSgxMik6CiAgICBpbnYgPSBzc20uZ2V0X2NvbW1hbmRfaW52b2NhdGlvbihDb21tYW5kSWQ9cjJbJ0NvbW1hbmQnXVsnQ29tbWFuZElkJ10sIEluc3RhbmNlSWQ9aWlkKQogICAgaWYgaW52WydTdGF0dXMnXSA9PSAnU3VjY2Vzcyc6CiAgICAgICAgb3V0ID0gaW52WydTdGFuZGFyZE91dHB1dENvbnRlbnQnXQogICAgICAgIGZvciBsaW5lIGluIG91dC5zcGxpdCgpOgogICAgICAgICAgICBpZiAnOicgaW4gbGluZSBhbmQgbm90IGxpbmUuc3RhcnRzd2l0aCgnQ0xVU1RFUicpOgogICAgICAgICAgICAgICAgcHJpbnQobGluZSkKICAgICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgYnJlYWsKICAgIHRpbWUuc2xlZXAoMykK"
-                Write-PyScript "get_cluster_ep" "aW1wb3J0IGJvdG8zLCB0aW1lLCBvcwpzc20gPSBib3RvMy5jbGllbnQoJ3NzbScsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvblsnX0xJTlVYX0lOU1RBTkNFX0lEJ10KY21kX2lkID0gb3MuZW52aXJvblsnX0NMVVNURVJfQ01EX0lEJ10KZGVhZGxpbmUgPSB0aW1lLnRpbWUoKSArIDE4MAp3aGlsZSB0aW1lLnRpbWUoKSA8IGRlYWRsaW5lOgogICAgciA9IHNzbS5nZXRfY29tbWFuZF9pbnZvY2F0aW9uKENvbW1hbmRJZD1jbWRfaWQsIEluc3RhbmNlSWQ9aWlkKQogICAgaWYgclsnU3RhdHVzJ10gaW4gKCdTdWNjZXNzJywgJ0ZhaWxlZCcsICdDYW5jZWxsZWQnKToKICAgICAgICBicmVhawogICAgdGltZS5zbGVlcCg1KQpyMiA9IHNzbS5zZW5kX2NvbW1hbmQoCiAgICBJbnN0YW5jZUlkcz1baWlkXSwgRG9jdW1lbnROYW1lPSdBV1MtUnVuU2hlbGxTY3JpcHQnLAogICAgUGFyYW1ldGVycz17J2NvbW1hbmRzJzogWydjYXQgL3RtcC9jbHVzdGVyLW91dC50eHQnXX0sIFRpbWVvdXRTZWNvbmRzPTEwCikKdGltZS5zbGVlcCg1KQpmb3IgXyBpbiByYW5nZSgxMik6CiAgICBpbnYgPSBzc20uZ2V0X2NvbW1hbmRfaW52b2NhdGlvbihDb21tYW5kSWQ9cjJbJ0NvbW1hbmQnXVsnQ29tbWFuZElkJ10sIEluc3RhbmNlSWQ9aWlkKQogICAgaWYgaW52WydTdGF0dXMnXSA9PSAnU3VjY2Vzcyc6CiAgICAgICAgb3V0ID0gaW52WydTdGFuZGFyZE91dHB1dENvbnRlbnQnXQogICAgICAgIGZvciBsaW5lIGluIG91dC5zcGxpdCgpOgogICAgICAgICAgICBpZiAnOicgaW4gbGluZSBhbmQgbm90IGxpbmUuc3RhcnRzd2l0aCgnQ0xVU1RFUicpOgogICAgICAgICAgICAgICAgcHJpbnQobGluZSkKICAgICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgYnJlYWsKICAgIHRpbWUuc2xlZXAoMykK"
-                Write-PyScript "launch_windows" "aW1wb3J0IGJvdG8zLCBiYXNlNjQsIG9zCmVjMiA9IGJvdG8zLmNsaWVudCgnZWMyJywgcmVnaW9uX25hbWU9b3MuZW52aXJvblsnX1JFR0lPTiddKQp1ZCA9IGJhc2U2NC5iNjRlbmNvZGUob3Blbihvcy5lbnZpcm9uWydfVVNFUkRBVEFfRklMRSddLCAncmInKS5yZWFkKCkpLmRlY29kZSgpCnJlc3AgPSBlYzIucnVuX2luc3RhbmNlcygKICAgIEltYWdlSWQ9b3MuZW52aXJvblsnRUMyX1dJTkRPV1NfQU1JX0lEJ10sCiAgICBJbnN0YW5jZVR5cGU9b3MuZW52aXJvblsnRUMyX1dJTkRPV1NfSU5TVEFOQ0VfVFlQRSddLAogICAgTWluQ291bnQ9MSwgTWF4Q291bnQ9MSwKICAgIFN1Ym5ldElkPW9zLmVudmlyb25bJ0VDMl9TVUJORVRfSUQnXSwKICAgIFNlY3VyaXR5R3JvdXBJZHM9W29zLmVudmlyb25bJ0VDMl9TRUNVUklUWV9HUk9VUCddXSwKICAgIElhbUluc3RhbmNlUHJvZmlsZT17J05hbWUnOiBvcy5lbnZpcm9uWydFQzJfV0lORE9XU19JTlNUQU5DRV9QUk9GSUxFJ119LAogICAgVXNlckRhdGE9dWQsCiAgICBUYWdTcGVjaWZpY2F0aW9ucz1beydSZXNvdXJjZVR5cGUnOiAnaW5zdGFuY2UnLCAnVGFncyc6IFsKICAgICAgICB7J0tleSc6ICdOYW1lJywgJ1ZhbHVlJzogJ2dsaWRlLWNpLXdpbmRvd3MtJyArIG9zLmVudmlyb25bJ19CVUlMRF9JRCddfQogICAgXX1dCikKcHJpbnQocmVzcFsnSW5zdGFuY2VzJ11bMF1bJ0luc3RhbmNlSWQnXSkK"
-                Write-PyScript "poll_s3" "aW1wb3J0IGJvdG8zLCB0aW1lLCBqc29uLCBzeXMsIG9zCnMzID0gYm90bzMuY2xpZW50KCdzMycsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ19SRUdJT04nXSkKYnVja2V0ID0gb3MuZW52aXJvblsnUkVQT1JUX0JVQ0tFVCddCmtleSA9IG9zLmVudmlyb25bJ19CVUlMRF9JRCddICsgJy9zdGF0dXMuanNvbicKZGVhZGxpbmUgPSB0aW1lLnRpbWUoKSArIDU0MDAKd2hpbGUgdGltZS50aW1lKCkgPCBkZWFkbGluZToKICAgIHRyeToKICAgICAgICBvYmogPSBzMy5nZXRfb2JqZWN0KEJ1Y2tldD1idWNrZXQsIEtleT1rZXkpCiAgICAgICAgZGF0YSA9IGpzb24ubG9hZHMob2JqWydCb2R5J10ucmVhZCgpKQogICAgICAgIHByaW50KGRhdGFbJ3N0YXR1cyddKQogICAgICAgIHN5cy5leGl0KDAgaWYgZGF0YVsnc3RhdHVzJ10gPT0gJ3N1Y2Nlc3MnIGVsc2UgMSkKICAgIGV4Y2VwdCBzMy5leGNlcHRpb25zLk5vU3VjaEtleToKICAgICAgICBwYXNzCiAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgcHJpbnQoZidQb2xsIGVycm9yOiB7ZX0nLCBmbHVzaD1UcnVlKQogICAgdGltZS5zbGVlcCgzMCkKcHJpbnQoJ3RpbWVvdXQnKQpzeXMuZXhpdCgxKQo="
-                Write-PyScript "download_report" "aW1wb3J0IGJvdG8zLCBvcwpzMyA9IGJvdG8zLmNsaWVudCgnczMnLCByZWdpb25fbmFtZT1vcy5lbnZpcm9uWydfUkVHSU9OJ10pCnRyeToKICAgIHMzLmRvd25sb2FkX2ZpbGUob3MuZW52aXJvblsnUkVQT1JUX0JVQ0tFVCddLAogICAgICAgICAgICAgICAgICAgICBvcy5lbnZpcm9uWydfQlVJTERfSUQnXSArICcvdGVzdC1yZXBvcnQuaHRtbCcsCiAgICAgICAgICAgICAgICAgICAgICdub2RlL3Rlc3QtcmVwb3J0Lmh0bWwnKQogICAgcHJpbnQoJ1Rlc3QgcmVwb3J0IGRvd25sb2FkZWQuJykKZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgcHJpbnQoZidDb3VsZCBub3QgZG93bmxvYWQgcmVwb3J0OiB7ZX0nKQo="
-                Write-PyScript "teardown_linux" "aW1wb3J0IGJvdG8zLCBvcwplYzIgPSBib3RvMy5jbGllbnQoJ2VjMicsIHJlZ2lvbl9uYW1lPW9zLmVudmlyb25bJ0FXU19SRUdJT04nXSkKaWlkID0gb3MuZW52aXJvbi5nZXQoJ19MSU5VWF9JTlNUQU5DRV9JRCcsICcnKQppZiBpaWQ6CiAgICBlYzIudGVybWluYXRlX2luc3RhbmNlcyhJbnN0YW5jZUlkcz1baWlkXSkKICAgIHByaW50KGYnTGludXggRUMyIHtpaWR9IHRlcm1pbmF0ZWQuJykKZWxzZToKICAgIHByaW50KCdObyBMaW51eCBFQzIgdG8gdGVybWluYXRlLicpCg=="
-                Write-Host "All Python helper scripts written to $env:TEMP"
+            - pip install --quiet boto3
 
     build:
         commands:
             - |
-                $region = $env:AWS_REGION
-                $reportBucket = $env:REPORT_BUCKET
-                $buildId = $env:CODEBUILD_BUILD_ID -replace ':', '-'
-                $commitSha = $env:CODEBUILD_RESOLVED_SOURCE_VERSION
-                $repoUrl = "https://github.com/valkey-io/valkey-glide.git"
-                $env:_REGION = $region
-                $env:_BUILD_ID = $buildId
-
-                Write-Host "=== Launching Linux EC2 (Valkey server) ==="
-                $linuxInstanceId = (python "$env:TEMP\launch_linux.py").Trim()
-                Write-Host "Linux instance launched: $linuxInstanceId"
-
-                $env:_LINUX_INSTANCE_ID = $linuxInstanceId
-                $linuxPrivateIp = (python "$env:TEMP\get_linux_ip.py").Trim()
-                Write-Host "Linux EC2: $linuxInstanceId ($linuxPrivateIp)"
-
-                python "$env:TEMP\wait_ssm.py"
-                python "$env:TEMP\copy_cluster_mgr.py"
-
-                $env:_LINUX_PRIVATE_IP = $linuxPrivateIp
-                $standaloneCmdId = (python "$env:TEMP\start_standalone.py").Trim()
-                $clusterCmdId = (python "$env:TEMP\start_cluster.py").Trim()
-
-                $env:_STANDALONE_CMD_ID = $standaloneCmdId
-                $standaloneEndpoint = (python "$env:TEMP\get_standalone_ep.py").Trim()
-                $env:_CLUSTER_CMD_ID = $clusterCmdId
-                $clusterEndpoint = (python "$env:TEMP\get_cluster_ep.py").Trim()
-
-                Write-Host "Standalone endpoint: $standaloneEndpoint"
-                Write-Host "Cluster endpoint: $clusterEndpoint"
-                Write-Host "=== Launching Windows EC2 (build + test) ==="
-
-            # Build the Windows user-data script by assembling individual lines so no
-            # unindented content appears directly in this YAML block scalar.
-            - |
-                $udFile = "$env:TEMP\userdata-$env:_BUILD_ID.ps1"
-                $lines = [System.Collections.Generic.List[string]]::new()
-                $lines.Add('<powershell>')
-                $lines.Add('$ErrorActionPreference = ''Stop''')
-                $lines.Add('$buildId = ''' + $env:_BUILD_ID + '''')
-                $lines.Add('$commitSha = ''' + $env:CODEBUILD_RESOLVED_SOURCE_VERSION + '''')
-                $lines.Add('$reportBucket = ''' + $env:REPORT_BUCKET + '''')
-                $lines.Add('$region = ''' + $env:_REGION + '''')
-                $lines.Add('$standaloneEndpoint = ''' + $standaloneEndpoint + '''')
-                $lines.Add('$clusterEndpoint = ''' + $clusterEndpoint + '''')
-                $lines.Add('$nodeVersion = ''' + $env:NODE_VERSION + '''')
-                $lines.Add('$exitCode = 1')
-                $lines.Add('try {')
-                $lines.Add('    $env:CARGO_HOME = ''C:\cargo''')
-                $lines.Add('    $env:RUSTUP_HOME = ''C:\rustup''')
-                $lines.Add('    $env:RUSTUP_TOOLCHAIN = ''stable''')
-                $lines.Add('    $env:PATH = "C:\cargo\bin;C:\Windows\System32;C:\Program Files\nodejs;$env:PATH"')
-                $lines.Add('    $env:PROTOC = ''C:\Windows\System32\protoc.exe''')
-                $lines.Add('    Write-Host ''=== Updating Rust ===''')
-                $lines.Add('    & ''C:\cargo\bin\rustup.exe'' update stable 2>&1')
-                $lines.Add('    Write-Host "Cargo: $(& ''C:\cargo\bin\cargo.exe'' --version)"')
-                $lines.Add('    $vsWhere = ''C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe''')
-                $lines.Add('    if (Test-Path $vsWhere) {')
-                $lines.Add('        $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null')
-                $lines.Add('        if ($vsPath) {')
-                $lines.Add('            $vcVer = (Get-Content "$vsPath\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()')
-                $lines.Add('            $env:PATH = "$vsPath\VC\Tools\MSVC\$vcVer\bin\Hostx64\x64;$env:PATH"')
-                $lines.Add('        }')
-                $lines.Add('    }')
-                $lines.Add('    Write-Host ''=== Cloning repo ===''')
-                $lines.Add('    git clone https://github.com/valkey-io/valkey-glide.git C:\build\valkey-glide --depth=1')
-                $lines.Add('    Set-Location C:\build\valkey-glide')
-                $lines.Add('    git fetch origin $commitSha')
-                $lines.Add('    git checkout $commitSha')
-                $lines.Add('    Write-Host ''=== Building ===''')
-                $lines.Add('    Set-Location utils; npm ci; npm run build; Set-Location ..')
-                $lines.Add('    Set-Location node; npm ci; npm run build:release')
-                $lines.Add('    Write-Host ''=== Running tests ===''')
-                $lines.Add('    $testArgs = @(''test'', ''--'', ''--runInBand'', ''--forceExit'')')
-                $lines.Add('    if ($standaloneEndpoint) { $testArgs += "--standalone-endpoints=$standaloneEndpoint" }')
-                $lines.Add('    if ($clusterEndpoint) { $testArgs += "--cluster-endpoints=$clusterEndpoint" }')
-                $lines.Add('    $testArgs += ''--testPathIgnorePatterns=ServerModules''')
-                $lines.Add('    $testArgs += ''--testPathIgnorePatterns=TlsTest''')
-                $lines.Add('    $testArgs += ''--testPathIgnorePatterns=MutualTLS''')
-                $lines.Add('    & npm @testArgs')
-                $lines.Add('    $exitCode = $LASTEXITCODE')
-                $lines.Add('} catch {')
-                $lines.Add('    Write-Host "Build/test failed: $_"')
-                $lines.Add('    $exitCode = 1')
-                $lines.Add('} finally {')
-                $lines.Add('    try {')
-                $lines.Add('        if (Test-Path ''C:\build\valkey-glide\node\test-report.html'') {')
-                $lines.Add('            & ''C:\Program Files\Amazon\AWSCLIV2\aws.exe'' s3 cp ''C:\build\valkey-glide\node\test-report.html'' "s3://$reportBucket/$buildId/test-report.html" --region $region')
-                $lines.Add('        }')
-                $lines.Add('        $status = if ($exitCode -eq 0) { ''success'' } else { ''failed'' }')
-                $lines.Add('        $json = ''{"status":"'' + $status + ''","exitCode":'' + $exitCode + ''}''')
-                $lines.Add('        $json | Out-File -FilePath ''C:\status.json'' -Encoding UTF8')
-                $lines.Add('        & ''C:\Program Files\Amazon\AWSCLIV2\aws.exe'' s3 cp ''C:\status.json'' "s3://$reportBucket/$buildId/status.json" --region $region')
-                $lines.Add('    } catch { Write-Host "Failed to upload to S3: $_" }')
-                $lines.Add('    $instanceId = (Invoke-WebRequest -Uri ''http://169.254.169.254/latest/meta-data/instance-id'' -UseBasicParsing).Content')
-                $lines.Add('    & ''C:\Program Files\Amazon\AWSCLIV2\aws.exe'' ec2 terminate-instances --instance-ids $instanceId --region $region')
-                $lines.Add('}')
-                $lines.Add('</powershell>')
-                [System.IO.File]::WriteAllLines($udFile, $lines)
-                Write-Host "User-data written to $udFile"
-
-            - |
-                $env:_USERDATA_FILE = "$env:TEMP\userdata-$env:_BUILD_ID.ps1"
-                $windowsInstanceId = (python "$env:TEMP\launch_windows.py").Trim()
-                Write-Host "Windows EC2 launched: $windowsInstanceId"
-                Write-Host "Polling S3 for build completion (max 90 min)..."
-
-                python "$env:TEMP\poll_s3.py"
-                $pollExitCode = $LASTEXITCODE
-
-                python "$env:TEMP\download_report.py"
-
-                if ($pollExitCode -ne 0) {
-                    Write-Error "Windows build/test failed or timed out."
-                }
+                export BUILD_ID=$(echo "$CODEBUILD_BUILD_ID" | tr ':' '-')
+                export COMMIT_SHA="$CODEBUILD_RESOLVED_SOURCE_VERSION"
+                mkdir -p node
+                python3 utils/ec2_orchestrator.py
 
     post_build:
         commands:
-            - 'Write-Host "=== post_build: tearing down Linux EC2 ==="'
-            - |
-                if ($env:_LINUX_INSTANCE_ID) {
-                    Write-Host "Terminating Linux EC2 $env:_LINUX_INSTANCE_ID..."
-                    python "$env:TEMP\teardown_linux.py"
-                }
+            - echo "Build complete. Test report available as artifact if downloaded."
 
 artifacts:
     files:
