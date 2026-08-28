@@ -4530,7 +4530,7 @@ export function runBaseTests(config: {
                 );
 
                 let resultCursor = "0";
-                let secondResultValues: GlideString[] = [];
+                let secondResultValues: GlideString[];
 
                 let isFirstLoop = true;
 

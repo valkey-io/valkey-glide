@@ -370,6 +370,7 @@ export const parseEndpoints = (endpointsStr: string): [string, number][] => {
     } catch (error) {
         throw new Error(
             "Invalid endpoints format: " + (error as Error).message,
+            { cause: error },
         );
     }
 };
@@ -2543,7 +2544,7 @@ export async function getServerVersion(
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
 ): Promise<string> {
-    let info = "";
+    let info: string;
 
     if (clusterMode) {
         const glideClusterClient = await GlideClusterClient.createClient({
