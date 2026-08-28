@@ -71,7 +71,7 @@ pub(crate) struct ClientCertReloadState {
     /// Root/CA certificate bytes (PEM), read once at construction and re-attached
     /// to every produced `TlsConnParams`. Root reload is out of scope, so this is
     /// constant for the client's lifetime.
-    // TODO(#6529): when root/CA reload lands, this field becomes reloadable
+    // TODO #6529: when root/CA reload lands, this field becomes reloadable
     // material rather than a constant. https://github.com/valkey-io/valkey-glide/issues/6529
     root_cert: Option<Vec<u8>>,
 }
