@@ -243,7 +243,7 @@ jobs:
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                    # Install cargo-zigbuild for GNU targets (direct cargo zigbuild invocation for glibc 2.17 floor)
+                    # Install cargo-zigbuild for GNU targets (used as zig cc wrapper for glibc 2.17 floor)
                     if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       cargo install cargo-zigbuild --version "=0.23.2" --locked
                     fi
@@ -254,26 +254,38 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets: use cargo-zigbuild with .2.17 glibc suffix to enforce
-                  # GLIBC 2.17 floor (required for Amazon Linux 2 compatibility).
-                  # napi-rs v3 --cross-compile without --target defaults to zig's glibc 2.28.
-                  # After building with cargo-zigbuild, napi is invoked with the plain triple
-                  # (no .2.17 suffix) because rustc/cargo-metadata doesn't understand the suffix.
+                  # For GNU targets: enforce glibc 2.17 floor using a zig cc wrapper.
+                  # napi v3 --cross-compile without --target defaults to zig's glibc 2.28.
+                  # We create a wrapper script that calls 'cargo-zigbuild zig cc' with
+                  # '-target <triple>.2.17' baked in, then set it as the cargo linker.
+                  # CARGO_TARGET_APPLIES_TO_HOST=false is required so cargo respects
+                  # CARGO_TARGET_*_LINKER even when host arch == target arch.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
-                    TARGET_WITH_GLIBC="${{ matrix.TARGET }}.2.17"
-                    # Build with explicit glibc 2.17 floor via cargo-zigbuild.
-                    # cargo-zigbuild understands the .2.17 glibc version suffix and links against glibc 2.17.
-                    # The resulting binary lands at target/<triple>/release/ (cargo strips the version suffix
-                    # from the output directory), so no symlink is needed.
-                    cargo zigbuild --release --target "${TARGET_WITH_GLIBC}"
-                    # Run napi with the plain target triple (without .2.17 suffix).
-                    # napi calls `cargo metadata --target <triple>` internally; rustc only accepts plain triples.
-                    # The binary was already compiled above; napi's cargo step is a no-op due to build cache.
+                    npm ci
+                    # Build target triple (e.g. x86_64-unknown-linux-gnu)
+                    TARGET="${{ matrix.TARGET }}"
+                    # Zig target with glibc 2.17 floor (e.g. x86_64-linux-gnu.2.17)
+                    ZIG_TARGET="$(echo $TARGET | sed 's/unknown-linux-/linux-/').2.17"
+                    # Create zig cc wrapper with glibc 2.17 baked in
+                    cat > /tmp/zigcc-glibc-2.17.sh << ZIGEOF
+#!/bin/sh
+exec cargo-zigbuild zig cc -- -target ${ZIG_TARGET} "\$@"
+ZIGEOF
+                    chmod +x /tmp/zigcc-glibc-2.17.sh
+                    # Set cargo to use our wrapper as the linker.
+                    # CARGO_TARGET_APPLIES_TO_HOST=false is required when host==target
+                    # to ensure cargo uses CARGO_TARGET_*_LINKER instead of the system linker.
+                    ENV_TARGET="$(echo $TARGET | tr '-' '_' | tr '[:lower:]' '[:upper:]')"
+                    export CARGO_TARGET_${ENV_TARGET}_LINKER=/tmp/zigcc-glibc-2.17.sh
+                    export CARGO_UNSTABLE_TARGET_APPLIES_TO_HOST=true
+                    export CARGO_TARGET_APPLIES_TO_HOST=false
+                    export __CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS=nightly
+                    # Single napi build call — cargo uses our glibc 2.17 linker wrapper
                     npx napi build --release --strip --platform \
-                        --target "${{ matrix.TARGET }}" \
-                        --js ../build-ts/native.js \
-                        --dts ../build-ts/native.d.ts \
-                        --js-package-name @valkey/valkey-glide
+                      --target "$TARGET" \
+                      --js ../build-ts/native.js \
+                      --dts ../build-ts/native.d.ts \
+                      --js-package-name @valkey/valkey-glide
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
