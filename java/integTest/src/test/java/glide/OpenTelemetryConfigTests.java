@@ -49,19 +49,18 @@ public class OpenTelemetryConfigTests {
     @Test
     public void metricsConfigSupportsHeadersAndTemporality() {
         Map<String, String> headers = new HashMap<>();
-        headers.put("X-LI-Fluentbit-Tag", "serviceName:test-service");
+        headers.put("X-Routing-Header", "tenant:test");
 
         OpenTelemetry.MetricsConfig metricsConfig =
                 OpenTelemetry.MetricsConfig.builder()
-                        .endpoint("http://[::1]:22784/v1/metrics")
+                        .endpoint("http://localhost:4318/v1/metrics")
                         .headers(headers)
                         .temporality(OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA)
                         .build();
         headers.put("unexpected", "mutation");
 
         assertEquals(
-                Collections.singletonMap("X-LI-Fluentbit-Tag", "serviceName:test-service"),
-                metricsConfig.getHeaders());
+                Collections.singletonMap("X-Routing-Header", "tenant:test"), metricsConfig.getHeaders());
         assertEquals(
                 OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA, metricsConfig.getTemporality());
         assertThrows(
