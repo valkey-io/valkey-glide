@@ -3,6 +3,7 @@ package glide.api.models.scope;
 
 import glide.ffi.resolvers.GlideScopeResolver;
 import glide.internal.AsyncRegistry;
+import glide.managers.DirectBufferResolver;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -97,8 +98,17 @@ public class IsolatedScope implements AutoCloseable {
     }
 
     public CompletableFuture<String> cmd(String command, String... args) {
+        return command(command, args).thenApply(IsolatedScope::asString);
+    }
+
+    /**
+     * Execute a command and return the decoded response object, using the same decoder as a normal
+     * client so a scope sees the same value regardless of its size. Bulk values come back as {@link
+     * String}, arrays as {@code Object[]}, and maps as {@link java.util.Map}.
+     */
+    public CompletableFuture<Object> command(String command, String... args) {
         if (released.get()) {
-            CompletableFuture<String> f = new CompletableFuture<>();
+            CompletableFuture<Object> f = new CompletableFuture<>();
             f.completeExceptionally(new IllegalStateException("Scope released"));
             return f;
         }
@@ -113,12 +123,26 @@ public class IsolatedScope implements AutoCloseable {
         else if (result == -2)
             future.completeExceptionally(new IllegalArgumentException("Serialize failed"));
 
-        return future.thenApply(
-                r -> {
-                    if (r == null) return null;
-                    if (r instanceof byte[]) return new String((byte[]) r, StandardCharsets.UTF_8);
-                    return r.toString();
-                });
+        return future.thenApply(IsolatedScope::resolve);
+    }
+
+    /**
+     * The native layer offloads any response over 16 KB into a direct buffer, so decode that back
+     * into a value instead of stringifying the buffer handle. Smaller responses arrive already
+     * decoded and pass through untouched.
+     */
+    private static Object resolve(Object raw) {
+        if (raw instanceof ByteBuffer) {
+            return DirectBufferResolver.normalizeDirectBuffer((ByteBuffer) raw, true);
+        }
+        return raw;
+    }
+
+    private static String asString(Object value) {
+        if (value == null) return null;
+        if (value instanceof String) return (String) value;
+        if (value instanceof byte[]) return new String((byte[]) value, StandardCharsets.UTF_8);
+        return value.toString();
     }
 
     @Override
