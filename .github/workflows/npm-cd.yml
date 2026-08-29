@@ -243,6 +243,10 @@ jobs:
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
+                    # Install cargo-zigbuild for GNU targets (direct cargo zigbuild invocation for glibc 2.17 floor)
+                    if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
+                      cargo install cargo-zigbuild --version "=0.23.2" --locked
+                    fi
                   else
                     brew update
                     brew install tree
