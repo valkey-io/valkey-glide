@@ -32,6 +32,7 @@ use url::Url;
 const SPAN_WRITE_LOCK_ERR: &str = "Failed to acquire span write lock";
 const SPAN_READ_LOCK_ERR: &str = "Failed to acquire span read lock";
 const TRACE_SCOPE: &str = "valkey_glide";
+const DEFAULT_OTLP_EXPORT_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Metric names
 const TIMEOUT_ERROR_METRIC: &str = "glide.timeout_errors";
@@ -705,12 +706,30 @@ impl GlideOpenTelemetry {
         }
         reqwest::Client::builder()
             .default_headers(default_headers)
+            .timeout(Self::metrics_http_timeout())
             .build()
             .map_err(|error| {
                 GlideOTELError::Other(format!(
                     "Failed to build OpenTelemetry metrics HTTP client: {error}"
                 ))
             })
+    }
+
+    fn metrics_http_timeout() -> Duration {
+        let metrics_timeout = std::env::var("OTEL_EXPORTER_OTLP_METRICS_TIMEOUT").ok();
+        let general_timeout = std::env::var("OTEL_EXPORTER_OTLP_TIMEOUT").ok();
+        Self::metrics_http_timeout_from(metrics_timeout.as_deref(), general_timeout.as_deref())
+    }
+
+    fn metrics_http_timeout_from(
+        metrics_timeout: Option<&str>,
+        general_timeout: Option<&str>,
+    ) -> Duration {
+        metrics_timeout
+            .and_then(|value| value.parse().ok())
+            .or_else(|| general_timeout.and_then(|value| value.parse().ok()))
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_OTLP_EXPORT_TIMEOUT)
     }
 
     fn metadata_from_headers(
@@ -1016,11 +1035,14 @@ impl GlideOpenTelemetry {
                         }
                     }
                     p => {
-                        let builder = MetricExporter::builder()
+                        let mut builder = MetricExporter::builder()
                             .with_http()
                             .with_endpoint(url)
-                            .with_protocol(p)
-                            .with_http_client(Self::http_client_from_headers(headers)?);
+                            .with_protocol(p);
+                        if !headers.is_empty() {
+                            builder =
+                                builder.with_http_client(Self::http_client_from_headers(headers)?);
+                        }
                         match temporality {
                             Some(temporality) => builder.with_temporality(temporality).build()?,
                             None => builder.build()?,
@@ -1055,11 +1077,14 @@ impl GlideOpenTelemetry {
                         }
                     }
                     p => {
-                        let builder = MetricExporter::builder()
+                        let mut builder = MetricExporter::builder()
                             .with_http()
                             .with_endpoint(url)
-                            .with_protocol(p)
-                            .with_http_client(Self::http_client_from_headers(headers)?);
+                            .with_protocol(p);
+                        if !headers.is_empty() {
+                            builder =
+                                builder.with_http_client(Self::http_client_from_headers(headers)?);
+                        }
                         match temporality {
                             Some(temporality) => builder.with_temporality(temporality).build()?,
                             None => builder.build()?,
@@ -1400,6 +1425,40 @@ mod tests {
         assert_eq!(
             metrics.temporality,
             Some(GlideOpenTelemetryMetricsTemporality::Delta)
+        );
+    }
+
+    #[test]
+    fn metrics_http_timeout_matches_otlp_environment_precedence() {
+        assert_eq!(
+            GlideOpenTelemetry::metrics_http_timeout_from(None, None),
+            DEFAULT_OTLP_EXPORT_TIMEOUT
+        );
+        assert_eq!(
+            GlideOpenTelemetry::metrics_http_timeout_from(Some("2500"), Some("5000")),
+            Duration::from_millis(2500)
+        );
+        assert_eq!(
+            GlideOpenTelemetry::metrics_http_timeout_from(Some("invalid"), Some("5000")),
+            Duration::from_millis(5000)
+        );
+    }
+
+    #[test]
+    fn grpc_metadata_preserves_header_value_and_normalizes_name() {
+        let metadata = GlideOpenTelemetry::metadata_from_headers(&HashMap::from([(
+            "X-Routing-Header".to_string(),
+            "serviceName:test,instanceId:i-1".to_string(),
+        )]))
+        .expect("metadata should be valid");
+
+        assert_eq!(
+            metadata
+                .get("x-routing-header")
+                .expect("routing header should be present")
+                .to_str()
+                .expect("routing header should be ASCII"),
+            "serviceName:test,instanceId:i-1"
         );
     }
 
