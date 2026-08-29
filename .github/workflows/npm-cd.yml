@@ -254,24 +254,23 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets: use cargo-zigbuild directly with .2.17 glibc suffix to enforce
-                  # GLIBC 2.17 floor (required for Amazon Linux 2 / glibc 2.26 compatibility).
+                  # For GNU targets: use cargo-zigbuild with .2.17 glibc suffix to enforce
+                  # GLIBC 2.17 floor (required for Amazon Linux 2 compatibility).
                   # napi-rs v3 --cross-compile without --target defaults to zig's glibc 2.28.
-                  # Direct cargo-zigbuild + symlink workaround for napi-rs bug #3176
-                  # (artifact path mismatch when --target includes a glibc version suffix).
+                  # After building with cargo-zigbuild, napi is invoked with the plain triple
+                  # (no .2.17 suffix) because rustc/cargo-metadata doesn't understand the suffix.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     TARGET_WITH_GLIBC="${{ matrix.TARGET }}.2.17"
-                    # Build with explicit glibc 2.17 floor
+                    # Build with explicit glibc 2.17 floor via cargo-zigbuild.
+                    # cargo-zigbuild understands the .2.17 glibc version suffix and links against glibc 2.17.
+                    # The resulting binary lands at target/<triple>/release/ (cargo strips the version suffix
+                    # from the output directory), so no symlink is needed.
                     cargo zigbuild --release --target "${TARGET_WITH_GLIBC}"
-                    # Workaround for napi-rs#3176: napi looks for artifact at target/<triple.2.17>/
-                    # but cargo outputs to target/<triple>/. Create a symlink to bridge the gap.
-                    mkdir -p target
-                    ln -sfn "${{ matrix.TARGET }}" "target/${TARGET_WITH_GLIBC}"
-                    # Run napi with the suffixed target to generate JS/dts bindings
-                    # (cargo step is a no-op due to cache; napi copies artifact via symlink)
-                    CARGO_BUILD_TARGET="${TARGET_WITH_GLIBC}" \
-                      npx napi build --release --strip --platform \
-                        --target "${TARGET_WITH_GLIBC}" \
+                    # Run napi with the plain target triple (without .2.17 suffix).
+                    # napi calls `cargo metadata --target <triple>` internally; rustc only accepts plain triples.
+                    # The binary was already compiled above; napi's cargo step is a no-op due to build cache.
+                    npx napi build --release --strip --platform \
+                        --target "${{ matrix.TARGET }}" \
                         --js ../build-ts/native.js \
                         --dts ../build-ts/native.d.ts \
                         --js-package-name @valkey/valkey-glide
