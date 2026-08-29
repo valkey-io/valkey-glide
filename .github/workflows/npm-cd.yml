@@ -274,6 +274,9 @@ jobs:
                     # to ensure cargo uses CARGO_TARGET_*_LINKER instead of the system linker.
                     ENV_TARGET="$(echo $TARGET | tr '-' '_' | tr '[:lower:]' '[:upper:]')"
                     export CARGO_TARGET_${ENV_TARGET}_LINKER=/tmp/zigcc-glibc-2.17.sh
+                    # Also set C compiler to zig cc so aws-lc-sys does not use system GCC 13
+                    # (GCC 13 on ubuntu-24.04 introduces C23 __isoc23_sscanf symbols not present in AL2)
+                    export CC_${ENV_TARGET}=/tmp/zigcc-glibc-2.17.sh
                     export CARGO_UNSTABLE_TARGET_APPLIES_TO_HOST=true
                     export CARGO_TARGET_APPLIES_TO_HOST=false
                     export __CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS=nightly
