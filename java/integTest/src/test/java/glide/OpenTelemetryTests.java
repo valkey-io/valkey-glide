@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -175,7 +176,12 @@ public class OpenTelemetryTests {
                                         .endpoint(VALID_FILE_ENDPOINT_TRACES)
                                         .samplePercentage(100)
                                         .build())
-                        .metrics(OpenTelemetry.MetricsConfig.builder().endpoint(VALID_ENDPOINT_METRICS).build())
+                        .metrics(
+                                OpenTelemetry.MetricsConfig.builder()
+                                        .endpoint(VALID_ENDPOINT_METRICS)
+                                        .headers(Collections.singletonMap("x-test-routing-header", "test-value"))
+                                        .temporality(OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA)
+                                        .build())
                         .flushIntervalMs(100L)
                         .build();
 

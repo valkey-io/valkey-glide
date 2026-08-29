@@ -1,12 +1,16 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.OpenTelemetry;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -24,6 +28,45 @@ public class OpenTelemetryConfigTests {
         Path tempDir = Files.createTempDirectory("otel-test");
         VALID_ENDPOINT_TRACES = tempDir.resolve("spans.json").toString();
         VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
+    }
+
+    @Test
+    public void invalidMetricsHeaderIsRejectedByNativeExporter() {
+        OpenTelemetry.OpenTelemetryConfig invalidHeaderConfig =
+                OpenTelemetry.OpenTelemetryConfig.builder()
+                        .metrics(
+                                OpenTelemetry.MetricsConfig.builder()
+                                        .endpoint("http://localhost:4318/v1/metrics")
+                                        .headers(Collections.singletonMap("x-test-header", "invalid\nvalue"))
+                                        .build())
+                        .build();
+
+        Exception exception =
+                assertThrows(Exception.class, () -> OpenTelemetry.init(invalidHeaderConfig));
+        assertTrue(exception.getMessage().contains("Invalid OpenTelemetry metrics header value"));
+    }
+
+    @Test
+    public void metricsConfigSupportsHeadersAndTemporality() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-LI-Fluentbit-Tag", "serviceName:test-service");
+
+        OpenTelemetry.MetricsConfig metricsConfig =
+                OpenTelemetry.MetricsConfig.builder()
+                        .endpoint("http://[::1]:22784/v1/metrics")
+                        .headers(headers)
+                        .temporality(OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA)
+                        .build();
+        headers.put("unexpected", "mutation");
+
+        assertEquals(
+                Collections.singletonMap("X-LI-Fluentbit-Tag", "serviceName:test-service"),
+                metricsConfig.getHeaders());
+        assertEquals(
+                OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA, metricsConfig.getTemporality());
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> metricsConfig.getHeaders().put("another", "mutation"));
     }
 
     // Test wrong open telemetry configs

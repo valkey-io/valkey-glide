@@ -17,6 +17,7 @@ use std::time::Duration;
 pub struct FileMetricExporter {
     is_shutdown: AtomicBool,
     path: PathBuf,
+    temporality: Temporality,
 }
 
 impl FileMetricExporter {
@@ -40,17 +41,25 @@ impl FileMetricExporter {
     /// - The path points to a directory that doesn't exist
     /// - The user doesn't have write permissions for the target location
     pub fn new(path: PathBuf) -> Result<Self, OTelSdkError> {
+        Self::new_with_temporality(path, Temporality::Cumulative)
+    }
+
+    pub fn new_with_temporality(
+        path: PathBuf,
+        temporality: Temporality,
+    ) -> Result<Self, OTelSdkError> {
         // TODO: Check if the file exists and has write permissions - https://github.com/valkey-io/valkey-glide/issues/3720
         Ok(Self {
             is_shutdown: AtomicBool::new(false),
             path,
+            temporality,
         })
     }
 }
 
 impl PushMetricExporter for FileMetricExporter {
     fn temporality(&self) -> Temporality {
-        Temporality::Cumulative
+        self.temporality
     }
 
     async fn export(&self, metrics: &ResourceMetrics) -> OTelSdkResult {

@@ -5,15 +5,19 @@ use opentelemetry::trace::{
     Span, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId, TraceState,
 };
 use opentelemetry::{global, trace::Tracer};
-use opentelemetry_otlp::{MetricExporter, Protocol, WithExportConfig};
+use opentelemetry_otlp::{
+    MetricExporter, Protocol, WithExportConfig, WithHttpConfig, WithTonicConfig,
+};
 use opentelemetry_sdk::error::OTelSdkError;
-use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{
     BatchConfig, BatchSpanProcessor, SdkTracerProvider, SpanExporter,
     span_processor_with_async_runtime::BatchSpanProcessor as AsyncBatchSpanProcessor,
 };
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -22,6 +26,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use thiserror::Error;
+use tonic::metadata::{Ascii, MetadataKey, MetadataMap, MetadataValue};
 use url::Url;
 
 const SPAN_WRITE_LOCK_ERR: &str = "Failed to acquire span write lock";
@@ -519,6 +524,27 @@ pub struct GlideOpenTelemetryTracesConfig {
 pub struct GlideOpenTelemetryMetricsConfig {
     /// Specifies how the exporter sends telemetry data to the collector, and holds the endpoint information.
     metrics_exporter: GlideOpenTelemetrySignalsExporter,
+    /// Additional headers sent with every metrics export request.
+    headers: HashMap<String, String>,
+    /// Aggregation temporality used by the metrics exporter.
+    temporality: Option<GlideOpenTelemetryMetricsTemporality>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GlideOpenTelemetryMetricsTemporality {
+    Cumulative,
+    Delta,
+    LowMemory,
+}
+
+impl From<GlideOpenTelemetryMetricsTemporality> for Temporality {
+    fn from(value: GlideOpenTelemetryMetricsTemporality) -> Self {
+        match value {
+            GlideOpenTelemetryMetricsTemporality::Cumulative => Temporality::Cumulative,
+            GlideOpenTelemetryMetricsTemporality::Delta => Temporality::Delta,
+            GlideOpenTelemetryMetricsTemporality::LowMemory => Temporality::LowMemory,
+        }
+    }
 }
 
 /// Builder for configuring OpenTelemetry in GLIDE
@@ -581,6 +607,23 @@ impl GlideOpenTelemetryConfigBuilder {
     pub fn with_metrics_exporter(mut self, exporter: GlideOpenTelemetrySignalsExporter) -> Self {
         self.metrics_config = Some(GlideOpenTelemetryMetricsConfig {
             metrics_exporter: exporter,
+            headers: HashMap::new(),
+            temporality: None,
+        });
+        self
+    }
+
+    /// Configure the metrics exporter, request headers, and aggregation temporality.
+    pub fn with_metrics_exporter_config(
+        mut self,
+        exporter: GlideOpenTelemetrySignalsExporter,
+        headers: HashMap<String, String>,
+        temporality: Option<GlideOpenTelemetryMetricsTemporality>,
+    ) -> Self {
+        self.metrics_config = Some(GlideOpenTelemetryMetricsConfig {
+            metrics_exporter: exporter,
+            headers,
+            temporality,
         });
         self
     }
@@ -643,6 +686,54 @@ static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
+    fn http_client_from_headers(
+        headers: &HashMap<String, String>,
+    ) -> Result<reqwest::Client, GlideOTELError> {
+        let mut default_headers = HeaderMap::new();
+        for (key, value) in headers {
+            let header_name = HeaderName::from_bytes(key.as_bytes()).map_err(|error| {
+                GlideOTELError::Other(format!(
+                    "Invalid OpenTelemetry metrics header name '{key}': {error}"
+                ))
+            })?;
+            let header_value = HeaderValue::from_str(value).map_err(|error| {
+                GlideOTELError::Other(format!(
+                    "Invalid OpenTelemetry metrics header value for '{key}': {error}"
+                ))
+            })?;
+            default_headers.insert(header_name, header_value);
+        }
+        reqwest::Client::builder()
+            .default_headers(default_headers)
+            .build()
+            .map_err(|error| {
+                GlideOTELError::Other(format!(
+                    "Failed to build OpenTelemetry metrics HTTP client: {error}"
+                ))
+            })
+    }
+
+    fn metadata_from_headers(
+        headers: &HashMap<String, String>,
+    ) -> Result<MetadataMap, GlideOTELError> {
+        let mut metadata = MetadataMap::new();
+        for (key, value) in headers {
+            let metadata_key: MetadataKey<Ascii> =
+                key.to_ascii_lowercase().parse().map_err(|error| {
+                    GlideOTELError::Other(format!(
+                        "Invalid OpenTelemetry metrics header name '{key}': {error}"
+                    ))
+                })?;
+            let metadata_value: MetadataValue<Ascii> = value.parse().map_err(|error| {
+                GlideOTELError::Other(format!(
+                    "Invalid OpenTelemetry metrics header value for '{key}': {error}"
+                ))
+            })?;
+            metadata.insert(metadata_key, metadata_value);
+        }
+        Ok(metadata)
+    }
+
     /// Validate if a span pointer is valid
     ///
     /// # Arguments
@@ -753,6 +844,8 @@ impl GlideOpenTelemetry {
                 Self::initialise_metrics_exporter(
                     config.flush_interval_ms,
                     &metrics_config.metrics_exporter,
+                    &metrics_config.headers,
+                    metrics_config.temporality,
                 )?;
                 Self::init_metrics()?;
             }
@@ -882,14 +975,21 @@ impl GlideOpenTelemetry {
     fn initialise_metrics_exporter(
         flush_interval_ms: Duration,
         metrics_exporter: &GlideOpenTelemetrySignalsExporter,
+        headers: &HashMap<String, String>,
+        temporality: Option<GlideOpenTelemetryMetricsTemporality>,
     ) -> Result<(), GlideOTELError> {
         let env_protocol = protocol_from_env(OtelSignal::Metrics);
+        let temporality = temporality.map(Temporality::from);
         // The async-runtime `PeriodicReader<E>` is generic over the exporter
         // type, so the file and OTLP readers are distinct concrete types. Build
         // the `SdkMeterProvider` inside each arm to keep the reader type local.
         let meter_provider = match metrics_exporter {
             GlideOpenTelemetrySignalsExporter::File(p) => {
-                let exporter = crate::FileMetricExporter::new(p.clone()).map_err(|e| {
+                let exporter = crate::FileMetricExporter::new_with_temporality(
+                    p.clone(),
+                    temporality.unwrap_or(Temporality::Cumulative),
+                )
+                .map_err(|e| {
                     GlideOTELError::Other(format!("Failed to create metrics exporter: {}", e))
                 })?;
                 // The file exporter performs synchronous IO, so the
@@ -904,16 +1004,28 @@ impl GlideOpenTelemetry {
             GlideOpenTelemetrySignalsExporter::Http(url) => {
                 let protocol = env_protocol.unwrap_or(Protocol::HttpBinary);
                 let exporter = match protocol {
-                    Protocol::Grpc => MetricExporter::builder()
-                        .with_tonic()
-                        .with_endpoint(url)
-                        .with_protocol(Protocol::Grpc)
-                        .build()?,
-                    p => MetricExporter::builder()
-                        .with_http()
-                        .with_endpoint(url)
-                        .with_protocol(p)
-                        .build()?,
+                    Protocol::Grpc => {
+                        let builder = MetricExporter::builder()
+                            .with_tonic()
+                            .with_endpoint(url)
+                            .with_protocol(Protocol::Grpc)
+                            .with_metadata(Self::metadata_from_headers(headers)?);
+                        match temporality {
+                            Some(temporality) => builder.with_temporality(temporality).build()?,
+                            None => builder.build()?,
+                        }
+                    }
+                    p => {
+                        let builder = MetricExporter::builder()
+                            .with_http()
+                            .with_endpoint(url)
+                            .with_protocol(p)
+                            .with_http_client(Self::http_client_from_headers(headers)?);
+                        match temporality {
+                            Some(temporality) => builder.with_temporality(temporality).build()?,
+                            None => builder.build()?,
+                        }
+                    }
                 };
                 let reader = opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
@@ -931,16 +1043,28 @@ impl GlideOpenTelemetry {
                     );
                 }
                 let exporter = match protocol {
-                    Protocol::Grpc => MetricExporter::builder()
-                        .with_tonic()
-                        .with_endpoint(url)
-                        .with_protocol(Protocol::Grpc)
-                        .build()?,
-                    p => MetricExporter::builder()
-                        .with_http()
-                        .with_endpoint(url)
-                        .with_protocol(p)
-                        .build()?,
+                    Protocol::Grpc => {
+                        let builder = MetricExporter::builder()
+                            .with_tonic()
+                            .with_endpoint(url)
+                            .with_protocol(Protocol::Grpc)
+                            .with_metadata(Self::metadata_from_headers(headers)?);
+                        match temporality {
+                            Some(temporality) => builder.with_temporality(temporality).build()?,
+                            None => builder.build()?,
+                        }
+                    }
+                    p => {
+                        let builder = MetricExporter::builder()
+                            .with_http()
+                            .with_endpoint(url)
+                            .with_protocol(p)
+                            .with_http_client(Self::http_client_from_headers(headers)?);
+                        match temporality {
+                            Some(temporality) => builder.with_temporality(temporality).build()?,
+                            None => builder.build()?,
+                        }
+                    }
                 };
                 let reader = opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
                     .with_interval(flush_interval_ms)
@@ -1256,6 +1380,27 @@ mod tests {
     fn string_property_to_u64(json: &serde_json::Value, prop: &str) -> u64 {
         let s = json[prop].to_string().replace('"', "");
         s.parse::<u64>().unwrap()
+    }
+
+    #[test]
+    fn metrics_exporter_config_preserves_headers_and_temporality() {
+        let headers = HashMap::from([("x-routing-header".to_string(), "test-value".to_string())]);
+        let config = GlideOpenTelemetryConfigBuilder::default()
+            .with_metrics_exporter_config(
+                GlideOpenTelemetrySignalsExporter::Http(
+                    "http://localhost:4318/v1/metrics".to_string(),
+                ),
+                headers.clone(),
+                Some(GlideOpenTelemetryMetricsTemporality::Delta),
+            )
+            .build();
+
+        let metrics = config.metrics.expect("metrics config should be present");
+        assert_eq!(metrics.headers, headers);
+        assert_eq!(
+            metrics.temporality,
+            Some(GlideOpenTelemetryMetricsTemporality::Delta)
+        );
     }
 
     /// Helper function to find a metric by name in the metrics array

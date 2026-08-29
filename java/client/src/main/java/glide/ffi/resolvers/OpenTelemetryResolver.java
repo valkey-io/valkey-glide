@@ -17,6 +17,9 @@ public class OpenTelemetryResolver {
      * @param tracesEndpoint The endpoint for traces exporter (can be null if not used)
      * @param tracesSamplePercentage The percentage of requests to sample (0 for default)
      * @param metricsEndpoint The endpoint for metrics exporter (can be null if not used)
+     * @param metricsHeaderKeys The names of additional metrics exporter headers
+     * @param metricsHeaderValues The values of additional metrics exporter headers
+     * @param metricsTemporality The metrics aggregation temporality (can be null for default)
      * @param flushIntervalMs The interval in milliseconds between consecutive exports (0 for default)
      * @return 0 on success, error code otherwise: 1 - Missing configuration (both traces and metrics
      *     are null) 2 - Invalid traces endpoint 3 - Invalid metrics endpoint 4 - Runtime
@@ -26,6 +29,9 @@ public class OpenTelemetryResolver {
             String tracesEndpoint,
             int tracesSamplePercentage,
             String metricsEndpoint,
+            String[] metricsHeaderKeys,
+            String[] metricsHeaderValues,
+            String metricsTemporality,
             long flushIntervalMs);
 
     /**

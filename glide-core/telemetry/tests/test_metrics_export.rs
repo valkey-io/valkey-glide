@@ -191,6 +191,15 @@ async fn test_exporter_temporality() {
 }
 
 #[tokio::test]
+async fn test_exporter_custom_temporality() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let file_path = temp_dir.path().join("delta-temporality.json");
+    let exporter = FileMetricExporter::new_with_temporality(file_path, Temporality::Delta)
+        .expect("Failed to create exporter");
+    assert_eq!(exporter.temporality(), Temporality::Delta);
+}
+
+#[tokio::test]
 async fn test_gauge_i64_export_success() {
     let (provider, exporter) = provider_with_exporter();
     let meter = provider.meter("test_scope");

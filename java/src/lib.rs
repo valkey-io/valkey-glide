@@ -982,6 +982,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
     traces_endpoint: JString<'local>,
     traces_sample_percentage: jint,
     metrics_endpoint: JString<'local>,
+    metrics_header_keys: JObjectArray<'local>,
+    metrics_header_values: JObjectArray<'local>,
+    metrics_temporality: JString<'local>,
     flush_interval_ms: jlong,
 ) -> jint {
     run_ffi(|| {
@@ -990,6 +993,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                 traces_endpoint: JString<'a>,
                 traces_sample_percentage: jint,
                 metrics_endpoint: JString<'a>,
+                metrics_header_keys: JObjectArray<'a>,
+                metrics_header_values: JObjectArray<'a>,
+                metrics_temporality: JString<'a>,
                 flush_interval_ms: jlong,
             ) -> Result<jint, FFIError> {
                 // Convert JString to Rust String or None if null
@@ -1003,6 +1009,50 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                     Ok(endpoint) => Some(endpoint.into()),
                     Err(JniError::NullPtr(_)) => None,
                     Err(err) => return Err(err.into()),
+                };
+
+                let header_key_count = env.get_array_length(&metrics_header_keys)?;
+                let header_value_count = env.get_array_length(&metrics_header_values)?;
+                if header_key_count != header_value_count {
+                    return Err(FFIError::OpenTelemetry(
+                        "Metrics header keys and values must have the same length.".to_string(),
+                    ));
+                }
+                let mut metrics_headers =
+                    std::collections::HashMap::with_capacity(header_key_count as usize);
+                for index in 0..header_key_count {
+                    let key =
+                        JString::from(env.get_object_array_element(&metrics_header_keys, index)?);
+                    let value =
+                        JString::from(env.get_object_array_element(&metrics_header_values, index)?);
+                    metrics_headers.insert(
+                        env.get_string(&key)?.into(),
+                        env.get_string(&value)?.into(),
+                    );
+                }
+
+                let metrics_temporality: Option<String> =
+                    match env.get_string(&metrics_temporality) {
+                        Ok(temporality) => Some(temporality.into()),
+                        Err(JniError::NullPtr(_)) => None,
+                        Err(err) => return Err(err.into()),
+                    };
+                let metrics_temporality = match metrics_temporality.as_deref() {
+                    Some("cumulative") => {
+                        Some(glide_core::GlideOpenTelemetryMetricsTemporality::Cumulative)
+                    }
+                    Some("delta") => {
+                        Some(glide_core::GlideOpenTelemetryMetricsTemporality::Delta)
+                    }
+                    Some("lowmemory") => {
+                        Some(glide_core::GlideOpenTelemetryMetricsTemporality::LowMemory)
+                    }
+                    Some(value) => {
+                        return Err(FFIError::OpenTelemetry(format!(
+                            "Invalid metrics temporality: {value}"
+                        )));
+                    }
+                    None => None,
                 };
 
                 // Validate that at least one endpoint is provided
@@ -1038,9 +1088,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
 
                 // Initialize metrics exporter if endpoint is provided
                 if let Some(endpoint) = metrics_endpoint {
-                    config = config.with_metrics_exporter(
+                    config = config.with_metrics_exporter_config(
                         glide_core::GlideOpenTelemetrySignalsExporter::from_str(&endpoint)
                             .map_err(|e| FFIError::OpenTelemetry(format!("{e}")))?,
+                        metrics_headers,
+                        metrics_temporality,
                     );
                 }
 
@@ -1073,7 +1125,16 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
 
                 Ok(0 as jint)
             }
-            let result = init_open_telemetry(&mut env, traces_endpoint, traces_sample_percentage, metrics_endpoint, flush_interval_ms);
+            let result = init_open_telemetry(
+                &mut env,
+                traces_endpoint,
+                traces_sample_percentage,
+                metrics_endpoint,
+                metrics_header_keys,
+                metrics_header_values,
+                metrics_temporality,
+                flush_interval_ms,
+            );
             handle_errors(&mut env, result)
         },
     )

@@ -4,6 +4,9 @@ package glide.api;
 import glide.api.logging.Logger;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.ffi.resolvers.OpenTelemetryResolver;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -41,6 +44,8 @@ import java.util.Random;
  *             <ul>
  *               <li><b>endpoint</b>: The collector endpoint for metrics. Same protocol rules as
  *                   above.
+ *               <li><b>headers</b>: (optional) Additional headers sent with each export request.
+ *               <li><b>temporality</b>: (optional) Aggregation temporality for exported metrics.
  *             </ul>
  *         <li><b>flushIntervalMs</b>: (optional) Interval in milliseconds for flushing data to the
  *             collector. Must be a positive integer. Defaults to 5000ms if not specified.
@@ -280,6 +285,25 @@ public class OpenTelemetry {
     /** Configuration for OpenTelemetry metrics. */
     public static class MetricsConfig {
         private String endpoint;
+        private Map<String, String> headers = Collections.emptyMap();
+        private MetricsTemporality temporality;
+
+        /** Aggregation temporality used when exporting metrics. */
+        public enum MetricsTemporality {
+            CUMULATIVE("cumulative"),
+            DELTA("delta"),
+            LOW_MEMORY("lowmemory");
+
+            private final String value;
+
+            MetricsTemporality(String value) {
+                this.value = value;
+            }
+
+            String getValue() {
+                return value;
+            }
+        }
 
         /**
          * Creates a new MetricsConfig builder.
@@ -293,6 +317,8 @@ public class OpenTelemetry {
         /** Builder for MetricsConfig. */
         public static class Builder {
             private String endpoint;
+            private Map<String, String> headers = Collections.emptyMap();
+            private MetricsTemporality temporality;
 
             /**
              * Sets the endpoint for metrics.
@@ -306,6 +332,31 @@ public class OpenTelemetry {
             }
 
             /**
+             * Sets additional headers to send with every metrics export request.
+             *
+             * @param headers The metrics exporter headers
+             * @return This builder
+             */
+            public Builder headers(Map<String, String> headers) {
+                this.headers =
+                        headers == null
+                                ? Collections.emptyMap()
+                                : Collections.unmodifiableMap(new HashMap<>(headers));
+                return this;
+            }
+
+            /**
+             * Sets the aggregation temporality for exported metrics.
+             *
+             * @param temporality The metrics aggregation temporality
+             * @return This builder
+             */
+            public Builder temporality(MetricsTemporality temporality) {
+                this.temporality = temporality;
+                return this;
+            }
+
+            /**
              * Builds the MetricsConfig.
              *
              * @return The built MetricsConfig
@@ -313,6 +364,8 @@ public class OpenTelemetry {
             public MetricsConfig build() {
                 MetricsConfig config = new MetricsConfig();
                 config.endpoint = this.endpoint;
+                config.headers = this.headers;
+                config.temporality = this.temporality;
                 return config;
             }
         }
@@ -326,9 +379,29 @@ public class OpenTelemetry {
             return endpoint;
         }
 
+        /**
+         * Gets the additional metrics exporter headers.
+         *
+         * @return An immutable map of metrics exporter headers
+         */
+        public Map<String, String> getHeaders() {
+            return headers;
+        }
+
+        /**
+         * Gets the metrics aggregation temporality.
+         *
+         * @return The configured temporality, or null when the exporter default is used
+         */
+        public MetricsTemporality getTemporality() {
+            return temporality;
+        }
+
         MetricsConfig copy() {
             MetricsConfig clone = new MetricsConfig();
             clone.endpoint = this.endpoint;
+            clone.headers = this.headers;
+            clone.temporality = this.temporality;
             return clone;
         }
     }
@@ -354,6 +427,8 @@ public class OpenTelemetry {
      *          .metrics(
      *             OpenTelemetry.MetricsConfig.builder()
      *                 .endpoint("http://localhost:4318/v1/metrics")
+     *                 .headers(Collections.singletonMap("Authorization", "Bearer token"))
+     *                 .temporality(OpenTelemetry.MetricsConfig.MetricsTemporality.DELTA)
      *                 .build()
      *          )
      *         .flushIntervalMs(5000L) // Optional, defaults to 5000
@@ -390,9 +465,23 @@ public class OpenTelemetry {
         }
 
         String metricsEndpoint = null;
+        String[] metricsHeaderKeys = new String[0];
+        String[] metricsHeaderValues = new String[0];
+        String metricsTemporality = null;
         MetricsConfig metricsConfig = config.getMetrics();
         if (metricsConfig != null) {
             metricsEndpoint = metricsConfig.getEndpoint();
+            metricsHeaderKeys = new String[metricsConfig.getHeaders().size()];
+            metricsHeaderValues = new String[metricsConfig.getHeaders().size()];
+            int headerIndex = 0;
+            for (Map.Entry<String, String> header : metricsConfig.getHeaders().entrySet()) {
+                metricsHeaderKeys[headerIndex] = header.getKey();
+                metricsHeaderValues[headerIndex] = header.getValue();
+                headerIndex++;
+            }
+            if (metricsConfig.getTemporality() != null) {
+                metricsTemporality = metricsConfig.getTemporality().getValue();
+            }
         }
 
         long flushIntervalMs =
@@ -400,7 +489,13 @@ public class OpenTelemetry {
 
         int rc =
                 OpenTelemetryResolver.initOpenTelemetry(
-                        tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
+                        tracesEndpoint,
+                        tracesSamplePercentage,
+                        metricsEndpoint,
+                        metricsHeaderKeys,
+                        metricsHeaderValues,
+                        metricsTemporality,
+                        flushIntervalMs);
         if (rc != 0) {
             String msg;
             switch (rc) {

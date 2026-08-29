@@ -25,7 +25,8 @@ pub mod request_type;
 pub mod tls_reload;
 pub use telemetrylib::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
-    GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
+    GlideOpenTelemetryConfigBuilder, GlideOpenTelemetryMetricsTemporality,
+    GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 
 #[cfg(feature = "proto")]
