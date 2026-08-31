@@ -339,7 +339,8 @@ public class ClientPoolIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testOrdinaryClientCloseDoesNotEvictPooledClients(boolean clusterMode) throws Exception {
+    public void testOrdinaryClientCloseDoesNotEvictPooledClients(boolean clusterMode)
+            throws Exception {
         assumeMode(clusterMode);
 
         // ClientPool.create runs a connectivity probe: it opens and closes one ordinary
