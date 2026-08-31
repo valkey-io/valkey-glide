@@ -163,7 +163,7 @@ impl HashFieldConditionalChange {
 /// Options for the `MIGRATE` command.
 ///
 /// Mirrors Python `MigrateOptions`.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct MigrateOptions {
     /// Do not remove the key from the source instance (`COPY`).
     pub copy: bool,
@@ -173,6 +173,17 @@ pub struct MigrateOptions {
     pub password: Option<String>,
     /// Username for `AUTH2` (requires `password`).
     pub username: Option<String>,
+}
+
+impl std::fmt::Debug for MigrateOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MigrateOptions")
+            .field("copy", &self.copy)
+            .field("replace", &self.replace)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("username", &self.username)
+            .finish()
+    }
 }
 
 impl MigrateOptions {
@@ -424,6 +435,23 @@ mod tests {
         let mut cmd = Cmd::new();
         opts.add_to(&mut cmd);
         assert_eq!(args_of(&cmd), vec!["AUTH2", "user", "pw"]);
+    }
+
+    #[test]
+    fn migrate_options_debug_redacts_password() {
+        let opts = MigrateOptions {
+            copy: true,
+            replace: false,
+            password: Some("super-secret".into()),
+            username: Some("alice".into()),
+        };
+
+        let redacted_str = format!("{opts:?}");
+        assert!(!redacted_str.contains("super-secret"));
+        assert!(redacted_str.contains("<redacted>"));
+
+        let unredacted_str = format!("{:?}", MigrateOptions::default());
+        assert!(!unredacted_str.contains("<redacted>"));
     }
 
     #[test]
