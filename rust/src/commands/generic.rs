@@ -241,6 +241,13 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Watch the given keys for changes before a transaction (`WATCH`).
+    ///
+    /// Note: `WATCH` is connection-scoped, but GLIDE multiplexes commands over
+    /// shared connections. The optimistic lock is therefore only reliable while
+    /// the caller has exclusive use of the client through `EXEC`/`UNWATCH`.
+    /// Dedicated scoped connections are tracked in [#6917].
+    ///
+    /// [#6917]: https://github.com/valkey-io/valkey-glide/issues/6917
     async fn watch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> Result<()> {
         let mut cmd = Cmd::new();
         cmd.arg("WATCH");
@@ -251,6 +258,9 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Forget all watched keys (`UNWATCH`).
+    ///
+    /// See [`watch`](Self::watch) for the connection-scoping caveat that
+    /// applies to `WATCH`/`UNWATCH` on GLIDE's multiplexed client.
     async fn unwatch(&self) -> Result<()> {
         let mut cmd = Cmd::new();
         cmd.arg("UNWATCH");
