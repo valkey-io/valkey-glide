@@ -600,9 +600,10 @@ where
 
         // Valkey redirects can contain raw IPs. Prefer the exact node address
         // already known from topology, including its port.
-        if let Some((host, _port_str)) = address.rsplit_once(':') {
-            if let Ok(ip) = host.parse::<IpAddr>() {
-                if let Some(node_address) = conn_lock.slot_map.node_address_for_ip(ip) {
+        if let Some((host, port)) = address.rsplit_once(':') {
+            let host = host.trim_start_matches('[').trim_end_matches(']');
+            if let (Ok(ip), Ok(port)) = (host.parse::<IpAddr>(), port.parse::<u16>()) {
+                if let Some(node_address) = conn_lock.slot_map.node_address_for_ip(ip, port) {
                     return ((*node_address).clone(), "reverse_ip_lookup");
                 }
             }
@@ -4481,7 +4482,7 @@ where
                 .and_then(|addr| {
                     conn_lock
                         .slot_map
-                        .node_address_for_ip(addr.ip())
+                        .node_address_for_ip(addr.ip(), addr.port())
                         .map(|a| (*a).clone())
                 })
                 // Step 3: Use socket_addr if available

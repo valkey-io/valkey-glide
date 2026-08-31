@@ -32,8 +32,8 @@ mod cluster_async {
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
-        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AddressResolver,
-        AsyncCommands, Cmd, ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
+        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AddressResolver, AsyncCommands,
+        Cmd, ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
         IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, RedisError, RedisFuture,
         RedisResult, Value,
     };
@@ -2410,17 +2410,18 @@ mod cluster_async {
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")])
-                .address_resolver(Arc::new(InternalNodeResolver { resolved_name: name })),
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                InternalNodeResolver {
+                    resolved_name: name,
+                },
+            )),
             name,
             move |cmd: &[u8], port| {
                 respond_startup_two_nodes(name, cmd)?;
 
                 let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
                 match (port, count) {
-                    (6379, 0) => Err(parse_redis_value(
-                        b"-MOVED 14000 internal-node:6380\r\n",
-                    )),
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6380\r\n")),
                     (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Unexpected command on port {port}: {cmd:?}"),
                 }
@@ -2450,8 +2451,11 @@ mod cluster_async {
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")])
-                .address_resolver(Arc::new(InternalNodeResolver { resolved_name: name })),
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                InternalNodeResolver {
+                    resolved_name: name,
+                },
+            )),
             name,
             move |cmd: &[u8], port| {
                 if contains_slice(cmd, b"ASKING") {
@@ -2463,9 +2467,7 @@ mod cluster_async {
 
                 let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
                 match (port, count) {
-                    (6379, 0) => Err(parse_redis_value(
-                        b"-ASK 14000 internal-node:6380\r\n",
-                    )),
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 internal-node:6380\r\n")),
                     (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Unexpected command on port {port}: {cmd:?}"),
                 }
@@ -2480,6 +2482,97 @@ mod cluster_async {
 
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_moved_raw_ip_redirect_with_shared_ip() {
+        let name = "test_async_cluster_moved_raw_ip_redirect_with_shared_ip";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder_and_behavior(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup_two_nodes(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 127.0.0.1:6380\r\n")),
+                    (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+            |behavior| {
+                behavior.returned_ip_type =
+                    ConnectionIPReturnType::Specified("127.0.0.1".parse().unwrap());
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_ask_raw_ip_redirect_with_shared_ip() {
+        let name = "test_async_cluster_ask_raw_ip_redirect_with_shared_ip";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder_and_behavior(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"ASKING") {
+                    assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                respond_startup_two_nodes(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 127.0.0.1:6380\r\n")),
+                    (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+            |behavior| {
+                behavior.returned_ip_type =
+                    ConnectionIPReturnType::Specified("127.0.0.1".parse().unwrap());
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 1);
     }
 
     fn test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
