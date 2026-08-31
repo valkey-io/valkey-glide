@@ -9,8 +9,8 @@ import java.nio.ByteOrder;
 import java.util.LinkedHashMap;
 
 /**
- * Decodes the zero-copy {@link ByteBuffer} the native layer hands back for responses above the 16 KB
- * threshold. Every response path shares this one decoder so no two of them can drift apart.
+ * Decodes the zero-copy {@link ByteBuffer} the native layer hands back for responses above the 16
+ * KB threshold. Every response path shares this one decoder so no two of them can drift apart.
  */
 public final class DirectBufferResolver {
 

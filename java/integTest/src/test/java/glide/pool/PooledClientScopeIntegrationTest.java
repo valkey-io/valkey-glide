@@ -181,8 +181,7 @@ public class PooledClientScopeIntegrationTest {
                     values[i] = asciiValue(2048);
                     pooled.set(keys[i], values[i]).get(5, TimeUnit.SECONDS);
                 }
-                Object viaScopeMget =
-                        scope.command("MGET", keys).get(5, TimeUnit.SECONDS);
+                Object viaScopeMget = scope.command("MGET", keys).get(5, TimeUnit.SECONDS);
                 String[] viaClientMget = pooled.unwrap().mget(keys).get(5, TimeUnit.SECONDS);
                 assertTrue(viaScopeMget instanceof Object[], "MGET must decode to an array");
                 Object[] scopeMget = (Object[]) viaScopeMget;
