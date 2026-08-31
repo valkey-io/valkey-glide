@@ -1,10 +1,10 @@
 use glide_ffi::*;
 use rstest::rstest;
 use std::ffi::{CStr, CString, c_char};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command};
 use std::ptr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // TODO: Move RedisServer implementation from glide-core tests to a reusable library and replace this Server implementation.
 struct Server {
@@ -55,9 +55,34 @@ impl Server {
             }
         };
 
-        // Give the server some time to start
-        std::thread::sleep(Duration::from_millis(500));
+        // Wait for the server to actually accept connections instead of
+        // sleeping a fixed duration. On busy CI runners a fixed 500ms sleep
+        // was not always long enough for the server to bind and start
+        // listening, causing the client to time out while connecting. Poll
+        // the port until a TCP connection succeeds, with a short backoff
+        // between attempts and a generous overall timeout.
+        Self::wait_until_ready(port);
         child
+    }
+
+    /// Polls the server port until it accepts TCP connections, or panics if it
+    /// does not become ready within the timeout. This replaces a fixed sleep so
+    /// the tests do not race a slow-starting server on busy CI machines.
+    fn wait_until_ready(port: u16) {
+        let addr = format!("127.0.0.1:{port}");
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match TcpStream::connect(&addr) {
+                Ok(_) => return,
+                Err(e) => {
+                    if Instant::now() >= deadline {
+                        panic!("Server on {addr} did not become ready within timeout: {e}");
+                    }
+                    // Short backoff between connection attempts.
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
     }
 }
 
