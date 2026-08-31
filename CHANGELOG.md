@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Java: Prevent an ordinary-client close from evicting a pooled client by unifying JNI handle and pool client-id allocation ([#6968](https://github.com/valkey-io/valkey-glide/issues/6968))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))

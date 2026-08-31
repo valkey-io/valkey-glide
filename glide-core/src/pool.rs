@@ -400,7 +400,11 @@ static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = On
 fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
     MONITOR_HANDLES.get_or_init(DashMap::new)
 }
-/// Global client_id allocator — ensures uniqueness across all pools.
+/// Global client_id allocator that keeps ids unique across all pools.
+///
+/// Bindings that key pooled and ordinary clients in one table (the Java JNI
+/// handle table) also draw ordinary-client handles from here, so a pooled
+/// client_id can never equal a live ordinary handle.
 static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Allocate a globally unique client_id (can be called without holding a pool lock).

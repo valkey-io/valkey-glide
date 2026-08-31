@@ -166,11 +166,15 @@ pub(crate) fn get_pending_map() -> &'static PendingMap {
     PENDING_CONFIGS.get_or_init(|| Arc::new(DashMap::new()))
 }
 
-/// Generate unique safe handle for JNI resource management
-static NEXT_HANDLE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-
+/// Allocate a handle for an ordinary JNI client.
+///
+/// Ordinary clients and pooled clients live in the same handle table, so both
+/// have to draw their ids from one sequence. With separate counters an ordinary
+/// client and a live pooled client could be handed the same id, and closing the
+/// ordinary client would then evict the pooled client from the shared table.
+/// Delegating to the pool's global allocator keeps every id in the table unique.
 pub fn generate_safe_handle() -> u64 {
-    NEXT_HANDLE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    glide_core::pool::allocate_client_id()
 }
 
 /// Create actual glide-core Valkey client with specified configuration
@@ -1065,8 +1069,32 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
+    use super::generate_safe_handle;
     use super::serialize_array_to_bytes;
     use redis::{Value, parse_redis_value};
+
+    #[test]
+    fn ordinary_handles_and_pooled_ids_never_collide() {
+        // Ordinary-client handles and pooled client_ids share one JNI handle table.
+        // If they came from separate counters their ranges would overlap, and closing
+        // an ordinary client could evict a live pooled client (issue #6968). Drawing
+        // ids from both allocators and checking they are all distinct proves they run
+        // off a single sequence.
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            let handle = generate_safe_handle();
+            assert!(
+                seen.insert(handle),
+                "generate_safe_handle produced a duplicate id: {handle}"
+            );
+            let pooled = glide_core::pool::allocate_client_id();
+            assert!(
+                seen.insert(pooled),
+                "allocate_client_id collided with an ordinary handle: {pooled}"
+            );
+        }
+    }
 
     #[test]
     fn serialize_array_to_bytes_encodes_bool_double_bignumber_and_nil() {
