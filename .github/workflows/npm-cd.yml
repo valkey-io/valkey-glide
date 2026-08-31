@@ -243,10 +243,7 @@ jobs:
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                    # Install cargo-zigbuild for GNU targets (used as zig cc wrapper for glibc 2.17 floor)
-                    if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
-                      cargo install cargo-zigbuild --version "=0.23.2" --locked
-                    fi
+                    # zig is still needed for musl targets (--cross-compile via napi)
                   else
                     brew update
                     brew install tree
@@ -254,38 +251,60 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets: enforce glibc 2.17 floor using a zig cc wrapper.
-                  # napi v3 --cross-compile without --target defaults to zig's glibc 2.28.
-                  # We create a wrapper script that calls 'cargo-zigbuild zig cc' with
-                  # '-target <triple>.2.17' baked in, then set it as the cargo linker.
-                  # CARGO_TARGET_APPLIES_TO_HOST=false is required so cargo respects
-                  # CARGO_TARGET_*_LINKER even when host arch == target arch.
+                  # For GNU targets: build inside a manylinux2014 container to enforce
+                  # glibc 2.17 floor. manylinux2014 uses GCC 4.8.5 / glibc 2.17 headers so
+                  # all compiled C/C++ code (including aws-lc-sys via cmake) naturally targets
+                  # glibc 2.17 without zig, linker wrappers, or env var tricks.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm ci
-                    # Build target triple (e.g. x86_64-unknown-linux-gnu)
                     TARGET="${{ matrix.TARGET }}"
-                    # Zig target with glibc 2.17 floor (e.g. x86_64-linux-gnu.2.17)
-                    ZIG_TARGET="$(echo $TARGET | sed 's/unknown-linux-/linux-/').2.17"
-                    # Create zig cc wrapper with glibc 2.17 baked in
-                    printf '#!/bin/sh\nexec cargo-zigbuild zig cc -- -target %s "$@"\n' "${ZIG_TARGET}" > /tmp/zigcc-glibc-2.17.sh
-                    chmod +x /tmp/zigcc-glibc-2.17.sh
-                    # Set cargo to use our wrapper as the linker.
-                    # CARGO_TARGET_APPLIES_TO_HOST=false is required when host==target
-                    # to ensure cargo uses CARGO_TARGET_*_LINKER instead of the system linker.
-                    ENV_TARGET="$(echo $TARGET | tr '-' '_' | tr '[:lower:]' '[:upper:]')"
-                    export CARGO_TARGET_${ENV_TARGET}_LINKER=/tmp/zigcc-glibc-2.17.sh
-                    # Also set C compiler to zig cc so aws-lc-sys does not use system GCC 13
-                    # (GCC 13 on ubuntu-24.04 introduces C23 __isoc23_sscanf symbols not present in AL2)
-                    export CC_${ENV_TARGET}=/tmp/zigcc-glibc-2.17.sh
-                    export CARGO_UNSTABLE_TARGET_APPLIES_TO_HOST=true
-                    export CARGO_TARGET_APPLIES_TO_HOST=false
-                    export __CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS=nightly
-                    # Single napi build call — cargo uses our glibc 2.17 linker wrapper
-                    npx napi build --release --strip --platform \
-                      --target "$TARGET" \
-                      --js ../build-ts/native.js \
-                      --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                    # Select manylinux2014 image for this arch
+                    if [[ "$TARGET" == "aarch64"* ]]; then
+                      ML_IMAGE="quay.io/pypa/manylinux2014_aarch64"
+                    else
+                      ML_IMAGE="quay.io/pypa/manylinux2014_x86_64"
+                    fi
+                    echo "Building ${TARGET} inside ${ML_IMAGE}"
+                    # Download protoc to pass into the container
+                    PROTOC_ZIP="protoc-25.1-linux-$(uname -m | sed s/aarch64/aarch_64/).zip"
+                    curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/${PROTOC_ZIP}"
+                    # Build inside manylinux2014 container (GCC 4.8.5 / glibc 2.17 headers)
+                    docker run --rm \
+                      -v "$(pwd)/../..":/workspace \
+                      -v "$HOME/.cargo/registry":/root/.cargo/registry \
+                      -v "$(pwd)/${PROTOC_ZIP}":/tmp/protoc.zip \
+                      -w /workspace/node/rust-client \
+                      "${ML_IMAGE}" bash -c \
+                        'set -e
+                        # Install protoc
+                        unzip -o /tmp/protoc.zip -d /usr/local bin/protoc > /dev/null
+                        # Install Rust stable
+                        curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable 2>&1 | tail -3
+                        source $HOME/.cargo/env
+                        echo "Rust: $(rustc --version)"
+                        echo "GCC: $(gcc --version | head -1)"
+                        echo "glibc: $(ldd --version 2>&1 | head -1)"
+                        # Build native module
+                        cargo build --release
+                        echo "Build complete:"
+                        ls -la target/release/libvalkey_glide.so'
+                    # Copy built artifact to rust-client dir with napi naming
+                    ARCH_PART="$(echo $TARGET | cut -d- -f1)"
+                    if [[ "$ARCH_PART" == "aarch64" ]]; then NAPI_ARCH="arm64"; else NAPI_ARCH="x64"; fi
+                    NODE_FILENAME="valkey-glide.linux-${NAPI_ARCH}-gnu.node"
+                    cp "target/release/libvalkey_glide.so" "${NODE_FILENAME}"
+                    echo "Copied to ${NODE_FILENAME}"
+                    # For x86_64: generate JS/dts bindings on host (skips cargo recompile)
+                    if [[ "$TARGET" == "x86_64"* ]]; then
+                      CARGO=true npx napi build --release --strip --platform \
+                        --target "$TARGET" \
+                        --js ../build-ts/native.js \
+                        --dts ../build-ts/native.d.ts \
+                        --js-package-name @valkey/valkey-glide \
+                        --target-dir ./target || true
+                      # Ensure our manylinux .node is used (not any napi rebuild)
+                      cp "target/release/libvalkey_glide.so" "${NODE_FILENAME}"
+                    fi
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
