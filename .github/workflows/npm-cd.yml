@@ -208,7 +208,7 @@ jobs:
             - name: Install Rust with the required target
               uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
               with:
-                  toolchain: stable
+                  toolchain: "1.97.0"
                   targets: ${{ matrix.TARGET }}
 
             - name: Install protoc (protobuf)
