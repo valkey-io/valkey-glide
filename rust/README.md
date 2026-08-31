@@ -1,7 +1,7 @@
 # Valkey GLIDE for Rust (`glide`)
 
 [![CI](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml/badge.svg)](https://github.com/valkey-io/valkey-glide/actions/workflows/rust-client.yml)
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.91.1%2B-orange.svg)](https://www.rust-lang.org)
 
 A first-class, native **Rust** client for [Valkey](https://valkey.io) and Redis OSS,
 built directly on the shared **`glide-core`** engine that powers the official
@@ -61,7 +61,7 @@ should work wherever `glide-core` builds, but are not exercised in CI.
 
 ### Prerequisites
 
-- **Rust 1.85+** (the crate and `glide-core` use edition 2024).
+- **Rust 1.91.1+** (the crate and `glide-core` use edition 2024).
 - **A monorepo checkout** — this crate lives in the `valkey-io/valkey-glide`
   monorepo under `rust/` and links `glide-core` and `redis-rs` via
   in-repo **path** dependencies (see [Status & publishing](#status--publishing)).

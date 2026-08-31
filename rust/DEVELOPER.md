@@ -1,7 +1,8 @@
 # DEVELOPER guide — `glide-rust`
 
 ## Prerequisites
-- Rust 1.85+ (edition 2024; developed on 1.95). No MSRV is declared, matching the
+
+- Rust 1.91.1+ (edition 2024; developed on 1.95). No MSRV is declared, matching the
   upstream valkey-glide Rust crates.
 - The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
   **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
@@ -10,6 +11,7 @@
   in it, under `rust/`). No network fetch is needed to resolve the dependencies.
 - A `valkey-server` (or `redis-server`) binary for integration tests / benches.
   The harness auto-discovers one on `PATH`; override with:
+
   ```bash
   export VALKEY_SERVER_PATH=/path/to/valkey-server
   ```
