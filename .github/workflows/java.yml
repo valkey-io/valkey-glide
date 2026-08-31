@@ -179,7 +179,7 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       java/target
@@ -190,7 +190,7 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ~/.gradle/caches
@@ -304,7 +304,7 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       java/target
@@ -315,7 +315,7 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ~/.gradle/caches
@@ -546,7 +546,7 @@ jobs:
                   pip3 install ziglang --break-system-packages
                   cargo install --locked cargo-zigbuild
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       java/target
@@ -555,7 +555,7 @@ jobs:
                   restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Cache Gradle dependencies
-              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ~/.gradle/caches
