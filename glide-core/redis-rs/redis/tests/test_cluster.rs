@@ -30,6 +30,29 @@ mod cluster {
         }
     }
 
+    #[derive(Debug)]
+    struct NonIdempotentRedirectResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for NonIdempotentRedirectResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port != 6380 {
+                return (host.to_owned(), port);
+            }
+
+            let call = self
+                .redirect_resolutions
+                .fetch_add(1, atomic::Ordering::SeqCst);
+            if host == "internal-node" && call == 0 {
+                (self.resolved_name.to_owned(), port)
+            } else {
+                (format!("unexpected-second-resolution-{call}"), port)
+            }
+        }
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_cluster_basics() {
@@ -556,23 +579,26 @@ mod cluster {
         let name = "test_cluster_moved_redirect_with_address_resolver";
         let requests = Arc::new(atomic::AtomicUsize::new(0));
         let requests_clone = requests.clone();
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
 
         let MockEnv {
             mut connection,
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")])
-                .address_resolver(Arc::new(InternalNodeResolver { resolved_name: name })),
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                NonIdempotentRedirectResolver {
+                    resolved_name: name,
+                    redirect_resolutions: redirect_resolutions.clone(),
+                },
+            )),
             name,
             move |cmd: &[u8], port| {
-                respond_startup_two_nodes(name, cmd)?;
+                respond_startup(name, cmd)?;
 
                 let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
                 match (port, count) {
-                    (6379, 0) => Err(parse_redis_value(
-                        b"-MOVED 14000 internal-node:6380\r\n",
-                    )),
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6380\r\n")),
                     (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Unexpected command on port {port}: {cmd:?}"),
                 }
@@ -583,6 +609,54 @@ mod cluster {
 
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_cluster_ask_redirect_with_address_resolver() {
+        let name = "test_cluster_ask_redirect_with_address_resolver";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
+
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                InternalNodeResolver {
+                    resolved_name: name,
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"ASKING") {
+                    assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                respond_startup(name, cmd)?;
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 internal-node:6380\r\n")),
+                    (6380, 1) => {
+                        assert!(contains_slice(cmd, b"GET"));
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 1);
     }
 
     #[test]
