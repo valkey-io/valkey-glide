@@ -55,6 +55,24 @@ mod cluster_async {
         }
     }
 
+    #[derive(Debug)]
+    struct CountingRedirectResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for CountingRedirectResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "internal-node" && port == 6380 {
+                self.redirect_resolutions
+                    .fetch_add(1, atomic::Ordering::SeqCst);
+                (self.resolved_name.to_string(), port)
+            } else {
+                (host.to_string(), port)
+            }
+        }
+    }
+
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
             std::io::ErrorKind::BrokenPipe,
@@ -2403,6 +2421,7 @@ mod cluster_async {
         let name = "test_async_cluster_moved_redirect_with_address_resolver";
         let requests = Arc::new(atomic::AtomicUsize::new(0));
         let requests_clone = requests.clone();
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
 
         let MockEnv {
             runtime,
@@ -2411,8 +2430,9 @@ mod cluster_async {
             ..
         } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
-                InternalNodeResolver {
+                CountingRedirectResolver {
                     resolved_name: name,
+                    redirect_resolutions: redirect_resolutions.clone(),
                 },
             )),
             name,
@@ -2436,6 +2456,7 @@ mod cluster_async {
 
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

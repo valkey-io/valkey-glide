@@ -1366,10 +1366,15 @@ where
                         RetryMethod::MovedRedirect | RetryMethod::RefreshSlotsAndRetry
                     ) || matches!(target, OperationTarget::NotFound)
                     {
+                        let core = this.core.clone();
                         Next::RefreshSlots {
                             request: None,
                             sleep_duration: None,
-                            moved_redirect: RedirectNode::from_option_tuple(err.redirect_node()),
+                            moved_redirect: RedirectNode::from_option_tuple(err.redirect_node())
+                                .map(|mut redirect| {
+                                    redirect.address = core.resolve_address(&redirect.address);
+                                    redirect
+                                }),
                         }
                         .into()
                     } else if matches!(retry_method, RetryMethod::Reconnect)
@@ -1473,12 +1478,22 @@ where
                         let mut request = this.request.take().unwrap();
                         let redirect_node = err.redirect_node();
                         let core = this.core.clone();
+                        let resolved_redirect_node = RedirectNode::from_option_tuple(redirect_node)
+                            .map(|mut redirect| {
+                                redirect.address = core.resolve_address(&redirect.address);
+                                redirect
+                            });
 
                         // Check for circular MOVED and trigger reconnect if detected
-                        // Use resolve_address to handle hostname vs IP mismatches
-                        if is_circular_moved_redirect(redirect_node, &address, |addr| {
-                            core.resolve_address(addr)
-                        }) {
+                        // Both addresses are canonical here, so avoid resolving the
+                        // redirect target again during the comparison.
+                        if is_circular_moved_redirect(
+                            resolved_redirect_node
+                                .as_ref()
+                                .map(|redirect| (redirect.address.as_str(), redirect.slot)),
+                            &address,
+                            |addr| addr.to_owned(),
+                        ) {
                             // Reset routing and reconnect with retry
                             request.info.reset_routing();
                             return Next::Reconnect {
@@ -1490,12 +1505,14 @@ where
 
                         // Normal MOVED handling: set redirect and refresh slots
                         request.info.set_redirect(
-                            redirect_node.map(|(node, _slot)| Redirect::Moved(node.to_string())),
+                            resolved_redirect_node
+                                .as_ref()
+                                .map(|redirect| Redirect::Moved(redirect.address.clone())),
                         );
                         Next::RefreshSlots {
                             request: Some(request),
                             sleep_duration: None,
-                            moved_redirect: RedirectNode::from_option_tuple(redirect_node),
+                            moved_redirect: resolved_redirect_node,
                         }
                         .into()
                     }
@@ -3425,16 +3442,14 @@ where
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
                 ..
-            } => {
-                let resolved_addr = core.resolve_address(&moved_addr);
-                core.conn_lock
-                    .read()
-                    .connection_for_address(resolved_addr.as_str())
-                    .map_or(
-                        ConnectionCheck::OnlyAddress(resolved_addr),
-                        ConnectionCheck::Found,
-                    )
-            }
+            } => core
+                .conn_lock
+                .read()
+                .connection_for_address(moved_addr.as_str())
+                .map_or(
+                    ConnectionCheck::OnlyAddress(moved_addr),
+                    ConnectionCheck::Found,
+                ),
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Ask(ask_addr, should_exec_asking),
                 ..
@@ -4011,7 +4026,7 @@ where
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
                                 moved_redirect.slot,
-                                self.inner.resolve_address(&moved_redirect.address).into(),
+                                moved_redirect.address.into(),
                             )),
                         })
                     } else if let Some(ref request) = request {
