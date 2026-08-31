@@ -81,7 +81,7 @@
         "staged": "lint-staged",
         "prereq": "npm ci",
         "artifacts": "napi artifacts",
-        "prepublishOnly": "cd ../.. && napi pre-publish --config-path npm/glide/package.json -t npm --no-gh-release",
+        "prepublishOnly": "cd ../.. && napi prepublish --config npm/glide/package.json -t npm --skip-gh-release",
         "docs": "npm run build && ./docs/build-docs"
     },
     "devDependencies": {
