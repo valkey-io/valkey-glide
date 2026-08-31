@@ -57,7 +57,7 @@ strum_macros = "0.26"
 zstd = { version = "0.13" }
 lz4 = { version = "1.28" }
 libc = "0.2.186"
-regex = "=1.12.3"
+regex = "=1.13.1"
 
 [features]
 proto = ["protobuf"]
