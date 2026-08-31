@@ -296,12 +296,14 @@ jobs:
                     echo "Copied to ${NODE_FILENAME}"
                     # For x86_64: generate JS/dts bindings on host (skips cargo recompile)
                     if [[ "$TARGET" == "x86_64"* ]]; then
+                      # Fix ownership of target/ (was built as root inside docker)
+                      sudo chown -R "$(id -u):$(id -g)" target/
                       CARGO=true npx napi build --release --strip --platform \
                         --target "$TARGET" \
                         --js ../build-ts/native.js \
                         --dts ../build-ts/native.d.ts \
                         --js-package-name @valkey/valkey-glide \
-                        --target-dir ./target || true
+                        --target-dir ./target
                       # Ensure our manylinux .node is used (not any napi rebuild)
                       cp "target/release/libvalkey_glide.so" "${NODE_FILENAME}"
                     fi
