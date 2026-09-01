@@ -45,6 +45,39 @@ pub enum Expiry {
     PERSIST,
 }
 
+impl ToRedisArgs for Expiry {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
+        match self {
+            Expiry::EX(sec) => {
+                out.write_arg(b"EX");
+                out.write_arg_fmt(sec);
+            }
+            Expiry::PX(ms) => {
+                out.write_arg(b"PX");
+                out.write_arg_fmt(ms);
+            }
+            Expiry::EXAT(timestamp_sec) => {
+                out.write_arg(b"EXAT");
+                out.write_arg_fmt(timestamp_sec);
+            }
+            Expiry::PXAT(timestamp_ms) => {
+                out.write_arg(b"PXAT");
+                out.write_arg_fmt(timestamp_ms);
+            }
+            Expiry::PERSIST => {
+                out.write_arg(b"PERSIST");
+            }
+        }
+    }
+
+    fn is_single_arg(&self) -> bool {
+        false
+    }
+}
+
 /// Helper enum that is used to define expiry time for SET command
 #[derive(Clone, Copy)]
 pub enum SetExpiry {
@@ -58,6 +91,39 @@ pub enum SetExpiry {
     PXAT(usize),
     /// KEEPTTL -- Retain the time to live associated with the key.
     KEEPTTL,
+}
+
+impl ToRedisArgs for SetExpiry {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
+        match self {
+            SetExpiry::EX(secs) => {
+                out.write_arg(b"EX");
+                out.write_arg_fmt(secs);
+            }
+            SetExpiry::PX(millis) => {
+                out.write_arg(b"PX");
+                out.write_arg_fmt(millis);
+            }
+            SetExpiry::EXAT(unix_time) => {
+                out.write_arg(b"EXAT");
+                out.write_arg_fmt(unix_time);
+            }
+            SetExpiry::PXAT(unix_time) => {
+                out.write_arg(b"PXAT");
+                out.write_arg_fmt(unix_time);
+            }
+            SetExpiry::KEEPTTL => {
+                out.write_arg(b"KEEPTTL");
+            }
+        }
+    }
+
+    fn is_single_arg(&self) -> bool {
+        false
+    }
 }
 
 /// Helper enum that is used to define existence checks
