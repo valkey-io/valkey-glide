@@ -1450,7 +1450,8 @@ impl Client {
             cmd.clone()
         };
 
-        let request_timeout = Some(self.request_timeout);
+        // Blocking commands must honor their own timeout, not the flat request timeout.
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
 
         // Send with timeout
         let raw_value = match request_timeout {

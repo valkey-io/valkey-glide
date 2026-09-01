@@ -199,14 +199,27 @@ pub async fn execute_scope_command(
         cmd.arg(arg.as_slice());
     }
 
+    // Presume a blocking command's connection unsafe until it completes cleanly;
+    // any error leaves the flag set so release discards it.
+    let is_blocking = crate::client::is_blocking_command(&cmd);
+    if is_blocking {
+        conn.state.blocking_in_flight = true;
+    }
+
     // Execute via Client (gets timeout, decompression, IAM refresh) or raw fallback
-    match client {
+    let result = match client {
         Some(c) => {
             c.send_command_on_connection(&cmd, &mut conn.connection)
                 .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
+    };
+
+    if is_blocking && result.is_ok() {
+        conn.state.blocking_in_flight = false;
     }
+
+    result
 }
 
 /// Full-featured scope command execution with all cross-cutting concerns.

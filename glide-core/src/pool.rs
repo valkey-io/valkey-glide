@@ -643,6 +643,10 @@ pub struct ConnectionState {
     pub db_selected: u8,
     pub client_name_changed: bool,
     pub subscriptions: Vec<ScopeSubscription>,
+    /// Set while a blocking command is in flight; cleared only on clean completion.
+    /// A still-set connection may have an armed server-side waiter and is discarded
+    /// on release rather than reused.
+    pub blocking_in_flight: bool,
 }
 
 impl ConnectionState {
@@ -663,6 +667,7 @@ impl ConnectionState {
             && self.db_selected == configured_db
             && !self.client_name_changed
             && self.subscriptions.is_empty()
+            && !self.blocking_in_flight
     }
 
     /// Legacy check — clean means no state mutations at all (db must be 0).
@@ -902,6 +907,14 @@ impl ScopePool {
                     drop(conn);
                     self.idle.push_back(idle_conn);
                 } else {
+                    // A blocking command left the connection unrecoverable (armed
+                    // waiter); no cleanup command fixes that, so discard rather than
+                    // return to idle.
+                    if conn.state.blocking_in_flight {
+                        drop(conn);
+                        self.total_count.fetch_sub(1, Ordering::AcqRel);
+                        return true;
+                    }
                     // Dirty state — pipeline all cleanup commands in a single round-trip.
                     // If any command fails or the pipeline times out, discard the connection.
                     let conn_arc = entry.connection.clone();
@@ -1188,5 +1201,41 @@ pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option
             "Cross-slot error: command targets slot {} but scope is pinned to slot {}",
             first_slot, p
         )),
+    }
+}
+
+#[cfg(test)]
+mod connection_state_tests {
+    use super::ConnectionState;
+
+    const CONFIGURED_DB: u8 = 0;
+
+    #[test]
+    fn default_state_is_clean() {
+        let state = ConnectionState::default();
+        assert!(state.is_clean_for(CONFIGURED_DB));
+    }
+
+    #[test]
+    fn blocking_in_flight_marks_state_not_clean() {
+        // A connection whose blocking command has not cleanly completed must never
+        // be classified clean, so release discards it instead of returning it to
+        // idle with a possibly-armed server-side waiter.
+        let state = ConnectionState {
+            blocking_in_flight: true,
+            ..Default::default()
+        };
+        assert!(!state.is_clean_for(CONFIGURED_DB));
+    }
+
+    #[test]
+    fn blocking_in_flight_is_independent_of_other_dirty_flags() {
+        // The blocking flag alone taints the connection even when every other
+        // tracked mutation is in its clean baseline.
+        let state = ConnectionState {
+            blocking_in_flight: true,
+            ..Default::default()
+        };
+        assert!(!state.is_clean_for(CONFIGURED_DB));
     }
 }
