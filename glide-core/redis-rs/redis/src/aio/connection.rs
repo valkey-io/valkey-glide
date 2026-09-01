@@ -70,7 +70,7 @@ where
     Ok(())
 }
 #[cfg(feature = "tokio-comp")]
-use tokio_util::codec::Decoder;
+use tokio_util::codec::{Framed, FramedParts};
 
 /// Represents a stateful redis TCP connection.
 #[deprecated(note = "aio::Connection is deprecated. Use aio::MultiplexedConnection instead.")]
@@ -129,6 +129,17 @@ where
     /// Fetches a single response from the connection.
     async fn read_response(&mut self) -> RedisResult<Value> {
         crate::parser::parse_redis_value_async(&mut self.decoder, &mut self.con).await
+    }
+
+    /// Takes out the bytes the decoder read past the last parsed response.
+    ///
+    /// Ownership moves to the caller, so these bytes are parsed exactly once.
+    /// `combine`'s decoder has no in-place clear, so the reset is a replacement,
+    /// which is also how the decoder is built in the first place.
+    fn take_decoder_buffer(&mut self) -> bytes::BytesMut {
+        let leftover = bytes::BytesMut::from(self.decoder.buffer());
+        self.decoder = combine::stream::Decoder::new();
+        leftover
     }
 
     /// Brings [`Connection`] out of `PubSub` mode.
@@ -384,8 +395,11 @@ where
     /// The message itself is still generic and can be converted into an appropriate type through
     /// the helper methods on it.
     pub fn on_message(&mut self) -> impl Stream<Item = Msg> + '_ {
-        ValueCodec::default()
-            .framed(&mut self.0.con)
+        // Hand the buffered bytes to the stream rather than copying them: the stream
+        // owns them now, so leaving a copy behind would replay delivered messages on
+        // the next call.
+        let leftover = self.0.take_decoder_buffer();
+        framed_with_leftover(&mut self.0.con, leftover)
             .filter_map(|msg| Box::pin(async move { Msg::from_value(&msg.ok()?.ok()?) }))
     }
 
@@ -395,9 +409,9 @@ where
     /// the helper methods on it.
     /// This can be useful in cases where the stream needs to be returned or held by something other
     /// than the [`PubSub`].
-    pub fn into_on_message(self) -> impl Stream<Item = Msg> {
-        ValueCodec::default()
-            .framed(self.0.con)
+    pub fn into_on_message(mut self) -> impl Stream<Item = Msg> {
+        let leftover = self.0.take_decoder_buffer();
+        framed_with_leftover(self.0.con, leftover)
             .filter_map(|msg| Box::pin(async move { Msg::from_value(&msg.ok()?.ok()?) }))
     }
 
@@ -425,22 +439,55 @@ where
     }
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
-    pub fn on_message<T: FromRedisValue>(&mut self) -> impl Stream<Item = T> + '_ {
-        ValueCodec::default()
-            .framed(&mut self.0.con)
-            .filter_map(|value| {
-                Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
-            })
+    pub fn on_message<'a, T: FromRedisValue + 'a>(&'a mut self) -> impl Stream<Item = T> + 'a {
+        // Hand the buffered bytes to the stream rather than copying them: the stream
+        // owns them now, so leaving a copy behind would replay delivered lines on the
+        // next call.
+        let leftover = self.0.take_decoder_buffer();
+        monitor_stream(&mut self.0.con, leftover)
     }
 
     /// Returns [`Stream`] of [`FromRedisValue`] values from this [`Monitor`]ing connection
-    pub fn into_on_message<T: FromRedisValue>(self) -> impl Stream<Item = T> {
-        ValueCodec::default()
-            .framed(self.0.con)
-            .filter_map(|value| {
-                Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
-            })
+    pub fn into_on_message<T: FromRedisValue>(mut self) -> impl Stream<Item = T> {
+        let leftover = self.0.take_decoder_buffer();
+        monitor_stream(self.0.con, leftover)
     }
+}
+
+/// Builds a [`ValueCodec`] [`Framed`] over `con`, seeding its read buffer with
+/// the `leftover` bytes the connection decoder read past the handshake.
+///
+/// A stream handshake (`MONITOR`, `SUBSCRIBE`, `PSUBSCRIBE`) is parsed through
+/// `Connection::decoder`, which reads from the socket in chunks. Under load the
+/// server can pack the first stream payload into the same TCP segment as the
+/// handshake reply, leaving those bytes buffered inside the decoder. Building the
+/// stream's codec over the bare socket would drop that buffer, and the damage
+/// depends on how much was buffered: a complete frame is lost outright, while a
+/// partial frame leaves the new codec resuming mid-frame, which fails to parse and
+/// ends the stream before it delivers anything. Seeding the read buffer with the
+/// leftover bytes avoids both.
+///
+/// The `Monitor` and `PubSub` stream constructors all route through here, over the
+/// borrowed `&mut con` and the moved `con` alike, so every path stays in step.
+fn framed_with_leftover<C>(con: C, leftover: bytes::BytesMut) -> Framed<C, ValueCodec>
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+{
+    let mut parts = FramedParts::new::<Vec<u8>>(con, ValueCodec::default());
+    parts.read_buf = leftover;
+    Framed::from_parts(parts)
+}
+
+/// Builds a MONITOR line [`Stream`] over `con`, seeding the framed read buffer
+/// with the `leftover` bytes the connection decoder read past the handshake.
+fn monitor_stream<C, T>(con: C, leftover: bytes::BytesMut) -> impl Stream<Item = T>
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+    T: FromRedisValue,
+{
+    framed_with_leftover(con, leftover).filter_map(|value| {
+        Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
+    })
 }
 
 pub(crate) async fn get_socket_addrs(
@@ -545,4 +592,328 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
             )))
         }
     })
+}
+
+#[cfg(all(test, feature = "tokio-comp"))]
+mod monitor_tests {
+    use super::*;
+    use ::tokio::io::{duplex, AsyncWriteExt, DuplexStream};
+    use ::tokio::sync::oneshot;
+
+    // A MONITOR line as the server sends it: a RESP simple string.
+    const MONITOR_LINE: &str = "+1720000000.000000 [0 127.0.0.1:6379] \"SET\" \"k\" \"v\"\r\n";
+
+    // Wraps a `Monitor` around the client end of an in-memory duplex, matching a
+    // connection that has finished setup. The decoder starts empty; each test fills
+    // it by running the real `MONITOR` handshake through `monitor()`.
+    fn monitor_over(client: DuplexStream) -> Monitor<DuplexStream> {
+        Monitor::new(Connection {
+            con: client,
+            buf: Vec::new(),
+            decoder: combine::stream::Decoder::new(),
+            db: 0,
+            pubsub: false,
+            protocol: ProtocolVersion::RESP2,
+        })
+    }
+
+    // The server can pack the first monitor line into the same segment as the `+OK`
+    // handshake reply. `monitor()` reads `+OK` through the decoder, which over-reads
+    // and leaves the whole monitor line sitting in `decoder`. The borrowed
+    // `on_message()` has to hand that line back: dropping the buffer (the codec built
+    // over the bare socket) hangs here, because the socket has nothing left to read.
+    #[tokio::test]
+    async fn on_message_delivers_fully_buffered_line() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = String::from("+OK\r\n");
+        handshake.push_str(MONITOR_LINE);
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut monitor = monitor_over(client);
+        monitor.monitor().await.unwrap();
+
+        // Check the precondition instead of assuming it: the handshake read has to
+        // pull the whole monitor line into the decoder, so the socket holds nothing more.
+        assert_eq!(
+            monitor.0.decoder.buffer(),
+            MONITOR_LINE.as_bytes(),
+            "handshake did not buffer the monitor line, so the test would not exercise the handoff"
+        );
+
+        // Hold the server end open so a buffer-dropping stream blocks on the socket
+        // rather than seeing EOF, which makes a timeout here a real failure signal.
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
+        let _server_task = tokio::spawn(async move {
+            let _ = stop_rx.await;
+            drop(server);
+        });
+
+        let mut stream = monitor.on_message::<String>();
+        let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("borrowed on_message dropped the buffered monitor line")
+            .expect("stream ended before delivering the buffered monitor line");
+        assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+    }
+
+    // When only part of the first monitor line was buffered with `+OK`, the borrowed
+    // `on_message()` has to resume the frame from the buffered prefix and read the rest
+    // from the socket. A fresh codec over the bare socket starts mid-frame on the
+    // remaining bytes, hits a parse error, and ends the stream with zero lines.
+    #[tokio::test]
+    async fn on_message_recovers_partially_buffered_line() {
+        let (client, mut server) = duplex(4096);
+
+        let split = MONITOR_LINE.len() / 2;
+        let mut first = String::from("+OK\r\n");
+        first.push_str(&MONITOR_LINE[..split]);
+        server.write_all(first.as_bytes()).await.unwrap();
+
+        let mut monitor = monitor_over(client);
+        monitor.monitor().await.unwrap();
+
+        // Check the precondition: the prefix has to be sitting in the decoder mid-frame,
+        // which is what makes dropping it resume parsing at the wrong offset.
+        assert_eq!(
+            monitor.0.decoder.buffer(),
+            &MONITOR_LINE.as_bytes()[..split],
+            "handshake did not buffer the partial monitor line prefix"
+        );
+
+        // Send the remainder only after the handshake read has buffered the prefix.
+        let rest = MONITOR_LINE[split..].to_string();
+        let _server_task = tokio::spawn(async move {
+            server.write_all(rest.as_bytes()).await.unwrap();
+            ::tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            drop(server);
+        });
+
+        let mut stream = monitor.on_message::<String>();
+        let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("borrowed on_message terminated on the partially buffered line")
+            .expect("stream ended before delivering the partially buffered line");
+        assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+    }
+
+    // The borrowed path hands the decoder's bytes to the stream, so it also has to take
+    // them out of the decoder. Otherwise dropping one stream and building another
+    // replays lines the first stream already delivered.
+    #[tokio::test]
+    async fn on_message_does_not_replay_buffered_line_across_streams() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = String::from("+OK\r\n");
+        handshake.push_str(MONITOR_LINE);
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut monitor = monitor_over(client);
+        monitor.monitor().await.unwrap();
+        assert_eq!(monitor.0.decoder.buffer(), MONITOR_LINE.as_bytes());
+
+        {
+            let mut first = monitor.on_message::<String>();
+            let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), first.next())
+                .await
+                .expect("first borrowed stream did not deliver the buffered line")
+                .expect("first borrowed stream ended early");
+            assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+        }
+
+        // The first stream consumed the line, so a second stream must not see it again.
+        // Only the server's next write should ever surface here.
+        let mut second = monitor.on_message::<String>();
+        let replayed =
+            ::tokio::time::timeout(std::time::Duration::from_millis(200), second.next()).await;
+        assert!(
+            replayed.is_err(),
+            "second borrowed stream replayed an already-delivered line: {replayed:?}"
+        );
+
+        drop(second);
+        drop(server);
+    }
+}
+
+#[cfg(all(test, feature = "tokio-comp"))]
+mod pubsub_tests {
+    use super::*;
+    use ::tokio::io::{duplex, AsyncWriteExt, DuplexStream};
+    use ::tokio::sync::oneshot;
+
+    const CHANNEL: &str = "ch";
+    const PAYLOAD: &str = "hello";
+
+    // The RESP2 confirmation the server sends in reply to SUBSCRIBE.
+    fn subscribe_confirmation() -> String {
+        format!(
+            "*3\r\n$9\r\nsubscribe\r\n${}\r\n{}\r\n:1\r\n",
+            CHANNEL.len(),
+            CHANNEL
+        )
+    }
+
+    // The RESP2 frame for a published message on `CHANNEL`.
+    fn message_frame() -> String {
+        format!(
+            "*3\r\n$7\r\nmessage\r\n${}\r\n{}\r\n${}\r\n{}\r\n",
+            CHANNEL.len(),
+            CHANNEL,
+            PAYLOAD.len(),
+            PAYLOAD
+        )
+    }
+
+    // Wraps a `PubSub` around the client end of an in-memory duplex, matching a
+    // connection that has finished setup. The decoder starts empty; each test fills
+    // it by running the real `SUBSCRIBE` handshake through `subscribe()` in RESP2,
+    // where the confirmation is parsed through `decoder` and no_response is not set.
+    fn pubsub_over(client: DuplexStream) -> PubSub<DuplexStream> {
+        PubSub::new(Connection {
+            con: client,
+            buf: Vec::new(),
+            decoder: combine::stream::Decoder::new(),
+            db: 0,
+            pubsub: false,
+            protocol: ProtocolVersion::RESP2,
+        })
+    }
+
+    fn assert_expected_message(msg: Msg) {
+        assert_eq!(msg.get_channel_name(), CHANNEL, "unexpected channel");
+        assert_eq!(
+            msg.get_payload::<String>().unwrap(),
+            PAYLOAD,
+            "unexpected payload"
+        );
+    }
+
+    // The confirmation is parsed through the combine decoder, whose async read grows
+    // the buffer in increments, so it over-reads a prefix of the message frame rather
+    // than a fixed amount. Asserting that prefix is non-empty and lines up with the
+    // frame is enough to prove the handshake buffered bytes the stream must recover.
+    fn assert_buffered_prefix(buffered: &[u8]) {
+        let frame = message_frame();
+        assert!(
+            !buffered.is_empty(),
+            "handshake did not buffer any of the message frame, so the test would not exercise the handoff"
+        );
+        assert!(
+            frame.as_bytes().starts_with(buffered),
+            "buffered bytes are not a prefix of the message frame: {buffered:?}"
+        );
+    }
+
+    // The server can pack the first published message into the same segment as the
+    // subscribe confirmation. `subscribe()` reads the confirmation through the decoder,
+    // which over-reads and leaves the whole message frame sitting in `decoder`. The
+    // borrowed `on_message()` has to hand that frame back: dropping the buffer (the
+    // codec built over the bare socket) hangs here, because the socket has nothing
+    // left to read.
+    #[tokio::test]
+    async fn on_message_delivers_fully_buffered_message() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = subscribe_confirmation();
+        handshake.push_str(&message_frame());
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut pubsub = pubsub_over(client);
+        pubsub.subscribe(CHANNEL).await.unwrap();
+
+        assert_buffered_prefix(pubsub.0.decoder.buffer());
+
+        // Hold the server end open so a buffer-dropping stream blocks on the socket
+        // rather than seeing EOF, which makes a timeout here a real failure signal.
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
+        let _server_task = tokio::spawn(async move {
+            let _ = stop_rx.await;
+            drop(server);
+        });
+
+        let mut stream = pubsub.on_message();
+        let msg = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("borrowed on_message dropped the buffered message")
+            .expect("stream ended before delivering the buffered message");
+        assert_expected_message(msg);
+    }
+
+    // When only part of the first message was buffered with the confirmation, the
+    // borrowed `on_message()` has to resume the frame from the buffered prefix and read
+    // the rest from the socket. A fresh codec over the bare socket starts mid-frame on
+    // the remaining bytes, hits a parse error, and ends the stream with zero messages.
+    #[tokio::test]
+    async fn on_message_recovers_partially_buffered_message() {
+        let (client, mut server) = duplex(4096);
+
+        let frame = message_frame();
+        let split = frame.len() / 2;
+        let mut first = subscribe_confirmation();
+        first.push_str(&frame[..split]);
+        server.write_all(first.as_bytes()).await.unwrap();
+
+        let mut pubsub = pubsub_over(client);
+        pubsub.subscribe(CHANNEL).await.unwrap();
+
+        assert_eq!(
+            pubsub.0.decoder.buffer(),
+            &frame.as_bytes()[..split],
+            "handshake did not buffer the partial message prefix"
+        );
+
+        // Send the remainder only after the handshake read has buffered the prefix.
+        let rest = frame[split..].to_string();
+        let _server_task = tokio::spawn(async move {
+            server.write_all(rest.as_bytes()).await.unwrap();
+            ::tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            drop(server);
+        });
+
+        let mut stream = pubsub.on_message();
+        let msg = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("borrowed on_message terminated on the partially buffered message")
+            .expect("stream ended before delivering the partially buffered message");
+        assert_expected_message(msg);
+    }
+
+    // The borrowed path hands the decoder's bytes to the stream, so it also has to take
+    // them out of the decoder. Otherwise dropping one stream and building another
+    // replays messages the first stream already delivered.
+    #[tokio::test]
+    async fn on_message_does_not_replay_buffered_message_across_streams() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = subscribe_confirmation();
+        handshake.push_str(&message_frame());
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut pubsub = pubsub_over(client);
+        pubsub.subscribe(CHANNEL).await.unwrap();
+        assert_buffered_prefix(pubsub.0.decoder.buffer());
+
+        {
+            let mut first = pubsub.on_message();
+            let msg = ::tokio::time::timeout(std::time::Duration::from_secs(2), first.next())
+                .await
+                .expect("first borrowed stream did not deliver the buffered message")
+                .expect("first borrowed stream ended early");
+            assert_expected_message(msg);
+        }
+
+        // The first stream consumed the message, so a second stream must not see it
+        // again. Only the server's next write should ever surface here.
+        let mut second = pubsub.on_message();
+        let replayed =
+            ::tokio::time::timeout(std::time::Duration::from_millis(200), second.next()).await;
+        assert!(
+            replayed.is_err(),
+            "second borrowed stream replayed an already-delivered message: {replayed:?}"
+        );
+
+        drop(second);
+        drop(server);
+    }
 }
