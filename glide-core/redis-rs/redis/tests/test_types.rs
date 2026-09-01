@@ -22,24 +22,6 @@ mod types {
         assert!(!twobytesvec.is_single_arg());
     }
 
-    #[test]
-    fn test_expiry_is_single_arg() {
-        assert!(Expiry::PERSIST.is_single_arg());
-        assert!(!Expiry::EX(1).is_single_arg());
-        assert!(!Expiry::PX(1).is_single_arg());
-        assert!(!Expiry::EXAT(1).is_single_arg());
-        assert!(!Expiry::PXAT(1).is_single_arg());
-    }
-
-    #[test]
-    fn test_set_expiry_is_single_arg() {
-        assert!(SetExpiry::KEEPTTL.is_single_arg());
-        assert!(!SetExpiry::EX(1).is_single_arg());
-        assert!(!SetExpiry::PX(1).is_single_arg());
-        assert!(!SetExpiry::EXAT(1).is_single_arg());
-        assert!(!SetExpiry::PXAT(1).is_single_arg());
-    }
-
     /// The `FromRedisValue` trait provides two methods for parsing:
     /// - `fn from_redis_value(&Value) -> Result<T, RedisError>`
     /// - `fn from_owned_redis_value(Value) -> Result<T, RedisError>`
@@ -588,5 +570,68 @@ mod types {
                 ])
             )
         }
+    }
+
+    #[test]
+    fn test_expiry_is_single_arg() {
+        assert!(Expiry::PERSIST.is_single_arg());
+        assert!(!Expiry::EX(1).is_single_arg());
+        assert!(!Expiry::PX(1).is_single_arg());
+        assert!(!Expiry::EXAT(1).is_single_arg());
+        assert!(!Expiry::PXAT(1).is_single_arg());
+    }
+
+    #[test]
+    fn test_set_expiry_is_single_arg() {
+        assert!(SetExpiry::KEEPTTL.is_single_arg());
+        assert!(!SetExpiry::EX(1).is_single_arg());
+        assert!(!SetExpiry::PX(1).is_single_arg());
+        assert!(!SetExpiry::EXAT(1).is_single_arg());
+        assert!(!SetExpiry::PXAT(1).is_single_arg());
+    }
+
+    #[test]
+    fn test_expiry_to_redis_args() {
+        assert_eq!(
+            Expiry::EX(60).to_redis_args(),
+            vec![b"EX".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            Expiry::PX(60).to_redis_args(),
+            vec![b"PX".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            Expiry::EXAT(60).to_redis_args(),
+            vec![b"EXAT".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            Expiry::PXAT(60).to_redis_args(),
+            vec![b"PXAT".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(Expiry::PERSIST.to_redis_args(), vec![b"PERSIST".to_vec()]);
+    }
+
+    #[test]
+    fn test_set_expiry_to_redis_args() {
+        assert_eq!(
+            SetExpiry::EX(60).to_redis_args(),
+            vec![b"EX".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            SetExpiry::PX(60).to_redis_args(),
+            vec![b"PX".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            SetExpiry::EXAT(60).to_redis_args(),
+            vec![b"EXAT".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            SetExpiry::PXAT(60).to_redis_args(),
+            vec![b"PXAT".to_vec(), b"60".to_vec()]
+        );
+        assert_eq!(
+            SetExpiry::KEEPTTL.to_redis_args(),
+            vec![b"KEEPTTL".to_vec()]
+        );
     }
 }
