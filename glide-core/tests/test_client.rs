@@ -1797,6 +1797,88 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_connection_discarded_on_concurrent_release(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // Covers the release path taken when `release` races a command that still
+        // holds the connection lock: `try_lock` fails and release defers the work
+        // to a spawned task that locks the connection asynchronously. A blocking
+        // command that hasn't cleanly completed leaves an armed server-side waiter,
+        // so this deferred path must also discard the connection instead of parking
+        // it back in idle with default (clean-looking) state. We force the contended
+        // path deterministically by holding the connection lock ourselves while
+        // calling release, marking the state blocking-in-flight beforehand, then
+        // releasing the lock so the spawned task can run, and finally asserting the
+        // connection was discarded (not idle, not counted).
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // Clone the registry entry's connection Arc and hold its lock so that
+            // release's `try_lock` fails and the spawned (deferred) path is taken.
+            let registry = glide_core::pool::get_scope_registry();
+            let conn_arc = registry
+                .get(&scope.scope_id)
+                .expect("scope entry present before release")
+                .connection
+                .clone();
+            let mut guard = conn_arc.lock().await;
+            // Simulate a still-in-flight/cancelled blocking command.
+            guard.state.blocking_in_flight = true;
+
+            // Release while the lock is held -> Err(_)/try_lock-contention branch.
+            let released = {
+                let mut pool = scope.pool.lock().await;
+                pool.release(scope.scope_id, registry)
+            };
+            assert!(released, "release should report success even when deferred");
+
+            // Let the spawned task acquire the connection now that we release it.
+            drop(guard);
+
+            // Wait (bounded) for the deferred task to finish adjusting pool state.
+            let discarded = {
+                let mut discarded = false;
+                for _ in 0..200 {
+                    let pool = scope.pool.lock().await;
+                    if pool.idle.is_empty()
+                        && pool.total_count.load(std::sync::atomic::Ordering::Acquire) == 0
+                    {
+                        discarded = true;
+                        break;
+                    }
+                    drop(pool);
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+                discarded
+            };
+
+            let pool = scope.pool.lock().await;
+            assert!(
+                discarded,
+                "deferred release did not discard the blocking connection \
+                 (idle={}, total_count={})",
+                pool.idle.len(),
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire)
+            );
+            drop(pool);
+
+            glide_core::scope::unregister_client(scope.client_id);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(

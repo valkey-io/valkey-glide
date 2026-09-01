@@ -1052,10 +1052,12 @@ impl ScopePool {
                 true
             }
             Err(_) => {
-                // Connection is locked (execute still running) — spawn async release.
-                // This shouldn't happen in normal operation (release is called after
-                // execute completes), but handle gracefully rather than discarding.
+                // Connection is locked because a command is still executing (e.g. a
+                // blocking command racing a cancellation/release). Defer the release:
+                // once the lock is free, discard the connection if it was left in an
+                // unrecoverable state, otherwise return it to idle.
                 let conn_arc = entry.connection.clone();
+                let configured_db = self.configured_database_id as u8;
                 let pool_arc = {
                     let pools = get_client_scope_pools();
                     pools.get(&self.parent_client_id).map(|p| p.value().clone())
@@ -1063,6 +1065,20 @@ impl ScopePool {
 
                 tokio::spawn(async move {
                     let conn = conn_arc.lock().await;
+                    // Racing a still-running/cancelled blocking command: once we can
+                    // lock, inspect the state before it is reset to default. A
+                    // connection with a blocking command in flight may have an armed
+                    // server-side waiter that would steal a later push, and any other
+                    // dirty state is unrecoverable here (no cleanup pipeline runs on
+                    // this path), so discard rather than return it to idle.
+                    if !conn.state.is_clean_for(configured_db) {
+                        drop(conn);
+                        if let Some(pool_arc) = pool_arc {
+                            let pool = pool_arc.lock().await;
+                            pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                        }
+                        return;
+                    }
                     let idle_conn = ScopedConnection {
                         scope_id: conn.scope_id,
                         connection: conn.connection.clone(),
