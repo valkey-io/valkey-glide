@@ -1,0 +1,519 @@
+version: 0.2
+
+# buildspec-node-windows.yml
+# AWS CodeBuild buildspec for valkey-glide Node.js client - Windows
+#
+# Runs on: CodeBuild Reserved Capacity fleet, Windows Server 2022/2025
+#
+# ElastiCache lifecycle (USE_ELASTICACHE=true):
+#   - Cluster creation starts in background early in install phase
+#   - Rust + Node build happen in parallel with cluster spin-up
+#   - build phase waits for clusters before running npm test
+#   - post_build ALWAYS tears down clusters (even on build failure)
+#
+# Required environment variables:
+#   NODE_VERSION          - Node.js version, e.g. "20.18.0"
+#
+# Required when USE_ELASTICACHE=true:
+#   EC_SUBNET_GROUP       - ElastiCache subnet group name
+#   EC_SECURITY_GROUP     - (optional) security group ID
+#   NAME                  - prefix for generated cluster names
+#   AWS_REGION            - AWS region, e.g. "us-east-1"
+#
+# Required when USE_ELASTICACHE is not set:
+#   STANDALONE_ENDPOINT   - existing standalone endpoint
+#   CLUSTER_ENDPOINT      - existing cluster endpoint
+
+env:
+    variables:
+        NODE_VERSION: "20.18.0"
+        CARGO_TERM_COLOR: "always"
+        RUSTUP_TOOLCHAIN: "stable"
+        PROTOC: "C:\\Windows\\System32\\protoc.exe"
+
+phases:
+    install:
+        commands:
+            # -- 1. Node.js ----------------------------------------------------------
+            - |
+                Write-Host "=== Installing Node.js $env:NODE_VERSION ==="
+                if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                  Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  $env:PATH = "$env:ALLUSERSPROFILE\chocolatey\bin;$env:PATH"
+                }
+                $nodePath = "C:\Program Files\nodejs\node.exe"
+                if (Test-Path $nodePath) {
+                  Write-Host "Node.js already installed (cache hit), skipping choco install."
+                } else {
+                  choco install nodejs --version=$env:NODE_VERSION -y --no-progress
+                }
+                $env:PATH = "C:\Program Files\nodejs;$env:PATH"
+                node --version
+                npm --version
+
+            # -- 2. Install Python dependencies and start ElastiCache setup in background
+            # Runs in parallel with MSVC + Rust install (~10 min overlap).
+            # Uses Start-Process so env vars (AWS creds, EC_SUBNET_GROUP etc) are inherited.
+            # Output goes to $TEMP\ec-setup.log; PID saved to $TEMP\ec-setup.pid.
+            - |
+                if ($env:USE_ELASTICACHE -eq "true") {
+                  Write-Host "=== Installing node deps, boto3, and starting ElastiCache setup in background ==="
+
+                  # Install node deps first so ts-node is available for the background runner
+                  Set-Location node
+                  npm ci --prefer-offline
+                  if ($LASTEXITCODE -ne 0) { Write-Error "npm ci failed in node/"; Set-Location ..; exit 1 }
+                  Set-Location ..
+
+                  # Find the real Python executable, bypassing pyenv shims (.bat files)
+                  # which don't work correctly in child processes.
+                  # Strategy: resolve the shim chain to get the actual python.exe path.
+                  $pythonExe = $null
+
+                  # First try: find real python.exe under pyenv versions
+                  $pyenvVersions = "$env:USERPROFILE\.pyenv\pyenv-win\versions"
+                  if (Test-Path $pyenvVersions) {
+                    $latestPython = Get-ChildItem $pyenvVersions -Directory |
+                      Sort-Object Name -Descending | Select-Object -First 1
+                    if ($latestPython) {
+                      $candidate = Join-Path $latestPython.FullName "python.exe"
+                      if (Test-Path $candidate) { $pythonExe = $candidate }
+                    }
+                  }
+
+                  # Second try: find any python.exe on PATH that is not a .bat shim
+                  if (-not $pythonExe) {
+                    $pythonExe = Get-Command python.exe -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Source -notlike "*.bat" } |
+                      Select-Object -ExpandProperty Source -First 1
+                  }
+
+                  # Third try: well-known install locations
+                  if (-not $pythonExe) {
+                    $candidates = @(
+                      "C:\Python312\python.exe",
+                      "C:\Python311\python.exe",
+                      "C:\Python310\python.exe",
+                      "C:\Python39\python.exe"
+                    )
+                    foreach ($c in $candidates) {
+                      if (Test-Path $c) { $pythonExe = $c; break }
+                    }
+                  }
+
+                  if (-not $pythonExe) { Write-Error "Could not find a real python.exe"; exit 1 }
+                  Write-Host "Using Python: $pythonExe"
+
+                  # Install boto3 into this specific interpreter
+                  & $pythonExe -m pip install --quiet boto3
+
+                  # Prepend this Python's directory to PATH (session + machine level)
+                  # so child processes spawned by node resolve 'python' to the same exe.
+                  $pythonDir = Split-Path $pythonExe -Parent
+                  $env:PATH = "$pythonDir;$env:PATH"
+                  [System.Environment]::SetEnvironmentVariable("PATH", "$pythonDir;$([System.Environment]::GetEnvironmentVariable('PATH','Machine'))", "Machine")
+                  Write-Host "Python dir prepended to PATH: $pythonDir"
+
+                  $logFile = "$env:TEMP\ec-setup.log"
+                  $repoRoot = (Get-Location).Path
+
+                  $runner = "$env:TEMP\ec-setup-runner.js"
+                  $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
+                  $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
+                  $setupPath = "$repoRoot\node\tests\jest.globalSetup.ts".Replace('\', '/')
+                  $lines = @(
+                    "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true });",
+                    "const setup = require('$setupPath');",
+                    "setup.default().then(() => { console.log('[ec-setup] Done.'); process.exit(0); }).catch(err => { console.error('[ec-setup] FAILED:', err.message || err); process.exit(1); });"
+                  )
+                  $lines | Set-Content $runner -Encoding UTF8
+
+                  $proc = Start-Process -FilePath "node" `
+                    -ArgumentList $runner `
+                    -WorkingDirectory $repoRoot `
+                    -RedirectStandardOutput $logFile `
+                    -RedirectStandardError "$env:TEMP\ec-setup-err.log" `
+                    -NoNewWindow -PassThru
+
+                  $proc.Id | Set-Content "$env:TEMP\ec-setup.pid"
+                  Write-Host "ElastiCache setup started (PID $($proc.Id)), log: $logFile"
+                } else {
+                  Write-Host "USE_ELASTICACHE not set - skipping background ElastiCache setup"
+                }
+
+            # -- 3. MSVC Build Tools -------------------------------------------------
+            - |
+                Write-Host "=== Installing MSVC Build Tools ==="
+                if (Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio", "C:\Program Files\Microsoft Visual Studio", "C:\BuildTools" -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "Hostx64" } | Select-Object -First 1) {
+                  Write-Host "MSVC Build Tools already present, skipping install."
+                } else {
+                  Write-Host "Installing Visual Studio 2022 Build Tools with VC++ workload..."
+                  choco install visualstudio2022buildtools -y --no-progress --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet"
+                  Write-Host "MSVC Build Tools installed."
+                }
+                $msvcLink = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio", "C:\Program Files\Microsoft Visual Studio", "C:\BuildTools" -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "Hostx64.x64" } | Select-Object -First 1
+                if ($msvcLink) {
+                  $linkerDir = $msvcLink.DirectoryName
+                  $env:PATH = "$linkerDir;$env:PATH"
+                  [System.Environment]::SetEnvironmentVariable("PATH", "$linkerDir;$([System.Environment]::GetEnvironmentVariable('PATH', 'Machine'))", "Machine")
+                  Write-Host "MSVC linker dir added to PATH: $linkerDir"
+                  $linkVersion = (& $msvcLink.FullName 2>&1 | Select-Object -First 1)
+                  $global:LASTEXITCODE = 0
+                  Write-Host $linkVersion
+                } else {
+                  Write-Error "ERROR: MSVC link.exe not found after installation."
+                  exit 1
+                }
+
+            # -- 4. Rust toolchain ---------------------------------------------------
+            - |
+                Write-Host "=== Installing Rust stable toolchain ==="
+
+                # Always use machine-wide CARGO_HOME/RUSTUP_HOME for stable cache paths.
+                # We never migrate the user-level rustup because the migration copies stale
+                # proxies into C:\cargo\bin that break after rustup update.
+                # Instead, always run rustup-init into the machine-wide locations.
+                $CARGO_HOME  = "C:\cargo"
+                $RUSTUP_HOME = "C:\rustup"
+                [System.Environment]::SetEnvironmentVariable("CARGO_HOME",  $CARGO_HOME,  "Machine")
+                [System.Environment]::SetEnvironmentVariable("RUSTUP_HOME", $RUSTUP_HOME, "Machine")
+                $env:CARGO_HOME  = $CARGO_HOME
+                $env:RUSTUP_HOME = $RUSTUP_HOME
+                $env:PATH = "$CARGO_HOME\bin;$env:PATH"
+
+                # Remove ALL pre-installed Rust instances that shadow our rustup install.
+                # The AMI has Rust in multiple locations; we must clear them all.
+
+                # 1. Chocolatey Rust
+                if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  $chocoRust = choco list --local-only 2>$null | Select-String '^rust '
+                  if ($chocoRust) {
+                    Write-Host "Uninstalling Chocolatey Rust..."
+                    choco uninstall rust -y --no-progress 2>&1 | Out-Null
+                  }
+                }
+                foreach ($binName in @('cargo.exe','rustc.exe','rustup.exe')) {
+                  Remove-Item "C:\ProgramData\chocolatey\bin\$binName" -Force -ErrorAction SilentlyContinue
+                }
+
+                # 2. User-level rustup (ContainerAdministrator) - remove cargo/rustc shims
+                # so they can't shadow C:\cargo\bin in PATH.
+                foreach ($binName in @('cargo.exe','rustc.exe','rustup.exe')) {
+                  Remove-Item "$env:USERPROFILE\.cargo\bin\$binName" -Force -ErrorAction SilentlyContinue
+                }
+
+                # 3. Strip all known old Rust bin dirs from BOTH session and machine PATH
+                # so new processes (pre_build, build phases) also get the clean PATH.
+                $pathEntriesToRemove = @(
+                  "$env:USERPROFILE\.cargo\bin",
+                  "C:\Users\ContainerAdministrator\.cargo\bin",
+                  "C:\ProgramData\chocolatey\bin"
+                )
+                # Session PATH
+                $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notin $pathEntriesToRemove }) -join ';'
+                # Machine PATH - persists to all subsequent CodeBuild phase processes
+                $machinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $cleanMachinePath = ($machinePath -split ';' | Where-Object { $_ -notin $pathEntriesToRemove }) -join ';'
+                [System.Environment]::SetEnvironmentVariable('PATH', $cleanMachinePath, 'Machine')
+                Write-Host "Cleaned old Rust locations from session and machine PATH."
+
+                # Download and run rustup-init each time to ensure the proxy in C:\cargo\bin
+                # is created fresh and points to the correct stable toolchain.
+                # rustup-init is fast when the toolchain is already present (cache hit).
+                Write-Host "Running rustup-init to set up stable toolchain..."
+                $rustupInit = "$env:TEMP\rustup-init.exe"
+                Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupInit
+                $env:RUSTUP_INIT_SKIP_PATH_CHECK = "yes"
+                & $rustupInit -y --default-toolchain stable --no-modify-path 2>&1
+                if ($LASTEXITCODE -ne 0) { Write-Error "rustup-init failed"; exit 1 }
+
+                # Force update to latest stable to ensure edition2024 support
+                Write-Host "Updating Rust stable toolchain to latest..."
+                & "$CARGO_HOME\bin\rustup.exe" update stable 2>&1
+
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                [System.Environment]::SetEnvironmentVariable("RUSTUP_TOOLCHAIN", "stable", "Machine")
+
+                # Set CARGO env var to the toolchain binary (used by napi-rs build)
+                $cargoBin = "$RUSTUP_HOME\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe"
+                [System.Environment]::SetEnvironmentVariable("CARGO", $cargoBin, "Machine")
+                $env:CARGO = $cargoBin
+
+                # Add C:\cargo\bin to machine PATH so it persists to pre_build and build phases
+                $currentMachinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                if ($currentMachinePath -notlike "*C:\cargo\bin*") {
+                  [System.Environment]::SetEnvironmentVariable('PATH', "C:\cargo\bin;$currentMachinePath", 'Machine')
+                  Write-Host "Added C:\cargo\bin to machine PATH."
+                }
+
+                # Verify the proxy works and reports the updated version
+                Write-Host "Cargo version: $(& "$CARGO_HOME\bin\cargo.exe" --version)"
+                Write-Host "Rustc version: $(& "$CARGO_HOME\bin\rustc.exe" --version)"
+
+                if (Test-Path "C:\Windows\System32\link.exe") {
+                  $linkItem = Get-Item "C:\Windows\System32\link.exe" -ErrorAction SilentlyContinue
+                  $isMsvc = $false
+                  if ($linkItem) {
+                    $versionInfo = $linkItem.VersionInfo
+                    if ($versionInfo.CompanyName -match "Microsoft" -or $versionInfo.FileDescription -match "Microsoft") {
+                      $isMsvc = $true
+                    }
+                  }
+                  if (-not $isMsvc) {
+                    Remove-Item "C:\Windows\System32\link.exe" -Force
+                    Write-Host "Removed non-MSVC link.exe from System32"
+                  }
+                }
+
+                $vsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+                if (Test-Path $vsWhere) {
+                  $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+                  if ($vsPath) {
+                    $vcToolsVersion = Get-Content "$vsPath\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt" -ErrorAction SilentlyContinue
+                    if ($vcToolsVersion) {
+                      $vcToolsVersion = $vcToolsVersion.Trim()
+                      $linkerPath = "$vsPath\VC\Tools\MSVC\$vcToolsVersion\bin\Hostx64\x64"
+                      if (Test-Path $linkerPath) {
+                        $env:PATH = "$linkerPath;$env:PATH"
+                        [System.Environment]::SetEnvironmentVariable("PATH", "$linkerPath;$([System.Environment]::GetEnvironmentVariable('PATH', 'Machine'))", "Machine")
+                        Write-Host "MSVC linker path added: $linkerPath"
+                      }
+                    }
+                  }
+                }
+
+                $fallbackLinker = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
+                if (Test-Path $fallbackLinker) {
+                  $vcVer = (Get-ChildItem $fallbackLinker | Sort-Object Name -Descending | Select-Object -First 1).Name
+                  $linkerPath = "$fallbackLinker\$vcVer\bin\Hostx64\x64"
+                  if (Test-Path $linkerPath) {
+                    $env:PATH = "$linkerPath;$env:PATH"
+                    [System.Environment]::SetEnvironmentVariable("PATH", "$linkerPath;$([System.Environment]::GetEnvironmentVariable('PATH', 'Machine'))", "Machine")
+                    Write-Host "MSVC linker fallback path added: $linkerPath"
+                  }
+                }
+
+            # -- 5. protoc -----------------------------------------------------------
+            - |
+                Write-Host "=== Installing protoc ==="
+                if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                  Write-Host "protoc already present: $(protoc --version)"
+                } else {
+                  $protocZip = "$env:TEMP\protoc.zip"
+                  Invoke-WebRequest -Uri "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip" -OutFile $protocZip
+                  Expand-Archive -Path $protocZip -DestinationPath "$env:USERPROFILE\.local" -Force
+                  $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+                  Copy-Item -Path "$env:USERPROFILE\.local\bin\protoc.exe" -Destination "C:\Windows\System32\protoc.exe" -Force
+                }
+                # Resolve the actual protoc path after install-or-skip
+                $protocExe = (Get-Command protoc -ErrorAction SilentlyContinue).Source
+                if (-not $protocExe) { $protocExe = "C:\Windows\System32\protoc.exe" }
+                [System.Environment]::SetEnvironmentVariable("PROTOC", $protocExe, "Machine")
+                $env:PROTOC = $protocExe
+                Write-Host "PROTOC=$env:PROTOC"
+                protoc --version
+
+            # -- 6. TCP tuning -------------------------------------------------------
+            - |
+                Write-Host "=== Tuning TCP settings ==="
+                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpTimedWaitDelay" -Value 15 -Type DWord
+                netsh int ipv4 set dynamicport tcp start=10000 num=55535
+                Write-Host "TCP configured"
+
+    pre_build:
+        commands:
+            - |
+                # Rebuild PATH from machine registry so PowerShell picks up C:\cargo\bin
+                # that was added in the install phase. Simple prepend is not enough because
+                # PowerShell caches the command table at process start.
+                $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ";" + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                # Set CARGO to the rustup proxy so napi-rs delegates to the correct toolchain
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
+                Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
+                Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
+                Write-Host "Cargo version: $(& 'C:\cargo\bin\cargo.exe' --version)"
+
+            - |
+                Write-Host "Active cargo: $(Get-Command cargo | Select-Object -ExpandProperty Source)"
+                Write-Host "Cargo version: $(cargo --version)"
+
+            # -- Build test utilities ------------------------------------------------
+            - |
+                $env:PATH = "C:\cargo\bin;" + [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                Write-Host "=== Building test utilities ==="
+                Set-Location utils
+                npm ci
+                npm run build
+                Set-Location ..
+
+            # -- Build Node client ---------------------------------------------------
+            - |
+                # Ensure C:\cargo\bin is on PATH for this process - each CodeBuild
+                # command block is a new process that doesn't inherit session PATH changes.
+                $env:PATH = "C:\cargo\bin;" + [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
+                Write-Host "Cargo: $(& 'C:\cargo\bin\cargo.exe' --version)"
+                Write-Host "=== Building Node client ==="
+                Set-Location node
+                npm ci
+                npm run build:release
+                Set-Location ..
+
+    build:
+        commands:
+            - |
+                # Rebuild PATH from machine registry so PowerShell picks up C:\cargo\bin
+                # that was added in the install phase. Simple prepend is not enough because
+                # PowerShell caches the command table at process start.
+                $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ";" + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+                $env:RUSTUP_TOOLCHAIN = "stable"
+                $env:CARGO_HOME = "C:\cargo"
+                $env:RUSTUP_HOME = "C:\rustup"
+                # Set CARGO to the rustup proxy so napi-rs delegates to the correct toolchain
+                $env:CARGO = "C:\cargo\bin\cargo.exe"
+                Write-Host "C:\cargo\bin exists: $(Test-Path 'C:\cargo\bin')"
+                Write-Host "cargo.exe exists: $(Test-Path 'C:\cargo\bin\cargo.exe')"
+                Write-Host "Cargo version: $(& 'C:\cargo\bin\cargo.exe' --version)"
+
+            # -- Wait for ElastiCache setup, then run integration tests -------------
+            - |
+                if ($env:USE_ELASTICACHE -eq "true") {
+                  Write-Host "=== Waiting for ElastiCache cluster setup ==="
+                  $pidFile = "$env:TEMP\ec-setup.pid"
+                  $logFile = "$env:TEMP\ec-setup.log"
+                  $errFile = "$env:TEMP\ec-setup-err.log"
+                  $endpointsFile = "$env:TEMP\glide-windows-test-ec-endpoints.json"
+
+                  if (Test-Path $pidFile) {
+                    $pidContent = (Get-Content $pidFile -Raw).Trim()
+                    if ([string]::IsNullOrWhiteSpace($pidContent)) {
+                      Write-Error "PID file is empty - ElastiCache setup may have failed to start"
+                      exit 1
+                    }
+                    $setupPid = [int]$pidContent
+                    Write-Host "Waiting for PID $setupPid (max 25 min)..."
+                    $proc = Get-Process -Id $setupPid -ErrorAction SilentlyContinue
+                    if ($proc) {
+                      $proc.WaitForExit(1500000)  # 25 min in ms
+                    }
+
+                    if (Test-Path $logFile) {
+                      Write-Host "--- ElastiCache setup log ---"
+                      Get-Content $logFile
+                    }
+                    if (Test-Path $errFile) {
+                      $errContent = Get-Content $errFile
+                      if ($errContent) {
+                        Write-Host "--- ElastiCache setup stderr ---"
+                        Write-Host $errContent
+                      }
+                    }
+
+                    $proc = Get-Process -Id $setupPid -ErrorAction SilentlyContinue
+                    if ($proc -and -not $proc.HasExited) {
+                      Write-Error "ElastiCache setup timed out after 25 minutes!"
+                      Stop-Process -Id $setupPid -Force
+                      exit 1
+                    }
+
+                    if (-not (Test-Path $endpointsFile)) {
+                      Write-Error "ElastiCache setup failed - endpoints file not found at $endpointsFile"
+                      exit 1
+                    }
+                  } else {
+                    Write-Error "No PID file found - ElastiCache setup process did not start correctly"
+                    exit 1
+                  }
+
+                  $data = Get-Content $endpointsFile | ConvertFrom-Json
+                  $env:STANDALONE_ENDPOINT = $data.standaloneEndpoint
+                  $env:CLUSTER_ENDPOINT    = $data.clusterEndpoint
+                  Write-Host "Standalone: $env:STANDALONE_ENDPOINT"
+                  Write-Host "Cluster:    $env:CLUSTER_ENDPOINT"
+                }
+
+                # -- Run integration tests -------------------------------------------
+                Write-Host "=== Running integration tests ==="
+                if (-not (Test-Path "node/test-report.html")) {
+                  "<html><body>No test report generated</body></html>" | Set-Content "node/test-report.html"
+                }
+                Set-Location node
+
+                $testArgs = @("test", "--", "--runInBand", "--forceExit")
+
+                if ($env:STANDALONE_ENDPOINT) { $testArgs += "--standalone-endpoints=$env:STANDALONE_ENDPOINT" }
+                if ($env:CLUSTER_ENDPOINT)    { $testArgs += "--cluster-endpoints=$env:CLUSTER_ENDPOINT" }
+                if ($env:TLS_STANDALONE_ENDPOINT) { $testArgs += "--tls-standalone-endpoints=$env:TLS_STANDALONE_ENDPOINT" }
+                if ($env:TLS_CLUSTER_ENDPOINT)    { $testArgs += "--tls-cluster-endpoints=$env:TLS_CLUSTER_ENDPOINT" }
+                if ($env:TEST_NAME_PATTERN)   { $testArgs += "--testNamePattern=$env:TEST_NAME_PATTERN" }
+
+                $ignorePatterns = @("ServerModules")
+                if (-not $env:TLS_STANDALONE_ENDPOINT -and -not $env:TLS_CLUSTER_ENDPOINT) {
+                  $ignorePatterns += "TlsTest"
+                }
+                if ($env:USE_ELASTICACHE -eq "true") {
+                  $ignorePatterns += "MutualTLS"
+                }
+                foreach ($pattern in $ignorePatterns) { $testArgs += "--testPathIgnorePatterns=$pattern" }
+
+                Write-Host "Running: npm $($testArgs -join ' ')"
+                & npm @testArgs
+                $testExitCode = $LASTEXITCODE
+                Set-Location ..
+                exit $testExitCode
+
+    post_build:
+        commands:
+            - 'Write-Host "=== post_build: CODEBUILD_BUILD_SUCCEEDING=$env:CODEBUILD_BUILD_SUCCEEDING ==="'
+
+            # -- Always teardown ElastiCache clusters --------------------------------
+            # post_build runs even if build phase fails, so clusters are always cleaned up.
+            # Set SKIP_TEARDOWN=true in CodeBuild env vars to keep clusters alive for debugging.
+            - |
+                if ($env:USE_ELASTICACHE -eq "true" -and $env:SKIP_TEARDOWN -ne "true") {
+                  Write-Host "=== Tearing down ElastiCache clusters ==="
+                  $repoRoot = (Get-Location).Path
+                  $tsNodePath = "$repoRoot\node\node_modules\ts-node".Replace('\', '/')
+                  $tsConfigPath = "$repoRoot\node\tsconfig.json".Replace('\', '/')
+                  $teardownPath = "$repoRoot\node\tests\jest.globalTeardown.ts".Replace('\', '/')
+                  # Use a runner file instead of inline -e to avoid issues with spaces in paths
+                  $teardownRunner = "$env:TEMP\ec-teardown-runner.js"
+                  $teardownLines = @(
+                    "require('$tsNodePath').register({ project: '$tsConfigPath', transpileOnly: true });",
+                    "const td = require('$teardownPath');",
+                    "td.default().then(() => { console.log('[teardown] Done.'); process.exit(0); }).catch(err => { console.error('[teardown] Error:', err.message || err); process.exit(1); });"
+                  )
+                  $teardownLines | Set-Content $teardownRunner -Encoding UTF8
+                  & node $teardownRunner
+                  Write-Host "Teardown complete."
+                }
+
+cache:
+    paths:
+        # Rust build artifacts (incremental compilation)
+        - "node/rust-client/target/**/*"
+        - "glide-core/src/generated/**/*"
+        # Rust toolchain and registry (saves ~3-5 min on cache hit)
+        - "C:/rustup/toolchains/**/*"
+        - "C:/cargo/registry/**/*"
+        - "C:/cargo/git/**/*"
+        # Node modules (saves npm ci time)
+        - "node/node_modules/**/*"
+        - "utils/node_modules/**/*"
+
+artifacts:
+    files:
+        - "test-report*.html"
+    base-directory: "node"
+    discard-paths: yes

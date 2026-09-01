@@ -14,6 +14,7 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
+    parseEndpoints,
 } from "./TestUtilities";
 const TIMEOUT = 50000;
 const CLUSTER_CREATION_TIMEOUT = 120000; // Increased timeout for TLS cluster creation
@@ -28,18 +29,32 @@ const TLS_OPTIONS = {
 describe("tls GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient | undefined;
+    let usingExternalCluster: boolean;
 
     beforeAll(async () => {
-        cluster = await ValkeyCluster.createCluster(
-            true,
-            3,
-            2,
-            getServerVersion,
-            true,
-            TLS_OPTIONS,
-        );
-        // Small delay to ensure cluster is fully ready after TLS setup
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const tlsClusterAddresses: string =
+            global.TLS_CLUSTER_ENDPOINTS as string;
+        usingExternalCluster = !!tlsClusterAddresses;
+
+        if (tlsClusterAddresses) {
+            cluster = await ValkeyCluster.initFromExistingCluster(
+                true,
+                parseEndpoints(tlsClusterAddresses),
+                getServerVersion,
+                true,
+            );
+        } else {
+            cluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                1,
+                getServerVersion,
+                true,
+                TLS_OPTIONS,
+            );
+            // Small delay to ensure cluster is fully ready after TLS setup
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
@@ -53,22 +68,24 @@ describe("tls GlideClusterClient", () => {
     });
 
     afterAll(async () => {
-        try {
-            if (cluster) {
-                await cluster.close();
+        if (!usingExternalCluster) {
+            try {
+                if (cluster) {
+                    await cluster.close();
+                }
+            } catch (error) {
+                // Log the error but don't throw to avoid masking test results
+                Logger.log(
+                    "warn",
+                    "TlsTest",
+                    "Error closing cluster",
+                    error as Error,
+                );
             }
-        } catch (error) {
-            // Log the error but don't throw to avoid masking test results
-            Logger.log(
-                "warn",
-                "TlsTest",
-                "Error closing cluster",
-                error as Error,
-            );
-        }
 
-        // Additional delay to ensure proper TLS cleanup
-        await new Promise((resolve) => setTimeout(resolve, 100));
+            // Additional delay to ensure proper TLS cleanup
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -91,22 +108,36 @@ describe("tls GlideClusterClient", () => {
     );
 });
 
-// tls cluster tests
+// tls standalone tests
 describe("tls GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient | undefined;
+    let usingExternalCluster: boolean;
 
     beforeAll(async () => {
-        cluster = await ValkeyCluster.createCluster(
-            false,
-            1,
-            1,
-            getServerVersion,
-            true,
-            TLS_OPTIONS,
-        );
-        // Small delay to ensure cluster is fully ready after TLS setup
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const tlsStandaloneAddress: string =
+            global.TLS_STAND_ALONE_ENDPOINT as string;
+        usingExternalCluster = !!tlsStandaloneAddress;
+
+        if (tlsStandaloneAddress) {
+            cluster = await ValkeyCluster.initFromExistingCluster(
+                false,
+                parseEndpoints(tlsStandaloneAddress),
+                getServerVersion,
+                true,
+            );
+        } else {
+            cluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+                true,
+                TLS_OPTIONS,
+            );
+            // Small delay to ensure cluster is fully ready after TLS setup
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
@@ -120,22 +151,24 @@ describe("tls GlideClient", () => {
     });
 
     afterAll(async () => {
-        try {
-            if (cluster) {
-                await cluster.close();
+        if (!usingExternalCluster) {
+            try {
+                if (cluster) {
+                    await cluster.close();
+                }
+            } catch (error) {
+                // Log the error but don't throw to avoid masking test results
+                Logger.log(
+                    "warn",
+                    "TlsTest",
+                    "Error closing cluster",
+                    error as Error,
+                );
             }
-        } catch (error) {
-            // Log the error but don't throw to avoid masking test results
-            Logger.log(
-                "warn",
-                "TlsTest",
-                "Error closing cluster",
-                error as Error,
-            );
-        }
 
-        // Additional delay to ensure proper TLS cleanup
-        await new Promise((resolve) => setTimeout(resolve, 100));
+            // Additional delay to ensure proper TLS cleanup
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

@@ -14,6 +14,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
+            - utils/elasticache_manager.py
+            - .github/buildspec/node-windows.yml
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -27,6 +29,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
+            - utils/elasticache_manager.py
+            - .github/buildspec/node-windows.yml
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -445,3 +449,116 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-windows:
+        name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        permissions:
+            id-token: write
+            contents: read
+        #if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        timeout-minutes: 120
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
+                  aws-region: us-east-1
+                  role-duration-seconds: 7200
+
+            - name: Trigger CodeBuild and wait for result
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+                  REPORT_BUCKET: valkey-glide-win
+              run: |
+                  echo "Starting CodeBuild project ${PROJECT_NAME}..."
+                  BUILD_ID=$(aws codebuild start-build \
+                    --project-name "${PROJECT_NAME}" \
+                    --source-version "${GITHUB_SHA}" \
+                    --query 'build.id' \
+                    --output text)
+                  echo "Build started: ${BUILD_ID}"
+
+                  # Poll until the build reaches a terminal state (max 90 minutes)
+                  echo "Polling for build completion..."
+                  echo "CODEBUILD_BUILD_ID=${BUILD_ID}" >> "$GITHUB_ENV"
+                  POLL_START=$(date +%s)
+                  MAX_POLL_SECONDS=5400
+                  while true; do
+                    if (( $(date +%s) - POLL_START > MAX_POLL_SECONDS )); then
+                      echo "::error::CodeBuild polling timed out after ${MAX_POLL_SECONDS}s. Build ID: ${BUILD_ID}"
+                      exit 1
+                    fi
+                    STATUS=$(aws codebuild batch-get-builds \
+                      --ids "${BUILD_ID}" \
+                      --query 'builds[0].buildStatus' \
+                      --output text)
+                    echo "  Status: ${STATUS}"
+                    case "${STATUS}" in
+                      SUCCEEDED)
+                        echo "CodeBuild succeeded."
+                        break
+                        ;;
+                      FAILED|FAULT|STOPPED|TIMED_OUT)
+                        echo "::error::CodeBuild build ${BUILD_ID} finished with status: ${STATUS}"
+                        exit 1
+                        ;;
+                      IN_PROGRESS)
+                        sleep 30
+                        ;;
+                      *)
+                        echo "Unexpected status '${STATUS}', continuing to poll..."
+                        sleep 30
+                        ;;
+                    esac
+                  done
+
+                  # Download the test report from S3.
+                  # Get the exact artifact S3 location from CodeBuild build metadata
+                  # rather than guessing the key structure.
+                  ARTIFACT_URL=$(aws codebuild batch-get-builds \
+                    --ids "${BUILD_ID}" \
+                    --query 'builds[0].artifacts.location' \
+                    --output text 2>/dev/null || true)
+                  echo "CodeBuild artifact location: ${ARTIFACT_URL}"
+
+                  if [[ -n "${ARTIFACT_URL}" && "${ARTIFACT_URL}" != "None" ]]; then
+                    # artifacts.location is an S3 ARN (arn:aws:s3:::bucket/path) or s3://bucket/path.
+                    # Normalize to s3:// URI.
+                    if [[ "${ARTIFACT_URL}" == arn:aws:s3:::* ]]; then
+                      S3_URI="s3://${ARTIFACT_URL#arn:aws:s3:::}"
+                    else
+                      S3_URI="${ARTIFACT_URL}"
+                    fi
+                    echo "Downloading report from ${S3_URI}"
+                    # The artifact path may be a directory; use --recursive and find the html file.
+                    aws s3 cp "${S3_URI}/test-report.html" ./test-report-windows.html \
+                      || aws s3 cp "${S3_URI}" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3 path ${S3_URI}"
+                  else
+                    # Fallback: try the build-id prefix directly
+                    aws s3 cp "s3://${REPORT_BUCKET}/${BUILD_ID}/test-report.html" ./test-report-windows.html \
+                      || echo "Warning: could not download test report from S3"
+                  fi
+
+            - name: Stop CodeBuild on cancellation
+              if: cancelled()
+              shell: bash
+              env:
+                  PROJECT_NAME: GlideNodeWindows
+              run: |
+                  if [[ -n "${CODEBUILD_BUILD_ID}" ]]; then
+                    echo "Job cancelled - stopping CodeBuild build ${CODEBUILD_BUILD_ID}"
+                    aws codebuild stop-build --id "${CODEBUILD_BUILD_ID}" || true
+                  fi
+
+            - name: Upload Windows test report
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: node-test-report-windows-${{ github.run_id }}
+                  path: test-report-windows.html
+                  if-no-files-found: ignore

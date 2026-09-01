@@ -133,7 +133,10 @@ export function runBaseTests(config: {
     const BGSAVE_NOT_CANCELLED_RESPONSE =
         "Background saving is currently not in progress or scheduled";
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `should register client library name and version_%p`,
         async (protocol) => {
             await runTest(
@@ -318,7 +321,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `test config rewrite_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -340,7 +346,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `info stats before and after Config ResetStat is different_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -407,7 +416,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "save %p",
         async (protocol) => {
             await runTest(
@@ -432,7 +444,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "bgsave %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -458,7 +473,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "bgsaveSchedule %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -493,6 +511,8 @@ export function runBaseTests(config: {
                         return;
                     }
 
+                    if (process.env.USE_ELASTICACHE === "true") return; // BGSAVE CANCEL not supported on ElastiCache
+
                     await waitForSaveNotInProgress(client);
 
                     // When no save is in progress, BGSAVE CANCEL should return an error
@@ -512,7 +532,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "bgrewriteaof %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -540,7 +563,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyHistory %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -565,7 +591,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyLatest %p",
         async (protocol) => {
             await runTest(
@@ -605,7 +634,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "latencyReset %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1505,7 +1537,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         `config get and config set with multiple parameters_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
@@ -9904,7 +9939,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "object freq test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -9939,7 +9977,10 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+        ProtocolVersion.RESP2,
+        ProtocolVersion.RESP3,
+    ])(
         "object idletime test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -13742,7 +13783,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([
+    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
