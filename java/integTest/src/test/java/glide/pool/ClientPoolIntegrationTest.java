@@ -112,10 +112,7 @@ public class ClientPoolIntegrationTest {
             return glide.api.GlideClient.createClient(
                             GlideClientConfiguration.builder()
                                     .address(
-                                            NodeAddress.builder()
-                                                    .host(parts[0])
-                                                    .port(Integer.parseInt(parts[1]))
-                                                    .build())
+                                            NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
                                     .requestTimeout(5000)
                                     .build())
                     .get(10, TimeUnit.SECONDS);
@@ -375,9 +372,7 @@ public class ClientPoolIntegrationTest {
                     "still-alive",
                     client.get(key).get(5, TimeUnit.SECONDS),
                     () ->
-                            "pooled client "
-                                    + client.getClientId()
-                                    + " was evicted by an ordinary-client close");
+                            "pooled client " + client.getClientId() + " was evicted by an ordinary-client close");
             client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
         }
 
