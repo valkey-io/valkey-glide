@@ -11,6 +11,29 @@ use glide_core::pool::{self, ClientPool, ClientState, POOL_RUNNING, PoolConfig, 
 use glide_core::scope;
 use std::sync::atomic::Ordering as AtomicOrdering;
 
+/// Whether the diagnostic timeout watchdog should be armed for a scoped command.
+///
+/// The watchdog arms at the flat client request timeout and aborts the command
+/// when it fires. That is meaningless for a blocking command, which is expected
+/// to wait far longer than the request timeout (the authoritative deadline for
+/// blocking commands is derived per-command in `send_command_on_connection`).
+/// Arming it would wrongly abort a blocking scoped command, so skip it for those
+/// and let the command block for as long as its own semantics allow.
+fn should_arm_watchdog(cmd: &redis::Cmd) -> bool {
+    !glide_core::client::is_blocking_command(cmd)
+}
+
+/// Build a `redis::Cmd` from a deserialized scope command name and args, so it can
+/// be inspected (e.g. for blocking-command detection) before dispatch.
+fn build_scope_cmd(cmd_name: &str, args: &[Vec<u8>]) -> redis::Cmd {
+    let mut cmd = redis::Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(arg.as_slice());
+    }
+    cmd
+}
+
 /// Pool creation/acquire error codes
 const POOL_ERROR_INVALID_CONFIG: i64 = -1;
 #[allow(dead_code)] // used in future pool expansion (documented in FFI contract)
@@ -697,12 +720,18 @@ pub unsafe extern "C" fn glide_scope_execute_async(
             .as_ref()
             .map(|c| c.get_request_timeout())
             .unwrap_or(std::time::Duration::from_millis(250));
-        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
-            .register(timeout_duration, cmd_start);
+
+        // Skip the watchdog for blocking commands: it would abort them at the flat
+        // request timeout. Blocking commands manage their own deadline in the core.
+        let arm_watchdog = should_arm_watchdog(&build_scope_cmd(&cmd_name, &args));
 
         // Execute with watchdog race — send_scope_command handles CB, inflight,
         // compression, latency recording internally
-        let result = {
+        let result = if !arm_watchdog {
+            scope::send_scope_command(scope_id, &cmd_name, &mut args, client.as_ref()).await
+        } else {
+            let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
+                .register(timeout_duration, cmd_start);
             let execute =
                 scope::send_scope_command(scope_id, &cmd_name, &mut args, client.as_ref());
             tokio::pin!(execute);
@@ -941,10 +970,23 @@ pub unsafe extern "C" fn glide_scope_execute(
         .as_ref()
         .map(|c| c.get_request_timeout())
         .unwrap_or(std::time::Duration::from_millis(250));
-    let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
-        .register(timeout_duration, cmd_start);
+
+    // Skip the watchdog for blocking commands: it would abort them at the flat
+    // request timeout. Blocking commands manage their own deadline in the core.
+    let arm_watchdog = should_arm_watchdog(&build_scope_cmd(&cmd_name, &args));
 
     let result = runtime.block_on(async {
+        if !arm_watchdog {
+            return scope::send_scope_command(
+                scope_id,
+                &cmd_name,
+                &mut args,
+                parent_client.as_ref(),
+            )
+            .await;
+        }
+        let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
+            .register(timeout_duration, cmd_start);
         let execute =
             scope::send_scope_command(scope_id, &cmd_name, &mut args, parent_client.as_ref());
         tokio::pin!(execute);
@@ -1075,5 +1117,42 @@ pub unsafe extern "C" fn glide_scope_execute(
                 arena: std::ptr::null_mut(),
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod watchdog_gating_tests {
+    use super::{build_scope_cmd, should_arm_watchdog};
+
+    fn arms(cmd_name: &str, args: &[&str]) -> bool {
+        let args: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+        should_arm_watchdog(&build_scope_cmd(cmd_name, &args))
+    }
+
+    #[test]
+    fn non_blocking_commands_arm_the_watchdog() {
+        assert!(arms("GET", &["key"]));
+        assert!(arms("SET", &["key", "value"]));
+        assert!(arms("LPUSH", &["key", "value"]));
+    }
+
+    #[test]
+    fn blocking_commands_skip_the_watchdog() {
+        // Arming the diagnostic watchdog for these would abort them at the flat
+        // request timeout, defeating their blocking semantics.
+        assert!(!arms("BLPOP", &["key", "0"]));
+        assert!(!arms("BLPOP", &["key", "5"]));
+        assert!(!arms("BRPOP", &["key", "0"]));
+        assert!(!arms("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"]));
+        assert!(!arms("BZPOPMIN", &["key", "0"]));
+        assert!(!arms("WAIT", &["0", "100"]));
+    }
+
+    #[test]
+    fn xread_is_blocking_only_with_the_block_option() {
+        // XREAD/XREADGROUP block only when BLOCK is present; a plain XREAD is a
+        // normal command and should keep watchdog coverage.
+        assert!(!arms("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"]));
+        assert!(arms("XREAD", &["COUNT", "10", "STREAMS", "s", "0"]));
     }
 }
