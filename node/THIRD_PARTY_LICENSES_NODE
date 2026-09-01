@@ -7884,7 +7884,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: chacha20:0.10.1
+Package: chacha20:0.10.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -8342,7 +8342,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: combine:4.6.7
+Package: combine:4.6.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9079,7 +9079,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: cpufeatures:0.3.0
+Package: cpufeatures:0.3.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13047,7 +13047,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: flate2:1.1.9
+Package: flate2:1.1.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17197,7 +17197,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: h2:0.4.18
+Package: h2:0.4.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18367,7 +18367,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hermit-abi:0.5.2
+Package: hermit-abi:0.5.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20045,7 +20045,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hyper:1.11.0
+Package: hyper:1.11.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21978,7 +21978,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: indexmap:2.14.0
+Package: indexmap:2.14.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24540,7 +24540,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: libredox:0.1.20
+Package: libredox:0.1.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25677,7 +25677,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: miniz_oxide:0.8.9
+Package: miniz_oxide:0.9.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33736,7 +33736,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.8.7
+Package: rand:0.8.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42825,7 +42825,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:3.0.3
+Package: syn:3.0.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47749,7 +47749,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.25.0
+Package: uuid:1.26.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -58061,6 +58061,30 @@ authorization of the copyright holder.
 
 ----
 
+Package: zlib-rs:0.6.7
+
+The following copyrights and licenses were found in the source code of this package:
+
+This software is provided 'as-is', without any express or implied warranty. In no
+event will the authors be held liable for any damages arising from the use of this
+software.
+
+Permission is granted to anyone to use this software for any purpose, including
+commercial applications, and to alter it and redistribute it freely, subject to
+the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim that
+   you wrote the original software. If you use this software in a product, an
+   acknowledgment in the product documentation would be appreciated but is not
+   required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
+
+----
+
 Package: zmij:1.0.23
 
 The following copyrights and licenses were found in the source code of this package:
@@ -58777,7 +58801,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: protobufjs:7.6.5
+Package: protobufjs:7.6.6
 
 The following copyrights and licenses were found in the source code of this package:
 
