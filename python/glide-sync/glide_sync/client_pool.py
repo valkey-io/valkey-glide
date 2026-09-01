@@ -271,11 +271,27 @@ class ClientPool:
             return client
 
     def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
+        """Get pool metrics: idle, active, total counts.
+
+        ``glide_pool_metrics`` reads the counts under a non-blocking
+        ``try_lock`` and returns -1 when the pool lock is momentarily held (for
+        example by a background provisioning thread pushing a freshly created
+        client to the idle stack). The out-params are left untouched on that
+        path, so without a retry the caller would observe a spurious all-zero
+        reading for a pool that actually has idle clients. Retry briefly on the
+        transient contention so a live pool is never misreported as empty.
+        """
+        import time
+
         idle = self._ffi.new("uint32_t*")
         active = self._ffi.new("uint32_t*")
         total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
+        result = -1
+        for _ in range(200):
+            result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
+            if result == 0:
+                break
+            time.sleep(0.001)
         if result != 0:
             return {"idle": 0, "active": 0, "total": 0}
         return {"idle": idle[0], "active": active[0], "total": total[0]}
