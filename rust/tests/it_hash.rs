@@ -288,7 +288,7 @@ matrix_test!(hsetex, c, {
     skip_unless_command!(c, "HSETEX");
     let k = common::key("h_setex");
 
-    // HSETEX wuth FNX and EX.
+    // HSETEX with FNX and EX.
     let res = c
         .hsetex(
             &k,
