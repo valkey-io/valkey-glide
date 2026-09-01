@@ -734,6 +734,58 @@ mod monitor_tests {
         drop(second);
         drop(server);
     }
+
+    // The handshake read can over-read more than one line: two lines can share the
+    // segment that carried `+OK`, so both land in the decoder. A single borrowed
+    // stream owns the whole leftover, so it has to hand back both lines in order,
+    // decoding the second from the seeded buffer once the first is consumed.
+    #[tokio::test]
+    async fn on_message_delivers_two_buffered_lines() {
+        let (client, mut server) = duplex(4096);
+
+        let mut handshake = String::from("+OK\r\n");
+        handshake.push_str(MONITOR_LINE);
+        handshake.push_str(MONITOR_LINE);
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut monitor = monitor_over(client);
+        monitor.monitor().await.unwrap();
+
+        // The read that satisfies `+OK` over-reads a prefix of the two lines; whatever
+        // it buffered has to line up with them, and the stream reads any remainder from
+        // the socket.
+        let two_lines = format!("{MONITOR_LINE}{MONITOR_LINE}");
+        let buffered = monitor.0.decoder.buffer();
+        assert!(
+            !buffered.is_empty(),
+            "handshake did not buffer any of the monitor lines, so the test would not exercise the two-frame handoff"
+        );
+        assert!(
+            two_lines.as_bytes().starts_with(buffered),
+            "buffered bytes are not a prefix of the two monitor lines: {buffered:?}"
+        );
+
+        // Hold the server end open so a stream that mishandles the second line blocks
+        // on the socket rather than seeing EOF, which makes a timeout a real failure.
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
+        let _server_task = tokio::spawn(async move {
+            let _ = stop_rx.await;
+            drop(server);
+        });
+
+        let mut stream = monitor.on_message::<String>();
+        for nth in ["first", "second"] {
+            let line = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+                .await
+                .unwrap_or_else(|_| {
+                    panic!("borrowed on_message did not deliver the {nth} buffered line")
+                })
+                .unwrap_or_else(|| {
+                    panic!("stream ended before delivering the {nth} buffered line")
+                });
+            assert!(line.contains("\"SET\""), "unexpected monitor line: {line}");
+        }
+    }
 }
 
 #[cfg(all(test, feature = "tokio-comp"))]
@@ -915,5 +967,58 @@ mod pubsub_tests {
 
         drop(second);
         drop(server);
+    }
+
+    // The handshake read can over-read more than one message: two messages can share
+    // the segment that carried the subscribe confirmation, so both land in the decoder.
+    // A single borrowed stream owns the whole leftover, so it has to hand back both
+    // messages in order, decoding the second from the seeded buffer once the first is
+    // consumed.
+    #[tokio::test]
+    async fn on_message_delivers_two_buffered_messages() {
+        let (client, mut server) = duplex(4096);
+
+        let frame = message_frame();
+        let mut handshake = subscribe_confirmation();
+        handshake.push_str(&frame);
+        handshake.push_str(&frame);
+        server.write_all(handshake.as_bytes()).await.unwrap();
+
+        let mut pubsub = pubsub_over(client);
+        pubsub.subscribe(CHANNEL).await.unwrap();
+
+        // The decoder over-reads a prefix of the two frames; whatever it buffered has
+        // to line up with them, and the stream reads any remainder from the socket.
+        let two_frames = format!("{frame}{frame}");
+        let buffered = pubsub.0.decoder.buffer();
+        assert!(
+            !buffered.is_empty(),
+            "handshake did not buffer any of the message frames, so the test would not exercise the two-frame handoff"
+        );
+        assert!(
+            two_frames.as_bytes().starts_with(buffered),
+            "buffered bytes are not a prefix of the two message frames: {buffered:?}"
+        );
+
+        // Hold the server end open so a stream that mishandles the second message blocks
+        // on the socket rather than seeing EOF, which makes a timeout a real failure.
+        let (_stop_tx, stop_rx) = oneshot::channel::<()>();
+        let _server_task = tokio::spawn(async move {
+            let _ = stop_rx.await;
+            drop(server);
+        });
+
+        let mut stream = pubsub.on_message();
+        for nth in ["first", "second"] {
+            let msg = ::tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+                .await
+                .unwrap_or_else(|_| {
+                    panic!("borrowed on_message did not deliver the {nth} buffered message")
+                })
+                .unwrap_or_else(|| {
+                    panic!("stream ended before delivering the {nth} buffered message")
+                });
+            assert_expected_message(msg);
+        }
     }
 }
