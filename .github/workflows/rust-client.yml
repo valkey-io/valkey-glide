@@ -1,0 +1,80 @@
+name: Rust client tests
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - rust/**
+            - glide-core/**
+            - logger_core/**
+            - utils/cluster_manager.py
+            - .github/workflows/rust-client.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+    pull_request:
+        paths:
+            - rust/**
+            - glide-core/**
+            - logger_core/**
+            - utils/cluster_manager.py
+            - .github/workflows/rust-client.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+    workflow_dispatch:
+
+concurrency:
+    group: rust-client-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  persist-credentials: false
+
+            - name: Install shared software dependencies
+              uses: ./.github/actions/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  engine-version: "9.0"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run rust client tests
+              working-directory: ./rust
+              run: cargo test
+
+    # TODO #6519: This standalone deny job runs the client's dependency closure
+    # against the shared root deny.toml. It is expected to be folded into the
+    # shared Rust lint tooling (see .github/workflows/lint-rust) in future work.
+    deny:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+              with:
+                  target: x86_64-unknown-linux-gnu
+
+            - name: Install cargo-deny
+              run: cargo install --locked cargo-deny
+
+            - name: cargo deny check
+              working-directory: ./rust
+              run: cargo deny --config ${GITHUB_WORKSPACE}/deny.toml check

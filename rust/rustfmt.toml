@@ -1,0 +1,3 @@
+# Formatting config. Kept minimal so `rustfmt` (standalone) matches `cargo fmt`
+# defaults for this crate's edition; run `cargo fmt` to apply.
+edition = "2024"
