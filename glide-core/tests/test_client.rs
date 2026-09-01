@@ -1800,16 +1800,19 @@ pub(crate) mod shared_client_tests {
     fn test_scoped_blocking_connection_discarded_on_concurrent_release(
         #[values(false, true)] use_cluster: bool,
     ) {
-        // Covers the release path taken when `release` races a command that still
-        // holds the connection lock: `try_lock` fails and release defers the work
-        // to a spawned task that locks the connection asynchronously. A blocking
-        // command that hasn't cleanly completed leaves an armed server-side waiter,
-        // so this deferred path must also discard the connection instead of parking
-        // it back in idle with default (clean-looking) state. We force the contended
-        // path deterministically by holding the connection lock ourselves while
-        // calling release, marking the state blocking-in-flight beforehand, then
-        // releasing the lock so the spawned task can run, and finally asserting the
-        // connection was discarded (not idle, not counted).
+        // Guards the clear-then-requeue race on the deferred release path. When
+        // `release` races a command still holding the connection lock, `try_lock`
+        // fails and the work is deferred to a spawned task. A binding may cancel a
+        // blocking command and release the scope while the native command is still
+        // parked; if a push then satisfies it, the command completes and clears its
+        // in-flight marker. A release that re-inspected state *after* the command
+        // finished would see a clean connection and requeue it — even though the
+        // push was already consumed. Correct behaviour is to discard from the fact
+        // that release raced an in-flight command, not from post-completion state.
+        //
+        // We reproduce deterministically: hold the lock so release defers, then
+        // reset the state to clean BEFORE the deferred task runs, then release the
+        // lock and assert the connection is still discarded.
         block_on_all(async {
             let config = TestConfiguration {
                 request_timeout: Some(1), // millisecond
@@ -1832,8 +1835,6 @@ pub(crate) mod shared_client_tests {
                 .connection
                 .clone();
             let mut guard = conn_arc.lock().await;
-            // Simulate a still-in-flight/cancelled blocking command.
-            guard.state.blocking_in_flight = true;
 
             // Release while the lock is held -> Err(_)/try_lock-contention branch.
             let released = {
@@ -1841,6 +1842,17 @@ pub(crate) mod shared_client_tests {
                 pool.release(scope.scope_id, registry)
             };
             assert!(released, "release should report success even when deferred");
+
+            // Simulate the racing blocking command completing (a late push arrived)
+            // and clearing every marker before the deferred task runs. This is the
+            // exact window the old post-completion state check got wrong: the
+            // connection now looks perfectly clean.
+            guard.state = glide_core::pool::ConnectionState::with_configured_db(0);
+            assert!(
+                guard.state.is_clean_for(0),
+                "precondition: state must look clean so a post-completion check \
+                 would (wrongly) requeue"
+            );
 
             // Let the spawned task acquire the connection now that we release it.
             drop(guard);
@@ -1865,8 +1877,8 @@ pub(crate) mod shared_client_tests {
             let pool = scope.pool.lock().await;
             assert!(
                 discarded,
-                "deferred release did not discard the blocking connection \
-                 (idle={}, total_count={})",
+                "deferred release requeued a connection that raced an in-flight \
+                 blocking command (clear-then-requeue race): idle={}, total_count={}",
                 pool.idle.len(),
                 pool.total_count.load(std::sync::atomic::Ordering::Acquire)
             );

@@ -1052,52 +1052,26 @@ impl ScopePool {
                 true
             }
             Err(_) => {
-                // Connection is locked because a command is still executing (e.g. a
-                // blocking command racing a cancellation/release). Defer the release:
-                // once the lock is free, discard the connection if it was left in an
-                // unrecoverable state, otherwise return it to idle.
+                // A command still holds the connection lock while we release it —
+                // in practice a blocking command whose binding side was cancelled
+                // while the native task kept running. Discard the connection: it may
+                // have an armed server-side waiter, and deciding here (rather than
+                // re-checking state after the command finishes) avoids a race where a
+                // late push satisfies the command, clears its state, and makes the
+                // connection look reusable even though the push was already consumed.
                 let conn_arc = entry.connection.clone();
-                let configured_db = self.configured_database_id as u8;
                 let pool_arc = {
                     let pools = get_client_scope_pools();
                     pools.get(&self.parent_client_id).map(|p| p.value().clone())
                 };
 
                 tokio::spawn(async move {
+                    // Wait for the command to release the lock, then drop and account.
                     let conn = conn_arc.lock().await;
-                    // Racing a still-running/cancelled blocking command: once we can
-                    // lock, inspect the state before it is reset to default. A
-                    // connection with a blocking command in flight may have an armed
-                    // server-side waiter that would steal a later push, and any other
-                    // dirty state is unrecoverable here (no cleanup pipeline runs on
-                    // this path), so discard rather than return it to idle.
-                    if !conn.state.is_clean_for(configured_db) {
-                        drop(conn);
-                        if let Some(pool_arc) = pool_arc {
-                            let pool = pool_arc.lock().await;
-                            pool.total_count.fetch_sub(1, Ordering::AcqRel);
-                        }
-                        return;
-                    }
-                    let idle_conn = ScopedConnection {
-                        scope_id: conn.scope_id,
-                        connection: conn.connection.clone(),
-                        created_at: conn.created_at,
-                        last_idle_at: Instant::now(),
-                        borrowed_at: None,
-                        state: ConnectionState::default(),
-                        pinned_slot: None,
-                        target_slot: conn.target_slot,
-                    };
                     drop(conn);
-
                     if let Some(pool_arc) = pool_arc {
-                        let mut pool = pool_arc.lock().await;
-                        if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
-                            pool.idle.push_back(idle_conn);
-                        } else {
-                            pool.total_count.fetch_sub(1, Ordering::AcqRel);
-                        }
+                        let pool = pool_arc.lock().await;
+                        pool.total_count.fetch_sub(1, Ordering::AcqRel);
                     }
                 });
                 true
