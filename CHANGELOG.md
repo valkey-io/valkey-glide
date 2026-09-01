@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Heal the process-global `TimeoutWatchdog` after `fork()`. A forked child inherited the parent's watchdog pointer but not its thread, so registering a command's deadline on it killed the child with `SIGTRAP` on macOS — below the language VM, where no exception could catch it. `global()` now records the PID that built each instance and installs a replacement when it observes one owned by another process, so every binding is covered without needing to call anything; the `reinit_global()` hook it replaces is removed. ([#6672](https://github.com/valkey-io/valkey-glide/issues/6672))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
