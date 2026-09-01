@@ -5,7 +5,8 @@ mod common;
 
 use glide::AsyncCommands;
 use glide::HashCommands;
-use glide::commands::options::ExpireOptions; // surviving native extensions: hmget, hstrlen, hrandfield*, hexpire/httl/etc.
+use glide::commands::options::{ExpireOptions, HashFieldConditionalChange};
+use redis::{Expiry, SetExpiry};
 
 matrix_test!(hset_hget, c, {
     let k = common::key("h");
@@ -184,23 +185,25 @@ matrix_test!(hset_wrong_type_errors, c, {
 });
 
 // ---------------------------------------------------------------------------
-// Hash-field TTL (Valkey/Redis 7.4+). Gated on the server actually supporting
-// HEXPIRE (via COMMAND INFO) rather than a version number.
+// Hash-field TTL (Valkey/Redis 7.4+).
 // ---------------------------------------------------------------------------
 
 matrix_test!(hexpire_and_httl, c, {
     skip_unless_command!(c, "HEXPIRE");
     let k = common::key("h_ttl");
+
     let _: () = c
         .hset_multiple(&k, &[("f1", "v1"), ("f2", "v2")])
         .await
         .unwrap();
+
     // Set a 100s TTL on f1 only.
     let res = c.hexpire(&k, 100, &["f1"], None).await.unwrap();
     assert_eq!(res, vec![1]); // 1 = expiry set
+
     // HTTL: f1 has a positive TTL, f2 has none (-1), missing field is -2.
     let ttls = c.httl(&k, &["f1", "f2", "missing"]).await.unwrap();
-    assert!(ttls[0] > 0 && ttls[0] <= 100);
+    assert!((1..=100).contains(&ttls[0]));
     assert_eq!(ttls[1], -1);
     assert_eq!(ttls[2], -2);
 });
@@ -236,12 +239,14 @@ matrix_test!(hpexpire_and_hpttl, c, {
     skip_unless_command!(c, "HEXPIRE");
     let k = common::key("h_pttl");
     let _: () = c.hset_multiple(&k, &[("f", "v")]).await.unwrap();
+
     assert_eq!(
         c.hpexpire(&k, 100_000, &["f"], None).await.unwrap(),
         vec![1]
     );
-    let pttls = c.hpttl(&k, &["f"]).await.unwrap();
-    assert!(pttls[0] > 0 && pttls[0] <= 100_000);
+
+    let pttl = c.hpttl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=100_000).contains(&pttl));
 });
 
 matrix_test!(hexpiretime_absolute, c, {
@@ -255,4 +260,108 @@ matrix_test!(hexpiretime_absolute, c, {
     );
     let et = c.hexpiretime(&k, &["f"]).await.unwrap();
     assert_eq!(et[0], future);
+});
+
+// ---------------------------------------------------------------------------
+// HGETEX / HSETEX (Valkey/Redis 9.0+).
+// ---------------------------------------------------------------------------
+
+matrix_test!(hgetex, c, {
+    skip_unless_command!(c, "HGETEX");
+    let k = common::key("h_getex");
+    let _: () = c.hset(&k, "f", "v").await.unwrap();
+
+    // HGETEX with EX.
+    let vals = c.hgetex(&k, &["f"], Some(Expiry::EX(100))).await.unwrap();
+    assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=100).contains(&ttl));
+
+    // HGETEX with PERSIST.
+    let vals = c.hgetex(&k, &["f"], Some(Expiry::PERSIST)).await.unwrap();
+    assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(ttl, -1); // -1 = field exists with no TTL
+});
+
+matrix_test!(hsetex, c, {
+    skip_unless_command!(c, "HSETEX");
+    let k = common::key("h_setex");
+
+    // HSETEX wuth FNX and EX.
+    let res = c
+        .hsetex(
+            &k,
+            &[("f", "v1")],
+            Some(HashFieldConditionalChange::OnlyIfNoneExist),
+            Some(SetExpiry::EX(100)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v1"));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=100).contains(&ttl));
+
+    let res = c
+        .hsetex(
+            &k,
+            &[("f", "v2")],
+            Some(HashFieldConditionalChange::OnlyIfNoneExist),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, 0);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v1"));
+
+    // HSETEX with FXX and EX.
+    let res = c
+        .hsetex(
+            &k,
+            &[("f", "v3")],
+            Some(HashFieldConditionalChange::OnlyIfAllExist),
+            Some(SetExpiry::EX(50)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v3"));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=50).contains(&ttl));
+
+    let res = c
+        .hsetex(
+            &k,
+            &[("g", "gv")],
+            Some(HashFieldConditionalChange::OnlyIfAllExist),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, 0);
+    let g: Option<String> = c.hget(&k, "g").await.unwrap();
+    assert_eq!(g, None);
+
+    // HSETEX with KEEPTTL.
+    let res = c
+        .hsetex(&k, &[("f", "v4")], None, Some(SetExpiry::KEEPTTL))
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v4"));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=50).contains(&ttl));
+
+    // HSETEX with no expiry option.
+    let res = c.hsetex(&k, &[("f", "v5")], None, None).await.unwrap();
+    assert_eq!(res, 1);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v5"));
+    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(ttl, -1);
 });
