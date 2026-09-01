@@ -347,6 +347,7 @@ matrix_test!(hsetex, c, {
     assert_eq!(g, None);
 
     // HSETEX with KEEPTTL.
+    let before = c.hpttl(&k, &["f"]).await.unwrap()[0];
     let res = c
         .hsetex(&k, &[("f", "v4")], None, Some(SetExpiry::KEEPTTL))
         .await
@@ -354,8 +355,8 @@ matrix_test!(hsetex, c, {
     assert_eq!(res, 1);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
     assert_eq!(v.as_deref(), Some("v4"));
-    let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
-    assert!((1..=50).contains(&ttl));
+    let after = c.hpttl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=before).contains(&after));
 
     // HSETEX with no expiry option.
     let res = c.hsetex(&k, &[("f", "v5")], None, None).await.unwrap();
