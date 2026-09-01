@@ -2,7 +2,7 @@ mod support;
 
 #[cfg(test)]
 mod types {
-    use redis::{FromRedisValue, ToRedisArgs, Value};
+    use redis::{Expiry, FromRedisValue, SetExpiry, ToRedisArgs, Value};
     #[test]
     fn test_is_single_arg() {
         let sslice: &[_] = &["foo"][..];
@@ -20,6 +20,24 @@ mod types {
 
         assert!(!twobytesslice.is_single_arg());
         assert!(!twobytesvec.is_single_arg());
+    }
+
+    #[test]
+    fn test_expiry_is_single_arg() {
+        assert!(Expiry::PERSIST.is_single_arg());
+        assert!(!Expiry::EX(1).is_single_arg());
+        assert!(!Expiry::PX(1).is_single_arg());
+        assert!(!Expiry::EXAT(1).is_single_arg());
+        assert!(!Expiry::PXAT(1).is_single_arg());
+    }
+
+    #[test]
+    fn test_set_expiry_is_single_arg() {
+        assert!(SetExpiry::KEEPTTL.is_single_arg());
+        assert!(!SetExpiry::EX(1).is_single_arg());
+        assert!(!SetExpiry::PX(1).is_single_arg());
+        assert!(!SetExpiry::EXAT(1).is_single_arg());
+        assert!(!SetExpiry::PXAT(1).is_single_arg());
     }
 
     /// The `FromRedisValue` trait provides two methods for parsing:

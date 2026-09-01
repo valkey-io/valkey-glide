@@ -74,7 +74,7 @@ impl ToRedisArgs for Expiry {
     }
 
     fn is_single_arg(&self) -> bool {
-        false
+        matches!(self, Expiry::PERSIST)
     }
 }
 
@@ -122,7 +122,7 @@ impl ToRedisArgs for SetExpiry {
     }
 
     fn is_single_arg(&self) -> bool {
-        false
+        matches!(self, SetExpiry::KEEPTTL)
     }
 }
 
