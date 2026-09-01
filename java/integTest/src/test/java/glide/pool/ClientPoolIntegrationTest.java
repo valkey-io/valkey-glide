@@ -94,6 +94,31 @@ public class ClientPoolIntegrationTest {
         }
     }
 
+    /** Create a standalone or cluster GlideClient outside of any pool. */
+    private AutoCloseable createOrdinaryClient(boolean clusterMode) throws Exception {
+        assumeMode(clusterMode);
+        if (clusterMode) {
+            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                    GlideClusterClientConfiguration.builder();
+            for (String host : CLUSTER_HOSTS) {
+                String[] parts = host.split(":");
+                builder.address(
+                        NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+            }
+            builder.requestTimeout(5000);
+            return GlideClusterClient.createClient(builder.build()).get(10, TimeUnit.SECONDS);
+        } else {
+            String[] parts = STANDALONE_HOSTS[0].split(":");
+            return glide.api.GlideClient.createClient(
+                            GlideClientConfiguration.builder()
+                                    .address(
+                                            NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                                    .requestTimeout(5000)
+                                    .build())
+                    .get(10, TimeUnit.SECONDS);
+        }
+    }
+
     /** Poll until pool has at least minIdle clients ready. */
     private static void waitForPoolReady(ClientPool pool, int minIdle) throws InterruptedException {
         waitForPoolReady(pool, minIdle, 30000);
@@ -307,6 +332,56 @@ public class ClientPoolIntegrationTest {
 
         pool.close();
         System.out.println("testPoolReuse PASSED (cluster=" + clusterMode + ")");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOrdinaryClientCloseDoesNotEvictPooledClients(boolean clusterMode)
+            throws Exception {
+        assumeMode(clusterMode);
+
+        // ClientPool.create runs a connectivity probe: it opens and closes one ordinary
+        // client. Borrow several pooled clients and keep them alive across that probe and
+        // across further ordinary-client closes below.
+        ClientPool pool = ClientPool.create(poolConfig(clusterMode));
+        waitForPoolReady(pool, 1);
+
+        java.util.List<glide.api.models.pool.PooledGlideClient> borrowed = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            borrowed.add(pool.acquire().get(10, TimeUnit.SECONDS));
+        }
+
+        for (glide.api.models.pool.PooledGlideClient client : borrowed) {
+            String key = testKey(clusterMode, "pre-close");
+            client.set(key, "alive").get(5, TimeUnit.SECONDS);
+            assertEquals("alive", client.get(key).get(5, TimeUnit.SECONDS));
+            client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
+        }
+
+        // Create and close ordinary clients in the same process. No ordinary-client close
+        // may evict a pooled client from the shared handle table.
+        for (int i = 0; i < 5; i++) {
+            AutoCloseable ordinary = createOrdinaryClient(clusterMode);
+            ordinary.close();
+        }
+
+        for (glide.api.models.pool.PooledGlideClient client : borrowed) {
+            String key = testKey(clusterMode, "post-close");
+            client.set(key, "still-alive").get(5, TimeUnit.SECONDS);
+            assertEquals(
+                    "still-alive",
+                    client.get(key).get(5, TimeUnit.SECONDS),
+                    () ->
+                            "pooled client " + client.getClientId() + " was evicted by an ordinary-client close");
+            client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
+        }
+
+        for (glide.api.models.pool.PooledGlideClient client : borrowed) {
+            client.close();
+        }
+        pool.close();
+        System.out.println(
+                "testOrdinaryClientCloseDoesNotEvictPooledClients PASSED (cluster=" + clusterMode + ")");
     }
 
     @ParameterizedTest
