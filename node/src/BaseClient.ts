@@ -298,7 +298,11 @@ import {
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 import { IsolatedScope } from "./IsolatedScope.js";
-import { CONNECTION_REQUEST_BYTES } from "./ScopeInternal.js";
+import {
+    clearScopeConnectionRequest,
+    refreshScopeConnectionPassword,
+    setScopeConnectionRequest,
+} from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -1483,13 +1487,6 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
-    /**
-     * The serialized connection request used to open this client's connection.
-     * Cached at connect time so `scopedConnection` and `IsolatedScope.acquire`
-     * can hand the same request to glide-core when opening a scope, without the
-     * caller having to produce the bytes.
-     */
-    private connectionRequestBytes: Uint8Array | undefined;
     protected clientHandle: GlideClientHandle | null = null;
     /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
     private readonly otelSpanPointers = new Map<number, bigint>();
@@ -10067,8 +10064,10 @@ export class BaseClient {
             );
 
             // Keep the exact bytes used to connect so a scope can reopen an
-            // identical connection through glide-core.
-            this.connectionRequestBytes = connectionRequestBytes;
+            // identical connection through glide-core. They stay in
+            // module-private storage, off this instance and its prototype, so
+            // the password or mTLS key they carry cannot be read back.
+            setScopeConnectionRequest(this, connectionRequestBytes);
 
             this.clientHandle = await CreateDirectClient(
                 connectionRequestBytes,
@@ -10120,19 +10119,6 @@ export class BaseClient {
      */
     public getClientId(): number {
         return this.clientHandle?.clientId ?? -1;
-    }
-
-    /**
-     * Hands a scope a defensive copy of the connection request captured when
-     * this client connected, or `undefined` if it is not yet connected. Keyed
-     * by an internal symbol so the cached credentials stay off the public
-     * surface and a caller cannot retain or mutate the client's buffer.
-     * @internal
-     */
-    [CONNECTION_REQUEST_BYTES](): Uint8Array | undefined {
-        return this.connectionRequestBytes
-            ? Uint8Array.from(this.connectionRequestBytes)
-            : undefined;
     }
 
     /**
@@ -10194,6 +10180,10 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Drop the cached connection request so its credentials do not outlive
+        // the client.
+        clearScopeConnectionRequest(this);
 
         // Clean up address resolver from the global registry
         if (this.addressResolverKey) {
@@ -10300,8 +10290,10 @@ export class BaseClient {
 
         if (response === "OK") {
             // Refresh the cached request so a later scope authenticates with
-            // the new credential rather than the stale one.
-            this.refreshCachedConnectionPassword(password);
+            // the new credential rather than the stale one. glide-core picks
+            // up the new bytes on the next acquire and rebuilds scope
+            // connections with the new credential.
+            refreshScopeConnectionPassword(this, password);
 
             if (!this.config?.credentials) {
                 this.config = {
@@ -10315,27 +10307,6 @@ export class BaseClient {
         }
 
         return response;
-    }
-
-    /**
-     * @internal
-     * Rewrites the password in the cached connection-request bytes so scopes
-     * opened after a password update use the new credential.
-     */
-    private refreshCachedConnectionPassword(password: string | null): void {
-        if (!this.connectionRequestBytes) return;
-
-        const request = connection_request.ConnectionRequest.decode(
-            this.connectionRequestBytes,
-        );
-        const authenticationInfo =
-            request.authenticationInfo ??
-            connection_request.AuthenticationInfo.create({});
-        authenticationInfo.password = password ?? "";
-        request.authenticationInfo = authenticationInfo;
-        this.connectionRequestBytes = Buffer.from(
-            connection_request.ConnectionRequest.encode(request).finish(),
-        );
     }
 
     /**

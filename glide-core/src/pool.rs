@@ -818,6 +818,34 @@ impl ScopePool {
         allocate_scope_id()
     }
 
+    /// Replace the cached connection request after a credential rotation.
+    ///
+    /// The stored request is what background connection creation clones for
+    /// every new scope connection, so a rotated password only reaches new
+    /// connections once this is updated. Idle connections are dropped because
+    /// they authenticated with the old credential; the next acquire recreates
+    /// them from the new request. In-use connections are left alone and drain
+    /// on release.
+    pub fn refresh_connection_request(&mut self, connection_request_bytes: Vec<u8>) {
+        let dropped = self.idle.len() as u32;
+        self.idle.clear();
+        if dropped > 0 {
+            self.total_count.fetch_sub(dropped, Ordering::AcqRel);
+        }
+
+        #[cfg(feature = "proto")]
+        {
+            use protobuf::Message as _;
+            if let Ok(req) = crate::connection_request::ConnectionRequest::parse_from_bytes(
+                &connection_request_bytes,
+            ) {
+                self.configured_database_id = req.database_id;
+            }
+        }
+
+        self.connection_request_bytes = connection_request_bytes;
+    }
+
     /// Non-blocking acquire. Returns scope_id >= 0, -1 if exhausted.
     pub fn try_acquire(&mut self, registry: &DashMap<u64, ScopeEntry>, routing_slot: u16) -> i64 {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
