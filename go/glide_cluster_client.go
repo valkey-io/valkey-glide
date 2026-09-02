@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"time"
 	"unsafe"
@@ -695,6 +696,10 @@ func (client *ClusterClient) clusterScan(
 		argLengthsPtr,
 	)
 	client.mu.Unlock()
+	// Keep args reachable until C.request_cluster_scan returns. toCStrings hands the string
+	// data to the core as bare uintptr values that the GC cannot see, so the backing memory
+	// must not be freed or moved while the core still reads those pointers.
+	runtime.KeepAlive(args)
 
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
 	if err != nil {
