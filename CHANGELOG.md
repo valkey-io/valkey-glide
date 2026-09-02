@@ -4,7 +4,7 @@
 
 ### Fixes
 
-* Go: Keep FFI argument buffers alive across native calls to prevent a GC use-after-free under heavy load ([#5990](https://github.com/valkey-io/valkey-glide/issues/5990))
+* Go: keep FFI argument buffers alive across native calls to prevent GC use-after-free ([#6985](https://github.com/valkey-io/valkey-glide/pull/6985))
 * Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
 * Java: Fix scoped connection truncating values larger than 16 KB ([#6893](https://github.com/valkey-io/valkey-glide/issues/6893))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
