@@ -76,11 +76,13 @@ export function tryAcquireScope(
     explicitBytes?: Uint8Array,
 ): number {
     const bytes = explicitBytes ?? connectionRequests.get(client);
+
     if (!bytes) {
         throw new Error(
             "Client has no connection request available for a scope. " +
                 "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
         );
     }
+
     return scopeTryAcquire(clientId, bytes, routingSlot);
 }

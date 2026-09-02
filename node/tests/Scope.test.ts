@@ -458,11 +458,7 @@ describe("IsolatedScope", () => {
                 // Walk the whole prototype chain plus the instance, reading
                 // every property and invoking symbol-keyed accessors (the covert
                 // channel the exploit used). String-named methods are the
-                // documented public API and are only read, not invoked.
-                const probed = probeClient as unknown as Record<
-                    PropertyKey,
-                    unknown
-                >;
+                // documented public API and are only read, not called.
                 let target: object | null = probeClient;
                 const seen = new Set<object>();
 
@@ -473,35 +469,32 @@ describe("IsolatedScope", () => {
                 ) {
                     seen.add(target);
 
-                    for (const name of Object.getOwnPropertyNames(target)) {
+                    const keys: (string | symbol)[] = [
+                        ...Object.getOwnPropertyNames(target),
+                        ...Object.getOwnPropertySymbols(target),
+                    ];
+
+                    for (const key of keys) {
+                        const isSymbol = typeof key === "symbol";
+
+                        if (isSymbol) {
+                            // The removed accessor keyed a method by this symbol.
+                            expect(key.toString()).not.toContain(
+                                "connectionRequestBytes",
+                            );
+                        }
+
                         let value: unknown;
 
                         try {
-                            value = probed[name];
+                            value = Reflect.get(target, key);
                         } catch {
                             continue;
                         }
 
                         expect(leaksRequest(value)).toBe(false);
-                    }
 
-                    for (const sym of Object.getOwnPropertySymbols(target)) {
-                        // The removed accessor keyed a method by this symbol.
-                        expect(sym.toString()).not.toContain(
-                            "connectionRequestBytes",
-                        );
-
-                        let value: unknown;
-
-                        try {
-                            value = probed[sym];
-                        } catch {
-                            continue;
-                        }
-
-                        expect(leaksRequest(value)).toBe(false);
-
-                        if (typeof value === "function") {
+                        if (isSymbol && typeof value === "function") {
                             let returned: unknown;
 
                             try {
