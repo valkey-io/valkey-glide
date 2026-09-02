@@ -16,11 +16,13 @@ import {
     scopeExecute,
     scopeNextAttemptToken,
     scopeRelease,
-    scopeTryAcquire,
 } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
-import { CONNECTION_REQUEST_BYTES } from "./ScopeInternal.js";
+import {
+    hasScopeConnectionRequest,
+    tryAcquireScope,
+} from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
@@ -134,17 +136,11 @@ function slotForKey(key: Buffer): number {
 export class IsolatedScope {
     private scopeId: number;
     private clientId: number;
-    private connectionRequestBytes: Uint8Array;
     private released = false;
 
-    private constructor(
-        scopeId: number,
-        clientId: number,
-        connectionRequestBytes: Uint8Array,
-    ) {
+    private constructor(scopeId: number, clientId: number) {
         this.scopeId = scopeId;
         this.clientId = clientId;
-        this.connectionRequestBytes = connectionRequestBytes;
     }
 
     /**
@@ -195,12 +191,12 @@ export class IsolatedScope {
         // Normalize the overloaded arguments. When the second argument is a
         // Uint8Array it is an explicit connection request; otherwise it is the
         // routing key and the bytes are derived from the client.
-        let connectionRequestBytes: Uint8Array | undefined;
+        let explicitBytes: Uint8Array | undefined;
         let routingKey: string | undefined;
 
         if (bytesOrRoutingKey instanceof Uint8Array) {
             // acquire(client, bytes, routingKey?, maxRetries?)
-            connectionRequestBytes = bytesOrRoutingKey;
+            explicitBytes = bytesOrRoutingKey;
             routingKey = routingKeyOrMaxRetries as string | undefined;
         } else {
             // acquire(client, routingKey?, maxRetries?)
@@ -211,18 +207,14 @@ export class IsolatedScope {
             }
         }
 
-        if (!connectionRequestBytes) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            connectionRequestBytes = (client as any)[
-                CONNECTION_REQUEST_BYTES
-            ]();
-
-            if (!connectionRequestBytes) {
-                throw new Error(
-                    "Client has no connection request available for a scope. " +
-                        "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
-                );
-            }
+        // Without explicit bytes, the scope reuses the client's cached request.
+        // It lives in module-private storage, so acquisition happens through a
+        // helper that never hands the bytes back here.
+        if (!explicitBytes && !hasScopeConnectionRequest(client)) {
+            throw new Error(
+                "Client has no connection request available for a scope. " +
+                    "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
+            );
         }
 
         // Get the client_id from the handle (registered in Rust scope registry)
@@ -247,19 +239,16 @@ export class IsolatedScope {
         const attemptToken = scopeNextAttemptToken();
 
         for (let i = 0; i < maxRetries; i++) {
-            const scopeId = scopeTryAcquire(
+            const scopeId = tryAcquireScope(
+                client,
                 clientId,
-                connectionRequestBytes,
                 routingSlot,
                 attemptToken,
+                explicitBytes,
             );
 
             if (scopeId >= 0) {
-                return new IsolatedScope(
-                    scopeId,
-                    clientId,
-                    connectionRequestBytes,
-                );
+                return new IsolatedScope(scopeId, clientId);
             }
 
             // Exponential backoff
