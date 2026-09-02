@@ -507,9 +507,28 @@ fn get_timeout_from_cmd_arg(
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
     match command.as_slice() {
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // `command()` already normalizes the name to uppercase, so pass it through
+        // to the shared name-based check (empty args slice — the only arg-dependent
+        // case, XREAD/XREADGROUP, is handled above via `cmd.position`).
+        name => is_blocking_command_name(name, &[]),
+    }
+}
+
+/// Blocking-command check that avoids building a `redis::Cmd`.
+///
+/// `name` is the command name (matched case-insensitively); `args` are the
+/// remaining arguments, scanned only for the `BLOCK` token of XREAD/XREADGROUP.
+/// This lets FFI hot paths detect blocking commands without allocating a `Cmd`
+/// and copying every argument byte (e.g. a large SET payload). It recognizes the
+/// exact same set as [`is_blocking_command`].
+pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
+    let upper = name.to_ascii_uppercase();
+    match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
-        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
+        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
     }
 }
@@ -3067,7 +3086,7 @@ mod tests {
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
-        get_request_timeout, is_blocking_command,
+        get_request_timeout, is_blocking_command, is_blocking_command_name,
     };
 
     use super::{
@@ -3826,5 +3845,69 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value");
         assert!(!is_blocking_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command_name() {
+        // Direct cases.
+        assert!(is_blocking_command_name(b"BLPOP", &[]));
+        assert!(!is_blocking_command_name(b"GET", &[]));
+
+        // XREAD/XREADGROUP block only when a BLOCK token is present in args.
+        let streams: Vec<Vec<u8>> = vec![b"STREAMS".to_vec(), b"s".to_vec(), b"$".to_vec()];
+        assert!(!is_blocking_command_name(b"XREAD", &streams));
+        let with_block: Vec<Vec<u8>> = vec![
+            b"BLOCK".to_vec(),
+            b"0".to_vec(),
+            b"STREAMS".to_vec(),
+            b"s".to_vec(),
+            b"$".to_vec(),
+        ];
+        assert!(is_blocking_command_name(b"XREAD", &with_block));
+
+        // Case-insensitive on both the command name and the BLOCK token.
+        assert!(is_blocking_command_name(b"blpop", &[]));
+        let with_block_lower: Vec<Vec<u8>> =
+            vec![b"block".to_vec(), b"0".to_vec(), b"STREAMS".to_vec()];
+        assert!(is_blocking_command_name(b"xread", &with_block_lower));
+
+        // Behavioral parity with `is_blocking_command` over a representative table.
+        // Each entry: (name, args, expected).
+        let table: &[(&str, &[&str])] = &[
+            ("BLPOP", &["key", "0"]),
+            ("BRPOP", &["key", "5"]),
+            ("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"]),
+            ("BRPOPLPUSH", &["src", "dst", "0"]),
+            ("BLMPOP", &["0", "1", "key", "LEFT"]),
+            ("BZPOPMIN", &["key", "0"]),
+            ("BZPOPMAX", &["key", "0"]),
+            ("BZMPOP", &["0", "1", "key", "MIN"]),
+            ("WAIT", &["0", "100"]),
+            ("WAITAOF", &["0", "0", "100"]),
+            ("XREAD", &["STREAMS", "s", "$"]),
+            ("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"]),
+            ("XREADGROUP", &["GROUP", "g", "c", "STREAMS", "s", ">"]),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"],
+            ),
+            ("GET", &["key"]),
+            ("SET", &["key", "value"]),
+            ("LPUSH", &["key", "value"]),
+        ];
+        for (name, args) in table {
+            let mut cmd = Cmd::new();
+            cmd.arg(*name);
+            for a in *args {
+                cmd.arg(*a);
+            }
+            let via_cmd = is_blocking_command(&cmd);
+            let arg_vecs: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+            let via_name = is_blocking_command_name(name.as_bytes(), &arg_vecs);
+            assert_eq!(
+                via_cmd, via_name,
+                "parity mismatch for {name} {args:?}: cmd={via_cmd} name={via_name}"
+            );
+        }
     }
 }

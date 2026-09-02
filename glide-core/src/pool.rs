@@ -1052,27 +1052,24 @@ impl ScopePool {
                 true
             }
             Err(_) => {
-                // A command still holds the connection lock while we release it —
-                // in practice a blocking command whose binding side was cancelled
-                // while the native task kept running. Discard the connection: it may
-                // have an armed server-side waiter, and deciding here (rather than
-                // re-checking state after the command finishes) avoids a race where a
-                // late push satisfies the command, clears its state, and makes the
-                // connection look reusable even though the push was already consumed.
+                // A command still holds the connection lock at release time (any
+                // in-flight command, though almost always a blocking one whose binding
+                // was cancelled). Discard rather than reuse: the connection may have an
+                // armed server-side waiter, and re-checking state after the command
+                // finishes would race a late push that clears it and makes the
+                // connection look reusable after the push was already consumed.
+                //
+                // Reclaim the slot synchronously — we hold the pool lock and checked
+                // POOL_RUNNING above. It can't be deferred: for an unbounded blocking
+                // command (BLPOP key 0) the lock may never free, so a decrement gated
+                // on it would leak the slot.
+                self.total_count.fetch_sub(1, Ordering::AcqRel);
                 let conn_arc = entry.connection.clone();
-                let pool_arc = {
-                    let pools = get_client_scope_pools();
-                    pools.get(&self.parent_client_id).map(|p| p.value().clone())
-                };
-
                 tokio::spawn(async move {
-                    // Wait for the command to release the lock, then drop and account.
+                    // Best-effort: drop the connection once the command frees the lock
+                    // (accounting already done above). Parks harmlessly if it never does.
                     let conn = conn_arc.lock().await;
                     drop(conn);
-                    if let Some(pool_arc) = pool_arc {
-                        let pool = pool_arc.lock().await;
-                        pool.total_count.fetch_sub(1, Ordering::AcqRel);
-                    }
                 });
                 true
             }

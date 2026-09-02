@@ -19,19 +19,12 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 /// blocking commands is derived per-command in `send_command_on_connection`).
 /// Arming it would wrongly abort a blocking scoped command, so skip it for those
 /// and let the command block for as long as its own semantics allow.
-fn should_arm_watchdog(cmd: &redis::Cmd) -> bool {
-    !glide_core::client::is_blocking_command(cmd)
-}
-
-/// Build a `redis::Cmd` from a deserialized scope command name and args, so it can
-/// be inspected (e.g. for blocking-command detection) before dispatch.
-fn build_scope_cmd(cmd_name: &str, args: &[Vec<u8>]) -> redis::Cmd {
-    let mut cmd = redis::Cmd::new();
-    cmd.arg(cmd_name.as_bytes());
-    for arg in args {
-        cmd.arg(arg.as_slice());
-    }
-    cmd
+///
+/// Takes the command name and args directly (rather than a `redis::Cmd`) so the
+/// hot path avoids allocating a `Cmd` and copying every argument byte — notably a
+/// large SET payload — just to answer this yes/no question.
+fn should_arm_watchdog(cmd_name: &str, args: &[Vec<u8>]) -> bool {
+    !glide_core::client::is_blocking_command_name(cmd_name.as_bytes(), args)
 }
 
 /// Pool creation/acquire error codes
@@ -723,7 +716,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
 
         // Skip the watchdog for blocking commands: it would abort them at the flat
         // request timeout. Blocking commands manage their own deadline in the core.
-        let arm_watchdog = should_arm_watchdog(&build_scope_cmd(&cmd_name, &args));
+        let arm_watchdog = should_arm_watchdog(&cmd_name, &args);
 
         // Execute with watchdog race — send_scope_command handles CB, inflight,
         // compression, latency recording internally
@@ -973,7 +966,7 @@ pub unsafe extern "C" fn glide_scope_execute(
 
     // Skip the watchdog for blocking commands: it would abort them at the flat
     // request timeout. Blocking commands manage their own deadline in the core.
-    let arm_watchdog = should_arm_watchdog(&build_scope_cmd(&cmd_name, &args));
+    let arm_watchdog = should_arm_watchdog(&cmd_name, &args);
 
     let result = runtime.block_on(async {
         if !arm_watchdog {
@@ -1122,11 +1115,11 @@ pub unsafe extern "C" fn glide_scope_execute(
 
 #[cfg(test)]
 mod watchdog_gating_tests {
-    use super::{build_scope_cmd, should_arm_watchdog};
+    use super::should_arm_watchdog;
 
     fn arms(cmd_name: &str, args: &[&str]) -> bool {
         let args: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
-        should_arm_watchdog(&build_scope_cmd(cmd_name, &args))
+        should_arm_watchdog(cmd_name, &args)
     }
 
     #[test]

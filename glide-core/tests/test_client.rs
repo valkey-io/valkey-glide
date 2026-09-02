@@ -1719,6 +1719,94 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_release_contended_lock_reclaims_slot_synchronously(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // Regression for the release() Err(_) branch: when a scoped blocking
+        // command is still holding the connection lock at release time (its
+        // binding-side await was cancelled but the native task kept running and
+        // is parked in an unbounded BLPOP), release() cannot lock the connection
+        // and takes the try_lock -> Err path. The pool slot MUST be reclaimed
+        // synchronously there; the earlier code deferred the total_count
+        // decrement into a spawned task gated on acquiring that same connection
+        // lock, so for an unbounded blocking command the lock never freed and the
+        // slot leaked forever (total_count stuck at 1).
+        //
+        // We force the contended path deterministically: hold a clone of the
+        // connection's Arc<Mutex> for the whole test, then call release(). The
+        // internal try_lock is guaranteed to fail, so we exercise exactly the
+        // Err(_) branch. We assert total_count returns to 0 immediately, WITHOUT
+        // ever releasing our held lock (mirroring a never-completing BLPOP).
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // A seated + acquired scope means the slot is counted.
+            {
+                let pool = scope.pool.lock().await;
+                assert_eq!(
+                    pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                    1,
+                    "expected one counted connection before release"
+                );
+            }
+
+            // Grab and hold the connection lock the way an in-flight, never
+            // completing blocking command would. This clone keeps the Arc alive
+            // and the lock held for the duration of release().
+            let registry = glide_core::pool::get_scope_registry();
+            let conn_arc = registry
+                .get(&scope.scope_id)
+                .expect("scope entry present before release")
+                .connection
+                .clone();
+            let _held = conn_arc
+                .try_lock()
+                .expect("test should be sole holder before release");
+
+            // Drive release() directly so the branch is deterministic. We hold the
+            // pool lock ourselves (as release_scope's Ok arm does) and stay inside
+            // the runtime so the best-effort cleanup task has a reactor.
+            {
+                let mut pool = scope.pool.lock().await;
+                let reclaimed = pool.release(scope.scope_id, registry);
+                assert!(reclaimed, "release should report the scope was reclaimed");
+
+                // The decrement must have happened synchronously in the Err(_)
+                // branch — we are STILL holding the connection lock, so any
+                // lock-gated deferred decrement (the buggy path) could not have
+                // run yet. Pre-fix this reads 1 (leaked); post-fix it reads 0.
+                assert_eq!(
+                    pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                    0,
+                    "pool slot was not reclaimed synchronously on the contended \
+                     release path — the blocking command's held lock leaked it"
+                );
+                assert!(
+                    pool.in_use.is_empty(),
+                    "released scope is still marked in-use"
+                );
+            }
+
+            // Never released `_held`, mirroring an unbounded BLPOP that never
+            // completes; the slot must already be reclaimed regardless.
+            drop(_held);
+            glide_core::scope::unregister_client(scope.client_id);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     #[ignore = "End-to-end reuse race is timing-dependent; the deterministic pool-state \
                 invariant is covered by test_scoped_blocking_command_cancelled_connection_is_not_reused. \
                 Enable manually to exercise the full push-to-consumer path against a real server."]
