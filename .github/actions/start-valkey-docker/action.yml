@@ -25,7 +25,11 @@ runs:
           id: docker-image
           shell: bash
           run: |
-              IMAGE="valkey/valkey-bundle:9.1"
+              # Pinned to a specific patch tag (ships ValkeyJSON 1.0.3) instead of
+              # the floating ":9.1" tag, so a future bundle rebuild cannot silently
+              # change module behavior and break unrelated PRs. Bump deliberately in
+              # a reviewed PR when adopting a newer module. See GHSA-q7rf-74qm-hr9g.
+              IMAGE="valkey/valkey-bundle:9.1.3"
               echo "image=$IMAGE" >> $GITHUB_OUTPUT
               echo "Using Docker image: $IMAGE"
 

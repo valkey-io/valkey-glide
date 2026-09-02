@@ -1177,7 +1177,11 @@ class TestJson:
             -1,
             ['"negative_index_value"'],
         )
-        assert result == [9, 13, None, 11, 10, None, None, 12]  # Update valid paths
+        # NOTE(#6990): ValkeyJSON 1.0.3 (GHSA-q7rf-74qm-hr9g) changed recursive
+        # JSONPath mutation to process matches deepest-first, which changes the
+        # array lengths returned here vs. the pre-1.0.3 behavior. The CI failure
+        # log shows index 3 ($..a match d[0].a) now returns 13 instead of 11.
+        assert result == [9, 13, None, 13, 10, None, None, 12]  # Update valid paths
 
         # Check document after negative index insertion
         updated_doc_negative = await json.get(glide_client, key)
