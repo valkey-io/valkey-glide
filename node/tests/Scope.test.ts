@@ -416,9 +416,8 @@ describe("IsolatedScope", () => {
             const closedClient = await GlideClient.createClient(config);
             closedClient.close();
 
-            await expect(closedClient.scopedConnection()).rejects.toBeInstanceOf(
-                ClosingError,
-            );
+            const attempt = closedClient.scopedConnection();
+            await expect(attempt).rejects.toBeInstanceOf(ClosingError);
         },
         TIMEOUT,
     );
@@ -427,10 +426,8 @@ describe("IsolatedScope", () => {
         "connection-request bytes are private and defensively copied",
         async () => {
             // The public accessor is gone; callers cannot read the buffer.
-            expect(
-                (client as unknown as Record<string, unknown>)
-                    .getConnectionRequestBytes,
-            ).toBeUndefined();
+            const publicClient = client as unknown as Record<string, unknown>;
+            expect(publicClient.getConnectionRequestBytes).toBeUndefined();
 
             // The internal accessor hands out a copy, so mutating it cannot
             // corrupt the credentials a later scope reuses.
@@ -460,17 +457,15 @@ describe("IsolatedScope", () => {
             const rotatingClient = await GlideClient.createClient(config);
 
             try {
-                const newPassword = `rotated-${Math.random()
-                    .toString(36)
-                    .slice(2, 10)}`;
+                const suffix = Math.random().toString(36).slice(2, 10);
+                const newPassword = `rotated-${suffix}`;
                 // Non-immediate update returns OK without re-auth against a
                 // password-free server, refreshing the cached request.
-                expect(
-                    await rotatingClient.updateConnectionPassword(
-                        newPassword,
-                        false,
-                    ),
-                ).toBe("OK");
+                const result = await rotatingClient.updateConnectionPassword(
+                    newPassword,
+                    false,
+                );
+                expect(result).toBe("OK");
 
                 const clientInternal = rotatingClient as unknown as {
                     [CONNECTION_REQUEST_BYTES](): Uint8Array | undefined;
