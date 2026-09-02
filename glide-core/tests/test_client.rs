@@ -1691,13 +1691,24 @@ pub(crate) mod shared_client_tests {
             // `5` = block up to 5 seconds; nothing is ever pushed to `key`, so this
             // returns only when the command's own deadline elapses.
             let mut args = vec![key.into_bytes(), b"5".to_vec()];
-            let _ = scope.send("BLPOP", &mut args).await;
+            let result = scope.send("BLPOP", &mut args).await;
             let elapsed = started.elapsed();
 
             assert!(
                 elapsed > std::time::Duration::from_secs(2),
                 "scoped BLPOP with a 5s timeout returned after {elapsed:?}, which is at \
                  or below the 1s flat request_timeout — the per-command timeout was not honoured"
+            );
+
+            // The command must reach its own 5s server-side deadline cleanly: BLPOP on
+            // an empty key at its timeout returns a nil reply. Asserting the nil success
+            // (rather than merely `is_ok()` or just the timing) rejects both a spurious
+            // non-nil success and any post-2s connection/protocol error, which would
+            // otherwise satisfy the timing check alone.
+            assert_eq!(
+                result,
+                Ok(Value::Nil),
+                "scoped BLPOP should return a nil reply at its command deadline, got {result:?}"
             );
 
             scope.release();
