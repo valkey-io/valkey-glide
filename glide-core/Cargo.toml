@@ -10,6 +10,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 bytes = "1"
+dashmap = "~6.2.1"
 futures = "^0.3"
 redis = { path = "./redis-rs/redis", features = [
     "aio",
@@ -23,7 +24,7 @@ redis = { path = "./redis-rs/redis", features = [
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
 rustls-pki-types = "1.9"
 telemetrylib = { path = "./telemetry" }
-tokio = { version = "1", features = ["macros", "time"] }
+tokio = { version = "1", features = ["fs", "macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
@@ -45,6 +46,7 @@ futures-intrusive = "0.5"
 directories = { version = "6", optional = true }
 once_cell = "1"
 sha1_smol = "1"
+sha2 = "0.11"
 nanoid = "0.4"
 async-trait = { version = "0.1" }
 serde_json = "1"
@@ -55,6 +57,7 @@ strum_macros = "0.26"
 zstd = { version = "0.13" }
 lz4 = { version = "1.28" }
 libc = "0.2.186"
+regex = "=1.13.1"
 
 [features]
 proto = ["protobuf"]
@@ -75,7 +78,7 @@ rsevents = "0.3.1"
 socket2 = "0.6"
 tempfile = "3.3.0"
 rstest = "^0.26"
-serial_test = "3"
+serial_test = "4"
 criterion = { version = "^0.8", features = ["html_reports", "async_tokio"] }
 which = "8"
 ctor = "0.10"

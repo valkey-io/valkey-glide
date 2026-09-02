@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.concatenateArrays;
+import static glide.TestUtilities.createClientWithRetry;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -53,29 +54,21 @@ public class ClusterBatchTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
 
+    // Client setup runs once before the whole parameterized suite. Under heavy CI load the initial
+    // connect can fail transiently, so use the shared bounded-retry helper (see its javadoc for why
+    // Glide's native reconnect strategy is not sufficient here). See issue #5343.
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clients.add(
-                Arguments.of(
-                        Named.of(
-                                "RESP2",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP2)
-                                                        .build())
-                                        .get())));
-        clients.add(
-                Arguments.of(
-                        Named.of(
-                                "RESP3",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP3)
-                                                        .build())
-                                        .get())));
+        clients.add(Arguments.of(Named.of("RESP2", connectWithRetry(ProtocolVersion.RESP2))));
+        clients.add(Arguments.of(Named.of("RESP3", connectWithRetry(ProtocolVersion.RESP3))));
+    }
+
+    private static GlideClusterClient connectWithRetry(ProtocolVersion protocol) {
+        return createClientWithRetry(
+                () ->
+                        GlideClusterClient.createClient(
+                                commonClusterClientConfig().requestTimeout(7000).protocol(protocol).build()));
     }
 
     @AfterAll

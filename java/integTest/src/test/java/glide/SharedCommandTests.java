@@ -137,6 +137,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -199,15 +200,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public void cleanup() {
-        // Flush all databases to ensure clean state between tests
+        // Flush all databases in parallel to reduce teardown time
+        List<CompletableFuture<String>> futures = new ArrayList<>();
         for (Arguments client : clients) {
             BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
             if (baseClient instanceof GlideClient) {
-                ((GlideClient) baseClient).flushall().get();
+                futures.add(((GlideClient) baseClient).flushall());
             } else if (baseClient instanceof GlideClusterClient) {
-                ((GlideClusterClient) baseClient).flushall().get();
+                futures.add(((GlideClusterClient) baseClient).flushall());
             }
         }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
     }
 
     @SneakyThrows
@@ -14390,7 +14393,7 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination, 1).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14406,7 +14409,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14465,7 +14468,7 @@ public class SharedCommandTests {
         }
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
             ((GlideClusterClient) client).select(1).get();
@@ -14480,7 +14483,7 @@ public class SharedCommandTests {
         }
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination, 1).get());
@@ -14522,12 +14525,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, "one");
+        client.set(source, "one").get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals("one", client.get(destination).get());
 
         // setting new value for source
-        client.set(source, "two");
+        client.set(source, "two").get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());
@@ -14554,12 +14557,12 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination).get());
 
         // source exists, destination does not
-        client.set(source, gs("one"));
+        client.set(source, gs("one")).get();
         assertTrue(client.copy(source, destination, false).get());
         assertEquals(gs("one"), client.get(destination).get());
 
         // setting new value for source
-        client.set(source, gs("two"));
+        client.set(source, gs("two")).get();
 
         // both exists, no REPLACE
         assertFalse(client.copy(source, destination).get());

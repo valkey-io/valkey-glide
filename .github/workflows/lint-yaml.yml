@@ -11,10 +11,12 @@ on:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
+            - "node/pm-and-types-tests/*/.yarnrc.yml"
     pull_request:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
+            - "node/pm-and-types-tests/*/.yarnrc.yml"
     workflow_dispatch:
 
 jobs:
@@ -24,8 +26,51 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Install dependencies
+              run: npm ci
 
             - name: Run Prettier on YAML files
               run: |
                   npx prettier --check .github/
+
+            - name: Install PyYAML
+              run: pip install --quiet PyYAML==6.0.3
+
+            - name: Validate dependabot cooldown
+              run: |
+                  python3 - <<'EOF'
+                  import yaml, sys
+                  with open(".github/dependabot.yml") as f:
+                      config = yaml.safe_load(f)
+                  missing = [
+                      entry.get("directory", "unknown")
+                      for entry in config.get("updates", [])
+                      if entry.get("cooldown", {}).get("default-days") != 7
+                  ]
+                  if missing:
+                      print("ERROR: Entries not equal to 7:", missing)
+                      sys.exit(1)
+                  print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
+                  EOF
+
+            - name: Validate npmMinimalAgeGate
+              run: |
+                  python3 - <<'EOF'
+                  import yaml, sys
+                  paths = [
+                      "node/pm-and-types-tests/depend-on-glide-package/.yarnrc.yml",
+                      "node/pm-and-types-tests/depend-on-glide-dependent/.yarnrc.yml",
+                  ]
+                  bad = []
+                  for p in paths:
+                      with open(p) as f:
+                          got = (yaml.safe_load(f) or {}).get("npmMinimalAgeGate")
+                      if got != "7d":
+                          bad.append(f"{p}: {got!r}")
+                  if bad:
+                      print('ERROR: npmMinimalAgeGate must be "7d" (requires Yarn 4.18.0+ for correct 7-day gate):', bad)
+                      sys.exit(1)
+                  print(f"OK: all {len(paths)} .yarnrc.yml files have npmMinimalAgeGate == '7d'")
+                  EOF

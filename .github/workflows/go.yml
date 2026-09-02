@@ -96,7 +96,7 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -129,7 +129,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -150,7 +150,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ffi/target
@@ -181,6 +181,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
@@ -217,7 +218,7 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ !github.event.inputs.rc-version }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Set up Go
               uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -230,7 +231,7 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ffi/target
@@ -260,7 +261,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -298,7 +299,7 @@ jobs:
                   fi
 
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   submodules: recursive
 
@@ -329,7 +330,7 @@ jobs:
               with:
                   target: ${{ matrix.host.TARGET }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ffi/target
@@ -358,6 +359,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
                     make -k integ-test
@@ -391,7 +393,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -412,7 +414,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       ffi/target

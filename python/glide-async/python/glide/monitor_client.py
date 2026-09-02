@@ -9,6 +9,7 @@ import sniffio
 from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
+from glide_shared.connection_request import _create_async_connection_request
 
 
 class MonitorClient:
@@ -16,6 +17,8 @@ class MonitorClient:
     An async client that streams all commands processed by the server via MONITOR.
 
     Must be used with a standalone (non-cluster) configuration.
+    The configuration's ``lib_name`` and ``client_info_tag`` identify the dedicated
+    monitor connection, using ``GlidePy`` as the default library name.
     Supports both asyncio and trio backends via anyio.
 
     Warning: MONITOR is a debugging tool with performance implications.
@@ -88,6 +91,8 @@ class MonitorClient:
 
         Args:
             config: Standalone client configuration (must be GlideClientConfiguration).
+                    Its library-name override and client information tag are applied
+                    to the dedicated monitor connection.
             callback: Optional sync callback invoked for each MonitorMsg. If None,
                       messages are queued for get_monitor_message().
 
@@ -106,7 +111,7 @@ class MonitorClient:
         instance._user_callback = callback
         instance._setup_queue()
 
-        conn_req = config._create_a_protobuf_conn_request(cluster_mode=False)
+        conn_req = _create_async_connection_request(config)
         conn_req_bytes = conn_req.SerializeToString()
 
         @instance._ffi.callback("MonitorCallback")

@@ -15,20 +15,65 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  fetch-depth: 0
 
             - name: Fetch relevant branches
               id: get-branches
               run: |
-                  # Get all branches matching 'release-*' and include 'main'
-                  branches=$(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-/ {printf $NF" "}')
-                  branches="main $branches"
-                  echo "::set-output name=branches::$branches"
+                  # Start with main (always included)
+                  branches="main"
+                  skipped=""
+
+                  # Only match release-X.Y branches (not release-2.3-update, etc.)
+                  # KEEP IN SYNC: branch pattern must match the release train naming convention
+                  for branch in $(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-[0-9]+\.[0-9]+$/ {print $NF}'); do
+                    # Extract version number from branch name (e.g., release-2.5 -> 2.5)
+                    version=${branch#release-}
+
+                    # Check if a final (non-RC, non-suffixed) tag exists for this branch
+                    # Only match plain semver tags (e.g., v2.5.0) not v2.2.9-java etc.
+                    latest_final_tag=$(git tag -l "v${version}.*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+
+                    if [ -z "$latest_final_tag" ]; then
+                      # No final release tag yet - branch is still active (pre-release)
+                      branches="$branches $branch"
+                      continue
+                    fi
+
+                    # Check if there are commits on the branch after the latest final tag
+                    tag_commit=$(git rev-list -n 1 "$latest_final_tag")
+                    branch_head=$(git rev-parse "origin/$branch")
+
+                    if [ "$tag_commit" = "$branch_head" ]; then
+                      skipped="$skipped $branch($latest_final_tag:no-new-commits)"
+                      continue
+                    fi
+
+                    # Check if commits after the tag are only ORT attribution updates
+                    # If all post-tag commits are automated ORT updates, the branch is effectively dormant
+                    # KEEP IN SYNC WITH ort.yml commit-message (currently "Updated attribution files")
+                    non_ort_commits=$(git log --format="%s" "$latest_final_tag".."origin/$branch" \
+                      | grep -Ev '^Updated attribution files for commit [0-9a-f]' || true)
+
+                    if [ -z "$non_ort_commits" ]; then
+                      skipped="$skipped $branch($latest_final_tag:ort-only)"
+                    else
+                      branches="$branches $branch"
+                    fi
+                  done
+
+                  echo "Active branches for ORT check: $branches"
+                  if [ -n "$skipped" ]; then
+                    echo "Skipped branches:$skipped"
+                  fi
+                  echo "branches=$branches" >> $GITHUB_OUTPUT
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Trigger ORT Check workflows
-              uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               with:
                   script: |
                       const branches = "${{ steps.get-branches.outputs.branches }}".split(" ");

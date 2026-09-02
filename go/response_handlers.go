@@ -19,14 +19,40 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
+// responseTypeName returns the name of a ResponseType, for error messages only.
+func responseTypeName(responseType uint32) string {
+	switch responseType {
+	case uint32(C.Null):
+		return "Null"
+	case uint32(C.Int):
+		return "Int"
+	case uint32(C.Float):
+		return "Float"
+	case uint32(C.Bool):
+		return "Bool"
+	case uint32(C.String):
+		return "String"
+	case uint32(C.Array):
+		return "Array"
+	case uint32(C.Map):
+		return "Map"
+	case uint32(C.Sets):
+		return "Sets"
+	case uint32(C.Ok):
+		return "Ok"
+	case uint32(C.Error):
+		return "Error"
+	}
+	return fmt.Sprintf("Unknown(%d)", responseType)
+}
+
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
-	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
 
 	if !isNilable && response == nil {
 		return fmt.Errorf(
 			"unexpected return type from Valkey: got nil, expected %s",
-			C.GoString(expectedTypeStr),
+			responseTypeName(expectedTypeInt),
 		)
 	}
 
@@ -38,11 +64,10 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 		return nil
 	}
 
-	actualTypeStr := C.get_response_type_string(response.response_type)
 	return fmt.Errorf(
 		"unexpected return type from Valkey: got %s, expected %s",
-		C.GoString(actualTypeStr),
-		C.GoString(expectedTypeStr),
+		responseTypeName(response.response_type),
+		responseTypeName(expectedTypeInt),
 	)
 }
 
@@ -55,10 +80,11 @@ func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool
 	if response.string_value == nil {
 		return models.CreateNilStringResult(), nil
 	}
-	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
-
-	// Create Go string from byte slice (preserving null characters)
-	return models.CreateStringResult(string(byteSlice)), nil
+	// GoStringN copies once and preserves interior NULs.
+	return models.CreateStringResult(C.GoStringN(
+		response.string_value,
+		C.int(response.string_value_len),
+	)), nil
 }
 
 // Fix after merging with https://github.com/valkey-io/valkey-glide/pull/2964
@@ -156,10 +182,11 @@ func parseString(response *C.struct_CommandResponse) (any, error) {
 	if response.string_value == nil {
 		return nil, nil
 	}
-	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
-
-	// Create Go string from byte slice (preserving null characters)
-	return string(byteSlice), nil
+	// GoStringN copies once and preserves interior NULs.
+	return C.GoStringN(
+		response.string_value,
+		C.int(response.string_value_len),
+	), nil
 }
 
 func parseArray(response *C.struct_CommandResponse) (any, error) {

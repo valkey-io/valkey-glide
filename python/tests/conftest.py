@@ -155,6 +155,29 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             load_module=load_module,
             addresses=standalone_endpoints,
         )
+        # Dedicated cluster for the auth suite. Auth tests fan CLIENT KILL out
+        # over AllNodes and rotate requirepass; sharing the main cluster
+        # bleeds a damaged topology into every cluster-mode test that runs
+        # after. 3 primaries with no replicas is the smallest bootable Redis
+        # Cluster shape and keeps setup cost low. Only the twin matching the
+        # session's --tls mode is booted; the auth fixtures consume exactly
+        # one of them per session.
+        if tls:
+            pytest.valkey_auth_tls_cluster = ValkeyCluster(
+                tls=True,
+                cluster_mode=True,
+                shard_count=3,
+                replica_count=0,
+                load_module=load_module,
+            )
+        else:
+            pytest.valkey_auth_cluster = ValkeyCluster(
+                tls=False,
+                cluster_mode=True,
+                shard_count=3,
+                replica_count=0,
+                load_module=load_module,
+            )
 
     if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
@@ -196,29 +219,18 @@ def pytest_sessionfinish(session, exitstatus):
     Called after whole test run finished, right before
     returning the exit status to the system.
     """
-    try:
-        del pytest.valkey_cluster
-    except AttributeError:
-        # valkey_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.standalone_cluster
-    except AttributeError:
-        # standalone_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.valkey_tls_cluster
-    except AttributeError:
-        # valkey_tls_cluster was not set, skip deletion
-        pass
-
-    try:
-        del pytest.standalone_tls_cluster
-    except AttributeError:
-        # standalone_tls_cluster was not set, skip deletion
-        pass
+    for attr in (
+        "valkey_cluster",
+        "standalone_cluster",
+        "valkey_tls_cluster",
+        "standalone_tls_cluster",
+        "valkey_auth_cluster",
+        "valkey_auth_tls_cluster",
+    ):
+        try:
+            delattr(pytest, attr)
+        except AttributeError:
+            pass
 
 
 def pytest_collection_modifyitems(config, items):
@@ -322,6 +334,74 @@ def skip_if_version_below(request):
                 )
         finally:
             client.close()
+
+
+@pytest.fixture(scope="session")
+def valkey_mtls_cluster(request) -> ValkeyCluster:
+    """
+    A single TLS standalone node started with ``--tls-auth-clients yes``.
+
+    The session clusters accept a client that sends no certificate, so they
+    cannot show that a client cert was required or checked. Started on first
+    use because only the mTLS tests need it.
+    """
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(
+            reason="mTLS tests require an internally-created cluster with "
+            "client-cert auth enabled"
+        )
+    return ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=0,
+        tls_auth_clients=True,
+    )
+
+
+@pytest.fixture(scope="session")
+def valkey_mtls_cluster_cluster(request) -> ValkeyCluster:
+    """
+    A TLS cluster (3 shards, 1 replica each) started with ``--tls-cluster yes``
+    and ``--tls-auth-clients yes`` so both the cluster bus and clients use TLS
+    with client certificates.
+
+    The existing session clusters accept a client that sends no certificate,
+    so they cannot show that a client cert was required or checked. Started on
+    first use because only the mTLS tests need it.
+    """
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(
+            reason="mTLS tests require an internally-created cluster with "
+            "client-cert auth enabled"
+        )
+    return ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        shard_count=3,
+        replica_count=1,
+        tls_auth_clients=True,
+    )
+
+
+@pytest.fixture
+def valkey_mtls_target(
+    request,
+    cluster_mode,
+    valkey_mtls_cluster,
+    valkey_mtls_cluster_cluster,
+) -> ValkeyCluster:
+    """
+    Return the mTLS-required fixture matching the requested ``cluster_mode``.
+
+    Keyed by ``cluster_mode`` so the same test body exercises both the
+    standalone and cluster topologies.
+    """
+    return valkey_mtls_cluster_cluster if cluster_mode else valkey_mtls_cluster
 
 
 @pytest.fixture

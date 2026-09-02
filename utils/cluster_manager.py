@@ -159,15 +159,23 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        # ARM64 runners take longer to generate TLS certificates, and sometimes fail if the timeout shorter (10 seconds).
-        output, err = p.communicate(timeout=20)
+        # openssl genrsa can stall on low-entropy aarch64 runners. Time out here
+        # (inside cluster.py's 80s budget) and kill the child so it stops
+        # writing to the shared ca.key.
+        try:
+            output, err = p.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.communicate()
+            raise
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
             )
 
     # Build CA key
-    make_key(ca_key, 4096)
+    # 2048-bit is enough for test certs and faster on low-entropy runners.
+    make_key(ca_key, 2048)
 
     # Build server key
     make_key(SERVER_KEY, 2048)
@@ -434,6 +442,15 @@ def start_server(
     # Bind server to both IPv4 and IPv6 loopback addresses.
     cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
 
+    # If host is a DNS hostname, set cluster-announce-hostname so
+    # the cluster topology reports DNS names instead of IP addresses.
+    if cluster_mode:
+        try:
+            import ipaddress
+            ipaddress.ip_address(host)
+        except ValueError:
+            cmd_args.extend(["--cluster-announce-hostname", host])
+
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
     # Enable multi-database support in cluster mode for Valkey 9.0+
@@ -485,6 +502,7 @@ def create_servers(
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
+    tls_auth_clients: bool = False,
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -510,8 +528,9 @@ def create_servers(
             key_file,
             "--tls-ca-cert-file",
             ca_file,
-            "--tls-auth-clients",  # Make it so client doesn't have to send cert
-            "no",
+            # When true, the server requires a client certificate on every TLS connection.
+            "--tls-auth-clients",
+            "yes" if tls_auth_clients else "no",
             "--port",
             "0",
         ]
@@ -1226,6 +1245,15 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--tls-auth-clients",
+        action="store_true",
+        default=False,
+        help="Require a client certificate on every TLS connection, i.e. "
+        "--tls-auth-clients yes (default: %(default)s)",
+        required=False,
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1313,6 +1341,7 @@ def main():
             getattr(args, 'tls_cert_file', None),
             getattr(args, 'tls_key_file', None),
             getattr(args, 'tls_ca_cert_file', None),
+            getattr(args, 'tls_auth_clients', False),
         )
         if args.cluster_mode:
             # Create a cluster

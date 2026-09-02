@@ -300,6 +300,192 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	clientForTestingAz.Close()
 }
 
+func (suite *GlideTestSuite) TestAzAffinityAllNodesSplitsBetweenPrimaryAndReplica() {
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
+
+	az := "us-east-1a"
+	otherAz := "us-east-1b"
+	const nGetCalls = 4
+	const nodesInSameAz = 2 // one primary + one replica
+	perNodeGetStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls/nodesInSameAz)
+
+	// Client used only to set AZ and reset stats.
+	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
+
+	// Reset stats and put every node in otherAz first.
+	suite.verifyOK(
+		clientForConfigSet.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
+	_, err = clientForConfigSet.ConfigSetWithOptions(context.Background(),
+		map[string]string{"availability-zone": otherAz}, options.RouteOption{Route: config.AllNodes})
+	assert.NoError(suite.T(), err)
+
+	// Move the primary and one replica of slot 12182 ("foo") into az.
+	_, err = clientForConfigSet.ConfigSetWithOptions(
+		context.Background(),
+		map[string]string{"availability-zone": az},
+		options.RouteOption{Route: config.NewSlotIdRoute(config.SlotTypePrimary, 12182)},
+	)
+	assert.NoError(suite.T(), err)
+	_, err = clientForConfigSet.ConfigSetWithOptions(
+		context.Background(),
+		map[string]string{"availability-zone": az},
+		options.RouteOption{Route: config.NewSlotIdRoute(config.SlotTypeReplica, 12182)},
+	)
+	assert.NoError(suite.T(), err)
+
+	clientForConfigSet.Close()
+
+	// Create test client AFTER configuration so it picks up the AZs on connect.
+	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second).
+		WithReadFrom(config.AzAffinityAllNodes).
+		WithClientAZ(az))
+	require.NoError(suite.T(), err)
+	defer clientForTestingAz.Close()
+
+	for i := 0; i < nGetCalls; i++ {
+		_, err = clientForTestingAz.Get(context.Background(), "foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	// Assert: exactly nodesInSameAz nodes (the primary + replica in az) each got
+	// nGetCalls/nodesInSameAz GETs, no GETs landed on nodes outside az, and the
+	// total across the cluster equals nGetCalls.
+	matchingEntriesCount := 0
+	totalGetCalls := 0
+	for _, value := range infoResult.MultiValue() {
+		if !strings.Contains(value, "cmdstat_get:calls=") {
+			continue
+		}
+		startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+		endIndex := strings.Index(value[startIndex:], ",") + startIndex
+		calls, convErr := strconv.Atoi(value[startIndex:endIndex])
+		assert.NoError(suite.T(), convErr)
+		totalGetCalls += calls
+
+		inAz := strings.Contains(value, "availability_zone:"+az)
+		if inAz && strings.Contains(value, perNodeGetStat) {
+			matchingEntriesCount++
+		} else if !inAz {
+			assert.Failf(suite.T(), "unexpected GETs on out-of-AZ node",
+				"node not in AZ %s received %d GETs", az, calls)
+		}
+	}
+	assert.Equal(suite.T(), nodesInSameAz, matchingEntriesCount,
+		"primary and in-AZ replica should evenly split the GET calls")
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
+}
+
+func (suite *GlideTestSuite) TestAzAffinityAllNodesFallsBackToAllNodesWhenNoInAzNode() {
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
+
+	// Client used only to reset stats and discover topology.
+	// No AZ is set on any node: "non-existing-az" matches nothing by default,
+	// which triggers the all-nodes fallback without needing ConfigSet.
+	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second))
+	require.NoError(suite.T(), err)
+
+	suite.verifyOK(
+		clientForConfigSet.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
+
+	// In cluster mode, GET only routes to the shard that owns the key.
+	// "all nodes" fallback means primary + all replicas of that shard.
+	// Query connected_slaves from the shard primary for "foo" (slot 12182).
+	shardInfo, err := clientForConfigSet.InfoWithOptions(context.Background(),
+		options.ClusterInfoOptions{
+			RouteOption: &options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "foo")},
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Replication}},
+		})
+	require.NoError(suite.T(), err)
+	nReplicas := 0
+	for _, line := range strings.Split(shardInfo.SingleValue(), "\n") {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "connected_slaves" {
+			nReplicas, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+			require.NoError(suite.T(), err)
+			break
+		}
+	}
+	nodesInShard := nReplicas + 1 // primary + replicas
+	require.Greater(suite.T(), nodesInShard, 1, "shard must have at least one replica for this test")
+	clientForConfigSet.Close()
+
+	// nGetCalls == nodesInShard gives exactly one GET per shard node under round-robin.
+	nGetCalls := nodesInShard
+
+	// Use a client AZ that no node belongs to, triggering the all-nodes fallback.
+	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second).
+		WithReadFrom(config.AzAffinityAllNodes).
+		WithClientAZ("non-existing-az"))
+	require.NoError(suite.T(), err)
+	defer clientForTestingAz.Close()
+
+	for i := 0; i < nGetCalls; i++ {
+		_, err = clientForTestingAz.Get(context.Background(), "foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	// Every node in the shard (primary + all replicas) must have received traffic.
+	nodesWithGets := 0
+	totalGetCalls := 0
+	primaryReceivedGets := false
+	replicaReceivedGets := false
+	for _, value := range infoResult.MultiValue() {
+		if !strings.Contains(value, "cmdstat_get:calls=") {
+			continue
+		}
+		nodesWithGets++
+		startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+		endIndex := strings.Index(value[startIndex:], ",") + startIndex
+		calls, convErr := strconv.Atoi(value[startIndex:endIndex])
+		assert.NoError(suite.T(), convErr)
+		totalGetCalls += calls
+		if strings.Contains(value, "role:master") {
+			primaryReceivedGets = true
+		}
+		if strings.Contains(value, "role:slave") {
+			replicaReceivedGets = true
+		}
+	}
+	assert.Equal(suite.T(), nodesInShard, nodesWithGets,
+		"all %d shard nodes (primary + replicas) should receive GETs under all-nodes fallback", nodesInShard)
+	assert.True(suite.T(), primaryReceivedGets, "primary must receive GETs")
+	assert.True(suite.T(), replicaReceivedGets, "at least one replica must receive GETs")
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
+}
+
 func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
 

@@ -487,3 +487,87 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 
 	assertConnected(suite.T(), client)
 }
+
+func (suite *GlideTestSuite) TestInflightRequestsLimit_Standalone() {
+	inflightLimit := uint32(5)
+	clientConfig := defaultClientConfig().
+		WithAddress(&suite.standaloneHosts[0]).
+		WithInflightRequestsLimit(inflightLimit)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	keyName := "nonexistkeylist-standalone-" + suite.T().Name()
+
+	// Send inflightLimit + 1 blocking requests
+	errCh := make(chan error, inflightLimit+1)
+	for i := uint32(0); i <= inflightLimit; i++ {
+		go func() {
+			_, e := client.BLPop(context.Background(), []string{keyName}, 0)
+			if e != nil {
+				errCh <- e
+			}
+		}()
+	}
+
+	// At least one request should fail with an error about maximum inflight requests
+	select {
+	case e := <-errCh:
+		assert.Contains(suite.T(), e.Error(), "maximum inflight requests")
+	case <-time.After(5 * time.Second):
+		suite.T().Fatal("Timed out waiting for inflight limit rejection")
+	}
+
+	// Cleanup: push values to unblock pending requests
+	cleanupConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0])
+	cleanupClient, err := glide.NewClient(cleanupConfig)
+	require.NoError(suite.T(), err)
+	defer cleanupClient.Close()
+	for i := uint32(0); i < inflightLimit; i++ {
+		_, err := cleanupClient.LPush(context.Background(), keyName, []string{"val"})
+		require.NoError(suite.T(), err)
+	}
+}
+
+func (suite *GlideTestSuite) TestInflightRequestsLimit_Cluster() {
+	inflightLimit := uint32(5)
+	clientConfig := defaultClusterClientConfig().
+		WithAddress(&suite.clusterHosts[0]).
+		WithInflightRequestsLimit(inflightLimit)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	keyName := "nonexistkeylist-cluster-" + suite.T().Name()
+
+	// Send inflightLimit + 1 blocking requests
+	errCh := make(chan error, inflightLimit+1)
+	for i := uint32(0); i <= inflightLimit; i++ {
+		go func() {
+			_, e := client.BLPop(context.Background(), []string{keyName}, 0)
+			if e != nil {
+				errCh <- e
+			}
+		}()
+	}
+
+	// At least one request should fail with an error about maximum inflight requests
+	select {
+	case e := <-errCh:
+		assert.Contains(suite.T(), e.Error(), "maximum inflight requests")
+	case <-time.After(5 * time.Second):
+		suite.T().Fatal("Timed out waiting for inflight limit rejection")
+	}
+
+	// Cleanup: push values to unblock pending requests
+	cleanupConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0])
+	cleanupClient, err := glide.NewClusterClient(cleanupConfig)
+	require.NoError(suite.T(), err)
+	defer cleanupClient.Close()
+	for i := uint32(0); i < inflightLimit; i++ {
+		_, err := cleanupClient.LPush(context.Background(), keyName, []string{"val"})
+		require.NoError(suite.T(), err)
+	}
+}

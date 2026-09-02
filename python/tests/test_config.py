@@ -1,5 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import os
+from types import SimpleNamespace
+from unittest import mock
+
 import pytest
 from glide_shared.config import (
     AdvancedBaseClientConfiguration,
@@ -16,9 +20,224 @@ from glide_shared.config import (
     ReadFrom,
     TlsAdvancedConfiguration,
 )
+from glide_shared.connection_request import (
+    _create_async_connection_request,
+    _create_sync_connection_request,
+)
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
+
+
+@pytest.mark.parametrize(
+    ("request_factory", "runtime_default"),
+    [
+        (_create_async_connection_request, "GlidePy"),
+        (_create_sync_connection_request, "GlidePySync"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("lib_name", "client_info_tag", "expected"),
+    [
+        (None, None, "{default}"),
+        ("custom-client", None, "custom-client"),
+        (None, "framework:1.2", "{default}(framework:1.2)"),
+        ("custom-client", "framework:1.2", "custom-client(framework:1.2)"),
+        ("", None, "{default}"),
+        (None, "", "{default}"),
+        ("", "", "{default}"),
+        ("lib:name/1.0", "tag@v2!", "lib:name/1.0(tag@v2!)"),
+    ],
+)
+def test_connection_request_lib_name(
+    request_factory, runtime_default, lib_name, client_info_tag, expected
+):
+    config = GlideClientConfiguration(
+        addresses=[], lib_name=lib_name, client_info_tag=client_info_tag
+    )
+
+    request = request_factory(config)
+
+    assert request.lib_name == expected.format(default=runtime_default)
+
+
+# The client-instance pools build their own connection request when they create
+# the underlying Rust pool. They must route it through the same helpers the
+# direct clients use, so pooled clients report the same lib-name (default,
+# user-configured, and with client_info_tag appended). These are unit tests: the
+# native glide_pool_create call is stubbed so only the Python
+# connection-request-building path runs — no server required. End-to-end
+# coverage lives in the pool integration suites (test_async_pool.py /
+# test_sync_pool.py).
+class _FakeFFI:
+    """Minimal stand-in for the CFFI ``ffi`` object used by the pools."""
+
+    NULL = object()
+
+    def new(self, *_args, **_kwargs):
+        return SimpleNamespace(_type=0, async_client=SimpleNamespace())
+
+    def from_buffer(self, data):
+        return data
+
+    def cast(self, _type, value):
+        return value
+
+
+class _FakeLib:
+    """Minimal stand-in for the loaded native library."""
+
+    noop_success_callback = object()
+    noop_failure_callback = object()
+
+    def glide_pool_create(self, *_args, **_kwargs):
+        return 1  # positive id => "pool created"; no real pool is started
+
+    def init_async_pipe(self, *_args, **_kwargs):
+        pass
+
+    def reinit_async_pipe(self, *_args, **_kwargs):
+        pass
+
+    def glide_pool_destroy(self, *_args, **_kwargs):
+        return 0
+
+
+def _fake_ffi_instance():
+    return SimpleNamespace(ffi=_FakeFFI(), lib=_FakeLib())
+
+
+def _pool_conn_req_lib_name(conn_req_bytes: bytes) -> str:
+    request = ConnectionRequest()
+    request.ParseFromString(conn_req_bytes)
+    return request.lib_name
+
+
+_POOL_LIB_NAME_CASES = [
+    pytest.param(None, None, "{default}", id="defaults"),
+    pytest.param("custom-client", None, "custom-client", id="custom-lib-name"),
+    pytest.param(None, "framework:1.2", "{default}(framework:1.2)", id="tag-only"),
+    pytest.param(
+        "custom-client",
+        "framework:1.2",
+        "custom-client(framework:1.2)",
+        id="lib-name-and-tag",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("lib_name", "client_info_tag", "expected"), _POOL_LIB_NAME_CASES
+)
+def test_sync_pool_connection_request_lib_name(lib_name, client_info_tag, expected):
+    """ClientPool must send the same lib_name the sync client would."""
+    from glide_sync import client_pool as sync_pool
+
+    config = GlideClientConfiguration(
+        addresses=[], lib_name=lib_name, client_info_tag=client_info_tag
+    )
+
+    with mock.patch.object(sync_pool, "_GlideFFI", return_value=_fake_ffi_instance()):
+        pool = sync_pool.ClientPool(
+            config, sync_pool.PoolConfig(max_size=1, min_idle=0)
+        )
+
+    assert _pool_conn_req_lib_name(pool._conn_req_bytes) == expected.format(
+        default="GlidePySync"
+    )
+    assert (
+        _pool_conn_req_lib_name(pool._conn_req_bytes)
+        == _create_sync_connection_request(config).lib_name
+    )
+
+
+@pytest.mark.parametrize(
+    ("lib_name", "client_info_tag", "expected"), _POOL_LIB_NAME_CASES
+)
+def test_async_pool_connection_request_lib_name(lib_name, client_info_tag, expected):
+    """AsyncClientPool must send the same lib_name the async client would."""
+    import glide.client_pool as async_pool
+    import glide.glide_client as async_glide_client
+
+    config = GlideClientConfiguration(
+        addresses=[], lib_name=lib_name, client_info_tag=client_info_tag
+    )
+
+    fake = _fake_ffi_instance()
+    # The async pool reads the module-level _ASYNC_FFI, sets up the shared pipe
+    # (module globals + native lib), and casts a buffer. Stub all of that so only
+    # the connection-request-building code runs.
+    with (
+        mock.patch.object(async_pool, "_ASYNC_FFI", fake),
+        mock.patch.object(async_glide_client, "_detect_fork_and_reset", lambda: None),
+    ):
+        pool = async_pool.AsyncClientPool(
+            config, async_pool.PoolConfig(max_size=1, min_idle=0)
+        )
+
+    assert _pool_conn_req_lib_name(pool._conn_req_bytes) == expected.format(
+        default="GlidePy"
+    )
+    assert (
+        _pool_conn_req_lib_name(pool._conn_req_bytes)
+        == _create_async_connection_request(config).lib_name
+    )
+
+
+@pytest.mark.parametrize("field_name", ["lib_name", "client_info_tag"])
+@pytest.mark.parametrize(
+    "accepted_value",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("!", id="lower-boundary"),
+        pytest.param("~", id="upper-boundary"),
+        pytest.param("client!#$%&'*+,-./:;=?@[]^_`{|}~", id="punctuation"),
+    ],
+)
+def test_client_library_metadata_accepts_printable_ascii(field_name, accepted_value):
+    config = GlideClientConfiguration(addresses=[], **{field_name: accepted_value})
+
+    assert getattr(config, field_name) == accepted_value
+
+
+# CLIENT SETINFO validates both LIB-NAME and LIB-VER with validateClientAttr,
+# which permits only visible ASCII characters from "!" through "~" so that
+# CLIENT LIST remains space-delimited and parseable. Parentheses are additionally
+# reserved as delimiters when composing lib_name and client_info_tag.
+# See: validateClientAttr in https://github.com/valkey-io/valkey/blob/4e98093b208f956050fb441d89e1e2d7f91ac466/src/networking.c
+@pytest.mark.parametrize("field_name", ["lib_name", "client_info_tag"])
+@pytest.mark.parametrize(
+    "invalid_character",
+    [
+        pytest.param(" ", id="space"),
+        pytest.param("\t", id="tab"),
+        pytest.param("\n", id="newline"),
+        pytest.param("\r", id="carriage-return"),
+        pytest.param("\x00", id="null-control-character"),
+        pytest.param("\x1f", id="unit-separator-control-character"),
+        pytest.param("(", id="opening-parenthesis"),
+        pytest.param(")", id="closing-parenthesis"),
+        pytest.param("\x7f", id="delete-control-character"),
+        pytest.param("\u00a0", id="non-breaking-space"),
+        pytest.param("\u2003", id="em-space"),
+        pytest.param("\x80", id="non-ascii-boundary"),
+        pytest.param("é", id="non-ascii-latin-character"),
+        pytest.param("中", id="non-ascii-cjk-character"),
+        pytest.param("😀", id="non-ascii-emoji"),
+    ],
+)
+def test_client_library_metadata_rejects_invalid_characters(
+    field_name, invalid_character
+):
+    value = f"valid{invalid_character}value"
+
+    with pytest.raises(ValueError) as error:
+        GlideClientConfiguration(addresses=[], **{field_name: value})
+
+    assert str(error.value) == (
+        f"{field_name} must contain only printable ASCII characters from '!' "
+        "through '~', excluding '(' and ')'"
+    )
 
 
 def test_default_client_config():
@@ -89,6 +308,21 @@ def test_convert_config_with_azaffinity_replicas_and_primary_to_protobuf():
     assert isinstance(request, ConnectionRequest)
     assert request.tls_mode is TlsMode.SecureTls
     assert request.read_from == ProtobufReadFrom.AZAffinityReplicasAndPrimary
+    assert request.client_az == az
+
+
+def test_convert_config_with_azaffinity_all_nodes_to_protobuf():
+    az = "us-east-1a"
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        read_from=ReadFrom.AZ_AFFINITY_ALL_NODES,
+        client_az=az,
+    )
+    request = config._create_a_protobuf_conn_request()
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.SecureTls
+    assert request.read_from == ProtobufReadFrom.AZAffinityAllNodes
     assert request.client_az == az
 
 
@@ -656,28 +890,462 @@ def test_load_client_key_from_file_empty(tmp_path):
 
 
 def test_tls_configuration_client_cert_key_consistency():
-    config = AdvancedBaseClientConfiguration(
-        tls_config=TlsAdvancedConfiguration(),
-    )
-    request = ConnectionRequest()
-    # Do not raise if both client_cert_pem and client_key_pem are not provided.
-    config._create_a_protobuf_conn_request(request)
+    # No cert/key: construction succeeds.
+    AdvancedBaseClientConfiguration(tls_config=TlsAdvancedConfiguration())
 
-    config.tls_config.client_cert_pem = b"nonempty"
-    config.tls_config.client_key_pem = None
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"nonempty", client_key_pem=None
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        config._create_a_protobuf_conn_request(request)
-    assert "client_cert_pem is provided but client_key_pem not provided" in str(
+        config._create_a_protobuf_conn_request()
+    assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
 
-    config.tls_config.client_cert_pem = None
-    config.tls_config.client_key_pem = b"nonempty"
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=None, client_key_pem=b"nonempty"
+    )
+    config = _build_standalone_config(tls_config)
     with pytest.raises(ConfigurationError) as exc_info:
-        config._create_a_protobuf_conn_request(request)
-    assert "client_key_pem is provided but client_cert_pem not provided" in str(
+        config._create_a_protobuf_conn_request()
+    assert "client_cert_pem and client_key_pem must be provided together" in str(
         exc_info.value
     )
+
+
+# -------- Path-based mTLS with automatic client cert/key reload --------
+
+
+def _write_cert_key(tmp_path):
+    cert_path = tmp_path / "client-cert.pem"
+    key_path = tmp_path / "client-key.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    return cert_path, key_path
+
+
+def test_tls_path_based_mtls_defaults_to_core_reload(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+    )
+
+    for build in (_build_standalone_config, _build_cluster_config):
+        config = build(tls_config)
+        request = (
+            config._create_a_protobuf_conn_request(cluster_mode=True)
+            if build is _build_cluster_config
+            else config._create_a_protobuf_conn_request()
+        )
+        assert request.client_cert_path == str(cert_path)
+        assert request.client_key_path == str(key_path)
+        assert request.HasField("cert_reload")
+        assert request.cert_reload.enabled is True
+        assert not request.cert_reload.HasField("interval_seconds")
+        # Path-based must NOT populate byte-based fields.
+        assert request.client_cert == b""
+        assert request.client_key == b""
+
+
+def test_tls_path_based_mtls_with_explicit_interval(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=120,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.HasField("interval_seconds")
+    assert request.cert_reload.interval_seconds == 120
+
+
+def test_tls_path_based_mtls_accepts_pathlib_and_preserves_input(tmp_path):
+    from pathlib import Path
+
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=Path(cert_path),
+        client_key_path=Path(key_path),
+    )
+    # Normalization is deferred to protobuf creation, so the public attributes
+    # reflect exactly what the user passed in.
+    assert tls_config.client_cert_path == Path(cert_path)
+    assert tls_config.client_key_path == Path(key_path)
+
+    # The built request normalizes the paths to `str`.
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.client_cert_path == str(cert_path)
+    assert request.client_key_path == str(key_path)
+
+
+def test_tls_path_based_mtls_missing_key_path(tmp_path):
+    cert_path, _ = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(client_cert_path=str(cert_path))
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be provided together" in str(exc_info.value)
+
+
+def test_tls_path_based_mtls_missing_cert_path(tmp_path):
+    _, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(client_key_path=str(key_path))
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be provided together" in str(exc_info.value)
+
+
+def test_tls_path_based_and_byte_based_mutually_exclusive(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "mutually exclusive" in str(exc_info.value)
+
+
+def test_tls_cert_reload_interval_requires_paths():
+    tls_config = TlsAdvancedConfiguration(cert_reload_interval_seconds=60)
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
+
+
+def test_tls_cert_reload_interval_rejected_with_byte_based_mtls():
+    # Byte-based mTLS never reloads, so an interval here is an error rather than
+    # something to drop silently.
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        cert_reload_interval_seconds=60,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "may only be set when path-based mTLS is configured" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("interval", [0, -1])
+def test_tls_cert_reload_interval_rejects_non_positive_with_paths(tmp_path, interval):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=interval,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be positive" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("interval", [2**32])
+def test_tls_cert_reload_interval_out_of_range(tmp_path, interval):
+    # A value too large for a uint32 never reaches the core, so reject it here.
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=interval,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "must be a positive integer no greater than" in str(exc_info.value)
+
+
+def test_tls_cert_reload_interval_accepts_max_uint32(tmp_path):
+    # The bound is inclusive: max uint32 is accepted, max+1 is not.
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=str(cert_path),
+        client_key_path=str(key_path),
+        cert_reload_interval_seconds=2**32 - 1,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+    assert request.HasField("cert_reload")
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.HasField("interval_seconds")
+    assert request.cert_reload.interval_seconds == 2**32 - 1
+
+
+def test_tls_byte_based_mtls_ok():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        root_pem_cacerts=TEST_CERT_DATA_1,
+    )
+    assert tls_config.client_cert_pem == TEST_CLIENT_CERT_DATA
+    assert tls_config.client_key_pem == TEST_CLIENT_KEY_DATA
+    assert tls_config.root_pem_cacerts == TEST_CERT_DATA_1
+    assert tls_config.client_cert_path is None
+    assert tls_config.client_key_path is None
+    assert tls_config.cert_reload_interval_seconds is None
+
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+    assert not request.HasField("cert_reload")
+
+
+def test_tls_path_based_mtls_reload_ok(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=cert_path,
+        client_key_path=key_path,
+        cert_reload_interval_seconds=90,
+        root_pem_cacerts=TEST_CERT_DATA_1,
+    )
+    # Deferred normalization: the public attributes preserve the user's input.
+    assert tls_config.client_cert_path == cert_path
+    assert tls_config.client_key_path == key_path
+    assert tls_config.cert_reload_interval_seconds == 90
+    assert tls_config.root_pem_cacerts == TEST_CERT_DATA_1
+    assert tls_config.client_cert_pem is None
+    assert tls_config.client_key_pem is None
+
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+    assert request.client_cert_path == str(cert_path)
+    assert request.client_key_path == str(key_path)
+    assert request.cert_reload.enabled is True
+    assert request.cert_reload.interval_seconds == 90
+
+
+def test_tls_path_based_mtls_omitted_interval_defaults_to_core_reload(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=cert_path,
+        client_key_path=key_path,
+    )
+    assert tls_config.cert_reload_interval_seconds is None
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.cert_reload.enabled is True
+    assert not request.cert_reload.HasField("interval_seconds")
+
+
+def test_load_client_certificate_and_key_from_file_success(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    key_path = tmp_path / "client-key.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+
+    cert, key = load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert cert == TEST_CLIENT_CERT_DATA
+    assert key == TEST_CLIENT_KEY_DATA
+
+
+def test_load_client_certificate_and_key_from_file_missing_cert(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_certificate_and_key_from_file(
+            tmp_path / "missing-cert.pem", key_path
+        )
+    assert "Client certificate file not found" in str(exc_info.value)
+
+
+def test_load_client_certificate_and_key_from_file_empty_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(b"")
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert "Client key file is empty" in str(exc_info.value)
+
+
+def test_tls_byte_based_still_emits_no_reload_config():
+    """Byte-based mTLS remains static: no cert_reload field on the request."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+    assert not request.HasField("cert_reload")
+    assert request.client_cert_path == ""
+    assert request.client_key_path == ""
+
+
+# -------- byte-based mTLS: negative cases + forwarding --------
+
+
+def test_tls_byte_based_mtls_empty_cert():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"",
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_cert_pem"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_byte_based_mtls_empty_key():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=b"",
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_key_pem"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_byte_based_mtls_forwards_use_insecure_tls():
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+        use_insecure_tls=True,
+    )
+    assert tls_config.use_insecure_tls is True
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert request.tls_mode == TlsMode.InsecureTls
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+
+
+# -------- path-based mTLS reload: negative cases + forwarding --------
+
+
+def test_tls_path_based_mtls_forwards_root_pem_cacerts(tmp_path):
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_path=cert_path,
+        client_key_path=key_path,
+        root_pem_cacerts=TEST_CERT_DATA_1,
+    )
+    assert tls_config.root_pem_cacerts == TEST_CERT_DATA_1
+
+    request = _build_standalone_config(tls_config)._create_a_protobuf_conn_request()
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == TEST_CERT_DATA_1
+
+
+# -------- load_client_certificate_and_key_from_file: negative cases --------
+
+
+def test_load_client_certificate_and_key_from_file_missing_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    missing_key = tmp_path / "missing-key.pem"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, missing_key)
+    assert "Client key file not found" in str(exc_info.value)
+    assert str(missing_key) in str(exc_info.value)
+
+
+def test_load_client_certificate_and_key_from_file_empty_cert(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(b"")
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_certificate_and_key_from_file(cert_path, key_path)
+    assert "Client certificate file is empty" in str(exc_info.value)
+    assert str(cert_path) in str(exc_info.value)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="chmod 0o000 does not restrict root or Windows",
+)
+def test_load_client_certificate_and_key_from_file_unreadable_key(tmp_path):
+    from glide_shared.config import load_client_certificate_and_key_from_file
+
+    cert_path = tmp_path / "client-cert.pem"
+    cert_path.write_bytes(TEST_CLIENT_CERT_DATA)
+    key_path = tmp_path / "client-key.pem"
+    key_path.write_bytes(TEST_CLIENT_KEY_DATA)
+    os.chmod(key_path, 0o000)
+    try:
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_client_certificate_and_key_from_file(cert_path, key_path)
+        assert "client key" in str(exc_info.value).lower()
+        assert str(key_path) in str(exc_info.value)
+    finally:
+        os.chmod(key_path, 0o600)
+
+
+# -------- recovered pre-reshape coverage: empty byte PEM inputs --------
+
+
+def test_tls_client_cert_pem_empty_bytes_rejected():
+    """Empty client_cert_pem bytes must be rejected when the request is built."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=b"",
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_cert_pem must not be empty"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_client_key_pem_empty_bytes_rejected():
+    """Empty client_key_pem bytes must be rejected when the request is built."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=b"",
+    )
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_key_pem must not be empty"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_mutation_after_construction_rejected(tmp_path):
+    """Post-construction mutation is caught the next time the request is built."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    # Break the pairing invariant after construction.
+    tls_config.client_key_pem = None
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="client_cert_pem and client_key_pem"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_tls_mixed_mode_after_construction_rejected(tmp_path):
+    """Post-construction mutation into a mixed byte/path config is caught the next time the request is built."""
+    cert_path, key_path = _write_cert_key(tmp_path)
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+    tls_config.client_cert_path = str(cert_path)
+    tls_config.client_key_path = str(key_path)
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError, match="mutually exclusive"):
+        config._create_a_protobuf_conn_request()
 
 
 def test_tcp_nodelay_default_value():
@@ -714,3 +1382,19 @@ def test_tcp_nodelay_in_protobuf_request():
     )
     request_default = config_default._create_a_protobuf_conn_request()
     assert not request_default.HasField("tcp_nodelay")
+
+
+def test_recovery_requests_queue_size_in_proto():
+    """Verify recovery_requests_queue_size is accepted and mapped to the proto request."""
+    # Default: not set — field should be absent (HasField returns False)
+    config = GlideClusterClientConfiguration([NodeAddress("localhost", 6379)])
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert not request.HasField("recovery_requests_queue_size")
+
+    # Custom value
+    config_custom = GlideClusterClientConfiguration(
+        [NodeAddress("localhost", 6379)],
+        recovery_requests_queue_size=500,
+    )
+    request_custom = config_custom._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request_custom.recovery_requests_queue_size == 500

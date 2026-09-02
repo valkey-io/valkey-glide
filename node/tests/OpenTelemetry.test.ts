@@ -43,6 +43,7 @@ function readAndParseSpanFile(path: string): {
     } catch (error: unknown) {
         throw new Error(
             `Failed to read or validate file: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
         );
     }
 

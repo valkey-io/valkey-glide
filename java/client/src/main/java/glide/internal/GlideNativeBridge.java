@@ -38,17 +38,47 @@ public class GlideNativeBridge {
     public static native long createClient(
             byte[] connectionRequestBytes, AddressResolver addressResolver);
 
-    /** Execute command asynchronously */
+    /** Execute a single command asynchronously, passing parameters directly via JNI. */
     public static native void executeCommandAsync(
-            long clientPtr, byte[] requestBytes, long callbackId);
+            long clientPtr,
+            long callbackId,
+            int requestType,
+            byte[][] args,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long spanPtr);
 
-    /** Execute binary command with mixed String/byte[] arguments asynchronously */
-    public static native void executeBinaryCommandAsync(
-            long clientPtr, byte[] requestBytes, long callbackId);
-
-    /** Execute batch (pipeline/transaction) asynchronously */
+    /**
+     * Execute a batch of commands asynchronously, passing parameters directly via JNI.
+     *
+     * @param requestTypes array of request type integers, one per command
+     * @param args 3D byte array: args[cmdIndex][argIndex] = byte[] argument
+     * @param isAtomic whether this is a transaction (atomic) or pipeline
+     * @param raiseOnError whether to raise on individual command errors
+     * @param timeout batch timeout in ms (0 = no timeout)
+     * @param retryServerError whether to retry on server errors
+     * @param retryConnectionError whether to retry on connection errors
+     * @param hasRoute whether routing is specified
+     * @param routeType route type int
+     * @param routeParam route parameter string
+     */
     public static native void executeBatchAsync(
-            long clientPtr, byte[] batchRequestBytes, boolean expectUtf8Response, long callbackId);
+            long clientPtr,
+            long callbackId,
+            int[] requestTypes,
+            byte[][][] args,
+            boolean isAtomic,
+            boolean raiseOnError,
+            int timeout,
+            boolean retryServerError,
+            boolean retryConnectionError,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long spanPtr);
 
     /** Update the connection password with optional immediate authentication. */
     public static native void updateConnectionPassword(

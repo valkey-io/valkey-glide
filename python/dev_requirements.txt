@@ -1,10 +1,10 @@
-maturin==1.13.3
+maturin==1.14.1
 anyio[trio]>=4.9.0
 uvloop
 pytest<9.1
 pytest-html
 pytest-timeout
-black >= 24.3.0
+black >= 25.11.0
 mypy == 1.19.1
 mypy-protobuf == 3.6.0
 flake8 == 7.3.0

@@ -236,8 +236,179 @@ fn get_async_error(index: usize) -> (String, RequestErrorType) {
     (err_msg.to_string(), err_type.clone())
 }
 
+/// Exercises [`command`] (unrouted): good PING, bad SADD. Sync + async.
+fn test_command(client_ptr: *const c_void, async_client: bool) {
+    // Good command: PING IS_WORKING
+    let good_cmd_idx = 0;
+    let ping_value = b"IS_WORKING";
+    let good_res = execute_command(
+        client_ptr,
+        good_cmd_idx,
+        ping_value,
+        1_u64,
+        RequestType::Ping,
+    );
+    let ping_res = if async_client {
+        assert!(good_res.is_none()); // result should be returned through callback
+        let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+        assert_eq!(metrics.success_count.load(Ordering::SeqCst), 1);
+        get_async_response(good_cmd_idx)
+    } else {
+        assert!(good_res.is_some());
+        get_sync_response(good_res.unwrap().response)
+    };
+    assert_eq!(ping_res, String::from_utf8_lossy(ping_value));
+    // Bad command: Non existing command args, the server should return with an error: SADD NOTAREALCMD
+    let bad_cmd_idx = 1;
+    let bad_res = execute_command(
+        client_ptr,
+        bad_cmd_idx,
+        b"NOTAREALCMD",
+        1_u64,
+        RequestType::SAdd,
+    );
+    let (err_msg, err_type) = if async_client {
+        assert!(bad_res.is_none()); // result should be returned through callback
+        let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+        assert_eq!(metrics.failure_count.load(Ordering::SeqCst), 1);
+        get_async_error(bad_cmd_idx)
+    } else {
+        assert!(bad_res.is_some());
+        get_sync_error(bad_res.unwrap().command_error)
+    };
+    assert!(err_msg.contains("wrong number of arguments for 'sadd' command"));
+    assert_eq!(err_type, RequestErrorType::Unspecified);
+}
+
+fn execute_command_with_route_info(
+    client_ptr: *const c_void,
+    index: usize,
+    command_bytes: &[u8],
+    arg_count: u64,
+    command_type: RequestType,
+    route_info: *const RouteInfo,
+) -> Option<Box<CommandResult>> {
+    let command_len = command_bytes.len();
+    let command_vec = [command_bytes.as_ptr()];
+    let command_ptr = command_vec.as_ptr() as *const usize;
+    let args_len = command_len as c_ulong;
+    let args_len_vec = [args_len];
+    let args_len_ptr = args_len_vec.as_ptr();
+
+    let command_res_ptr = unsafe {
+        command_with_route_info(
+            client_ptr,
+            index,
+            command_type,
+            arg_count,
+            command_ptr,
+            args_len_ptr,
+            route_info,
+            std::ptr::null_mut(),
+            0,
+            0,
+        )
+    };
+    if command_res_ptr.is_null() {
+        // If the returned CommandResult pointer is null it means that the Async client is being used.
+        // We shall let the async callback to be called.
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            sleep(Duration::from_millis(1)).await;
+        });
+        None
+    } else {
+        // Sync client, command result returns immediately
+        unsafe { Some(Box::from_raw(command_res_ptr)) }
+    }
+}
+
+/// Exercises [`command_with_route_info`]: good PING, bad SADD, and a
+/// null-route PING, all via `RouteInfo::Random`. Sync + async.
+fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
+    // Route::Random — the only variant guaranteed to be meaningful against
+    // a single-node standalone server. slot_key/hostname are left null
+    // since RouteType::Random doesn't read them.
+    let route_info = RouteInfo {
+        route_type: RouteType::Random,
+        slot_id: 0,
+        slot_key: std::ptr::null(),
+        slot_type: SlotType::Primary,
+        hostname: std::ptr::null(),
+        port: 0,
+    };
+    let route_info_ptr = &route_info as *const RouteInfo;
+
+    // Good command: PING IS_WORKING, routed via RouteInfo instead of route_bytes.
+    let good_cmd_idx = 2;
+    let ping_value = b"IS_WORKING";
+    let good_res = execute_command_with_route_info(
+        client_ptr,
+        good_cmd_idx,
+        ping_value,
+        1_u64,
+        RequestType::Ping,
+        route_info_ptr,
+    );
+    let ping_res = if async_client {
+        assert!(good_res.is_none()); // result should be returned through callback
+        let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+        assert_eq!(metrics.success_count.load(Ordering::SeqCst), 2);
+        get_async_response(good_cmd_idx)
+    } else {
+        assert!(good_res.is_some());
+        get_sync_response(good_res.unwrap().response)
+    };
+    assert_eq!(ping_res, String::from_utf8_lossy(ping_value));
+
+    // Bad command: Non existing command args, the server should return with an error: SADD NOTAREALCMD
+    let bad_cmd_idx = 3;
+    let bad_res = execute_command_with_route_info(
+        client_ptr,
+        bad_cmd_idx,
+        b"NOTAREALCMD",
+        1_u64,
+        RequestType::SAdd,
+        route_info_ptr,
+    );
+    let (err_msg, err_type) = if async_client {
+        assert!(bad_res.is_none()); // result should be returned through callback
+        let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+        assert_eq!(metrics.failure_count.load(Ordering::SeqCst), 2);
+        get_async_error(bad_cmd_idx)
+    } else {
+        assert!(bad_res.is_some());
+        get_sync_error(bad_res.unwrap().command_error)
+    };
+    assert!(err_msg.contains("wrong number of arguments for 'sadd' command"));
+    assert_eq!(err_type, RequestErrorType::Unspecified);
+
+    // Null route_info should behave identically to an unrouted command
+    // (mirrors route_bytes = null / route_bytes_len = 0 on the protobuf path).
+    let null_route_cmd_idx = 4;
+    let null_route_res = execute_command_with_route_info(
+        client_ptr,
+        null_route_cmd_idx,
+        ping_value,
+        1_u64,
+        RequestType::Ping,
+        std::ptr::null(),
+    );
+    let null_route_ping_res = if async_client {
+        assert!(null_route_res.is_none());
+        let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
+        assert_eq!(metrics.success_count.load(Ordering::SeqCst), 3);
+        get_async_response(null_route_cmd_idx)
+    } else {
+        assert!(null_route_res.is_some());
+        get_sync_response(null_route_res.unwrap().response)
+    };
+    assert_eq!(null_route_ping_res, String::from_utf8_lossy(ping_value));
+}
+
+/// Test both command entrypoints executions.
 #[rstest]
-fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) {
+fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool) {
     let server = Server::new();
     let connection_request_bytes = create_connection_request(server.port);
     let connection_request_len = connection_request_bytes.len();
@@ -292,50 +463,122 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         );
 
         let client_ptr = response.conn_ptr;
-        // Good command: PING IS_WORKING
-        let good_cmd_idx = 0;
-        let ping_value = b"IS_WORKING";
-        let good_res = execute_command(
-            client_ptr,
-            good_cmd_idx,
-            ping_value,
-            1_u64,
-            RequestType::Ping,
-        );
-        let ping_res = if async_client {
-            assert!(good_res.is_none()); // result should be returned through callback
-            let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
-            assert_eq!(metrics.success_count.load(Ordering::SeqCst), 1);
-            get_async_response(good_cmd_idx)
-        } else {
-            assert!(good_res.is_some());
-            get_sync_response(good_res.unwrap().response)
-        };
-        assert_eq!(ping_res, String::from_utf8_lossy(ping_value));
-        // Bad command: Non existing command args, the server should return with an error: SADD NOTAREALCMD
-        let bad_cmd_idx = 1;
-        let bad_res = execute_command(
-            client_ptr,
-            bad_cmd_idx,
-            b"NOTAREALCMD",
-            1_u64,
-            RequestType::SAdd,
-        );
-        let (err_msg, err_type) = if async_client {
-            assert!(bad_res.is_none()); // result should be returned through callback
-            let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
-            assert_eq!(metrics.failure_count.load(Ordering::SeqCst), 1);
-            get_async_error(bad_cmd_idx)
-        } else {
-            assert!(bad_res.is_some());
-            get_sync_error(bad_res.unwrap().command_error)
-        };
-        assert!(err_msg.contains("wrong number of arguments for 'sadd' command"));
-        assert_eq!(err_type, RequestErrorType::Unspecified);
+
+        test_command(client_ptr, async_client);
+        test_command_with_route_info(client_ptr, async_client);
+
         free_connection_response(response_ptr as *mut ConnectionResponse);
         close_client(client_ptr);
     }
 }
+
+#[test]
+fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
+    unsafe extern "C-unwind" fn no_op_pubsub_callback(
+        _client_ptr: usize,
+        _kind: PushKind,
+        _message: *const u8,
+        _message_len: i64,
+        _channel: *const u8,
+        _channel_len: i64,
+        _pattern: *const u8,
+        _pattern_len: i64,
+    ) {
+    }
+
+    unsafe extern "C-unwind" fn no_op_address_resolver(
+        _client_ptr: usize,
+        _host: *const u8,
+        _host_len: usize,
+        _port: u16,
+        _resolved_host_buf: *mut u8,
+        _resolved_host_buf_len: usize,
+        resolved_host_len: *mut usize,
+    ) -> u16 {
+        if !resolved_host_len.is_null() {
+            unsafe { *resolved_host_len = 0 };
+        }
+        0
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    request.lazy_connect = true;
+    request.lib_name = "invalid name".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+
+    unsafe {
+        let response_ptr = create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            no_op_pubsub_callback,
+            no_op_address_resolver,
+            0,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("configuration error"), "{error}");
+        assert!(error.contains("library name"), "{error}");
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+#[test]
+fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    request.lib_name = "invalid name".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response_ptr = create_monitor_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            no_op_monitor_callback,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(
+            error.to_ascii_lowercase().contains("library name"),
+            "{error}"
+        );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
 #[test]
 fn test_create_otel_span_with_parent() {
     // Test creating a parent span

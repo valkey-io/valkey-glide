@@ -1,14 +1,15 @@
 name: Lint rust
+description: "Run linting for a Rust crate"
 
 inputs:
     cargo-toml-folder:
         description: "folder that contains the target Cargo.toml file"
         required: true
-        type: string
+
+    # GitHub token allows install-protoc action to avoid rate limiting.
     github-token:
         description: "github token"
-        required: false
-        type: string
+        required: true
 
 runs:
     using: "composite"
@@ -44,7 +45,7 @@ runs:
 
         - run: |
               cargo install --locked cargo-deny
-              cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
+              cargo deny --config ${GITHUB_WORKSPACE}/deny.toml check
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 

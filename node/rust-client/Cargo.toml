@@ -21,6 +21,7 @@ logger_core = { path = "../../logger_core" }
 telemetrylib = { path = "../../glide-core/telemetry" }
 byteorder = "1"
 bytes = "1"
+dashmap = "~6.2.1"
 num-traits = "0.2"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
@@ -30,7 +31,7 @@ protobuf = { version = "3", features = ["bytes", "with-bytes"] } # Direct dep re
 num-bigint = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }
+tikv-jemallocator = { version = "0.7", features = ["disable_initial_exec_tls"] }
 
 [build-dependencies]
 napi-build = "2"

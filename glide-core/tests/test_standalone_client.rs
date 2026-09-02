@@ -7,7 +7,7 @@ mod utilities;
 mod standalone_client_tests {
     use super::*;
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
-    use crate::utilities::mocks::{Mock, ServerMock};
+    use crate::utilities::mocks::{Mock, ServerMock, SetInfoResponse};
     use glide_core::{
         client::{Client as GlideClient, ConnectionError, StandaloneClient},
         connection_request::{ProtocolVersion, ReadFrom},
@@ -133,19 +133,19 @@ mod standalone_client_tests {
         let mut primary_responses = std::collections::HashMap::new();
         primary_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         primary_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
+            Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec().into()),
         );
         primary_responses.insert(
             "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
             Value::Map(vec![
-                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (Value::BulkString(b"proto".to_vec().into()), Value::Int(3)),
                 (
-                    Value::BulkString(b"role".to_vec()),
-                    Value::BulkString(b"master".to_vec()),
+                    Value::BulkString(b"role".to_vec().into()),
+                    Value::BulkString(b"master".to_vec().into()),
                 ),
             ]),
         );
@@ -156,19 +156,19 @@ mod standalone_client_tests {
         let mut replica_responses = std::collections::HashMap::new();
         replica_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         replica_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::BulkString(b"role:slave\r\n".to_vec()),
+            Value::BulkString(b"role:slave\r\n".to_vec().into()),
         );
         replica_responses.insert(
             "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
             Value::Map(vec![
-                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (Value::BulkString(b"proto".to_vec().into()), Value::Int(3)),
                 (
-                    Value::BulkString(b"role".to_vec()),
-                    Value::BulkString(b"replica".to_vec()),
+                    Value::BulkString(b"role".to_vec().into()),
+                    Value::BulkString(b"replica".to_vec().into()),
                 ),
             ]),
         );
@@ -190,7 +190,7 @@ mod standalone_client_tests {
         let mut responses = base;
         responses.insert(
             "*1\r\n$4\r\nINFO\r\n".to_string(),
-            Value::BulkString(format!("availability_zone:{az}\r\n").into_bytes()),
+            Value::BulkString(format!("availability_zone:{az}\r\n").into_bytes().into()),
         );
         responses
     }
@@ -514,6 +514,111 @@ mod standalone_client_tests {
                 "us-east-1a".to_string(),
                 "us-east-1a".to_string(),
                 "us-east-1a".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: same-AZ primary and replica share reads equally.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_az_match_mixed() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 2,
+            expected_replica_reads: vec![0, 0, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1b".to_string(),
+                "us-east-1b".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: only the primary matches the client AZ, so it gets all reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_az_match_primary() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            expected_primary_reads: 3,
+            expected_replica_reads: vec![0, 0, 0],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: when there are no local nodes, distribute reads evenly across all nodes.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_no_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 1,
+            expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1c".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: the primary is an equal member of the in-AZ rotation; out-of-AZ replicas get no reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_most_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 6,
+            expected_primary_reads: 2,
+            expected_replica_reads: vec![0, 2, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityAllNodes: a disconnected in-AZ node is skipped; the remaining in-AZ nodes serve all reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_nodes_skips_disconnected_nodes() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityAllNodes,
+            number_of_requests_sent: 6,
+            expected_primary_reads: 3,
+            expected_replica_reads: vec![0, 3],
+            number_of_replicas_dropped_after_connection: 1,
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1c".to_string(),
             ],
             ..Default::default()
         });
@@ -1156,6 +1261,66 @@ mod standalone_client_tests {
         });
     }
 
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_unsupported_client_setinfo_does_not_prevent_connection() {
+        let mut responses = create_primary_responses();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::SimpleString("PONG".to_string()),
+        );
+        let server = ServerMock::new_with_setinfo_response(responses, SetInfoResponse::Unsupported);
+        let addresses = server.get_addresses();
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.lib_name = "GlideRust(framework:1.2)".into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("unsupported CLIENT SETINFO should not prevent client creation");
+
+            assert_connected(&mut client).await;
+        });
+
+        assert_eq!(
+            server.get_number_of_received_setinfo_commands(),
+            2,
+            "connection setup should send CLIENT SETINFO for LIB-NAME and LIB-VER"
+        );
+    }
+
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_setinfo_in_library_name_keeps_setup_responses_synchronized() {
+        let mut responses = create_primary_responses();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::SimpleString("PONG".to_string()),
+        );
+        let server = ServerMock::new(responses);
+        let addresses = server.get_addresses();
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.lib_name = "GlideSETINFOClient".into();
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("SETINFO in the library name should not desynchronize setup responses");
+
+            assert_connected(&mut client).await;
+        });
+
+        assert_eq!(
+            server.get_number_of_received_setinfo_commands(),
+            2,
+            "only CLIENT SETINFO command frames should be counted"
+        );
+    }
+
     // ==================== Read-Only Mode Tests ====================
 
     /// Creates mock responses for a replica-only server (no primary detection needed)
@@ -1163,12 +1328,12 @@ mod standalone_client_tests {
         let mut responses = std::collections::HashMap::new();
         responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::BulkString(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec().into()),
         );
         // GET command response
         responses.insert(
             "*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n".to_string(),
-            Value::BulkString(b"bar".to_vec()),
+            Value::BulkString(b"bar".to_vec().into()),
         );
         // SET command response (for testing write blocking)
         responses.insert(
@@ -1338,6 +1503,35 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity_all_nodes() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinityAllNodes.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinityAllNodes should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_only_mode_accepts_prefer_replica() {
         let mock = create_replica_only_mock();
         let addresses = get_mock_addresses(&[mock]);
@@ -1494,7 +1688,7 @@ mod standalone_client_tests {
             let value = read_result.unwrap();
             assert_eq!(
                 value,
-                Value::BulkString(b"test_value".to_vec()),
+                Value::BulkString(b"test_value".to_vec().into()),
                 "Read value should match written value"
             );
 

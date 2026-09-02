@@ -78,6 +78,7 @@ import glide.api.models.configuration.PubSubState;
 import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
+import glide.api.models.scope.IsolatedScope;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
@@ -105,6 +106,70 @@ public class GlideClient extends BaseClient
     /** Constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientBuilder builder) {
         super(builder);
+    }
+
+    /**
+     * Creates a GlideClient that wraps an existing native handle from the pool.
+     *
+     * <p>Backward-compatible overload for callers that do not have the pool's serialized
+     * ConnectionRequest available. Scope acquisition ({@link #scopedConnection}) on the returned
+     * client requires the 4-arg overload so the pool's connection bytes are threaded through.
+     *
+     * @param nativeHandle the native client handle (same as client_id from pool)
+     * @param maxInflight max inflight requests (0 = use core defaults)
+     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
+     * @return a fully-functional GlideClient backed by the pool connection
+     */
+    public static GlideClient fromPoolHandle(
+            long nativeHandle, int maxInflight, long requestTimeoutMs) {
+        return fromPoolHandle(nativeHandle, maxInflight, requestTimeoutMs, null);
+    }
+
+    /**
+     * Creates a GlideClient that wraps an existing native handle from the pool.
+     *
+     * <p>The pool's Rust side creates the actual connection and registers it in the JNI handle table.
+     * This factory wires up the Java command dispatch chain so that commands flow through the
+     * existing native bridge, and seeds the {@link glide.managers.ConnectionManager} with the pool's
+     * native handle and serialized ConnectionRequest so {@link #scopedConnection} can materialize an
+     * isolated scope pool for this borrowed client.
+     *
+     * @param nativeHandle the native client handle (same as client_id from pool)
+     * @param maxInflight max inflight requests (0 = use core defaults)
+     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
+     * @param connectionRequestBytes the pool's serialized protobuf ConnectionRequest, or {@code null}
+     *     when unavailable (scope acquisition will fail with "Client not connected")
+     * @return a fully-functional GlideClient backed by the pool connection
+     */
+    public static GlideClient fromPoolHandle(
+            long nativeHandle, int maxInflight, long requestTimeoutMs, byte[] connectionRequestBytes) {
+        glide.internal.GlideCoreClient coreClient =
+                new glide.internal.GlideCoreClient(nativeHandle, maxInflight, requestTimeoutMs);
+        glide.managers.CommandManager commandManager = new glide.managers.CommandManager(coreClient);
+        glide.managers.ConnectionManager connectionManager =
+                new glide.managers.ConnectionManager(nativeHandle, connectionRequestBytes);
+        glide.connectors.handlers.MessageHandler messageHandler =
+                new glide.connectors.handlers.MessageHandler(
+                        java.util.Optional.empty(),
+                        java.util.Optional.empty(),
+                        new glide.managers.BaseResponseResolver(
+                                pointer -> {
+                                    if (pointer == null || pointer == 0) return null;
+                                    return glide.ffi.resolvers.GlideValueResolver.valueFromPointer(pointer);
+                                }));
+
+        GlideClient client =
+                new GlideClient(
+                        new ClientBuilder(
+                                connectionManager, commandManager, messageHandler, java.util.Optional.empty()));
+
+        try {
+            glide.internal.GlideCoreClient.registerClient(nativeHandle, client);
+        } catch (Throwable t) {
+            // Non-fatal: push delivery won't work but commands will
+        }
+
+        return client;
     }
 
     /**
@@ -154,6 +219,65 @@ public class GlideClient extends BaseClient
     public static CompletableFuture<GlideClient> createClient(
             @NonNull GlideClientConfiguration config) {
         return BaseClient.createClient(config, GlideClient::new);
+    }
+
+    /**
+     * Acquire an isolated scope (dedicated connection) for operations requiring per-connection server
+     * state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands).
+     *
+     * <p>The returned {@link IsolatedScope} borrows a connection from the client's internal scope
+     * pool. Commands on the scope bypass the multiplexer. Use try-with-resources to ensure the scope
+     * is returned to the pool.
+     *
+     * @param timeout maximum time to wait for a scope to become available
+     * @param routingKey in cluster mode, the key whose hash slot determines which node the scope
+     *     connects to. All keys used in the scope must hash to the same slot. May be null (defaults
+     *     to slot 0).
+     * @return a Future resolving to an {@link IsolatedScope}
+     */
+    public CompletableFuture<IsolatedScope> scopedConnection(
+            @NonNull java.time.Duration timeout, String routingKey) {
+        long clientId = connectionManager.getNativeClientHandle();
+        byte[] connBytes = connectionManager.getConnectionRequestBytes();
+        if (connBytes == null) {
+            CompletableFuture<IsolatedScope> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("Client not connected"));
+            return f;
+        }
+
+        int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
+        long timeoutMs = timeout.toMillis();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    while (true) {
+                        long scopeId =
+                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
+                                        clientId, connBytes, routingSlot);
+                        if (scopeId >= 0) {
+                            return new IsolatedScope(scopeId, clientId);
+                        }
+                        // Pool exhausted — retry with backoff until deadline
+                        long remaining = deadline - System.currentTimeMillis();
+                        if (remaining <= 0) {
+                            throw new java.util.concurrent.CompletionException(
+                                    new java.util.concurrent.TimeoutException(
+                                            "Timed out waiting for isolated scope (pool exhausted)"));
+                        }
+                        try {
+                            Thread.sleep(Math.min(10, remaining));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new java.util.concurrent.CompletionException(e);
+                        }
+                    }
+                });
+    }
+
+    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
+        return scopedConnection(timeout, null);
     }
 
     @Override
@@ -902,5 +1026,38 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Map<String, Object>> memoryStats() {
         return commandManager.submitNewCommand(
                 MemoryStats, EMPTY_STRING_ARRAY, this::handleMapResponse);
+    }
+
+    /** Compute the Redis cluster hash slot for a key (CRC16 mod 16384). */
+    private static int slotForKey(byte[] key) {
+        int start = -1;
+        for (int i = 0; i < key.length; i++) {
+            if (key[i] == '{') {
+                start = i;
+                break;
+            }
+        }
+        if (start != -1) {
+            for (int i = start + 1; i < key.length; i++) {
+                if (key[i] == '}' && i != start + 1) {
+                    byte[] tag = new byte[i - start - 1];
+                    System.arraycopy(key, start + 1, tag, 0, tag.length);
+                    key = tag;
+                    break;
+                }
+            }
+        }
+        int crc = 0;
+        for (byte b : key) {
+            crc ^= (b & 0xFF) << 8;
+            for (int j = 0; j < 8; j++) {
+                if ((crc & 0x8000) != 0) {
+                    crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+                } else {
+                    crc = (crc << 1) & 0xFFFF;
+                }
+            }
+        }
+        return crc % 16384;
     }
 }

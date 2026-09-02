@@ -8,6 +8,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -27,6 +29,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -46,6 +50,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -65,6 +71,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -84,6 +92,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -97,13 +107,15 @@ updates:
           - "Rust ⚙️"
           - "java ☕"
 
-    # Enable version updates for Cargo (Rust - Python wrapper)
+    # Enable version updates for Cargo (Rust - Python async wrapper)
     - package-ecosystem: "cargo"
-      directory: "/python"
+      directory: "/python/glide-async"
       schedule:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -117,6 +129,155 @@ updates:
           - "Rust ⚙️"
           - "python 🐍"
 
+    # Enable version updates for Cargo (Rust - Python shared)
+    - package-ecosystem: "cargo"
+      directory: "/python/glide-shared"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+          - "python 🐍"
+
+    # Enable version updates for Cargo (Rust - Node client)
+    - package-ecosystem: "cargo"
+      directory: "/node/rust-client"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+          - "node 🐢"
+
+    # Enable version updates for Cargo (Rust - FFI / Go & Python sync bindings)
+    - package-ecosystem: "cargo"
+      directory: "/ffi"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
+    # Enable version updates for Cargo (Rust - telemetry)
+    - package-ecosystem: "cargo"
+      directory: "/glide-core/telemetry"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
+    # Enable version updates for Cargo (Rust - redis-rs vendored fork)
+    - package-ecosystem: "cargo"
+      directory: "/glide-core/redis-rs"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
+    # Enable version updates for Cargo (Rust - benchmarks)
+    - package-ecosystem: "cargo"
+      directory: "/benchmarks/rust"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
+    # Enable version updates for Cargo (Rust - logger core)
+    - package-ecosystem: "cargo"
+      directory: "/logger_core"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
     # Enable version updates for Go modules
     - package-ecosystem: "gomod"
       directory: "/go"
@@ -124,6 +285,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -143,6 +306,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 10
       groups:
           patch-updates:
@@ -162,6 +327,8 @@ updates:
           interval: "weekly"
           day: "monday"
           time: "09:00"
+      cooldown:
+          default-days: 7
       open-pull-requests-limit: 5
       groups:
           patch-updates:
@@ -173,3 +340,45 @@ updates:
       labels:
           - "dependencies"
           - "github-actions"
+
+    # Enable version updates for npm (Node pm-and-types-tests/depend-on-glide-package)
+    - package-ecosystem: npm
+      directory: /node/pm-and-types-tests/depend-on-glide-package
+      schedule:
+          interval: weekly
+          day: monday
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "node 🐢"
+
+    # Enable version updates for npm (Node pm-and-types-tests/depend-on-glide-dependent)
+    - package-ecosystem: npm
+      directory: /node/pm-and-types-tests/depend-on-glide-dependent
+      schedule:
+          interval: weekly
+          day: monday
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "node 🐢"

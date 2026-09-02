@@ -91,6 +91,7 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
@@ -322,19 +323,21 @@ async def wait_for(
 def sync_wait_for(
     condition: Callable[[], bool],
     failure: str,
+    timeout: float = _WAIT_FOR_TIMEOUT_SEC,
 ) -> None:
     """Waits until a condition is met.
 
     Args:
         condition: Callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
+        timeout: Maximum time to wait for the condition to be met, in seconds.
 
     Raises:
         TimeoutError: If the condition is not met within the timeout.
     """
     import time as _time
 
-    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
+    deadline = _time.monotonic() + timeout
 
     while _time.monotonic() < deadline:
         if condition():
@@ -746,6 +749,8 @@ def create_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -787,6 +792,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -798,6 +805,7 @@ def create_client_config(
                 tls_config=tls_adv_conf,
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
+            reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
             compression=compression_config,
             client_side_cache=cache,
@@ -813,6 +821,8 @@ def create_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -863,6 +873,8 @@ def create_sync_client_config(
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
     cache: Optional[ClientSideCache] = None,
+    lib_name: Optional[str] = None,
+    client_info_tag: Optional[str] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -904,6 +916,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
@@ -915,6 +929,7 @@ def create_sync_client_config(
                 tls_config=tls_adv_conf,
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
+            reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
             compression=compression_config,
             client_side_cache=cache,
@@ -929,6 +944,8 @@ def create_sync_client_config(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            lib_name=lib_name,
+            client_info_tag=client_info_tag,
             protocol=protocol,
             request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
@@ -1020,6 +1037,44 @@ def kill_connections(
         return client.custom_command(cmd)
     elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
         return client.custom_command(cmd, route=AllNodes())
+
+
+# Tolerance for the fire-and-forget CLIENT KILL that reconnect tests issue to
+# force a disconnect. Under heavy full-matrix CI contention the kill command can
+# time out even though it reached the server: in cluster mode it is fanned over
+# AllNodes and can sever the caller's own connections to the non-executing nodes
+# before their responses arrive, and even a standalone kill can outlast a loaded
+# runner's request budget. That timeout is a benign outcome - the disconnect is
+# the whole point of the call, and every caller separately verifies that the
+# client recovers afterward - so we tolerate a GLIDE TimeoutError and let any
+# other error propagate as a real failure.
+async def kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+) -> None:
+    """Async: kill connections, tolerating a GLIDE TimeoutError from the kill.
+
+    The CLIENT KILL severs the connections even when the client's own response
+    times out under load, so a ``TimeoutError`` is an acceptable outcome here -
+    the caller's reconnect check is the real gate. Any other error propagates.
+    """
+    try:
+        await kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
+
+
+def sync_kill_connections_tolerant(
+    client: TAnyGlideClient,
+    kill_type: Optional[str] = "normal",
+    skip_me: str = "yes",
+) -> None:
+    """Sync counterpart of :func:`kill_connections_tolerant`."""
+    try:
+        kill_connections(client, kill_type=kill_type, skip_me=skip_me)
+    except GlideTimeoutError:
+        pass
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:
@@ -2162,3 +2217,32 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
         assert stats.db_dict_rehashing_count is None
         assert stats.overhead_db_hashtable_lut is None
         assert stats.overhead_db_hashtable_rehashing is None
+
+
+def get_standalone_address() -> NodeAddress:
+    """Get the standalone server address from conftest (CI) or fallback to localhost.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        addr = cluster.nodes_addr[0]
+        return NodeAddress(addr.host, addr.port)
+    except (AttributeError, IndexError):
+        return NodeAddress("localhost", 6379)
+
+
+def get_cluster_addresses() -> list:
+    """Get the cluster server addresses from conftest (CI) or fallback to localhost:7000.
+
+    Use in tests that run both with conftest (CI) and without (--noconftest local).
+    """
+    import pytest
+
+    try:
+        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        return [NodeAddress(addr.host, addr.port) for addr in cluster.nodes_addr]
+    except (AttributeError, IndexError):
+        return [NodeAddress("localhost", 7000)]

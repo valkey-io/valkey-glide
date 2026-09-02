@@ -31,6 +31,8 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 // [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#standalone
 type Client struct {
 	baseClient
+	clientConfig *config.ClientConfiguration // stored for scoped_connection
+	connReqBytes []byte                      // pre-serialized ConnectionRequest (set for pool-borrowed clients)
 }
 
 // Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
@@ -68,7 +70,7 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
-	return &Client{*client}, nil
+	return &Client{baseClient: *client, clientConfig: config}, nil
 }
 
 // Executes a batch by processing the queued commands.

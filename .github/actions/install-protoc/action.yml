@@ -2,6 +2,7 @@ name: Install protoc
 description: Install protobuf compiler (protoc)
 
 inputs:
+    # GitHub token allows setup-protoc action to avoid rate limiting.
     github-token:
         description: "GitHub token for downloading protoc release"
         required: true

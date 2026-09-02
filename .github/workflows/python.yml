@@ -121,7 +121,7 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -154,7 +154,7 @@ jobs:
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -171,7 +171,7 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       python/target
@@ -203,6 +203,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
@@ -213,6 +214,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (async only)
@@ -223,6 +225,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (sync only)
@@ -233,6 +236,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: test_secret_key
                   AWS_SESSION_TOKEN: test_session_token
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
@@ -265,7 +269,7 @@ jobs:
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -277,7 +281,7 @@ jobs:
               with:
                   python-version: ${{ matrix.python }}
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       python/target
@@ -299,29 +303,33 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -k 'pubsub' --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -k 'pubsub' --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -k 'pubsub' tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
+                  ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -k 'pubsub' tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - name: Detect mock pubsub changes
               id: pubsub_mock_changes
-              uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+              uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
               with:
                   filters: |
                       mock_pubsub:
@@ -361,7 +369,7 @@ jobs:
         if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: lint rust
               uses: ./.github/workflows/lint-rust
@@ -386,7 +394,7 @@ jobs:
         if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Install dependencies
               working-directory: ./python
@@ -412,7 +420,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -448,9 +456,9 @@ jobs:
                   python3 -m pip install mypy-protobuf virtualenv
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: |
                       python/target

@@ -230,6 +230,63 @@ public class GlideClusterClient extends BaseClient
         return BaseClient.createClient(config, GlideClusterClient::new);
     }
 
+    /**
+     * Acquire an isolated scope (dedicated connection) for operations requiring per-connection server
+     * state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands).
+     *
+     * <p>In cluster mode, the scope connection is opened to the primary node for the relevant slot.
+     * The scope is pinned to a single slot after the first keyed command.
+     *
+     * @param timeout maximum time to wait for a scope to become available
+     * @param routingKey the key whose hash slot determines which node the scope connects to. All keys
+     *     used in the scope must hash to the same slot. May be null (defaults to slot 0).
+     * @return a Future resolving to an {@link glide.api.models.scope.IsolatedScope}
+     */
+    public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
+            @NonNull java.time.Duration timeout, String routingKey) {
+        long clientId = connectionManager.getNativeClientHandle();
+        byte[] connBytes = connectionManager.getConnectionRequestBytes();
+        if (connBytes == null) {
+            CompletableFuture<glide.api.models.scope.IsolatedScope> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("Client not connected"));
+            return f;
+        }
+
+        int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
+        long timeoutMs = timeout.toMillis();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    while (true) {
+                        long scopeId =
+                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
+                                        clientId, connBytes, routingSlot);
+                        if (scopeId >= 0) {
+                            return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
+                        }
+                        long remaining = deadline - System.currentTimeMillis();
+                        if (remaining <= 0) {
+                            throw new java.util.concurrent.CompletionException(
+                                    new java.util.concurrent.TimeoutException(
+                                            "Timed out waiting for isolated scope (pool exhausted)"));
+                        }
+                        try {
+                            Thread.sleep(Math.min(10, remaining));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new java.util.concurrent.CompletionException(e);
+                        }
+                    }
+                });
+    }
+
+    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
+            @NonNull java.time.Duration timeout) {
+        return scopedConnection(timeout, null);
+    }
+
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
@@ -2394,5 +2451,38 @@ public class GlideClusterClient extends BaseClient
                         .flatMap(range -> Arrays.stream(range).mapToObj(Long::toString))
                         .toArray(String[]::new);
         return commandManager.submitNewCommand(ClusterDelSlotsRange, args, this::handleStringResponse);
+    }
+
+    /** Compute the Redis cluster hash slot for a key (CRC16 mod 16384). */
+    private static int slotForKey(byte[] key) {
+        int start = -1;
+        for (int i = 0; i < key.length; i++) {
+            if (key[i] == '{') {
+                start = i;
+                break;
+            }
+        }
+        if (start != -1) {
+            for (int i = start + 1; i < key.length; i++) {
+                if (key[i] == '}' && i != start + 1) {
+                    byte[] tag = new byte[i - start - 1];
+                    System.arraycopy(key, start + 1, tag, 0, tag.length);
+                    key = tag;
+                    break;
+                }
+            }
+        }
+        int crc = 0;
+        for (byte b : key) {
+            crc ^= (b & 0xFF) << 8;
+            for (int j = 0; j < 8; j++) {
+                if ((crc & 0x8000) != 0) {
+                    crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+                } else {
+                    crc = (crc << 1) & 0xFFFF;
+                }
+            }
+        }
+        return crc % 16384;
     }
 }

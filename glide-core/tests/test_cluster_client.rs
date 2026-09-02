@@ -838,9 +838,10 @@ mod cluster_client_tests {
         // See: https://github.com/valkey-io/valkey-glide/issues/4990
         //
         // Kills all cluster nodes with a TCP blackhole as seed node, then measures how many
-        // commands complete in a time window during reconnection. Without fixes, poll_flush blocks
-        // and causes commands to not be processed, leading to near-zero throughput (~1 completes
-        // every few seconds instead of immediately).
+        // commands complete in a time window during reconnection. Without the fix, poll_flush
+        // blocks behind the reconnect task (2000ms per attempt) and commands are not processed.
+        // With the fix, ReconnectToInitialNodes path calls fail_pending_requests immediately,
+        // so commands get ClientError quickly and the loop can advance.
         block_on_all(async {
             const CONNECTION_TIMEOUT_MS: u64 = 2000;
             const WINDOW_MS: u64 = 3000;
@@ -885,7 +886,7 @@ mod cluster_client_tests {
                 .expect("build cluster client");
 
             let mut conn: redis::cluster_async::ClusterConnection = cluster_client
-                .get_async_connection(None, None, None)
+                .get_async_connection(None, None, None, None)
                 .await
                 .expect("connect to cluster");
 
@@ -908,7 +909,10 @@ mod cluster_client_tests {
             // Wait for connection health checks to detect failures
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Measure how many commands complete (success or error) in the window
+            // Measure how many commands complete (success or error) in the window.
+            // With fail-fast, each command gets ClientError immediately so the loop
+            // advances quickly. Without the fix, each command would block for
+            // CONNECTION_TIMEOUT_MS waiting for the reconnect task to finish.
             let mut completed: u32 = 0;
             let mut cmd = redis::cmd("GET");
             cmd.arg("{test}key");
@@ -931,7 +935,7 @@ mod cluster_client_tests {
             assert!(
                 completed >= MIN_COMMANDS_WITH_FIX,
                 "Send loop blocked: only {}/{} commands completed in {}ms. \
-                 Each command serialized behind ready!(reconnect_to_initial_nodes) blocking for {}ms.",
+                 Each command serialized behind reconnect_to_initial_nodes blocking for {}ms.",
                 completed,
                 MIN_COMMANDS_WITH_FIX,
                 WINDOW_MS,
