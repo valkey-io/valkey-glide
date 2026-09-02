@@ -15,10 +15,7 @@
 import { scopeExecute, scopeRelease } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
-import {
-    hasScopeConnectionRequest,
-    tryAcquireScope,
-} from "./ScopeInternal.js";
+import { hasScopeConnectionRequest, tryAcquireScope } from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
