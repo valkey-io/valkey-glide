@@ -151,8 +151,29 @@ export class IsolatedScope {
      * Uses `glide_core::scope::try_acquire_scope` with exponential backoff.
      * Creates new scope connections in the background if the pool is empty.
      *
+     * The connection request is taken from the client (captured when it
+     * connected), so the one-argument form `IsolatedScope.acquire(client)`
+     * works on both a standalone client and a pool-borrowed client. Passing
+     * `connectionRequestBytes` explicitly is still supported and overrides the
+     * client's captured request.
+     *
+     * Prefer {@link BaseClient.scopedConnection} for the common case.
+     *
      * @param client - A GlideClient or GlideClusterClient instance.
-     * @param connectionRequestBytes - Serialized connection request (from pool or client config).
+     * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
+     * @param maxRetries - Maximum retries with backoff. Default: 10.
+     * @returns A new IsolatedScope.
+     */
+    static async acquire(
+        client: BaseClient,
+        routingKey?: string,
+        maxRetries?: number,
+    ): Promise<IsolatedScope>;
+    /**
+     * Acquire an isolated scope for a client using an explicit connection request.
+     *
+     * @param client - A GlideClient or GlideClusterClient instance.
+     * @param connectionRequestBytes - Serialized connection request to use for the scope's connection.
      * @param routingKey - In cluster mode, the key whose hash slot determines which node the scope connects to.
      * @param maxRetries - Maximum retries with backoff. Default: 10.
      * @returns A new IsolatedScope.
@@ -161,8 +182,44 @@ export class IsolatedScope {
         client: BaseClient,
         connectionRequestBytes: Uint8Array,
         routingKey?: string,
+        maxRetries?: number,
+    ): Promise<IsolatedScope>;
+    static async acquire(
+        client: BaseClient,
+        bytesOrRoutingKey?: Uint8Array | string,
+        routingKeyOrMaxRetries?: string | number,
         maxRetries = 10,
     ): Promise<IsolatedScope> {
+        // Normalize the overloaded arguments. When the second argument is a
+        // Uint8Array it is an explicit connection request; otherwise it is the
+        // routing key and the bytes are derived from the client.
+        let connectionRequestBytes: Uint8Array | undefined;
+        let routingKey: string | undefined;
+
+        if (bytesOrRoutingKey instanceof Uint8Array) {
+            // acquire(client, bytes, routingKey?, maxRetries?)
+            connectionRequestBytes = bytesOrRoutingKey;
+            routingKey = routingKeyOrMaxRetries as string | undefined;
+        } else {
+            // acquire(client, routingKey?, maxRetries?)
+            routingKey = bytesOrRoutingKey;
+
+            if (typeof routingKeyOrMaxRetries === "number") {
+                maxRetries = routingKeyOrMaxRetries;
+            }
+        }
+
+        if (!connectionRequestBytes) {
+            connectionRequestBytes = client.getConnectionRequestBytes();
+
+            if (!connectionRequestBytes) {
+                throw new Error(
+                    "Client has no connection request available for a scope. " +
+                        "Ensure it was created via GlideClient.createClient() (or GlideClusterClient.createClient()) and is connected.",
+                );
+            }
+        }
+
         // Get the client_id from the handle (registered in Rust scope registry)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const clientId = (client as any).clientHandle?.clientId;

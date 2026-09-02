@@ -297,6 +297,7 @@ import {
     response,
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
+import { IsolatedScope } from "./IsolatedScope.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -1481,6 +1482,13 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
+    /**
+     * The serialized connection request used to open this client's connection.
+     * Cached at connect time so `scopedConnection` and `IsolatedScope.acquire`
+     * can hand the same request to glide-core when opening a scope, without the
+     * caller having to produce the bytes.
+     */
+    private connectionRequestBytes: Uint8Array | undefined;
     protected clientHandle: GlideClientHandle | null = null;
     /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
     private readonly otelSpanPointers = new Map<number, bigint>();
@@ -10057,6 +10065,10 @@ export class BaseClient {
                 ).finish(),
             );
 
+            // Keep the exact bytes used to connect so a scope can reopen an
+            // identical connection through glide-core.
+            this.connectionRequestBytes = connectionRequestBytes;
+
             this.clientHandle = await CreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
@@ -10107,6 +10119,57 @@ export class BaseClient {
      */
     public getClientId(): number {
         return this.clientHandle?.clientId ?? -1;
+    }
+
+    /**
+     * Returns the serialized connection request captured when this client
+     * connected, or `undefined` if the client is not yet connected. A scope
+     * uses these bytes to open an identical connection through glide-core.
+     * @internal
+     */
+    public getConnectionRequestBytes(): Uint8Array | undefined {
+        return this.connectionRequestBytes;
+    }
+
+    /**
+     * Acquire an isolated execution scope on this client: a dedicated connection
+     * for operations that need per-connection state, such as `WATCH`/`MULTI`/`EXEC`
+     * transactions, `CLIENT TRACKING`, and blocking commands.
+     *
+     * The scope runs on its own connection through glide-core rather than the
+     * shared multiplexed one, so its state does not affect other commands on this
+     * client. This works on both a standalone client and a pool-borrowed client;
+     * the connection request captured at connect time is reused, so the caller
+     * does not have to produce any bytes.
+     *
+     * Release the scope when finished, or wrap it in a `try`/`finally`.
+     *
+     * @example
+     * ```typescript
+     * const scope = await client.scopedConnection();
+     * try {
+     *     await scope.watch("key");
+     *     const value = await scope.get("key");
+     *     await scope.multi();
+     *     await scope.set("key", String(Number(value ?? "0") + 1));
+     *     await scope.exec();
+     * } finally {
+     *     scope.release();
+     * }
+     * ```
+     *
+     * @param routingKey - In cluster mode, the key whose hash slot decides which
+     *     node the scope connects to. Every key used in the scope must hash to the
+     *     same slot. Defaults to slot 0.
+     * @param maxRetries - Maximum acquisition retries with exponential backoff
+     *     before giving up. Default: 10.
+     * @returns A new {@link IsolatedScope}.
+     */
+    public async scopedConnection(
+        routingKey?: string,
+        maxRetries = 10,
+    ): Promise<IsolatedScope> {
+        return IsolatedScope.acquire(this, routingKey, maxRetries);
     }
 
     /**
