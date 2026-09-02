@@ -41,6 +41,7 @@ env:
 
 jobs:
     lint:
+        name: Lint - Rust client
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
@@ -55,8 +56,21 @@ jobs:
               name: lint rust client
 
     tests:
-        runs-on: ubuntu-latest
+        name: Test - ${{ matrix.engine.type }} ${{ matrix.engine.version }}, ${{ matrix.host.arch }}
+        runs-on: ${{ matrix.host.runner }}
         timeout-minutes: 35
+        strategy:
+            fail-fast: false
+            matrix:
+                host:
+                    - { arch: x64, runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+                    - { arch: arm64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+                engine:
+                    - { type: valkey, version: "8.1" }
+                    - { type: valkey, version: "8.0" }
+                    - { type: valkey, version: "7.2" }
+                    - { type: redis, version: "7.0" }
+                    - { type: redis, version: "6.2" }
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -66,8 +80,8 @@ jobs:
               uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
-                  target: x86_64-unknown-linux-gnu
-                  engine-version: "9.0"
+                  target: ${{ matrix.host.target }}
+                  engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run rust client tests
