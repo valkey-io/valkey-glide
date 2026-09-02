@@ -11,6 +11,7 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -419,8 +420,7 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 	}
 
 	if strategy.jitterPercent != nil {
-		jitter := uint32(*strategy.jitterPercent)
-		protoStrategy.JitterPercent = &jitter
+		protoStrategy.JitterPercent = proto.Uint32(uint32(*strategy.jitterPercent))
 	}
 
 	return protoStrategy
@@ -459,17 +459,14 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 	}
 
 	if len(tlsConfig.clientCertPath) > 0 {
-		certPath := tlsConfig.clientCertPath
-		keyPath := tlsConfig.clientKeyPath
-		request.ClientCertPath = &certPath
-		request.ClientKeyPath = &keyPath
+		request.ClientCertPath = proto.String(tlsConfig.clientCertPath)
+		request.ClientKeyPath = proto.String(tlsConfig.clientKeyPath)
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
 			// certReloadInterval is a uint32 seconds value validated by
 			// WithMutualTLSFromFiles; forward it straight to the wire field.
-			s := tlsConfig.certReloadInterval
-			reload.IntervalSeconds = &s
+			reload.IntervalSeconds = proto.Uint32(tlsConfig.certReloadInterval)
 		}
 		request.CertReload = reload
 	}
@@ -516,7 +513,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 			request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
 			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
 		}
-		request.ReadOnly = &config.readOnly
+		request.ReadOnly = proto.Bool(config.readOnly)
 	}
 
 	if config.nodeDiscoveryMode != NodeDiscoveryModeStandard {
@@ -542,8 +539,9 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 
 	// Handle PubSub reconciliation interval
 	if config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs != nil {
-		intervalMs := uint32(*config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs)
-		request.PubsubReconciliationIntervalMs = &intervalMs
+		request.PubsubReconciliationIntervalMs = proto.Uint32(
+			uint32(*config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs),
+		)
 	}
 
 	// Handle TLS configuration
@@ -820,8 +818,9 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	// Handle PubSub reconciliation interval
 	if config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs != nil {
-		intervalMs := uint32(*config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs)
-		request.PubsubReconciliationIntervalMs = &intervalMs
+		request.PubsubReconciliationIntervalMs = proto.Uint32(
+			uint32(*config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs),
+		)
 	}
 
 	// Handle TLS configuration
