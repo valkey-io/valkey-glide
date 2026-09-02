@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { GlideClient, IsolatedScope } from "..";
+import { ClientPool, GlideClient, IsolatedScope } from "..";
 import { GlideClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
@@ -361,6 +361,110 @@ describe("IsolatedScope", () => {
             scope.release();
             db0Client.close();
             db2Client.close();
+        },
+        TIMEOUT,
+    );
+
+    // ─── Public acquisition API (issue #6962) ─────────────────────────────────
+    //
+    // A scope must be openable through the public API alone: no caller should
+    // have to build connection-request bytes from a non-exported protobuf.
+
+    it(
+        "scopedConnection() opens a scope without bytes",
+        async () => {
+            const scope = await client.scopedConnection();
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("scoped-conn");
+                await scope.set(key, "value");
+                expect(await scope.get(key)).toBe("value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+
+            expect(scope.isReleased).toBe(true);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() accepts a routing key",
+        async () => {
+            const scope = await client.scopedConnection(makeKey("route"));
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "acquire(client) one-argument form derives the connection request",
+        async () => {
+            const scope = await IsolatedScope.acquire(client);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("one-arg");
+                await scope.set(key, "derived");
+                expect(await scope.get(key)).toBe("derived");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "explicit connectionRequestBytes still work (additive)",
+        async () => {
+            const scope = await IsolatedScope.acquire(client, connReqBytes);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works on a pool-borrowed client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-scope");
+                const result = await pool.borrow(async (borrowed) => {
+                    const scope = await borrowed.scopedConnection();
+
+                    try {
+                        await scope.watch(key);
+                        await scope.multi();
+                        await scope.set(key, "from-pool-scope");
+                        await scope.exec();
+                        return await scope.get(key);
+                    } finally {
+                        scope.release();
+                    }
+                });
+
+                expect(result).toBe("from-pool-scope");
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
         },
         TIMEOUT,
     );
