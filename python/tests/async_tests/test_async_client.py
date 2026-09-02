@@ -9203,42 +9203,47 @@ class TestCommands:
 
         assert await glide_client.function_load(code, False) == lib_name.encode()
 
-        # A node briefly in recovery fast-fails with "Connection in recovery" before
-        # the request reaches the server, so poll until we get the real server error.
-        async def assert_error(call, expected_message):
-            deadline = time.monotonic() + 10.0
-            while True:
-                with pytest.raises(RequestError) as e:
-                    await call()
-                if "Connection in recovery" not in str(e.value):
-                    break
-                if time.monotonic() >= deadline:
-                    break
-                await anyio.sleep(0.1)
-            assert expected_message in str(e)
-
         # On a replica node should fail, because a function isn't guaranteed to be RO
-        await assert_error(
-            lambda: glide_client.fcall_route(
-                func_name, arguments=[], route=replicaRoute
-            ),
-            "You can't write against a read only replica.",
-        )
+        # Retry if connection is temporarily in recovery state (transient condition)
+        deadline = time.monotonic() + 10.0
+        while True:
+            with pytest.raises(RequestError) as e:
+                await glide_client.fcall_route(
+                    func_name, arguments=[], route=replicaRoute
+                )
+            if "Connection in recovery" not in str(e.value):
+                break
+            if time.monotonic() >= deadline:
+                break
+            await anyio.sleep(0.1)
+        assert "You can't write against a read only replica." in str(e)
 
-        await assert_error(
-            lambda: glide_client.fcall_ro_route(
-                func_name, arguments=[], route=replicaRoute
-            ),
-            "You can't write against a read only replica.",
-        )
+        deadline = time.monotonic() + 10.0
+        while True:
+            with pytest.raises(RequestError) as e:
+                await glide_client.fcall_ro_route(
+                    func_name, arguments=[], route=replicaRoute
+                )
+            if "Connection in recovery" not in str(e.value):
+                break
+            if time.monotonic() >= deadline:
+                break
+            await anyio.sleep(0.1)
+        assert "You can't write against a read only replica." in str(e)
 
         # fcall_ro also fails to run it even on primary - another error
-        await assert_error(
-            lambda: glide_client.fcall_ro_route(
-                func_name, arguments=[], route=primaryRoute
-            ),
-            "Can not execute a script with write flag using *_ro command.",
-        )
+        deadline = time.monotonic() + 10.0
+        while True:
+            with pytest.raises(RequestError) as e:
+                await glide_client.fcall_ro_route(
+                    func_name, arguments=[], route=primaryRoute
+                )
+            if "Connection in recovery" not in str(e.value):
+                break
+            if time.monotonic() >= deadline:
+                break
+            await anyio.sleep(0.1)
+        assert "Can not execute a script with write flag using *_ro command." in str(e)
 
         # create the same function, but with RO flag
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
