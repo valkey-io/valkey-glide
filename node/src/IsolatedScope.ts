@@ -20,6 +20,7 @@ import {
 } from "../build-ts/native";
 import type { GlideString } from "./BaseClient";
 import type { BaseClient } from "./BaseClient";
+import { CONNECTION_REQUEST_BYTES } from "./ScopeInternal.js";
 
 // ─── Wire Format Serialization ───────────────────────────────────────────────
 
@@ -211,7 +212,10 @@ export class IsolatedScope {
         }
 
         if (!connectionRequestBytes) {
-            connectionRequestBytes = client.getConnectionRequestBytes();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            connectionRequestBytes = (client as any)[
+                CONNECTION_REQUEST_BYTES
+            ]();
 
             if (!connectionRequestBytes) {
                 throw new Error(

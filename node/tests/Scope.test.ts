@@ -6,9 +6,10 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { ClientPool, GlideClient, IsolatedScope } from "..";
+import { ClientPool, ClosingError, GlideClient, IsolatedScope } from "..";
 import { GlideClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
+import { CONNECTION_REQUEST_BYTES } from "../build-ts/ScopeInternal";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     getClientConfigurationOption,
@@ -393,12 +394,93 @@ describe("IsolatedScope", () => {
     it(
         "scopedConnection() accepts a routing key",
         async () => {
-            const scope = await client.scopedConnection(makeKey("route"));
+            // Write and read back through the same routing key so a cluster run
+            // catches a scope connected to the wrong node; PING alone would not.
+            const key = makeKey("route");
+            const scope = await client.scopedConnection(key);
+
+            try {
+                await scope.set(key, "routed-value");
+                expect(await scope.get(key)).toBe("routed-value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a closed client rejects with ClosingError",
+        async () => {
+            const closedClient = await GlideClient.createClient(config);
+            closedClient.close();
+
+            await expect(closedClient.scopedConnection()).rejects.toBeInstanceOf(
+                ClosingError,
+            );
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "connection-request bytes are private and defensively copied",
+        async () => {
+            // The public accessor is gone; callers cannot read the buffer.
+            expect(
+                (client as unknown as Record<string, unknown>)
+                    .getConnectionRequestBytes,
+            ).toBeUndefined();
+
+            // The internal accessor hands out a copy, so mutating it cannot
+            // corrupt the credentials a later scope reuses.
+            const clientInternal = client as unknown as {
+                [CONNECTION_REQUEST_BYTES](): Uint8Array | undefined;
+            };
+            const firstCopy = clientInternal[CONNECTION_REQUEST_BYTES]()!;
+            firstCopy.fill(0);
+            const secondCopy = clientInternal[CONNECTION_REQUEST_BYTES]()!;
+            expect(secondCopy.some((b) => b !== 0)).toBe(true);
+
+            // Scopes still open normally after the mutation attempt.
+            const scope = await client.scopedConnection();
 
             try {
                 expect(await scope.ping()).toBe("PONG");
             } finally {
                 scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "a scope opened after a password update uses the new credential",
+        async () => {
+            const rotatingClient = await GlideClient.createClient(config);
+
+            try {
+                const newPassword = `rotated-${Math.random()
+                    .toString(36)
+                    .slice(2, 10)}`;
+                // Non-immediate update returns OK without re-auth against a
+                // password-free server, refreshing the cached request.
+                expect(
+                    await rotatingClient.updateConnectionPassword(
+                        newPassword,
+                        false,
+                    ),
+                ).toBe("OK");
+
+                const clientInternal = rotatingClient as unknown as {
+                    [CONNECTION_REQUEST_BYTES](): Uint8Array | undefined;
+                };
+                const decoded = connection_request.ConnectionRequest.decode(
+                    clientInternal[CONNECTION_REQUEST_BYTES]()!,
+                );
+                expect(decoded.authenticationInfo?.password).toBe(newPassword);
+            } finally {
+                rotatingClient.close();
             }
         },
         TIMEOUT,
