@@ -56,6 +56,14 @@ HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 DEFAULT_HOST_IPV4: str = "127.0.0.1"
 DEFAULT_HOST_IPV6: str = "::1"
 
+# Startup timing. TLS servers are slower to come up and contended CI runners
+# (aarch64 in particular) can push a single startup past the old 10s ceiling.
+# SERVER_STARTUP_TIMEOUT is the per-attempt poll ceiling for one server; the
+# whole auto-assigned spawn is retried until SERVERS_STARTUP_DEADLINE so pure
+# contention gets a fresh attempt instead of failing the run.
+SERVER_STARTUP_TIMEOUT: int = 40
+SERVERS_STARTUP_DEADLINE: int = 120
+
 def get_command(commands: List[str]) -> str:
     for command in commands:
         try:
@@ -472,6 +480,34 @@ def start_server(
     return server, node_folder
 
 
+def kill_leftover_servers(host: str, cluster_folder: str, use_tls: bool):
+    """Forcefully tear down any nodes left behind by a failed startup attempt.
+
+    Reads each node's pid from its server.log, sends SIGKILL, and removes the
+    node folder so the next attempt reuses no stale state. Best effort: a node
+    that never logged a pid or is already gone is simply skipped.
+    """
+    if not os.path.isdir(cluster_folder):
+        return
+    for entry in os.scandir(cluster_folder):
+        if not (entry.is_dir() and entry.name.isdigit()):
+            continue
+        log_file = f"{entry.path}/server.log"
+        if os.path.exists(log_file):
+            pid = wait_for_regex_in_log(
+                log_file, r"version=(.*?)pid=([\d]+), just started", 2, timeout=1
+            )
+            if pid:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, ValueError) as e:
+                    logging.debug(f"Could not kill pid {pid}: {e}")
+        try:
+            remove_folder(entry.path)
+        except Exception as e:
+            logging.debug(f"Could not remove folder {entry.path}: {e}")
+
+
 def create_servers(
     host: str,
     shard_count: int,
@@ -518,45 +554,80 @@ def create_servers(
         if replica_count > 0:
             tls_args.append("--tls-replication")
             tls_args.append("yes")
-    servers_to_check = set()
-    # Start all servers
-    for i in range(nodes_count):
-        port = ports[i] if ports else None
-        servers_to_check.add(
-            start_server(
-                host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
-            )
-        )
-    # Check all servers
-    while len(servers_to_check) > 0:
-        server, node_folder = servers_to_check.pop()
-        logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
-            remove_folder(node_folder)
-            if ports is not None:
-                # The user passed a taken port, exit with an error
-                raise Exception(
-                    f"Couldn't start server on {server.host}:{server.port}, address already in use"
-                )
-            # The port was already taken, try to find a new free one
+    # One spawn attempt: start every node, then poll each until it is ready.
+    # Returns the ready servers, or raises if a node never came up.
+    def spawn_attempt() -> List[Server]:
+        attempt_servers: List[Server] = []
+        servers_to_check = set()
+        # Start all servers
+        for i in range(nodes_count):
+            port = ports[i] if ports else None
             servers_to_check.add(
                 start_server(
-                    server.host,
-                    None,
-                    cluster_folder,
-                    tls,
-                    tls_args,
-                    cluster_mode,
-                    load_module,
+                    host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
                 )
             )
-            continue
-        if not wait_for_server(server, cluster_folder, tls, 40, tls_cert_file, tls_key_file, tls_ca_cert_file):
-            raise Exception(
-                f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
-                f"See {node_folder}/server.log for more information"
+        # Check all servers
+        while len(servers_to_check) > 0:
+            server, node_folder = servers_to_check.pop()
+            logging.debug(f"Checking server {server.host}:{server.port}")
+            if is_address_already_in_use(server, f"{node_folder}/server.log"):
+                remove_folder(node_folder)
+                if ports is not None:
+                    # The user passed a taken port, exit with an error
+                    raise Exception(
+                        f"Couldn't start server on {server.host}:{server.port}, address already in use"
+                    )
+                # The port was already taken, try to find a new free one
+                servers_to_check.add(
+                    start_server(
+                        server.host,
+                        None,
+                        cluster_folder,
+                        tls,
+                        tls_args,
+                        cluster_mode,
+                        load_module,
+                    )
+                )
+                continue
+            if not wait_for_server(
+                server,
+                cluster_folder,
+                tls,
+                SERVER_STARTUP_TIMEOUT,
+                tls_cert_file,
+                tls_key_file,
+                tls_ca_cert_file,
+            ):
+                raise Exception(
+                    f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
+                    f"See {node_folder}/server.log for more information"
+                )
+            attempt_servers.append(server)
+        return attempt_servers
+
+    # A caller-specified port set must not be reshuffled, so only auto-assigned
+    # runs are retried. For those we retry the whole spawn to a wall-clock
+    # deadline: contention that starves one attempt often clears on the next.
+    deadline = time.time() + SERVERS_STARTUP_DEADLINE
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            ready_servers = spawn_attempt()
+            break
+        except Exception as e:
+            if ports is not None or time.time() >= deadline:
+                raise
+            logging.warning(
+                f"Server startup attempt {attempt} failed: {e}. "
+                f"Tearing down and retrying until deadline."
             )
-        ready_servers.append(server)
+            # Kill any nodes this attempt left running and clear their folders
+            # so the next attempt starts from a clean slate.
+            kill_leftover_servers(host, cluster_folder, tls)
+
     logging.debug("All servers are up!")
     toc = time.perf_counter()
     logging.debug(f"create_servers() Elapsed time: {toc - tic:0.4f}")
