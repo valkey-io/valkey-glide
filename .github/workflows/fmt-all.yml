@@ -69,7 +69,7 @@ jobs:
 
     fmt-rust:
         if: github.repository_owner == 'valkey-io'
-        uses: ./.github/workflows/rust.yml
+        uses: ./.github/workflows/rust-core.yml
         with:
             full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}

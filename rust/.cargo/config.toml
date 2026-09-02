@@ -1,0 +1,14 @@
+[env]
+# Required by the vendored redis-rs (read at compile time via env!): identifies
+# the client library and version reported to the server on the handshake.
+#
+# Baselined on upstream valkey-glide's wrapper convention: GLIDE_VERSION is the
+# placeholder "unknown" and is expected to be overwritten by release tooling that
+# exports the real version at build time (e.g. `GLIDE_VERSION=1.2.3 cargo build`).
+# A cargo `[env]` default without `force` is overridden by a real environment
+# variable, so exporting GLIDE_VERSION at build time takes precedence.
+GLIDE_NAME = { value = "GlideRust", force = true }
+GLIDE_VERSION = "unknown"
+# Disable CPU jitter entropy in aws-lc-rs to avoid a connection-latency regression
+# (matches the setting in upstream's root .cargo/config.toml).
+AWS_LC_SYS_NO_JITTER_ENTROPY = "1"
