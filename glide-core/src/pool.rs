@@ -643,9 +643,10 @@ pub struct ConnectionState {
     pub db_selected: u8,
     pub client_name_changed: bool,
     pub subscriptions: Vec<ScopeSubscription>,
-    /// Set while a blocking command is in flight; cleared only on clean completion.
-    /// A still-set connection may have an armed server-side waiter and is discarded
-    /// on release rather than reused.
+    /// Set while a blocking command is in flight; kept set only when it ends in a
+    /// timeout or IO error (or is cancelled mid-flight), the cases that can leave a
+    /// server-side waiter armed. A still-set connection is discarded on release;
+    /// clean protocol errors clear it so the connection is reused.
     pub blocking_in_flight: bool,
 }
 
@@ -1217,12 +1218,21 @@ mod connection_state_tests {
 
     #[test]
     fn blocking_in_flight_is_independent_of_other_dirty_flags() {
-        // The blocking flag alone taints the connection even when every other
-        // tracked mutation is in its clean baseline.
-        let state = ConnectionState {
+        // The blocking flag taints on its own, and the other tracked mutations
+        // taint on their own — neither masks the other. A connection dirty only
+        // via db_selected (blocking flag clear) is not-clean, and a connection
+        // dirty only via the blocking flag (db at baseline) is not-clean too.
+        let db_only = ConnectionState {
+            db_selected: CONFIGURED_DB + 1,
+            blocking_in_flight: false,
+            ..Default::default()
+        };
+        assert!(!db_only.is_clean_for(CONFIGURED_DB));
+
+        let blocking_only = ConnectionState {
             blocking_in_flight: true,
             ..Default::default()
         };
-        assert!(!state.is_clean_for(CONFIGURED_DB));
+        assert!(!blocking_only.is_clean_for(CONFIGURED_DB));
     }
 }

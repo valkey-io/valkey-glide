@@ -199,8 +199,9 @@ pub async fn execute_scope_command(
         cmd.arg(arg.as_slice());
     }
 
-    // Presume a blocking command's connection unsafe until it completes cleanly;
-    // any error leaves the flag set so release discards it.
+    // Presume a blocking command's connection unsafe until we know the outcome;
+    // set before dispatch so a mid-flight cancellation (future dropped) leaves it
+    // poisoned and release discards it.
     let is_blocking = crate::client::is_blocking_command(&cmd);
     if is_blocking {
         conn.state.blocking_in_flight = true;
@@ -215,8 +216,13 @@ pub async fn execute_scope_command(
         None => conn.connection.send_packed_command(&cmd).await,
     };
 
-    if is_blocking && result.is_ok() {
-        conn.state.blocking_in_flight = false;
+    // Only a timeout or IO error can leave a server-side waiter armed on the
+    // connection; a clean protocol error (WRONGTYPE, MOVED/ASK, NOAUTH, or a
+    // client-side rejected timeout arg) never reached that state, so the
+    // connection stays reusable. Keep the flag set only for the poisoning cases.
+    if is_blocking {
+        let poisoned = matches!(&result, Err(e) if e.is_timeout() || e.is_io_error());
+        conn.state.blocking_in_flight = poisoned;
     }
 
     result
