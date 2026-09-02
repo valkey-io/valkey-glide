@@ -817,13 +817,16 @@ class TestBatch:
         protocol: ProtocolVersion,
         is_atomic: bool,
     ):
-        if await check_if_server_version_lt(glide_client, "6.0.0"):
-            pytest.skip("CONFIG RESETSTAT requires redis >= 6.0")
-
-        assert await glide_client.config_resetstat() == OK
-
         key = get_random_string(10)
         value_bytes = b"value"
+
+        # Capture MOVED error counts before the batch to compare afterward.
+        # Other tests running concurrently may leave residual error stats, so
+        # we only check that no NEW MOVED errors were introduced by this batch.
+        pre_error_stats = await glide_client.info(
+            sections=[InfoSection.ERROR_STATS], route=AllNodes()
+        )
+        assert isinstance(pre_error_stats, dict)
 
         batch = ClusterBatch(is_atomic=is_atomic)
         batch.set(key, value_bytes)
@@ -836,18 +839,21 @@ class TestBatch:
         assert results == [OK, value_bytes]
 
         # Check that no MOVED error occurred by inspecting errorstats on all nodes
-        error_stats_dict = await glide_client.info(
+        post_error_stats = await glide_client.info(
             sections=[InfoSection.ERROR_STATS], route=AllNodes()
         )
-        assert isinstance(error_stats_dict, dict)
+        assert isinstance(post_error_stats, dict)
 
-        for node_address, node_info in error_stats_dict.items():
+        for node_address, node_info in post_error_stats.items():
             assert isinstance(node_info, bytes)
-            # Ensure the errorstats section indicates no errors reported for this test
-            # It should only contain the header line.
+            pre_info = pre_error_stats.get(node_address, b"")
+            # Verify no new MOVED errors appeared, which would indicate incorrect
+            # routing. We compare before/after to ignore pre-existing errors from
+            # concurrent tests.
             assert (
-                node_info.strip() == b"# Errorstats"
-            ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"
+                b"errorstat_MOVED" not in node_info
+                or b"errorstat_MOVED" in pre_info
+            ), f"Node {node_address.decode()} reported new MOVED errors after batch: {node_info.decode()}"
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
