@@ -762,6 +762,10 @@ where
             let (addr, rv) = {
                 let mut connections = self.connections.borrow_mut();
                 let (addr, conn) = if let Some(redirected) = redirected.take() {
+                    // Async routing can reverse-map raw IPs through IP metadata
+                    // collected during topology refresh. The synchronous client
+                    // does not collect that metadata, so raw-IP redirects here
+                    // rely on the configured AddressResolver.
                     let (addr, is_asking) = match redirected {
                         Redirect::Moved(addr) => (
                             resolve_address(&addr, self.cluster_params.address_resolver.as_deref()),
@@ -1037,6 +1041,13 @@ pub(crate) fn get_connection_info(
 ) -> RedisResult<ConnectionInfo> {
     let address_resolver = cluster_params.address_resolver.clone();
     get_connection_info_with_resolver(node, cluster_params, address_resolver.as_deref())
+}
+
+pub(crate) fn get_connection_info_for_resolved_address(
+    node: &str,
+    cluster_params: ClusterParams,
+) -> RedisResult<ConnectionInfo> {
+    get_connection_info_with_resolver(node, cluster_params, None)
 }
 
 fn get_connection_info_with_resolver(

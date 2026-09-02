@@ -23,7 +23,6 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use super::boxed_sleep;
-use super::is_circular_moved_redirect;
 use super::testing::RefreshConnectionType;
 use super::CmdArg;
 use super::PendingRequest;
@@ -1082,12 +1081,11 @@ where
 
         // Check for circular MOVED redirect
         if matches!(retry_method, RetryMethod::MovedRedirect)
-            && is_circular_moved_redirect(
+            && core.is_circular_moved_redirect(
                 resolved_moved_redirect
                     .as_ref()
                     .map(|redirect| (redirect.address.as_str(), redirect.slot)),
                 &address,
-                |addr| addr.to_owned(),
             )
         {
             circular_moved_entries.push((indices, address, error));

@@ -6,7 +6,7 @@ use crate::cluster_slotmap::ReadFromReplicaStrategy;
 use crate::{
     aio::{ConnectionLike, DisconnectNotifier},
     client::GlideConnectionOptions,
-    cluster::get_connection_info,
+    cluster::{get_connection_info, get_connection_info_for_resolved_address},
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
@@ -32,6 +32,12 @@ pub enum RefreshConnectionType {
     AllConnections,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AddressResolution {
+    Resolve,
+    AlreadyResolved,
+}
+
 fn failed_management_connection<C>(
     addr: &str,
     user_conn: ConnectionDetails<ConnectionFuture<C>>,
@@ -55,6 +61,7 @@ pub(crate) async fn get_or_create_conn<C>(
     node: Option<AsyncClusterNode<C>>,
     params: &ClusterParams,
     conn_type: RefreshConnectionType,
+    address_resolution: AddressResolution,
     glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<AsyncClusterNode<C>>
 where
@@ -65,24 +72,26 @@ where
         // Instead, we depend on managed Redis services to close the connection for refresh if the node has changed.
         match check_node_connections(&node, params, conn_type, addr).await {
             None => Ok(node),
-            Some(conn_type) => connect_and_check(
+            Some(conn_type) => connect_and_check_with_resolution(
                 addr,
                 params.clone(),
                 None,
                 conn_type,
                 Some(node),
+                address_resolution,
                 glide_connection_options,
             )
             .await
             .get_node(),
         }
     } else {
-        connect_and_check(
+        connect_and_check_with_resolution(
             addr,
             params.clone(),
             None,
             conn_type,
             None,
+            address_resolution,
             glide_connection_options,
         )
         .await
@@ -107,6 +116,7 @@ pub(crate) async fn connect_and_check_all_connections<C>(
     addr: &str,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
+    address_resolution: AddressResolution,
     glide_connection_options: GlideConnectionOptions,
 ) -> ConnectAndCheckResult<C>
 where
@@ -119,6 +129,7 @@ where
             params.clone(),
             socket_addr,
             false,
+            address_resolution,
             glide_connection_options.clone(),
         ),
         // Management connection
@@ -127,6 +138,7 @@ where
             params.clone(),
             socket_addr,
             true,
+            address_resolution,
             glide_connection_options,
         ),
     )
@@ -171,6 +183,7 @@ async fn connect_and_check_only_management_conn<C>(
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     prev_node: AsyncClusterNode<C>,
+    address_resolution: AddressResolution,
     disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
 ) -> ConnectAndCheckResult<C>
 where
@@ -188,6 +201,7 @@ where
         params.clone(),
         socket_addr,
         true,
+        address_resolution,
         GlideConnectionOptions {
             push_sender: None,
             disconnect_notifier,
@@ -282,12 +296,37 @@ pub async fn connect_and_check<C>(
 where
     C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
 {
+    connect_and_check_with_resolution(
+        addr,
+        params,
+        socket_addr,
+        conn_type,
+        node,
+        AddressResolution::Resolve,
+        glide_connection_options,
+    )
+    .await
+}
+
+pub(crate) async fn connect_and_check_with_resolution<C>(
+    addr: &str,
+    params: ClusterParams,
+    socket_addr: Option<SocketAddr>,
+    conn_type: RefreshConnectionType,
+    node: Option<AsyncClusterNode<C>>,
+    address_resolution: AddressResolution,
+    glide_connection_options: GlideConnectionOptions,
+) -> ConnectAndCheckResult<C>
+where
+    C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
+{
     match conn_type {
         RefreshConnectionType::OnlyUserConnection => {
             let user_conn = match create_and_setup_user_connection(
                 addr,
                 params.clone(),
                 socket_addr,
+                address_resolution,
                 glide_connection_options,
             )
             .await
@@ -307,6 +346,7 @@ where
                         params,
                         socket_addr,
                         node,
+                        address_resolution,
                         glide_connection_options.disconnect_notifier,
                     )
                     .await
@@ -316,6 +356,7 @@ where
                         addr,
                         params,
                         socket_addr,
+                        address_resolution,
                         glide_connection_options,
                     )
                     .await
@@ -323,8 +364,14 @@ where
             }
         }
         RefreshConnectionType::AllConnections => {
-            connect_and_check_all_connections(addr, params, socket_addr, glide_connection_options)
-                .await
+            connect_and_check_all_connections(
+                addr,
+                params,
+                socket_addr,
+                address_resolution,
+                glide_connection_options,
+            )
+            .await
         }
     }
 }
@@ -333,6 +380,7 @@ async fn create_and_setup_user_connection<C>(
     node: &str,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
+    address_resolution: AddressResolution,
     glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<ConnectionDetails<C>>
 where
@@ -343,6 +391,7 @@ where
         params.clone(),
         socket_addr,
         false,
+        address_resolution,
         glide_connection_options,
     )
     .await?;
@@ -390,6 +439,7 @@ async fn create_connection<C>(
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     is_management: bool,
+    address_resolution: AddressResolution,
     mut glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<ConnectionDetails<C>>
 where
@@ -397,7 +447,12 @@ where
 {
     let connection_timeout = params.connection_timeout;
     let response_timeout = params.response_timeout;
-    let info = get_connection_info(node, params)?;
+    let info = match address_resolution {
+        AddressResolution::Resolve => get_connection_info(node, params)?,
+        AddressResolution::AlreadyResolved => {
+            get_connection_info_for_resolved_address(node, params)?
+        }
+    };
     // management connection does not require notifications or disconnect notifications
     // or pubsub synchronizer (subscriptions only exist on user connections)
     if is_management {

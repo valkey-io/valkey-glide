@@ -223,6 +223,7 @@ impl SlotMap {
                 return None;
             }
 
+            // Cluster node-map keys are canonical addresses in `host:port` form.
             let (_, node_port) = entry.key().rsplit_once(':')?;
             (node_port.parse::<u16>().ok()? == port).then(|| entry.key().clone())
         });
