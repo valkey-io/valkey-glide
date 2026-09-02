@@ -44,8 +44,12 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
         InstanceType=os.environ.get("EC2_LINUX_INSTANCE_TYPE", "t3.small"),
         MinCount=1,
         MaxCount=1,
-        SubnetId=os.environ["EC2_SUBNET_ID"],
-        SecurityGroupIds=[os.environ["EC2_SECURITY_GROUP"]],
+        NetworkInterfaces=[{
+            "DeviceIndex": 0,
+            "SubnetId": os.environ["EC2_SUBNET_ID"],
+            "Groups": [os.environ["EC2_SECURITY_GROUP"]],
+            "AssociatePublicIpAddress": True,
+        }],
         IamInstanceProfile={"Name": os.environ["EC2_INSTANCE_PROFILE"]},
         TagSpecifications=[
             {
@@ -232,8 +236,12 @@ def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
         InstanceType=os.environ.get("EC2_WINDOWS_INSTANCE_TYPE", "c5.2xlarge"),
         MinCount=1,
         MaxCount=1,
-        SubnetId=os.environ["EC2_SUBNET_ID"],
-        SecurityGroupIds=[os.environ["EC2_SECURITY_GROUP"]],
+        NetworkInterfaces=[{
+            "DeviceIndex": 0,
+            "SubnetId": os.environ["EC2_SUBNET_ID"],
+            "Groups": [os.environ["EC2_SECURITY_GROUP"]],
+            "AssociatePublicIpAddress": True,
+        }],
         IamInstanceProfile={"Name": os.environ["EC2_WINDOWS_INSTANCE_PROFILE"]},
         UserData=ud_b64,
         TagSpecifications=[
