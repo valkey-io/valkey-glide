@@ -1677,11 +1677,19 @@ public class PubSubTests {
                         standalone, subscriptions, Optional.of(callback), Optional.of(callbackMessages));
         BaseClient sender = createClient(standalone);
 
+        // wait for the subscription to register on the server before publishing; cluster pub/sub
+        // gives the client no readiness signal to poll for
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
         assertEquals(OK, sender.publish(message.getMessage(), channel).get());
         waitForCondition(
                 () -> callbackMessages.size() >= 1,
                 MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for binary message");
+                "Timed out waiting for binary message via callback");
+        waitForCondition(
+                () -> listener.getPubSubMessageCount() >= 1,
+                MESSAGE_DELIVERY_DELAY,
+                "Timed out waiting for binary message via message buffer");
 
         assertEquals(message, listener.tryGetPubSubMessage());
         assertEquals(1, callbackMessages.size());
