@@ -10,7 +10,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [dependencies]
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 bytes = "1"
-dashmap = "6"
+dashmap = "~6.2.1"
 futures = "^0.3"
 redis = { path = "./redis-rs/redis", features = [
     "aio",
@@ -57,6 +57,7 @@ strum_macros = "0.26"
 zstd = { version = "0.13" }
 lz4 = { version = "1.28" }
 libc = "0.2.186"
+regex = "=1.13.1"
 
 [features]
 proto = ["protobuf"]

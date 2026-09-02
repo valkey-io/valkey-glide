@@ -4,8 +4,8 @@ package glide
 
 // #include "lib.h"
 //
-// void successCallback(void *channelPtr, struct CommandResponse *message);
-// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(uintptr_t requestID, struct CommandResponse *message);
+// void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -242,12 +242,16 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 
 	// Create a Client wrapper pointing to the pooled adapter.
 	// The adapter is an AsyncClient type — commands via C.command() fire callbacks.
+	// connReqBytes carries the pool's serialized ConnectionRequest so ScopedConnection
+	// works on the borrowed client. clientConfig is intentionally not set: ScopedConnection
+	// always uses connReqBytes when present, so a config object here would never be read.
 	client := &Client{
 		baseClient: baseClient{
 			coreClient: unsafe.Pointer(adapterPtr),
-			pending:    make(map[unsafe.Pointer]struct{}),
+			pending:    make(map[uintptr]struct{}),
 			mu:         &sync.Mutex{},
 		},
+		connReqBytes: p.connReq,
 	}
 	client.setMessageHandler(NewMessageHandler(nil, nil))
 

@@ -5,9 +5,11 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use super::{NodeAddress, TlsMode};
+use super::{NodeAddress, TlsMode, validate_effective_lib_name};
 use futures::StreamExt;
-use redis::{ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult};
+use redis::{
+    ConnectionAddr, ConnectionInfo, ErrorKind, RedisConnectionInfo, RedisError, RedisResult,
+};
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
@@ -100,6 +102,16 @@ impl MonitorClient {
         tls_mode: TlsMode,
         on_line: MonitorLineCallback,
     ) -> RedisResult<Self> {
+        validate_effective_lib_name(redis_connection_info.lib_name.as_deref()).map_err(
+            |message| {
+                RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Invalid library name",
+                    message,
+                ))
+            },
+        )?;
+
         let conn_addr = match tls_mode {
             TlsMode::NoTls => ConnectionAddr::Tcp(address.host.clone(), address.port),
             _ => ConnectionAddr::TcpTls {
@@ -204,6 +216,33 @@ impl Drop for MonitorClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_new_rejects_invalid_lib_name_before_network_setup() {
+        let address = NodeAddress {
+            host: "127.0.0.1".to_string(),
+            port: 1,
+        };
+        let redis_connection_info = RedisConnectionInfo {
+            lib_name: Some("invalid name".to_string()),
+            ..Default::default()
+        };
+
+        let error = match MonitorClient::new(
+            &address,
+            redis_connection_info,
+            TlsMode::NoTls,
+            Arc::new(|_| {}),
+        )
+        .await
+        {
+            Ok(_) => panic!("invalid library name should fail monitor creation"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), ErrorKind::InvalidClientConfig);
+        assert!(error.to_string().contains("library name"));
+    }
 
     #[test]
     fn test_parse_basic_set() {

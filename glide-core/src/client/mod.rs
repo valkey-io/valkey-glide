@@ -23,10 +23,11 @@ use redis::{
     AddressResolver, ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy,
     PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
+use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -182,6 +183,31 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
         DEFAULT_PORT
     } else {
         address.port
+    }
+}
+
+static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\A[\x21-\x27\x2A-\x7E]+(?:\([\x21-\x27\x2A-\x7E]+\))?\z")
+        .expect("library name regex must be valid")
+});
+
+/// Validate a binding-composed runtime library name before client creation.
+///
+/// Empty values are treated as absent. Non-empty values must contain only printable ASCII
+/// characters and may contain at most one ordered, matched pair of parentheses introduced by
+/// binding-local `base(tag)` composition.
+pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), String> {
+    let Some(lib_name) = lib_name else {
+        return Ok(());
+    };
+
+    if lib_name.is_empty() || LIB_NAME_PATTERN.is_match(lib_name) {
+        Ok(())
+    } else {
+        Err(
+            "library name must contain only printable ASCII characters from '!' through '~' and parentheses must form a non-empty trailing '(tag)'"
+                .to_string(),
+        )
     }
 }
 
@@ -2668,6 +2694,9 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
+        validate_effective_lib_name(request.lib_name.as_deref())
+            .map_err(ConnectionError::Configuration)?;
+
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
@@ -3040,8 +3069,75 @@ mod tests {
         get_request_timeout, is_blocking_command,
     };
 
-    use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
+    use super::{
+        Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
+        validate_effective_lib_name,
+    };
     use std::sync::Weak;
+
+    #[test]
+    fn test_validate_effective_lib_name_accepts_supported_values() {
+        for lib_name in [
+            None,
+            Some(""),
+            Some("!"),
+            Some("~"),
+            Some("GlideRust"),
+            Some("client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~"),
+            Some("GlideJava(framework:1.2)"),
+        ] {
+            assert_eq!(
+                validate_effective_lib_name(lib_name),
+                Ok(()),
+                "{lib_name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_effective_lib_name_rejects_invalid_values() {
+        for lib_name in [
+            "Glide Rust",
+            "Glide\tRust",
+            "Glide\nRust",
+            "Glide\u{7f}Rust",
+            "GlidéRust",
+            "GlideRust(",
+            "GlideRust)",
+            ")GlideRust(",
+            "GlideRust((tag))",
+            "GlideRust(tag)(second)",
+            "GlideRust(tag)suffix",
+            "(tag)",
+            "GlideRust()",
+        ] {
+            assert!(
+                validate_effective_lib_name(Some(lib_name)).is_err(),
+                "{lib_name:?} should be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_invalid_lib_name_before_lazy_client_creation() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            lib_name: Some("invalid name".to_string()),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid library name should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, ConnectionError::Configuration(_)));
+        assert!(error.to_string().contains("library name"));
+    }
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {

@@ -2332,11 +2332,12 @@ export class BaseClient {
     ): PubSubMsg | null {
         let msg: PubSubMsg | null = null;
         const responsePointer = pushNotification.respPointer;
+        let nextPushNotificationValue: Record<string, unknown>;
         const isStringDecoder =
             (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
-            const nextPushNotificationValue =
+            nextPushNotificationValue =
                 typeof responsePointer === "number"
                     ? (valueFromPointer(
                           responsePointer,

@@ -782,7 +782,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                             unsafe {
                                 failure_callback(
                                     request_id,
-                                    c_msg.into_raw(),
+                                    c_msg.as_ptr(),
                                     errors::RequestErrorType::Unspecified,
                                 );
                             }
@@ -799,7 +799,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                 let msg = errors::error_message(&err);
                 let c_msg = CString::new(msg).unwrap_or_default();
                 unsafe {
-                    failure_callback(request_id, c_msg.into_raw(), error_type);
+                    failure_callback(request_id, c_msg.as_ptr(), error_type);
                 }
             }
         }

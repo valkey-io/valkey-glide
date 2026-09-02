@@ -67,7 +67,7 @@ jobs:
 
     run-full-tests-for-core:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
-        uses: ./.github/workflows/rust.yml
+        uses: ./.github/workflows/rust-core.yml
         with:
             run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for GLIDE core lib

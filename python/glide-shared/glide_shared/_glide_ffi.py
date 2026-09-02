@@ -111,7 +111,6 @@ class _GlideFFI:
                 void* arena;
             } CommandResult;
 
-            const char* get_response_type_string(int response_type);
             void free_command_response(CommandResponse* command_response_ptr);
             void free_response_arena(void* arena_ptr);
             void free_command_result(CommandResult* command_result_ptr);

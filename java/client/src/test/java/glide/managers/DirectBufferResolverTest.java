@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
-import glide.internal.GlideCoreClient;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
@@ -15,17 +13,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class CommandManagerDirectBufferTest {
-
-    private CommandManager commandManager;
-
-    @BeforeEach
-    void setUp() {
-        commandManager = new CommandManager(mock(GlideCoreClient.class));
-    }
+public class DirectBufferResolverTest {
 
     @Test
     void deserializeByteBufferArray_handlesBooleanDoubleAndBigNumberMarkers() throws Exception {
@@ -268,20 +258,19 @@ public class CommandManagerDirectBufferTest {
     private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response)
             throws Exception {
         Method method =
-                CommandManager.class.getDeclaredMethod(
+                DirectBufferResolver.class.getDeclaredMethod(
                         "deserializeByteBufferArray", ByteBuffer.class, boolean.class);
         method.setAccessible(true);
-        return (Object[]) method.invoke(commandManager, buffer, expectUtf8Response);
+        return (Object[]) method.invoke(null, buffer, expectUtf8Response);
     }
 
     @SuppressWarnings("unchecked")
     private LinkedHashMap<Object, Object> deserializeByteBufferMap(
             ByteBuffer buffer, boolean expectUtf8Response) throws Exception {
         Method method =
-                CommandManager.class.getDeclaredMethod(
+                DirectBufferResolver.class.getDeclaredMethod(
                         "deserializeByteBufferMap", ByteBuffer.class, boolean.class);
         method.setAccessible(true);
-        return (LinkedHashMap<Object, Object>)
-                method.invoke(commandManager, buffer, expectUtf8Response);
+        return (LinkedHashMap<Object, Object>) method.invoke(null, buffer, expectUtf8Response);
     }
 }
