@@ -95,10 +95,16 @@ def run_ssm_command(
     )
     cmd_id = resp["Command"]["CommandId"]
     deadline = time.time() + timeout
+    # Brief initial wait for the invocation record to be created on AWS side
+    time.sleep(2)
     while time.time() < deadline:
-        inv = ssm_client.get_command_invocation(
-            CommandId=cmd_id, InstanceId=instance_id
-        )
+        try:
+            inv = ssm_client.get_command_invocation(
+                CommandId=cmd_id, InstanceId=instance_id
+            )
+        except ssm_client.exceptions.InvocationDoesNotExist:
+            time.sleep(5)
+            continue
         if inv["Status"] in ("Success", "Failed", "Cancelled", "TimedOut"):
             if inv["Status"] != "Success":
                 raise RuntimeError(
