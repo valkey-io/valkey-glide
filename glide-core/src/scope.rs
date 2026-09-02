@@ -490,10 +490,7 @@ pub fn try_acquire_scope(
         match pools.get(&client_id) {
             Some(existing) => (existing.value().clone(), true),
             None => (
-                crate::pool::get_or_create_scope_pool(
-                    client_id,
-                    connection_request_bytes.clone(),
-                ),
+                crate::pool::get_or_create_scope_pool(client_id, connection_request_bytes.clone()),
                 false,
             ),
         }
