@@ -1540,6 +1540,7 @@ pub(crate) mod shared_client_tests {
         client_id: u64,
         scope_id: u64,
         pool: std::sync::Arc<tokio::sync::Mutex<glide_core::pool::ScopePool>>,
+        released: std::cell::Cell<bool>,
     }
 
     impl ScopeHandle {
@@ -1586,6 +1587,7 @@ pub(crate) mod shared_client_tests {
                 client_id,
                 scope_id: scope_id as u64,
                 pool,
+                released: std::cell::Cell::new(false),
             }
         }
 
@@ -1595,9 +1597,21 @@ pub(crate) mod shared_client_tests {
         }
 
         fn release(&self) {
+            if self.released.replace(true) {
+                return;
+            }
             let handle = tokio::runtime::Handle::current();
             glide_core::scope::release_scope(self.scope_id, self.client_id, &handle);
             glide_core::scope::unregister_client(self.client_id);
+        }
+    }
+
+    impl Drop for ScopeHandle {
+        /// Teardown runs unconditionally, even when a test asserts before calling
+        /// `release`, so a failed assertion cannot leak this client's registration
+        /// into the process-global registry and poison the next serial test.
+        fn drop(&mut self) {
+            self.release();
         }
     }
 
@@ -1644,6 +1658,110 @@ pub(crate) mod shared_client_tests {
             );
 
             scope.release();
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_honours_finite_command_timeout(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // A blocking command with a FINITE timeout must honour its own command-level
+        // deadline through the scope layer, not the much shorter flat request_timeout.
+        // With request_timeout = 1s and BLPOP <key> 5, a naive implementation bounded
+        // by request_timeout would return at ~1s; the correct behaviour (get_request_timeout
+        // -> Some(5s) for the blocking arg) keeps blocking until the command's own 5s
+        // deadline. We assert the call lasted clearly longer than the flat 1s timeout
+        // (> 2s, generous to avoid flakiness) rather than an exact 5s.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1000), // 1s flat request timeout
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            let started = std::time::Instant::now();
+            // `5` = block up to 5 seconds; nothing is ever pushed to `key`, so this
+            // returns only when the command's own deadline elapses.
+            let mut args = vec![key.into_bytes(), b"5".to_vec()];
+            let _ = scope.send("BLPOP", &mut args).await;
+            let elapsed = started.elapsed();
+
+            assert!(
+                elapsed > std::time::Duration::from_secs(2),
+                "scoped BLPOP with a 5s timeout returned after {elapsed:?}, which is at \
+                 or below the 1s flat request_timeout — the per-command timeout was not honoured"
+            );
+
+            scope.release();
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_clean_protocol_error_reuses_connection(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // A blocking command that fails with a clean protocol error never armed a
+        // server-side waiter, so its connection stays reusable and must be returned
+        // to the idle pool on release — not churned. We trigger the deterministic
+        // WRONGTYPE case: SET a string key, then BLPOP it (BLPOP on a non-list
+        // returns WRONGTYPE immediately). Pre-fix (poison-on-any-error) the released
+        // connection was discarded; post-fix it is reused.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1000),
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // Make the key a string so BLPOP on it fails fast with WRONGTYPE.
+            let mut set_args = vec![key.clone().into_bytes(), b"not-a-list".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("SET should succeed");
+
+            let mut blpop_args = vec![key.into_bytes(), b"0".to_vec()];
+            let result = scope.send("BLPOP", &mut blpop_args).await;
+            assert!(
+                result.is_err(),
+                "expected WRONGTYPE error from BLPOP on a string key, got {result:?}"
+            );
+            let err = result.unwrap_err();
+            assert!(
+                !err.is_timeout() && !err.is_io_error(),
+                "WRONGTYPE must be a clean protocol error, not timeout/io: {err:?}"
+            );
+
+            scope.release();
+
+            // A clean protocol error leaves the connection reusable: it is returned
+            // to idle and still counted, rather than discarded.
+            let pool = scope.pool.lock().await;
+            assert!(
+                !pool.idle.is_empty(),
+                "connection with a clean protocol error was discarded instead of reused"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                1,
+                "reusable connection was dropped from the pool total"
+            );
         });
     }
 
@@ -1711,8 +1829,6 @@ pub(crate) mod shared_client_tests {
                 "discarded blocking connection was still counted in the pool total"
             );
             drop(pool);
-
-            glide_core::scope::unregister_client(scope.client_id);
         });
     }
 
@@ -1800,7 +1916,6 @@ pub(crate) mod shared_client_tests {
             // Never released `_held`, mirroring an unbounded BLPOP that never
             // completes; the slot must already be reclaimed regardless.
             drop(_held);
-            glide_core::scope::unregister_client(scope.client_id);
         });
     }
 
@@ -1877,8 +1992,6 @@ pub(crate) mod shared_client_tests {
                 }
                 other => panic!("legitimate consumer did not receive the push: {other:?}"),
             }
-
-            glide_core::scope::unregister_client(scope.client_id);
         });
     }
 
@@ -1971,8 +2084,6 @@ pub(crate) mod shared_client_tests {
                 pool.total_count.load(std::sync::atomic::Ordering::Acquire)
             );
             drop(pool);
-
-            glide_core::scope::unregister_client(scope.client_id);
         });
     }
 
