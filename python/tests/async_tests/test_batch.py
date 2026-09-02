@@ -76,6 +76,16 @@ async def exec_batch(
         )
 
 
+def _moved_error_count(node_info: bytes) -> int:
+    """Return the errorstat_MOVED count from an INFO errorstats section, or 0."""
+    for line in node_info.splitlines():
+        if line.startswith(b"errorstat_MOVED"):
+            _, _, count_field = line.partition(b"count=")
+            if count_field:
+                return int(count_field.split(b",")[0])
+    return 0
+
+
 @pytest.mark.anyio
 class TestBatch:
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -777,11 +787,10 @@ class TestBatch:
             assert isinstance(node_info, bytes)
             pre_info = pre_error_stats.get(node_address, b"")
             # Verify no new MOVED errors appeared, which would indicate incorrect
-            # routing. We compare before/after to ignore pre-existing errors from
-            # concurrent tests.
-            assert (
-                b"errorstat_MOVED" not in node_info
-                or b"errorstat_MOVED" in pre_info
+            # routing. We compare the MOVED count before/after so pre-existing
+            # errors from concurrent tests do not mask a new one from this batch.
+            assert _moved_error_count(node_info) <= _moved_error_count(
+                pre_info
             ), f"Node {node_address.decode()} reported new MOVED errors after batch: {node_info.decode()}"
 
     @pytest.mark.parametrize("cluster_mode", [True])
