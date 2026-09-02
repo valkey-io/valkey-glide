@@ -1,4 +1,4 @@
-use crate::cluster_async::ConnectionFuture;
+use crate::cluster_async::{connections_logic::AddressResolution, ConnectionFuture};
 use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
 use crate::cluster_topology::TopologyHash;
@@ -234,15 +234,22 @@ pub(crate) struct RefreshTaskState {
     pub handle: JoinHandle<()>,
     // Current status of the refresh task.
     pub status: RefreshTaskStatus,
+    // Whether the task may resolve its address before opening a connection.
+    pub address_resolution: AddressResolution,
 }
 
 impl RefreshTaskState {
     // Creates a new `RefreshTaskState` with a `Reconnecting` status.
-    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
+    pub fn new(
+        handle: JoinHandle<()>,
+        notifier: RefreshTaskNotifier,
+        address_resolution: AddressResolution,
+    ) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
             handle,
             status: RefreshTaskStatus::with_notifier(notifier),
+            address_resolution,
         }
     }
 }

@@ -2017,8 +2017,9 @@ where
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
-    // If a refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned.
+    // If a compatible refresh task is already running for an address, no new task is created;
+    // instead, the notifier from the existing task is returned. An already-resolved refresh
+    // supersedes a resolver-aware task so the final address is never resolved again.
     // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
@@ -2067,32 +2068,57 @@ where
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
         for address in addresses {
-            if let Some(existing_task) = inner
-                .conn_lock
-                .read()
+            // Keep task arbitration and insertion under one lock so concurrent
+            // refreshes cannot choose incompatible address-resolution semantics.
+            let mut conn_lock = inner.conn_lock.write();
+            let existing_task = conn_lock
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .get(&address)
-            {
-                if let RefreshTaskStatus::Reconnecting(ref notifier) = existing_task.status {
-                    // Store the notifier
-                    notifiers.push(notifier.get_notifier());
+                .map(|task| {
+                    let notifier = match &task.status {
+                        RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                        RefreshTaskStatus::ReconnectingTooLong => None,
+                    };
+                    (task.address_resolution, notifier)
+                });
+
+            if let Some((existing_resolution, notifier)) = existing_task {
+                if !address_resolution.supersedes(existing_resolution) {
+                    if let Some(notifier) = notifier {
+                        notifiers.push(notifier);
+                    }
+                    log_debug_lazy!(
+                        "cluster",
+                        format!("Skipping refresh for {}: already in progress", address)
+                    );
+                    continue;
                 }
+
                 log_debug_lazy!(
                     "cluster",
-                    format!("Skipping refresh for {}: already in progress", address)
+                    format!(
+                        "Replacing resolver-aware refresh for {} with already-resolved refresh",
+                        address
+                    )
                 );
-                continue; // Skip creating a new refresh task
+                conn_lock
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .remove(&address);
             }
 
             let inner_clone = inner.clone();
             let address_clone_for_task = address.clone();
 
-            let mut node_option = inner.conn_lock.read().remove_node(&address);
+            let mut node_option = conn_lock.remove_node(&address);
 
             if !check_existing_conn {
                 node_option = None;
             }
+
+            let notifier = RefreshTaskNotifier::new();
+            notifiers.push(notifier.get_notifier());
 
             let handle = tokio::spawn(async move {
                 log_info_rate_limited!(
@@ -2145,7 +2171,9 @@ where
                                     .refresh_address_in_progress
                                     .get_mut(&address_clone_for_task)
                                 {
-                                    conn_state.status.flip_status_to_too_long();
+                                    if conn_state.address_resolution == address_resolution {
+                                        conn_state.status.flip_status_to_too_long();
+                                    }
                                 }
 
                                 first_attempt = false;
@@ -2167,10 +2195,18 @@ where
                                 address_clone_for_task
                             )
                         );
-                        inner_clone
-                            .conn_lock
-                            .read()
-                            .replace_or_add_connection_for_address(&address_clone_for_task, node);
+                        let conn_lock = inner_clone.conn_lock.read();
+                        let task_is_current = conn_lock
+                            .refresh_conn_state
+                            .refresh_address_in_progress
+                            .get(&address_clone_for_task)
+                            .is_some_and(|task| task.address_resolution == address_resolution);
+                        if task_is_current {
+                            conn_lock.replace_or_add_connection_for_address(
+                                &address_clone_for_task,
+                                node,
+                            );
+                        }
                     }
                     Err(err) => {
                         log_warn_lazy!(
@@ -2183,12 +2219,18 @@ where
                     }
                 }
 
-                inner_clone
-                    .conn_lock
-                    .write()
+                let mut conn_lock = inner_clone.conn_lock.write();
+                let task_is_current = conn_lock
                     .refresh_conn_state
                     .refresh_address_in_progress
-                    .remove(&address_clone_for_task);
+                    .get(&address_clone_for_task)
+                    .is_some_and(|task| task.address_resolution == address_resolution);
+                if task_is_current {
+                    conn_lock
+                        .refresh_conn_state
+                        .refresh_address_in_progress
+                        .remove(&address_clone_for_task);
+                }
 
                 log_debug_lazy!(
                     "cluster",
@@ -2199,15 +2241,10 @@ where
                 );
             });
 
-            let notifier = RefreshTaskNotifier::new();
-            notifiers.push(notifier.get_notifier());
-
             // Keep the task handle and notifier into the RefreshState of this address
-            let refresh_task_state = RefreshTaskState::new(handle, notifier);
+            let refresh_task_state = RefreshTaskState::new(handle, notifier, address_resolution);
 
-            inner
-                .conn_lock
-                .write()
+            conn_lock
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .insert(address.clone(), refresh_task_state);
@@ -5407,5 +5444,172 @@ mod circular_moved_address_normalization_tests {
         let core = core_with_ip_mapping();
 
         assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "10.0.0.1:6379"));
+    }
+}
+
+#[cfg(test)]
+mod refresh_task_resolution_tests {
+    use super::*;
+    use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
+    use crate::cluster_routing::Slot;
+    use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
+    use crate::types::AddressResolver;
+    use crate::ConnectionAddr;
+    use std::collections::HashMap;
+    use tokio::sync::{Notify, Semaphore};
+
+    static POISON_CONNECT_STARTED: Notify = Notify::const_new();
+    static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
+
+    #[derive(Clone, Debug)]
+    struct RecordingConnection {
+        port: u16,
+    }
+
+    impl ConnectionLike for RecordingConnection {
+        fn req_packed_command<'a>(&'a mut self, _cmd: &'a Cmd) -> RedisFuture<'a, Value> {
+            Box::pin(async { Ok(Value::Okay) })
+        }
+
+        fn req_packed_commands<'a>(
+            &'a mut self,
+            _pipeline: &'a crate::Pipeline,
+            _offset: usize,
+            count: usize,
+            _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
+        ) -> RedisFuture<'a, Vec<Value>> {
+            Box::pin(async move { Ok(vec![Value::Okay; count]) })
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn is_closed(&self) -> bool {
+            false
+        }
+    }
+
+    impl Connect for RecordingConnection {
+        fn connect<'a, T>(
+            info: T,
+            _response_timeout: Duration,
+            _connection_timeout: Duration,
+            _socket_addr: Option<SocketAddr>,
+            _glide_connection_options: GlideConnectionOptions,
+        ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
+        where
+            T: IntoConnectionInfo + Send + 'a,
+        {
+            Box::pin(async move {
+                let info = info.into_connection_info()?;
+                let port = match info.addr {
+                    ConnectionAddr::Tcp(_, port) | ConnectionAddr::TcpTls { port, .. } => port,
+                    ConnectionAddr::Unix(_) => unreachable!("cluster test uses TCP addresses"),
+                };
+
+                if port == 6381 {
+                    POISON_CONNECT_STARTED.notify_one();
+                    RELEASE_POISON_CONNECT
+                        .acquire()
+                        .await
+                        .expect("test semaphore remains open")
+                        .forget();
+                }
+
+                Ok((Self { port }, None))
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct NonIdempotentResolver;
+
+    impl AddressResolver for NonIdempotentResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port == 6380 {
+                (host.to_owned(), 6381)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
+    fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+        let address = "resolved-node:6380".to_owned();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address, vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
+        let mut cluster_params = ClusterParams::default_for_test(None);
+        cluster_params.address_resolver = Some(Arc::new(NonIdempotentResolver));
+
+        Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(cluster_params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    #[tokio::test]
+    async fn resolved_refresh_supersedes_concurrent_resolver_aware_refresh() {
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6380".to_owned();
+
+        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+            core.clone(),
+            HashSet::from([address.clone()]),
+            RefreshConnectionType::AllConnections,
+            false,
+            AddressResolution::Resolve,
+        )
+        .await;
+
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("resolver-aware refresh should start the poisoned connection");
+
+        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+            core.clone(),
+            HashSet::from([address.clone()]),
+            RefreshConnectionType::AllConnections,
+            false,
+            AddressResolution::AlreadyResolved,
+        )
+        .await;
+
+        RELEASE_POISON_CONNECT.add_permits(2);
+
+        let connected_port = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let connection = core
+                    .conn_lock
+                    .read()
+                    .connection_for_address(&address)
+                    .map(|(_, connection)| connection);
+                if let Some(connection) = connection {
+                    break connection.await.port;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("already-resolved refresh should install a connection");
+
+        assert_eq!(connected_port, 6380);
     }
 }

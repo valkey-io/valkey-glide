@@ -38,6 +38,12 @@ pub(crate) enum AddressResolution {
     AlreadyResolved,
 }
 
+impl AddressResolution {
+    pub(crate) fn supersedes(self, existing: Self) -> bool {
+        matches!((self, existing), (Self::AlreadyResolved, Self::Resolve))
+    }
+}
+
 fn failed_management_connection<C>(
     addr: &str,
     user_conn: ConnectionDetails<ConnectionFuture<C>>,
@@ -557,4 +563,17 @@ pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     };
 
     Some((host, port))
+}
+
+#[cfg(test)]
+mod address_resolution_tests {
+    use super::AddressResolution;
+
+    #[test]
+    fn already_resolved_refresh_supersedes_resolver_aware_refresh() {
+        assert!(AddressResolution::AlreadyResolved.supersedes(AddressResolution::Resolve));
+        assert!(!AddressResolution::Resolve.supersedes(AddressResolution::AlreadyResolved));
+        assert!(!AddressResolution::Resolve.supersedes(AddressResolution::Resolve));
+        assert!(!AddressResolution::AlreadyResolved.supersedes(AddressResolution::AlreadyResolved));
+    }
 }
