@@ -298,6 +298,7 @@ import {
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
 import { IsolatedScope } from "./IsolatedScope.js";
+import { CONNECTION_REQUEST_BYTES } from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -10122,13 +10123,16 @@ export class BaseClient {
     }
 
     /**
-     * Returns the serialized connection request captured when this client
-     * connected, or `undefined` if the client is not yet connected. A scope
-     * uses these bytes to open an identical connection through glide-core.
+     * Hands a scope a defensive copy of the connection request captured when
+     * this client connected, or `undefined` if it is not yet connected. Keyed
+     * by an internal symbol so the cached credentials stay off the public
+     * surface and a caller cannot retain or mutate the client's buffer.
      * @internal
      */
-    public getConnectionRequestBytes(): Uint8Array | undefined {
-        return this.connectionRequestBytes;
+    [CONNECTION_REQUEST_BYTES](): Uint8Array | undefined {
+        return this.connectionRequestBytes
+            ? Uint8Array.from(this.connectionRequestBytes)
+            : undefined;
     }
 
     /**
@@ -10169,6 +10173,9 @@ export class BaseClient {
         routingKey?: string,
         maxRetries = 10,
     ): Promise<IsolatedScope> {
+        // Reject on a closed client with ClosingError, like every command path,
+        // instead of the generic handle error the scope loop would raise.
+        this.ensureClientIsOpen();
         return IsolatedScope.acquire(this, routingKey, maxRetries);
     }
 
@@ -10291,17 +10298,44 @@ export class BaseClient {
             updateConnectionPassword,
         );
 
-        if (response === "OK" && !this.config?.credentials) {
-            this.config = {
-                ...this.config!,
-                credentials: {
-                    ...this.config!.credentials,
-                    password: password ? password : "",
-                },
-            };
+        if (response === "OK") {
+            // Refresh the cached request so a later scope authenticates with
+            // the new credential rather than the stale one.
+            this.refreshCachedConnectionPassword(password);
+
+            if (!this.config?.credentials) {
+                this.config = {
+                    ...this.config!,
+                    credentials: {
+                        ...this.config!.credentials,
+                        password: password ? password : "",
+                    },
+                };
+            }
         }
 
         return response;
+    }
+
+    /**
+     * @internal
+     * Rewrites the password in the cached connection-request bytes so scopes
+     * opened after a password update use the new credential.
+     */
+    private refreshCachedConnectionPassword(password: string | null): void {
+        if (!this.connectionRequestBytes) return;
+
+        const request = connection_request.ConnectionRequest.decode(
+            this.connectionRequestBytes,
+        );
+        const authenticationInfo =
+            request.authenticationInfo ??
+            connection_request.AuthenticationInfo.create({});
+        authenticationInfo.password = password ?? "";
+        request.authenticationInfo = authenticationInfo;
+        this.connectionRequestBytes = Buffer.from(
+            connection_request.ConnectionRequest.encode(request).finish(),
+        );
     }
 
     /**
