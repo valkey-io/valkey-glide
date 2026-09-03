@@ -8,6 +8,31 @@ import { lt } from "semver";
 const PYTHON_CMD = process.platform === "win32" ? "python" : "python3";
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
+// When set, cluster_manager.py commands are redirected to a remote EC2 via SSM.
+// Set by the Windows CI orchestrator to point at the Linux EC2 running Valkey.
+const REMOTE_INSTANCE_ID = process.env.GLIDE_REMOTE_INSTANCE_ID;
+const REMOTE_IP = process.env.GLIDE_REMOTE_IP;
+const REMOTE_REGION = process.env.GLIDE_REMOTE_REGION ?? "us-east-1";
+
+/**
+ * Appends --remote flags to cluster_manager.py args when running on Windows CI.
+ * This transparently redirects server start/stop to the Linux EC2.
+ */
+function appendRemoteArgs(args: string[]): string[] {
+    if (REMOTE_INSTANCE_ID && REMOTE_IP) {
+        return [
+            ...args,
+            "--remote",
+            REMOTE_INSTANCE_ID,
+            "--remote-ip",
+            REMOTE_IP,
+            "--remote-region",
+            REMOTE_REGION,
+        ];
+    }
+    return args;
+}
+
 function parseOutput(input: string): {
     clusterFolder: string;
     addresses: [string, number][];
@@ -123,7 +148,7 @@ export class ValkeyCluster {
 
             execFile(
                 PYTHON_CMD,
-                [PY_SCRIPT_PATH, ...commandArgs],
+                appendRemoteArgs([PY_SCRIPT_PATH, ...commandArgs]),
                 (error, stdout) => {
                     if (error) {
                         reject(error);
@@ -204,7 +229,7 @@ export class ValkeyCluster {
                     commandArgs.push(`--keep-folder`);
                 }
 
-                execFile(PYTHON_CMD, commandArgs, (error, _, stderr) => {
+                execFile(PYTHON_CMD, appendRemoteArgs(commandArgs), (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
