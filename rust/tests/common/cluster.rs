@@ -74,14 +74,9 @@ fn field_u64(fragment: &str, field: &str) -> Option<u64> {
     digits.parse().ok()
 }
 
-/// Two backends:
-/// * **cluster_manager.py** (preferred, opt-in): when the `GLIDE_CLUSTER_MANAGER`
-///   env var points at the canonical `valkey-glide/utils/cluster_manager.py`,
-///   the cluster is created with that tool — matching the Python suite and
-///   yielding **replicas** (and, in future, TLS). Requires `valkey-cli` on PATH.
-/// * **native** (fallback, self-contained): builds a primaries-only cluster
-///   directly from `valkey-server` via `CLUSTER ADDSLOTSRANGE` + `MEET`, so the
-///   standalone repo needs no external tooling.
+const CLUSTER_MANAGER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/cluster_manager.py");
+
+/// A cluster created with `cluster_manager.py`.
 pub struct ClusterHarness {
     children: Vec<Child>,
     pub ports: Vec<u16>,
@@ -112,17 +107,12 @@ impl ClusterHarness {
         Self::start_native(shards)
     }
 
-    /// Preferred backend: shell out to the canonical `cluster_manager.py`
-    /// (pointed to by `GLIDE_CLUSTER_MANAGER`). Returns `None` if the env var is
-    /// unset/invalid or the tool fails, so the caller falls back to native.
+    /// Starts a server using `cluster_manager.py`.
+    /// Returns `None` if it fails.
     fn start_via_cluster_manager(shards: usize, replicas: usize) -> Option<ClusterHarness> {
-        let script = std::env::var("GLIDE_CLUSTER_MANAGER").ok()?;
-        if !std::path::Path::new(&script).exists() {
-            return None;
-        }
         let out = Command::new("python3")
             .args([
-                &script,
+                CLUSTER_MANAGER,
                 "start",
                 "--cluster-mode",
                 "-n",
@@ -366,13 +356,11 @@ impl Drop for ClusterHarness {
     fn drop(&mut self) {
         if let Some(folder) = &self.managed_folder {
             // Managed backend: stop via cluster_manager.py (best effort).
-            if let Ok(script) = std::env::var("GLIDE_CLUSTER_MANAGER") {
-                let _ = Command::new("python3")
-                    .args([&script, "stop", "--cluster-folder", folder])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            }
+            let _ = Command::new("python3")
+                .args([CLUSTER_MANAGER, "stop", "--cluster-folder", folder])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
             return;
         }
         for child in &mut self.children {
