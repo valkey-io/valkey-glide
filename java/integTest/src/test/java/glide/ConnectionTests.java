@@ -17,7 +17,6 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SlotTyp
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -1308,6 +1307,7 @@ public class ConnectionTests {
     }
 
     @Test
+    @Timeout(30)
     @SneakyThrows
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
@@ -1332,7 +1332,11 @@ public class ConnectionTests {
                         () ->
                                 GlideClient.createClient(commonClientConfig().credentials(credentials).build())
                                         .get());
-        assertNotNull(exception.getCause());
+        // Verify the injected error message propagates through the exception chain.
+        String fullMessage = getFullExceptionMessage(exception);
+        assertTrue(
+                fullMessage.contains("injected test error"),
+                "Expected injected error message in exception chain, got: " + fullMessage);
     }
 
     @Test
@@ -1563,6 +1567,18 @@ public class ConnectionTests {
         return GlideClusterClient.createClient(
                         commonClusterClientConfig().credentials(credentials).build())
                 .get();
+    }
+
+    /** Collects all exception messages in the cause chain into a single string. */
+    private static String getFullExceptionMessage(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        while (t != null) {
+            if (t.getMessage() != null) {
+                sb.append(t.getMessage()).append(" | ");
+            }
+            t = t.getCause();
+        }
+        return sb.toString();
     }
 
     /**
