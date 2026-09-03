@@ -537,7 +537,7 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
 /// timeout — i.e. its resolved per-command timeout would be `None`.
 ///
 /// This is the name-based counterpart to the `None` branch of
-/// [`get_request_timeout`]: a blocking command resolves to `NoTimeout` (→ `None`)
+/// `get_request_timeout`: a blocking command resolves to `NoTimeout` (→ `None`)
 /// exactly when its own timeout argument is `0`. It deliberately answers only the
 /// "is the timeout zero?" question — it does *not* reproduce the full duration
 /// computation — so the FFI hot path can distinguish unbounded blocking (skip the
@@ -548,7 +548,7 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
 /// a missing/garbage arg is treated as *not* unbounded, so the watchdog still arms
 /// and the authoritative deadline in `send_command_on_connection` stays in force).
 ///
-/// Arg positions mirror [`get_request_timeout`] exactly, shifted by one because
+/// Arg positions mirror `get_request_timeout` exactly, shifted by one because
 /// `args` here excludes the command name (Cmd index `N` → `args` index `N - 1`).
 pub fn is_unbounded_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     let is_zero = |arg: Option<&Vec<u8>>| -> bool {

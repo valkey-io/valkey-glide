@@ -23,7 +23,7 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 /// watchdog diagnostics/circuit-breaker signal. This mirrors the multiplexed
 /// path, which arms whenever the resolved timeout is `Some` and skips only when
 /// it is `None` (unbounded). We detect the `None` case name-based via
-/// [`is_unbounded_blocking_command_name`] rather than resolving the full
+/// `is_unbounded_blocking_command_name` rather than resolving the full
 /// duration, keeping the hot path allocation-free (no `redis::Cmd`, no copying a
 /// large SET payload just to answer this yes/no question).
 fn should_arm_watchdog(cmd_name: &str, args: &[Vec<u8>]) -> bool {
