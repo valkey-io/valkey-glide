@@ -123,7 +123,7 @@ def build_windows_userdata(
     """Build the PowerShell user-data script for the Windows EC2."""
     lines = [
         "<powershell>",
-        "$ErrorActionPreference = 'Stop'",
+        "$ErrorActionPreference = 'Continue'",
         f"$buildId = '{BUILD_ID}'",
         f"$commitSha = '{COMMIT_SHA}'",
         f"$reportBucket = '{REPORT_BUCKET}'",
@@ -132,54 +132,92 @@ def build_windows_userdata(
         f"$env:EC2_LINUX_INSTANCE_ID = '{linux_instance_id}'",
         f"$env:EC2_LINUX_PRIVATE_IP = '{linux_private_ip}'",
         f"$env:AWS_REGION = '{REGION}'",
+        "$logFile = 'C:\\build-log.txt'",
+        "$aws = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'",
         "$exitCode = 1",
+        "",
+        "function Write-Log { param($msg) $ts = Get-Date -Format 'HH:mm:ss'; \"$ts $msg\" | Tee-Object -FilePath $logFile -Append }",
+        "function Push-Log { try { & $aws s3 cp $logFile \"s3://$reportBucket/$buildId/build-log.txt\" --region $region 2>&1 | Out-Null } catch {} }",
+        "function Push-Checkpoint { param($step) $json = '{\"step\":\"' + $step + '\"}'; $json | Out-File 'C:\\checkpoint.json' -Encoding UTF8; try { & $aws s3 cp 'C:\\checkpoint.json' \"s3://$reportBucket/$buildId/checkpoint.json\" --region $region 2>&1 | Out-Null } catch {} }",
+        "",
+        "Write-Log '=== Windows EC2 user-data started ===' ",
+        "Push-Checkpoint 'started'",
+        "",
         "try {",
         "    $env:CARGO_HOME = 'C:\\cargo'",
         "    $env:RUSTUP_HOME = 'C:\\rustup'",
         "    $env:RUSTUP_TOOLCHAIN = 'stable'",
         "    $env:PROTOC = 'C:\\Windows\\System32\\protoc.exe'",
         '    $env:PATH = "C:\\cargo\\bin;C:\\Windows\\System32;C:\\Program Files\\nodejs;$env:PATH"',
-        "    Write-Host '=== Updating Rust ==='",
-        "    & 'C:\\cargo\\bin\\rustup.exe' update stable 2>&1",
-        "    Write-Host \"Cargo: $(& 'C:\\cargo\\bin\\cargo.exe' --version)\"",
+        "",
+        "    Write-Log '=== Checking pre-installed tools ==='",
+        "    Write-Log \"Node: $(node --version 2>&1)\"",
+        "    Write-Log \"npm: $(npm --version 2>&1)\"",
+        "    Write-Log \"git: $(git --version 2>&1)\"",
+        "    Write-Log \"protoc: $(protoc --version 2>&1)\"",
+        "    Write-Log \"aws: $(& $aws --version 2>&1)\"",
+        "    Push-Log",
+        "    Push-Checkpoint 'tools-checked'",
+        "",
+        "    Write-Log '=== Updating Rust ==='",
         "    $vsWhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'",
         "    if (Test-Path $vsWhere) {",
         "        $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null",
         "        if ($vsPath) {",
         "            $vcVer = (Get-Content \"$vsPath\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt\").Trim()",
         '            $env:PATH = "$vsPath\\VC\\Tools\\MSVC\\$vcVer\\bin\\Hostx64\\x64;$env:PATH"',
-        "        }",
-        "    }",
-        "    Write-Host '=== Cloning repo ==='",
-        "    git clone https://github.com/valkey-io/valkey-glide.git C:\\build\\valkey-glide --depth=1",
+        "            Write-Log \"MSVC linker: $vsPath ($vcVer)\"",
+        "        } else { Write-Log 'WARNING: vswhere found no MSVC installation' }",
+        "    } else { Write-Log 'WARNING: vswhere not found' }",
+        "    & 'C:\\cargo\\bin\\rustup.exe' update stable 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    Write-Log \"Cargo: $(& 'C:\\cargo\\bin\\cargo.exe' --version 2>&1)\"",
+        "    Push-Log",
+        "    Push-Checkpoint 'rust-ready'",
+        "",
+        "    Write-Log '=== Cloning repo ==='",
+        "    git clone https://github.com/valkey-io/valkey-glide.git C:\\build\\valkey-glide --depth=1 2>&1 | Tee-Object -FilePath $logFile -Append",
         "    Set-Location C:\\build\\valkey-glide",
-        "    git fetch origin $commitSha",
-        "    git checkout $commitSha",
-        "    Write-Host '=== Building ==='",
-        "    Set-Location utils; npm ci; npm run build; Set-Location ..",
-        "    Set-Location node; npm ci; npm run build:release",
-        "    Write-Host '=== Running tests ==='",
+        "    git fetch origin $commitSha 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    git checkout $commitSha 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    Push-Log",
+        "    Push-Checkpoint 'repo-cloned'",
+        "",
+        "    Write-Log '=== Building utils ==='",
+        "    Set-Location utils; npm ci 2>&1 | Tee-Object -FilePath $logFile -Append; npm run build 2>&1 | Tee-Object -FilePath $logFile -Append; Set-Location ..",
+        "    Push-Checkpoint 'utils-built'",
+        "",
+        "    Write-Log '=== Building node client ==='",
+        "    Set-Location node; npm ci 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    npm run build:release 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    if ($LASTEXITCODE -ne 0) { throw \"build:release failed with exit code $LASTEXITCODE\" }",
+        "    Push-Log",
+        "    Push-Checkpoint 'node-built'",
+        "",
+        "    Write-Log '=== Running tests ==='",
         "    $testArgs = @('test', '--', '--runInBand', '--forceExit')",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
         "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
-        "    & npm @testArgs",
+        "    & npm @testArgs 2>&1 | Tee-Object -FilePath $logFile -Append",
         "    $exitCode = $LASTEXITCODE",
+        "    Write-Log \"Tests finished with exit code: $exitCode\"",
+        "    Push-Checkpoint 'tests-done'",
         "} catch {",
-        "    Write-Host \"Build/test failed: $_\"",
+        "    Write-Log \"FATAL: $_\"",
         "    $exitCode = 1",
         "} finally {",
+        "    Push-Log",
         "    try {",
         "        if (Test-Path 'C:\\build\\valkey-glide\\node\\test-report.html') {",
-        "            & 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe' s3 cp 'C:\\build\\valkey-glide\\node\\test-report.html' \"s3://$reportBucket/$buildId/test-report.html\" --region $region",
+        "            & $aws s3 cp 'C:\\build\\valkey-glide\\node\\test-report.html' \"s3://$reportBucket/$buildId/test-report.html\" --region $region",
         "        }",
         "        $status = if ($exitCode -eq 0) { 'success' } else { 'failed' }",
         "        $json = '{\"status\":\"' + $status + '\",\"exitCode\":' + $exitCode + '}'",
         "        $json | Out-File -FilePath 'C:\\status.json' -Encoding UTF8",
-        "        & 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe' s3 cp 'C:\\status.json' \"s3://$reportBucket/$buildId/status.json\" --region $region",
-        "    } catch { Write-Host \"S3 upload failed: $_\" }",
+        "        & $aws s3 cp 'C:\\status.json' \"s3://$reportBucket/$buildId/status.json\" --region $region",
+        "    } catch { Write-Log \"S3 upload failed: $_\" }",
         "    $iid = (Invoke-WebRequest -Uri 'http://169.254.169.254/latest/meta-data/instance-id' -UseBasicParsing).Content",
-        "    & 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe' ec2 terminate-instances --instance-ids $iid --region $region",
+        "    & $aws ec2 terminate-instances --instance-ids $iid --region $region",
         "}",
         "</powershell>",
     ]
@@ -220,18 +258,43 @@ def poll_s3_for_completion(
     s3_client, timeout: int = 5400
 ) -> dict:
     """Poll S3 for status.json written by Windows EC2. Returns status dict."""
-    key = f"{BUILD_ID}/status.json"
+    status_key = f"{BUILD_ID}/status.json"
+    checkpoint_key = f"{BUILD_ID}/checkpoint.json"
     deadline = time.time() + timeout
+    last_checkpoint = None
+    last_checkpoint_log = 0
     while time.time() < deadline:
+        # Check for completion
         try:
-            obj = s3_client.get_object(Bucket=REPORT_BUCKET, Key=key)
+            obj = s3_client.get_object(Bucket=REPORT_BUCKET, Key=status_key)
             data = json.loads(obj["Body"].read())
             log.info(f"Build complete: {data}")
             return data
         except s3_client.exceptions.NoSuchKey:
             pass
         except Exception as e:
-            log.warning(f"Poll error: {e}")
+            log.warning(f"Poll error (status): {e}")
+
+        # Log checkpoint progress every 60s
+        now = time.time()
+        if now - last_checkpoint_log >= 60:
+            try:
+                cp = s3_client.get_object(Bucket=REPORT_BUCKET, Key=checkpoint_key)
+                cp_data = json.loads(cp["Body"].read())
+                step = cp_data.get("step", "unknown")
+                if step != last_checkpoint:
+                    last_checkpoint = step
+                    log.info(f"Windows EC2 checkpoint: {step}")
+                else:
+                    elapsed = int(now - (deadline - timeout))
+                    log.info(f"Windows EC2 still at checkpoint '{step}' ({elapsed}s elapsed)")
+            except s3_client.exceptions.NoSuchKey:
+                elapsed = int(now - (deadline - timeout))
+                log.info(f"Windows EC2 has not written any checkpoint yet ({elapsed}s elapsed) - user-data may not have started")
+            except Exception as e:
+                log.warning(f"Poll error (checkpoint): {e}")
+            last_checkpoint_log = now
+
         time.sleep(30)
     raise TimeoutError(f"Windows build did not complete within {timeout}s")
 
