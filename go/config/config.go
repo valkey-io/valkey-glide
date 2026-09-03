@@ -11,6 +11,7 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -174,6 +175,10 @@ const (
 	AzAffinityReplicaAndPrimary
 	// ReadFromAllNodes - Spread the read requests between all nodes (primary and replicas) in a round-robin manner.
 	ReadFromAllNodes
+	// AzAffinityAllNodes - Spread read requests round-robin across ALL nodes (primary and replicas) in the client's
+	// Availability Zone (AZ). Falls back to round-robin across all nodes when no in-AZ node is available. Unlike
+	// AzAffinityReplicaAndPrimary, this strategy does not prioritize replicas over the primary within the AZ.
+	AzAffinityAllNodes
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
@@ -191,6 +196,10 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 
 	if readFrom == ReadFromAllNodes {
 		return protobuf.ReadFrom_AllNodes
+	}
+
+	if readFrom == AzAffinityAllNodes {
+		return protobuf.ReadFrom_AZAffinityAllNodes
 	}
 
 	return protobuf.ReadFrom_Primary
@@ -314,9 +323,12 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	request.LibName = libName
 
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
-		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary ||
+		request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
 		if config.clientAZ == "" {
-			return nil, errors.New("client AZ must be set when using AZ affinity or AZ affinity with replicas and primary")
+			return nil, errors.New(
+				"client AZ must be set when using AZ affinity, AZ affinity with replicas and primary, or AZ affinity across all nodes",
+			)
 		}
 	}
 
@@ -408,8 +420,7 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 	}
 
 	if strategy.jitterPercent != nil {
-		jitter := uint32(*strategy.jitterPercent)
-		protoStrategy.JitterPercent = &jitter
+		protoStrategy.JitterPercent = proto.Uint32(uint32(*strategy.jitterPercent))
 	}
 
 	return protoStrategy
@@ -448,17 +459,14 @@ func applyClientCertAndKey(tlsConfig *TlsConfiguration, request *protobuf.Connec
 	}
 
 	if len(tlsConfig.clientCertPath) > 0 {
-		certPath := tlsConfig.clientCertPath
-		keyPath := tlsConfig.clientKeyPath
-		request.ClientCertPath = &certPath
-		request.ClientKeyPath = &keyPath
+		request.ClientCertPath = proto.String(tlsConfig.clientCertPath)
+		request.ClientKeyPath = proto.String(tlsConfig.clientKeyPath)
 
 		reload := &protobuf.ClientCertReloadConfig{Enabled: true}
 		if tlsConfig.certReloadInterval > 0 {
 			// certReloadInterval is a uint32 seconds value validated by
 			// WithMutualTLSFromFiles; forward it straight to the wire field.
-			s := tlsConfig.certReloadInterval
-			reload.IntervalSeconds = &s
+			reload.IntervalSeconds = proto.Uint32(tlsConfig.certReloadInterval)
 		}
 		request.CertReload = reload
 	}
@@ -501,10 +509,11 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	if config.readOnly {
 		// Validate that read-only mode is not combined with AZAffinity strategies
 		if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
-			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary ||
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
 			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
 		}
-		request.ReadOnly = &config.readOnly
+		request.ReadOnly = proto.Bool(config.readOnly)
 	}
 
 	if config.nodeDiscoveryMode != NodeDiscoveryModeStandard {
@@ -530,8 +539,9 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 
 	// Handle PubSub reconciliation interval
 	if config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs != nil {
-		intervalMs := uint32(*config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs)
-		request.PubsubReconciliationIntervalMs = &intervalMs
+		request.PubsubReconciliationIntervalMs = proto.Uint32(
+			uint32(*config.AdvancedClientConfiguration.pubsubReconciliationIntervalMs),
+		)
 	}
 
 	// Handle TLS configuration
@@ -681,9 +691,9 @@ func (config *ClientConfiguration) WithSubscriptionConfig(
 // When enabled, the client will skip primary node detection during connection initialization
 // and will reject write commands. This is useful for connecting to replica-only deployments.
 //
-// Note: Read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
-// read strategies. Attempting to use these combinations will result in an error during
-// client creation.
+// Note: Read-only mode is not compatible with AzAffinity, AzAffinityReplicaAndPrimary, or
+// AzAffinityAllNodes read strategies. Attempting to use these combinations will result in an
+// error during client creation.
 func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfiguration {
 	config.readOnly = readOnly
 	return config
@@ -808,8 +818,9 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 
 	// Handle PubSub reconciliation interval
 	if config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs != nil {
-		intervalMs := uint32(*config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs)
-		request.PubsubReconciliationIntervalMs = &intervalMs
+		request.PubsubReconciliationIntervalMs = proto.Uint32(
+			uint32(*config.AdvancedClusterClientConfiguration.pubsubReconciliationIntervalMs),
+		)
 	}
 
 	// Handle TLS configuration

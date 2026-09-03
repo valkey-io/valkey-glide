@@ -1,0 +1,75 @@
+name: Rust client tests
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - rust/**
+            - glide-core/**
+            - logger_core/**
+            - deny.toml
+            - utils/cluster_manager.py
+            - .github/workflows/rust-client.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/workflows/lint-rust/action.yml
+    pull_request:
+        paths:
+            - rust/**
+            - glide-core/**
+            - logger_core/**
+            - deny.toml
+            - utils/cluster_manager.py
+            - .github/workflows/rust-client.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/workflows/lint-rust/action.yml
+    workflow_dispatch:
+
+concurrency:
+    group: rust-client-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  persist-credentials: false
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: rust
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+              name: lint rust client
+
+    tests:
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  persist-credentials: false
+
+            - name: Install shared software dependencies
+              uses: ./.github/actions/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  engine-version: "9.0"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run rust client tests
+              working-directory: ./rust
+              run: cargo test

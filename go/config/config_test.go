@@ -1321,6 +1321,44 @@ func TestClusterConfig_TcpNoDelay(t *testing.T) {
 	assert.Nil(t, request.TcpNodelay)
 }
 
+func TestStandaloneConfig_PubSubReconciliationIntervalMs(t *testing.T) {
+	// Test interval set
+	config := NewClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClientConfiguration().WithPubSubReconciliationIntervalMs(500),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.PubsubReconciliationIntervalMs)
+	assert.Equal(t, uint32(500), *request.PubsubReconciliationIntervalMs)
+
+	// Test interval not set (default)
+	config = NewClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.PubsubReconciliationIntervalMs)
+}
+
+func TestClusterConfig_PubSubReconciliationIntervalMs(t *testing.T) {
+	// Test interval set
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().WithPubSubReconciliationIntervalMs(500),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.PubsubReconciliationIntervalMs)
+	assert.Equal(t, uint32(500), *request.PubsubReconciliationIntervalMs)
+
+	// Test interval not set (default)
+	config = NewClusterClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.PubsubReconciliationIntervalMs)
+}
+
 // ============================================================================
 // Compression Configuration Tests
 // ============================================================================
@@ -1733,6 +1771,41 @@ func TestConfig_ReadOnly_RejectsAzAffinityReplicasAndPrimary(t *testing.T) {
 	config := NewClientConfiguration().
 		WithReadOnly(true).
 		WithReadFrom(AzAffinityReplicaAndPrimary).
+		WithClientAZ("us-east-1a")
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read-only mode is not compatible with AZAffinity")
+}
+
+func TestConfig_AzAffinityAllNodes_RequiresClientAZ(t *testing.T) {
+	// AzAffinityAllNodes without ClientAZ must return a validation error
+	config := NewClientConfiguration().
+		WithReadFrom(AzAffinityAllNodes)
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client AZ must be set")
+}
+
+func TestConfig_AzAffinityAllNodes_MapsToProtobuf(t *testing.T) {
+	// AzAffinityAllNodes with ClientAZ must map to ReadFrom_AZAffinityAllNodes
+	az := "us-east-1a"
+	config := NewClientConfiguration().
+		WithReadFrom(AzAffinityAllNodes).
+		WithClientAZ(az)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.ReadFrom_AZAffinityAllNodes, result.ReadFrom)
+	assert.Equal(t, az, result.ClientAz)
+}
+
+func TestConfig_ReadOnly_RejectsAzAffinityAllNodes(t *testing.T) {
+	// read_only with AzAffinityAllNodes must return an incompatibility error
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(AzAffinityAllNodes).
 		WithClientAZ("us-east-1a")
 
 	_, err := config.ToProtobuf()
