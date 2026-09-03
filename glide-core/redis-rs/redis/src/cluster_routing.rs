@@ -1146,6 +1146,7 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"PEXPIRETIME"
             | b"PFCOUNT"
             | b"PING"
+            | b"PSUBSCRIBE"
             | b"PTTL"
             | b"PUBLISH"
             | b"PUBSUB CHANNELS"
@@ -1154,6 +1155,7 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"PUBSUB NUMSUB"
             | b"PUBSUB SHARDCHANNELS"
             | b"PUBSUB SHARDNUMSUB"
+            | b"PUNSUBSCRIBE"
             | b"RANDOMKEY"
             | b"REPLICAOF"
             | b"RESET"
@@ -2176,6 +2178,8 @@ mod tests_routing {
         assert!(is_readonly_cmd(b"SENTINEL REPLICAS"));
         assert!(is_readonly_cmd(b"SENTINEL GET-MASTER-ADDR-BY-NAME"));
         assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
+        assert!(is_readonly_cmd(b"PSUBSCRIBE"));
+        assert!(is_readonly_cmd(b"PUNSUBSCRIBE"));
 
         assert!(!is_readonly_cmd(b"SENTINEL FAILOVER"));
 
