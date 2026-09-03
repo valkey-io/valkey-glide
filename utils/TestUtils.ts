@@ -5,6 +5,7 @@
 import { execFile } from "child_process";
 import { lt } from "semver";
 
+const PYTHON_CMD = process.platform === "win32" ? "python" : "python3";
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
 function parseOutput(input: string): {
@@ -121,7 +122,7 @@ export class ValkeyCluster {
             }
 
             execFile(
-                "python3",
+                PYTHON_CMD,
                 [PY_SCRIPT_PATH, ...commandArgs],
                 (error, stdout) => {
                     if (error) {
@@ -203,7 +204,7 @@ export class ValkeyCluster {
                     commandArgs.push(`--keep-folder`);
                 }
 
-                execFile("python3", commandArgs, (error, _, stderr) => {
+                execFile(PYTHON_CMD, commandArgs, (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
