@@ -226,7 +226,6 @@ def build_windows_userdata(
 
 def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
     """Launch Windows EC2 with user-data, return instance_id."""
-    ud_b64 = base64.b64encode(userdata).decode()
     resp = ec2_client.run_instances(
         ImageId=os.environ["EC2_WINDOWS_AMI_ID"],
         InstanceType=os.environ.get("EC2_WINDOWS_INSTANCE_TYPE", "c5.2xlarge"),
@@ -239,7 +238,7 @@ def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
             "AssociatePublicIpAddress": True,
         }],
         IamInstanceProfile={"Name": os.environ["EC2_WINDOWS_INSTANCE_PROFILE"]},
-        UserData=ud_b64,
+        UserData=userdata,
         TagSpecifications=[
             {
                 "ResourceType": "instance",
