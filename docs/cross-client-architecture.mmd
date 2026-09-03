@@ -1,0 +1,72 @@
+---
+config:
+  flowchart:
+    wrappingWidth: 300
+---
+flowchart LR
+    
+    python["Python client"]
+    go["Go client"]
+    php["PHP client"]
+    ruby["Ruby client"]
+    java["Java client"]
+    node["Node.js client"]
+    csharp["C# client"]
+    rust["Rust client"]
+
+    ffi["Shared C FFI<br/>crate: glide-ffi<br/><code>libglide_ffi</code>"]
+    csharp_ffi["C#-specific C FFI<br/>crate: glide_rs<br/><code>libglide_rs</code>"]
+    jni["JNI"]
+    napi["N-API"]
+
+    ruby -->|"ruby-ffi: URI + JSON config<br/>create_client_from_uri"| ffi
+
+    subgraph boundary["Shared interface definitions"]
+        config_schema["Shared configuration schema<br/>connection_request.proto<br/>ConnectionRequest"]
+        command_ids["Shared command identity<br/>RequestType numeric IDs"]
+        core_types["Core-native types<br/>glide_core::client::ConnectionRequest<br/>redis::Cmd / Pipeline"]
+    end
+
+    csharp_types["C# FFI Types ↔ Rust ABI layouts<br/>managed StructLayout ↔ Rust repr(C)<br/>ConnectionConfig / CmdInfo / BatchInfo"]
+    
+    core["Rust core<br/>glide-core"]
+    note["<b>Diagram overview</b><br/><br/>Client configuration flows through each language's native bridge and converges on glide-core's native types.<br/><br/>Most clients use the shared ConnectionRequest schema. Ruby enters shared FFI as URI + JSON, C# uses its own C-layout ABI, and Rust constructs core types directly."]
+
+    python -->|"generated protobuf config"| ffi
+    go -->|"generated protobuf config"| ffi
+    php -->|"protobuf-c config"| ffi
+    
+    java -->|"generated protobuf config"| jni
+    node -->|"protobufjs config"| napi
+    csharp -->|"builds managed layouts"| csharp_ffi
+    rust -->|"typed Rust config; no serialization"| core_types
+
+    config_schema -.->|"generated config types"| ffi
+    config_schema -.->|"generated config types"| jni
+    config_schema -.->|"generated config types"| napi
+
+    command_ids -.->|"command discriminator"| ffi
+    command_ids -.->|"command discriminator"| jni
+    command_ids -.->|"command discriminator"| napi
+    command_ids -.->|"⚠️ manually mirrored numeric IDs"| csharp_types
+
+    csharp_types -.->|"layout-coupled ABI"| csharp_ffi
+
+    ffi -->|"parse or build protobuf; normalize"| core_types
+    jni -->|"decode protobuf; normalize"| core_types
+    napi -->|"decode protobuf; normalize"| core_types
+    csharp_ffi -->|"constructs directly; no protobuf"| core_types
+    core_types --> core
+    core ~~~ note
+
+    classDef client fill:#e8f1ff,stroke:#3973ac,color:#111
+    classDef bridge fill:#fff1dc,stroke:#b46a00,color:#111
+    classDef sharedType fill:#f3eaff,stroke:#7651a8,color:#111
+    classDef coreComponent fill:#e7f7e7,stroke:#2f7d32,color:#111
+    classDef diagramNote fill:#fffbe6,stroke:#a68400,stroke-width:1px,stroke-dasharray:5 5,color:#333
+
+    class python,go,php,ruby,java,node,csharp,rust client
+    class ffi,csharp_ffi,jni,napi bridge
+    class config_schema,command_ids,ruby_types,csharp_types,core_types sharedType
+    class core coreComponent
+    class note diagramNote
