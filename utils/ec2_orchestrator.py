@@ -107,9 +107,11 @@ def run_ssm_command(
             continue
         if inv["Status"] in ("Success", "Failed", "Cancelled", "TimedOut"):
             if inv["Status"] != "Success":
+                stdout = inv.get("StandardOutputContent", "")
+                stderr = inv.get("StandardErrorContent", "")
                 raise RuntimeError(
-                    f"SSM command failed ({inv['Status']}): "
-                    f"{inv.get('StandardErrorContent', '')}"
+                    f"SSM command failed ({inv['Status']}):\n"
+                    f"STDOUT: {stdout}\nSTDERR: {stderr}"
                 )
             return inv.get("StandardOutputContent", "")
         time.sleep(5)
@@ -134,7 +136,7 @@ def start_valkey_servers(
     standalone_out = run_ssm_command(
         ssm_client,
         instance_id,
-        f"python3 /tmp/cluster_manager.py start -H {private_ip} 2>&1",
+        f"GLIDE_HOME_DIR=/home/ec2-user CLUSTERS_FOLDER=/home/ec2-user/clusters python3 /tmp/cluster_manager.py start -H {private_ip} 2>&1",
         timeout=120,
     )
     standalone_ep = _parse_endpoint(standalone_out, private_ip)
@@ -144,7 +146,7 @@ def start_valkey_servers(
     cluster_out = run_ssm_command(
         ssm_client,
         instance_id,
-        f"python3 /tmp/cluster_manager.py start --cluster-mode -H {private_ip} 2>&1",
+        f"GLIDE_HOME_DIR=/home/ec2-user CLUSTERS_FOLDER=/home/ec2-user/clusters python3 /tmp/cluster_manager.py start --cluster-mode -H {private_ip} 2>&1",
         timeout=180,
     )
     cluster_ep = _parse_endpoint(cluster_out, private_ip)
