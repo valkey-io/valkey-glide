@@ -106,7 +106,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_iterates_all_keys() {
-        let cluster = cluster_or_skip!();
+        let cluster = common::ClusterHarness::start();
         let client = match cluster.client().await {
             Some(c) => c,
             None => {
@@ -150,7 +150,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_with_match_pattern() {
-        let cluster = cluster_or_skip!();
+        let cluster = common::ClusterHarness::start();
         let client = match cluster.client().await {
             Some(c) => c,
             None => return,
@@ -186,7 +186,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn route_command_ping_variants() {
-        let cluster = cluster_or_skip!();
+        let cluster = common::ClusterHarness::start();
         let client = match cluster.client().await {
             Some(c) => c,
             None => return,

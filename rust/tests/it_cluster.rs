@@ -12,7 +12,7 @@ use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, Route};
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -31,7 +31,7 @@ async fn cluster_set_get_routed_by_key() {
 
 #[tokio::test]
 async fn cluster_ping_all_primaries() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -50,7 +50,7 @@ async fn cluster_ping_all_primaries() {
 
 #[tokio::test]
 async fn cluster_info_reports_ok() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -79,7 +79,7 @@ async fn cluster_info_reports_ok() {
 
 #[tokio::test]
 async fn cluster_del_and_exists() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -99,7 +99,7 @@ async fn cluster_del_and_exists() {
 
 #[tokio::test]
 async fn cluster_incr() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -116,7 +116,7 @@ async fn cluster_incr() {
 
 #[tokio::test]
 async fn cluster_hashtag_same_slot() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {
@@ -134,7 +134,7 @@ async fn cluster_hashtag_same_slot() {
 
 #[tokio::test]
 async fn cluster_ping_resp2_and_resp3() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     for proto in [glide::ProtocolVersion::RESP2, glide::ProtocolVersion::RESP3] {
         let client = match cluster.client_with_protocol(proto).await {
             Some(c) => c,

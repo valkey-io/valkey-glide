@@ -139,13 +139,7 @@ fn sync_update_password_store_only() {
 
 #[tokio::test]
 async fn cluster_update_password_store_only() {
-    let cluster = match common::ClusterHarness::start() {
-        Some(cl) => cl,
-        None => {
-            eprintln!("SKIP: cluster harness unavailable");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start();
     let client = match cluster.client().await {
         Some(c) => c,
         None => {

@@ -27,13 +27,7 @@ macro_rules! cluster_client {
 
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
         let c = cluster_client!(cluster);
 
         // Same-slot keys (hash tag) so the pipeline routes to one shard; options
@@ -68,13 +62,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_fcall_route() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
         let c = cluster_client!(cluster);
 
         // Load the library on every primary so a routed FCALL resolves on any node.
@@ -114,13 +102,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_runtime_subscribe_receive() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
         let publisher = cluster_client!(cluster);
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
@@ -147,13 +129,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_ssubscribe_sharded_receive() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
         let publisher = cluster_client!(cluster);
 
         // Sharded pub/sub is Valkey 7.0+
@@ -185,13 +161,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_zrangestore_by_score_same_slot() {
-        let cluster = match common::ClusterHarness::start() {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster harness unavailable");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
         let c = cluster_client!(cluster);
         // src + dst must share a slot in cluster mode (multi-key command).
         let src = common::tkey("czr", "src");

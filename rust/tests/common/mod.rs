@@ -4,14 +4,10 @@
 //! Provides:
 //! * [`TestServer`] — boots an ephemeral standalone `valkey-server` on a free
 //!   port and tears it down on drop, with RESP2/RESP3 client helpers.
-//! * [`ClusterHarness`] — boots a real 3-primary cluster and connects a
-//!   [`glide::GlideClusterClient`]. The canonical tool for this is
-//!   `valkey-glide/utils/cluster_manager.py`
-//!   (`python3 cluster_manager.py start --cluster-mode`), which we document and
-//!   prefer; however it requires `valkey-cli` on `PATH`. When that is not
-//!   available we build the cluster natively from the `valkey-server` binary
-//!   (`CLUSTER ADDSLOTSRANGE` + `CLUSTER MEET`), so cluster tests still run.
-//!   When neither is feasible the harness returns `None` and tests SKIP.
+//! * [`ClusterHarness`] — boots a real 3-primary cluster (one replica each) via
+//!   `valkey-glide/utils/cluster_manager.py` and connects a
+//!   [`glide::GlideClusterClient`]. Requires `python3` + `valkey-cli`/`redis-cli`
+//!   on `PATH`; panics if the cluster cannot be started.
 //! * The [`resp_test!`] macro — expands a single test body into two
 //!   `#[tokio::test]`s, one per RESP protocol version (the ~2x multiplier;
 //!   combined with standalone the effective coverage mirrors Python's
