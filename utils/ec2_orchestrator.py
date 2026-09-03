@@ -23,7 +23,6 @@ import logging
 import os
 import sys
 import time
-from pathlib import Path
 
 import boto3  # type: ignore[import-not-found]
 
@@ -118,58 +117,8 @@ def run_ssm_command(
     raise TimeoutError(f"SSM command timed out after {timeout}s")
 
 
-def start_valkey_servers(
-    ssm_client, instance_id: str, private_ip: str
-) -> tuple[str, str]:
-    """Start standalone + cluster Valkey on Linux EC2, return (standalone_ep, cluster_ep)."""
-    # Copy cluster_manager.py via base64 to avoid shell quoting issues
-    script_bytes = Path("utils/cluster_manager.py").read_bytes()
-    script_b64 = base64.b64encode(script_bytes).decode()
-    run_ssm_command(
-        ssm_client,
-        instance_id,
-        f"echo '{script_b64}' | base64 -d > /tmp/cluster_manager.py",
-        timeout=30,
-    )
-    log.info("cluster_manager.py copied to Linux EC2")
-
-    # Start standalone
-    standalone_out = run_ssm_command(
-        ssm_client,
-        instance_id,
-        f"GLIDE_HOME_DIR=/home/ec2-user CLUSTERS_FOLDER=/home/ec2-user/clusters python3 /tmp/cluster_manager.py start -H {private_ip} 2>&1",
-        timeout=120,
-    )
-    standalone_ep = _parse_endpoint(standalone_out, private_ip)
-    log.info(f"Standalone endpoint: {standalone_ep}")
-
-    # Start cluster
-    cluster_out = run_ssm_command(
-        ssm_client,
-        instance_id,
-        f"GLIDE_HOME_DIR=/home/ec2-user CLUSTERS_FOLDER=/home/ec2-user/clusters python3 /tmp/cluster_manager.py start --cluster-mode -H {private_ip} 2>&1",
-        timeout=180,
-    )
-    cluster_ep = _parse_endpoint(cluster_out, private_ip)
-    log.info(f"Cluster endpoint: {cluster_ep}")
-
-    return standalone_ep, cluster_ep
-
-
-def _parse_endpoint(output: str, host: str) -> str:
-    """Parse host:port from cluster_manager.py output."""
-    for token in output.split():
-        if token.startswith(host + ":"):
-            return token
-    # fallback: first token containing ':' that looks like host:port
-    for token in output.split():
-        if ":" in token and not token.startswith("CLUSTER"):
-            return token
-    raise ValueError(f"Could not parse endpoint from output:\n{output}")
-
-
 def build_windows_userdata(
-    standalone_ep: str, cluster_ep: str
+    linux_instance_id: str, linux_private_ip: str
 ) -> bytes:
     """Build the PowerShell user-data script for the Windows EC2."""
     lines = [
@@ -179,8 +128,10 @@ def build_windows_userdata(
         f"$commitSha = '{COMMIT_SHA}'",
         f"$reportBucket = '{REPORT_BUCKET}'",
         f"$region = '{REGION}'",
-        f"$standaloneEndpoint = '{standalone_ep}'",
-        f"$clusterEndpoint = '{cluster_ep}'",
+        f"$env:USE_EC2 = 'true'",
+        f"$env:EC2_LINUX_INSTANCE_ID = '{linux_instance_id}'",
+        f"$env:EC2_LINUX_PRIVATE_IP = '{linux_private_ip}'",
+        f"$env:AWS_REGION = '{REGION}'",
         "$exitCode = 1",
         "try {",
         "    $env:CARGO_HOME = 'C:\\cargo'",
@@ -209,8 +160,6 @@ def build_windows_userdata(
         "    Set-Location node; npm ci; npm run build:release",
         "    Write-Host '=== Running tests ==='",
         "    $testArgs = @('test', '--', '--runInBand', '--forceExit')",
-        "    if ($standaloneEndpoint) { $testArgs += \"--standalone-endpoints=$standaloneEndpoint\" }",
-        "    if ($clusterEndpoint)    { $testArgs += \"--cluster-endpoints=$clusterEndpoint\" }",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
         "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
@@ -311,21 +260,17 @@ def terminate_instance(ec2_client, instance_id: str) -> None:
 
 def main() -> int:
     ec2 = boto3.client("ec2", region_name=REGION)
-    ssm = boto3.client("ssm", region_name=REGION)
     s3 = boto3.client("s3", region_name=REGION)
 
     linux_instance_id = None
+    windows_instance_id = None
     try:
-        # Step 1: Linux EC2 + Valkey
+        # Step 1: Linux EC2
         linux_instance_id, linux_private_ip = launch_linux_ec2(ec2)
-        wait_for_ssm(ssm, linux_instance_id)
-        standalone_ep, cluster_ep = start_valkey_servers(
-            ssm, linux_instance_id, linux_private_ip
-        )
 
         # Step 2: Windows EC2 (build + test)
-        userdata = build_windows_userdata(standalone_ep, cluster_ep)
-        launch_windows_ec2(ec2, userdata)
+        userdata = build_windows_userdata(linux_instance_id, linux_private_ip)
+        windows_instance_id = launch_windows_ec2(ec2, userdata)
 
         # Step 3: Poll for completion
         status = poll_s3_for_completion(s3)
@@ -337,6 +282,8 @@ def main() -> int:
         log.error(f"Orchestration failed: {e}")
         return 1
     finally:
+        if windows_instance_id:
+            terminate_instance(ec2, windows_instance_id)
         if linux_instance_id:
             terminate_instance(ec2, linux_instance_id)
 

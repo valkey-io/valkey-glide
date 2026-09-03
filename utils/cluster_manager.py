@@ -3,6 +3,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import base64
 import json
 import logging
 import os
@@ -1538,13 +1539,13 @@ def main():
                 "/tmp/cluster_manager.py",
                 "--loglevel",
                 args.log,
+                "-H",
+                remote_ip,
             ]
             if args.tls:
                 cmd_parts.append("--tls")
             cmd_parts += [
                 "start",
-                "-H",
-                remote_ip,
                 "-n",
                 str(args.shard_count if args.cluster_mode else 1),
                 "-r",
@@ -1554,14 +1555,12 @@ def main():
                 cmd_parts.append("--cluster-mode")
             if args.ports:
                 cmd_parts += ["-p"] + [str(p) for p in args.ports]
-            # First copy cluster_manager.py to the remote instance
+            # First copy cluster_manager.py to the remote instance via base64
+            # to avoid shell quoting issues with single quotes in f-strings
             script_path = os.path.abspath(__file__)
-            with open(script_path, "r") as f:
-                script_content = f.read().replace("'", "'\"'\"'")
-            copy_cmd = (
-                f"cat > /tmp/cluster_manager.py << 'GLIDE_EOF'\n"
-                f"{script_content}\nGLIDE_EOF"
-            )
+            with open(script_path, "rb") as f:
+                script_b64 = base64.b64encode(f.read()).decode()
+            copy_cmd = f"echo '{script_b64}' | base64 -d > /tmp/cluster_manager.py"
             run_remote_command(args.remote, copy_cmd, args.remote_region)
             # Run the start command remotely
             remote_cmd = " ".join(cmd_parts)
