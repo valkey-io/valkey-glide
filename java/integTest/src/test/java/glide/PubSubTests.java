@@ -318,6 +318,29 @@ public class PubSubTests {
         fail(message);
     }
 
+    /**
+     * Reports whether the server has confirmed an exact-channel subscription for the client. The
+     * caller must hold a single exact subscription, because a binary channel does not round-trip to
+     * the String keys {@code getActualSubscriptions()} exposes, so a non-empty EXACT set is the way
+     * to recognize it.
+     */
+    private boolean exactSubscriptionConfirmed(BaseClient client, boolean standalone)
+            throws Exception {
+        Set<String> exact =
+                standalone
+                        ? ((GlideClient) client)
+                                .getSubscriptions()
+                                .get()
+                                .getActualSubscriptions()
+                                .get(PubSubChannelMode.EXACT)
+                        : ((GlideClusterClient) client)
+                                .getSubscriptions()
+                                .get()
+                                .getActualSubscriptions()
+                                .get(PubSubClusterChannelMode.EXACT);
+        return exact != null && !exact.isEmpty();
+    }
+
     @AfterEach
     @SneakyThrows
     public void cleanup() {
@@ -1677,9 +1700,14 @@ public class PubSubTests {
                         standalone, subscriptions, Optional.of(callback), Optional.of(callbackMessages));
         BaseClient sender = createClient(standalone);
 
-        // wait for the subscription to register on the server before publishing; cluster pub/sub
-        // gives the client no readiness signal to poll for
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Subscriptions are applied on the server asynchronously, so a message published before
+        // the subscription registers is lost. Publish only once both listeners are confirmed.
+        waitForCondition(
+                () ->
+                        exactSubscriptionConfirmed(listener, standalone)
+                                && exactSubscriptionConfirmed(listener2, standalone),
+                MESSAGE_DELIVERY_DELAY,
+                "Timed out waiting for subscription to register on the server");
 
         assertEquals(OK, sender.publish(message.getMessage(), channel).get());
         waitForCondition(
