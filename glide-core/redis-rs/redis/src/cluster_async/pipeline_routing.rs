@@ -4,7 +4,8 @@ use crate::cluster_async::Connect;
 use crate::cluster_routing::RoutingInfo;
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_routing::{
-    command_for_multi_slot_indices, MultipleNodeRoutingInfo, ResponsePolicy, SingleNodeRoutingInfo,
+    command_for_multi_slot_indices, MultipleNodeRoutingInfo, Redirect, ResponsePolicy,
+    SingleNodeRoutingInfo,
 };
 use crate::types::{RetryMethod, ServerError};
 use crate::Pipeline;
@@ -22,7 +23,6 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use super::boxed_sleep;
-use super::is_circular_moved_redirect;
 use super::testing::RefreshConnectionType;
 use super::CmdArg;
 use super::PendingRequest;
@@ -81,6 +81,13 @@ pub(crate) type PipelineResponses = Vec<Vec<NodeResponse>>;
 
 /// `AddressAndIndices` represents the address of a node and the indices of commands associated with that node.
 type AddressAndIndices = Vec<(String, Vec<(usize, Option<usize>, bool)>)>;
+
+type PipelineRedirectEntry = (
+    (usize, Option<usize>),
+    String,
+    ServerError,
+    Option<RedirectNode>,
+);
 
 /// A mapping of command indices to their respective routing information and response aggregation policies
 /// for multi-node commands.
@@ -1059,22 +1066,31 @@ where
     // Separate circular MOVED redirects from normal redirects
     // Circular MOVED needs reconnect handling, not normal redirect handling
     let mut circular_moved_entries: Vec<((usize, Option<usize>), String, ServerError)> = Vec::new();
-    let mut normal_redirect_entries: Vec<((usize, Option<usize>), String, ServerError)> =
-        Vec::new();
+    let mut normal_redirect_entries: Vec<PipelineRedirectEntry> = Vec::new();
 
     for (indices, address, error) in indices_addresses_and_error {
         let redis_error: RedisError = error.clone().into();
+        let resolved_moved_redirect = matches!(retry_method, RetryMethod::MovedRedirect)
+            .then(|| {
+                RedirectNode::from_option_tuple(redis_error.redirect_node()).map(|mut redirect| {
+                    redirect.address = core.resolve_address(&redirect.address);
+                    redirect
+                })
+            })
+            .flatten();
 
         // Check for circular MOVED redirect
-        // Use resolve_address to handle hostname vs IP mismatches
         if matches!(retry_method, RetryMethod::MovedRedirect)
-            && is_circular_moved_redirect(redis_error.redirect_node(), &address, |addr| {
-                ClusterConnInner::resolve_address(&core, addr)
-            })
+            && core.is_circular_moved_redirect(
+                resolved_moved_redirect
+                    .as_ref()
+                    .map(|redirect| (redirect.address.as_str(), redirect.slot)),
+                &address,
+            )
         {
             circular_moved_entries.push((indices, address, error));
         } else {
-            normal_redirect_entries.push((indices, address, error));
+            normal_redirect_entries.push((indices, address, error, resolved_moved_redirect));
         }
     }
 
@@ -1093,16 +1109,21 @@ where
     }
 
     // Handle normal redirects
-    for (indices, address, mut error) in normal_redirect_entries {
+    for (indices, address, mut error, resolved_moved_redirect) in normal_redirect_entries {
         // Convert the ServerError to a RedisError and try to extract redirect info.
         let redis_error: RedisError = error.clone().into();
         let (index, inner_index) = indices;
 
         // Handle MOVED redirect by updating the topology
         if matches!(retry_method, RetryMethod::MovedRedirect) {
-            if let Err(server_error) =
-                pipeline_handle_moved_redirect(core.clone(), &redis_error).await
-            {
+            let update_result = match resolved_moved_redirect.as_ref() {
+                Some(redirect) => pipeline_handle_moved_redirect(core.clone(), redirect).await,
+                None => Err(ServerError::ExtensionError {
+                    code: "ParsingError".to_string(),
+                    detail: Some("Failed to parse MOVED error".to_string()),
+                }),
+            };
+            if let Err(server_error) = update_result {
                 // A failure occurred, so we will append the error and continue to the next entry
                 error.append_detail(&server_error);
                 add_pipeline_result(
@@ -1116,7 +1137,13 @@ where
             }
         }
 
-        if let Some(redirect_info) = redis_error.redirect(false) {
+        let redirect_info = match retry_method {
+            RetryMethod::MovedRedirect => {
+                resolved_moved_redirect.map(|redirect| Redirect::Moved(redirect.address))
+            }
+            _ => redis_error.redirect(false),
+        };
+        if let Some(redirect_info) = redirect_info {
             let routing = InternalSingleNodeRouting::Redirect {
                 redirect: redirect_info,
                 previous_routing: Box::new(InternalSingleNodeRouting::ByAddress(address.clone())),
@@ -1172,24 +1199,15 @@ where
 /// If updating the topology fails, the error is returned.
 async fn pipeline_handle_moved_redirect<C>(
     core: Core<C>,
-    redis_error: &RedisError,
+    redirect_node: &RedirectNode,
 ) -> Result<(), ServerError>
 where
     C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
 {
-    let redirect_node =
-        RedirectNode::from_option_tuple(redis_error.redirect_node()).ok_or_else(|| {
-            ServerError::ExtensionError {
-                code: "ParsingError".to_string(),
-                detail: Some("Failed to parse MOVED error".to_string()),
-            }
-        })?;
-
-    let resolved_address = ClusterConnInner::resolve_address(&core, &redirect_node.address);
     ClusterConnInner::update_upon_moved_error(
         core.clone(),
         redirect_node.slot,
-        resolved_address.into(),
+        redirect_node.address.clone().into(),
     )
     .await
     .map_err(Into::into)

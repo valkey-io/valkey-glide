@@ -491,6 +491,15 @@ impl MockEnv {
         id: &str,
         handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> Self {
+        Self::with_client_builder_and_behavior(client_builder, id, handler, |_| {})
+    }
+
+    pub fn with_client_builder_and_behavior(
+        client_builder: ClusterClientBuilder,
+        id: &str,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+        configure: impl FnOnce(&mut MockConnectionBehavior),
+    ) -> Self {
         #[cfg(feature = "cluster-async")]
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
@@ -503,6 +512,7 @@ impl MockEnv {
             &id,
             Arc::new(move |cmd, port| handler(cmd, port)),
         );
+        modify_mock_connection_behavior(&id, configure);
         let client = client_builder.build().unwrap();
         let connection = client.get_generic_connection(None).unwrap();
         #[cfg(feature = "cluster-async")]

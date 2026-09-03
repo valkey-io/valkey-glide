@@ -32,6 +32,7 @@ pub mod testing {
 }
 use crate::{
     client::GlideConnectionOptions,
+    cluster,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
     cluster_slotmap::SlotMap,
     cluster_topology::{
@@ -80,7 +81,8 @@ use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
     cluster::slot_cmd,
     cluster_async::connections_logic::{
-        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture, RefreshConnectionType,
+        get_host_and_port_from_addr, get_or_create_conn, AddressResolution, ConnectionFuture,
+        RefreshConnectionType,
     },
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
@@ -151,32 +153,29 @@ fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
 /// a fresh connection. Without this, the retry write may succeed (to buffer)
 /// but the read will fail with FatalReceiveError, which doesn't trigger retry.
 ///
-/// The `resolve_address` parameter allows resolving IP addresses to their canonical
-/// hostname form using the slot map's IP→address table. This handles cases where:
-/// - Connected via hostname but MOVED returns an IP
-/// - Different IP representations of the same machine
+/// The redirect target must already be resolved. The `resolve_current_address`
+/// parameter converts the current connection address to the same form without
+/// resolving the redirect target again.
 ///
 /// Returns `true` if the redirect is circular and a reconnect should be triggered.
 pub(crate) fn is_circular_moved_redirect<F>(
     redirect_node: Option<(&str, u16)>,
     current_address: &str,
-    resolve_address: F,
+    resolve_current_address: F,
 ) -> bool
 where
     F: Fn(&str) -> String,
 {
     if let Some((redirect_addr, _slot)) = redirect_node {
-        // Resolve both addresses to canonical form for comparison
-        let resolved_redirect = resolve_address(redirect_addr);
-        let resolved_current = resolve_address(current_address);
+        let resolved_current = resolve_current_address(current_address);
 
-        if resolved_redirect == resolved_current {
+        if redirect_addr == resolved_current {
             log_debug_lazy!(
                 "cluster",
                 format!(
                     "Detected circular MOVED redirect: {} -> {} (resolved: {} == {}). \
                      Reconnecting before retry to avoid potential connection issues.",
-                    current_address, redirect_addr, resolved_current, resolved_redirect
+                    current_address, redirect_addr, resolved_current, redirect_addr
                 )
             );
             return true;
@@ -585,6 +584,46 @@ where
         F: FnOnce(&mut ClusterParams),
     {
         f(&mut self.cluster_params.write());
+    }
+
+    /// Resolves a raw `"host:port"` address from a redirect into the address used
+    /// by the connection map.
+    pub(crate) fn resolve_address(&self, address: &str) -> String {
+        self.reverse_lookup_address(address).unwrap_or_else(|| {
+            self.get_cluster_param(|params| {
+                cluster::resolve_address(address, params.address_resolver.as_deref())
+            })
+        })
+    }
+
+    fn reverse_lookup_address(&self, address: &str) -> Option<String> {
+        let conn_lock = self.conn_lock.read();
+
+        // Valkey redirects can contain raw IPs. Prefer the exact node address
+        // already known from topology, including its port.
+        let (host, port) = address.rsplit_once(':')?;
+        let host = host.trim_start_matches('[').trim_end_matches(']');
+        let ip = host.parse::<IpAddr>().ok()?;
+        let port = port.parse::<u16>().ok()?;
+        conn_lock
+            .slot_map
+            .node_address_for_ip(ip, port)
+            .map(|node_address| (*node_address).clone())
+    }
+
+    pub(crate) fn normalize_current_address(&self, address: &str) -> String {
+        self.reverse_lookup_address(address)
+            .unwrap_or_else(|| address.to_owned())
+    }
+
+    pub(crate) fn is_circular_moved_redirect(
+        &self,
+        resolved_redirect_node: Option<(&str, u16)>,
+        current_address: &str,
+    ) -> bool {
+        is_circular_moved_redirect(resolved_redirect_node, current_address, |address| {
+            self.normalize_current_address(address)
+        })
     }
 
     // return epoch of node
@@ -1326,10 +1365,15 @@ where
                         RetryMethod::MovedRedirect | RetryMethod::RefreshSlotsAndRetry
                     ) || matches!(target, OperationTarget::NotFound)
                     {
+                        let core = this.core.clone();
                         Next::RefreshSlots {
                             request: None,
                             sleep_duration: None,
-                            moved_redirect: RedirectNode::from_option_tuple(err.redirect_node()),
+                            moved_redirect: RedirectNode::from_option_tuple(err.redirect_node())
+                                .map(|mut redirect| {
+                                    redirect.address = core.resolve_address(&redirect.address);
+                                    redirect
+                                }),
                         }
                         .into()
                     } else if matches!(retry_method, RetryMethod::Reconnect)
@@ -1433,12 +1477,20 @@ where
                         let mut request = this.request.take().unwrap();
                         let redirect_node = err.redirect_node();
                         let core = this.core.clone();
+                        let resolved_redirect_node = RedirectNode::from_option_tuple(redirect_node)
+                            .map(|mut redirect| {
+                                redirect.address = core.resolve_address(&redirect.address);
+                                redirect
+                            });
 
-                        // Check for circular MOVED and trigger reconnect if detected
-                        // Use resolve_address to handle hostname vs IP mismatches
-                        if is_circular_moved_redirect(redirect_node, &address, |addr| {
-                            ClusterConnInner::resolve_address(&core, addr)
-                        }) {
+                        // Check for circular MOVED and trigger reconnect if detected.
+                        // The redirect is already resolved; normalize only the current address.
+                        if core.is_circular_moved_redirect(
+                            resolved_redirect_node
+                                .as_ref()
+                                .map(|redirect| (redirect.address.as_str(), redirect.slot)),
+                            &address,
+                        ) {
                             // Reset routing and reconnect with retry
                             request.info.reset_routing();
                             return Next::Reconnect {
@@ -1450,12 +1502,14 @@ where
 
                         // Normal MOVED handling: set redirect and refresh slots
                         request.info.set_redirect(
-                            redirect_node.map(|(node, _slot)| Redirect::Moved(node.to_string())),
+                            resolved_redirect_node
+                                .as_ref()
+                                .map(|redirect| Redirect::Moved(redirect.address.clone())),
                         );
                         Next::RefreshSlots {
                             request: Some(request),
                             sleep_duration: None,
-                            moved_redirect: RedirectNode::from_option_tuple(redirect_node),
+                            moved_redirect: resolved_redirect_node,
                         }
                         .into()
                     }
@@ -1963,14 +2017,48 @@ where
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
-    // If a refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned.
+    // If a compatible refresh task is already running for an address, no new task is created;
+    // instead, the notifier from the existing task is returned. An already-resolved refresh
+    // supersedes a resolver-aware task so the final address is never resolved again.
     // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<String>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
+    ) -> Vec<Arc<Notify>> {
+        Self::trigger_refresh_connection_tasks_with_resolution(
+            inner,
+            addresses,
+            conn_type,
+            check_existing_conn,
+            AddressResolution::Resolve,
+        )
+        .await
+    }
+
+    async fn trigger_refresh_resolved_connection_task(
+        inner: Arc<InnerCore<C>>,
+        address: String,
+        conn_type: RefreshConnectionType,
+        check_existing_conn: bool,
+    ) -> Vec<Arc<Notify>> {
+        Self::trigger_refresh_connection_tasks_with_resolution(
+            inner,
+            HashSet::from([address]),
+            conn_type,
+            check_existing_conn,
+            AddressResolution::AlreadyResolved,
+        )
+        .await
+    }
+
+    async fn trigger_refresh_connection_tasks_with_resolution(
+        inner: Arc<InnerCore<C>>,
+        addresses: HashSet<String>,
+        conn_type: RefreshConnectionType,
+        check_existing_conn: bool,
+        address_resolution: AddressResolution,
     ) -> Vec<Arc<Notify>> {
         log_debug_lazy!(
             "cluster",
@@ -1980,32 +2068,57 @@ where
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
         for address in addresses {
-            if let Some(existing_task) = inner
-                .conn_lock
-                .read()
+            // Keep task arbitration and insertion under one lock so concurrent
+            // refreshes cannot choose incompatible address-resolution semantics.
+            let mut conn_lock = inner.conn_lock.write();
+            let existing_task = conn_lock
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .get(&address)
-            {
-                if let RefreshTaskStatus::Reconnecting(ref notifier) = existing_task.status {
-                    // Store the notifier
-                    notifiers.push(notifier.get_notifier());
+                .map(|task| {
+                    let notifier = match &task.status {
+                        RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                        RefreshTaskStatus::ReconnectingTooLong => None,
+                    };
+                    (task.address_resolution, notifier)
+                });
+
+            if let Some((existing_resolution, notifier)) = existing_task {
+                if !address_resolution.supersedes(existing_resolution) {
+                    if let Some(notifier) = notifier {
+                        notifiers.push(notifier);
+                    }
+                    log_debug_lazy!(
+                        "cluster",
+                        format!("Skipping refresh for {}: already in progress", address)
+                    );
+                    continue;
                 }
+
                 log_debug_lazy!(
                     "cluster",
-                    format!("Skipping refresh for {}: already in progress", address)
+                    format!(
+                        "Replacing resolver-aware refresh for {} with already-resolved refresh",
+                        address
+                    )
                 );
-                continue; // Skip creating a new refresh task
+                conn_lock
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .remove(&address);
             }
 
             let inner_clone = inner.clone();
             let address_clone_for_task = address.clone();
 
-            let mut node_option = inner.conn_lock.read().remove_node(&address);
+            let mut node_option = conn_lock.remove_node(&address);
 
             if !check_existing_conn {
                 node_option = None;
             }
+
+            let notifier = RefreshTaskNotifier::new();
+            notifiers.push(notifier.get_notifier());
 
             let handle = tokio::spawn(async move {
                 log_info_rate_limited!(
@@ -2040,6 +2153,7 @@ where
                         node_option.clone(),
                         &cluster_params,
                         conn_type,
+                        address_resolution,
                         inner_clone.glide_connection_options.clone(),
                     )
                     .await;
@@ -2057,7 +2171,9 @@ where
                                     .refresh_address_in_progress
                                     .get_mut(&address_clone_for_task)
                                 {
-                                    conn_state.status.flip_status_to_too_long();
+                                    if conn_state.address_resolution == address_resolution {
+                                        conn_state.status.flip_status_to_too_long();
+                                    }
                                 }
 
                                 first_attempt = false;
@@ -2079,10 +2195,18 @@ where
                                 address_clone_for_task
                             )
                         );
-                        inner_clone
-                            .conn_lock
-                            .read()
-                            .replace_or_add_connection_for_address(&address_clone_for_task, node);
+                        let conn_lock = inner_clone.conn_lock.read();
+                        let task_is_current = conn_lock
+                            .refresh_conn_state
+                            .refresh_address_in_progress
+                            .get(&address_clone_for_task)
+                            .is_some_and(|task| task.address_resolution == address_resolution);
+                        if task_is_current {
+                            conn_lock.replace_or_add_connection_for_address(
+                                &address_clone_for_task,
+                                node,
+                            );
+                        }
                     }
                     Err(err) => {
                         log_warn_lazy!(
@@ -2095,12 +2219,18 @@ where
                     }
                 }
 
-                inner_clone
-                    .conn_lock
-                    .write()
+                let mut conn_lock = inner_clone.conn_lock.write();
+                let task_is_current = conn_lock
                     .refresh_conn_state
                     .refresh_address_in_progress
-                    .remove(&address_clone_for_task);
+                    .get(&address_clone_for_task)
+                    .is_some_and(|task| task.address_resolution == address_resolution);
+                if task_is_current {
+                    conn_lock
+                        .refresh_conn_state
+                        .refresh_address_in_progress
+                        .remove(&address_clone_for_task);
+                }
 
                 log_debug_lazy!(
                     "cluster",
@@ -2111,15 +2241,10 @@ where
                 );
             });
 
-            let notifier = RefreshTaskNotifier::new();
-            notifiers.push(notifier.get_notifier());
-
             // Keep the task handle and notifier into the RefreshState of this address
-            let refresh_task_state = RefreshTaskState::new(handle, notifier);
+            let refresh_task_state = RefreshTaskState::new(handle, notifier, address_resolution);
 
-            inner
-                .conn_lock
-                .write()
+            conn_lock
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .insert(address.clone(), refresh_task_state);
@@ -2816,6 +2941,7 @@ where
                         node,
                         &cluster_params,
                         RefreshConnectionType::AllConnections,
+                        AddressResolution::Resolve,
                         glide_connection_options,
                     )
                     .await
@@ -2881,35 +3007,6 @@ where
             )
         );
         Ok(())
-    }
-
-    /// Resolves a raw address (which may be a raw IP:port from a MOVED/ASK redirect)
-    /// to a canonical hostname:port usable for connection lookup.
-    ///
-    /// Resolution order:
-    /// 1. Reverse IP lookup: parse the host as an IP and look it up in the slot map's
-    ///    IP→address table (built from DNS resolution during CLUSTER SLOTS refresh).
-    ///    If found, replace only the host portion, preserving the original port.
-    /// 2. Raw address fallback: return the original address unchanged.
-    pub(crate) fn resolve_address(inner: &Arc<InnerCore<C>>, address: &str) -> String {
-        let conn_lock = inner.conn_lock.read();
-
-        // Step 1: Reverse IP lookup via slot map.
-        if let Some((host, port)) = address.rsplit_once(':') {
-            if let Ok(ip) = host.parse::<IpAddr>() {
-                if let Some(node_addr) = conn_lock.slot_map.node_address_for_ip(ip) {
-                    // Extract just the hostname from the resolved address and combine with original port
-                    if let Some((resolved_host, _resolved_port)) = node_addr.rsplit_once(':') {
-                        return format!("{}:{}", resolved_host, port);
-                    }
-                    // Fallback: if resolved address has no port (shouldn't happen), return as-is
-                    return (*node_addr).clone();
-                }
-            }
-        }
-
-        // Step 2: Return raw address as fallback.
-        address.to_string()
     }
 
     /// Handles MOVED errors by updating the client's slot and node mappings based on the new primary's role:
@@ -3427,11 +3524,12 @@ where
                 ..
             } => {
                 asking = should_exec_asking;
+                let resolved_addr = core.resolve_address(&ask_addr);
                 core.conn_lock
                     .read()
-                    .connection_for_address(ask_addr.as_str())
+                    .connection_for_address(resolved_addr.as_str())
                     .map_or(
-                        ConnectionCheck::OnlyAddress(ask_addr),
+                        ConnectionCheck::OnlyAddress(resolved_addr),
                         ConnectionCheck::Found,
                     )
             }
@@ -3530,9 +3628,9 @@ where
                     "MOVED target address {} not found in current connection map, triggering refresh",
                     address));
                 // Trigger refresh task and get the single notifier
-                let mut notifiers = Self::trigger_refresh_connection_tasks(
+                let mut notifiers = Self::trigger_refresh_resolved_connection_task(
                     core.clone(),
-                    HashSet::from([address.clone()]),
+                    address.clone(),
                     RefreshConnectionType::AllConnections,
                     false,
                 )
@@ -3997,11 +4095,7 @@ where
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
                                 moved_redirect.slot,
-                                ClusterConnInner::resolve_address(
-                                    &self.inner,
-                                    &moved_redirect.address,
-                                )
-                                .into(),
+                                moved_redirect.address.into(),
                             )),
                         })
                     } else if let Some(ref request) = request {
@@ -4472,7 +4566,7 @@ where
                 .and_then(|addr| {
                     conn_lock
                         .slot_map
-                        .node_address_for_ip(addr.ip())
+                        .node_address_for_ip(addr.ip(), addr.port())
                         .map(|a| (*a).clone())
                 })
                 // Step 3: Use socket_addr if available
@@ -5272,26 +5366,26 @@ mod is_circular_moved_redirect_tests {
     }
 
     #[test]
-    fn ip_vs_hostname_should_detect_circular() {
-        // Simulate a resolver that maps 127.0.0.1:6379 to localhost:6379
-        // This is what the slot map's IP→address table would do
-        fn localhost_resolver(addr: &str) -> String {
+    fn resolved_redirect_and_raw_current_should_detect_circular() {
+        // Redirect targets are already resolved before this check. Only the
+        // current raw IP should be reverse-mapped for comparison.
+        fn current_address_resolver(addr: &str) -> String {
             if addr == "127.0.0.1:6379" {
                 "localhost:6379".to_string()
             } else {
-                addr.to_string()
+                "unexpected-second-resolution:6379".to_string()
             }
         }
 
-        // Connected via "localhost:6379" but MOVED returns "127.0.0.1:6379"
-        // With the resolver, both should resolve to "localhost:6379"
+        // The redirect is already final, while the current connection is still
+        // keyed by its raw IP. Resolving the redirect again would change it.
         assert!(
             is_circular_moved_redirect(
-                Some(("127.0.0.1:6379", 5000)),
-                "localhost:6379",
-                localhost_resolver
+                Some(("localhost:6379", 5000)),
+                "127.0.0.1:6379",
+                current_address_resolver
             ),
-            "Should detect circular redirect when MOVED returns IP but connected via hostname"
+            "Should compare the final redirect with the resolved current address"
         );
     }
 
@@ -5307,5 +5401,215 @@ mod is_circular_moved_redirect_tests {
             ),
             "Without resolver, IP vs hostname won't be detected as circular"
         );
+    }
+}
+
+#[cfg(test)]
+mod circular_moved_address_normalization_tests {
+    use super::*;
+    use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
+    use crate::cluster_routing::Slot;
+    use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
+    use std::collections::HashMap;
+
+    fn core_with_ip_mapping() -> Arc<InnerCore<crate::aio::MultiplexedConnection>> {
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "node1:6379".to_owned(), vec![])],
+            HashMap::from([("node1:6379".to_owned(), "10.0.0.1".parse().unwrap())]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
+
+        Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    #[test]
+    fn raw_current_address_is_normalized_before_circular_comparison() {
+        let core = core_with_ip_mapping();
+
+        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "10.0.0.1:6379"));
+    }
+}
+
+#[cfg(test)]
+mod refresh_task_resolution_tests {
+    use super::*;
+    use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
+    use crate::cluster_routing::Slot;
+    use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
+    use crate::types::AddressResolver;
+    use crate::ConnectionAddr;
+    use std::collections::HashMap;
+    use tokio::sync::{Notify, Semaphore};
+
+    static POISON_CONNECT_STARTED: Notify = Notify::const_new();
+    static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
+
+    #[derive(Clone, Debug)]
+    struct RecordingConnection {
+        port: u16,
+    }
+
+    impl ConnectionLike for RecordingConnection {
+        fn req_packed_command<'a>(&'a mut self, _cmd: &'a Cmd) -> RedisFuture<'a, Value> {
+            Box::pin(async { Ok(Value::Okay) })
+        }
+
+        fn req_packed_commands<'a>(
+            &'a mut self,
+            _pipeline: &'a crate::Pipeline,
+            _offset: usize,
+            count: usize,
+            _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
+        ) -> RedisFuture<'a, Vec<Value>> {
+            Box::pin(async move { Ok(vec![Value::Okay; count]) })
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn is_closed(&self) -> bool {
+            false
+        }
+    }
+
+    impl Connect for RecordingConnection {
+        fn connect<'a, T>(
+            info: T,
+            _response_timeout: Duration,
+            _connection_timeout: Duration,
+            _socket_addr: Option<SocketAddr>,
+            _glide_connection_options: GlideConnectionOptions,
+        ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
+        where
+            T: IntoConnectionInfo + Send + 'a,
+        {
+            Box::pin(async move {
+                let info = info.into_connection_info()?;
+                let port = match info.addr {
+                    ConnectionAddr::Tcp(_, port) | ConnectionAddr::TcpTls { port, .. } => port,
+                    ConnectionAddr::Unix(_) => unreachable!("cluster test uses TCP addresses"),
+                };
+
+                if port == 6381 {
+                    POISON_CONNECT_STARTED.notify_one();
+                    RELEASE_POISON_CONNECT
+                        .acquire()
+                        .await
+                        .expect("test semaphore remains open")
+                        .forget();
+                }
+
+                Ok((Self { port }, None))
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct NonIdempotentResolver;
+
+    impl AddressResolver for NonIdempotentResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port == 6380 {
+                (host.to_owned(), 6381)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
+    fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+        let address = "resolved-node:6380".to_owned();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address, vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
+        let mut cluster_params = ClusterParams::default_for_test(None);
+        cluster_params.address_resolver = Some(Arc::new(NonIdempotentResolver));
+
+        Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(cluster_params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    #[tokio::test]
+    async fn resolved_refresh_supersedes_concurrent_resolver_aware_refresh() {
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6380".to_owned();
+
+        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+            core.clone(),
+            HashSet::from([address.clone()]),
+            RefreshConnectionType::AllConnections,
+            false,
+            AddressResolution::Resolve,
+        )
+        .await;
+
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("resolver-aware refresh should start the poisoned connection");
+
+        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+            core.clone(),
+            HashSet::from([address.clone()]),
+            RefreshConnectionType::AllConnections,
+            false,
+            AddressResolution::AlreadyResolved,
+        )
+        .await;
+
+        RELEASE_POISON_CONNECT.add_permits(2);
+
+        let connected_port = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let connection = core
+                    .conn_lock
+                    .read()
+                    .connection_for_address(&address)
+                    .map(|(_, connection)| connection);
+                if let Some(connection) = connection {
+                    break connection.await.port;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("already-resolved refresh should install a connection");
+
+        assert_eq!(connected_port, 6380);
     }
 }
