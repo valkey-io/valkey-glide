@@ -220,6 +220,7 @@ def build_windows_userdata(
         "    & $aws ec2 terminate-instances --instance-ids $iid --region $region",
         "}",
         "</powershell>",
+        "<persist>true</persist>",
     ]
     return "\n".join(lines).encode("utf-8")
 
