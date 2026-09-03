@@ -2,7 +2,6 @@
 package glide.api.models.configuration;
 
 import java.time.Instant;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 
@@ -32,7 +31,6 @@ import lombok.NonNull;
  * @see GlideCredentialProvider
  */
 @Getter
-@Builder
 public class AwsCredentials {
 
     /** The AWS Access Key ID. Required; must not be blank. */
@@ -53,16 +51,25 @@ public class AwsCredentials {
     private final Instant expiresAt;
 
     /**
-     * Package-private all-args constructor used by Lombok's {@code @Builder}.
+     * Returns a new builder for constructing {@link AwsCredentials}.
      *
-     * <p>Validates that {@code accessKeyId} and {@code secretAccessKey} are non-blank. {@code
-     * sessionToken} and {@code expiresAt} may be {@code null}.
+     * @return a new {@link AwsCredentialsBuilder} instance
+     */
+    public static AwsCredentialsBuilder builder() {
+        return new AwsCredentialsBuilder();
+    }
+
+    /**
+     * All-args constructor. Validates that {@code accessKeyId} and {@code secretAccessKey} are
+     * non-blank. {@code sessionToken} and {@code expiresAt} may be {@code null}.
+     *
+     * <p>Use {@link #builder()} to construct instances.
      *
      * @throws NullPointerException if {@code accessKeyId} or {@code secretAccessKey} is {@code null}
      *     (enforced by {@code @NonNull})
      * @throws IllegalArgumentException if {@code accessKeyId} or {@code secretAccessKey} is blank
      */
-    AwsCredentials(
+    private AwsCredentials(
             @NonNull String accessKeyId,
             @NonNull String secretAccessKey,
             String sessionToken,
@@ -77,5 +84,44 @@ public class AwsCredentials {
         this.secretAccessKey = secretAccessKey;
         this.sessionToken = sessionToken;
         this.expiresAt = expiresAt;
+    }
+
+    /** Builder for {@link AwsCredentials}. */
+    public static final class AwsCredentialsBuilder {
+        private String accessKeyId;
+        private String secretAccessKey;
+        private String sessionToken;
+        private Instant expiresAt;
+
+        private AwsCredentialsBuilder() {}
+
+        /** Sets the AWS Access Key ID. Required; must not be blank. */
+        public AwsCredentialsBuilder accessKeyId(@NonNull String accessKeyId) {
+            this.accessKeyId = accessKeyId;
+            return this;
+        }
+
+        /** Sets the AWS Secret Access Key. Required; must not be blank. */
+        public AwsCredentialsBuilder secretAccessKey(@NonNull String secretAccessKey) {
+            this.secretAccessKey = secretAccessKey;
+            return this;
+        }
+
+        /** Sets the AWS Session Token. Optional; omit for long-term credentials. */
+        public AwsCredentialsBuilder sessionToken(String sessionToken) {
+            this.sessionToken = sessionToken;
+            return this;
+        }
+
+        /** Sets the credential expiry time. Optional; omit if credentials have no known expiry. */
+        public AwsCredentialsBuilder expiresAt(Instant expiresAt) {
+            this.expiresAt = expiresAt;
+            return this;
+        }
+
+        /** Builds and returns a new {@link AwsCredentials} instance. */
+        public AwsCredentials build() {
+            return new AwsCredentials(accessKeyId, secretAccessKey, sessionToken, expiresAt);
+        }
     }
 }

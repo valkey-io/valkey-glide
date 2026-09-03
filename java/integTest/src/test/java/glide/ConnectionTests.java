@@ -17,6 +17,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SlotTyp
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -49,6 +50,7 @@ import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1303,6 +1305,68 @@ public class ConnectionTests {
                 invocations.get() > 0,
                 "Custom credentials provider was never invoked — JNI may have silently dropped the"
                         + " provider");
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_throws_exception() {
+        // A provider that always throws should cause client creation to fail.
+        GlideCredentialProvider throwingProvider =
+                () -> {
+                    throw new RuntimeException("injected test error from credentials provider");
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(throwingProvider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                GlideClient.createClient(commonClientConfig().credentials(credentials).build())
+                                        .get());
+        assertNotNull(exception.getCause());
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_with_expires_at() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .expiresAt(Instant.now().plusSeconds(3600))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_expires_at_key", "iam_expires_at_value").get());
+            assertEquals("iam_expires_at_value", client.get("iam_expires_at_key").get());
+        }
+        assertTrue(invocations.get() > 0, "Provider was never invoked");
     }
 
     @Test
