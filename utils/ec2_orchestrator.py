@@ -122,12 +122,13 @@ def start_valkey_servers(
     ssm_client, instance_id: str, private_ip: str
 ) -> tuple[str, str]:
     """Start standalone + cluster Valkey on Linux EC2, return (standalone_ep, cluster_ep)."""
-    # Copy cluster_manager.py
-    script = Path("utils/cluster_manager.py").read_text().replace("'", "'\"'\"'")
+    # Copy cluster_manager.py via base64 to avoid shell quoting issues
+    script_bytes = Path("utils/cluster_manager.py").read_bytes()
+    script_b64 = base64.b64encode(script_bytes).decode()
     run_ssm_command(
         ssm_client,
         instance_id,
-        f"cat > /tmp/cluster_manager.py << 'GLIDE_EOF'\n{script}\nGLIDE_EOF",
+        f"echo '{script_b64}' | base64 -d > /tmp/cluster_manager.py",
         timeout=30,
     )
     log.info("cluster_manager.py copied to Linux EC2")
