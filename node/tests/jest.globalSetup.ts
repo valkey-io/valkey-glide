@@ -150,54 +150,17 @@ export default async function globalSetup(): Promise<void> {
             "cluster_manager.py",
         );
         const region = process.env.AWS_REGION ?? "us-east-1";
+        const instanceId = process.env.EC2_LINUX_INSTANCE_ID;
+        const privateIp = process.env.EC2_LINUX_PRIVATE_IP;
 
-        // Step 1: provision EC2
-        console.log("[globalSetup] Provisioning EC2 instance...");
-        const provisionArgs = ["provision-ec2", "--region", region];
-        if (process.env.EC2_AMI_ID)
-            provisionArgs.push("--ami-id", process.env.EC2_AMI_ID);
-        if (process.env.EC2_SUBNET_ID)
-            provisionArgs.push("--subnet-id", process.env.EC2_SUBNET_ID);
-        if (process.env.EC2_SECURITY_GROUP)
-            provisionArgs.push(
-                "--security-group-id",
-                process.env.EC2_SECURITY_GROUP,
-            );
-        if (process.env.EC2_INSTANCE_PROFILE)
-            provisionArgs.push(
-                "--instance-profile",
-                process.env.EC2_INSTANCE_PROFILE,
-            );
-        if (process.env.EC2_INSTANCE_TYPE)
-            provisionArgs.push(
-                "--instance-type",
-                process.env.EC2_INSTANCE_TYPE,
-            );
-
-        const provisionOutput = await spawnAsync(
-            clusterManagerScript,
-            provisionArgs,
-            "provision-ec2",
-            10 * 60 * 1000, // 10 min
-        );
-
-        const instanceIdLine = provisionOutput
-            .split("\n")
-            .find((l) => l.startsWith("EC2_INSTANCE_ID="));
-        const privateIpLine = provisionOutput
-            .split("\n")
-            .find((l) => l.startsWith("EC2_PRIVATE_IP="));
-
-        if (!instanceIdLine || !privateIpLine) {
+        if (!instanceId || !privateIp) {
             throw new Error(
-                `[globalSetup] Could not parse EC2 provision output:\n${provisionOutput}`,
+                "[globalSetup] USE_EC2=true requires EC2_LINUX_INSTANCE_ID and EC2_LINUX_PRIVATE_IP env vars",
             );
         }
 
-        const instanceId = instanceIdLine.split("=").slice(1).join("=").trim();
-        const privateIp = privateIpLine.split("=").slice(1).join("=").trim();
         console.log(
-            `[globalSetup] EC2 instance ready: ${instanceId} (${privateIp})`,
+            `[globalSetup] Using Linux EC2: ${instanceId} (${privateIp})`,
         );
 
         // Write partial file immediately so teardown can terminate EC2 on failure
@@ -213,9 +176,9 @@ export default async function globalSetup(): Promise<void> {
             JSON.stringify(partialData, null, 2),
         );
 
-        // Step 2: start standalone + cluster Valkey on EC2 in parallel
+        // Start standalone + cluster Valkey on Linux EC2 in parallel
         console.log(
-            "[globalSetup] Starting Valkey servers on EC2 in parallel...",
+            "[globalSetup] Starting Valkey servers on Linux EC2 in parallel...",
         );
         const baseRemoteArgs = [
             "--remote",
