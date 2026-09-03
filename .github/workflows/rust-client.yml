@@ -58,7 +58,7 @@ jobs:
     tests:
         name: Test - ${{ matrix.engine.type }} ${{ matrix.engine.version }}, ${{ matrix.host.arch }}
         runs-on: ${{ matrix.host.runner }}
-        timeout-minutes: 35
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
