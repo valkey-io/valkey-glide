@@ -1,11 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import glide.api.models.GlideString;
+import glide.internal.GlideCoreClient;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
@@ -13,9 +20,28 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class DirectBufferResolverTest {
+
+    private CommandManager commandManager;
+    private GlideCoreClient coreClient;
+
+    @BeforeEach
+    void setUp() {
+        coreClient = mock(GlideCoreClient.class);
+        commandManager = new CommandManager(coreClient);
+    }
+
+    @Test
+    void submitMgetCommand_checksLocalLifecycleWithoutCrossingJni() {
+        when(coreClient.isClosed()).thenReturn(true);
+
+        assertTrue(commandManager.submitMgetCommand(new String[] {"key"}).isCompletedExceptionally());
+        verify(coreClient).isClosed();
+        verify(coreClient, never()).isConnected();
+    }
 
     @Test
     void deserializeByteBufferArray_handlesBooleanDoubleAndBigNumberMarkers() throws Exception {
@@ -52,6 +78,75 @@ public class DirectBufferResolverTest {
         assertEquals(42.25d, (Double) decoded[1]);
         assertEquals(new BigInteger(bigNumberText), decoded[2]);
         assertNull(decoded[3]);
+    }
+
+    @Test
+    void deserializeMgetStringArray_decodesDirectBufferAndNulls() throws Exception {
+        String[] decoded = deserializeMgetStringArray(createMgetBuffer());
+
+        assertEquals("one", decoded[0]);
+        assertNull(decoded[1]);
+        assertEquals("tres", decoded[2]);
+    }
+
+    @Test
+    void deserializeMgetStringArray_decodesDifferentLengthsUtf8AndEmptyValues() throws Exception {
+        String[] decoded =
+                deserializeMgetStringArray(createMgetBuffer("a", "más largo", null, "", "emoji-🚀"));
+
+        assertArrayEquals(new String[] {"a", "más largo", null, "", "emoji-🚀"}, decoded);
+    }
+
+    @Test
+    void deserializeMgetStringArray_rejectsTrailingBytes() {
+        byte[] response = createMgetBytes("value");
+        ByteBuffer buffer = ByteBuffer.allocateDirect(response.length + 1).order(ByteOrder.BIG_ENDIAN);
+        buffer.put(response);
+        buffer.put((byte) 0);
+        buffer.flip();
+
+        InvocationTargetException error =
+                assertThrows(InvocationTargetException.class, () -> deserializeMgetStringArray(buffer));
+        assertTrue(error.getCause() instanceof IllegalArgumentException);
+        assertTrue(error.getCause().getMessage().contains("trailing bytes"));
+    }
+
+    @Test
+    void deserializeMgetBinaryArray_decodesDirectBufferAndNulls() throws Exception {
+        GlideString[] decoded = deserializeMgetBinaryArray(createMgetBuffer());
+
+        assertArrayEquals("one".getBytes(StandardCharsets.UTF_8), decoded[0].getBytes());
+        assertNull(decoded[1]);
+        assertArrayEquals("tres".getBytes(StandardCharsets.UTF_8), decoded[2].getBytes());
+    }
+
+    @Test
+    void packMgetStringArguments_encodesUtf8Exactly() throws Exception {
+        String[] arguments = new String[32];
+        for (int index = 0; index < arguments.length; index++) {
+            arguments[index] = "key-" + index;
+        }
+        arguments[27] = "más largo";
+        arguments[28] = "emoji-🚀";
+        arguments[29] = "isolated-high-\uD800";
+        arguments[30] = "isolated-low-\uDC00";
+        arguments[31] = "";
+
+        byte[] packed = packMgetStringArguments(arguments);
+        ByteBuffer buffer = ByteBuffer.wrap(packed).order(ByteOrder.BIG_ENDIAN);
+        assertEquals(arguments.length, buffer.getInt());
+        for (String argument : arguments) {
+            int length = buffer.getInt();
+            byte[] actual = new byte[length];
+            buffer.get(actual);
+            assertArrayEquals(argument.getBytes(StandardCharsets.UTF_8), actual);
+        }
+        assertEquals(0, buffer.remaining());
+    }
+
+    @Test
+    void packMgetStringArguments_keepsSmallListsOnSeparateJniPath() throws Exception {
+        assertNull(packMgetStringArguments(new String[] {"one", "two"}));
     }
 
     // ==================== Array Bounds Checking Tests ====================
@@ -272,5 +367,66 @@ public class DirectBufferResolverTest {
                         "deserializeByteBufferMap", ByteBuffer.class, boolean.class);
         method.setAccessible(true);
         return (LinkedHashMap<Object, Object>) method.invoke(null, buffer, expectUtf8Response);
+    }
+
+    private String[] deserializeMgetStringArray(ByteBuffer buffer) throws Exception {
+        Method method =
+                GlideCoreClient.class.getDeclaredMethod("deserializeMgetStringArray", ByteBuffer.class);
+        method.setAccessible(true);
+        return (String[]) method.invoke(null, buffer);
+    }
+
+    private GlideString[] deserializeMgetBinaryArray(ByteBuffer buffer) throws Exception {
+        Method method =
+                GlideCoreClient.class.getDeclaredMethod("deserializeMgetBinaryArray", ByteBuffer.class);
+        method.setAccessible(true);
+        return (GlideString[]) method.invoke(null, buffer);
+    }
+
+    private byte[] packMgetStringArguments(String[] arguments) throws Exception {
+        Method method =
+                CommandManager.class.getDeclaredMethod(
+                        "packMgetStringArgumentsIfBeneficial", String[].class);
+        method.setAccessible(true);
+        return (byte[]) method.invoke(null, (Object) arguments);
+    }
+
+    private ByteBuffer createMgetBuffer() {
+        return createMgetBuffer("one", null, "tres");
+    }
+
+    private ByteBuffer createMgetBuffer(String... values) {
+        byte[] response = createMgetBytes(values);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(response.length).order(ByteOrder.BIG_ENDIAN);
+        buffer.put(response);
+        buffer.flip();
+        return buffer;
+    }
+
+    private byte[] createMgetBytes(String... values) {
+        byte[][] encoded = new byte[values.length][];
+        int responseLength = 1 + Integer.BYTES;
+        for (int index = 0; index < values.length; index++) {
+            if (values[index] != null) {
+                encoded[index] = values[index].getBytes(StandardCharsets.UTF_8);
+                responseLength += 1 + Integer.BYTES + encoded[index].length;
+            } else {
+                responseLength += 1 + Integer.BYTES;
+            }
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate(responseLength).order(ByteOrder.BIG_ENDIAN);
+        buffer.put((byte) '*');
+        buffer.putInt(values.length);
+        for (byte[] value : encoded) {
+            buffer.put((byte) '$');
+            if (value == null) {
+                buffer.putInt(-1);
+            } else {
+                buffer.putInt(value.length);
+                buffer.put(value);
+            }
+        }
+        return buffer.array();
     }
 }

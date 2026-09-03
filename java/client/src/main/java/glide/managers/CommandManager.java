@@ -44,6 +44,8 @@ import response.ResponseOuterClass.Response;
  */
 public class CommandManager {
 
+    private static final int MGET_PACKED_ARGUMENT_MIN_COUNT = 8;
+
     private static final Set<String> BLOCKING_COMMAND_NAMES =
             Collections.unmodifiableSet(
                     Java8Utils.createSet(
@@ -147,6 +149,63 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         return submitCommandAsync(
                 requestType, glideStringsToBytes(arguments), null, false, responseHandler);
+    }
+
+    /**
+     * Submit MGET with a typed response path that bypasses the generic Response registry bridge.
+     *
+     * <p>The native callback already supplies a Java object. MGET always returns an array of bulk
+     * strings or nulls, so passing that object directly avoids a registry round trip and an
+     * additional JNI call solely to retrieve it.
+     */
+    public CompletableFuture<String[]> submitMgetCommand(String[] arguments) {
+        byte[] packedArgs = packMgetStringArgumentsIfBeneficial(arguments);
+        byte[][] args =
+                packedArgs == null ? stringsToBytes(arguments) : GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
+        if (coreClient.isClosed()) {
+            CompletableFuture<String[]> errorFuture = new CompletableFuture<>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit command."));
+            return errorFuture;
+        }
+
+        try {
+            long spanPtr = 0;
+            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(RequestType.MGet.name());
+            }
+            return coreClient.executeMgetStringCommandAsync(
+                    args, packedArgs, coreClient.getRequestTimeoutMillis(), spanPtr);
+        } catch (Exception error) {
+            CompletableFuture<String[]> errorFuture = new CompletableFuture<>();
+            errorFuture.completeExceptionally(error);
+            return errorFuture;
+        }
+    }
+
+    /** Submit binary MGET with the same typed response path as the UTF-8 variant. */
+    public CompletableFuture<GlideString[]> submitMgetCommand(GlideString[] arguments) {
+        byte[][] args = glideStringsToBytes(arguments);
+        byte[] packedArgs = packMgetArgumentsIfBeneficial(args);
+        if (coreClient.isClosed()) {
+            CompletableFuture<GlideString[]> errorFuture = new CompletableFuture<>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit command."));
+            return errorFuture;
+        }
+
+        try {
+            long spanPtr = 0;
+            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(RequestType.MGet.name());
+            }
+            return coreClient.executeMgetBinaryCommandAsync(
+                    args, packedArgs, coreClient.getRequestTimeoutMillis(), spanPtr);
+        } catch (Exception error) {
+            CompletableFuture<GlideString[]> errorFuture = new CompletableFuture<>();
+            errorFuture.completeExceptionally(error);
+            return errorFuture;
+        }
     }
 
     /** Submit a command with explicit response type expectation. */
@@ -410,6 +469,8 @@ public class CommandManager {
     }
 
     /** Lightweight container for direct routing arguments. */
+    private static final DirectRouteArgs NO_ROUTE = new DirectRouteArgs(false, 0, null);
+
     private static final class DirectRouteArgs {
         final boolean hasRoute;
         final int routeType;
@@ -425,7 +486,7 @@ public class CommandManager {
     /** Centralized mapping from Route to direct routing tuple. */
     private static DirectRouteArgs computeRouteArgs(Route route) {
         if (route == null) {
-            return new DirectRouteArgs(false, 0, null);
+            return NO_ROUTE;
         }
         if (route instanceof SimpleMultiNodeRoute) {
             return new DirectRouteArgs(true, ((SimpleMultiNodeRoute) route).getOrdinal(), null);
@@ -922,5 +983,115 @@ public class CommandManager {
             result[i] = arguments[i].getBytes();
         }
         return result;
+    }
+
+    /** Pack UTF-8 MGET keys directly, avoiding one temporary byte array per key. */
+    private static byte[] packMgetStringArgumentsIfBeneficial(String[] arguments) {
+        if (arguments == null || arguments.length < MGET_PACKED_ARGUMENT_MIN_COUNT) {
+            return null;
+        }
+
+        long packedLength = Integer.BYTES;
+        for (String argument : arguments) {
+            if (argument == null) {
+                throw new NullPointerException("Argument cannot be null");
+            }
+            packedLength += Integer.BYTES + utf8Length(argument);
+            if (packedLength > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("MGET arguments exceed the maximum JNI array size");
+            }
+        }
+
+        byte[] packed = new byte[(int) packedLength];
+        int offset = writeInt(packed, 0, arguments.length);
+        for (String argument : arguments) {
+            int encodedLength = Math.toIntExact(utf8Length(argument));
+            offset = writeInt(packed, offset, encodedLength);
+            offset = writeUtf8(packed, offset, argument);
+        }
+        return packed;
+    }
+
+    /** Match {@link String#getBytes(java.nio.charset.Charset)} replacement semantics exactly. */
+    private static long utf8Length(String value) {
+        long length = 0;
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (current < 0x80) {
+                length++;
+            } else if (current < 0x800) {
+                length += 2;
+            } else if (Character.isHighSurrogate(current)
+                    && index + 1 < value.length()
+                    && Character.isLowSurrogate(value.charAt(index + 1))) {
+                length += 4;
+                index++;
+            } else if (Character.isSurrogate(current)) {
+                // StandardCharsets.UTF_8 replaces an unpaired surrogate with one '?' byte.
+                length++;
+            } else {
+                length += 3;
+            }
+        }
+        return length;
+    }
+
+    private static int writeUtf8(byte[] destination, int offset, String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (current < 0x80) {
+                destination[offset++] = (byte) current;
+            } else if (current < 0x800) {
+                destination[offset++] = (byte) (0xC0 | current >>> 6);
+                destination[offset++] = (byte) (0x80 | current & 0x3F);
+            } else if (Character.isHighSurrogate(current)
+                    && index + 1 < value.length()
+                    && Character.isLowSurrogate(value.charAt(index + 1))) {
+                int codePoint = Character.toCodePoint(current, value.charAt(++index));
+                destination[offset++] = (byte) (0xF0 | codePoint >>> 18);
+                destination[offset++] = (byte) (0x80 | codePoint >>> 12 & 0x3F);
+                destination[offset++] = (byte) (0x80 | codePoint >>> 6 & 0x3F);
+                destination[offset++] = (byte) (0x80 | codePoint & 0x3F);
+            } else if (Character.isSurrogate(current)) {
+                destination[offset++] = '?';
+            } else {
+                destination[offset++] = (byte) (0xE0 | current >>> 12);
+                destination[offset++] = (byte) (0x80 | current >>> 6 & 0x3F);
+                destination[offset++] = (byte) (0x80 | current & 0x3F);
+            }
+        }
+        return offset;
+    }
+
+    /** Pack larger MGET argument lists to cross JNI with one byte array instead of one per key. */
+    private static byte[] packMgetArgumentsIfBeneficial(byte[][] arguments) {
+        if (arguments.length < MGET_PACKED_ARGUMENT_MIN_COUNT) {
+            return null;
+        }
+
+        long packedLength = Integer.BYTES;
+        for (byte[] argument : arguments) {
+            packedLength += Integer.BYTES + (long) argument.length;
+            if (packedLength > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("MGET arguments exceed the maximum JNI array size");
+            }
+        }
+
+        byte[] packed = new byte[(int) packedLength];
+        int offset = writeInt(packed, 0, arguments.length);
+        for (byte[] argument : arguments) {
+            offset = writeInt(packed, offset, argument.length);
+            System.arraycopy(argument, 0, packed, offset, argument.length);
+            offset += argument.length;
+        }
+        return packed;
+    }
+
+    private static int writeInt(byte[] destination, int offset, int value) {
+        destination[offset] = (byte) (value >>> 24);
+        destination[offset + 1] = (byte) (value >>> 16);
+        destination[offset + 2] = (byte) (value >>> 8);
+        destination[offset + 3] = (byte) value;
+        return offset + Integer.BYTES;
     }
 }

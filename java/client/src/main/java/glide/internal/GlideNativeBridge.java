@@ -50,6 +50,18 @@ public class GlideNativeBridge {
             boolean expectUtf8Response,
             long spanPtr);
 
+    /** Execute a command whose length-prefixed arguments are packed into one byte array. */
+    public static native void executeCommandAsyncPacked(
+            long clientPtr,
+            long callbackId,
+            int requestType,
+            byte[] packedArgs,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long spanPtr);
+
     /**
      * Execute a batch of commands asynchronously, passing parameters directly via JNI.
      *

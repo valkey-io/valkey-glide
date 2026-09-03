@@ -9,7 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.models.exceptions.ClosingException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -89,6 +93,144 @@ public class AsyncRegistryTest {
         assertTrue(f.isDone());
         // First completion wins — should have normal result, not exception
         assertEquals("normal result", f.getNow(null));
+    }
+
+    @Test
+    void managedFuture_completesWithoutDependentCleanupStage() {
+        CompletableFuture<Object> future = AsyncRegistry.newManagedFuture();
+        long id = AsyncRegistry.register(future, 1, 42L, 60_000);
+
+        assertEquals(0, future.getNumberOfDependents());
+        assertEquals(1, AsyncRegistry.getActiveFutureCount());
+        assertEquals(1, AsyncRegistry.getPendingTimeoutCount());
+
+        assertTrue(AsyncRegistry.completeCallback(id, "result"));
+
+        assertEquals("result", future.getNow(null));
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+        assertEquals(0, AsyncRegistry.getPendingTimeoutCount());
+        assertFalse(AsyncRegistry.completeCallback(id, "late"));
+
+        CompletableFuture<Object> next = AsyncRegistry.newManagedFuture();
+        assertDoesNotThrow(() -> AsyncRegistry.register(next, 1, 42L, 0));
+    }
+
+    @Test
+    void mgetFuture_runsHandlerBeforeNativeCompletionReturns() {
+        AsyncRegistry.MgetFuturePair<String> futures =
+                AsyncRegistry.newMgetFutures((value, error) -> "decoded-" + value);
+        long id = AsyncRegistry.register(futures.rawFuture(), 0, 42L, 0);
+
+        assertTrue(AsyncRegistry.completeCallback(id, "value"));
+
+        assertEquals("decoded-value", futures.resultFuture().getNow(null));
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void mgetFuture_completesWhenPublicResultWasCancelled() {
+        AtomicBoolean handlerCalled = new AtomicBoolean();
+        AsyncRegistry.MgetFuturePair<Object> futures =
+                AsyncRegistry.newMgetFutures(
+                        (value, error) -> {
+                            handlerCalled.set(true);
+                            return value;
+                        });
+        long id = AsyncRegistry.register(futures.rawFuture(), 1, 42L, 60_000);
+
+        assertTrue(futures.resultFuture().cancel(false));
+        assertTrue(AsyncRegistry.completeCallback(id, "value"));
+
+        assertFalse(handlerCalled.get());
+        assertEquals("value", futures.rawFuture().getNow(null));
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+        assertEquals(0, AsyncRegistry.getPendingTimeoutCount());
+    }
+
+    @Test
+    void mgetFuture_onlyWinningRawCompletionRunsHandler() {
+        AtomicInteger handlerCalls = new AtomicInteger();
+        AsyncRegistry.MgetFuturePair<Object> futures =
+                AsyncRegistry.newMgetFutures(
+                        (value, error) -> {
+                            handlerCalls.incrementAndGet();
+                            return value;
+                        });
+        long id = AsyncRegistry.register(futures.rawFuture(), 0, 42L, 0);
+
+        assertTrue(AsyncRegistry.completeCallback(id, "first"));
+        assertFalse(futures.rawFuture().complete("second"));
+
+        assertEquals(1, handlerCalls.get());
+        assertEquals("first", futures.resultFuture().getNow(null));
+    }
+
+    @Test
+    void mgetFuture_waitsForRunningHandlerWhenPublicResultIsCancelled() throws Exception {
+        CountDownLatch handlerStarted = new CountDownLatch(1);
+        CountDownLatch allowHandlerToFinish = new CountDownLatch(1);
+        AtomicBoolean callbackReturned = new AtomicBoolean();
+        AsyncRegistry.MgetFuturePair<Object> futures =
+                AsyncRegistry.newMgetFutures(
+                        (value, error) -> {
+                            handlerStarted.countDown();
+                            try {
+                                if (!allowHandlerToFinish.await(5, TimeUnit.SECONDS)) {
+                                    throw new AssertionError("Timed out waiting to finish MGET handler");
+                                }
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                                throw new AssertionError("MGET handler interrupted", interrupted);
+                            }
+                            return value;
+                        });
+        long id = AsyncRegistry.register(futures.rawFuture(), 0, 42L, 0);
+        Thread completionThread =
+                new Thread(
+                        () -> {
+                            AsyncRegistry.completeCallback(id, "value");
+                            callbackReturned.set(true);
+                        },
+                        "mget-completion-test");
+
+        completionThread.start();
+        try {
+            assertTrue(handlerStarted.await(5, TimeUnit.SECONDS));
+            assertTrue(futures.resultFuture().cancel(false));
+            assertFalse(callbackReturned.get());
+        } finally {
+            allowHandlerToFinish.countDown();
+            completionThread.join(5_000);
+        }
+
+        assertFalse(completionThread.isAlive());
+        assertTrue(callbackReturned.get());
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void managedFuture_externalCancellationCleansRegistryState() {
+        CompletableFuture<Object> future = AsyncRegistry.newManagedFuture();
+        AsyncRegistry.register(future, 1, 42L, 60_000);
+
+        assertTrue(future.cancel(false));
+
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+        assertEquals(0, AsyncRegistry.getPendingTimeoutCount());
+        CompletableFuture<Object> next = AsyncRegistry.newManagedFuture();
+        assertDoesNotThrow(() -> AsyncRegistry.register(next, 1, 42L, 0));
+    }
+
+    @Test
+    void managedFuture_errorCompletionCleansRegistryState() {
+        CompletableFuture<Object> future = AsyncRegistry.newManagedFuture();
+        long id = AsyncRegistry.register(future, 1, 42L, 60_000);
+
+        assertTrue(AsyncRegistry.completeCallbackWithErrorCode(id, 0, "failed"));
+
+        assertTrue(future.isCompletedExceptionally());
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+        assertEquals(0, AsyncRegistry.getPendingTimeoutCount());
     }
 
     @Test

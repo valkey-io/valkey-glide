@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,6 +72,20 @@ public class GlideStringTest {
         assertArrayEquals(bytes, actualBytes);
         assertTrue(buffer.isReadOnly());
         assertThrows(ReadOnlyBufferException.class, () -> buffer.put((byte) 4));
+    }
+
+    @Test
+    public void shouldCopyRemainingByteBufferBytesAndAdvancePosition() {
+        byte[] sourceBytes = {9, 1, 2, 3, 8};
+        ByteBuffer source = ByteBuffer.wrap(sourceBytes);
+        source.position(1);
+        source.limit(4);
+
+        GlideString glideString = GlideString.of(source);
+        sourceBytes[2] = 99;
+
+        assertEquals(4, source.position());
+        assertArrayEquals(new byte[] {1, 2, 3}, glideString.getBytes());
     }
 
     private static Stream<byte[]> validUtf8Provider() {

@@ -50,6 +50,19 @@ public class GlideString implements Comparable<GlideString> {
         return res;
     }
 
+    /**
+     * Create a GlideString by copying the remaining bytes from a buffer.
+     *
+     * <p>The source position advances to its limit. The copied bytes remain immutable even if the
+     * source buffer is modified afterward.
+     */
+    public static GlideString of(ByteBuffer bytes) {
+        GlideString res = new GlideString();
+        res.bytes = new byte[bytes.remaining()];
+        bytes.get(res.bytes);
+        return res;
+    }
+
     /** Allow converting any type to GlideString */
     public static <ArgType> GlideString of(ArgType o) {
         if (o instanceof GlideString) {

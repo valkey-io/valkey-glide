@@ -84,13 +84,13 @@ static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 // The connection's internal reader task must run concurrently with command sends.
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
+const MGET_CONTIGUOUS_MIN_ELEMENTS: usize = 8;
 
 // =========================
 // Native buffer registry
 // =========================
 static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
     std::sync::OnceLock::new();
-static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 static TIMED_OUT_CALLBACKS: std::sync::OnceLock<dashmap::DashMap<jlong, ()>> =
     std::sync::OnceLock::new();
 
@@ -99,13 +99,19 @@ fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
 }
 
 pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
-    let id = NEXT_NATIVE_BUFFER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    assert!(
+        !bytes.is_empty(),
+        "DirectByteBuffer native storage must not be empty"
+    );
+    let ptr = bytes.as_ptr() as *mut u8;
+    let id = ptr as usize as u64;
+    let len = bytes.len();
     let registry = get_native_buffer_registry();
-    registry.insert(id, bytes);
-    // Obtain stable pointer/len from stored Vec
-    let guard = registry.get(&id).expect("buffer just inserted");
-    let ptr = guard.as_ptr() as *mut u8;
-    let len = guard.len();
+    let previous = registry.insert(id, bytes);
+    debug_assert!(
+        previous.is_none(),
+        "live native buffers cannot share an address"
+    );
     (id, ptr, len)
 }
 
@@ -362,8 +368,14 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
     Ok(method_cache)
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ResponseConversion {
+    Default,
+    Mget,
+}
+
 /// Callback job type handled by dedicated callback workers
-type CallbackJob = (Arc<JavaVM>, jlong, CallbackResult, bool);
+type CallbackJob = (Arc<JavaVM>, jlong, CallbackResult, bool, ResponseConversion);
 
 /// Global unbounded callback queue sender
 static CALLBACK_SENDER: std::sync::OnceLock<Sender<CallbackJob>> = std::sync::OnceLock::new();
@@ -406,12 +418,20 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
                             let guard = rx_clone.lock().unwrap();
                             guard.recv().ok()
                         };
-                        let Some((_, callback_id, result, binary_mode)) = job_opt else {
+                        let Some((_, callback_id, result, binary_mode, response_conversion)) =
+                            job_opt
+                        else {
                             break;
                         };
 
                         // Process callback with pre-attached env
-                        process_callback_job_with_env(&mut env, callback_id, result, binary_mode);
+                        process_callback_job_with_env(
+                            &mut env,
+                            callback_id,
+                            result,
+                            binary_mode,
+                            response_conversion,
+                        );
                     }
                 })
                 .expect("Failed to spawn callback worker thread");
@@ -428,6 +448,7 @@ fn process_callback_job_with_env(
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
+    response_conversion: ResponseConversion,
 ) {
     if take_timed_out_callback(callback_id) {
         logger_core::log_debug_rate_limited!(
@@ -445,27 +466,51 @@ fn process_callback_job_with_env(
         Ok(server_value) => {
             let _ = env.push_local_frame(16);
 
-            let java_result = if should_use_direct_buffer(&server_value) {
-                create_direct_byte_buffer(env, server_value, !binary_mode)
+            let use_mget_contiguous_response =
+                matches!(response_conversion, ResponseConversion::Mget)
+                    && should_use_mget_contiguous_response(&server_value);
+            let use_direct_buffer =
+                use_mget_contiguous_response || should_use_direct_buffer(&server_value);
+            let release_direct_buffer_after_callback =
+                use_direct_buffer && matches!(response_conversion, ResponseConversion::Mget);
+            let java_result = if use_direct_buffer {
+                create_direct_byte_buffer(
+                    env,
+                    server_value,
+                    !binary_mode,
+                    release_direct_buffer_after_callback,
+                )
             } else {
                 crate::resp_value_to_java(env, server_value, !binary_mode)
+                    .map(|value| (value, None))
             };
 
             if take_timed_out_callback(callback_id) {
+                if let Ok((_, Some(id))) = &java_result {
+                    let _ = free_native_buffer(*id);
+                }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
                 return;
             }
 
             match java_result {
-                Ok(java_result) => {
-                    if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
-                        log::error!("JNI completion failed for callback {callback_id}: {e}");
-                        let _ = env.exception_clear();
-                        invalidate_jni_caches();
-                        fail_all_pending_futures(
-                            env,
-                            "JNI callback completion failed — cached method IDs may be stale",
-                        );
+                Ok((java_result, release_after_callback_id)) => {
+                    let completion = complete_java_callback(env, callback_id, &java_result);
+                    if let Some(id) = release_after_callback_id {
+                        let _ = free_native_buffer(id);
+                    }
+                    match completion {
+                        Ok(true) => {}
+                        Ok(false) => {}
+                        Err(e) => {
+                            log::error!("JNI completion failed for callback {callback_id}: {e}");
+                            let _ = env.exception_clear();
+                            invalidate_jni_caches();
+                            fail_all_pending_futures(
+                                env,
+                                "JNI callback completion failed — cached method IDs may be stale",
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -519,8 +564,46 @@ pub fn complete_callback(
     result: CallbackResult,
     binary_mode: bool,
 ) {
+    enqueue_callback(
+        jvm,
+        callback_id,
+        result,
+        binary_mode,
+        ResponseConversion::Default,
+    );
+}
+
+/// Complete MGET using a contiguous response once per-element JNI conversion becomes expensive.
+pub fn complete_mget_callback(
+    jvm: Arc<JavaVM>,
+    callback_id: jlong,
+    result: CallbackResult,
+    binary_mode: bool,
+) {
+    enqueue_callback(
+        jvm,
+        callback_id,
+        result,
+        binary_mode,
+        ResponseConversion::Mget,
+    );
+}
+
+fn enqueue_callback(
+    jvm: Arc<JavaVM>,
+    callback_id: jlong,
+    result: CallbackResult,
+    binary_mode: bool,
+    response_conversion: ResponseConversion,
+) {
     let sender = init_callback_workers();
-    if let Err(e) = sender.send((jvm.clone(), callback_id, result, binary_mode)) {
+    if let Err(e) = sender.send((
+        jvm.clone(),
+        callback_id,
+        result,
+        binary_mode,
+        response_conversion,
+    )) {
         log::error!("Callback channel dead, sweeping all pending futures: {e}");
         // Workers are dead — sweep the entire AsyncRegistry table
         if let Ok(mut env) = jvm.attach_current_thread_as_daemon() {
@@ -533,6 +616,15 @@ pub fn complete_callback(
                 "FATAL: Cannot attach to JVM to sweep futures — all pending requests will hang"
             );
         }
+    }
+}
+
+fn should_use_mget_contiguous_response(value: &ServerValue) -> bool {
+    match value {
+        redis::Value::Array(values) if values.len() >= MGET_CONTIGUOUS_MIN_ELEMENTS => values
+            .iter()
+            .all(|value| matches!(value, redis::Value::BulkString(_) | redis::Value::Nil)),
+        _ => false,
     }
 }
 
@@ -574,10 +666,10 @@ pub fn complete_java_callback(
     env: &mut JNIEnv,
     callback_id: jlong,
     result: &JObject,
-) -> Result<()> {
+) -> Result<bool> {
     let method_cache = get_method_cache(env)?;
 
-    unsafe {
+    Ok(unsafe {
         env.call_static_method_unchecked(
             &method_cache.async_handle_table_class,
             method_cache.complete_callback_method,
@@ -587,9 +679,8 @@ pub fn complete_java_callback(
                 JValue::Object(result).as_jni(),
             ],
         )
-    }?;
-
-    Ok(())
+    }?
+    .z()?)
 }
 
 /// Complete Java CompletableFuture with error code and message using cached method IDs.
@@ -714,39 +805,57 @@ fn create_direct_byte_buffer<'local>(
     env: &mut JNIEnv<'local>,
     value: ServerValue,
     encoding_utf8: bool,
-) -> Result<JObject<'local>, crate::errors::FFIError> {
+    release_after_callback: bool,
+) -> Result<(JObject<'local>, Option<u64>), crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            let (id, ptr, len) = register_native_buffer(data.into());
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            // Register Java-side cleaner to free native buffer when GC'd
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
+            create_native_direct_byte_buffer(env, data.into(), release_after_callback)
         }
         redis::Value::Array(arr) => {
             let serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
-            let (id, ptr, len) = register_native_buffer(serialized);
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
+            create_native_direct_byte_buffer(env, serialized, release_after_callback)
         }
         redis::Value::Map(map) => {
             let serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
-            let (id, ptr, len) = register_native_buffer(serialized);
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
+            create_native_direct_byte_buffer(env, serialized, release_after_callback)
         }
         _ => {
             // Fall back to regular conversion for other large types
-            crate::resp_value_to_java(env, value, encoding_utf8)
+            crate::resp_value_to_java(env, value, encoding_utf8).map(|value| (value, None))
         }
+    }
+}
+
+fn create_native_direct_byte_buffer<'local>(
+    env: &mut JNIEnv<'local>,
+    bytes: Vec<u8>,
+    release_after_callback: bool,
+) -> Result<(JObject<'local>, Option<u64>), crate::errors::FFIError> {
+    let (id, ptr, len) = register_native_buffer(bytes);
+    let byte_buffer = match unsafe { env.new_direct_byte_buffer(ptr.cast(), len) } {
+        Ok(buffer) => buffer,
+        Err(error) => {
+            let _ = free_native_buffer(id);
+            return Err(error.into());
+        }
+    };
+    let object: JObject = byte_buffer.into();
+    let out = match env.new_local_ref(&object) {
+        Ok(reference) => reference,
+        Err(error) => {
+            let _ = free_native_buffer(id);
+            return Err(error.into());
+        }
+    };
+
+    if release_after_callback {
+        Ok((out, Some(id)))
+    } else {
+        if let Err(error) = register_buffer_cleaner(env, &out, id) {
+            let _ = free_native_buffer(id);
+            return Err(error);
+        }
+        Ok((out, None))
     }
 }
 
@@ -783,7 +892,9 @@ fn serialize_array_to_bytes(
     const FALSE_BOOL: u8 = 0;
     const TRUE_BOOL: u8 = 1;
 
-    let mut bytes = Vec::new();
+    let mut bytes = mget_serialized_capacity(&arr)
+        .map(Vec::with_capacity)
+        .unwrap_or_default();
 
     // Write array marker and length
     bytes.push(b'*'); // RESP array prefix
@@ -854,6 +965,22 @@ fn serialize_array_to_bytes(
     }
 
     Ok(bytes)
+}
+
+/// Compute the exact serialized size for MGET's array-of-bulk-strings response shape.
+///
+/// Pre-sizing avoids repeatedly reallocating and copying the contiguous native response. Other
+/// array shapes retain the generic growth strategy because formatting their fallback values would
+/// duplicate the actual serialization work.
+fn mget_serialized_capacity(arr: &[ServerValue]) -> Option<usize> {
+    arr.iter().try_fold(5usize, |capacity, value| {
+        let element_size = match value {
+            redis::Value::Nil => 5,
+            redis::Value::BulkString(data) => 5usize.checked_add(data.len())?,
+            _ => return None,
+        };
+        capacity.checked_add(element_size)
+    })
 }
 
 /// Serialize map Vec<(K,V)> to bytes for DirectByteBuffer (simplified binary format)
@@ -1065,7 +1192,10 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
-    use super::serialize_array_to_bytes;
+    use super::{
+        free_native_buffer, mget_serialized_capacity, register_native_buffer,
+        serialize_array_to_bytes, should_use_mget_contiguous_response,
+    };
     use redis::{Value, parse_redis_value};
 
     #[test]
@@ -1113,5 +1243,48 @@ mod tests {
             i32::from_be_bytes(bytes[null_offset + 1..null_offset + 5].try_into().unwrap()),
             -1
         );
+    }
+
+    #[test]
+    fn mget_contiguous_response_starts_at_element_threshold() {
+        let below_threshold = Value::Array((0..7).map(|_| Value::Nil).collect());
+        let at_threshold = Value::Array((0..8).map(|_| Value::Nil).collect());
+
+        assert!(!should_use_mget_contiguous_response(&below_threshold));
+        assert!(should_use_mget_contiguous_response(&at_threshold));
+    }
+
+    #[test]
+    fn mget_contiguous_response_rejects_non_bulk_values() {
+        let mut values: Vec<Value> = (0..7).map(|_| Value::Nil).collect();
+        values.push(Value::Int(1));
+
+        assert!(!should_use_mget_contiguous_response(&Value::Array(values)));
+    }
+
+    #[test]
+    fn mget_serialization_uses_exact_capacity() {
+        let values = vec![
+            Value::BulkString(b"one".to_vec().into()),
+            Value::Nil,
+            Value::BulkString(b"three".to_vec().into()),
+        ];
+        let expected_capacity = mget_serialized_capacity(&values).unwrap();
+        let Ok(serialized) = serialize_array_to_bytes(values, true) else {
+            panic!("MGET serialization unexpectedly failed");
+        };
+
+        assert_eq!(serialized.len(), expected_capacity);
+        assert_eq!(serialized.capacity(), expected_capacity);
+    }
+
+    #[test]
+    fn native_buffer_id_is_its_direct_memory_address_and_release_is_idempotent() {
+        let (id, pointer, length) = register_native_buffer(vec![1, 2, 3]);
+
+        assert_eq!(id, pointer as usize as u64);
+        assert_eq!(length, 3);
+        assert!(free_native_buffer(id));
+        assert!(!free_native_buffer(id));
     }
 }

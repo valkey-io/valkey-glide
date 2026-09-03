@@ -94,7 +94,6 @@ import static command_request.CommandRequestOuterClass.RequestType.LRange;
 import static command_request.CommandRequestOuterClass.RequestType.LRem;
 import static command_request.CommandRequestOuterClass.RequestType.LSet;
 import static command_request.CommandRequestOuterClass.RequestType.LTrim;
-import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
@@ -1352,16 +1351,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(
-                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+        return commandManager.submitMgetCommand(keys);
     }
 
     @Override
     public CompletableFuture<GlideString[]> mget(@NonNull GlideString[] keys) {
-        return commandManager.submitNewCommand(
-                MGet,
-                keys,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+        return commandManager.submitMgetCommand(keys);
     }
 
     @Override

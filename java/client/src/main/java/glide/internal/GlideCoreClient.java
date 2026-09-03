@@ -2,17 +2,24 @@
 package glide.internal;
 
 import command_request.CommandRequestOuterClass.CacheMetricsType;
+import command_request.CommandRequestOuterClass.RequestType;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.BaseClient;
 import glide.api.logging.Logger;
+import glide.api.models.GlideString;
+import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 
 /**
  * GLIDE core client transport. Provides direct native access to glide-core with all routing and
@@ -22,6 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * create connections - that responsibility belongs to ConnectionManager.
  */
 public class GlideCoreClient implements AutoCloseable {
+
     private static final ReferenceQueue<Object> CLEANUP_QUEUE = new ReferenceQueue<>();
     private static final ConcurrentHashMap<PhantomReference<?>, Runnable> CLEANUP_ACTIONS =
             new ConcurrentHashMap<>();
@@ -73,6 +81,21 @@ public class GlideCoreClient implements AutoCloseable {
     private static native void onNativeInit();
 
     private static native void freeNativeBuffer(long id);
+
+    /**
+     * Execute MGET through the immediate-release response path.
+     *
+     * <p>This entry point is private and fixes the request type to MGET on the Rust side. Its native
+     * buffer is consumed synchronously by one of this class's built-in typed decoders before JNI
+     * returns, so the buffer cannot escape to a caller.
+     */
+    private static native void executeMgetCommandAsyncNative(
+            long clientPtr,
+            long callbackId,
+            byte[][] args,
+            byte[] packedArgs,
+            boolean expectUtf8Response,
+            long spanPtr);
 
     private static final ConcurrentHashMap<Long, WeakReference<BaseClient>> clients =
             new ConcurrentHashMap<>();
@@ -367,6 +390,337 @@ public class GlideCoreClient implements AutoCloseable {
             boolean expectUtf8Response,
             long timeoutMs,
             long spanPtr) {
+        return executeCommandAsync(
+                requestType,
+                args,
+                null,
+                hasRoute,
+                routeType,
+                routeParam,
+                expectUtf8Response,
+                timeoutMs,
+                spanPtr);
+    }
+
+    /** Execute a command whose length-prefixed arguments are packed into one JNI byte array. */
+    public CompletableFuture<Object> executeCommandAsyncPacked(
+            int requestType,
+            byte[] packedArgs,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr) {
+        return executeCommandAsync(
+                requestType,
+                EMPTY_2D_BYTE_ARRAY,
+                packedArgs,
+                hasRoute,
+                routeType,
+                routeParam,
+                expectUtf8Response,
+                timeoutMs,
+                spanPtr);
+    }
+
+    /**
+     * Execute MGET with a caller-supplied completion handler and cleaner-owned response storage.
+     *
+     * <p>This compatibility path deliberately uses the generic JNI entry point. Its response buffer
+     * remains valid if the handler retains or returns it. Performance-sensitive callers should use
+     * one of the typed MGET methods, whose fixed decoders cannot expose native storage.
+     */
+    public <T> CompletableFuture<T> executeMgetCommandAsync(
+            byte[][] args,
+            byte[] packedArgs,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr,
+            BiFunction<Object, Throwable, ? extends T> completionHandler) {
+        if (completionHandler == null) {
+            throw new IllegalArgumentException("Completion handler cannot be null");
+        }
+        return executeCommandAsync(
+                        RequestType.MGet.getNumber(),
+                        args,
+                        packedArgs,
+                        false,
+                        0,
+                        null,
+                        expectUtf8Response,
+                        timeoutMs,
+                        spanPtr)
+                .handle(completionHandler);
+    }
+
+    /** Execute UTF-8 MGET through a fixed synchronous decoder. */
+    public CompletableFuture<String[]> executeMgetStringCommandAsync(
+            byte[][] args, byte[] packedArgs, long timeoutMs, long spanPtr) {
+        return executeTypedMgetCommandAsync(
+                args, packedArgs, true, timeoutMs, spanPtr, this::completeMgetStringResponse);
+    }
+
+    /** Execute binary MGET through a fixed synchronous decoder. */
+    public CompletableFuture<GlideString[]> executeMgetBinaryCommandAsync(
+            byte[][] args, byte[] packedArgs, long timeoutMs, long spanPtr) {
+        return executeTypedMgetCommandAsync(
+                args, packedArgs, false, timeoutMs, spanPtr, this::completeMgetBinaryResponse);
+    }
+
+    private <T> CompletableFuture<T> executeTypedMgetCommandAsync(
+            byte[][] args,
+            byte[] packedArgs,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr,
+            BiFunction<Object, Throwable, ? extends T> completionHandler) {
+        AsyncRegistry.MgetFuturePair<T> futures = AsyncRegistry.newMgetFutures(completionHandler);
+        CompletableFuture<Object> rawFuture = futures.rawFuture();
+        CompletableFuture<T> resultFuture = futures.resultFuture();
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                rawFuture.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
+                return resultFuture;
+            }
+
+            long correlationId;
+            try {
+                correlationId =
+                        AsyncRegistry.register(rawFuture, this.maxInflightRequests, handle, timeoutMs);
+            } catch (glide.api.models.exceptions.RequestException error) {
+                rawFuture.completeExceptionally(error);
+                return resultFuture;
+            }
+
+            if (correlationId == 0L) {
+                return resultFuture;
+            }
+
+            executeMgetCommandAsyncNative(
+                    handle,
+                    correlationId,
+                    packedArgs == null && args != null ? args : EMPTY_2D_BYTE_ARRAY,
+                    packedArgs,
+                    expectUtf8Response,
+                    spanPtr);
+            return resultFuture;
+        } catch (Exception error) {
+            rawFuture.completeExceptionally(error);
+            return resultFuture;
+        }
+    }
+
+    private String[] completeMgetStringResponse(Object result, Throwable error) {
+        throwMgetError(error);
+        return decodeMgetStringArray(result);
+    }
+
+    private GlideString[] completeMgetBinaryResponse(Object result, Throwable error) {
+        throwMgetError(error);
+        return decodeMgetBinaryArray(result);
+    }
+
+    private void throwMgetError(Throwable error) {
+        if (error == null) {
+            return;
+        }
+        if (error instanceof ClosingException) {
+            close();
+        }
+        if (error instanceof RuntimeException) {
+            throw (RuntimeException) error;
+        }
+        throw new RuntimeException(error);
+    }
+
+    private static String[] decodeMgetStringArray(Object result) {
+        if (result == null) {
+            return null;
+        }
+        if (result instanceof ByteBuffer) {
+            return deserializeMgetStringArray((ByteBuffer) result);
+        }
+        if (result instanceof String[]) {
+            return (String[]) result;
+        }
+        if (!(result instanceof Object[])) {
+            throw new IllegalArgumentException(
+                    "Unexpected MGET UTF-8 response type: " + result.getClass().getName());
+        }
+
+        Object[] values = (Object[]) result;
+        String[] decoded = new String[values.length];
+        for (int index = 0; index < values.length; index++) {
+            decoded[index] = String.class.cast(values[index]);
+        }
+        return decoded;
+    }
+
+    private static GlideString[] decodeMgetBinaryArray(Object result) {
+        if (result == null) {
+            return null;
+        }
+        if (result instanceof ByteBuffer) {
+            return deserializeMgetBinaryArray((ByteBuffer) result);
+        }
+        if (result instanceof GlideString[]) {
+            return (GlideString[]) result;
+        }
+        if (!(result instanceof Object[])) {
+            throw new IllegalArgumentException(
+                    "Unexpected MGET binary response type: " + result.getClass().getName());
+        }
+
+        Object[] values = (Object[]) result;
+        GlideString[] decoded = new GlideString[values.length];
+        for (int index = 0; index < values.length; index++) {
+            if (values[index] != null) {
+                decoded[index] = GlideString.of(byte[].class.cast(values[index]));
+            }
+        }
+        return decoded;
+    }
+
+    private static String[] deserializeMgetStringArray(ByteBuffer buffer) {
+        int count = readMgetArrayLength(buffer);
+        int maxValueLength = 0;
+        for (int index = 0; index < count; index++) {
+            int length = readMgetBulkStringLength(buffer, index);
+            if (length != -1) {
+                maxValueLength = Math.max(maxValueLength, length);
+                buffer.position(buffer.position() + length);
+            }
+        }
+        requireMgetFullyConsumed(buffer.remaining());
+
+        int decodedCount = readMgetArrayLength(buffer);
+        if (decodedCount != count) {
+            throw new IllegalArgumentException("MGET array count changed while decoding");
+        }
+
+        byte[] decodeBuffer = new byte[maxValueLength];
+        String[] decoded = new String[count];
+        for (int index = 0; index < count; index++) {
+            int length = readMgetBulkStringLength(buffer, index);
+            if (length != -1) {
+                if (length == 0) {
+                    decoded[index] = "";
+                } else {
+                    buffer.get(decodeBuffer, 0, length);
+                    decoded[index] = new String(decodeBuffer, 0, length, StandardCharsets.UTF_8);
+                }
+            }
+        }
+        requireMgetFullyConsumed(buffer.remaining());
+        return decoded;
+    }
+
+    private static GlideString[] deserializeMgetBinaryArray(ByteBuffer buffer) {
+        int count = readMgetArrayLength(buffer);
+        GlideString[] decoded = new GlideString[count];
+        for (int index = 0; index < count; index++) {
+            int length = readMgetBulkStringLength(buffer, index);
+            if (length != -1) {
+                int originalLimit = buffer.limit();
+                buffer.limit(buffer.position() + length);
+                try {
+                    decoded[index] = GlideString.of(buffer);
+                } finally {
+                    buffer.limit(originalLimit);
+                }
+            }
+        }
+        requireMgetFullyConsumed(buffer.remaining());
+        return decoded;
+    }
+
+    private static int readMgetArrayLength(ByteBuffer buffer) {
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.rewind();
+        requireMgetBufferBytes(buffer, 5, "MGET array header");
+
+        byte marker = buffer.get();
+        if (marker != '*') {
+            throw new IllegalArgumentException("Expected MGET array marker '*', got: " + (char) marker);
+        }
+
+        int count = buffer.getInt();
+        validateMgetArrayCount(count, buffer.remaining());
+        return count;
+    }
+
+    private static void validateMgetArrayCount(int count, int remainingBytes) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid negative MGET array count: " + count);
+        }
+        if (count > remainingBytes / 5) {
+            throw new IllegalArgumentException(
+                    "MGET array count "
+                            + count
+                            + " exceeds the maximum encoded by "
+                            + remainingBytes
+                            + " remaining bytes");
+        }
+    }
+
+    private static int readMgetBulkStringLength(ByteBuffer buffer, int index) {
+        requireMgetBufferBytes(buffer, 5, "MGET element " + index);
+        byte marker = buffer.get();
+        if (marker != '$') {
+            throw new IllegalArgumentException(
+                    "Expected MGET bulk string marker at element " + index + ", got: " + (char) marker);
+        }
+
+        int length = buffer.getInt();
+        if (length != -1) {
+            validateMgetLength(length, buffer, index);
+        }
+        return length;
+    }
+
+    private static void requireMgetFullyConsumed(int remaining) {
+        if (remaining != 0) {
+            throw new IllegalArgumentException(
+                    "Unexpected trailing bytes in MGET response: " + remaining);
+        }
+    }
+
+    private static void requireMgetBufferBytes(ByteBuffer buffer, int required, String context) {
+        if (buffer.remaining() < required) {
+            throw new IllegalArgumentException(
+                    "Buffer too small for " + context + ": " + buffer.remaining() + " bytes");
+        }
+    }
+
+    private static void validateMgetLength(int length, ByteBuffer buffer, int index) {
+        if (length < 0) {
+            throw new IllegalArgumentException(
+                    "Invalid negative MGET bulk string length at element " + index + ": " + length);
+        }
+        if (length > buffer.remaining()) {
+            throw new IllegalArgumentException(
+                    "MGET bulk string length "
+                            + length
+                            + " exceeds buffer remaining "
+                            + buffer.remaining()
+                            + " at element "
+                            + index);
+        }
+    }
+
+    private CompletableFuture<Object> executeCommandAsync(
+            int requestType,
+            byte[][] args,
+            byte[] packedArgs,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            long timeoutMs,
+            long spanPtr) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -376,7 +730,10 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            CompletableFuture<Object> future = new CompletableFuture<>();
+            CompletableFuture<Object> future =
+                    requestType == RequestType.MGet.getNumber()
+                            ? AsyncRegistry.newManagedFuture()
+                            : new CompletableFuture<>();
             long correlationId;
             try {
                 correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
@@ -385,16 +742,29 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            GlideNativeBridge.executeCommandAsync(
-                    handle,
-                    correlationId,
-                    requestType,
-                    args != null ? args : EMPTY_2D_BYTE_ARRAY,
-                    hasRoute,
-                    routeType,
-                    routeParam,
-                    expectUtf8Response,
-                    spanPtr);
+            if (packedArgs == null) {
+                GlideNativeBridge.executeCommandAsync(
+                        handle,
+                        correlationId,
+                        requestType,
+                        args != null ? args : EMPTY_2D_BYTE_ARRAY,
+                        hasRoute,
+                        routeType,
+                        routeParam,
+                        expectUtf8Response,
+                        spanPtr);
+            } else {
+                GlideNativeBridge.executeCommandAsyncPacked(
+                        handle,
+                        correlationId,
+                        requestType,
+                        packedArgs,
+                        hasRoute,
+                        routeType,
+                        routeParam,
+                        expectUtf8Response,
+                        spanPtr);
+            }
 
             return future;
 
@@ -460,6 +830,11 @@ public class GlideCoreClient implements AutoCloseable {
     public boolean isConnected() {
         long handle = nativeClientHandle.get();
         return handle != 0 && GlideNativeBridge.isConnected(handle);
+    }
+
+    /** Check the local lifecycle state without crossing JNI. */
+    public boolean isClosed() {
+        return nativeClientHandle.get() == 0;
     }
 
     /** Get client information for debugging and monitoring. */

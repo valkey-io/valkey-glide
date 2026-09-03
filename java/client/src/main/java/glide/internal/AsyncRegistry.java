@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 
 /**
  * Async registry for correlating native callbacks with Java {@link CompletableFuture}s.
@@ -34,6 +35,161 @@ import java.util.concurrent.atomic.AtomicLong;
  * the Rust core.
  */
 public final class AsyncRegistry {
+
+    /**
+     * Internal future whose registry cleanup runs from the winning completion without allocating a
+     * dependent {@link CompletableFuture} stage.
+     *
+     * <p>Registration and completion may race, so cleanup metadata is installed independently from
+     * completion. Whichever happens second performs cleanup exactly once.
+     */
+    private static class ManagedFuture<T> extends CompletableFuture<T> {
+        private long correlationId;
+        private int maxInflightRequests;
+        private long clientHandle;
+        private boolean cleanupInstalled;
+        private boolean cleaned;
+
+        synchronized void installCleanup(
+                long correlationId, int maxInflightRequests, long clientHandle) {
+            this.correlationId = correlationId;
+            this.maxInflightRequests = maxInflightRequests;
+            this.clientHandle = clientHandle;
+            cleanupInstalled = true;
+            if (isDone()) {
+                runCleanup();
+            }
+        }
+
+        private void runCleanup() {
+            long id;
+            int inflightLimit;
+            long handle;
+            synchronized (this) {
+                if (!cleanupInstalled || cleaned) {
+                    return;
+                }
+                cleaned = true;
+                id = correlationId;
+                inflightLimit = maxInflightRequests;
+                handle = clientHandle;
+            }
+            cleanup(id, inflightLimit, handle);
+        }
+
+        @Override
+        public boolean complete(T value) {
+            boolean completed = super.complete(value);
+            if (completed) {
+                runCleanup();
+            }
+            return completed;
+        }
+
+        @Override
+        public boolean completeExceptionally(Throwable error) {
+            boolean completed = super.completeExceptionally(error);
+            if (completed) {
+                runCleanup();
+            }
+            return completed;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            boolean cancelled = super.cancel(mayInterruptIfRunning);
+            if (cancelled) {
+                runCleanup();
+            }
+            return cancelled;
+        }
+
+        @Override
+        public void obtrudeValue(T value) {
+            super.obtrudeValue(value);
+            runCleanup();
+        }
+
+        @Override
+        public void obtrudeException(Throwable error) {
+            super.obtrudeException(error);
+            runCleanup();
+        }
+    }
+
+    /**
+     * Internal MGET future that converts the native value only after winning raw completion.
+     *
+     * <p>The decoder runs directly in the winning completion call rather than as a dependent stage.
+     * This guarantees the JNI callback cannot return while another thread is still consuming its
+     * native {@code DirectByteBuffer}. The separate result future preserves public cancellation:
+     * cancelling it never cancels or exposes the registry-owned raw future.
+     */
+    private static final class MgetManagedFuture<T> extends ManagedFuture<Object> {
+        private final CompletableFuture<T> resultFuture = new CompletableFuture<>();
+        private final BiFunction<Object, Throwable, ? extends T> completionHandler;
+
+        private MgetManagedFuture(BiFunction<Object, Throwable, ? extends T> completionHandler) {
+            this.completionHandler = completionHandler;
+        }
+
+        @Override
+        public boolean complete(Object value) {
+            boolean completed = super.complete(value);
+            if (completed) {
+                completeResult(value, null);
+            }
+            return completed;
+        }
+
+        @Override
+        public boolean completeExceptionally(Throwable error) {
+            boolean completed = super.completeExceptionally(error);
+            if (completed) {
+                completeResult(null, error);
+            }
+            return completed;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            boolean cancelled = super.cancel(mayInterruptIfRunning);
+            if (cancelled) {
+                resultFuture.cancel(mayInterruptIfRunning);
+            }
+            return cancelled;
+        }
+
+        private void completeResult(Object value, Throwable error) {
+            if (resultFuture.isCancelled()) {
+                return;
+            }
+            try {
+                resultFuture.complete(completionHandler.apply(value, error));
+            } catch (Throwable completionError) {
+                resultFuture.completeExceptionally(completionError);
+            }
+        }
+    }
+
+    /** Registry-owned raw future and the distinct future returned to the MGET caller. */
+    static final class MgetFuturePair<T> {
+        private final CompletableFuture<Object> rawFuture;
+        private final CompletableFuture<T> resultFuture;
+
+        private MgetFuturePair(MgetManagedFuture<T> rawFuture) {
+            this.rawFuture = rawFuture;
+            this.resultFuture = rawFuture.resultFuture;
+        }
+
+        CompletableFuture<Object> rawFuture() {
+            return rawFuture;
+        }
+
+        CompletableFuture<T> resultFuture() {
+            return resultFuture;
+        }
+    }
 
     /** Rate-limit interval for timeout/disconnect log messages (in nanoseconds) */
     private static final long LOG_RATE_LIMIT_NS = 5_000_000_000L; // 5 seconds
@@ -117,6 +273,20 @@ public final class AsyncRegistry {
      */
     static void handleJvmShutdown() {
         // Intentionally a no-op: keep the client usable for concurrent user shutdown hooks.
+    }
+
+    /** Create an internal future that does not need a dependent cleanup stage. */
+    static <T> CompletableFuture<T> newManagedFuture() {
+        return new ManagedFuture<>();
+    }
+
+    /** Create an MGET completion pair without allocating a dependent CompletableFuture stage. */
+    static <T> MgetFuturePair<T> newMgetFutures(
+            BiFunction<Object, Throwable, ? extends T> completionHandler) {
+        if (completionHandler == null) {
+            throw new IllegalArgumentException("Completion handler cannot be null");
+        }
+        return new MgetFuturePair<>(new MgetManagedFuture<>(completionHandler));
     }
 
     /** Estimate initial capacity for the active futures map using inflight limit with margin. */
@@ -253,24 +423,33 @@ public final class AsyncRegistry {
             CompletableFuture<Object> future,
             int maxInflightRequests,
             long clientHandle) {
+        if (future instanceof ManagedFuture) {
+            ((ManagedFuture<?>) future).installCleanup(correlationId, maxInflightRequests, clientHandle);
+            return;
+        }
+
         future.whenComplete(
                 (result, error) -> {
-                    // Atomic cleanup - no race conditions
-                    activeFutures.remove(correlationId);
-                    registrationTimestamps.remove(correlationId);
-
-                    // Cancel the timeout task if it hasn't fired yet
-                    // Using cancel(false) to avoid interrupting the scheduler thread
-                    ScheduledFuture<?> timeoutTask = timeoutTasks.remove(correlationId);
-                    if (timeoutTask != null) {
-                        timeoutTask.cancel(false);
-                    }
-
-                    // Decrement per-client counter if applicable
-                    if (maxInflightRequests > 0) {
-                        decrementInflightCount(clientHandle);
-                    }
+                    cleanup(correlationId, maxInflightRequests, clientHandle);
                 });
+    }
+
+    private static void cleanup(long correlationId, int maxInflightRequests, long clientHandle) {
+        // Atomic cleanup - no race conditions
+        activeFutures.remove(correlationId);
+        registrationTimestamps.remove(correlationId);
+
+        // Cancel the timeout task if it hasn't fired yet
+        // Using cancel(false) to avoid interrupting the scheduler thread
+        ScheduledFuture<?> timeoutTask = timeoutTasks.remove(correlationId);
+        if (timeoutTask != null) {
+            timeoutTask.cancel(false);
+        }
+
+        // Decrement per-client counter if applicable
+        if (maxInflightRequests > 0) {
+            decrementInflightCount(clientHandle);
+        }
     }
 
     /** Decrement inflight count for client, removing the entry when it reaches zero. */

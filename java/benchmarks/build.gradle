@@ -42,6 +42,12 @@ dependencies {
     jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
+tasks.register('loopbackServerRegressionTest', JavaExec) {
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'glide.benchmarks.MgetLoopbackServerRegressionTest'
+    dependsOn jmhClasses
+}
+
 jmh {
     warmupIterations = 5
     iterations = 10
@@ -50,8 +56,8 @@ jmh {
     timeUnit = 'ns'
     profilers = ['gc']
     resultFormat = 'JSON'
-    resultsFile = project.file("${project.buildDir}/reports/jmh/results.json")
-    includes = ['ArrayTransformBenchmark']
+    resultsFile = project.file(findProperty('jmhResultsFile') ?: "${project.buildDir}/reports/jmh/results.json")
+    includes = (findProperty('jmhIncludes') ?: 'ArrayTransformBenchmark').split(',').toList()
 }
 
 if (!System.getenv("GLIDE_RELEASE_VERSION")) {
