@@ -14,7 +14,7 @@ use crate::compression::CompressionBackendType;
 use crate::compression::CompressionConfig;
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
-use crate::iam::CredentialsProviderFn;
+use crate::iam::CredentialsProvider;
 use crate::iam::ServiceType;
 #[cfg(feature = "proto")]
 #[allow(unused_imports)]
@@ -146,7 +146,7 @@ pub struct IamAuthenticationConfig {
     /// When `Some`, this closure is invoked to retrieve AWS credentials
     /// `(access_key_id, secret_access_key, session_token)` for SigV4 token signing
     /// instead of the default AWS credential chain.
-    pub credentials_provider: Option<CredentialsProviderFn>,
+    pub credentials_provider: Option<CredentialsProvider>,
 }
 
 impl PartialEq for IamAuthenticationConfig {

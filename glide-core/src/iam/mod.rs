@@ -32,9 +32,9 @@ const TOKEN_GEN_INITIAL_BACKOFF_MS: u64 = 100;
 /// Safety cap so we never sleep unreasonably long between attempts
 const TOKEN_GEN_MAX_BACKOFF_MS: u64 = 3_000;
 
-/// Type alias for the custom credentials callback function.
+/// Callback type for supplying custom AWS credentials to IAM token signing.
 /// Returns `(access_key_id, secret_access_key, session_token, expires_at)` or an error.
-pub(crate) type CredentialsProviderFn = Arc<
+pub type CredentialsProvider = Arc<
     dyn Fn() -> Result<
             (
                 String,
@@ -189,7 +189,7 @@ pub(crate) struct IamTokenState {
     /// `(access_key_id, secret_access_key, session_token)` instead of using the
     /// default AWS credential chain. The callback must be `Send + Sync` so that
     /// it can be called from the async background refresh task.
-    pub(crate) credentials_provider: Option<CredentialsProviderFn>,
+    pub(crate) credentials_provider: Option<CredentialsProvider>,
 }
 
 impl std::fmt::Debug for IamTokenState {
@@ -269,7 +269,7 @@ impl IAMTokenManager {
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
-        credentials_provider: Option<CredentialsProviderFn>,
+        credentials_provider: Option<CredentialsProvider>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
 
@@ -1221,7 +1221,7 @@ mod tests {
     async fn test_iam_token_manager_with_custom_callback() {
         initialize_test_environment();
 
-        let callback: CredentialsProviderFn = Arc::new(|| {
+        let callback: CredentialsProvider = Arc::new(|| {
             Ok((
                 "test_access_key".to_string(),
                 "test_secret_key".to_string(),
@@ -1275,7 +1275,7 @@ mod tests {
     async fn test_iam_token_manager_callback_error_propagates() {
         initialize_test_environment();
 
-        let callback: CredentialsProviderFn = Arc::new(|| {
+        let callback: CredentialsProvider = Arc::new(|| {
             Err(GlideIAMError::CredentialsError(
                 "injected credential failure".to_string(),
             ))
@@ -1358,7 +1358,7 @@ mod tests {
         let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let call_count_clone = Arc::clone(&call_count);
 
-        let callback: CredentialsProviderFn = Arc::new(move || {
+        let callback: CredentialsProvider = Arc::new(move || {
             call_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok((
                 "test_access_key".to_string(),
@@ -1403,7 +1403,7 @@ mod tests {
         let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let call_count_clone = Arc::clone(&call_count);
 
-        let callback: CredentialsProviderFn = Arc::new(move || {
+        let callback: CredentialsProvider = Arc::new(move || {
             call_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok((
                 "test_access_key".to_string(),

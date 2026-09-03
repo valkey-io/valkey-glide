@@ -322,27 +322,13 @@ impl From<IamCallbackError> for glide_core::iam::GlideIAMError {
     }
 }
 
-// ─── Public types ────────────────────────────────────────────────────────────
-
-/// Shared callback type used by `IAMTokenManager`.
-pub type IamCredentialsFn = Arc<
-    dyn Fn() -> Result<
-            (
-                String,
-                String,
-                Option<String>,
-                Option<std::time::SystemTime>,
-            ),
-            glide_core::iam::GlideIAMError,
-        > + Send
-        + Sync,
->;
-
 // ─── Public factory ──────────────────────────────────────────────────────────
 
 /// Wrap a `JavaIamTokenCallback` in an `Arc<dyn Fn>` suitable for passing to
 /// `IAMTokenManager::new`.
-pub fn make_iam_provider_callback(callback: JavaIamTokenCallback) -> IamCredentialsFn {
+pub fn make_iam_provider_callback(
+    callback: JavaIamTokenCallback,
+) -> glide_core::iam::CredentialsProvider {
     Arc::new(move || {
         callback
             .try_get_credentials()
