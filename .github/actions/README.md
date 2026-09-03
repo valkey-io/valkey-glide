@@ -145,7 +145,7 @@ Starts standalone and cluster Valkey servers with modules (Search, JSON, Bloom, 
 
 #### Behavior
 
-- Pulls `valkey/valkey-bundle:9.1` Docker image
+- Pulls `valkey/valkey-bundle:9.1.3` Docker image
 - Starts a standalone Valkey server with modules on the configured port
 - Starts a 6-node Valkey cluster (3 primaries, 3 replicas) on consecutive ports
 - Waits for all servers to be ready (PING returns PONG)
