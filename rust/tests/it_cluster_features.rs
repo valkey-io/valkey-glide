@@ -155,6 +155,10 @@ timed_tokio_test!(
             }
         };
         let publisher = cluster_client!(cluster);
+
+        // Sharded pub/sub is Valkey 7.0+
+        skip_if_version_below!(publisher, 7, 0, 0);
+
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
                 .enable_pubsub(),
