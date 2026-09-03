@@ -67,7 +67,7 @@ jobs:
               shell: bash
               run: |
                   cd glide-core
-                  cargo build --release
+                  cargo build --locked --release
 
             # Go Build
             - name: Install protoc-gen-go
