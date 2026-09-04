@@ -107,7 +107,7 @@ function runRustBenchmark(){
     rustConcurrentTasks=$rustConcurrentTasks" --concurrentTasks "$value
   done
   cd ${BENCH_FOLDER}/rust
-  cargo run --release -- --resultsFile=../$1 --dataSize $2 $rustConcurrentTasks --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
+  cargo run --locked --release -- --resultsFile=../$1 --dataSize $2 $rustConcurrentTasks --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
 }
 
 function flushDB() {

@@ -243,7 +243,7 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
         dest = None
 
     if needs_build:
-        ffi_build_cmd = ["cargo", "build"]
+        ffi_build_cmd = ["cargo", "build", "--locked"]
         if release:
             ffi_build_cmd += ["--release"]
         run_command(
@@ -412,7 +412,7 @@ def build_sync_client(
         }
     )
     # Build the FFI library
-    build_args = ["cargo", "build"]
+    build_args = ["cargo", "build", "--locked"]
     if release:
         build_args += ["--release"]
 
