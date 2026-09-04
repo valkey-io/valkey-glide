@@ -282,7 +282,10 @@ matrix_test!(hgetex, c, {
     assert!((1..=100).contains(&ttl));
 
     // HGETEX with PX.
-    let vals = c.hgetex(&k, &["f"], Some(Expiry::PX(100_000))).await.unwrap();
+    let vals = c
+        .hgetex(&k, &["f"], Some(Expiry::PX(100_000)))
+        .await
+        .unwrap();
     assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
     let pttl = c.hpttl(&k, &["f"]).await.unwrap()[0];
     assert!((1..=100_000).contains(&pttl));
@@ -385,7 +388,12 @@ matrix_test!(hsetex, c, {
 
     // HSETEX with EXAT.
     let res = c
-        .hsetex(&k, &[("f", "v5")], None, Some(SetExpiry::EXAT(FUTURE_EXPIRY_SECS)))
+        .hsetex(
+            &k,
+            &[("f", "v5")],
+            None,
+            Some(SetExpiry::EXAT(FUTURE_EXPIRY_SECS)),
+        )
         .await
         .unwrap();
     assert_eq!(res, 1);
@@ -394,7 +402,12 @@ matrix_test!(hsetex, c, {
 
     // HSETEX with PXAT.
     let res = c
-        .hsetex(&k, &[("f", "v6")], None, Some(SetExpiry::PXAT(FUTURE_EXPIRY_MS)))
+        .hsetex(
+            &k,
+            &[("f", "v6")],
+            None,
+            Some(SetExpiry::PXAT(FUTURE_EXPIRY_MS)),
+        )
         .await
         .unwrap();
     assert_eq!(res, 1);
