@@ -1,13 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Hash commands. Mirrors Python's hash command surface.
 
-use crate::commands::options::{ExpireOptions, ExpirySet, HashFieldConditionalChange};
+use crate::commands::options::{ExpireOptions, HashFieldConditionalChange};
 use crate::error::Result;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
+use redis::{Cmd, Expiry, SetExpiry, ToRedisArgs};
 
 /// Hash commands (`HSET`, `HGET`, `HGETALL`, `HDEL`, ...).
 #[async_trait]
@@ -219,21 +219,18 @@ pub trait HashCommands: CommandExecutor {
         collect_i64(self.execute_command(cmd, None).await?)
     }
 
-    // TODO #6934: hgetex and hsetex share ExpirySet, which allows options each
-    // command rejects at runtime (HGETEX + KEEPTTL, HSETEX + PERSIST). Split
-    // into distinct expiry types so invalid combinations are unrepresentable.
     /// Get the values of hash fields, optionally changing their expiry
     /// (`HGETEX`).
     async fn hgetex<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
-        expiry: Option<ExpirySet>,
+        expiry: Option<Expiry>,
     ) -> Result<Vec<Option<Bytes>>> {
         let mut cmd = Cmd::new();
         cmd.arg("HGETEX").arg(key);
         if let Some(e) = expiry {
-            e.add_to(&mut cmd);
+            cmd.arg(e);
         }
         cmd.arg("FIELDS").arg(fields.len());
         for f in fields {
@@ -253,7 +250,7 @@ pub trait HashCommands: CommandExecutor {
         key: K,
         field_values: &[(F, V)],
         condition: Option<HashFieldConditionalChange>,
-        expiry: Option<ExpirySet>,
+        expiry: Option<SetExpiry>,
     ) -> Result<i64>
     where
         K: ToRedisArgs + Send + Sync,
@@ -266,7 +263,7 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(c.as_arg());
         }
         if let Some(e) = expiry {
-            e.add_to(&mut cmd);
+            cmd.arg(e);
         }
         cmd.arg("FIELDS").arg(field_values.len());
         for (f, v) in field_values {

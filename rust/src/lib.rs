@@ -38,7 +38,7 @@ pub use commands::prelude::*;
 
 /// All shared option types.
 pub use commands::options::{
-    ClientPauseMode, ConditionalChange, ExpireOptions, ExpirySet, FlushMode, FunctionRestorePolicy,
+    ClientPauseMode, ConditionalChange, ExpireOptions, FlushMode, FunctionRestorePolicy,
     HashFieldConditionalChange, Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions,
 };
 
