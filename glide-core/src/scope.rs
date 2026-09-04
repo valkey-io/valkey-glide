@@ -201,8 +201,11 @@ pub async fn execute_scope_command(
 
     // Presume a blocking command's connection unsafe until we know the outcome;
     // set before dispatch so a mid-flight cancellation (future dropped) leaves it
-    // poisoned and release discards it.
+    // poisoned and release discards it. Remember whether a *previous* command on
+    // this scope already poisoned the connection, so a later command that
+    // completes cleanly can't clear that earlier poison.
     let is_blocking = crate::client::is_blocking_command(&cmd);
+    let already_poisoned = conn.state.blocking_in_flight;
     if is_blocking {
         conn.state.blocking_in_flight = true;
     }
@@ -216,13 +219,18 @@ pub async fn execute_scope_command(
         None => conn.connection.send_packed_command(&cmd).await,
     };
 
-    // Only a timeout or IO error can leave a server-side waiter armed on the
-    // connection; a clean protocol error (WRONGTYPE, MOVED/ASK, NOAUTH, or a
-    // client-side rejected timeout arg) never reached that state, so the
-    // connection stays reusable. Keep the flag set only for the poisoning cases.
+    // A timeout, IO error, dropped connection, or protocol desync can leave a
+    // server-side waiter armed on the connection (or the connection itself in an
+    // unknown state after a failover/CLIENT KILL/restart); a clean protocol error
+    // (WRONGTYPE, MOVED/ASK, NOAUTH, or a client-side rejected timeout arg) never
+    // reached that state, so the connection stays reusable. Keep the flag set only
+    // for the poisoning cases — and never clear a poison a prior command left behind.
     if is_blocking {
-        let poisoned = matches!(&result, Err(e) if e.is_timeout() || e.is_io_error());
-        conn.state.blocking_in_flight = poisoned;
+        let poisoned = matches!(&result, Err(e) if e.is_timeout()
+            || e.is_io_error()
+            || e.is_connection_dropped()
+            || e.kind() == redis::ErrorKind::ProtocolDesync);
+        conn.state.blocking_in_flight = already_poisoned || poisoned;
     }
 
     result
