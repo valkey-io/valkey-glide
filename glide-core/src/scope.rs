@@ -482,18 +482,30 @@ pub fn try_acquire_scope(
     runtime: &tokio::runtime::Handle,
     routing_slot: u16,
 ) -> i64 {
-    // Fast path: check if scope pool exists before cloning bytes
-    let scope_pool = {
+    // Fast path: reuse the existing pool if present; otherwise create it with
+    // these bytes. When the pool already exists we keep the passed bytes so a
+    // rotated credential can refresh the pool's cached request below.
+    let (scope_pool, pool_existed) = {
         let pools = crate::pool::get_client_scope_pools();
         match pools.get(&client_id) {
-            Some(existing) => existing.value().clone(),
-            None => crate::pool::get_or_create_scope_pool(client_id, connection_request_bytes),
+            Some(existing) => (existing.value().clone(), true),
+            None => (
+                crate::pool::get_or_create_scope_pool(client_id, connection_request_bytes.clone()),
+                false,
+            ),
         }
     };
     let registry = get_scope_registry();
 
     match scope_pool.try_lock() {
         Ok(mut pool) => {
+            // A client that rotated credentials passes newer request bytes than
+            // the pool cached at init. Refresh the pool's stored request and
+            // drop idle connections holding the old credential so connections
+            // created after rotation authenticate with the new one.
+            if pool_existed && pool.connection_request_bytes != connection_request_bytes {
+                pool.refresh_connection_request(connection_request_bytes);
+            }
             let result = pool.try_acquire(registry, routing_slot);
             if result >= 0 {
                 let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
@@ -665,6 +677,40 @@ mod tests {
             shutdown_receiver.recv().expect("receive server shutdown");
         });
         (port, shutdown_sender, server)
+    }
+
+    fn request_bytes_with_auth(port: u16, password: &str, database_id: u32) -> Vec<u8> {
+        use crate::connection_request::AuthenticationInfo;
+        use protobuf::MessageField;
+
+        let mut request = ConnectionRequest::new();
+        request.addresses.push(NodeAddress {
+            host: "127.0.0.1".into(),
+            port: port.into(),
+            ..Default::default()
+        });
+        request.database_id = database_id;
+        request.authentication_info = MessageField::some(AuthenticationInfo {
+            password: password.into(),
+            ..Default::default()
+        });
+        request.write_to_bytes().expect("serialize scope request")
+    }
+
+    #[test]
+    fn refresh_connection_request_swaps_cached_request() {
+        // A credential rotation must replace the pool's cached request so new
+        // scope connections authenticate with the new password and database.
+        let original = request_bytes_with_auth(6379, "old", 0);
+        let rotated = request_bytes_with_auth(6379, "new", 2);
+        let mut pool = ScopePool::new(ScopePoolConfig::default(), original.clone(), 1);
+        assert_eq!(pool.configured_database_id, 0);
+
+        pool.refresh_connection_request(rotated.clone());
+
+        assert_eq!(pool.connection_request_bytes, rotated);
+        assert_ne!(pool.connection_request_bytes, original);
+        assert_eq!(pool.configured_database_id, 2);
     }
 
     #[tokio::test]

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
-import { GlideClient, IsolatedScope } from "..";
+import { ClientPool, ClosingError, GlideClient, IsolatedScope } from "..";
 import { GlideClientConfiguration } from "..";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
@@ -361,6 +361,305 @@ describe("IsolatedScope", () => {
             scope.release();
             db0Client.close();
             db2Client.close();
+        },
+        TIMEOUT,
+    );
+
+    // ─── Public acquisition API (issue #6962) ─────────────────────────────────
+    //
+    // A scope must be openable through the public API alone: no caller should
+    // have to build connection-request bytes from a non-exported protobuf.
+
+    it(
+        "scopedConnection() opens a scope without bytes",
+        async () => {
+            const scope = await client.scopedConnection();
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("scoped-conn");
+                await scope.set(key, "value");
+                expect(await scope.get(key)).toBe("value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+
+            expect(scope.isReleased).toBe(true);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() accepts a routing key",
+        async () => {
+            // Write and read back through the same routing key so a cluster run
+            // catches a scope connected to the wrong node; PING alone would not.
+            const key = makeKey("route");
+            const scope = await client.scopedConnection(key);
+
+            try {
+                await scope.set(key, "routed-value");
+                expect(await scope.get(key)).toBe("routed-value");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() on a closed client rejects with ClosingError",
+        async () => {
+            const closedClient = await GlideClient.createClient(config);
+            closedClient.close();
+
+            const attempt = closedClient.scopedConnection();
+            await expect(attempt).rejects.toBeInstanceOf(ClosingError);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "cached connection-request bytes cannot be reached from the client",
+        async () => {
+            // The bytes carry the connection's password or mTLS key. Prove a
+            // caller holding the client cannot recover them through any own or
+            // inherited, string- or symbol-keyed path, the way the earlier
+            // exported-symbol accessor allowed.
+            const probeClient = await GlideClient.createClient(config);
+
+            try {
+                // Internal code can still open a scope, so the bytes remain
+                // reachable where they should be.
+                const scope = await probeClient.scopedConnection();
+
+                try {
+                    expect(await scope.ping()).toBe("PONG");
+                } finally {
+                    scope.release();
+                }
+
+                // A reachable Uint8Array leaks the request only if it decodes to
+                // a ConnectionRequest carrying this cluster's addresses.
+                const leaksRequest = (value: unknown): boolean => {
+                    if (!(value instanceof Uint8Array)) return false;
+
+                    try {
+                        const req =
+                            connection_request.ConnectionRequest.decode(value);
+                        return (req.addresses?.length ?? 0) > 0;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                // Walk the whole prototype chain plus the instance, reading
+                // every property and invoking symbol-keyed accessors (the covert
+                // channel the exploit used). String-named methods are the
+                // documented public API and are only read, not called.
+                let target: object | null = probeClient;
+                const seen = new Set<object>();
+
+                while (
+                    target &&
+                    target !== Object.prototype &&
+                    !seen.has(target)
+                ) {
+                    seen.add(target);
+
+                    const keys: (string | symbol)[] = [
+                        ...Object.getOwnPropertyNames(target),
+                        ...Object.getOwnPropertySymbols(target),
+                    ];
+
+                    for (const key of keys) {
+                        const isSymbol = typeof key === "symbol";
+
+                        if (isSymbol) {
+                            // The removed accessor keyed a method by this symbol.
+                            expect(key.toString()).not.toContain(
+                                "connectionRequestBytes",
+                            );
+                        }
+
+                        let value: unknown;
+
+                        try {
+                            value = Reflect.get(target, key);
+                        } catch {
+                            continue;
+                        }
+
+                        expect(leaksRequest(value)).toBe(false);
+
+                        if (isSymbol && typeof value === "function") {
+                            let returned: unknown;
+
+                            try {
+                                returned = (value as () => unknown).call(
+                                    probeClient,
+                                );
+                            } catch {
+                                returned = undefined;
+                            }
+
+                            expect(leaksRequest(returned)).toBe(false);
+                        }
+                    }
+
+                    target = Object.getPrototypeOf(target);
+                }
+            } finally {
+                probeClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "a scope created after a password rotation authenticates with the new credential",
+        async () => {
+            const rotatingClient = await GlideClient.createClient(config);
+            const suffix = Math.random().toString(36).slice(2, 10);
+            const newPassword = `rotated-${suffix}`;
+
+            const resetServerPassword = async () => {
+                try {
+                    await client.configSet({ requirepass: "" });
+                } catch {
+                    try {
+                        await client.customCommand(["AUTH", newPassword]);
+                        await client.configSet({ requirepass: "" });
+                    } catch {
+                        // Best effort: leave the server as-is on failure.
+                    }
+                }
+            };
+
+            let held: IsolatedScope | undefined;
+
+            try {
+                // Initialize the pool while the server has no password, and hold
+                // the scope so a later acquire must create a fresh connection
+                // rather than reuse this one.
+                held = await rotatingClient.scopedConnection();
+                expect(await held.ping()).toBe("PONG");
+
+                // Require a password on the server. Connections created from now
+                // on must AUTH.
+                expect(
+                    await rotatingClient.configSet({
+                        requirepass: newPassword,
+                    }),
+                ).toBe("OK");
+
+                // Before rotating the client's credential, a newly created scope
+                // connection still carries the old (empty) credential and cannot
+                // authenticate.
+                const staleScope = await rotatingClient.scopedConnection();
+
+                try {
+                    await expect(staleScope.ping()).rejects.toThrow(
+                        /NOAUTH|Authentication/i,
+                    );
+                } finally {
+                    staleScope.release();
+                }
+
+                // Rotate the client's credential. The next acquire must rebuild
+                // the pool's request and drop the stale idle connections.
+                expect(
+                    await rotatingClient.updateConnectionPassword(
+                        newPassword,
+                        true,
+                    ),
+                ).toBe("OK");
+
+                // A scope created after rotation authenticates with the new
+                // credential and runs commands.
+                const freshScope = await rotatingClient.scopedConnection();
+
+                try {
+                    expect(await freshScope.ping()).toBe("PONG");
+                    const key = makeKey("rotated");
+                    await freshScope.set(key, "authenticated");
+                    expect(await freshScope.get(key)).toBe("authenticated");
+                    await freshScope.del(key);
+                } finally {
+                    freshScope.release();
+                }
+            } finally {
+                held?.release();
+                await resetServerPassword();
+                rotatingClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "acquire(client) one-argument form derives the connection request",
+        async () => {
+            const scope = await IsolatedScope.acquire(client);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+                const key = makeKey("one-arg");
+                await scope.set(key, "derived");
+                expect(await scope.get(key)).toBe("derived");
+                await scope.del(key);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "explicit connectionRequestBytes still work (additive)",
+        async () => {
+            const scope = await IsolatedScope.acquire(client, connReqBytes);
+
+            try {
+                expect(await scope.ping()).toBe("PONG");
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "scopedConnection() works on a pool-borrowed client",
+        async () => {
+            const pool = await ClientPool.create(config, {
+                maxSize: 2,
+                minIdle: 1,
+            });
+
+            try {
+                const key = makeKey("pool-scope");
+                const result = await pool.borrow(async (borrowed) => {
+                    const scope = await borrowed.scopedConnection();
+
+                    try {
+                        await scope.watch(key);
+                        await scope.multi();
+                        await scope.set(key, "from-pool-scope");
+                        await scope.exec();
+                        return await scope.get(key);
+                    } finally {
+                        scope.release();
+                    }
+                });
+
+                expect(result).toBe("from-pool-scope");
+                await client.del([key]);
+            } finally {
+                pool.close();
+            }
         },
         TIMEOUT,
     );

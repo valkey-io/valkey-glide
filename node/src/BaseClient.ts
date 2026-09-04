@@ -297,6 +297,12 @@ import {
     response,
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
+import { IsolatedScope } from "./IsolatedScope.js";
+import {
+    clearScopeConnectionRequest,
+    refreshScopeConnectionPassword,
+    setScopeConnectionRequest,
+} from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -10057,6 +10063,12 @@ export class BaseClient {
                 ).finish(),
             );
 
+            // Keep the exact bytes used to connect so a scope can reopen an
+            // identical connection through glide-core. They stay in
+            // module-private storage, off this instance and its prototype, so
+            // the password or mTLS key they carry cannot be read back.
+            setScopeConnectionRequest(this, connectionRequestBytes);
+
             this.clientHandle = await CreateDirectClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
@@ -10110,6 +10122,50 @@ export class BaseClient {
     }
 
     /**
+     * Acquire an isolated execution scope on this client: a dedicated connection
+     * for operations that need per-connection state, such as `WATCH`/`MULTI`/`EXEC`
+     * transactions, `CLIENT TRACKING`, and blocking commands.
+     *
+     * The scope runs on its own connection through glide-core rather than the
+     * shared multiplexed one, so its state does not affect other commands on this
+     * client. This works on both a standalone client and a pool-borrowed client;
+     * the connection request captured at connect time is reused, so the caller
+     * does not have to produce any bytes.
+     *
+     * Release the scope when finished, or wrap it in a `try`/`finally`.
+     *
+     * @example
+     * ```typescript
+     * const scope = await client.scopedConnection();
+     * try {
+     *     await scope.watch("key");
+     *     const value = await scope.get("key");
+     *     await scope.multi();
+     *     await scope.set("key", String(Number(value ?? "0") + 1));
+     *     await scope.exec();
+     * } finally {
+     *     scope.release();
+     * }
+     * ```
+     *
+     * @param routingKey - In cluster mode, the key whose hash slot decides which
+     *     node the scope connects to. Every key used in the scope must hash to the
+     *     same slot. Defaults to slot 0.
+     * @param maxRetries - Maximum acquisition retries with exponential backoff
+     *     before giving up. Default: 10.
+     * @returns A new {@link IsolatedScope}.
+     */
+    public async scopedConnection(
+        routingKey?: string,
+        maxRetries = 10,
+    ): Promise<IsolatedScope> {
+        // Reject on a closed client with ClosingError, like every command path,
+        // instead of the generic handle error the scope loop would raise.
+        this.ensureClientIsOpen();
+        return IsolatedScope.acquire(this, routingKey, maxRetries);
+    }
+
+    /**
      *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
@@ -10124,6 +10180,10 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Drop the cached connection request so its credentials do not outlive
+        // the client.
+        clearScopeConnectionRequest(this);
 
         // Clean up address resolver from the global registry
         if (this.addressResolverKey) {
@@ -10228,14 +10288,22 @@ export class BaseClient {
             updateConnectionPassword,
         );
 
-        if (response === "OK" && !this.config?.credentials) {
-            this.config = {
-                ...this.config!,
-                credentials: {
-                    ...this.config!.credentials,
-                    password: password ? password : "",
-                },
-            };
+        if (response === "OK") {
+            // Refresh the cached request so a later scope authenticates with
+            // the new credential rather than the stale one. glide-core picks
+            // up the new bytes on the next acquire and rebuilds scope
+            // connections with the new credential.
+            refreshScopeConnectionPassword(this, password);
+
+            if (!this.config?.credentials) {
+                this.config = {
+                    ...this.config!,
+                    credentials: {
+                        ...this.config!.credentials,
+                        password: password ? password : "",
+                    },
+                };
+            }
         }
 
         return response;
