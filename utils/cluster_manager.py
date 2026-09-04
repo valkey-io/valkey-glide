@@ -441,8 +441,12 @@ def start_server(
         "",
     ]
 
-    # Bind server to both IPv4 and IPv6 loopback addresses.
-    cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
+    # Bind server to the specified host. If host is not localhost, bind to both
+    # the private IP and loopback so local and remote clients can connect.
+    if host not in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+        cmd_args.extend(["--bind", host, DEFAULT_HOST_IPV4])
+    else:
+        cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
 
     # If host is a DNS hostname, set cluster-announce-hostname so
     # the cluster topology reports DNS names instead of IP addresses.
@@ -1560,8 +1564,15 @@ def main():
             ]
             if args.cluster_mode:
                 cmd_parts.append("--cluster-mode")
+            # Use fixed ports for remote execution so firewall rules are predictable.
+            # open 7000-17010 (data ports + cluster bus ports).
             if args.ports:
                 cmd_parts += ["-p"] + [str(p) for p in args.ports]
+            else:
+                node_count = args.shard_count * (1 + args.replica_count) if args.cluster_mode else 1
+                base_port = 7000 if args.cluster_mode else 7006
+                fixed_ports = list(range(base_port, base_port + node_count))
+                cmd_parts += ["-p"] + [str(p) for p in fixed_ports]
             # First copy cluster_manager.py to the remote instance via base64
             # to avoid shell quoting issues with single quotes in f-strings
             script_path = os.path.abspath(__file__)
