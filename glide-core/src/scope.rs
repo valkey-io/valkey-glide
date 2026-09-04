@@ -199,14 +199,43 @@ pub async fn execute_scope_command(
         cmd.arg(arg.as_slice());
     }
 
+    // Presume a blocking command's connection unsafe until we know the outcome;
+    // set before dispatch so a mid-flight cancellation (future dropped) leaves it
+    // poisoned and release discards it. Remember whether a *previous* command on
+    // this scope already poisoned the connection, so a later command that
+    // completes cleanly can't clear that earlier poison.
+    let is_blocking = crate::client::is_blocking_command(&cmd);
+    let already_poisoned = conn.state.blocking_in_flight;
+    if is_blocking {
+        conn.state.blocking_in_flight = true;
+    }
+
     // Execute via Client (gets timeout, decompression, IAM refresh) or raw fallback
-    match client {
+    let result = match client {
         Some(c) => {
             c.send_command_on_connection(&cmd, &mut conn.connection)
                 .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
+    };
+
+    // A timeout, IO error, dropped connection, or protocol desync can leave a
+    // server-side waiter armed on the connection (or the connection itself in an
+    // unknown state after a failover/CLIENT KILL/restart); a clean protocol error
+    // (WRONGTYPE, MOVED/ASK, NOAUTH, or a client-side rejected timeout arg) never
+    // reached that state, so the connection stays reusable. Keep the flag set only
+    // for the poisoning cases — and never clear a poison a prior command left behind.
+    if is_blocking {
+        // `is_timeout()` is a strict subset of `is_io_error()` in redis-rs (it only
+        // checks for IO errors of kind TimedOut/WouldBlock), so it adds no coverage
+        // beyond `is_io_error()` and is omitted here.
+        let poisoned = matches!(&result, Err(e) if e.is_io_error()
+            || e.is_connection_dropped()
+            || e.kind() == redis::ErrorKind::ProtocolDesync);
+        conn.state.blocking_in_flight = already_poisoned || poisoned;
     }
+
+    result
 }
 
 /// Full-featured scope command execution with all cross-cutting concerns.
@@ -699,5 +728,55 @@ mod tests {
             shutdown_sender.send(()).expect("stop mock server");
             server.join().expect("mock server exits cleanly");
         }
+    }
+
+    /// Mirrors the poison predicate from `execute_scope_command` directly against
+    /// synthetic errors, since constructing a real `FatalReceiveError`/`FatalSendError`
+    /// (multiplexed connection driver errors) or `ProtocolDesync` requires a live
+    /// server round-trip and isn't practical to reproduce as a pure unit test here.
+    fn is_poisoning_error(e: &redis::RedisError) -> bool {
+        e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
+    }
+
+    #[test]
+    fn poison_predicate_catches_dropped_connections_and_protocol_desync() {
+        use std::io;
+
+        // A broken pipe / connection reset is an IO error AND a dropped-connection
+        // error (both is_io_error() and is_connection_dropped() are true) — the
+        // connection is dead either way.
+        let broken_pipe = redis::RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe));
+        assert!(is_poisoning_error(&broken_pipe));
+
+        // FatalSendError/FatalReceiveError are dropped-connection errors from the
+        // multiplexed connection driver but are NOT is_io_error() (they don't wrap
+        // an io::Error) — this is the case the earlier `is_io_error()`-only
+        // predicate missed.
+        let fatal_send =
+            redis::RedisError::from((redis::ErrorKind::FatalSendError, "failed to send command"));
+        assert!(fatal_send.is_connection_dropped());
+        assert!(!fatal_send.is_io_error());
+        assert!(is_poisoning_error(&fatal_send));
+
+        let fatal_receive = redis::RedisError::from((
+            redis::ErrorKind::FatalReceiveError,
+            "failed to receive response",
+        ));
+        assert!(is_poisoning_error(&fatal_receive));
+
+        // ProtocolDesync means the client and server have lost sync on the wire
+        // protocol (e.g. after a failover mid-response) — also neither an IO error
+        // nor a "dropped connection" error by redis-rs's own classification, so it
+        // must be matched explicitly.
+        let protocol_desync =
+            redis::RedisError::from((redis::ErrorKind::ProtocolDesync, "protocol desync"));
+        assert!(!protocol_desync.is_io_error());
+        assert!(!protocol_desync.is_connection_dropped());
+        assert!(is_poisoning_error(&protocol_desync));
+
+        // A clean protocol-level error (e.g. WRONGTYPE) never leaves the
+        // connection in a bad state and must not be treated as poisoning.
+        let wrong_type = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE"));
+        assert!(!is_poisoning_error(&wrong_type));
     }
 }

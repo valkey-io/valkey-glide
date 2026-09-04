@@ -643,6 +643,11 @@ pub struct ConnectionState {
     pub db_selected: u8,
     pub client_name_changed: bool,
     pub subscriptions: Vec<ScopeSubscription>,
+    /// Set while a blocking command is in flight; kept set only when it ends in a
+    /// timeout or IO error (or is cancelled mid-flight), the cases that can leave a
+    /// server-side waiter armed. A still-set connection is discarded on release;
+    /// clean protocol errors clear it so the connection is reused.
+    pub blocking_in_flight: bool,
 }
 
 impl ConnectionState {
@@ -663,6 +668,7 @@ impl ConnectionState {
             && self.db_selected == configured_db
             && !self.client_name_changed
             && self.subscriptions.is_empty()
+            && !self.blocking_in_flight
     }
 
     /// Legacy check — clean means no state mutations at all (db must be 0).
@@ -902,6 +908,14 @@ impl ScopePool {
                     drop(conn);
                     self.idle.push_back(idle_conn);
                 } else {
+                    // A blocking command left the connection unrecoverable (armed
+                    // waiter); no cleanup command fixes that, so discard rather than
+                    // return to idle.
+                    if conn.state.blocking_in_flight {
+                        drop(conn);
+                        self.total_count.fetch_sub(1, Ordering::AcqRel);
+                        return true;
+                    }
                     // Dirty state — pipeline all cleanup commands in a single round-trip.
                     // If any command fails or the pipeline times out, discard the connection.
                     let conn_arc = entry.connection.clone();
@@ -1039,37 +1053,24 @@ impl ScopePool {
                 true
             }
             Err(_) => {
-                // Connection is locked (execute still running) — spawn async release.
-                // This shouldn't happen in normal operation (release is called after
-                // execute completes), but handle gracefully rather than discarding.
+                // A command still holds the connection lock at release time (any
+                // in-flight command, though almost always a blocking one whose binding
+                // was cancelled). Discard rather than reuse: the connection may have an
+                // armed server-side waiter, and re-checking state after the command
+                // finishes would race a late push that clears it and makes the
+                // connection look reusable after the push was already consumed.
+                //
+                // Reclaim the slot synchronously — we hold the pool lock and checked
+                // POOL_RUNNING above. It can't be deferred: for an unbounded blocking
+                // command (BLPOP key 0) the lock may never free, so a decrement gated
+                // on it would leak the slot.
+                self.total_count.fetch_sub(1, Ordering::AcqRel);
                 let conn_arc = entry.connection.clone();
-                let pool_arc = {
-                    let pools = get_client_scope_pools();
-                    pools.get(&self.parent_client_id).map(|p| p.value().clone())
-                };
-
                 tokio::spawn(async move {
+                    // Best-effort: drop the connection once the command frees the lock
+                    // (accounting already done above). Parks harmlessly if it never does.
                     let conn = conn_arc.lock().await;
-                    let idle_conn = ScopedConnection {
-                        scope_id: conn.scope_id,
-                        connection: conn.connection.clone(),
-                        created_at: conn.created_at,
-                        last_idle_at: Instant::now(),
-                        borrowed_at: None,
-                        state: ConnectionState::default(),
-                        pinned_slot: None,
-                        target_slot: conn.target_slot,
-                    };
                     drop(conn);
-
-                    if let Some(pool_arc) = pool_arc {
-                        let mut pool = pool_arc.lock().await;
-                        if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
-                            pool.idle.push_back(idle_conn);
-                        } else {
-                            pool.total_count.fetch_sub(1, Ordering::AcqRel);
-                        }
-                    }
                 });
                 true
             }
@@ -1188,5 +1189,50 @@ pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option
             "Cross-slot error: command targets slot {} but scope is pinned to slot {}",
             first_slot, p
         )),
+    }
+}
+
+#[cfg(test)]
+mod connection_state_tests {
+    use super::ConnectionState;
+
+    const CONFIGURED_DB: u8 = 0;
+
+    #[test]
+    fn default_state_is_clean() {
+        let state = ConnectionState::default();
+        assert!(state.is_clean_for(CONFIGURED_DB));
+    }
+
+    #[test]
+    fn blocking_in_flight_marks_state_not_clean() {
+        // A connection whose blocking command has not cleanly completed must never
+        // be classified clean, so release discards it instead of returning it to
+        // idle with a possibly-armed server-side waiter.
+        let state = ConnectionState {
+            blocking_in_flight: true,
+            ..Default::default()
+        };
+        assert!(!state.is_clean_for(CONFIGURED_DB));
+    }
+
+    #[test]
+    fn blocking_in_flight_is_independent_of_other_dirty_flags() {
+        // The blocking flag taints on its own, and the other tracked mutations
+        // taint on their own — neither masks the other. A connection dirty only
+        // via db_selected (blocking flag clear) is not-clean, and a connection
+        // dirty only via the blocking flag (db at baseline) is not-clean too.
+        let db_only = ConnectionState {
+            db_selected: CONFIGURED_DB + 1,
+            blocking_in_flight: false,
+            ..Default::default()
+        };
+        assert!(!db_only.is_clean_for(CONFIGURED_DB));
+
+        let blocking_only = ConnectionState {
+            blocking_in_flight: true,
+            ..Default::default()
+        };
+        assert!(!blocking_only.is_clean_for(CONFIGURED_DB));
     }
 }

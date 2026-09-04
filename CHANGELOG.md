@@ -5,6 +5,7 @@
 ### Fixes
 
 * Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
+* Core/FFI: Scoped connections honor blocking-command timeouts (e.g. `BLPOP key 0` blocks instead of timing out at the request timeout), and a scoped connection whose blocking command timed out or was cancelled is discarded on release instead of being reused with a stale server-side waiter ([#6780](https://github.com/valkey-io/valkey-glide/issues/6780), [#6794](https://github.com/valkey-io/valkey-glide/issues/6794))
 * Java: Fix scoped connection truncating values larger than 16 KB ([#6893](https://github.com/valkey-io/valkey-glide/issues/6893))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
