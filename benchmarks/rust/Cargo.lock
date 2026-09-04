@@ -1692,6 +1692,7 @@ version = "0.1.0"
 dependencies = [
  "file-rotate",
  "once_cell",
+ "serde_json",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
