@@ -1516,6 +1516,12 @@ def main():
         default=os.environ.get("AWS_REGION", "us-east-1"),
         help="AWS region for SSM (default: us-east-1)",
     )
+    parser_stop.add_argument(
+        "--remote-ip",
+        type=str,
+        default=None,
+        help="Private IP of the remote EC2 instance (not used by stop, accepted for CLI compatibility).",
+    )
 
     # provision-ec2 parser
     parser_provision = subparsers.add_parser(
