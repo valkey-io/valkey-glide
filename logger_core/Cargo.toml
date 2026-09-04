@@ -8,7 +8,7 @@ authors = ["Valkey GLIDE Maintainers"]
 [lib]
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = "0.10.2"
 test-env-helpers = "0.2.2"
 
 [dependencies]
