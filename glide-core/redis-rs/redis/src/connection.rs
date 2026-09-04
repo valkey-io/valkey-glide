@@ -1868,7 +1868,7 @@ mod tests {
         let unknown = "UnknownClient";
 
         assert_eq!(effective_lib_name(Some(runtime), Some(compile)), runtime);
-        assert_eq!(effective_lib_name(None, Some(compile)),compile);
+        assert_eq!(effective_lib_name(None, Some(compile)), compile);
         assert_eq!(effective_lib_name(Some(""), Some(compile)), compile);
         assert_eq!(effective_lib_name(None, Some("")), unknown);
         assert_eq!(effective_lib_name(None, None), unknown);
