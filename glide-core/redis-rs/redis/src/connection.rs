@@ -1862,62 +1862,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_effective_lib_name_prefers_non_empty_runtime_name() {
-        assert_eq!(
-            effective_lib_name(Some("RuntimeClient"), Some("CompileTimeClient")),
-            "RuntimeClient"
-        );
+    fn test_effective_lib_name() {
+        let runtime = "RuntimeClient";
+        let compile = "CompileTimeClient";
+        let unknown = "UnknownClient";
+
+        assert_eq!(effective_lib_name(Some(runtime), Some(compile)), runtime);
+        assert_eq!(effective_lib_name(None, Some(compile)),compile);
+        assert_eq!(effective_lib_name(Some(""), Some(compile)), compile);
+        assert_eq!(effective_lib_name(None, Some("")), unknown);
+        assert_eq!(effective_lib_name(None, None), unknown);
     }
 
     #[test]
-    fn test_effective_lib_name_uses_compile_time_name() {
-        assert_eq!(
-            effective_lib_name(None, Some("CompileTimeClient")),
-            "CompileTimeClient"
-        );
-    }
+    fn test_effective_lib_ver() {
+        let runtime = "1.2.3";
+        let compile = "9.9.9";
+        let unknown = "unknown";
 
-    #[test]
-    fn test_effective_lib_name_uses_unknown_client_without_names() {
-        assert_eq!(effective_lib_name(None, None), "UnknownClient");
-    }
-
-    #[test]
-    fn test_effective_lib_name_treats_empty_compile_time_name_as_absent() {
-        assert_eq!(effective_lib_name(None, Some("")), "UnknownClient");
-    }
-
-    #[test]
-    fn test_effective_lib_name_treats_empty_runtime_name_as_absent() {
-        assert_eq!(
-            effective_lib_name(Some(""), Some("CompileTimeClient")),
-            "CompileTimeClient"
-        );
-    }
-
-    #[test]
-    fn test_effective_lib_ver_prefers_non_empty_runtime_ver() {
-        assert_eq!(effective_lib_ver(Some("1.2.3"), Some("9.9.9")), "1.2.3");
-    }
-
-    #[test]
-    fn test_effective_lib_ver_uses_compile_time_ver() {
-        assert_eq!(effective_lib_ver(None, Some("9.9.9")), "9.9.9");
-    }
-
-    #[test]
-    fn test_effective_lib_ver_uses_unknown_without_versions() {
-        assert_eq!(effective_lib_ver(None, None), "unknown");
-    }
-
-    #[test]
-    fn test_effective_lib_ver_treats_empty_compile_time_ver_as_absent() {
-        assert_eq!(effective_lib_ver(None, Some("")), "unknown");
-    }
-
-    #[test]
-    fn test_effective_lib_ver_treats_empty_runtime_ver_as_absent() {
-        assert_eq!(effective_lib_ver(Some(""), Some("9.9.9")), "9.9.9");
+        assert_eq!(effective_lib_ver(Some(runtime), Some(compile)), runtime);
+        assert_eq!(effective_lib_ver(None, Some(compile)), compile);
+        assert_eq!(effective_lib_ver(Some(""), Some(compile)), compile);
+        assert_eq!(effective_lib_ver(None, Some("")), unknown);
+        assert_eq!(effective_lib_ver(None, None), unknown);
     }
 
     #[test]
