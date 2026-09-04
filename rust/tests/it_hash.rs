@@ -8,6 +8,10 @@ use glide::HashCommands;
 use glide::commands::options::{ExpireOptions, HashFieldConditionalChange};
 use redis::{Expiry, SetExpiry};
 
+/// Max seconds and milliseconds for future expiry.
+const FUTURE_EXPIRY_SECS: usize = (i64::MAX / 1_000_i64) as usize;
+const FUTURE_EXPIRY_MS: usize = i64::MAX as usize;
+
 matrix_test!(hset_hget, c, {
     let k = common::key("h");
     // HSET with multiple fields returns the count of NEW fields added.
@@ -277,6 +281,30 @@ matrix_test!(hgetex, c, {
     let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
     assert!((1..=100).contains(&ttl));
 
+    // HGETEX with PX.
+    let vals = c.hgetex(&k, &["f"], Some(Expiry::PX(100_000))).await.unwrap();
+    assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
+    let pttl = c.hpttl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=100_000).contains(&pttl));
+
+    // HGETEX with EXAT.
+    let vals = c
+        .hgetex(&k, &["f"], Some(Expiry::EXAT(FUTURE_EXPIRY_SECS)))
+        .await
+        .unwrap();
+    assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
+    let et = c.hexpiretime(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(et, FUTURE_EXPIRY_SECS as i64);
+
+    // HGETEX with PXAT.
+    let vals = c
+        .hgetex(&k, &["f"], Some(Expiry::PXAT(FUTURE_EXPIRY_MS)))
+        .await
+        .unwrap();
+    assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
+    let pet = c.hpexpiretime(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(pet, FUTURE_EXPIRY_MS as i64);
+
     // HGETEX with PERSIST.
     let vals = c.hgetex(&k, &["f"], Some(Expiry::PERSIST)).await.unwrap();
     assert_eq!(vals[0].as_deref(), Some(&b"v"[..]));
@@ -346,23 +374,50 @@ matrix_test!(hsetex, c, {
     let g: Option<String> = c.hget(&k, "g").await.unwrap();
     assert_eq!(g, None);
 
+    // HSETEX with PX.
+    let res = c
+        .hsetex(&k, &[("f", "v4")], None, Some(SetExpiry::PX(100_000)))
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let pttl = c.hpttl(&k, &["f"]).await.unwrap()[0];
+    assert!((1..=100_000).contains(&pttl));
+
+    // HSETEX with EXAT.
+    let res = c
+        .hsetex(&k, &[("f", "v5")], None, Some(SetExpiry::EXAT(FUTURE_EXPIRY_SECS)))
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let et = c.hexpiretime(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(et, FUTURE_EXPIRY_SECS as i64);
+
+    // HSETEX with PXAT.
+    let res = c
+        .hsetex(&k, &[("f", "v6")], None, Some(SetExpiry::PXAT(FUTURE_EXPIRY_MS)))
+        .await
+        .unwrap();
+    assert_eq!(res, 1);
+    let pet = c.hpexpiretime(&k, &["f"]).await.unwrap()[0];
+    assert_eq!(pet, FUTURE_EXPIRY_MS as i64);
+
     // HSETEX with KEEPTTL.
     let before = c.hpttl(&k, &["f"]).await.unwrap()[0];
     let res = c
-        .hsetex(&k, &[("f", "v4")], None, Some(SetExpiry::KEEPTTL))
+        .hsetex(&k, &[("f", "v7")], None, Some(SetExpiry::KEEPTTL))
         .await
         .unwrap();
     assert_eq!(res, 1);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
-    assert_eq!(v.as_deref(), Some("v4"));
+    assert_eq!(v.as_deref(), Some("v7"));
     let after = c.hpttl(&k, &["f"]).await.unwrap()[0];
     assert!((1..=before).contains(&after));
 
     // HSETEX with no expiry option.
-    let res = c.hsetex(&k, &[("f", "v5")], None, None).await.unwrap();
+    let res = c.hsetex(&k, &[("f", "v8")], None, None).await.unwrap();
     assert_eq!(res, 1);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
-    assert_eq!(v.as_deref(), Some("v5"));
+    assert_eq!(v.as_deref(), Some("v8"));
     let ttl = c.httl(&k, &["f"]).await.unwrap()[0];
     assert_eq!(ttl, -1);
 });
