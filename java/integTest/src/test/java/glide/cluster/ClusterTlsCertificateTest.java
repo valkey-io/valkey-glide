@@ -5,6 +5,7 @@ import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestUtilities;
 import glide.api.GlideClusterClient;
@@ -36,15 +37,24 @@ public class ClusterTlsCertificateTest {
     @BeforeAll
     static void setup() throws Exception {
         String clusterHosts = System.getProperty("test.server.cluster.tls", "");
+        assumeTrue(
+                clusterHosts != null && !clusterHosts.trim().isEmpty(),
+                "TLS cluster not available - cluster setup may have failed");
+
         String[] hosts = clusterHosts.split(",");
 
         clusterNodes = new ArrayList<>();
         for (String host : hosts) {
             String[] parts = host.trim().split(":");
+            assumeTrue(
+                    parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty(),
+                    "TLS cluster address malformed: '" + host + "' - cluster setup may have failed");
             NodeAddress node =
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build();
             clusterNodes.add(node);
         }
+
+        assumeTrue(!clusterNodes.isEmpty(), "No TLS cluster nodes available");
 
         caCert = getCaCertificate();
     }
