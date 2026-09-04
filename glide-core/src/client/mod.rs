@@ -2026,7 +2026,7 @@ impl Client {
     /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-    ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
+    ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
@@ -2041,19 +2041,17 @@ impl Client {
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
-                        Some(std::sync::Arc::new(token_manager))
+                        Ok(Some(std::sync::Arc::new(token_manager)))
                     }
-                    Err(e) => {
-                        log_error("IAM", format!("Failed to create IAM token manager: {e}"));
-                        None
-                    }
+                    Err(e) => Err(ConnectionError::IAMError(e.to_string())),
                 }
             } else {
-                log_error("IAM", "IAM authentication requires a username");
-                None
+                Err(ConnectionError::IAMError(
+                    "IAM authentication requires a username".to_string(),
+                ))
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -2497,6 +2495,7 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    IAMError(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -2507,6 +2506,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
         }
     }
 }
@@ -2519,6 +2519,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
         }
     }
 }
@@ -2829,7 +2830,7 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await
+                Self::create_iam_token_manager(auth_info).await?
             } else {
                 None
             };
