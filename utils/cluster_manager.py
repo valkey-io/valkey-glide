@@ -1543,7 +1543,7 @@ def main():
                 parser.error("--remote-ip is required when using --remote")
             cmd_parts = [
                 "python3",
-                "/tmp/cluster_manager.py",
+                "/home/ssm-user/glide/cluster_manager.py",
                 "--loglevel",
                 args.log,
                 "-H",
@@ -1567,10 +1567,12 @@ def main():
             script_path = os.path.abspath(__file__)
             with open(script_path, "rb") as f:
                 script_b64 = base64.b64encode(f.read()).decode()
-            copy_cmd = f"echo '{script_b64}' | base64 -d > /tmp/cluster_manager.py"
+            copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
             run_remote_command(args.remote, copy_cmd, args.remote_region)
-            # Run the start command remotely
-            remote_cmd = " ".join(cmd_parts)
+            # Run the start command remotely with writable paths for SSM user
+            remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
+            # Update the script path in cmd_parts to use the new location
+            remote_cmd = remote_cmd.replace("/tmp/cluster_manager.py", "/home/ssm-user/glide/cluster_manager.py")
             output = run_remote_command(
                 args.remote, remote_cmd, args.remote_region, timeout_seconds=300
             )
@@ -1645,7 +1647,7 @@ def main():
         if getattr(args, "remote", None):
             cmd_parts = [
                 "python3",
-                "/tmp/cluster_manager.py",
+                "/home/ssm-user/glide/cluster_manager.py",
                 "--loglevel",
                 args.log,
                 "stop",
@@ -1656,7 +1658,7 @@ def main():
                 cmd_parts += ["--prefix", args.prefix]
             if getattr(args, "keep_folder", False):
                 cmd_parts.append("--keep-folder")
-            remote_cmd = " ".join(cmd_parts)
+            remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
             output = run_remote_command(
                 args.remote, remote_cmd, args.remote_region, timeout_seconds=120
             )
