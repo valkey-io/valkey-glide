@@ -1291,7 +1291,7 @@ dependencies = [
  "once_cell",
  "protobuf",
  "protobuf-codegen",
- "rand 0.8.6",
+ "rand 0.10.1",
  "redis",
  "regex",
  "rsevents",
