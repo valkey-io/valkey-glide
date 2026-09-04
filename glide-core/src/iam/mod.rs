@@ -393,6 +393,18 @@ impl IAMTokenManager {
                     return Ok(token);
                 }
                 Err(e) => {
+                    // CredentialsError means the custom provider threw an exception or
+                    // returned invalid credentials. This is a programming/configuration
+                    // error, not a transient failure — retrying will not help.
+                    if matches!(e, GlideIAMError::CredentialsError(_)) {
+                        log_error(
+                            "IAM token generation failed",
+                            "Custom credentials provider returned an error. \
+                             Check your GlideCredentialProvider implementation.",
+                        );
+                        return Err(e);
+                    }
+
                     attempt += 1;
 
                     if attempt >= TOKEN_GEN_MAX_ATTEMPTS {
