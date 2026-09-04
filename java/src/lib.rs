@@ -2630,6 +2630,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         },
                         client_name: None,
                         lib_name: lib_name.clone(),
+                        lib_ver: None,
                         cache: None,
                         server_assisted_cache: false,
                     }
@@ -2646,6 +2647,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         },
                         client_name: None,
                         lib_name,
+                        lib_ver: None,
                         cache: None,
                         server_assisted_cache: false,
                     }
