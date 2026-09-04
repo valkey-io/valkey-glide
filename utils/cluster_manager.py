@@ -1580,6 +1580,13 @@ def main():
                 script_b64 = base64.b64encode(f.read()).decode()
             copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
             run_remote_command(args.remote, copy_cmd, args.remote_region)
+            # Ensure vm.overcommit_memory=1 for Valkey cluster mode
+            run_remote_command(
+                args.remote,
+                "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+                args.remote_region,
+                timeout_seconds=30,
+            )
             # Run the start command remotely with writable paths for SSM user
             remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
             # Update the script path in cmd_parts to use the new location
