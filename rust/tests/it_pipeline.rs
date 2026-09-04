@@ -272,13 +272,7 @@ async fn typed_pipeline_query_glide_still_works() {
 
 timed_tokio_test!(
     async fn cluster_atomic_transaction_same_slot() {
-        let h = match common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible");
-                return;
-            }
-        };
+        let h = common::ClusterHarness::start();
         let c = match h.client().await {
             Some(c) => c,
             None => {
@@ -309,13 +303,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_non_atomic_pipeline() {
-        let h = match common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible");
-                return;
-            }
-        };
+        let h = common::ClusterHarness::start();
         let c = match h.client().await {
             Some(c) => c,
             None => {

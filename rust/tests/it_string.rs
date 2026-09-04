@@ -220,6 +220,8 @@ matrix_test!(get_wrong_type_errors, c, {
 });
 
 matrix_test!(lcs_len, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k1 = common::tkey("lcs", "1");
     let k2 = common::tkey("lcs", "2");
     let _: () = c.set(&k1, "ohmytext").await.unwrap();

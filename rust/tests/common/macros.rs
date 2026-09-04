@@ -62,21 +62,6 @@ macro_rules! server_or_skip {
     }};
 }
 
-/// Start a cluster, or `return` from the test (printing SKIP) when a cluster is
-/// not feasible in this environment.
-#[macro_export]
-macro_rules! cluster_or_skip {
-    () => {{
-        match $crate::common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible in this environment");
-                return;
-            }
-        }
-    }};
-}
-
 /// Expand one test body into two `#[tokio::test]`s — one for RESP2, one for
 /// RESP3 — each with its own fresh standalone server bound to `$c`.
 ///
@@ -162,13 +147,7 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp2() {
-                let __h = match $crate::common::ClusterHarness::start() {
-                    Some(h) => h,
-                    None => {
-                        eprintln!("SKIP: cluster harness not feasible in this environment");
-                        return;
-                    }
-                };
+                let __h = $crate::common::ClusterHarness::start();
                 let $c = match __h
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
                     .await
@@ -184,13 +163,7 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp3() {
-                let __h = match $crate::common::ClusterHarness::start() {
-                    Some(h) => h,
-                    None => {
-                        eprintln!("SKIP: cluster harness not feasible in this environment");
-                        return;
-                    }
-                };
+                let __h = $crate::common::ClusterHarness::start();
                 let $c = match __h
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
                     .await

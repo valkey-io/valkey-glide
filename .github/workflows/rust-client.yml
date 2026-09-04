@@ -41,10 +41,11 @@ env:
 
 jobs:
     lint:
+        name: Lint - Rust client
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
@@ -55,10 +56,32 @@ jobs:
               name: lint rust client
 
     tests:
-        runs-on: ubuntu-latest
-        timeout-minutes: 35
+        name: Test - ${{ matrix.engine.type }} ${{ matrix.engine.version }}, ${{ matrix.host.arch }}
+        runs-on: ${{ matrix.host.runner }}
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                host:
+                    - {
+                          arch: x64,
+                          runner: ubuntu-24.04,
+                          target: x86_64-unknown-linux-gnu,
+                      }
+                    - {
+                          arch: arm64,
+                          runner: ubuntu-24.04-arm,
+                          target: aarch64-unknown-linux-gnu,
+                      }
+                engine:
+                    - { type: valkey, version: "9.0" }
+                    - { type: valkey, version: "8.1" }
+                    - { type: valkey, version: "8.0" }
+                    - { type: valkey, version: "7.2" }
+                    - { type: redis, version: "7.0" }
+                    - { type: redis, version: "6.2" }
         steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
@@ -66,8 +89,8 @@ jobs:
               uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
-                  target: x86_64-unknown-linux-gnu
-                  engine-version: "9.0"
+                  target: ${{ matrix.host.target }}
+                  engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run rust client tests

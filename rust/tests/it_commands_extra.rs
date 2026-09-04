@@ -351,7 +351,7 @@ matrix_test!(lmpop_typed_method, c, {
 
 #[tokio::test]
 async fn cluster_from_urls_connects_and_routes() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     // Build seed-node URLs from the real cluster's primaries and connect via
     // the URL constructor.
     let urls: Vec<String> = cluster
@@ -379,7 +379,7 @@ async fn cluster_from_urls_connects_and_routes() {
 
 #[test]
 fn sync_cluster_commands_trait() {
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let c = match SyncGlideClusterClient::connect(GlideClusterClientConfiguration::with_address(
         "127.0.0.1",
         cluster.seed_port(),
@@ -405,7 +405,7 @@ async fn cluster_script_noscript_fallback() {
     // node it lands on — exercising the transparent EVAL fallback in cluster
     // mode. Flush all nodes first to guarantee the miss, then invoke enough
     // times to hit multiple nodes.
-    let cluster = cluster_or_skip!();
+    let cluster = common::ClusterHarness::start();
     let c = match cluster.client().await {
         Some(c) => c,
         None => {
