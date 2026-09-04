@@ -533,50 +533,6 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     }
 }
 
-/// Whether a blocking command was issued with an *unbounded* (block-forever)
-/// timeout — i.e. its resolved per-command timeout would be `None`.
-///
-/// This is the name-based counterpart to the `None` branch of
-/// `get_request_timeout`: a blocking command resolves to `NoTimeout` (→ `None`)
-/// exactly when its own timeout argument is `0`. It deliberately answers only the
-/// "is the timeout zero?" question — it does *not* reproduce the full duration
-/// computation — so the FFI hot path can distinguish unbounded blocking (skip the
-/// diagnostic watchdog) from bounded blocking (arm it) without allocating a `Cmd`.
-///
-/// Returns `false` for non-blocking commands, for bounded blocking commands, and
-/// for any command whose timeout argument is missing or unparseable (conservative:
-/// a missing/garbage arg is treated as *not* unbounded, so the watchdog still arms
-/// and the authoritative deadline in `send_command_on_connection` stays in force).
-///
-/// Arg positions mirror `get_request_timeout` exactly, shifted by one because
-/// `args` here excludes the command name (Cmd index `N` → `args` index `N - 1`).
-pub fn is_unbounded_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
-    let is_zero = |arg: Option<&Vec<u8>>| -> bool {
-        arg.and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .and_then(|s| s.parse::<f64>().ok())
-            .is_some_and(|secs| secs == 0.0)
-    };
-    let upper = name.to_ascii_uppercase();
-    match upper.as_slice() {
-        // Timeout is the last argument.
-        b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" => {
-            is_zero(args.last())
-        }
-        // Timeout is the first argument.
-        b"BLMPOP" | b"BZMPOP" => is_zero(args.first()),
-        // Timeout is the WAIT/WAITAOF numtimeout argument (`WAIT numreplicas timeout`,
-        // `WAITAOF numlocal numreplicas timeout`) — Cmd index 2/3 → args index 1/2.
-        b"WAIT" => is_zero(args.get(1)),
-        b"WAITAOF" => is_zero(args.get(2)),
-        // Blocking only when `BLOCK` is present; timeout is the arg right after it.
-        b"XREAD" | b"XREADGROUP" => args
-            .iter()
-            .position(|a| a.eq_ignore_ascii_case(b"BLOCK"))
-            .is_some_and(|idx| is_zero(args.get(idx + 1))),
-        _ => false,
-    }
-}
-
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {

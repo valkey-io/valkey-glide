@@ -14,20 +14,17 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 /// Whether the diagnostic timeout watchdog should be armed for a scoped command.
 ///
 /// The watchdog arms at the flat client request timeout and aborts the command
-/// when it fires. Aborting is meaningful only when the command has a finite
-/// deadline; an *unbounded* blocking command (e.g. `BLPOP key 0`) is expected to
-/// wait forever, so arming it would wrongly abort it — skip those (see #6780).
+/// when it fires. That is meaningless for a blocking command, which is expected
+/// to wait far longer than the request timeout (the authoritative deadline for
+/// blocking commands is derived per-command in `send_command_on_connection`).
+/// Arming it would wrongly abort a blocking scoped command, so skip it for those
+/// and let the command block for as long as its own semantics allow (see #6780).
 ///
-/// A *bounded* blocking command (e.g. `BLPOP key 5`) does have a finite deadline
-/// (derived per-command in `send_command_on_connection`), so it should still get
-/// watchdog diagnostics/circuit-breaker signal. This mirrors the multiplexed
-/// path, which arms whenever the resolved timeout is `Some` and skips only when
-/// it is `None` (unbounded). We detect the `None` case name-based via
-/// `is_unbounded_blocking_command_name` rather than resolving the full
-/// duration, keeping the hot path allocation-free (no `redis::Cmd`, no copying a
-/// large SET payload just to answer this yes/no question).
+/// Takes the command name and args directly (rather than a `redis::Cmd`) so the
+/// hot path avoids allocating a `Cmd` and copying every argument byte — notably a
+/// large SET payload — just to answer this yes/no question.
 fn should_arm_watchdog(cmd_name: &str, args: &[Vec<u8>]) -> bool {
-    !glide_core::client::is_unbounded_blocking_command_name(cmd_name.as_bytes(), args)
+    !glide_core::client::is_blocking_command_name(cmd_name.as_bytes(), args)
 }
 
 /// Pool creation/acquire error codes
@@ -1133,10 +1130,12 @@ mod watchdog_gating_tests {
     }
 
     #[test]
-    fn unbounded_blocking_commands_skip_the_watchdog() {
-        // A `0` timeout means block forever (#6780). Arming the diagnostic
-        // watchdog would abort these at the flat request timeout, so skip them.
+    fn blocking_commands_skip_the_watchdog() {
+        // Arming the diagnostic watchdog for these would abort them at the flat
+        // request timeout, defeating their blocking semantics — regardless of
+        // whether the command's own timeout is bounded or unbounded (#6780).
         assert!(!arms("BLPOP", &["key", "0"]));
+        assert!(!arms("BLPOP", &["key", "5"]));
         assert!(!arms("BRPOP", &["key", "0"]));
         assert!(!arms("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"]));
         assert!(!arms("BRPOPLPUSH", &["src", "dst", "0"]));
@@ -1144,50 +1143,20 @@ mod watchdog_gating_tests {
         assert!(!arms("BZPOPMAX", &["key", "0"]));
         assert!(!arms("BLMPOP", &["0", "1", "k", "LEFT"]));
         assert!(!arms("BZMPOP", &["0", "1", "k", "MIN"]));
-        assert!(!arms("WAIT", &["1", "0"]));
+        assert!(!arms("WAIT", &["0", "100"]));
         assert!(!arms("WAITAOF", &["1", "0", "0"]));
     }
 
     #[test]
-    fn bounded_blocking_commands_arm_the_watchdog() {
-        // A finite timeout gives the command a real deadline, so it should get
-        // watchdog diagnostics/circuit-breaker signal — matching the multiplexed
-        // path (arm when the resolved timeout is `Some`).
-        assert!(arms("BLPOP", &["key", "5"]));
-        assert!(arms("BRPOP", &["key", "5"]));
-        assert!(arms("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "5"]));
-        assert!(arms("BRPOPLPUSH", &["src", "dst", "5"]));
-        assert!(arms("BZPOPMIN", &["key", "5"]));
-        assert!(arms("BLMPOP", &["5", "1", "k", "LEFT"]));
-        assert!(arms("BZMPOP", &["5", "1", "k", "MIN"]));
-        assert!(arms("WAIT", &["1", "100"]));
-        assert!(arms("WAITAOF", &["1", "0", "100"]));
-    }
-
-    #[test]
-    fn xread_watchdog_gating_depends_on_the_block_timeout() {
-        // XREAD/XREADGROUP block only when BLOCK is present. A plain XREAD is a
-        // normal command; BLOCK 0 is unbounded (skip); BLOCK <n> is bounded (arm).
+    fn xread_is_blocking_only_with_the_block_option() {
+        // XREAD/XREADGROUP block only when BLOCK is present; a plain XREAD is a
+        // normal command and should keep watchdog coverage.
         assert!(!arms("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"]));
-        assert!(arms("XREAD", &["BLOCK", "5000", "STREAMS", "s", "$"]));
+        assert!(!arms("XREAD", &["BLOCK", "5000", "STREAMS", "s", "$"]));
         assert!(arms("XREAD", &["COUNT", "10", "STREAMS", "s", "0"]));
         assert!(!arms(
             "XREADGROUP",
             &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"]
         ));
-        assert!(arms(
-            "XREADGROUP",
-            &["GROUP", "g", "c", "BLOCK", "5000", "STREAMS", "s", ">"]
-        ));
-    }
-
-    #[test]
-    fn malformed_or_missing_timeout_args_arm_the_watchdog() {
-        // Conservative fallback: if the timeout arg is missing or unparseable we
-        // can't prove it's unbounded, so arm the watchdog. The authoritative
-        // deadline still comes from `send_command_on_connection`.
-        assert!(arms("BLPOP", &["key"]));
-        assert!(arms("BLPOP", &["key", "notanumber"]));
-        assert!(arms("XREAD", &["BLOCK", "STREAMS", "s", "$"]));
     }
 }
