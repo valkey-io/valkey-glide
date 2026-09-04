@@ -11362,7 +11362,7 @@ public class SharedCommandTests {
         assertEquals(1, client.hset(hashKey, createMap("1", "2")).get());
         assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
         assertEquals(1, client.zadd(zsetKey, createMap("1", 2d)).get());
-        assertNotNull(client.xadd(streamKey, createMap("field", "value")));
+        assertNotNull(client.xadd(streamKey, createMap("field", "value")).get());
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
         assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
@@ -11390,7 +11390,7 @@ public class SharedCommandTests {
         assertEquals(1, client.hset(hashKey, createMap("1", "2")).get());
         assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
         assertEquals(1, client.zadd(zsetKey, createMap("1", 2d)).get());
-        assertNotNull(client.xadd(streamKey, createMap("field", "value")));
+        assertNotNull(client.xadd(streamKey, createMap("field", "value")).get());
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
         assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
@@ -12216,7 +12216,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void objectEncoding_returns_stream(BaseClient client) {
         String streamKey = UUID.randomUUID().toString();
-        assertNotNull(client.xadd(streamKey, createMap("field", "value")));
+        assertNotNull(client.xadd(streamKey, createMap("field", "value")).get());
         assertEquals("stream", client.objectEncoding(streamKey).get());
     }
 
