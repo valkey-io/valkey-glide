@@ -1569,7 +1569,7 @@ def main():
             if args.ports:
                 cmd_parts += ["-p"] + [str(p) for p in args.ports]
             else:
-                node_count = args.shard_count * (1 + args.replica_count) if args.cluster_mode else 1
+                node_count = args.shard_count * (1 + args.replica_count)
                 base_port = 7000 if args.cluster_mode else 7006
                 fixed_ports = list(range(base_port, base_port + node_count))
                 cmd_parts += ["-p"] + [str(p) for p in fixed_ports]
