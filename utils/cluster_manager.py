@@ -1268,6 +1268,46 @@ def run_remote_command(
     )
 
 
+def _pick_free_remote_ports(
+    instance_id: str,
+    region: str,
+    count: int,
+    min_port: int = 7000,
+    max_port: int = 17010,
+    max_attempts: int = 100,
+) -> list:
+    """
+    Pick `count` free TCP ports on a remote instance within [min_port, max_port].
+    Verifies availability by checking ss/netstat output on the remote host via SSM.
+    """
+    # Get all listening ports on the remote instance
+    try:
+        output = run_remote_command(
+            instance_id,
+            "ss -tln 2>/dev/null | awk 'NR>1 {print $4}' | grep -oE '[0-9]+$' || netstat -tln 2>/dev/null | awk 'NR>2 {print $4}' | grep -oE '[0-9]+$'",
+            region,
+            timeout_seconds=30,
+        )
+        used_ports = set(int(p) for p in output.split() if p.isdigit())
+    except Exception:
+        used_ports = set()
+
+    selected = []
+    attempts = 0
+    while len(selected) < count and attempts < max_attempts:
+        attempts += 1
+        p = random.randint(min_port, max_port)
+        if p not in used_ports and p not in selected:
+            selected.append(p)
+
+    if len(selected) < count:
+        raise Exception(
+            f"Could not find {count} free ports in range {min_port}-{max_port} "
+            f"on remote instance {instance_id}"
+        )
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
     parser.add_argument(
@@ -1569,10 +1609,13 @@ def main():
             if args.ports:
                 cmd_parts += ["-p"] + [str(p) for p in args.ports]
             else:
+                # Pick free ports on the remote host within the allowed range.
+                # Uses ss/netstat on the remote to verify each port is free.
                 node_count = args.shard_count * (1 + args.replica_count)
-                base_port = 7000 if args.cluster_mode else 7006
-                fixed_ports = list(range(base_port, base_port + node_count))
-                cmd_parts += ["-p"] + [str(p) for p in fixed_ports]
+                remote_ports = _pick_free_remote_ports(
+                    args.remote, args.remote_region, node_count
+                )
+                cmd_parts += ["-p"] + [str(p) for p in remote_ports]
             # First copy cluster_manager.py to the remote instance via base64
             # to avoid shell quoting issues with single quotes in f-strings
             script_path = os.path.abspath(__file__)
