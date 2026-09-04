@@ -447,21 +447,19 @@ public class ClusterClientTests {
             deleteAclUser(adminClient, username);
             setNewAclUserPassword(adminClient, username, newPwd);
 
-            // Sleep to ensure password change in server and client reconnection
-            Thread.sleep(1000);
-
-            // Ensure client can reconnect when updating the password with immediate auth
-            // Retry during reconnection - non-blocking reconnect may still be in progress
-            int maxRetries = 20;
+            // Poll until client can reconnect and authenticate with the new password.
+            // No fixed sleep: the server may take variable time to propagate the ACL
+            // change and the client to notice the disconnection, especially on slower
+            // environments (Windows CI, engine 7.0). The loop retries all transient
+            // exceptions; a persistent auth failure (wrong password) will exhaust retries
+            // and rethrow on the final attempt.
+            int maxRetries = 40;
             for (int i = 0; i < maxRetries; i++) {
                 try {
                     assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage() != null
-                            && (e.getMessage().contains("AllConnectionsUnavailable")
-                                    || e.getMessage().contains("Connection in recovery"))
-                            && i < maxRetries - 1) {
+                    if (i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
                     }
@@ -469,16 +467,13 @@ public class ClusterClientTests {
                 }
             }
 
-            // Validate client reconnected and is working - retry during reconnection
+            // Validate client reconnected and is working
             for (int i = 0; i < maxRetries; i++) {
                 try {
                     assertNotNull(testClient.info().get());
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage() != null
-                            && (e.getMessage().contains("AllConnectionsUnavailable")
-                                    || e.getMessage().contains("Connection in recovery"))
-                            && i < maxRetries - 1) {
+                    if (i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
                     }
