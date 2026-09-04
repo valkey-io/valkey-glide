@@ -1295,7 +1295,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 Some(safe_handle as jlong)
             }
             Err(e) => {
-                log::error!("Failed to create client: {e}");
+                // Do not include the full error in the log to prevent leaking credential
+                // material. The error is thrown as a Java exception so the caller can
+                // inspect it.
+                log::error!("Failed to create client.");
+                // Throw a ClosingException so the caller receives the actual error detail
+                // rather than a generic ClosingException("Connection refused") from handle==0.
+                let msg = e.to_string();
+                match env.exception_check() {
+                    Ok(false) => {
+                        if env
+                            .throw_new("glide/api/models/exceptions/ClosingException", &msg)
+                            .is_err()
+                        {
+                            log::error!(
+                                "Failed to throw ClosingException for client creation error."
+                            );
+                        }
+                    }
+                    Ok(true) => {
+                        // An exception is already pending; don't clobber it.
+                    }
+                    Err(err) => {
+                        log::error!("Failed to check pending exception: {err}");
+                    }
+                }
                 Some(0)
             }
         }
