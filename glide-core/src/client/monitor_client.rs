@@ -82,15 +82,15 @@ impl MonitorClient {
         tls_mode: TlsMode,
         on_line: MonitorLineCallback,
     ) -> RedisResult<Self> {
-        validate_effective_lib_name(redis_connection_info.lib_name.as_deref()).map_err(
-            |message| {
+        if let Some(lib_name) = redis_connection_info.lib_name.as_deref() {
+            validate_effective_lib_name(lib_name).map_err(|message| {
                 RedisError::from((
                     ErrorKind::InvalidClientConfig,
                     "Invalid library name",
                     message,
                 ))
-            },
-        )?;
+            })?;
+        }
 
         let conn_addr = match tls_mode {
             TlsMode::NoTls => ConnectionAddr::Tcp(address.host.clone(), address.port),

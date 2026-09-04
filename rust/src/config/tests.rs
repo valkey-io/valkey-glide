@@ -55,6 +55,24 @@ fn lib_name_is_glide_rust() {
 }
 
 #[test]
+fn lib_ver_is_cargo_pkg_version() {
+    assert_eq!(
+        GlideClientConfiguration::with_address("h", 1)
+            .to_request()
+            .lib_ver
+            .as_deref(),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+    assert_eq!(
+        GlideClusterClientConfiguration::with_address("h", 1)
+            .to_request()
+            .lib_ver
+            .as_deref(),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn with_address_single_host_port() {
     let req = GlideClientConfiguration::with_address("example.com", 6380).to_request();
     assert_eq!(req.addresses.len(), 1);

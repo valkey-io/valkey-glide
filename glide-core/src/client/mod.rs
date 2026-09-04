@@ -186,29 +186,39 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
     }
 }
 
+/// Matches the optional-tag structure of a library name.
 static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\A[\x21-\x27\x2A-\x7E]+(?:\([\x21-\x27\x2A-\x7E]+\))?\z")
-        .expect("library name regex must be valid")
+    Regex::new(r"\A[^()]+(?:\([^()]+\))?\z").expect("library name tag regex must be valid")
 });
 
-/// Validate a binding-composed runtime library name before client creation.
-///
-/// Empty values are treated as absent. Non-empty values must contain only printable ASCII
-/// characters and may contain at most one ordered, matched pair of parentheses introduced by
-/// binding-local `base(tag)` composition.
-pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), String> {
-    let Some(lib_name) = lib_name else {
-        return Ok(());
-    };
-
-    if lib_name.is_empty() || LIB_NAME_PATTERN.is_match(lib_name) {
-        Ok(())
-    } else {
-        Err(
-            "library name must contain only printable ASCII characters from '!' through '~' and parentheses must form a non-empty trailing '(tag)'"
-                .to_string(),
-        )
+/// Validate whether a library name:
+///   - is non-empty;
+///   - contain only printable ASCII characters;
+///   - matches to the optional tag pattern – 'name' or 'name(tag)'.
+pub(crate) fn validate_effective_lib_name(lib_name: &str) -> Result<(), String> {
+    if lib_name.is_empty() {
+        return Err("library name must not be empty".to_string());
     }
+    if !lib_name.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library name must contain only printable ASCII characters".to_string());
+    }
+    if !LIB_NAME_PATTERN.is_match(lib_name) {
+        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
+    }
+    Ok(())
+}
+
+/// Validate whether a library version:
+///   - is non-empty; and
+///   - contain only printable ASCII characters.
+pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
+    if lib_ver.is_empty() {
+        return Err("library version must not be empty".to_string());
+    }
+    if !lib_ver.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library version must contain only printable ASCII characters".to_string());
+    }
+    Ok(())
 }
 
 /// Get Valkey connection info with IAM token integration
@@ -225,6 +235,7 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
+    let lib_ver = connection_request.lib_ver.clone();
     let cache = connection_request
         .client_side_cache
         .clone()
@@ -262,6 +273,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -274,6 +286,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -284,6 +297,7 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
+            lib_ver,
             cache,
             server_assisted_cache,
             ..Default::default()
@@ -2379,6 +2393,9 @@ async fn create_cluster_client(
     if let Some(lib_name) = valkey_connection_info.lib_name {
         builder = builder.lib_name(lib_name);
     }
+    if let Some(lib_ver) = valkey_connection_info.lib_ver {
+        builder = builder.lib_ver(lib_ver);
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
@@ -2694,8 +2711,13 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        validate_effective_lib_name(request.lib_name.as_deref())
-            .map_err(ConnectionError::Configuration)?;
+        // Validate library name and version.
+        if let Some(lib_name) = request.lib_name.as_deref() {
+            validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
+        }
+        if let Some(lib_ver) = request.lib_ver.as_deref() {
+            validate_effective_lib_ver(lib_ver).map_err(ConnectionError::Configuration)?;
+        }
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
@@ -3071,20 +3093,18 @@ mod tests {
 
     use super::{
         Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
-        validate_effective_lib_name,
+        validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
     #[test]
     fn test_validate_effective_lib_name_accepts_supported_values() {
         for lib_name in [
-            None,
-            Some(""),
-            Some("!"),
-            Some("~"),
-            Some("GlideRust"),
-            Some("client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~"),
-            Some("GlideJava(framework:1.2)"),
+            "!",
+            "~",
+            "GlideRust",
+            "client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~",
+            "GlideJava(framework:1.2)",
         ] {
             assert_eq!(
                 validate_effective_lib_name(lib_name),
@@ -3097,6 +3117,7 @@ mod tests {
     #[test]
     fn test_validate_effective_lib_name_rejects_invalid_values() {
         for lib_name in [
+            "",
             "Glide Rust",
             "Glide\tRust",
             "Glide\nRust",
@@ -3112,7 +3133,7 @@ mod tests {
             "GlideRust()",
         ] {
             assert!(
-                validate_effective_lib_name(Some(lib_name)).is_err(),
+                validate_effective_lib_name(lib_name).is_err(),
                 "{lib_name:?} should be rejected"
             );
         }
@@ -3137,6 +3158,52 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_accepts_supported_values() {
+        for lib_ver in ["unknown", "0.2.0", "1.2.3-rc.1+build.5", "255.255.255"] {
+            assert_eq!(validate_effective_lib_ver(lib_ver), Ok(()), "{lib_ver:?}");
+        }
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_rejects_invalid_values() {
+        for lib_ver in [
+            "",
+            "1.2.3 ",
+            "1.2 3",
+            "1.2\t3",
+            "1.2\n3",
+            "1.2\u{7f}3",
+            "1.2.é",
+        ] {
+            assert!(
+                validate_effective_lib_ver(lib_ver).is_err(),
+                "{lib_ver:?} should be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_invalid_lib_ver_before_lazy_client_creation() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            lib_ver: Some("bad version".to_string()),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid library version should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, ConnectionError::Configuration(_)));
+        assert!(error.to_string().contains("library version"));
     }
 
     #[test]

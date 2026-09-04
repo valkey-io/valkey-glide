@@ -235,6 +235,8 @@ pub struct RedisConnectionInfo {
     pub client_name: Option<String>,
     /// Optionally a library name that should be used for connection
     pub lib_name: Option<String>,
+    /// Optionally a library version that should be used for connection
+    pub lib_ver: Option<String>,
     /// Optionally a cache used for client-side caching
     pub cache: Option<Arc<dyn GlideCache>>,
     /// Whether to enable server-assisted client tracking (CLIENT TRACKING ON BCAST)
@@ -397,6 +399,7 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
+            lib_ver: None,
             cache: None,
             server_assisted_cache: false,
         },
@@ -432,6 +435,7 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
+            lib_ver: None,
             cache: None,
             server_assisted_cache: false,
         },
@@ -1008,26 +1012,57 @@ fn effective_lib_name<'a>(
     runtime_lib_name: Option<&'a str>,
     compile_time_lib_name: Option<&'a str>,
 ) -> &'a str {
-    runtime_lib_name
+    match runtime_lib_name
         .filter(|lib_name| !lib_name.is_empty())
         .or(compile_time_lib_name.filter(|lib_name| !lib_name.is_empty()))
-        .unwrap_or("UnknownClient")
+    {
+        Some(lib_name) => lib_name,
+        None => {
+            logger_core::log_warn(
+                "client_set_info",
+                "No library name available. Defaulting to 'lib-name=UnknownClient'.",
+            );
+            "UnknownClient"
+        }
+    }
 }
 
-pub(crate) fn client_set_info_pipeline(lib_name: Option<&str>) -> Pipeline {
+fn effective_lib_ver<'a>(
+    runtime_lib_ver: Option<&'a str>,
+    compile_time_lib_ver: Option<&'a str>,
+) -> &'a str {
+    match runtime_lib_ver
+        .filter(|lib_ver| !lib_ver.is_empty())
+        .or(compile_time_lib_ver.filter(|lib_ver| !lib_ver.is_empty()))
+    {
+        Some(lib_ver) => lib_ver,
+        None => {
+            logger_core::log_warn(
+                "client_set_info",
+                "No library version available. Defaulting to 'lib-ver=unknown'.",
+            );
+            "unknown"
+        }
+    }
+}
+
+pub(crate) fn client_set_info_pipeline(lib_name: Option<&str>, lib_ver: Option<&str>) -> Pipeline {
     let mut pipeline = crate::pipe();
-    let final_lib_name = effective_lib_name(lib_name, option_env!("GLIDE_NAME"));
+
+    let lib_name = effective_lib_name(lib_name, option_env!("GLIDE_NAME"));
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-NAME")
-        .arg(final_lib_name)
+        .arg(lib_name)
         .ignore();
+
+    let lib_ver = effective_lib_ver(lib_ver, option_env!("GLIDE_VERSION"));
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-VER")
-        .arg(std::env!("GLIDE_VERSION"))
+        .arg(lib_ver)
         .ignore();
     pipeline
 }
@@ -1083,8 +1118,11 @@ fn setup_connection(
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> =
-        client_set_info_pipeline(connection_info.lib_name.as_deref()).query(&mut rv);
+    let _: RedisResult<()> = client_set_info_pipeline(
+        connection_info.lib_name.as_deref(),
+        connection_info.lib_ver.as_deref(),
+    )
+    .query(&mut rv);
 
     Ok(rv)
 }
@@ -1858,8 +1896,33 @@ mod tests {
     }
 
     #[test]
-    fn test_client_set_info_pipeline_uses_effective_lib_name() {
-        let pipeline = client_set_info_pipeline(Some("RuntimeClient"));
+    fn test_effective_lib_ver_prefers_non_empty_runtime_ver() {
+        assert_eq!(effective_lib_ver(Some("1.2.3"), Some("9.9.9")), "1.2.3");
+    }
+
+    #[test]
+    fn test_effective_lib_ver_uses_compile_time_ver() {
+        assert_eq!(effective_lib_ver(None, Some("9.9.9")), "9.9.9");
+    }
+
+    #[test]
+    fn test_effective_lib_ver_uses_unknown_without_versions() {
+        assert_eq!(effective_lib_ver(None, None), "unknown");
+    }
+
+    #[test]
+    fn test_effective_lib_ver_treats_empty_compile_time_ver_as_absent() {
+        assert_eq!(effective_lib_ver(None, Some("")), "unknown");
+    }
+
+    #[test]
+    fn test_effective_lib_ver_treats_empty_runtime_ver_as_absent() {
+        assert_eq!(effective_lib_ver(Some(""), Some("9.9.9")), "9.9.9");
+    }
+
+    #[test]
+    fn test_client_set_info_pipeline_includes_lib_name_and_lib_ver() {
+        let pipeline = client_set_info_pipeline(Some("RuntimeClient"), Some("1.2.3"));
         let packed_commands = pipeline.get_packed_pipeline();
         let cmd_str = String::from_utf8_lossy(&packed_commands);
 
@@ -1867,6 +1930,8 @@ mod tests {
         assert!(cmd_str.contains("SETINFO"));
         assert!(cmd_str.contains("LIB-NAME"));
         assert!(cmd_str.contains("RuntimeClient"));
+        assert!(cmd_str.contains("LIB-VER"));
+        assert!(cmd_str.contains("1.2.3"));
     }
 
     #[test]
@@ -1979,6 +2044,7 @@ mod tests {
                         protocol: ProtocolVersion::RESP2,
                         client_name: None,
                         lib_name: None,
+                        lib_ver: None,
                         cache: None,
                         server_assisted_cache: false,
                     },
