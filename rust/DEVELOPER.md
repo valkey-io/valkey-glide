@@ -16,29 +16,21 @@
   export VALKEY_SERVER_PATH=/path/to/valkey-server
   ```
 
-## Required build environment
-The vendored `redis-rs` reads two variables at **compile time** (via `env!`).
-They are provided by `.cargo/config.toml` in this repo, so a plain `cargo build`
-works out of the box:
-```toml
-[env]
-GLIDE_NAME = { value = "GlideRust", force = true }
-GLIDE_VERSION = "unknown"   # override at build time: `GLIDE_VERSION=1.2.3 cargo build`
-AWS_LC_SYS_NO_JITTER_ENTROPY = "1"
-```
-
 ## Build
+
 ```bash
 cargo build            # debug
 cargo build --release  # optimized
 ```
 
 ## Test
+
 ```bash
 cargo test --lib              # fast, pure unit tests (no server)
 cargo test --test it_string   # a single live integration suite (spawns valkey-server)
 cargo test                    # everything, incl. doctests
 ```
+
 Integration tests each boot their own ephemeral server on a free port and tear it
 down on drop. When no server binary is found, they print `SKIP` and pass.
 
@@ -55,14 +47,17 @@ cargo doc --no-deps --document-private-items
 ```
 
 ## Benchmarks
+
 ```bash
 cargo bench
 ```
+
 Prints a manual throughput probe (ops/sec at several concurrency levels) and runs
 Criterion latency benchmarks for `SET`/`GET`/`INCR`.
 
 ## Layout
-```
+
+```text
 src/
   lib.rs          crate root + public re-exports
   error.rs        GlideError (mirrors Python exceptions)
@@ -93,6 +88,7 @@ benches/
 ```
 
 ## Adding a command
+
 1. Pick the family module in `src/commands/`.
 2. Add an `async fn` to that family's trait following the template in
    `string.rs`: build a `redis::Cmd`, call `self.execute_command(cmd, None)`,
@@ -103,6 +99,7 @@ benches/
 4. `cargo test && cargo clippy --all-targets`.
 
 ## Extending value conversion
+
 Because the client negotiates **RESP3** by default, replies may arrive as
 `Value::Map`, `Value::Double`, `Value::Boolean`, or `Value::VerbatimString`.
 Prefer the helpers in `src/value.rs`, which already normalize these, and add new

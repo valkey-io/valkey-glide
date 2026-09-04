@@ -21,6 +21,7 @@ mod test_monitor {
             protocol: redis::ProtocolVersion::RESP2,
             client_name: None,
             lib_name: None,
+            lib_ver: None,
             cache: None,
             server_assisted_cache: false,
         }
