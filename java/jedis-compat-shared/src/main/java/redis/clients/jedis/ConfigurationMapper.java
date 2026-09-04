@@ -72,13 +72,10 @@ public class ConfigurationMapper {
         // Address mapping
         builder.address(NodeAddress.builder().host(host).port(port).build());
 
-        // Database selection (standalone only) - Note: GLIDE may handle this differently
-        // For now, we'll log a warning if database is not default
+        // Database selection (standalone only); cluster configurations are rejected in
+        // ClusterConfigurationMapper, where only database 0 exists.
         if (jedisConfig.getDatabase() != Protocol.DEFAULT_DATABASE) {
-            logger.warning(
-                    "Database selection specified ("
-                            + jedisConfig.getDatabase()
-                            + "). GLIDE may handle database selection differently than Jedis.");
+            builder.databaseId(jedisConfig.getDatabase());
         }
 
         // Client name
