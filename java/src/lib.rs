@@ -1096,8 +1096,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
         ) -> Result<jlong, FFIError> {
             let name_str: String = env.get_string(&name)?.into();
             let span = glide_core::GlideOpenTelemetry::new_span(&name_str);
-            let s = Arc::into_raw(Arc::new(span)) as *mut glide_core::GlideSpan;
-            Ok(s as jlong)
+            // Shared create path with the C FFI binding; see glide_core::GlideOpenTelemetry::leak_span.
+            Ok(glide_core::GlideOpenTelemetry::leak_span(span) as jlong)
         }
         let result = create_leaked_otel_span(&mut env, name);
         handle_errors(&mut env, result)
@@ -1119,23 +1119,18 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dro
 ) {
     run_ffi(|| {
         fn drop_otel_span(span_ptr: jlong) -> Result<(), FFIError> {
+            // The JNI contract rejects a 0/negative pointer as an error (unlike the shared
+            // helper, which treats 0 as a no-op), so guard it before delegating.
             if span_ptr <= 0 {
                 return Err(FFIError::OpenTelemetry(
                     "Received an invalid pointer value.".to_string(),
                 ));
             }
 
-            let span_ptr_u64 = span_ptr as u64;
-            if unsafe { !glide_core::GlideOpenTelemetry::is_span_pointer_valid(span_ptr_u64) } {
-                return Err(FFIError::OpenTelemetry(format!(
-                    "Received an invalid pointer value: {span_ptr}"
-                )));
-            }
-
-            unsafe {
-                Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-            }
-            Ok(())
+            // Shared validate + reclaim path with the C FFI binding; see
+            // glide_core::GlideOpenTelemetry::drop_span_ptr.
+            unsafe { glide_core::GlideOpenTelemetry::drop_span_ptr(span_ptr as u64) }
+                .map_err(|e| FFIError::OpenTelemetry(e.to_string()))
         }
         let result = drop_otel_span(span_ptr);
         handle_errors(&mut env, result)
@@ -1644,9 +1639,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         }
                     {
                         span.end();
-                        unsafe {
-                            std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-                        }
+                        // Reclaim via the shared helper (pointer already validated above).
+                        let _ = unsafe {
+                            glide_core::GlideOpenTelemetry::drop_span_ptr(span_ptr as u64)
+                        };
                     }
 
                     complete_callback(jvm, callback_id, result, !expect_utf8_bool);
@@ -1856,9 +1852,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
             {
                 span.end();
-                unsafe {
-                    std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-                }
+                // Reclaim via the shared helper (pointer already validated above).
+                let _ = unsafe { glide_core::GlideOpenTelemetry::drop_span_ptr(span_ptr as u64) };
             }
 
             complete_callback(jvm, callback_id, result, !expect_utf8_bool);
