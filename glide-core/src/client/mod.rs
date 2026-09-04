@@ -1455,7 +1455,7 @@ impl Client {
         }
 
         // Compression on write: compress command args if compression is enabled
-        let cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
+        let mut cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
             if compression_manager.is_enabled() {
                 // Clone the command and apply compression to its args
                 // Note: for scope commands, args are already serialized — this handles
@@ -1471,6 +1471,12 @@ impl Client {
 
         // Blocking commands must honor their own timeout, not the flat request timeout.
         let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        // Scoped connections use Duration::MAX as their base response timeout, so
+        // without this, the pipeline driver's slow-response warning (gated on
+        // `!is_blocking_cmd`) fires for any legitimately-blocking command that
+        // waits past its threshold — mirrors the multiplexed path (see
+        // `set_is_blocking` above in `send_command`).
+        cmd_to_send.set_is_blocking(is_blocking_command(cmd));
 
         // Send with timeout
         let raw_value = match request_timeout {
@@ -3872,30 +3878,41 @@ mod tests {
         assert!(is_blocking_command_name(b"xread", &with_block_lower));
 
         // Behavioral parity with `is_blocking_command` over a representative table.
-        // Each entry: (name, args, expected).
-        let table: &[(&str, &[&str])] = &[
-            ("BLPOP", &["key", "0"]),
-            ("BRPOP", &["key", "5"]),
-            ("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"]),
-            ("BRPOPLPUSH", &["src", "dst", "0"]),
-            ("BLMPOP", &["0", "1", "key", "LEFT"]),
-            ("BZPOPMIN", &["key", "0"]),
-            ("BZPOPMAX", &["key", "0"]),
-            ("BZMPOP", &["0", "1", "key", "MIN"]),
-            ("WAIT", &["0", "100"]),
-            ("WAITAOF", &["0", "0", "100"]),
-            ("XREAD", &["STREAMS", "s", "$"]),
-            ("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"]),
-            ("XREADGROUP", &["GROUP", "g", "c", "STREAMS", "s", ">"]),
+        // Each entry: (name, args, expected). `expected` is written out explicitly
+        // (rather than comparing `via_cmd == via_name`) so that a regression in
+        // either function's match arms is caught: for every non-XREAD/XREADGROUP
+        // name, `is_blocking_command` just forwards to `is_blocking_command_name`,
+        // so comparing the two outputs to each other can never fail if a command
+        // is accidentally dropped from `is_blocking_command_name`'s match arms —
+        // both sides would agree on the same (wrong) answer.
+        let table: &[(&str, &[&str], bool)] = &[
+            ("BLPOP", &["key", "0"], true),
+            ("BRPOP", &["key", "5"], true),
+            ("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"], true),
+            ("BRPOPLPUSH", &["src", "dst", "0"], true),
+            ("BLMPOP", &["0", "1", "key", "LEFT"], true),
+            ("BZPOPMIN", &["key", "0"], true),
+            ("BZPOPMAX", &["key", "0"], true),
+            ("BZMPOP", &["0", "1", "key", "MIN"], true),
+            ("WAIT", &["0", "100"], true),
+            ("WAITAOF", &["0", "0", "100"], true),
+            ("XREAD", &["STREAMS", "s", "$"], false),
+            ("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"], true),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "STREAMS", "s", ">"],
+                false,
+            ),
             (
                 "XREADGROUP",
                 &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"],
+                true,
             ),
-            ("GET", &["key"]),
-            ("SET", &["key", "value"]),
-            ("LPUSH", &["key", "value"]),
+            ("GET", &["key"], false),
+            ("SET", &["key", "value"], false),
+            ("LPUSH", &["key", "value"], false),
         ];
-        for (name, args) in table {
+        for (name, args, expected) in table {
             let mut cmd = Cmd::new();
             cmd.arg(*name);
             for a in *args {
@@ -3905,8 +3922,12 @@ mod tests {
             let arg_vecs: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
             let via_name = is_blocking_command_name(name.as_bytes(), &arg_vecs);
             assert_eq!(
-                via_cmd, via_name,
-                "parity mismatch for {name} {args:?}: cmd={via_cmd} name={via_name}"
+                via_cmd, *expected,
+                "is_blocking_command mismatch for {name} {args:?}: got {via_cmd}, expected {expected}"
+            );
+            assert_eq!(
+                via_name, *expected,
+                "is_blocking_command_name mismatch for {name} {args:?}: got {via_name}, expected {expected}"
             );
         }
     }
