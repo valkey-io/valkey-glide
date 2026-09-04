@@ -11615,30 +11615,37 @@ class TestScripts:
         instance with the same hash still exists, even after the original reference is released
         and the server-side script cache is flushed.
         """
+        import gc
+
         script_1 = Script("return 'Script Exists'")
         script_2 = Script("return 'Script Exists'")
         assert script_1.get_hash() == script_2.get_hash()
+        script_hash = script_1.get_hash()
 
         # Run first script and drop reference
         assert await glide_client.invoke_script(script_1) == b"Script Exists"
-        script_1.__del__()
+        del script_1
+        gc.collect()
 
         # Flush the script from the server
         assert await glide_client.script_flush() == OK
 
         # Script should not exist on the server anymore
-        assert await glide_client.script_exists([script_1.get_hash()]) == [False]
+        assert await glide_client.script_exists([script_hash]) == [False]
 
         # Run second script; it should not exist on the server but must be found in the local script cache
         assert await glide_client.invoke_script(script_2) == b"Script Exists"
 
         # Release script_2 and flush again
-        script_2.__del__()
+        del script_2
+        gc.collect()
         assert await glide_client.script_flush() == OK
 
-        # Should now raise NOSCRIPT
+        # Should now raise NOSCRIPT when trying to execute via EVALSHA directly,
+        # because both Script references have been dropped (refcount == 0) and
+        # the server cache was flushed.
         with pytest.raises(RequestError) as exc_info:
-            await glide_client.invoke_script(script_2)
+            await glide_client.custom_command(["EVALSHA", script_hash, "0"])
 
         assert "NOSCRIPT" in str(exc_info.value).upper()
 

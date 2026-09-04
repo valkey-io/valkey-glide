@@ -66,9 +66,20 @@ class Script:
     def __del__(self):
         """
         Clean up the script from the cache when the object is garbage collected.
+
+        This method is idempotent: calling it multiple times (e.g., once
+        explicitly and once via GC) will only invoke ``drop_script`` once.
         """
         try:
+            # Guard against repeated calls. If __del__ was already invoked
+            # (explicitly or by the GC), self.hash will have been set to None.
+            if not hasattr(self, "hash") or self.hash is None:
+                return
+
             hash_bytes = self.hash.encode(ENCODING)
+            # Mark as already dropped BEFORE calling into native code so that
+            # a concurrent GC sweep cannot race with us.
+            self.hash = None
             hash_buffer = self._ffi.from_buffer(hash_bytes)
             error_ptr = self._lib.drop_script(hash_buffer, len(hash_bytes))
 
