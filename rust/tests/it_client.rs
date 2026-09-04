@@ -122,14 +122,11 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_client_info_reports_lib_name_and_ver() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start().expect("cluster harness should start");
+        let client = cluster
+            .client()
+            .await
+            .expect("cluster client should connect");
 
         let reply = client
             .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
