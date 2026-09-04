@@ -9,6 +9,7 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
@@ -280,10 +281,52 @@ public class ClientPool implements AutoCloseable {
             String rf = config.getReadFrom().name();
             if ("PRIMARY".equals(rf)) b.setReadFrom(ReadFrom.Primary);
             else if ("PREFER_REPLICA".equals(rf)) b.setReadFrom(ReadFrom.PreferReplica);
+            else if ("AZ_AFFINITY".equals(rf)) b.setReadFrom(ReadFrom.AZAffinity);
+            else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(rf)) {
+                b.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
+            } else if ("ALL_NODES".equals(rf)) b.setReadFrom(ReadFrom.AllNodes);
+        }
+
+        // Serialize the client circuit breaker configuration (already validated by the
+        // builder) so pooled clients fail fast exactly like non-pooled clients. A
+        // pooled client silently ignoring an unhealthy core defeats the purpose of a
+        // bounded pool under sustained failures (#6897).
+        ClientCircuitBreakerConfiguration cbConfig = config.getClientCircuitBreakerConfiguration();
+        if (cbConfig != null) {
+            if (cbConfig.getWindowSizeMs() <= 0) {
+                throw new IllegalArgumentException("windowSizeMs must be positive");
+            }
+            if (cbConfig.getFailureRateThreshold() <= 0.0f || cbConfig.getFailureRateThreshold() > 1.0f) {
+                throw new IllegalArgumentException(
+                        "failureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)");
+            }
+            if (cbConfig.getMinErrors() <= 0) {
+                throw new IllegalArgumentException("minErrors must be positive");
+            }
+            if (cbConfig.getOpenTimeoutMs() <= 0) {
+                throw new IllegalArgumentException("openTimeoutMs must be positive");
+            }
+            if (cbConfig.getConsecutiveSuccesses() <= 0) {
+                throw new IllegalArgumentException("consecutiveSuccesses must be positive");
+            }
+            b.setClientCircuitBreaker(
+                    ClientCircuitBreakerConfig.newBuilder()
+                            .setWindowSizeMs(cbConfig.getWindowSizeMs())
+                            .setFailureRateThreshold(cbConfig.getFailureRateThreshold())
+                            .setMinErrors(cbConfig.getMinErrors())
+                            .setOpenTimeoutMs(cbConfig.getOpenTimeoutMs())
+                            .setCountTimeouts(cbConfig.isCountTimeouts())
+                            .setConsecutiveSuccesses(cbConfig.getConsecutiveSuccesses())
+                            .build());
         }
 
         if (config.getClientName() != null) b.setClientName(config.getClientName());
+        if (config.getClientAZ() != null) b.setClientAz(config.getClientAZ());
         if (config.getDatabaseId() != null) b.setDatabaseId(config.getDatabaseId());
+
+        // lazyConnect: deliberately serialized unconditionally so pooled clients match
+        // the canonical ConnectionManager behavior (default false, no-op when unset).
+        b.setLazyConnect(config.isLazyConnect());
 
         if (config.getProtocol() != null) {
             if ("RESP2".equals(config.getProtocol().name())) b.setProtocol(ProtocolVersion.RESP2);
@@ -296,6 +339,7 @@ public class ClientPool implements AutoCloseable {
             if (rs.getNumOfRetries() != null) r.setNumberOfRetries(rs.getNumOfRetries());
             if (rs.getFactor() != null) r.setFactor(rs.getFactor());
             if (rs.getExponentBase() != null) r.setExponentBase(rs.getExponentBase());
+            if (rs.getJitterPercent() != null) r.setJitterPercent(rs.getJitterPercent());
             b.setConnectionRetryStrategy(r.build());
         }
 
