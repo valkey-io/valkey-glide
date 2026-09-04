@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
@@ -11608,39 +11609,79 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_isnt_removed_while_another_instance_exists(
-        self, glide_client: TGlideClient
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
         """
         Verifies that a script is retained in the local scripts container and not removed while another
         instance with the same hash still exists, even after the original reference is released
         and the server-side script cache is flushed.
+
+        Runs against a dedicated server rather than the shared test server. The
+        test relies on a global ``SCRIPT FLUSH`` to clear the server-side cache,
+        and on the shared server a parallel worker's flush could evict this
+        script between the client's internal ``SCRIPT LOAD`` and ``EVALSHA``,
+        producing a spurious NOSCRIPT. A private server keeps this a genuine
+        check of local script-cache retention.
         """
-        script_1 = Script("return 'Script Exists'")
-        script_2 = Script("return 'Script Exists'")
-        assert script_1.get_hash() == script_2.get_hash()
+        dedicated_cluster = ValkeyCluster(
+            tls=False,
+            cluster_mode=cluster_mode,
+            shard_count=3 if cluster_mode else 1,
+            replica_count=0,
+        )
+        try:
+            glide_client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                request_timeout=5000,
+                valkey_cluster=dedicated_cluster,
+            )
+            try:
+                random_str = get_random_string(10)
+                expected = random_str.encode()
 
-        # Run first script and drop reference
-        assert await glide_client.invoke_script(script_1) == b"Script Exists"
-        script_1.__del__()
+                # Two instances share the same code, so they share one entry in
+                # the local script cache.
+                script_1 = Script(f"return '{random_str}'")
+                script_2 = Script(f"return '{random_str}'")
+                assert script_1.get_hash() == script_2.get_hash()
+                script_hash = script_1.get_hash()
 
-        # Flush the script from the server
-        assert await glide_client.script_flush() == OK
+                # Run first script, then release its reference. gc.collect()
+                # forces the finalizer to run now so the local cache release is
+                # deterministic rather than dependent on collection timing.
+                assert await glide_client.invoke_script(script_1) == expected
+                del script_1
+                gc.collect()
 
-        # Script should not exist on the server anymore
-        assert await glide_client.script_exists([script_1.get_hash()]) == [False]
+                # Flush the script from the server
+                assert await glide_client.script_flush() == OK
 
-        # Run second script; it should not exist on the server but must be found in the local script cache
-        assert await glide_client.invoke_script(script_2) == b"Script Exists"
+                # Script should not exist on the server anymore
+                assert await glide_client.script_exists([script_hash]) == [False]
 
-        # Release script_2 and flush again
-        script_2.__del__()
-        assert await glide_client.script_flush() == OK
+                # Run second script; it is gone from the server but script_2
+                # still holds the code in the local cache, so the client
+                # transparently reloads and runs it.
+                assert await glide_client.invoke_script(script_2) == expected
 
-        # Should now raise NOSCRIPT
-        with pytest.raises(RequestError) as exc_info:
-            await glide_client.invoke_script(script_2)
+                # Release script_2 and flush again
+                del script_2
+                gc.collect()
+                assert await glide_client.script_flush() == OK
 
-        assert "NOSCRIPT" in str(exc_info.value).upper()
+                # With every instance released the local cache no longer holds
+                # the code, so a direct EVALSHA on the flushed server must fail
+                # with NOSCRIPT.
+                with pytest.raises(RequestError) as exc_info:
+                    await glide_client.custom_command(["EVALSHA", script_hash, "0"])
+
+                assert "NOSCRIPT" in str(exc_info.value).upper()
+            finally:
+                await glide_client.close()
+        finally:
+            del dedicated_cluster
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
