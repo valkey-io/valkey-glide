@@ -1194,8 +1194,10 @@ export interface BaseClientConfiguration {
      * Client-side cache configuration.
      *
      * @remarks
-     * When provided, enables client-side caching for cacheable commands (GET, HGETALL, SMEMBERS).
+     * When provided, enables client-side caching for cacheable commands (GET, MGET, HGETALL, SMEMBERS).
      * The cache reduces network round-trips and server load by storing frequently accessed data locally.
+     * An MGET response may combine locally cached values with values fetched from the server, so it does not provide
+     * an atomic snapshot across all keys.
      *
      * - **Memory Management**: The cache respects the configured memory limit and evicts entries based on the specified policy.
      * - **TTL Support**: Entries can have optional time-to-live values for automatic expiration.
