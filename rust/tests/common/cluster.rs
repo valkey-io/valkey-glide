@@ -23,10 +23,9 @@ const CLUSTER_MANAGER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/clu
 
 /// A cluster created with `cluster_manager.py`.
 pub struct ClusterHarness {
-    pub ports: Vec<u16>,
     /// The `--cluster-folder` used to stop the cluster on drop.
     folder: String,
-    /// Primary node ports (the seed is `ports[0]`, always a primary).
+    /// Primary node ports.
     pub primary_ports: Vec<u16>,
     /// Replica node ports.
     pub replica_ports: Vec<u16>,
@@ -37,13 +36,13 @@ impl ClusterHarness {
     /// Panics if the cluster cannot be created.
     pub fn start() -> ClusterHarness {
         Self::start_via_cluster_manager(3, 1)
-            .expect("failed to start a cluster with `cluster_manager.py`.")
     }
 
-    /// Starts a cluster with the specified number of shards and replicas using `cluster_manager.py`.
-    /// Returns `None` if the script fails.
-    fn start_via_cluster_manager(shards: usize, replicas: usize) -> Option<ClusterHarness> {
-        let out = Command::new("python3")
+    /// Starts a cluster with the specified number of shards and replicas using
+    /// `cluster_manager.py`. Panics if the script fails.
+    fn start_via_cluster_manager(shards: usize, replicas: usize) -> ClusterHarness {
+        // [1] Run `cluster_manager.py`.
+        let result = Command::new("python3")
             .args([
                 CLUSTER_MANAGER,
                 "start",
@@ -53,11 +52,21 @@ impl ClusterHarness {
                 "-r",
                 &replicas.to_string(),
             ])
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
+            .output();
+
+        let out = match result {
+            Ok(out) => out,
+            Err(e) => panic!("could not run cluster_manager.py: {e}"),
+        };
+
+        assert!(
+            out.status.success(),
+            "cluster_manager.py exited with {}:\n{}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        // [2] Parse CLUSTER_FOLDER and CLUSTER_NODES from output.
         let stdout = String::from_utf8_lossy(&out.stdout);
 
         let mut folder: Option<String> = None;
@@ -75,12 +84,16 @@ impl ClusterHarness {
                 }
             }
         }
-        let folder = folder?;
-        if nodes.is_empty() {
-            return None;
-        }
 
-        // Parse SERVERS_JSON for the primary/replica split.
+        let folder = folder.unwrap_or_else(|| {
+            panic!("cluster_manager.py output missing CLUSTER_FOLDER=:\n{stdout}")
+        });
+        assert!(
+            !nodes.is_empty(),
+            "cluster_manager.py output missing CLUSTER_NODES=:\n{stdout}"
+        );
+
+        // [3] Parse SERVERS_JSON from output.
         let mut primary_ports: Vec<u16> = Vec::new();
         let mut replica_ports: Vec<u16> = Vec::new();
         if let Some(json_line) = stdout.lines().find(|l| l.starts_with("SERVERS_JSON=")) {
@@ -101,25 +114,22 @@ impl ClusterHarness {
             }
         }
 
-        // Seed on a primary if we identified one, else the first node.
-        let seed = *primary_ports.first().unwrap_or(&nodes[0].1);
-        let mut ports: Vec<u16> = vec![seed];
-        ports.extend(nodes.iter().map(|(_, p)| *p).filter(|p| *p != seed));
+        // If `cluster_manager.py` didn't report a primary node,
+        // treat every node as a primary.
         if primary_ports.is_empty() {
             primary_ports = nodes.iter().map(|(_, p)| *p).collect();
         }
 
-        Some(ClusterHarness {
-            ports,
+        ClusterHarness {
             folder,
             primary_ports,
             replica_ports,
-        })
+        }
     }
 
     /// The seed `host:port` used to connect a cluster client.
     pub fn seed_port(&self) -> u16 {
-        self.ports[0]
+        self.primary_ports[0]
     }
 
     /// Connect a cluster client to this cluster with the given protocol.
@@ -127,7 +137,7 @@ impl ClusterHarness {
         &self,
         protocol: ProtocolVersion,
     ) -> Option<GlideClusterClient> {
-        let config = GlideClusterClientConfiguration::with_address("127.0.0.1", self.ports[0])
+        let config = GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
             .protocol(protocol)
             .request_timeout(Duration::from_secs(5));
         // Bounded connect-retry: under load a freshly-formed cluster can briefly
