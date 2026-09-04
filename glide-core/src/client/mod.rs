@@ -193,8 +193,8 @@ static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Validate whether a library name:
 ///   - is non-empty;
-///   - contain only printable ASCII characters;
-///   - matches to the optional tag pattern – 'name' or 'name(tag)'.
+///   - contains only printable ASCII characters;
+///   - matches the library name pattern with optional tag – 'name' or 'name(tag)'.
 pub(crate) fn validate_effective_lib_name(lib_name: &str) -> Result<(), String> {
     if lib_name.is_empty() {
         return Err("library name must not be empty".to_string());
@@ -210,7 +210,7 @@ pub(crate) fn validate_effective_lib_name(lib_name: &str) -> Result<(), String> 
 
 /// Validate whether a library version:
 ///   - is non-empty; and
-///   - contain only printable ASCII characters.
+///   - contains only printable ASCII characters.
 pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
     if lib_ver.is_empty() {
         return Err("library version must not be empty".to_string());
