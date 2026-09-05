@@ -784,6 +784,7 @@ impl TimeoutWatchdog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::sync::Arc;
 
     // ── Basic Firing Behavior ────────────────────────────────────────────
@@ -829,20 +830,30 @@ mod tests {
     // ── Pending Count ────────────────────────────────────────────────────
 
     #[tokio::test]
+    #[serial]
     async fn pending_count_increments_and_decrements() {
         // Use the global watchdog since PUBLISHED_PENDING is a single global.
+        // #[serial] prevents concurrent tests from perturbing the global counter
+        // while we poll for our 2 registered entries.
         let watchdog = TimeoutWatchdog::global();
 
         let rx1 = watchdog.register(Duration::from_millis(500), Instant::now());
         let rx2 = watchdog.register(Duration::from_millis(500), Instant::now());
 
-        // Give the watchdog thread time to drain and publish
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let after_register = pending_count();
-        assert!(
-            after_register >= 2,
-            "pending count must reflect registered entries: got {after_register}"
-        );
+        // Poll until the watchdog thread drains the channel and publishes our
+        // two entries, or until a deadline expires. A fixed sleep is not
+        // reliable under concurrent test load.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            let count = pending_count();
+            if count >= 2 {
+                break;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                panic!("pending count must reflect registered entries within 2s: got {count}");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
 
         // Wait for both to fire
         let _ = rx1.await;

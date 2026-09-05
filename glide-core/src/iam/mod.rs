@@ -32,6 +32,21 @@ const TOKEN_GEN_INITIAL_BACKOFF_MS: u64 = 100;
 /// Safety cap so we never sleep unreasonably long between attempts
 const TOKEN_GEN_MAX_BACKOFF_MS: u64 = 3_000;
 
+/// Callback type for supplying custom AWS credentials to IAM token signing.
+/// Returns `(access_key_id, secret_access_key, session_token, expires_at)` or an error.
+pub type CredentialsProvider = Arc<
+    dyn Fn() -> Result<
+            (
+                String,
+                String,
+                Option<String>,
+                Option<std::time::SystemTime>,
+            ),
+            GlideIAMError,
+        > + Send
+        + Sync,
+>;
+
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
 pub enum GlideIAMError {
@@ -156,7 +171,7 @@ async fn get_signing_identity(
 }
 
 /// Internal state structure for IAM token management
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct IamTokenState {
     /// AWS region for signing requests
     region: String,
@@ -168,6 +183,32 @@ pub(crate) struct IamTokenState {
     service_type: ServiceType,
     /// Token refresh interval in seconds
     refresh_interval_seconds: u32,
+    /// Optional custom credentials callback.
+    ///
+    /// When `Some`, this closure is invoked to obtain AWS credentials
+    /// `(access_key_id, secret_access_key, session_token)` instead of using the
+    /// default AWS credential chain. The callback must be `Send + Sync` so that
+    /// it can be called from the async background refresh task.
+    pub(crate) credentials_provider: Option<CredentialsProvider>,
+}
+
+impl std::fmt::Debug for IamTokenState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IamTokenState")
+            .field("region", &self.region)
+            .field("cluster_name", &self.cluster_name)
+            .field("username", &self.username)
+            .field("service_type", &self.service_type)
+            .field("refresh_interval_seconds", &self.refresh_interval_seconds)
+            .field(
+                "credentials_provider",
+                &self
+                    .credentials_provider
+                    .as_ref()
+                    .map(|_| "<custom callback>"),
+            )
+            .finish()
+    }
 }
 
 /// IAM-based token manager for ElastiCache/MemoryDB.
@@ -216,12 +257,19 @@ impl IAMTokenManager {
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 5 minutes (300 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
+    /// * `credentials_provider` - Optional custom callback to retrieve AWS credentials.
+    ///   When `Some`, this closure is called instead of the default AWS credential chain.
+    ///   Returns `(access_key_id, secret_access_key, session_token)` where session token
+    ///   may be `None` for long-term credentials.
+    ///   When `None`, the default AWS credential chain (environment variables,
+    ///   `~/.aws/credentials`, EC2/ECS metadata, etc.) is used.
     pub async fn new(
         cluster_name: String,
         username: String,
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
+        credentials_provider: Option<CredentialsProvider>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
 
@@ -232,6 +280,7 @@ impl IAMTokenManager {
             service_type,
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
+            credentials_provider,
         };
 
         // Generate initial token using the state
@@ -317,11 +366,13 @@ impl IAMTokenManager {
                 }
                 token_changed.store(true, Ordering::Release);
             }
-            Err(err) => {
-                // Leave cached token unchanged; logs already emitted in backoff routine
+            Err(_err) => {
+                // Backoff routine has already logged the failure details.
+                // Do not re-log here to avoid double-logging credential-related
+                // error messages.
                 log_error(
                     "IAM token refresh failed",
-                    format!("Could not refresh token after backoff: {}", err),
+                    "Could not refresh token after backoff. Check your GlideCredentialProvider implementation.",
                 );
             }
         }
@@ -342,14 +393,27 @@ impl IAMTokenManager {
                     return Ok(token);
                 }
                 Err(e) => {
+                    // CredentialsError means the custom provider threw an exception or
+                    // returned invalid credentials. This is a programming/configuration
+                    // error, not a transient failure — retrying will not help.
+                    if matches!(e, GlideIAMError::CredentialsError(_)) {
+                        log_error(
+                            "IAM token generation failed",
+                            "Custom credentials provider returned an error. \
+                             Check your GlideCredentialProvider implementation.",
+                        );
+                        return Err(e);
+                    }
+
                     attempt += 1;
 
                     if attempt >= TOKEN_GEN_MAX_ATTEMPTS {
                         log_error(
                             "IAM token generation failed",
                             format!(
-                                "Exhausted {} attempts with exponential backoff. error: {}",
-                                TOKEN_GEN_MAX_ATTEMPTS, e
+                                "Exhausted {} attempts with exponential backoff. \
+                                 Check your GlideCredentialProvider implementation for details.",
+                                TOKEN_GEN_MAX_ATTEMPTS
                             ),
                         );
                         return Err(e);
@@ -357,7 +421,11 @@ impl IAMTokenManager {
 
                     log_warn(
                         "IAM token generation failed",
-                        format!(" {}. Retrying in {}ms", e, backoff_ms),
+                        format!(
+                            "Attempt {}/{}: credentials provider returned an error. \
+                             Retrying in {}ms.",
+                            attempt, TOKEN_GEN_MAX_ATTEMPTS, backoff_ms
+                        ),
                     );
 
                     tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
@@ -442,8 +510,42 @@ impl IAMTokenManager {
         let base_url = build_base_url(&hostname, &state.username);
 
         // Fetch fresh credentials on every token generation to handle credential rotation
-        // (e.g., EC2 instance profile credentials rotate every ~6 hours)
-        let creds = get_signing_identity(&state.region, state.service_type).await?;
+        // (e.g., EC2 instance profile credentials rotate every ~6 hours).
+        // When a custom credentials callback is configured, use it; otherwise fall back to
+        // the default AWS credential chain.
+        let creds = if let Some(provider) = &state.credentials_provider {
+            let provider = Arc::clone(provider);
+            // Bound the callback with a timeout so a slow or hung credentials
+            // provider (e.g. an unreachable Vault endpoint) cannot block token
+            // refresh indefinitely.  10 seconds is generous for a network round
+            // trip while still being short enough to surface the problem quickly.
+            const CREDENTIALS_CALLBACK_TIMEOUT: Duration = Duration::from_secs(10);
+            let (access_key_id, secret_access_key, session_token, expires_at) =
+                tokio::time::timeout(
+                    CREDENTIALS_CALLBACK_TIMEOUT,
+                    tokio::task::spawn_blocking(move || provider()),
+                )
+                .await
+                .map_err(|_| {
+                    GlideIAMError::CredentialsError(format!(
+                        "Custom credentials callback did not return within {:?}. \
+                         Check your GlideCredentialProvider implementation.",
+                        CREDENTIALS_CALLBACK_TIMEOUT
+                    ))
+                })?
+                .map_err(|e| {
+                    GlideIAMError::CredentialsError(format!("spawn_blocking panicked: {e}"))
+                })??;
+            aws_credential_types::Credentials::new(
+                access_key_id,
+                secret_access_key,
+                session_token,
+                expires_at,
+                "glide-custom-credentials",
+            )
+        } else {
+            get_signing_identity(&state.region, state.service_type).await?
+        };
         let identity_value = creds.into();
 
         let mut signing_settings = SigningSettings::default();
@@ -599,6 +701,7 @@ mod tests {
             username: username.to_string(),
             service_type,
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
+            credentials_provider: None,
         }
     }
 
@@ -619,6 +722,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
+            None,    // credentials_provider
         )
         .await
         .unwrap();
@@ -674,6 +778,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -710,6 +815,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
 
@@ -749,6 +855,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -778,6 +885,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -834,6 +942,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
+            None,    // credentials_provider
         )
         .await
         .unwrap();
@@ -879,6 +988,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                None, // credentials_provider
             )
             .await;
 
@@ -897,6 +1007,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                None, // credentials_provider
             )
             .await;
 
@@ -939,6 +1050,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
+            None, // credentials_provider
         )
         .await
         .unwrap();
@@ -1049,6 +1161,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
         assert!(
@@ -1073,6 +1186,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 None,
+                None, // credentials_provider
             )
             .await;
             assert!(
@@ -1093,6 +1207,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            None, // credentials_provider
         )
         .await;
         assert!(
@@ -1107,5 +1222,243 @@ mod tests {
         unsafe {
             env::remove_var("AWS_ENDPOINT_URL_STS");
         }
+    }
+
+    /// Test that a custom credentials callback is used when provided.
+    ///
+    /// The callback returns hard-coded mock credentials.  No real AWS account
+    /// is needed – the SigV4 signing step accepts any non-empty key material.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_with_custom_callback() {
+        initialize_test_environment();
+
+        let callback: CredentialsProvider = Arc::new(|| {
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None, // no expiry
+            ))
+        });
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "IAMTokenManager creation with custom callback should succeed: {:?}",
+            result.err()
+        );
+
+        let manager = result.unwrap();
+        let token = manager.get_token().await;
+        assert!(
+            !token.is_empty(),
+            "Token generated via callback should not be empty"
+        );
+        assert!(
+            token.starts_with("test-cluster/"),
+            "Token should start with cluster name, got: {token}"
+        );
+        assert!(
+            token.contains("Action=connect"),
+            "Token should contain Action=connect"
+        );
+        assert!(
+            token.contains("X-Amz-Signature="),
+            "Token should contain X-Amz-Signature"
+        );
+    }
+
+    /// Test that an error returned by the custom callback propagates correctly.
+    ///
+    /// The callback always returns a `CredentialsError`; we verify that
+    /// `IAMTokenManager::new` surfaces that error rather than silently swallowing it.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_callback_error_propagates() {
+        initialize_test_environment();
+
+        let callback: CredentialsProvider = Arc::new(|| {
+            Err(GlideIAMError::CredentialsError(
+                "injected credential failure".to_string(),
+            ))
+        });
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "IAMTokenManager creation should fail when callback returns an error"
+        );
+
+        match result.unwrap_err() {
+            GlideIAMError::CredentialsError(msg) => {
+                assert!(
+                    msg.contains("injected credential failure"),
+                    "Error message should propagate the callback's message, got: {msg}"
+                );
+            }
+            other => panic!("Expected CredentialsError, got: {other:?}"),
+        }
+    }
+
+    /// Verify that the default credential-chain path (no callback) still works.
+    ///
+    /// This is a regression guard: the existing test
+    /// `test_iam_token_manager_new_creates_initial_token` already covers this,
+    /// but we add an explicit assertion here to document the expectation.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_default_path_when_no_callback() {
+        initialize_test_environment();
+        // Set standard env-var credentials so the default chain resolves.
+        setup_test_credentials();
+
+        let result = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            None, // <-- no callback: default AWS credential chain
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Default credential chain path should succeed when env-var creds are set: {:?}",
+            result.err()
+        );
+        let token = result.unwrap().get_token().await;
+        assert!(
+            !token.is_empty(),
+            "Token from default chain should not be empty"
+        );
+        assert!(
+            token.starts_with("test-cluster/"),
+            "Token should start with cluster name"
+        );
+    }
+
+    /// Test that the custom callback is invoked again after `refresh_token()`.
+    ///
+    /// Uses an `AtomicUsize` counter shared between the callback closure and
+    /// the test body.  After the initial token is generated (counter ≥ 1) we
+    /// call `refresh_token()` and assert the counter increases.
+    #[tokio::test]
+    #[serial]
+    async fn test_custom_callback_invoked_on_manual_refresh() {
+        initialize_test_environment();
+
+        let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let call_count_clone = Arc::clone(&call_count);
+
+        let callback: CredentialsProvider = Arc::new(move || {
+            call_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None,
+            ))
+        });
+
+        let manager = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await
+        .expect("IAMTokenManager creation should succeed");
+
+        let after_new = call_count.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(after_new >= 1, "Callback should be invoked during new()");
+
+        manager.refresh_token().await;
+
+        let after_refresh = call_count.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            after_refresh > after_new,
+            "Callback should be invoked again after refresh_token() (before={after_new}, after={after_refresh})"
+        );
+    }
+
+    /// Test that the custom callback is invoked by the background refresh task.
+    ///
+    /// Starts the background refresh task with a 1-second interval, waits up to
+    /// 5 seconds for a second invocation, then shuts down.
+    #[tokio::test]
+    #[serial]
+    async fn test_custom_callback_invoked_on_scheduled_refresh() {
+        initialize_test_environment();
+
+        let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let call_count_clone = Arc::clone(&call_count);
+
+        let callback: CredentialsProvider = Arc::new(move || {
+            call_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None,
+            ))
+        });
+
+        let mut manager = IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            ServiceType::ElastiCache,
+            Some(1), // 1-second refresh interval
+            Some(callback),
+        )
+        .await
+        .expect("IAMTokenManager creation should succeed");
+
+        let after_new = call_count.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(after_new >= 1, "Callback should be invoked during new()");
+
+        manager.start_refresh_task();
+
+        // Poll for up to 5 seconds for the background task to invoke the callback.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let current = call_count.load(std::sync::atomic::Ordering::SeqCst);
+            if current > after_new {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                panic!(
+                    "Background refresh task did not invoke the callback within 5 seconds \
+                     (after_new={after_new}, current={current})"
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        // Stop the background task to prevent it from racing with subsequent
+        // serial tests that mutate environment variables via env::set_var.
+        manager.stop_refresh_task().await;
     }
 }
