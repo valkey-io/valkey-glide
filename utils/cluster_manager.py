@@ -1268,45 +1268,6 @@ def run_remote_command(
     )
 
 
-def _pick_free_remote_ports(
-    instance_id: str,
-    region: str,
-    count: int,
-    min_port: int = 7000,
-    max_port: int = 17010,
-    max_attempts: int = 100,
-) -> list:
-    """
-    Pick `count` free TCP ports on a remote instance within [min_port, max_port].
-    Verifies availability by checking ss/netstat output on the remote host via SSM.
-    """
-    # Get all listening ports on the remote instance
-    try:
-        output = run_remote_command(
-            instance_id,
-            "ss -tln 2>/dev/null | awk 'NR>1 {print $4}' | grep -oE '[0-9]+$' || netstat -tln 2>/dev/null | awk 'NR>2 {print $4}' | grep -oE '[0-9]+$'",
-            region,
-            timeout_seconds=30,
-        )
-        used_ports = set(int(p) for p in output.split() if p.isdigit())
-    except Exception:
-        used_ports = set()
-
-    selected = []
-    attempts = 0
-    while len(selected) < count and attempts < max_attempts:
-        attempts += 1
-        p = random.randint(min_port, max_port)
-        if p not in used_ports and p not in selected:
-            selected.append(p)
-
-    if len(selected) < count:
-        raise Exception(
-            f"Could not find {count} free ports in range {min_port}-{max_port} "
-            f"on remote instance {instance_id}"
-        )
-    return selected
-
 
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
@@ -1591,106 +1552,53 @@ def main():
             remote_ip = args.remote_ip
             if not remote_ip:
                 parser.error("--remote-ip is required when using --remote")
-            cmd_parts = [
+
+            # Build cluster_manager.py args for the remote side
+            cm_args = [
                 "python3",
                 "/home/ssm-user/glide/cluster_manager.py",
-                "--loglevel",
-                args.log,
-                "-H",
-                remote_ip,
+                "--loglevel", args.log,
+                "-H", remote_ip,
             ]
             if args.tls:
-                cmd_parts.append("--tls")
-            cmd_parts += [
+                cm_args.append("--tls")
+            cm_args += [
                 "start",
-                "-n",
-                str(args.shard_count if args.cluster_mode else 1),
-                "-r",
-                str(args.replica_count),
+                "-n", str(args.shard_count if args.cluster_mode else 1),
+                "-r", str(args.replica_count),
             ]
             if args.cluster_mode:
-                cmd_parts.append("--cluster-mode")
-            # Use fixed ports for remote execution so firewall rules are predictable.
-            # open 7000-17010 (data ports + cluster bus ports).
+                cm_args.append("--cluster-mode")
             if args.ports:
-                cmd_parts += ["-p"] + [str(p) for p in args.ports]
-            else:
-                # Pick free ports on the remote host within the allowed range.
-                # Uses ss/netstat on the remote to verify each port is free.
+                cm_args += ["-p"] + [str(p) for p in args.ports]
+
+            # Build the port selection expression for inline shell
+            if not args.ports:
                 node_count = args.shard_count * (1 + args.replica_count)
-                logging.info(f"[remote] Picking free ports on remote host...")
-                _tp0 = time.perf_counter()
-                remote_ports = _pick_free_remote_ports(
-                    args.remote, args.remote_region, node_count
-                )
-                logging.info(f"[remote] Port pick done in {time.perf_counter()-_tp0:.1f}s, ports={remote_ports}")
-                cmd_parts += ["-p"] + [str(p) for p in remote_ports]
-            _t0 = time.perf_counter()
-            # Step 1: pick free ports
-            logging.info(f"[remote] Step 1: picking free ports...")
-            _t1 = time.perf_counter()
-            logging.info(f"[remote] Step 1 done in {_t1-_t0:.1f}s")
-
-            # Step 2: copy cluster_manager.py (skip if already present with same size)
-            logging.info(f"[remote] Step 2: copying cluster_manager.py...")
-            script_path = os.path.abspath(__file__)
-            local_size = os.path.getsize(script_path)
-            check_cmd = f"test -f /home/ssm-user/glide/cluster_manager.py && stat -c%s /home/ssm-user/glide/cluster_manager.py || echo 0"
-            try:
-                remote_size_str = run_remote_command(args.remote, check_cmd, args.remote_region, timeout_seconds=15).strip()
-                remote_size = int(remote_size_str) if remote_size_str.isdigit() else 0
-            except Exception:
-                remote_size = 0
-            if remote_size != local_size:
-                with open(script_path, "rb") as f:
-                    script_b64 = base64.b64encode(f.read()).decode()
-                copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
-                run_remote_command(args.remote, copy_cmd, args.remote_region)
-                logging.info(f"[remote] Step 2: file copied (local={local_size}, remote was {remote_size})")
+                # Simpler: just pick random ports inline
+                port_script = f"python3 -c 'import random; used=set(); ports=[]; [ports.append(p) or used.add(p) for _ in range(9999) for p in [random.randint(7000,17010)] if p not in used and len(ports)<{node_count}]; print(\" \".join(map(str,ports)))'"
+                cm_args_str = " ".join(cm_args) + " -p $(" + port_script + ")"
             else:
-                logging.info(f"[remote] Step 2: skipped (already up to date, size={local_size})")
-            _t2 = time.perf_counter()
-            logging.info(f"[remote] Step 2 done in {_t2-_t1:.1f}s")
+                cm_args_str = " ".join(cm_args)
 
-            # Step 3: set vm.overcommit_memory (skip if already set)
-            logging.info(f"[remote] Step 3: setting vm.overcommit_memory...")
-            try:
-                current = run_remote_command(
-                    args.remote,
-                    "cat /proc/sys/vm/overcommit_memory",
-                    args.remote_region,
-                    timeout_seconds=15,
-                ).strip()
-                if current != "1":
-                    run_remote_command(
-                        args.remote,
-                        "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
-                        args.remote_region,
-                        timeout_seconds=30,
-                    )
-                    logging.info(f"[remote] Step 3: overcommit set to 1")
-                else:
-                    logging.info(f"[remote] Step 3: skipped (already 1)")
-            except Exception:
-                run_remote_command(
-                    args.remote,
-                    "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
-                    args.remote_region,
-                    timeout_seconds=30,
-                )
-            _t3 = time.perf_counter()
-            logging.info(f"[remote] Step 3 done in {_t3-_t2:.1f}s")
+            # Single SSM call: setup + start in one shell script
+            script_path = os.path.abspath(__file__)
+            with open(script_path, "rb") as f:
+                script_b64 = base64.b64encode(f.read()).decode()
 
-            # Step 4: start Valkey
-            logging.info(f"[remote] Step 4: starting Valkey servers...")
-            remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
-            remote_cmd = remote_cmd.replace("/tmp/cluster_manager.py", "/home/ssm-user/glide/cluster_manager.py")
+            single_cmd = ";".join([
+                "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+                "mkdir -p /home/ssm-user/glide/clusters",
+                f"echo '{script_b64}' | base64 -d > /home/ssm-user/glide/cluster_manager.py",
+                f"GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters {cm_args_str}",
+            ])
+
+            _t0 = time.perf_counter()
+            logging.info(f"[remote] Single SSM call: setup + start Valkey on {args.remote}")
             output = run_remote_command(
-                args.remote, remote_cmd, args.remote_region, timeout_seconds=300
+                args.remote, single_cmd, args.remote_region, timeout_seconds=300
             )
-            _t4 = time.perf_counter()
-            logging.info(f"[remote] Step 4 done in {_t4-_t3:.1f}s")
-            logging.info(f"[remote] Total remote start time: {_t4-_t0:.1f}s")
+            logging.info(f"[remote] Done in {time.perf_counter()-_t0:.1f}s")
             # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
             print(output)
             sys.exit(0)
