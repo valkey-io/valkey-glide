@@ -130,7 +130,7 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
 
 
 def build_windows_userdata(
-    linux_instance_id: str, linux_private_ip: str
+    linux_instance_id: str, linux_private_ip: str,
 ) -> bytes:
     """Build the PowerShell user-data script for the Windows EC2."""
     lines = [
@@ -140,12 +140,7 @@ def build_windows_userdata(
         f"$commitSha = '{COMMIT_SHA}'",
         f"$reportBucket = '{REPORT_BUCKET}'",
         f"$region = '{REGION}'",
-        f"$env:GLIDE_REMOTE_INSTANCE_ID = '{linux_instance_id}'",
-        f"$env:GLIDE_REMOTE_IP = '{linux_private_ip}'",
-        f"$env:GLIDE_REMOTE_REGION = '{REGION}'",
-        "[System.Environment]::SetEnvironmentVariable('GLIDE_REMOTE_INSTANCE_ID', '" + linux_instance_id + "', 'Machine')",
-        "[System.Environment]::SetEnvironmentVariable('GLIDE_REMOTE_IP', '" + linux_private_ip + "', 'Machine')",
-        f"[System.Environment]::SetEnvironmentVariable('GLIDE_REMOTE_REGION', '{REGION}', 'Machine')",
+        f"'{{\"instanceId\":\"{linux_instance_id}\",\"privateIp\":\"{linux_private_ip}\",\"region\":\"{REGION}\"}}' | Out-File -FilePath 'C:\\glide-remote.json' -Encoding UTF8",
         "$logFile = 'C:\\build-log.txt'",
         "$aws = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'",
         "$exitCode = 1",
@@ -220,16 +215,10 @@ def build_windows_userdata(
         "    Push-Checkpoint 'pip-ready'",
         "",
         "    Write-Log '=== Running tests ==='",
-        f"    $env:GLIDE_REMOTE_INSTANCE_ID = '{linux_instance_id}'",
-        f"    $env:GLIDE_REMOTE_IP = '{linux_private_ip}'",
-        f"    $env:GLIDE_REMOTE_REGION = '{REGION}'",
         "    $testArgs = @('test', '--', '--forceExit')",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
         "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
-        f"    $env:GLIDE_REMOTE_INSTANCE_ID = '{linux_instance_id}'",
-        f"    $env:GLIDE_REMOTE_IP = '{linux_private_ip}'",
-        f"    $env:GLIDE_REMOTE_REGION = '{REGION}'",
         "    & npm @testArgs 2>&1 | Tee-Object -FilePath $logFile -Append",
         "    $exitCode = $LASTEXITCODE",
         "    Write-Log \"Tests finished with exit code: $exitCode\"",

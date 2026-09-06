@@ -46,7 +46,79 @@ function parseElastiCacheOutput(output: string): {
     };
 }
 
+function spawnAsync(
+    cmd: string,
+    args: string[],
+    label: string,
+    timeoutMs = 10 * 60 * 1000,
+): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { spawn } = require("child_process") as typeof import("child_process");
+    return new Promise((resolve, reject) => {
+        const proc = spawn(cmd, args, { env: process.env });
+        const timer = setTimeout(() => {
+            proc.kill();
+            reject(new Error(`[globalSetup] ${label} timed out after ${timeoutMs / 60000} min`));
+        }, timeoutMs);
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); process.stdout.write(d); });
+        proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); process.stderr.write(d); });
+        proc.on("close", (code: number | null) => {
+            clearTimeout(timer);
+            if (code !== 0) reject(new Error(`[globalSetup] ${label} exited ${code}\n${stderr}`));
+            else resolve(stdout);
+        });
+        proc.on("error", (err: Error) => { clearTimeout(timer); reject(err); });
+    });
+}
+
 export default async function globalSetup(): Promise<void> {
+    // -------------------------------------------------------------------------
+    // GLIDE_REMOTE path: start Valkey on Linux EC2, set endpoints for all tests
+    // The orchestrator writes C:\glide-remote.json with instanceId/privateIp.
+    // -------------------------------------------------------------------------
+    const remoteConfigFile = "C:\\glide-remote.json";
+    if (fs.existsSync(remoteConfigFile)) {
+        let remoteConfig: { instanceId: string; privateIp: string; region: string };
+        try {
+            remoteConfig = JSON.parse(fs.readFileSync(remoteConfigFile, "utf-8"));
+        } catch (e) {
+            throw new Error(`[globalSetup] Failed to read remote config: ${e}`);
+        }
+        const { instanceId, privateIp, region } = remoteConfig;
+        console.log(`[globalSetup] GLIDE_REMOTE: instance=${instanceId} ip=${privateIp}`);
+
+        const pythonCmd = process.platform === "win32" ? "python" : "python3";
+        const repoRoot = path.resolve(__dirname, "..", "..");
+        const clusterManagerScript = path.join(repoRoot, "utils", "cluster_manager.py");
+        const baseRemoteArgs = ["--remote", instanceId, "--remote-ip", privateIp, "--remote-region", region];
+
+        console.log("[globalSetup] Starting standalone + cluster Valkey in parallel...");
+        const [standaloneOut, clusterOut] = await Promise.all([
+            spawnAsync(pythonCmd, [clusterManagerScript, "start", ...baseRemoteArgs], "start standalone", 5 * 60 * 1000),
+            spawnAsync(pythonCmd, [clusterManagerScript, "start", "--cluster-mode", ...baseRemoteArgs], "start cluster", 5 * 60 * 1000),
+        ]);
+
+        const parseNodes = (out: string) => out.split("\n").find(l => l.startsWith("CLUSTER_NODES="))?.split("=").slice(1).join("=").trim().split(",")[0] ?? "";
+        const standaloneEndpoint = parseNodes(standaloneOut);
+        const clusterEndpoint = parseNodes(clusterOut);
+
+        process.env.STANDALONE_ENDPOINT = standaloneEndpoint;
+        process.env.CLUSTER_ENDPOINT = clusterEndpoint;
+
+        const data: EndpointsFile = {
+            cmdClusterName: "",
+            cmeClusterName: "",
+            standaloneEndpoint,
+            clusterEndpoint,
+        };
+        fs.writeFileSync(ELASTICACHE_ENDPOINTS_FILE, JSON.stringify(data, null, 2));
+        console.log(`[globalSetup] Standalone: ${standaloneEndpoint}`);
+        console.log(`[globalSetup] Cluster: ${clusterEndpoint}`);
+        return;
+    }
+
     if (process.env.USE_ELASTICACHE !== "true") {
         console.log(
             "[globalSetup] USE_ELASTICACHE is not set - skipping cloud cluster creation.",
