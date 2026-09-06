@@ -3,7 +3,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
-import base64
 import json
 import logging
 import os
@@ -1577,21 +1576,16 @@ def main():
                 cm_args += ["-p"] + [str(p) for p in args.ports]
             cm_args_str = " ".join(cm_args)
 
-            # Single SSM call: setup + start in one shell script
-            script_path = os.path.abspath(__file__)
-            with open(script_path, "rb") as f:
-                script_b64 = base64.b64encode(f.read()).decode()
-
-            single_cmd = ";".join([
+            # Run the start command.
+            # cluster_manager.py is copied to the Linux EC2 once by the orchestrator
+            # before tests start (see ec2_orchestrator.py setup_linux_ec2).
+            run_cmd = ";".join([
                 "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
-                "mkdir -p /home/ssm-user/glide/clusters",
-                f"echo '{script_b64}' | base64 -d > /home/ssm-user/glide/cluster_manager.py",
                 f"GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters {cm_args_str}",
             ])
-
             logging.info(f"[remote] Starting Valkey on {args.remote} ({remote_ip})")
             output = run_remote_command(
-                args.remote, single_cmd, args.remote_region, timeout_seconds=300
+                args.remote, run_cmd, args.remote_region, timeout_seconds=300
             )
             # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
             print(output)

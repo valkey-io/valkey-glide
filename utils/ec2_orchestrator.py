@@ -26,6 +26,7 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 
 import boto3  # type: ignore[import-not-found]
 
@@ -69,6 +70,63 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
     private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
     log.info(f"Linux EC2 running: {instance_id} ({private_ip})")
     return instance_id, private_ip
+
+
+def setup_linux_ec2(ssm_client, instance_id: str) -> None:
+    """Copy cluster_manager.py to the Linux EC2 and set up the environment.
+    Called once before tests start so createCluster calls just run the script."""
+    import gzip as _gzip
+    import hashlib
+
+    script_path = Path("utils/cluster_manager.py")
+    script_data = script_path.read_bytes()
+    compressed = _gzip.compress(script_data, compresslevel=9)
+    gz_b64 = base64.b64encode(compressed).decode()
+    log.info(f"Copying cluster_manager.py to {instance_id} ({len(compressed)} bytes gzipped)")
+
+    # Wait for SSM agent to be ready
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        info = ssm_client.describe_instance_information(
+            Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
+        )
+        if info.get("InstanceInformationList"):
+            break
+        time.sleep(5)
+    else:
+        raise TimeoutError(f"SSM agent not ready on {instance_id}")
+
+    # Copy and set up in one SSM call
+    setup_cmd = ";".join([
+        "mkdir -p /home/ssm-user/glide/clusters",
+        f"echo '{gz_b64}' | base64 -d | gzip -d > /home/ssm-user/glide/cluster_manager.py",
+        "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+        "echo SETUP_DONE",
+    ])
+
+    # Send SSM command
+    resp = ssm_client.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={"commands": [setup_cmd]},
+        TimeoutSeconds=60,
+    )
+    cmd_id = resp["Command"]["CommandId"]
+    time.sleep(2)
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        try:
+            inv = ssm_client.get_command_invocation(CommandId=cmd_id, InstanceId=instance_id)
+        except ssm_client.exceptions.InvocationDoesNotExist:
+            time.sleep(3)
+            continue
+        if inv["Status"] in ("Success", "Failed", "Cancelled", "TimedOut"):
+            if inv["Status"] != "Success":
+                raise RuntimeError(f"Linux EC2 setup failed: {inv.get('StandardErrorContent', '')}")
+            log.info(f"Linux EC2 setup complete: {inv.get('StandardOutputContent','').strip()}")
+            return
+        time.sleep(3)
+    raise TimeoutError("Linux EC2 setup timed out")
 
 
 def build_windows_userdata(
@@ -304,6 +362,9 @@ def main() -> int:
     try:
         # Step 1: Linux EC2
         linux_instance_id, linux_private_ip = launch_linux_ec2(ec2)
+        ssm = boto3.client("ssm", region_name=REGION)
+        setup_linux_ec2(ssm, linux_instance_id)
+        log.info(f"Linux EC2 ready: {linux_instance_id} ({linux_private_ip})")
 
         # Step 2: Windows EC2 (build + test)
         userdata = build_windows_userdata(linux_instance_id, linux_private_ip)
