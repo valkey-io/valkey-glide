@@ -140,7 +140,7 @@ def build_windows_userdata(
         f"$commitSha = '{COMMIT_SHA}'",
         f"$reportBucket = '{REPORT_BUCKET}'",
         f"$region = '{REGION}'",
-        f"'{{\"instanceId\":\"{linux_instance_id}\",\"privateIp\":\"{linux_private_ip}\",\"region\":\"{REGION}\"}}' | Out-File -FilePath 'C:\\glide-remote.json' -Encoding UTF8",
+        f"[System.IO.File]::WriteAllText('C:\\glide-remote.json', '{{\"instanceId\":\"{linux_instance_id}\",\"privateIp\":\"{linux_private_ip}\",\"region\":\"{REGION}\"}}', (New-Object System.Text.UTF8Encoding $false))",
         "$logFile = 'C:\\build-log.txt'",
         "$aws = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'",
         "$exitCode = 1",
