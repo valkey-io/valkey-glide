@@ -5,6 +5,20 @@ import minimist from "minimist";
 import { Logger } from "../build-ts";
 import { ELASTICACHE_ENDPOINTS_FILE, EndpointsFile } from "./jest.globalSetup";
 
+// When running on Windows EC2 with a remote Linux EC2, read the config file
+// and set env vars so TestUtils.ts can route createCluster calls to the remote host.
+const remoteConfigPath = "C:\\glide-remote.json";
+if (fs.existsSync(remoteConfigPath) && !process.env.GLIDE_REMOTE_INSTANCE_ID) {
+    try {
+        const cfg = JSON.parse(fs.readFileSync(remoteConfigPath, "utf-8"));
+        process.env.GLIDE_REMOTE_INSTANCE_ID = cfg.instanceId;
+        process.env.GLIDE_REMOTE_IP = cfg.privateIp;
+        process.env.GLIDE_REMOTE_REGION = cfg.region ?? "us-east-1";
+    } catch {
+        // ignore parse errors
+    }
+}
+
 beforeAll(() => {
     Logger.init("error", "log.log");
 

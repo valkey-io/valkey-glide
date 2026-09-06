@@ -94,6 +94,12 @@ export default async function globalSetup(): Promise<void> {
         const clusterManagerScript = path.join(repoRoot, "utils", "cluster_manager.py");
         const baseRemoteArgs = ["--remote", instanceId, "--remote-ip", privateIp, "--remote-region", region];
 
+        console.log("[globalSetup] Killing any leftover Valkey servers...");
+        await spawnAsync(pythonCmd, [
+            clusterManagerScript, "stop", "--prefix", "cluster",
+            "--remote", instanceId, "--remote-region", region,
+        ], "stop leftover clusters", 30 * 1000).catch(() => { /* ignore if nothing to stop */ });
+
         console.log("[globalSetup] Starting standalone + cluster Valkey in parallel...");
         const [standaloneOut, clusterOut] = await Promise.all([
             spawnAsync(pythonCmd, [clusterManagerScript, "start", ...baseRemoteArgs], "start standalone", 5 * 60 * 1000),
