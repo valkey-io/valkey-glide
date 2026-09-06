@@ -124,6 +124,9 @@ export default async function globalSetup(): Promise<void> {
     // Linux EC2 so all tests reuse them via initFromExistingCluster instead of
     // spinning up new servers on every beforeAll.
     // -------------------------------------------------------------------------
+    console.log(`[globalSetup] ENV CHECK: GLIDE_REMOTE_INSTANCE_ID=${
+        process.env.GLIDE_REMOTE_INSTANCE_ID ?? 'UNDEFINED'
+    } GLIDE_REMOTE_IP=${process.env.GLIDE_REMOTE_IP ?? 'UNDEFINED'}`);
     if (process.env.GLIDE_REMOTE_INSTANCE_ID) {
         const pythonCmd =
             process.platform === "win32" ? "python" : "python3";
