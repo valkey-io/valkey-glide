@@ -15,6 +15,9 @@ Required env vars:
   EC2_WINDOWS_INSTANCE_TYPE (default: c5.2xlarge)
   REPORT_BUCKET, AWS_REGION (default: us-east-1)
   BUILD_ID, COMMIT_SHA, NODE_VERSION
+
+Optional debug env vars:
+  GLIDE_KEEP_EC2  — if set, skip EC2 termination so you can SSM in for debugging
 """
 
 import base64
@@ -371,10 +374,17 @@ def main() -> int:
         log.error(f"Orchestration failed: {e}")
         return 1
     finally:
-        if windows_instance_id:
-            terminate_instance(ec2, windows_instance_id)
-        if linux_instance_id:
-            terminate_instance(ec2, linux_instance_id)
+        if os.environ.get("GLIDE_KEEP_EC2"):
+            log.info(f"GLIDE_KEEP_EC2 set — skipping EC2 termination for debugging.")
+            if windows_instance_id:
+                log.info(f"  Windows EC2: {windows_instance_id}")
+            if linux_instance_id:
+                log.info(f"  Linux EC2:   {linux_instance_id}")
+        else:
+            if windows_instance_id:
+                terminate_instance(ec2, windows_instance_id)
+            if linux_instance_id:
+                terminate_instance(ec2, linux_instance_id)
 
 
 if __name__ == "__main__":
