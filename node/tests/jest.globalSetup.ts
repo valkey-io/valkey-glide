@@ -21,6 +21,8 @@ export interface EndpointsFile {
     cmeClusterName: string;
     standaloneEndpoint: string;
     clusterEndpoint: string;
+    standaloneClusterFolder?: string;
+    clusterClusterFolder?: string;
 }
 
 function parseElastiCacheOutput(output: string): {
@@ -46,7 +48,162 @@ function parseElastiCacheOutput(output: string): {
     };
 }
 
+function parseClusterManagerOutput(output: string): {
+    nodes: string;
+    folder: string;
+} {
+    const nodesLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_NODES="));
+    const folderLine = output
+        .split("\n")
+        .find((l) => l.startsWith("CLUSTER_FOLDER="));
+
+    if (!nodesLine || !folderLine) {
+        throw new Error(
+            `[globalSetup] Could not parse cluster_manager.py output:\n${output}`,
+        );
+    }
+
+    return {
+        nodes: nodesLine.split("=").slice(1).join("=").trim(),
+        folder: folderLine.split("=").slice(1).join("=").trim(),
+    };
+}
+
+function spawnAsync(
+    cmd: string,
+    args: string[],
+    label: string,
+    timeoutMs = 10 * 60 * 1000,
+): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { spawn } = require("child_process") as typeof import("child_process");
+    return new Promise((resolve, reject) => {
+        const proc = spawn(cmd, args, { env: process.env });
+        const timer = setTimeout(() => {
+            proc.kill();
+            reject(
+                new Error(
+                    `[globalSetup] ${label} timed out after ${
+                        timeoutMs / 60000
+                    } min`,
+                ),
+            );
+        }, timeoutMs);
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (d: Buffer) => {
+            stdout += d.toString();
+            process.stdout.write(d);
+        });
+        proc.stderr.on("data", (d: Buffer) => {
+            stderr += d.toString();
+            process.stderr.write(d);
+        });
+        proc.on("close", (code: number | null) => {
+            clearTimeout(timer);
+            if (code !== 0)
+                reject(
+                    new Error(
+                        `[globalSetup] ${label} exited ${code}\n${stderr}`,
+                    ),
+                );
+            else resolve(stdout);
+        });
+        proc.on("error", (err: Error) => {
+            clearTimeout(timer);
+            reject(err);
+        });
+    });
+}
+
 export default async function globalSetup(): Promise<void> {
+    // -------------------------------------------------------------------------
+    // GLIDE_REMOTE path: pre-start one standalone + one cluster Valkey on the
+    // Linux EC2 so all tests reuse them via initFromExistingCluster instead of
+    // spinning up new servers on every beforeAll.
+    // -------------------------------------------------------------------------
+    if (process.env.GLIDE_REMOTE_INSTANCE_ID) {
+        const pythonCmd =
+            process.platform === "win32" ? "python" : "python3";
+        const repoRoot = path.resolve(__dirname, "..", "..");
+        const clusterManagerScript = path.join(
+            repoRoot,
+            "utils",
+            "cluster_manager.py",
+        );
+        const instanceId = process.env.GLIDE_REMOTE_INSTANCE_ID!;
+        const remoteIp = process.env.GLIDE_REMOTE_IP!;
+        const region = process.env.GLIDE_REMOTE_REGION ?? "us-east-1";
+
+        console.log(
+            `[globalSetup] Pre-starting Valkey on Linux EC2 ${
+                instanceId
+            } (${ remoteIp })`,
+        );
+
+        const baseRemoteArgs = [
+            "--remote",
+            instanceId,
+            "--remote-ip",
+            remoteIp,
+            "--remote-region",
+            region,
+        ];
+
+        // Start standalone and cluster in parallel
+        const [standaloneOutput, clusterOutput] = await Promise.all([
+            spawnAsync(
+                pythonCmd,
+                [clusterManagerScript, "start", ...baseRemoteArgs],
+                "start standalone",
+                5 * 60 * 1000,
+            ),
+            spawnAsync(
+                pythonCmd,
+                [
+                    clusterManagerScript,
+                    "start",
+                    "--cluster-mode",
+                    ...baseRemoteArgs,
+                ],
+                "start cluster",
+                5 * 60 * 1000,
+            ),
+        ]);
+
+        const standalone = parseClusterManagerOutput(standaloneOutput);
+        const cluster = parseClusterManagerOutput(clusterOutput);
+
+        // Use first node as the endpoint
+        const standaloneEndpoint = standalone.nodes.split(",")[0];
+        const clusterEndpoint = cluster.nodes.split(",")[0];
+
+        process.env.STANDALONE_ENDPOINT = standaloneEndpoint;
+        process.env.CLUSTER_ENDPOINT = clusterEndpoint;
+
+        const data: EndpointsFile = {
+            cmdClusterName: "",
+            cmeClusterName: "",
+            standaloneEndpoint,
+            clusterEndpoint,
+            standaloneClusterFolder: standalone.folder,
+            clusterClusterFolder: cluster.folder,
+        };
+        fs.writeFileSync(
+            ELASTICACHE_ENDPOINTS_FILE,
+            JSON.stringify(data, null, 2),
+        );
+
+        console.log(`[globalSetup] Standalone: ${standaloneEndpoint}`);
+        console.log(`[globalSetup] Cluster:    ${clusterEndpoint}`);
+        console.log(
+            `[globalSetup] Endpoints written to ${ELASTICACHE_ENDPOINTS_FILE}`,
+        );
+        return;
+    }
+
     if (process.env.USE_ELASTICACHE !== "true") {
         console.log(
             "[globalSetup] USE_ELASTICACHE is not set - skipping cloud cluster creation.",

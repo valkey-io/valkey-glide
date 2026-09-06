@@ -29,7 +29,6 @@ import {
     getRandomKey,
     getServerVersion,
     parseEndpoints,
-    retryWithBackoff,
 } from "./TestUtilities";
 import {
     Mode,
@@ -5959,19 +5958,12 @@ describe("PubSub", () => {
                 );
 
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -6138,19 +6130,12 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -6295,19 +6280,12 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -6461,13 +6439,8 @@ describe("PubSub", () => {
                     );
                 }
 
-                publishingClient = await retryWithBackoff(
-                    () =>
-                        GlideClusterClient.createClient(
-                            getOptions(clusterMode),
-                        ),
-                    5,
-                    2000,
+                publishingClient = await GlideClusterClient.createClient(
+                    getOptions(clusterMode),
                 );
 
                 await waitForSubscriptionStateIfNeeded(
@@ -6615,19 +6588,12 @@ describe("PubSub", () => {
                 }
 
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -7102,19 +7068,12 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -7405,19 +7364,12 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -7731,19 +7683,12 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 
@@ -8149,19 +8094,12 @@ describe("PubSub", () => {
 
                 // Create publishing client
                 if (clusterMode) {
-                    publishingClient = await retryWithBackoff(
-                        () =>
-                            GlideClusterClient.createClient(
-                                getOptions(clusterMode),
-                            ),
-                        5,
-                        2000,
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
                     );
                 } else {
-                    publishingClient = await retryWithBackoff(
-                        () => GlideClient.createClient(getOptions(clusterMode)),
-                        5,
-                        2000,
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
                     );
                 }
 

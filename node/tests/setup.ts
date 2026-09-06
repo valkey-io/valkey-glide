@@ -51,7 +51,7 @@ global.CLI_ARGS = args;
 // When USE_ELASTICACHE=true, synchronously read the endpoints file here at
 // module eval time so globals are populated before any test code runs.
 // (beforeAll runs after module evaluation, so reading there is too late.)
-if (process.env.USE_ELASTICACHE === "true") {
+if (process.env.USE_ELASTICACHE === "true" || process.env.GLIDE_REMOTE_INSTANCE_ID) {
     try {
         if (fs.existsSync(ELASTICACHE_ENDPOINTS_FILE)) {
             const data = JSON.parse(
@@ -73,16 +73,15 @@ if (process.env.USE_ELASTICACHE === "true") {
     }
 }
 
+const useRemoteServer =
+    process.env.USE_ELASTICACHE === "true" ||
+    !!process.env.GLIDE_REMOTE_INSTANCE_ID;
 global.CLUSTER_ENDPOINTS =
     (args["cluster-endpoints"] as string) ??
-    (process.env.USE_ELASTICACHE === "true"
-        ? process.env.CLUSTER_ENDPOINT
-        : undefined);
+    (useRemoteServer ? process.env.CLUSTER_ENDPOINT : undefined);
 global.STAND_ALONE_ENDPOINT =
     (args["standalone-endpoints"] as string) ??
-    (process.env.USE_ELASTICACHE === "true"
-        ? process.env.STANDALONE_ENDPOINT
-        : undefined);
+    (useRemoteServer ? process.env.STANDALONE_ENDPOINT : undefined);
 global.TLS = !!args.tls;
 global.TLS_CLUSTER_ENDPOINTS = args["tls-cluster-endpoints"] as string;
 global.TLS_STAND_ALONE_ENDPOINT = args["tls-standalone-endpoints"] as string;

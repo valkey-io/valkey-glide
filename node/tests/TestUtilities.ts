@@ -2752,38 +2752,3 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
 }
-
-/**
- * Retries an async operation with linear backoff.
- * Useful for flaky network operations like TLS connections on Windows/WSL.
- * Each retry waits `delayMs * (attempt + 1)` ms (linear, not exponential).
- *
- * @param fn - Async function to retry
- * @param retries - Number of retry attempts (default: 3)
- * @param delayMs - Base delay between retries in ms (default: 1000)
- * @returns Result of the function
- * @throws Last error if all retries exhausted
- */
-export async function retryWithBackoff<T>(
-    fn: () => Promise<T>,
-    retries = 3,
-    delayMs = 1000,
-): Promise<T> {
-    let lastError: Error | unknown;
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            return await fn();
-        } catch (e) {
-            lastError = e;
-
-            if (attempt < retries) {
-                await new Promise((r) =>
-                    setTimeout(r, delayMs * (attempt + 1)),
-                );
-            }
-        }
-    }
-
-    throw lastError;
-}
