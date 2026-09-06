@@ -1631,24 +1631,53 @@ def main():
             _t1 = time.perf_counter()
             logging.info(f"[remote] Step 1 done in {_t1-_t0:.1f}s")
 
-            # Step 2: copy cluster_manager.py
+            # Step 2: copy cluster_manager.py (skip if already present with same size)
             logging.info(f"[remote] Step 2: copying cluster_manager.py...")
             script_path = os.path.abspath(__file__)
-            with open(script_path, "rb") as f:
-                script_b64 = base64.b64encode(f.read()).decode()
-            copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
-            run_remote_command(args.remote, copy_cmd, args.remote_region)
+            local_size = os.path.getsize(script_path)
+            check_cmd = f"test -f /home/ssm-user/glide/cluster_manager.py && stat -c%s /home/ssm-user/glide/cluster_manager.py || echo 0"
+            try:
+                remote_size_str = run_remote_command(args.remote, check_cmd, args.remote_region, timeout_seconds=15).strip()
+                remote_size = int(remote_size_str) if remote_size_str.isdigit() else 0
+            except Exception:
+                remote_size = 0
+            if remote_size != local_size:
+                with open(script_path, "rb") as f:
+                    script_b64 = base64.b64encode(f.read()).decode()
+                copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
+                run_remote_command(args.remote, copy_cmd, args.remote_region)
+                logging.info(f"[remote] Step 2: file copied (local={local_size}, remote was {remote_size})")
+            else:
+                logging.info(f"[remote] Step 2: skipped (already up to date, size={local_size})")
             _t2 = time.perf_counter()
             logging.info(f"[remote] Step 2 done in {_t2-_t1:.1f}s")
 
-            # Step 3: set vm.overcommit_memory
+            # Step 3: set vm.overcommit_memory (skip if already set)
             logging.info(f"[remote] Step 3: setting vm.overcommit_memory...")
-            run_remote_command(
-                args.remote,
-                "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
-                args.remote_region,
-                timeout_seconds=30,
-            )
+            try:
+                current = run_remote_command(
+                    args.remote,
+                    "cat /proc/sys/vm/overcommit_memory",
+                    args.remote_region,
+                    timeout_seconds=15,
+                ).strip()
+                if current != "1":
+                    run_remote_command(
+                        args.remote,
+                        "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+                        args.remote_region,
+                        timeout_seconds=30,
+                    )
+                    logging.info(f"[remote] Step 3: overcommit set to 1")
+                else:
+                    logging.info(f"[remote] Step 3: skipped (already 1)")
+            except Exception:
+                run_remote_command(
+                    args.remote,
+                    "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+                    args.remote_region,
+                    timeout_seconds=30,
+                )
             _t3 = time.perf_counter()
             logging.info(f"[remote] Step 3 done in {_t3-_t2:.1f}s")
 
