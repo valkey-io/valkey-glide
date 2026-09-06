@@ -48,6 +48,10 @@ const config: Config = {
     // Setup file to configure the testing environment after Jest is installed
     setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
 
+    // Increase default test timeout for remote EC2 runs where network latency
+    // adds overhead to module initialization and hook execution.
+    testTimeout: 30000,
+
     // Global setup/teardown for ElastiCache cluster lifecycle
     // Only active when USE_ELASTICACHE=true and no endpoints are pre-provided
     ...(needsJestManagedClusters && {

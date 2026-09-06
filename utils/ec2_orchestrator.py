@@ -215,7 +215,7 @@ def build_windows_userdata(
         "    Push-Checkpoint 'pip-ready'",
         "",
         "    Write-Log '=== Running tests ==='",
-        "    $testArgs = @('test', '--', '--forceExit')",
+        "    $testArgs = @('test', '--', '--forceExit', '--maxWorkers=4')",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
         "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
