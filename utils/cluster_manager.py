@@ -1553,7 +1553,10 @@ def main():
             if not remote_ip:
                 parser.error("--remote-ip is required when using --remote")
 
-            # Build cluster_manager.py args for the remote side
+            # Build cluster_manager.py args for the remote side.
+            # Do NOT pass -p — let cluster_manager.py on the remote side pick
+            # free ports using next_free_port() which does actual socket binding,
+            # same as local Mac/Linux runs. This avoids TIME_WAIT port conflicts.
             cm_args = [
                 "python3",
                 "/home/ssm-user/glide/cluster_manager.py",
@@ -1570,16 +1573,9 @@ def main():
             if args.cluster_mode:
                 cm_args.append("--cluster-mode")
             if args.ports:
+                # Explicit ports requested - pass them through
                 cm_args += ["-p"] + [str(p) for p in args.ports]
-
-            # Build the port selection expression for inline shell
-            if not args.ports:
-                node_count = args.shard_count * (1 + args.replica_count)
-                # Simpler: just pick random ports inline
-                port_script = f"python3 -c 'import random; used=set(); ports=[]; [ports.append(p) or used.add(p) for _ in range(9999) for p in [random.randint(7000,17010)] if p not in used and len(ports)<{node_count}]; print(\" \".join(map(str,ports)))'"
-                cm_args_str = " ".join(cm_args) + " -p $(" + port_script + ")"
-            else:
-                cm_args_str = " ".join(cm_args)
+            cm_args_str = " ".join(cm_args)
 
             # Single SSM call: setup + start in one shell script
             script_path = os.path.abspath(__file__)
@@ -1593,12 +1589,10 @@ def main():
                 f"GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters {cm_args_str}",
             ])
 
-            _t0 = time.perf_counter()
-            logging.info(f"[remote] Single SSM call: setup + start Valkey on {args.remote}")
+            logging.info(f"[remote] Starting Valkey on {args.remote} ({remote_ip})")
             output = run_remote_command(
                 args.remote, single_cmd, args.remote_region, timeout_seconds=300
             )
-            logging.info(f"[remote] Done in {time.perf_counter()-_t0:.1f}s")
             # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
             print(output)
             sys.exit(0)

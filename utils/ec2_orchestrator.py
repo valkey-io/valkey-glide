@@ -71,55 +71,6 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
     return instance_id, private_ip
 
 
-def wait_for_ssm(ssm_client, instance_id: str, timeout: int = 300) -> None:
-    """Wait for SSM agent to register on an instance."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        info = ssm_client.describe_instance_information(
-            Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
-        )
-        if info.get("InstanceInformationList"):
-            log.info(f"SSM ready on {instance_id}")
-            return
-        time.sleep(10)
-    raise TimeoutError(f"SSM agent not ready on {instance_id} within {timeout}s")
-
-
-def run_ssm_command(
-    ssm_client, instance_id: str, command: str, timeout: int = 300
-) -> str:
-    """Run a shell command on an EC2 instance via SSM, return stdout."""
-    resp = ssm_client.send_command(
-        InstanceIds=[instance_id],
-        DocumentName="AWS-RunShellScript",
-        Parameters={"commands": [command]},
-        TimeoutSeconds=timeout,
-    )
-    cmd_id = resp["Command"]["CommandId"]
-    deadline = time.time() + timeout
-    # Brief initial wait for the invocation record to be created on AWS side
-    time.sleep(2)
-    while time.time() < deadline:
-        try:
-            inv = ssm_client.get_command_invocation(
-                CommandId=cmd_id, InstanceId=instance_id
-            )
-        except ssm_client.exceptions.InvocationDoesNotExist:
-            time.sleep(5)
-            continue
-        if inv["Status"] in ("Success", "Failed", "Cancelled", "TimedOut"):
-            if inv["Status"] != "Success":
-                stdout = inv.get("StandardOutputContent", "")
-                stderr = inv.get("StandardErrorContent", "")
-                raise RuntimeError(
-                    f"SSM command failed ({inv['Status']}):\n"
-                    f"STDOUT: {stdout}\nSTDERR: {stderr}"
-                )
-            return inv.get("StandardOutputContent", "")
-        time.sleep(5)
-    raise TimeoutError(f"SSM command timed out after {timeout}s")
-
-
 def build_windows_userdata(
     linux_instance_id: str, linux_private_ip: str
 ) -> bytes:
