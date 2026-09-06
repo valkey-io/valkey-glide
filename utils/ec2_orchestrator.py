@@ -34,9 +34,9 @@ logging.basicConfig(level=logging.INFO, format="[orchestrator] %(message)s")
 log = logging.getLogger(__name__)
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-BUILD_ID = os.environ["BUILD_ID"]
-COMMIT_SHA = os.environ["COMMIT_SHA"]
-REPORT_BUCKET = os.environ["REPORT_BUCKET"]
+BUILD_ID = os.environ.get("BUILD_ID", "")
+COMMIT_SHA = os.environ.get("COMMIT_SHA", "")
+REPORT_BUCKET = os.environ.get("REPORT_BUCKET", "")
 NODE_VERSION = os.environ.get("NODE_VERSION", "20.18.0")
 
 
@@ -394,4 +394,15 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse as _ap
+    if len(sys.argv) > 1 and sys.argv[1] == "setup-linux":
+        _p = _ap.ArgumentParser(description="Copy cluster_manager.py to a Linux EC2")
+        _p.add_argument("setup-linux")
+        _p.add_argument("--instance-id", required=True)
+        _p.add_argument("--region", default="us-east-1")
+        _a = _p.parse_args()
+        _ssm = boto3.client("ssm", region_name=_a.region)
+        setup_linux_ec2(_ssm, _a.instance_id)
+        print("Done")
+        sys.exit(0)
     sys.exit(main())
