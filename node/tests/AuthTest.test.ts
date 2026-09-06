@@ -66,16 +66,8 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
         let managementClientCMD: GlideClient;
         let managementClientCME: GlideClusterClient;
         beforeAll(async () => {
-            // AuthTest modifies server auth settings which would break other tests
-            // sharing the same pre-started servers. Always create fresh clusters.
-            const fs = require("fs");
-            const useShared = !fs.existsSync("C:\\glide-remote.json");
-            const standaloneAddresses = useShared
-                ? (global.STAND_ALONE_ENDPOINT as string)
-                : undefined;
-            const clusterAddresses = useShared
-                ? (global.CLUSTER_ENDPOINTS as string)
-                : undefined;
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+            const clusterAddresses = global.CLUSTER_ENDPOINTS;
 
             // Connect to cluster or create a new one based on the parsed addresses
             cmdCluster = standaloneAddresses
