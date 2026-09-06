@@ -8,11 +8,34 @@ import { lt } from "semver";
 const PYTHON_CMD = process.platform === "win32" ? "python" : "python3";
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
-// When set, cluster_manager.py commands are redirected to a remote EC2 via SSM.
-// Set by the Windows CI orchestrator to point at the Linux EC2 running Valkey.
-const REMOTE_INSTANCE_ID = process.env.GLIDE_REMOTE_INSTANCE_ID;
-const REMOTE_IP = process.env.GLIDE_REMOTE_IP;
-const REMOTE_REGION = process.env.GLIDE_REMOTE_REGION ?? "us-east-1";
+// Read remote config from C:\glide-remote.json if present (Windows EC2 CI).
+// This is done at module load time so appendRemoteArgs works correctly.
+// Env vars are also checked as fallback for non-Windows environments.
+function _loadRemoteConfig(): { instanceId?: string; privateIp?: string; region: string } {
+    // Check env vars first
+    if (process.env.GLIDE_REMOTE_INSTANCE_ID) {
+        return {
+            instanceId: process.env.GLIDE_REMOTE_INSTANCE_ID,
+            privateIp: process.env.GLIDE_REMOTE_IP,
+            region: process.env.GLIDE_REMOTE_REGION ?? "us-east-1",
+        };
+    }
+    // Fall back to file (Windows EC2 CI)
+    try {
+        const configPath = "C:\\glide-remote.json";
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require("fs") as typeof import("fs");
+        if (fs.existsSync(configPath)) {
+            const cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            return { instanceId: cfg.instanceId, privateIp: cfg.privateIp, region: cfg.region ?? "us-east-1" };
+        }
+    } catch { /* ignore */ }
+    return { region: "us-east-1" };
+}
+const _remoteConfig = _loadRemoteConfig();
+const REMOTE_INSTANCE_ID = _remoteConfig.instanceId;
+const REMOTE_IP = _remoteConfig.privateIp;
+const REMOTE_REGION = _remoteConfig.region;
 
 /**
  * Appends --remote flags to cluster_manager.py args when running on Windows CI.

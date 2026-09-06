@@ -5,21 +5,6 @@ import minimist from "minimist";
 import { Logger } from "../build-ts";
 import { ELASTICACHE_ENDPOINTS_FILE, EndpointsFile } from "./jest.globalSetup";
 
-// When C:\glide-remote.json exists, set GLIDE_REMOTE_* env vars so
-// TestUtils.ts appendRemoteArgs routes createCluster calls to the Linux EC2.
-// File-based approach is more reliable than env var inheritance on Windows.
-const _remoteConfigPath = "C:\\glide-remote.json";
-if (fs.existsSync(_remoteConfigPath) && !process.env.GLIDE_REMOTE_INSTANCE_ID) {
-    try {
-        const _cfg = JSON.parse(fs.readFileSync(_remoteConfigPath, "utf-8"));
-        process.env.GLIDE_REMOTE_INSTANCE_ID = _cfg.instanceId;
-        process.env.GLIDE_REMOTE_IP = _cfg.privateIp;
-        process.env.GLIDE_REMOTE_REGION = _cfg.region ?? "us-east-1";
-    } catch {
-        // ignore
-    }
-}
-
 beforeAll(() => {
     Logger.init("error", "log.log");
 
