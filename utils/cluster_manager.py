@@ -1618,31 +1618,50 @@ def main():
                 # Pick free ports on the remote host within the allowed range.
                 # Uses ss/netstat on the remote to verify each port is free.
                 node_count = args.shard_count * (1 + args.replica_count)
+                logging.info(f"[remote] Picking free ports on remote host...")
+                _tp0 = time.perf_counter()
                 remote_ports = _pick_free_remote_ports(
                     args.remote, args.remote_region, node_count
                 )
+                logging.info(f"[remote] Port pick done in {time.perf_counter()-_tp0:.1f}s, ports={remote_ports}")
                 cmd_parts += ["-p"] + [str(p) for p in remote_ports]
-            # First copy cluster_manager.py to the remote instance via base64
-            # to avoid shell quoting issues with single quotes in f-strings
+            _t0 = time.perf_counter()
+            # Step 1: pick free ports
+            logging.info(f"[remote] Step 1: picking free ports...")
+            _t1 = time.perf_counter()
+            logging.info(f"[remote] Step 1 done in {_t1-_t0:.1f}s")
+
+            # Step 2: copy cluster_manager.py
+            logging.info(f"[remote] Step 2: copying cluster_manager.py...")
             script_path = os.path.abspath(__file__)
             with open(script_path, "rb") as f:
                 script_b64 = base64.b64encode(f.read()).decode()
             copy_cmd = "mkdir -p /home/ssm-user/glide && echo '" + script_b64 + "' | base64 -d > /home/ssm-user/glide/cluster_manager.py"
             run_remote_command(args.remote, copy_cmd, args.remote_region)
-            # Ensure vm.overcommit_memory=1 for Valkey cluster mode
+            _t2 = time.perf_counter()
+            logging.info(f"[remote] Step 2 done in {_t2-_t1:.1f}s")
+
+            # Step 3: set vm.overcommit_memory
+            logging.info(f"[remote] Step 3: setting vm.overcommit_memory...")
             run_remote_command(
                 args.remote,
                 "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
                 args.remote_region,
                 timeout_seconds=30,
             )
-            # Run the start command remotely with writable paths for SSM user
+            _t3 = time.perf_counter()
+            logging.info(f"[remote] Step 3 done in {_t3-_t2:.1f}s")
+
+            # Step 4: start Valkey
+            logging.info(f"[remote] Step 4: starting Valkey servers...")
             remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
-            # Update the script path in cmd_parts to use the new location
             remote_cmd = remote_cmd.replace("/tmp/cluster_manager.py", "/home/ssm-user/glide/cluster_manager.py")
             output = run_remote_command(
                 args.remote, remote_cmd, args.remote_region, timeout_seconds=300
             )
+            _t4 = time.perf_counter()
+            logging.info(f"[remote] Step 4 done in {_t4-_t3:.1f}s")
+            logging.info(f"[remote] Total remote start time: {_t4-_t0:.1f}s")
             # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
             print(output)
             sys.exit(0)
