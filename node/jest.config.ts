@@ -1,14 +1,16 @@
+import * as fs from "fs";
 import type { Config } from "jest";
 
 const useElastiCache = process.env.USE_ELASTICACHE === "true";
-// Use Jest globalSetup/globalTeardown only when ElastiCache is enabled
-// AND endpoints have not already been provided externally (e.g. by the
-// buildspec background job). When endpoints are pre-set, Jest should
-// skip cluster creation and just use the existing clusters.
+const useRemote = fs.existsSync("C:\\glide-remote.json");
+// Use Jest globalSetup/globalTeardown when:
+// 1. ElastiCache is enabled and no endpoints are pre-provided, OR
+// 2. Running on Windows EC2 with a remote Linux EC2 (glide-remote.json present)
 const needsJestManagedClusters =
-    useElastiCache &&
-    !process.env.STANDALONE_ENDPOINT &&
-    !process.env.CLUSTER_ENDPOINT;
+    (useElastiCache &&
+        !process.env.STANDALONE_ENDPOINT &&
+        !process.env.CLUSTER_ENDPOINT) ||
+    useRemote;
 
 const config: Config = {
     preset: "ts-jest",
