@@ -74,7 +74,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
-const CLEANUP_TIMEOUT = 10000; // 10 seconds for cleanup operations
+const CLEANUP_TIMEOUT = 60000; // 60 seconds for cleanup operations (SSM remote stop takes >10s on EC2)
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;

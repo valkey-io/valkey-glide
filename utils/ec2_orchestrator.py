@@ -76,7 +76,6 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
     """Copy cluster_manager.py to the Linux EC2 and set up the environment.
     Called once before tests start so createCluster calls just run the script."""
     import gzip as _gzip
-    import hashlib
 
     script_path = Path("utils/cluster_manager.py")
     script_data = script_path.read_bytes()
@@ -109,11 +108,11 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
         InstanceIds=[instance_id],
         DocumentName="AWS-RunShellScript",
         Parameters={"commands": [setup_cmd]},
-        TimeoutSeconds=60,
+        TimeoutSeconds=120,
     )
     cmd_id = resp["Command"]["CommandId"]
     time.sleep(2)
-    deadline = time.time() + 60
+    deadline = time.time() + 120
     while time.time() < deadline:
         try:
             inv = ssm_client.get_command_invocation(CommandId=cmd_id, InstanceId=instance_id)
@@ -219,7 +218,7 @@ def build_windows_userdata(
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
         "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
-        "    & npm @testArgs 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    & npm $testArgs 2>&1 | Tee-Object -FilePath $logFile -Append",
         "    $exitCode = $LASTEXITCODE",
         "    Write-Log \"Tests finished with exit code: $exitCode\"",
         "    Push-Checkpoint 'tests-done'",
