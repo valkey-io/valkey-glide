@@ -4,6 +4,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/go-cd.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
@@ -142,6 +143,10 @@ jobs:
             - name: Smoke test binary
               run: |
                   file ffi/target/release/libglide_ffi.a | grep -q "archive"
+            - name: Ensure binary generation leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go release binary, cbindgen, and protobuf generation
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -164,6 +169,10 @@ jobs:
             - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   path: artifacts
+            - name: Ensure tracked tree is clean before copying generated files
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go release pre-generation baseline
             - name: Copy generated files to repo
               run: |
                   cd artifacts
@@ -227,21 +236,49 @@ jobs:
                   cp go/lib.h $GITHUB_WORKSPACE/go/
                   mkdir -p $GITHUB_WORKSPACE/go/internal/protobuf
                   cp go/internal/protobuf/* $GITHUB_WORKSPACE/go/internal/protobuf/
-            - name: Commit and push tag
+            - name: Stage and validate generated release files
               run: |
-                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
-                  git config user.name github-actions
-                  git config user.email github-actions@github.com
                   # Remove go/.gitignore from the released module. 'go mod vendor'
                   # copies this file into the consumer's vendor/ tree, where its
                   # rules (*.pb.go, rustbin/, lib.h) cause git to silently drop the
                   # generated artifacts we force-add below when the consumer commits
                   # vendor/. This tag commit is never merged back to main, so main
                   # keeps its .gitignore for development. See issue #6437.
-                  rm -f $GITHUB_WORKSPACE/go/.gitignore
+                  rm -f "$GITHUB_WORKSPACE/go/.gitignore"
                   git add -f go
-                  git status
+
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/.gitignore|go/lib.h|go/tools.go|go/internal/protobuf/*|go/rustbin/*)
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes in Go generated release files:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
+                  echo "Tracked status (first 200 entries):"
+                  git status --short --untracked-files=no | sed -n '1,200p'
+            - name: Commit generated release files
+              run: |
+                  git config user.name github-actions
+                  git config user.email github-actions@github.com
                   git commit -m "Automated commit from GitHub Actions"
+            - name: Ensure release commit leaves tracked tree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go generated release commit
+            - name: Push generated release tag
+              run: |
+                  RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION
                   GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION
@@ -294,11 +331,36 @@ jobs:
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
+            - name: Ensure tracked tree is clean before benchmark module edits
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go benchmark pre-tidy baseline
             - name: test newly released go client
               env:
                   PORT: ${{ steps.start-server.outputs.PORT }}
               working-directory: go/benchmarks
               run: |
+                  validate_benchmark_changes() {
+                    unexpected_paths=()
+                    while IFS= read -r path; do
+                      case "$path" in
+                        go/benchmarks/go.mod|go/benchmarks/go.sum)
+                          ;;
+                        *)
+                          unexpected_paths+=("$path")
+                          ;;
+                      esac
+                    done < <(git -C "$GITHUB_WORKSPACE" diff --name-only HEAD)
+                    if (( ${#unexpected_paths[@]} > 0 )); then
+                      echo "Unexpected tracked changes in Go benchmark module test:"
+                      echo "Tracked status (first 200 entries):"
+                      git -C "$GITHUB_WORKSPACE" status --short --untracked-files=no | sed -n '1,200p'
+                      echo "Unexpected paths (first 200 entries):"
+                      printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                      exit 1
+                    fi
+                  }
+
                   # change go/benchmarks/go.mod on the fly
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
                   if [[ "${{ matrix.host.OS }}" == "macos" ]]; then
@@ -309,4 +371,6 @@ jobs:
                       sed -i "s|github\.com/valkey-io/valkey-glide/go/v2 v.*|github.com/valkey-io/valkey-glide/go/v2 $RELEASE_VERSION|g" go.mod
                   fi
                   go mod tidy
+                  validate_benchmark_changes
                   go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}
+                  validate_benchmark_changes

@@ -250,6 +250,11 @@ jobs:
                     echo "No unapproved packages found."
                   fi
 
+            - name: Ensure ORT analysis leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: ORT analysis, package builds, and source generation
+
               ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
@@ -269,6 +274,48 @@ jobs:
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
                     echo "FOUND_DIFF=false" >> $GITHUB_ENV
+                  fi
+
+            - name: Validate attribution changes stay within declared scope
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "$PYTHON_ASYNC_ATTRIBUTIONS"
+                    "$PYTHON_SYNC_ATTRIBUTIONS"
+                    "$NODE_ATTRIBUTIONS"
+                    "$RUST_ATTRIBUTIONS"
+                    "$JAVA_ATTRIBUTIONS"
+                    "$GO_ATTRIBUTIONS"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::ORT attribution generation changed tracked paths outside its declared scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
                   fi
 
               ### Create PR, Note a potential race on the source branch ###

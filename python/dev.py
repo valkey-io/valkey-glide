@@ -219,7 +219,7 @@ def copy_readme_to_package(package_dir: Path) -> None:
 
 
 def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
-    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
     # Don't use zigbuild for glide-shared — it must match the host Python's ABI
@@ -243,7 +243,7 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
         dest = None
 
     if needs_build:
-        ffi_build_cmd = ["cargo", "build"]
+        ffi_build_cmd = ["cargo", "build", "--locked"]
         if release:
             ffi_build_cmd += ["--release"]
         run_command(
@@ -272,7 +272,7 @@ def build_async_client_wheel(
     copytree(SHARED_PACKAGE_DIR, dest_shared)
 
     # 2. Build wheel using maturin
-    maturin_cmd = ["maturin", "build"]
+    maturin_cmd = ["maturin", "build", "--locked"]
     if release:
         maturin_cmd += ["--release", "--strip"]
     if features:
@@ -333,7 +333,7 @@ def build_async_client(
     if wheel:
         return build_async_client_wheel(env, release, features)
 
-    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release", "--strip"]
     if features:
@@ -412,7 +412,7 @@ def build_sync_client(
         }
     )
     # Build the FFI library
-    build_args = ["cargo", "build"]
+    build_args = ["cargo", "build", "--locked"]
     if release:
         build_args += ["--release"]
 
