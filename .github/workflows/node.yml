@@ -15,6 +15,7 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -30,6 +31,7 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -196,6 +198,11 @@ jobs:
                   language-version: ${{ matrix.node }}
                   base-language-version: ${{ env.BASE_NODE_VERSION }}
 
+            - name: Ensure tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node build and test
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -307,6 +314,16 @@ jobs:
                   pnpm run test
               working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
 
+            - name: Run benchmarks
+              uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -node
+
+            - name: Ensure extra tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node package-manager compatibility and benchmark tests
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -328,6 +345,11 @@ jobs:
               with:
                   cargo-toml-folder: ./node/rust-client
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure Rust lint leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node Rust lint
 
     get-containers:
         runs-on: ubuntu-24.04
@@ -440,6 +462,11 @@ jobs:
 
                   npm run build
                   npm run test
+
+            - name: Ensure container tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node container build and test
 
             - name: Sanitize IMAGE variable
               # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
