@@ -317,7 +317,9 @@ pub async fn create_scope_connection(
             return;
         }
     };
-    if crate::client::validate_effective_lib_name(Some(proto.lib_name.as_ref())).is_err() {
+    if !proto.lib_name.is_empty()
+        && crate::client::validate_effective_lib_name(proto.lib_name.as_ref()).is_err()
+    {
         pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
         return;
     }
