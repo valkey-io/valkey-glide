@@ -1933,21 +1933,17 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    #[ignore = "End-to-end reuse race is timing-dependent; the deterministic pool-state \
-                invariant is covered by test_scoped_blocking_command_cancelled_connection_is_not_reused. \
-                Enable manually to exercise the full push-to-consumer path against a real server."]
+    #[ignore = "Fails on the pre-existing gap tracked in #7000: dropping the \
+                MultiplexedConnection doesn't close the socket while a command is \
+                outstanding, so a cancelled BLPOP's server-side waiter can still steal \
+                a later push. Not a regression from this PR."]
     fn test_scoped_blocking_command_expired_does_not_steal_later_push(
         #[values(false, true)] use_cluster: bool,
     ) {
         // Full end-to-end version of the "no silent consumption" guarantee: a
         // scoped BLPOP is cancelled in flight and its scope released; a later
         // legitimate consumer then blocks on the same key and must receive a
-        // subsequent push, proving the stale scoped connection did not intercept
-        // it. This is #[ignore]d because it depends on real network/server timing:
-        // there is no deterministic barrier that guarantees the cancelled BLPOP's
-        // waiter has actually reached (or been torn down on) the server before the
-        // push, so as an always-on test it would be flaky. It is kept as an
-        // executable, manually runnable specification of the intended behaviour.
+        // subsequent push, proving the stale scoped connection did not intercept it.
         block_on_all(async {
             let config = TestConfiguration {
                 request_timeout: Some(1), // millisecond
