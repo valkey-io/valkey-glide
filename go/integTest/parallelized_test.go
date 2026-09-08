@@ -13,7 +13,9 @@ import (
 
 func (suite *GlideTestSuite) TestParallelizedSetWithGC() {
 	// The insane 640 parallelism is required to reproduce https://github.com/valkey-io/valkey-glide/issues/3207.
-	suite.runParallelizedWithDefaultClients(640, 640000, 2*time.Minute, func(client interfaces.BaseClientCommands) {
+	// Use a longer timeout to accommodate AddressSanitizer overhead in container environments
+	// where GC pressure from 640 goroutines significantly increases execution time.
+	suite.runParallelizedWithDefaultClients(640, 640000, 5*time.Minute, func(client interfaces.BaseClientCommands) {
 		runtime.GC()
 		key := uuid.New().String()
 		value := uuid.New().String()
