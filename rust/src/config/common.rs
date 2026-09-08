@@ -9,6 +9,12 @@ use glide_core::iam::ServiceType as CoreServiceType;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+/// Library name reported to the server.
+pub(crate) const LIB_NAME: &str = "GlideRust";
+
+/// Library version reported to the server.
+pub(crate) const LIB_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// The kind of a Pub/Sub channel subscription.
 ///
 /// Mirrors Python's `PubSubChannelModes`.
@@ -629,10 +635,8 @@ macro_rules! impl_common_config_builders {
                     read_from: Some(self.read_from.clone().into()),
                     protocol: Some(self.protocol.into()),
                     client_name: self.client_name.clone(),
-                    // Identify this client library to the server (CLIENT INFO /
-                    // lib-name), mirroring the other GLIDE wrappers (GlidePy,
-                    // GlideJava, ...).
-                    lib_name: Some("GlideRust".to_string()),
+                    lib_name: Some($crate::config::common::LIB_NAME.to_string()),
+                    lib_ver: Some($crate::config::common::LIB_VERSION.to_string()),
                     lazy_connect: self.lazy_connect,
                     inflight_requests_limit: self.inflight_requests_limit,
                     // Disable Nagle's algorithm. We build `ConnectionRequest`
