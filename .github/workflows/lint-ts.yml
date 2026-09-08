@@ -14,12 +14,14 @@ on:
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - .github/actions/ensure-clean-tree/action.yml
     pull_request:
         paths:
             - benchmarks/node/**
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - .github/actions/ensure-clean-tree/action.yml
     workflow_dispatch:
 
 concurrency:
@@ -48,3 +50,8 @@ jobs:
                     npx eslint ${{ github.workspace }}/$folder -c ${{ github.workspace }}/eslint.config.mjs
                     npx prettier --check ${{ github.workspace }}/$folder
                   done
+
+            - name: Ensure lint leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: TypeScript lint and formatting checks

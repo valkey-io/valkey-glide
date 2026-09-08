@@ -15,6 +15,7 @@ on:
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
             - .github/workflows/node-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -25,6 +26,7 @@ on:
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
             - .github/workflows/node-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -97,6 +99,11 @@ jobs:
                     --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
+            - name: Ensure module tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node module tests on Linux
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -143,6 +150,11 @@ jobs:
             - name: test
               run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
+
+            - name: Ensure module tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node module tests on persistent ARM64 runner
 
             - name: Upload test reports
               if: always()
