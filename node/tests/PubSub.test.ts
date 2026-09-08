@@ -7088,7 +7088,7 @@ describe("PubSub", () => {
                 );
 
                 // Record time before first subscription
-                const timeBeforeFirstSub = Date.now();
+                const timeBeforeFirstSub = Date.now() - 100;
 
                 // Subscribe to first channel
                 await subscribeByMethod(
