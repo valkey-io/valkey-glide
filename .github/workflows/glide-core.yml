@@ -212,6 +212,11 @@ jobs:
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
 
+            - name: Ensure Rust tests leave tracked files clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust core tests and benchmarks
+
             # A fresh checkout is newer than the restored dep-info, so cargo rebuilds these
             # crates on every run; only the registry crates are worth saving.
             - name: Remove the path crates from the cargo cache

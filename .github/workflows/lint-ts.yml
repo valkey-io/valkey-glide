@@ -14,6 +14,7 @@ on:
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -22,6 +23,7 @@ on:
             - node/**
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
@@ -52,3 +54,8 @@ jobs:
                     npx eslint ${{ github.workspace }}/$folder -c ${{ github.workspace }}/eslint.config.mjs
                     npx prettier --check ${{ github.workspace }}/$folder
                   done
+
+            - name: Ensure lint leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: TypeScript lint and formatting checks
