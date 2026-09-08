@@ -26,50 +26,6 @@ impl ConditionalChange {
     }
 }
 
-/// Expiry for `SET` / `GETEX`.
-///
-/// Mirrors Python `ExpirySet` / `ExpiryType`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpirySet {
-    /// Set expiry, in seconds (`EX`).
-    Seconds(u64),
-    /// Set expiry, in milliseconds (`PX`).
-    Milliseconds(u64),
-    /// Set expiry at a Unix timestamp, in seconds (`EXAT`).
-    UnixSeconds(u64),
-    /// Set expiry at a Unix timestamp, in milliseconds (`PXAT`).
-    UnixMilliseconds(u64),
-    /// Retain the existing TTL (`KEEPTTL`).
-    KeepExisting,
-    /// Remove any TTL (`PERSIST`, used by `GETEX`).
-    Persist,
-}
-
-impl ExpirySet {
-    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
-        match self {
-            ExpirySet::Seconds(v) => {
-                cmd.arg("EX").arg(v);
-            }
-            ExpirySet::Milliseconds(v) => {
-                cmd.arg("PX").arg(v);
-            }
-            ExpirySet::UnixSeconds(v) => {
-                cmd.arg("EXAT").arg(v);
-            }
-            ExpirySet::UnixMilliseconds(v) => {
-                cmd.arg("PXAT").arg(v);
-            }
-            ExpirySet::KeepExisting => {
-                cmd.arg("KEEPTTL");
-            }
-            ExpirySet::Persist => {
-                cmd.arg("PERSIST");
-            }
-        }
-    }
-}
-
 /// Conditions for `EXPIRE`/`PEXPIRE`/`EXPIREAT`/`PEXPIREAT`.
 ///
 /// Mirrors Python `ExpireOptions`.
@@ -346,25 +302,6 @@ mod tests {
         let mut cmd = Cmd::new();
         ConditionalChange::OnlyIfDoesNotExist.add_to(&mut cmd);
         assert_eq!(args_of(&cmd), vec!["NX"]);
-    }
-
-    #[test]
-    fn expiry_set_args() {
-        let mut cmd = Cmd::new();
-        ExpirySet::Seconds(60).add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["EX", "60"]);
-
-        let mut cmd = Cmd::new();
-        ExpirySet::Milliseconds(1500).add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["PX", "1500"]);
-
-        let mut cmd = Cmd::new();
-        ExpirySet::KeepExisting.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["KEEPTTL"]);
-
-        let mut cmd = Cmd::new();
-        ExpirySet::Persist.add_to(&mut cmd);
-        assert_eq!(args_of(&cmd), vec!["PERSIST"]);
     }
 
     #[test]
