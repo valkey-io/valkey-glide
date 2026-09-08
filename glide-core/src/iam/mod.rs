@@ -7,7 +7,7 @@ use aws_sigv4::sign::v4;
 use logger_core::{log_debug, log_error, log_info, log_warn};
 use rand::Rng;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use std::time::SystemTime;
 use strum_macros::IntoStaticStr;
@@ -190,6 +190,13 @@ pub struct IAMTokenManager {
     shutdown_notify: Arc<Notify>,
     /// Atomic flag to signal when token has changed (for efficient change detection)
     token_changed: Arc<AtomicBool>,
+    /// Monotonically increasing generation counter, bumped on every successful refresh.
+    ///
+    /// Unlike `token_changed`, this lets multiple independent consumers (e.g. the
+    /// ordinary command path and the scope AUTH path) each track their own
+    /// "last seen generation" and detect a rotation without racing to clear a
+    /// single shared flag.
+    token_generation: Arc<AtomicU64>,
 }
 
 /// Custom Debug implementation for IAMTokenManager
@@ -201,6 +208,10 @@ impl std::fmt::Debug for IAMTokenManager {
             .field("refresh_task", &self.refresh_task.is_some())
             .field("shutdown_notify", &"<Notify>")
             .field("token_changed", &self.token_changed.load(Ordering::Relaxed))
+            .field(
+                "token_generation",
+                &self.token_generation.load(Ordering::Relaxed),
+            )
             .finish()
     }
 }
@@ -244,6 +255,10 @@ impl IAMTokenManager {
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
             token_changed: Arc::new(AtomicBool::new(true)), // Initially true to trigger first AUTH
+            // Starts at 1 (not 0) so a fresh consumer with a default "last seen
+            // generation" of 0 immediately observes a mismatch and picks up the
+            // initial token, mirroring token_changed's "initially true" behavior.
+            token_generation: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -258,6 +273,7 @@ impl IAMTokenManager {
         let token_created_at = Arc::clone(&self.token_created_at);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
         let token_changed = Arc::clone(&self.token_changed);
+        let token_generation = Arc::clone(&self.token_generation);
 
         let task = tokio::spawn(Self::token_refresh_task(
             iam_token_state,
@@ -265,6 +281,7 @@ impl IAMTokenManager {
             token_created_at,
             shutdown_notify,
             token_changed,
+            token_generation,
         ));
 
         self.refresh_task = Some(task);
@@ -277,6 +294,7 @@ impl IAMTokenManager {
         token_created_at: Arc<RwLock<tokio::time::Instant>>,
         shutdown_notify: Arc<Notify>,
         token_changed: Arc<AtomicBool>,
+        token_generation: Arc<AtomicU64>,
     ) {
         let refresh_interval = Duration::from_secs(iam_token_state.refresh_interval_seconds as u64);
 
@@ -289,7 +307,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_created_at, &token_changed).await;
+                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_created_at, &token_changed, &token_generation).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -300,13 +318,14 @@ impl IAMTokenManager {
     }
 
     /// Refresh cached token with backoff + jitter.
-    /// On success: update token + set atomic flag.
+    /// On success: update token + set atomic flag + bump generation counter.
     /// On failure: log error, keep old token.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_created_at: &Arc<RwLock<tokio::time::Instant>>,
         token_changed: &Arc<AtomicBool>,
+        token_generation: &Arc<AtomicU64>,
     ) {
         match Self::generate_token_with_backoff(iam_token_state).await {
             Ok(new_token) => {
@@ -316,6 +335,7 @@ impl IAMTokenManager {
                     *ts = tokio::time::Instant::now();
                 }
                 token_changed.store(true, Ordering::Release);
+                token_generation.fetch_add(1, Ordering::AcqRel);
             }
             Err(err) => {
                 // Leave cached token unchanged; logs already emitted in backoff routine
@@ -386,6 +406,7 @@ impl IAMTokenManager {
             &self.cached_token,
             &self.token_created_at,
             &self.token_changed,
+            &self.token_generation,
         )
         .await;
     }
@@ -411,6 +432,11 @@ impl IAMTokenManager {
         token_guard.clone()
     }
 
+    /// Returns the IAM username configured for this manager.
+    pub(crate) fn username(&self) -> &str {
+        &self.iam_token_state.username
+    }
+
     /// Check if token has changed since last check
     pub fn token_changed(&self) -> bool {
         self.token_changed.load(Ordering::Acquire)
@@ -419,6 +445,11 @@ impl IAMTokenManager {
     /// Clear the token changed flag after handling the change
     pub fn clear_token_changed(&self) {
         self.token_changed.store(false, Ordering::Release)
+    }
+
+    /// Returns the current token generation number (see the `token_generation` field).
+    pub(crate) fn token_generation(&self) -> u64 {
+        self.token_generation.load(Ordering::Acquire)
     }
 
     /// Create a lightweight handle to the token cache for use by the reconnection path.
@@ -692,6 +723,91 @@ mod tests {
         );
 
         log_info("Manual refresh test completed successfully!", "");
+    }
+
+    /// Regression test: two independent "last seen generation" trackers must each
+    /// detect a token rotation via `token_generation()` without racing on a shared flag.
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_generation_counter_supports_independent_consumers() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            ServiceType::ElastiCache,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Fresh manager starts at generation 1 (not 0), so a consumer with a
+        // default "last seen" of 0 immediately observes a mismatch.
+        let initial_generation = manager.token_generation();
+        assert_eq!(
+            initial_generation, 1,
+            "Fresh manager should start at generation 1"
+        );
+
+        // Two independent consumers, each tracking their own "last seen" generation.
+        let mut consumer_a_last_seen: u64 = 0;
+        let mut consumer_b_last_seen: u64 = 0;
+
+        // Both should independently detect the initial token (0 != 1).
+        assert_ne!(consumer_a_last_seen, manager.token_generation());
+        assert_ne!(consumer_b_last_seen, manager.token_generation());
+        consumer_a_last_seen = manager.token_generation();
+        consumer_b_last_seen = manager.token_generation();
+
+        // Refresh once. This is the crux of the race being fixed: with the old
+        // single AtomicBool, whichever consumer checked first would clear the
+        // flag and the other would never observe the change. With independent
+        // generation tracking, both must see it regardless of order.
+        manager.refresh_token().await;
+        let generation_after_first_refresh = manager.token_generation();
+        assert_eq!(
+            generation_after_first_refresh,
+            initial_generation + 1,
+            "token_generation() should increase by exactly 1 per successful refresh"
+        );
+
+        // Consumer A checks (and updates its bookmark) first.
+        assert_ne!(
+            consumer_a_last_seen, generation_after_first_refresh,
+            "Consumer A must detect the rotation"
+        );
+        consumer_a_last_seen = generation_after_first_refresh;
+
+        // Consumer B checks afterwards — with the old shared-flag design this
+        // would have been silently cleared by consumer A already. With the
+        // generation counter, consumer B still independently detects it.
+        assert_ne!(
+            consumer_b_last_seen, generation_after_first_refresh,
+            "Consumer B must still detect the rotation independently of consumer A"
+        );
+        consumer_b_last_seen = generation_after_first_refresh;
+
+        // Refresh a second time; generation must keep advancing monotonically.
+        manager.refresh_token().await;
+        let generation_after_second_refresh = manager.token_generation();
+        assert_eq!(
+            generation_after_second_refresh,
+            generation_after_first_refresh + 1,
+            "token_generation() should increase by exactly 1 per successful refresh"
+        );
+        assert_ne!(consumer_a_last_seen, generation_after_second_refresh);
+        assert_ne!(consumer_b_last_seen, generation_after_second_refresh);
+
+        log_info(
+            "Generation counter independent-consumer test completed successfully!",
+            "",
+        );
     }
 
     #[tokio::test]

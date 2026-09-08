@@ -4320,4 +4320,158 @@ pub(crate) mod shared_client_tests {
             );
         });
     }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS. Distinct from the `iam_tests`-gated
+    /// `setup_mock_aws_credentials` above: this test runs under plain `proto`
+    /// (no real ElastiCache/MemoryDB endpoint needed) since the local server
+    /// accepts any AUTH password for the configured user (see `nopass` below).
+    #[cfg(feature = "proto")]
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// Regression test for scoped-connection IAM authentication.
+    ///
+    /// Prior to the fix, `create_scope_connection` skipped AUTH for scoped
+    /// connections when IAM was configured (or used the wrong credential),
+    /// so a scoped connection would run as the server's default/unauthenticated
+    /// identity rather than the configured IAM user. A bug of this shape is
+    /// invisible to a test that only asserts a command returned OK — an
+    /// unauthenticated (or default-user) connection to a permissive local
+    /// server still returns OK for ordinary commands. This test instead
+    /// asserts the scoped connection's *identity* via `ACL WHOAMI` against a
+    /// real server rather than a mock (a local user configured to accept any
+    /// password).
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_command_authenticates_as_configured_iam_user() {
+        use ::protobuf::{Message as _, MessageField};
+        use glide_core::connection_request as protobuf;
+        use glide_core::scope;
+        use protobuf::TlsMode;
+        use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
+        use protobuf::{
+            ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
+        };
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            // Local server with a custom user that accepts any password.
+            // `nopass` means ACL ignores the supplied password entirely (verified
+            // empirically: `AUTH iamuser <anything>` succeeds), which is the
+            // closest local stand-in for how a real ElastiCache/MemoryDB
+            // IAM-enabled user accepts a valid-looking SigV4-signed token
+            // without the test having real AWS access.
+            let server = RedisServer::new(ServerType::Tcp { tls: false });
+            let addr = server.get_client_addr();
+            let (host, port) = match &addr {
+                redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+                other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+            };
+
+            let iam_username = "iamuser";
+            {
+                let setup_client = redis::Client::open(redis::ConnectionInfo {
+                    addr: addr.clone(),
+                    redis: RedisConnectionInfo::default(),
+                })
+                .unwrap();
+                let mut setup_conn = retry(|| async {
+                    setup_client
+                        .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                        .await
+                        .ok()
+                })
+                .await;
+                let mut acl_cmd = redis::cmd("ACL");
+                acl_cmd
+                    .arg("SETUSER")
+                    .arg(iam_username)
+                    .arg("on")
+                    .arg("allkeys")
+                    .arg("+@all")
+                    .arg("nopass");
+                setup_conn
+                    .send_packed_command(&acl_cmd)
+                    .await
+                    .expect("ACL SETUSER should succeed");
+            }
+
+            // Build the protobuf ConnectionRequest used both for `Client::new`
+            // (via `.into()` to the native `client::types::ConnectionRequest`)
+            // and for `try_acquire_scope` (which parses raw protobuf bytes).
+            let mut proto_request = ProtoConnectionRequest::new();
+            proto_request.addresses.push(NodeAddress {
+                host: host.clone().into(),
+                port: port.into(),
+                ..Default::default()
+            });
+            proto_request.tls_mode = TlsMode::NoTls.into();
+            let mut iam_credentials = IamCredentials::new();
+            iam_credentials.cluster_name = "test-scope-iam-cluster".into();
+            iam_credentials.region = "us-east-1".into();
+            iam_credentials.service_type = ProtoServiceType::ELASTICACHE.into();
+            let mut auth_info = ProtoAuthInfo::new();
+            auth_info.username = iam_username.into();
+            auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
+            proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
+
+            let connection_request_bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            // Register the parent client so `create_scope_connection`'s background
+            // task (spawned by `try_acquire_scope`) can look it up via
+            // `get_parent_client` and read its IAM token manager.
+            let client_id = 1u64;
+            scope::register_client(client_id, client.clone());
+
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = retry(|| {
+                let connection_request_bytes = connection_request_bytes.clone();
+                async {
+                    let result =
+                        scope::try_acquire_scope(client_id, connection_request_bytes, &runtime, 0);
+                    if result >= 0 { Some(result) } else { None }
+                }
+            })
+            .await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response =
+                scope::send_scope_command(scope_id as u64, "ACL", &mut args, Some(&client)).await;
+
+            let value = response.expect("ACL WHOAMI through the scope should succeed");
+            let whoami = match value {
+                Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                Value::SimpleString(s) => s,
+                other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+            };
+
+            // The core assertion: the scoped connection authenticated as the
+            // configured IAM username, not the server's default/unauthenticated
+            // identity. An `assert!(response.is_ok())`-only check cannot catch
+            // the bug this test guards against, since ordinary commands still
+            // return OK when run as the wrong (or unauthenticated) identity on
+            // this permissive local server.
+            assert_eq!(
+                whoami, iam_username,
+                "Scoped connection should be authenticated as the configured IAM username"
+            );
+
+            scope::release_scope(scope_id as u64, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
 }

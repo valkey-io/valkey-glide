@@ -213,7 +213,12 @@ pub async fn execute_scope_command(
     // Execute via Client (gets timeout, decompression, IAM refresh) or raw fallback
     let result = match client {
         Some(c) => {
-            c.send_command_on_connection(&cmd, &mut conn.connection)
+            let ScopedConnection {
+                connection,
+                last_iam_generation,
+                ..
+            } = &mut *conn;
+            c.send_command_on_connection(&cmd, connection, last_iam_generation)
                 .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
@@ -404,7 +409,9 @@ pub async fn create_scope_connection(
         connection_retry_strategy: None,
         tcp_nodelay: true,
         pubsub_synchronizer: None,
-        iam_token_provider: None,
+        iam_token_provider: client
+            .and_then(|c| c.iam_token_manager())
+            .map(|m| Arc::new(m.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>),
         cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
@@ -425,8 +432,31 @@ pub async fn create_scope_connection(
     let mut init_pipe = redis::Pipeline::new();
     let mut init_count = 0;
 
-    // AUTH: send credentials if configured
-    if let Some(ref auth_info) = proto.authentication_info.0 {
+    // Generation observed at AUTH-build time, so send_command_on_connection can
+    // detect whether the token has rotated again since this connection's initial
+    // AUTH (rather than always re-authenticating on the very first command, or
+    // missing a rotation that lands between here and the first command).
+    let mut initial_iam_generation: u64 = 0;
+
+    // AUTH: IAM authentication takes priority when configured on the parent client
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
+    // fall back to the protobuf-configured password/username.
+    if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
+        let current_token = manager.get_token().await;
+        if !current_token.is_empty() {
+            initial_iam_generation = manager.token_generation();
+            init_pipe
+                .cmd("AUTH")
+                .arg(manager.username())
+                .arg(current_token.as_str());
+            init_count += 1;
+        } else {
+            logger_core::log_warn(
+                "create_scope_connection",
+                "IAM token unavailable; skipping AUTH for scoped connection",
+            );
+        }
+    } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
         if !password.is_empty() {
@@ -489,6 +519,7 @@ pub async fn create_scope_connection(
         state: ConnectionState::with_configured_db(database_id as u8),
         pinned_slot: None,
         target_slot: routing_slot,
+        last_iam_generation: std::sync::atomic::AtomicU64::new(initial_iam_generation),
     };
     pool_guard.idle.push_back(entry);
 }

@@ -26,7 +26,7 @@ use redis::{
 use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
@@ -579,6 +579,13 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Returns the parent client's IAM token manager, if IAM authentication is configured.
+    /// Used by scoped connections to authenticate as the IAM identity instead of
+    /// running unauthenticated.
+    pub(crate) fn iam_token_manager(&self) -> Option<&Arc<crate::iam::IAMTokenManager>> {
+        self.iam_token_manager.as_ref()
+    }
+
     /// Checks if the given command is a SELECT command.
     /// Returns true if the command is "SELECT", false otherwise.
     /// Handles cases where command() returns None gracefully.
@@ -1448,6 +1455,9 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
+    /// IAM change-detection here uses `last_seen_generation` (owned by the caller)
+    /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
+    ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
     /// connections operate outside the multiplexer's pipeline. OTel support for
     /// scopes is tracked as a follow-up enhancement.
@@ -1455,16 +1465,22 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
+        last_seen_generation: &AtomicU64,
     ) -> RedisResult<Value> {
-        // IAM token refresh: if token rotated, re-authenticate this connection
-        if let Some(iam_manager) = &self.iam_token_manager
-            && iam_manager.token_changed()
-        {
-            let current_token = iam_manager.get_token().await;
-            if !current_token.is_empty() {
-                iam_manager.clear_token_changed();
-                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
-                connection.send_packed_command(&auth_cmd).await?;
+        // IAM token refresh: if token rotated (generation advanced since this
+        // connection last applied one), re-authenticate this connection.
+        if let Some(iam_manager) = &self.iam_token_manager {
+            let current_generation = iam_manager.token_generation();
+            if current_generation != last_seen_generation.load(Ordering::Acquire) {
+                let current_token = iam_manager.get_token().await;
+                if !current_token.is_empty() {
+                    let auth_cmd = redis::cmd("AUTH")
+                        .arg(iam_manager.username())
+                        .arg(current_token.as_str())
+                        .to_owned();
+                    connection.send_packed_command(&auth_cmd).await?;
+                    last_seen_generation.store(current_generation, Ordering::Release);
+                }
             }
         }
 
@@ -3997,5 +4013,85 @@ mod tests {
                 "is_blocking_command_name mismatch for {name} {args:?}: got {via_name}, expected {expected}"
             );
         }
+    }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS (same approach as `iam::tests::setup_test_credentials`).
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_username_accessor_returns_configured_username() {
+        setup_test_credentials();
+
+        let manager = crate::iam::IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "iam-test-user".to_string(),
+            "us-east-1".to_string(),
+            crate::iam::ServiceType::ElastiCache,
+            None,
+        )
+        .await
+        .expect("IAMTokenManager creation should succeed with fake credentials");
+
+        assert_eq!(manager.username(), "iam-test-user");
+    }
+
+    #[tokio::test]
+    async fn test_client_iam_token_manager_accessor() {
+        setup_test_credentials();
+
+        // With IAM configured, Client::new should populate the IAM token manager,
+        // and the new accessor should expose it (used by scoped connections to
+        // authenticate as the IAM identity instead of running unauthenticated).
+        let iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let client = Client::new(iam_request, None)
+            .await
+            .expect("lazy client creation with IAM config should succeed");
+
+        let manager = client
+            .iam_token_manager()
+            .expect("iam_token_manager() should return Some when IAM is configured");
+        assert_eq!(manager.username(), "iam-test-user");
+
+        // Without IAM configured, the accessor should return None.
+        let non_iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let non_iam_client = Client::new(non_iam_request, None)
+            .await
+            .expect("lazy client creation without IAM config should succeed");
+        assert!(
+            non_iam_client.iam_token_manager().is_none(),
+            "iam_token_manager() should return None when IAM is not configured"
+        );
     }
 }

@@ -772,6 +772,11 @@ pub struct ScopedConnection {
     /// The target slot this connection was created for (cluster routing).
     /// Used to match idle connections to acquire requests for the same slot range.
     pub target_slot: u16,
+    /// Last IAM token generation this connection's AUTH was applied at (see
+    /// `IAMTokenManager::token_generation`). Per-connection rather than on the
+    /// shared `Client` since scoped connections are reused independently.
+    /// Starts at 0 so a fresh connection re-authenticates on first use if needed.
+    pub last_iam_generation: AtomicU64,
 }
 
 /// Per-client scope pool.
@@ -904,6 +909,9 @@ impl ScopePool {
                         state: ConnectionState::default(),
                         pinned_slot: None,
                         target_slot: conn.target_slot,
+                        last_iam_generation: AtomicU64::new(
+                            conn.last_iam_generation.load(Ordering::Relaxed),
+                        ),
                     };
                     drop(conn);
                     self.idle.push_back(idle_conn);
@@ -1023,6 +1031,9 @@ impl ScopePool {
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
                                     target_slot: guard.target_slot,
+                                    last_iam_generation: AtomicU64::new(
+                                        guard.last_iam_generation.load(Ordering::Relaxed),
+                                    ),
                                 };
                                 drop(guard);
 
