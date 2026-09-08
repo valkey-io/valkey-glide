@@ -207,7 +207,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         };
         OpenTelemetry.init(openTelemetryConfig);
         await teardown_otel_test();
-    }, 120000);
+    }, 40000);
 
     async function teardown_otel_test() {
         // Clean up OpenTelemetry files
@@ -559,7 +559,7 @@ describe("OpenTelemetry GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 120000);
+    }, 20000);
 
     afterEach(async () => {
         // remove the span file
@@ -954,7 +954,7 @@ describe("OpenTelemetry parent span context propagation", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 120000);
+    }, 40000);
 
     afterEach(async () => {
         OpenTelemetry.setParentSpanContextProvider(null);

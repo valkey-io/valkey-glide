@@ -69,11 +69,11 @@ describe("GlideMonitorClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 120000);
+    }, 40000);
 
     afterAll(async () => {
         await cluster.close();
-    }, 60000);
+    }, 20000);
 
     it("monitor receives commands", async () => {
         const config = getClientConfigurationOption(

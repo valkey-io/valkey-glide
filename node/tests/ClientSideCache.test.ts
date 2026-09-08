@@ -27,7 +27,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
-const CLEANUP_TIMEOUT = 60000;
+const CLEANUP_TIMEOUT = 10000;
 
 describe("ClientSideCache", () => {
     let standaloneCluster: ValkeyCluster;

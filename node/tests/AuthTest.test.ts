@@ -102,7 +102,7 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
             managementClientCME = await GlideClusterClient.createClient({
                 addresses: formatAddresses(cmeCluster.getAddresses()),
             });
-        }, 120000);
+        }, 40000);
 
         const formatAddresses = (
             addresses: AddressEntry[],

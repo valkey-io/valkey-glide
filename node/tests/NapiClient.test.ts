@@ -32,7 +32,7 @@ import {
 } from "../build-ts";
 import { getServerVersion, parseEndpoints } from "./TestUtilities";
 
-const TIMEOUT = 120000;
+const TIMEOUT = 40000;
 
 function formatAddresses(
     addresses: [string, number][],

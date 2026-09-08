@@ -56,7 +56,7 @@ const TIMEOUT = 50000;
 const FUNCTION_TIMEOUT = 6000;
 
 // This timeout is used for cleanup operations like closing clients
-const CLEANUP_TIMEOUT = 60000;
+const CLEANUP_TIMEOUT = 10000;
 
 describe("GlideClient", () => {
     let testsFailed = 0;
@@ -88,7 +88,7 @@ describe("GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 120000);
+    }, 20000);
 
     afterEach(async () => {
         await flushClient(client);
