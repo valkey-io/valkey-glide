@@ -18,12 +18,13 @@
 
 use crate::client::Client;
 use crate::pool::{
-    get_client_scope_pools, get_scope_registry, update_state_for_command, validate_scope_slot,
+    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
+    validate_scope_slot,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool, ScopedConnection};
+use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -442,9 +443,16 @@ pub async fn create_scope_connection(
     // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
     // fall back to the protobuf-configured password/username.
     if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
+        // Read the generation before the token: if a refresh lands in this gap,
+        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // so the mismatch on the first scope command still triggers a
+        // reauthentication. Reading generation after the token could otherwise
+        // suppress it — a refresh landing there would mean the initial AUTH used
+        // the old token, but the recorded generation already matches the new one.
+        let generation_before_auth = manager.token_generation();
         let current_token = manager.get_token().await;
         if !current_token.is_empty() {
-            initial_iam_generation = manager.token_generation();
+            initial_iam_generation = generation_before_auth;
             init_pipe
                 .cmd("AUTH")
                 .arg(manager.username())

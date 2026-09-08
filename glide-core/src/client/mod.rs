@@ -1478,7 +1478,17 @@ impl Client {
                         .arg(iam_manager.username())
                         .arg(current_token.as_str())
                         .to_owned();
-                    connection.send_packed_command(&auth_cmd).await?;
+                    match tokio::time::timeout(
+                        self.request_timeout,
+                        connection.send_packed_command(&auth_cmd),
+                    )
+                    .await
+                    {
+                        Ok(result) => result?,
+                        Err(_) => {
+                            return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                        }
+                    };
                     last_seen_generation.store(current_generation, Ordering::Release);
                 }
             }
