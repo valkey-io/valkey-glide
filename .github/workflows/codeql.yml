@@ -67,7 +67,13 @@ jobs:
               shell: bash
               run: |
                   cd glide-core
-                  cargo build --release
+                  cargo build --release --locked
+
+            - name: Ensure C++ CodeQL build leaves tracked files unchanged
+              if: matrix.language == 'c-cpp'
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: CodeQL C/C++ Cargo build
 
             # Go Build
             - name: Install protoc-gen-go
@@ -123,6 +129,12 @@ jobs:
                   echo "Attempting Go build for CodeQL analysis..."
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
 
+            - name: Ensure Go CodeQL build leaves tracked files unchanged
+              if: matrix.language == 'go'
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: CodeQL Go protobuf generation and build
+
             # Java/Kotlin Build
             - name: Build Java/Kotlin components
               if: matrix.language == 'java-kotlin'
@@ -146,6 +158,12 @@ jobs:
                   # Build all Java components (skip Rust build for CodeQL analysis)
                   cd java
                   ./gradlew --build-cache assemble --exclude-task :client:buildRust
+
+            - name: Ensure Java/Kotlin CodeQL build leaves tracked files unchanged
+              if: matrix.language == 'java-kotlin'
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: CodeQL Java/Kotlin build
 
             - name: Debug - Verify .class files are produced
               if: matrix.language == 'java-kotlin'

@@ -178,13 +178,13 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Check features
               working-directory: ./glide-core
               run: |
-                  cargo check --benches --all-features
-                  cargo check --no-default-features
+                  cargo check --locked --benches --all-features
+                  cargo check --locked --no-default-features
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
@@ -200,6 +200,11 @@ jobs:
                   language-flag: -rust
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
+
+            - name: Ensure Rust tests leave tracked files clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust core tests and benchmarks
 
     lint:
         runs-on: ubuntu-24.04

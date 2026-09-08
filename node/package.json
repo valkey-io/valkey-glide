@@ -72,7 +72,7 @@
         "test:debug": "npm run build-test-utils && jest --runInBand",
         "test:minimum": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern=\"^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$\"",
         "test:modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern=\"(GlideJson|GlideFt)\"",
-        "build-test-utils": "cd ../utils && npm i && npm run build",
+        "build-test-utils": "cd ../utils && npm ci && npm run build",
         "repl": "ts-node --project tsconfig.json",
         "lint": "npm run install-linting && eslint -c ../eslint.config.mjs && npm run prettier:check",
         "lint:fix": "npm run install-linting && eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
