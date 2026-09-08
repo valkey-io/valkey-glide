@@ -463,6 +463,8 @@ pub async fn create_scope_connection(
                 "create_scope_connection",
                 "IAM token unavailable; skipping AUTH for scoped connection",
             );
+            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+            return;
         }
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
