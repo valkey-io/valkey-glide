@@ -217,9 +217,10 @@ pub async fn execute_scope_command(
             let ScopedConnection {
                 connection,
                 last_iam_generation,
+                state,
                 ..
             } = &mut *conn;
-            c.send_command_on_connection(&cmd, connection, last_iam_generation)
+            c.send_command_on_connection(&cmd, connection, last_iam_generation, state.multi_active)
                 .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
@@ -410,6 +411,8 @@ pub async fn create_scope_connection(
         connection_retry_strategy: None,
         tcp_nodelay: true,
         pubsub_synchronizer: None,
+        // Inert here: MultiplexedConnection has no reconnect loop, so this never
+        // fires. Only the cluster client's connection path reads it.
         iam_token_provider: client
             .and_then(|c| c.iam_token_manager())
             .map(|m| Arc::new(m.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>),

@@ -1466,31 +1466,41 @@ impl Client {
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
         last_seen_generation: &AtomicU64,
+        multi_active: bool,
     ) -> RedisResult<Value> {
         // IAM token refresh: if token rotated (generation advanced since this
-        // connection last applied one), re-authenticate this connection.
-        if let Some(iam_manager) = &self.iam_token_manager {
+        // connection last applied one), re-authenticate this connection. Skipped
+        // while a transaction is open — an AUTH sent between MULTI and EXEC gets
+        // queued by the server instead of executing immediately, and its `+OK`
+        // becomes an extra element in the EXEC reply. Leave the generation
+        // bookmark unadvanced so the re-auth fires on the first command after
+        // EXEC/DISCARD instead.
+        if !multi_active && let Some(iam_manager) = &self.iam_token_manager {
             let current_generation = iam_manager.token_generation();
             if current_generation != last_seen_generation.load(Ordering::Acquire) {
                 let current_token = iam_manager.get_token().await;
-                if !current_token.is_empty() {
-                    let auth_cmd = redis::cmd("AUTH")
-                        .arg(iam_manager.username())
-                        .arg(current_token.as_str())
-                        .to_owned();
-                    match tokio::time::timeout(
-                        self.request_timeout,
-                        connection.send_packed_command(&auth_cmd),
-                    )
-                    .await
-                    {
-                        Ok(result) => result?,
-                        Err(_) => {
-                            return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-                        }
-                    };
-                    last_seen_generation.store(current_generation, Ordering::Release);
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
                 }
+                let auth_cmd = redis::cmd("AUTH")
+                    .arg(iam_manager.username())
+                    .arg(current_token.as_str())
+                    .to_owned();
+                match tokio::time::timeout(
+                    self.request_timeout,
+                    connection.send_packed_command(&auth_cmd),
+                )
+                .await
+                {
+                    Ok(result) => result?,
+                    Err(_) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                };
+                last_seen_generation.store(current_generation, Ordering::Release);
             }
         }
 
