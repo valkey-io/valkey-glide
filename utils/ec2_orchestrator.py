@@ -54,10 +54,18 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
             "AssociatePublicIpAddress": True,
         }],
         IamInstanceProfile={"Name": os.environ["EC2_INSTANCE_PROFILE"]},
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
         TagSpecifications=[
             {
                 "ResourceType": "instance",
-                "Tags": [{"Key": "Name", "Value": f"glide-ci-valkey-{BUILD_ID}"}],
+                "Tags": [
+                    {"Key": "Name", "Value": f"glide-ci-valkey-{BUILD_ID}"},
+                    {"Key": "Project", "Value": "glide-ci"},
+                ],
             }
         ],
     )
@@ -257,8 +265,6 @@ def build_windows_userdata(
         "        $json | Out-File -FilePath 'C:\\status.json' -Encoding UTF8",
         "        & $aws s3 cp 'C:\\status.json' \"s3://$reportBucket/$buildId/status.json\" --region $region",
         "    } catch { Write-Log \"S3 upload failed: $_\" }",
-        "    $iid = (Invoke-WebRequest -Uri 'http://169.254.169.254/latest/meta-data/instance-id' -UseBasicParsing).Content",
-        "    & $aws ec2 terminate-instances --instance-ids $iid --region $region",
         "}",
         "</powershell>",
         "<persist>true</persist>",
@@ -281,11 +287,17 @@ def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
         }],
         IamInstanceProfile={"Name": os.environ["EC2_WINDOWS_INSTANCE_PROFILE"]},
         UserData=userdata,
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
         TagSpecifications=[
             {
                 "ResourceType": "instance",
                 "Tags": [
-                    {"Key": "Name", "Value": f"glide-ci-windows-{BUILD_ID}"}
+                    {"Key": "Name", "Value": f"glide-ci-windows-{BUILD_ID}"},
+                    {"Key": "Project", "Value": "glide-ci"},
                 ],
             }
         ],
