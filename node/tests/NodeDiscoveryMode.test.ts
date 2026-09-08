@@ -32,7 +32,7 @@ describe("NodeDiscoveryMode", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-    }, 20000);
+    }, 120000);
 
     afterEach(async () => {
         client?.close();

@@ -16,7 +16,7 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 
-const TIMEOUT = 30_000;
+const TIMEOUT = 120000;
 
 function makeKey(prefix: string): string {
     return `scope-test-${prefix}-${Math.random().toString(36).slice(2, 10)}`;

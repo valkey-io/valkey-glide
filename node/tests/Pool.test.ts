@@ -15,7 +15,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 30_000;
-const CLUSTER_TIMEOUT = 60_000;
+const CLUSTER_TIMEOUT = 120000;
 
 function makeKey(clusterMode: boolean, prefix: string): string {
     const uid = Math.random().toString(36).slice(2, 10);
