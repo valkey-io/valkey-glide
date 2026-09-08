@@ -1,0 +1,36 @@
+name: Ensure clean tree
+description: "Fail when tracked files are modified by a preceding operation"
+
+inputs:
+    context:
+        description: "Optional human-readable description of the preceding operation"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+    steps:
+        - name: Assert tracked worktree is clean
+          shell: bash
+          env:
+              INPUT_CONTEXT: ${{ inputs.context }}
+          run: |
+              set -euo pipefail
+
+              tracked_status="$(git status --porcelain=v1 --untracked-files=all)"
+              if [[ -z "${tracked_status}" ]]; then
+                  exit 0
+              fi
+
+              echo "Tracked repository changes were detected after a mutation-prone operation."
+              if [[ -n "${INPUT_CONTEXT}" ]]; then
+                  printf 'Context: %s\n' "${INPUT_CONTEXT}"
+              fi
+
+              echo "::group::Tracked status (first 200 entries)"
+              git -P status --short --untracked-files=no | sed -n '1,200p'
+              echo "::endgroup::"
+
+              echo "Reproduce the operation locally and update generated files or lockfiles intentionally."
+              echo "If the changes are unintended, fix the operation so it leaves tracked files unchanged."
+              exit 1
