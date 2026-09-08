@@ -1466,16 +1466,15 @@ impl Client {
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
         last_seen_generation: &AtomicU64,
-        multi_active: bool,
+        defer_reauth: bool,
     ) -> RedisResult<Value> {
         // IAM token refresh: if token rotated (generation advanced since this
-        // connection last applied one), re-authenticate this connection. Skipped
-        // while a transaction is open — an AUTH sent between MULTI and EXEC gets
-        // queued by the server instead of executing immediately, and its `+OK`
-        // becomes an extra element in the EXEC reply. Leave the generation
-        // bookmark unadvanced so the re-auth fires on the first command after
-        // EXEC/DISCARD instead.
-        if !multi_active && let Some(iam_manager) = &self.iam_token_manager {
+        // connection last applied one), re-authenticate this connection.
+        // `defer_reauth` skips this when AUTH can't run normally — an open
+        // transaction (queued, corrupting the EXEC reply) or RESP2 subscribed
+        // mode (rejected outright). Bookmark stays unadvanced so it retries once
+        // the connection is back in a mode that allows AUTH.
+        if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
             let current_generation = iam_manager.token_generation();
             if current_generation != last_seen_generation.load(Ordering::Acquire) {
                 let current_token = iam_manager.get_token().await;

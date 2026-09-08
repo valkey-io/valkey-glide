@@ -168,6 +168,12 @@ pub async fn execute_scope_command(
 
     // State tracking (for conditional cleanup on release)
     let arg_refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
+    // Captured before the update below, since it clears multi_active/subscriptions
+    // on the very command that closes them (EXEC/DISCARD, last UNSUBSCRIBE) — the
+    // server is still in the old mode when that command's AUTH would run, so using
+    // the post-update state would attempt (and fail) AUTH on the closing command.
+    let multi_active_before_command = conn.state.multi_active;
+    let subscribed_before_command = conn.state.has_subscriptions();
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
 
     // Cluster mode: validate slot consistency (skip in standalone — no slots)
@@ -217,11 +223,15 @@ pub async fn execute_scope_command(
             let ScopedConnection {
                 connection,
                 last_iam_generation,
-                state,
                 ..
             } = &mut *conn;
-            c.send_command_on_connection(&cmd, connection, last_iam_generation, state.multi_active)
-                .await
+            c.send_command_on_connection(
+                &cmd,
+                connection,
+                last_iam_generation,
+                multi_active_before_command || subscribed_before_command,
+            )
+            .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
     };
