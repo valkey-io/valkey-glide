@@ -411,11 +411,7 @@ pub async fn create_scope_connection(
         connection_retry_strategy: None,
         tcp_nodelay: true,
         pubsub_synchronizer: None,
-        // Inert here: MultiplexedConnection has no reconnect loop, so this never
-        // fires. Only the cluster client's connection path reads it.
-        iam_token_provider: client
-            .and_then(|c| c.iam_token_manager())
-            .map(|m| Arc::new(m.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>),
+        iam_token_provider: None,
         cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
