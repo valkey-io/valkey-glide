@@ -1192,10 +1192,7 @@ export async function batchTest(
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
-    if (
-        !cluster.checkIfServerVersionLessThan("9.0.0") &&
-        process.env.USE_ELASTICACHE !== "true"
-    ) {
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
         baseBatch.set(key28, foo);
         responseData.push(['set(key1, "foo")', "OK"]);
         baseBatch.move(key28, 1);
@@ -2546,7 +2543,6 @@ export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
-    readOnly = false,
 ): Promise<string> {
     let info: string;
 
@@ -2572,7 +2568,6 @@ export async function getServerVersion(
         const glideClient = await GlideClient.createClient({
             ...getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
             ...tlsConfig,
-            readOnly,
             advancedConfiguration: {
                 connectionTimeout: 10000,
                 ...(tlsConfig?.advancedConfiguration ?? {}),

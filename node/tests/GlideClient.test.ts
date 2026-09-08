@@ -549,7 +549,7 @@ describe("GlideClient", () => {
         },
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -595,7 +595,7 @@ describe("GlideClient", () => {
         },
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],
@@ -678,7 +678,6 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "lolwut test_%p",
         async (protocol) => {
-            if (process.env.USE_ELASTICACHE === "true") return; // lolwut version format differs on ElastiCache
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -858,7 +857,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -959,40 +958,20 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
         "migrate multi-key success test_%p",
         async (protocol) => {
             let destCluster: ValkeyCluster | null = null;
-            const useElastiCache = process.env.USE_ELASTICACHE === "true";
 
-            if (useElastiCache) {
-                // Use pre-created ElastiCache migrate destination cluster
-                const migrateDestEndpoint = global.MIGRATE_DEST_ENDPOINT as
-                    string | undefined;
-
-                if (!migrateDestEndpoint) {
-                    throw new Error(
-                        "[migrate multi-key] MIGRATE_DEST_ENDPOINT not set. " +
-                            "Ensure globalSetup created a migrate destination cluster.",
-                    );
-                }
-
-                destCluster = await ValkeyCluster.initFromExistingCluster(
-                    false,
-                    parseEndpoints(migrateDestEndpoint),
-                    getServerVersion,
-                );
-            } else {
-                destCluster = await ValkeyCluster.createCluster(
-                    false,
-                    1,
-                    0,
-                    getServerVersion,
-                );
-            }
+            destCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+            );
 
             const sourceClient = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -1033,9 +1012,7 @@ describe("GlideClient", () => {
                 sourceClient.close();
                 destClient.close();
 
-                if (process.env.USE_ELASTICACHE !== "true") {
-                    await destCluster?.close();
-                }
+                await destCluster?.close();
             }
         },
         60000,
@@ -1308,7 +1285,7 @@ describe("GlideClient", () => {
         },
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -1413,7 +1390,7 @@ describe("GlideClient", () => {
         FUNCTION_TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -1476,7 +1453,7 @@ describe("GlideClient", () => {
                 // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
                 await Promise.all([
                     debugCommandPromise, // Run the long-running command
-                    connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+                    connectWithLargeTimeout(), // Verify a long timeout (10s) allows successful connection
                 ]);
             } finally {
                 // Clean up the test client and ensure everything is flushed and closed
@@ -1486,7 +1463,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -2440,7 +2417,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip : it)(
+    it(
         "should connect with IPv6 address",
         async () => {
             const address = {
@@ -2459,7 +2436,7 @@ describe("GlideClient", () => {
 
     // Spin up a dedicated standalone with 1 replica so the failover
     // doesn't destabilize the shared test server.
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -2526,7 +2503,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(

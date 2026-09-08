@@ -3593,6 +3593,7 @@ describe("PubSub", () => {
         },
         TIMEOUT,
     );
+    // TODO: 512MB message tests are disabled — exceed available CI memory
     describe.skip("pubsub max size message test", () => {
         const generateLargeMessage = (char: string, size: number): string => {
             let message = "";
@@ -6166,7 +6167,7 @@ describe("PubSub", () => {
                 await new Promise((resolve) =>
                     setTimeout(
                         resolve,
-                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                        2000,
                     ),
                 );
 
@@ -6318,7 +6319,7 @@ describe("PubSub", () => {
                 await new Promise((resolve) =>
                     setTimeout(
                         resolve,
-                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                        2000,
                     ),
                 );
 
@@ -6381,7 +6382,6 @@ describe("PubSub", () => {
                 [cmeCluster.getAddresses()[0]],
                 false,
                 undefined,
-                true,
             );
 
             if (version < "7.0.0") {
@@ -6472,7 +6472,7 @@ describe("PubSub", () => {
                 await new Promise((resolve) =>
                     setTimeout(
                         resolve,
-                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                        2000,
                     ),
                 );
 
@@ -6610,7 +6610,7 @@ describe("PubSub", () => {
                 await new Promise((resolve) =>
                     setTimeout(
                         resolve,
-                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                        2000,
                     ),
                 );
 
@@ -6631,7 +6631,7 @@ describe("PubSub", () => {
                 await new Promise((resolve) =>
                     setTimeout(
                         resolve,
-                        process.env.USE_ELASTICACHE === "true" ? 5000 : 2000,
+                        2000,
                     ),
                 );
 
@@ -6690,7 +6690,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         true,
         false,
     ])(
@@ -6879,7 +6879,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         true,
         false,
     ])(
@@ -7177,7 +7177,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         true,
         false,
     ])(

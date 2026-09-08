@@ -379,7 +379,7 @@ describe("Scan GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(

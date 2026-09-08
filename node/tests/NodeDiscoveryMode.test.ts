@@ -98,48 +98,21 @@ describe("NodeDiscoveryMode", () => {
         10000,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? describe.skip : describe)(
-        "DiscoverAll",
-        () => {
-            let discoveryCluster: ValkeyCluster;
+    describe("DiscoverAll", () => {
+        let discoveryCluster: ValkeyCluster;
 
-            beforeAll(async () => {
-                if (process.env.USE_ELASTICACHE === "true") {
-                    // Use the pre-created ElastiCache discovery cluster
-                    // global.DISCOVERY_NODE_ADDRESSES contains [host, port] pairs
-                    // We create a dummy ValkeyCluster from existing addresses using
-                    // the first address as the "cluster" endpoint
-                    if (
-                        !global.DISCOVERY_NODE_ADDRESSES ||
-                        global.DISCOVERY_NODE_ADDRESSES.length < 4
-                    ) {
-                        throw new Error(
-                            "[DiscoverAll] DISCOVERY_NODE_ADDRESSES not set or insufficient nodes. " +
-                                "Ensure globalSetup created a discovery cluster with 3 replicas.",
-                        );
-                    }
+        beforeAll(async () => {
+            discoveryCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                3,
+                getServerVersion,
+            );
+        }, 120000);
 
-                    discoveryCluster =
-                        await ValkeyCluster.initFromExistingCluster(
-                            false,
-                            global.DISCOVERY_NODE_ADDRESSES,
-                            getServerVersion,
-                        );
-                } else {
-                    discoveryCluster = await ValkeyCluster.createCluster(
-                        false,
-                        1,
-                        3,
-                        getServerVersion,
-                    );
-                }
-            }, 120000);
-
-            afterAll(async () => {
-                if (process.env.USE_ELASTICACHE !== "true") {
-                    await discoveryCluster.close();
-                }
-            });
+        afterAll(async () => {
+            await discoveryCluster.close();
+        });
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
                 "discover replicas from primary_%p",
@@ -274,6 +247,5 @@ describe("NodeDiscoveryMode", () => {
                 },
                 30000,
             );
-        },
-    );
+    });
 });

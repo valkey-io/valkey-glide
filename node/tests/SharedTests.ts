@@ -133,7 +133,7 @@ export function runBaseTests(config: {
     const BGSAVE_NOT_CANCELLED_RESPONSE =
         "Background saving is currently not in progress or scheduled";
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -321,7 +321,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -346,7 +346,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -416,7 +416,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -444,7 +444,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -473,7 +473,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -511,7 +511,6 @@ export function runBaseTests(config: {
                         return;
                     }
 
-                    if (process.env.USE_ELASTICACHE === "true") return; // BGSAVE CANCEL not supported on ElastiCache
 
                     await waitForSaveNotInProgress(client);
 
@@ -532,7 +531,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -563,7 +562,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -591,7 +590,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -634,7 +633,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -1537,7 +1536,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -9939,7 +9938,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -9977,7 +9976,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         ProtocolVersion.RESP2,
         ProtocolVersion.RESP3,
     ])(
@@ -13783,7 +13782,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    (process.env.USE_ELASTICACHE === "true" ? it.skip.each : it.each)([
+    it.each([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
         [ProtocolVersion.RESP3, true],

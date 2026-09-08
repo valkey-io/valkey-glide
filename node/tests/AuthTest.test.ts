@@ -56,9 +56,7 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
     };
 }
 
-(process.env.USE_ELASTICACHE === "true" ? describe.skip : describe)(
-    "Auth tests",
-    () => {
+describe("Auth tests", () => {
         let cmeCluster: ValkeyCluster;
         let cmdCluster: ValkeyCluster;
         let managementClient: BaseClient;
@@ -653,8 +651,7 @@ function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
                 });
             },
         );
-    },
-);
+});
 
 // IAM Auth tests with mock credentials
 describe("IAM Auth: Mock Credentials", () => {
@@ -665,10 +662,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME; // Use default user
@@ -700,7 +694,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Basic ping test to verify connection
@@ -734,10 +728,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -769,7 +760,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Verify initial connection
@@ -801,10 +792,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -836,7 +824,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Basic ping test to verify connection
@@ -870,10 +858,7 @@ describe("IAM Auth: Mock Credentials", () => {
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
-                console.log(
-                    "Skipping IAM test - AWS credentials not set in OS environment",
-                );
-                return;
+                return; // IAM tests require AWS credentials — see DEVELOPER.md
             }
 
             const username = IAM_USERNAME;
@@ -905,7 +890,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: global.TLS, // Use TLS setting from test configuration
+                    useTLS: global.TLS,
                 });
 
                 // Verify initial connection
