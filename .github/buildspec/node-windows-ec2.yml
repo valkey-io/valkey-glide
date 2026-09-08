@@ -40,7 +40,8 @@ env:
 phases:
     install:
         commands:
-            - pip install --quiet boto3
+            # boto3 is pre-installed in aws/codebuild/standard:7.0 — no install needed.
+            - pip show boto3 | grep Version
 
     build:
         commands:

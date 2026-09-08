@@ -138,7 +138,11 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
 def build_windows_userdata(
     linux_instance_id: str, linux_private_ip: str,
 ) -> bytes:
-    """Build the PowerShell user-data script for the Windows EC2."""
+    """Build the PowerShell user-data script for the Windows EC2.
+
+    All values interpolated into the PowerShell script are validated against
+    strict regex patterns before interpolation to prevent injection.
+    """
     import re as _re
     # Validate all values interpolated into PowerShell to prevent injection.
     # These come from the EC2 API and environment variables, but we enforce
@@ -155,8 +159,8 @@ def build_windows_userdata(
         raise ValueError(f"Invalid linux_private_ip: {linux_private_ip!r}")
     if not _alphanum.match(BUILD_ID):
         raise ValueError(f"Invalid BUILD_ID: {BUILD_ID!r}")
-    if COMMIT_SHA and not _sha.match(COMMIT_SHA):
-        raise ValueError(f"Invalid COMMIT_SHA (must be 40-char hex): {COMMIT_SHA!r}")
+    if not COMMIT_SHA or not _sha.match(COMMIT_SHA):
+        raise ValueError(f"COMMIT_SHA is required and must be a 40-char hex string, got: {COMMIT_SHA!r}")
     if not _bucket.match(REPORT_BUCKET):
         raise ValueError(f"Invalid REPORT_BUCKET: {REPORT_BUCKET!r}")
     if not _region.match(REGION):
@@ -239,7 +243,7 @@ def build_windows_userdata(
         "    Push-Checkpoint 'node-built'",
         "",
         "    Write-Log '=== Installing Python dependencies ===' ",
-        "    python -m pip install --quiet boto3 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    python -m pip install --quiet boto3==1.35.36 2>&1 | Tee-Object -FilePath $logFile -Append",
         "    Push-Checkpoint 'pip-ready'",
         "",
         "    Write-Log '=== Warming up SSM agent on Linux EC2 (10 pings) ===' ",

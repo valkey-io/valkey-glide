@@ -449,6 +449,8 @@ jobs:
     test-windows:
         name: Test Windows (x86_64-pc-windows-msvc) via CodeBuild
         runs-on: ubuntu-latest
+        # AWS_ACTIONS environment requires manual approval from a maintainer,
+        # acting as the gate for real AWS resource usage (EC2, S3, CodeBuild).
         environment: AWS_ACTIONS
         permissions:
             id-token: write

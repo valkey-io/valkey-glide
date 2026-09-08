@@ -1658,11 +1658,18 @@ def main():
 
     elif args.action == "stop":
         if getattr(args, "remote", None):
+            import re as _re
             remote_ip = getattr(args, "remote_ip", None)
             if remote_ip:
-                import re as _re
                 if not _re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', remote_ip):
                     parser.error(f"--remote-ip must be a valid IPv4 address, got: {remote_ip!r}")
+            # Validate cluster_folder and prefix to prevent shell injection
+            # in the SSM command string (runs as root on the Linux EC2).
+            _path_safe = _re.compile(r'^[a-zA-Z0-9/_.-]+$')
+            if args.cluster_folder and not _path_safe.match(args.cluster_folder):
+                parser.error(f"--cluster-folder contains invalid characters: {args.cluster_folder!r}")
+            if getattr(args, 'prefix', None) and not _path_safe.match(args.prefix):
+                parser.error(f"--prefix contains invalid characters: {args.prefix!r}")
             cmd_parts = [
                 "python3",
                 "/home/ssm-user/glide/cluster_manager.py",
