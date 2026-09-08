@@ -1551,6 +1551,9 @@ def main():
             remote_ip = args.remote_ip
             if not remote_ip:
                 parser.error("--remote-ip is required when using --remote")
+            import re as _re
+            if not _re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', remote_ip):
+                parser.error(f"--remote-ip must be a valid IPv4 address, got: {remote_ip!r}")
 
             # Build cluster_manager.py args for the remote side.
             # Do NOT pass -p — let cluster_manager.py on the remote side pick
@@ -1656,6 +1659,11 @@ def main():
 
     elif args.action == "stop":
         if getattr(args, "remote", None):
+            remote_ip = getattr(args, "remote_ip", None)
+            if remote_ip:
+                import re as _re
+                if not _re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', remote_ip):
+                    parser.error(f"--remote-ip must be a valid IPv4 address, got: {remote_ip!r}")
             cmd_parts = [
                 "python3",
                 "/home/ssm-user/glide/cluster_manager.py",

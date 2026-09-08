@@ -140,6 +140,28 @@ def build_windows_userdata(
     linux_instance_id: str, linux_private_ip: str,
 ) -> bytes:
     """Build the PowerShell user-data script for the Windows EC2."""
+    import re as _re
+    # Validate all values interpolated into PowerShell to prevent injection.
+    # These come from the EC2 API and environment variables, but we enforce
+    # strict formats as a defence-in-depth measure.
+    _ec2_id   = _re.compile(r'^i-[0-9a-f]{8,17}$')
+    _ipv4     = _re.compile(r'^\d{1,3}(\.\d{1,3}){3}$')
+    _alphanum = _re.compile(r'^[a-zA-Z0-9_:/-]{1,128}$')
+    _sha      = _re.compile(r'^[0-9a-f]{40}$')
+    _bucket   = _re.compile(r'^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$')
+    _region   = _re.compile(r'^[a-z]{2}-[a-z]+-\d$')
+    if not _ec2_id.match(linux_instance_id):
+        raise ValueError(f"Invalid linux_instance_id: {linux_instance_id!r}")
+    if not _ipv4.match(linux_private_ip):
+        raise ValueError(f"Invalid linux_private_ip: {linux_private_ip!r}")
+    if not _alphanum.match(BUILD_ID):
+        raise ValueError(f"Invalid BUILD_ID: {BUILD_ID!r}")
+    if COMMIT_SHA and not _sha.match(COMMIT_SHA):
+        raise ValueError(f"Invalid COMMIT_SHA (must be 40-char hex): {COMMIT_SHA!r}")
+    if not _bucket.match(REPORT_BUCKET):
+        raise ValueError(f"Invalid REPORT_BUCKET: {REPORT_BUCKET!r}")
+    if not _region.match(REGION):
+        raise ValueError(f"Invalid REGION: {REGION!r}")
     lines = [
         "<powershell>",
         "$ErrorActionPreference = 'Continue'",
