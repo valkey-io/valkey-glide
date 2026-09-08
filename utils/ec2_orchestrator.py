@@ -91,7 +91,7 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
     gz_b64 = base64.b64encode(compressed).decode()
     log.info(f"Copying cluster_manager.py to {instance_id} ({len(compressed)} bytes gzipped)")
 
-    # Wait for SSM agent to be ready
+    # SSM agent can take 30-120s to register after instance start; poll until visible.
     deadline = time.time() + 120
     while time.time() < deadline:
         info = ssm_client.describe_instance_information(
@@ -111,7 +111,6 @@ def setup_linux_ec2(ssm_client, instance_id: str) -> None:
         "echo SETUP_DONE",
     ])
 
-    # Send SSM command
     resp = ssm_client.send_command(
         InstanceIds=[instance_id],
         DocumentName="AWS-RunShellScript",

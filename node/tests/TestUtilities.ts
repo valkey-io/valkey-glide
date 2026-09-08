@@ -51,6 +51,15 @@ import {
 const execAsync = promisify(exec);
 
 /**
+ * Small delay between cluster close() calls to allow OS to drain socket
+ * file descriptors. Prevents socket exhaustion when multiple clusters are
+ * torn down sequentially in afterAll.
+ */
+export async function socketDrainDelay(ms = 50): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Reads and returns the CA certificate data for TLS connections.
  *
  * @returns The CA certificate data as a Buffer

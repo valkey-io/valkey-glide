@@ -46,6 +46,7 @@ import {
     getRandomKey,
     getServerVersion,
     parseEndpoints,
+    socketDrainDelay,
     validateBatchResponse,
     waitForNotBusy,
 } from "./TestUtilities";
@@ -113,13 +114,11 @@ describe("GlideClient", () => {
 
         if (testsFailed === 0) {
             await cluster.close();
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             await azCluster.close();
         } else {
             await cluster.close(true);
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             await azCluster.close();
         }
     }, CLEANUP_TIMEOUT);

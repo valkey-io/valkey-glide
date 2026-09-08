@@ -1590,7 +1590,6 @@ def main():
             output = run_remote_command(
                 args.remote, run_cmd, args.remote_region, timeout_seconds=300
             )
-            # Forward output to stdout (CLUSTER_NODES= and CLUSTER_FOLDER= lines)
             print(output)
             sys.exit(0)
         if not args.cluster_mode:

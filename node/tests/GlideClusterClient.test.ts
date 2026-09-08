@@ -71,10 +71,11 @@ import {
     triggerLatencySpike,
     validateBatchResponse,
     waitForNotBusy,
+    socketDrainDelay,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
-const CLEANUP_TIMEOUT = 60000; // 60 seconds for cleanup operations (SSM remote stop takes >10s on EC2)
+const CLEANUP_TIMEOUT = 60000; // afterAll timeout: cluster teardown on EC2 runners can take >10s
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
@@ -147,13 +148,11 @@ describe("GlideClusterClient", () => {
 
         if (testsFailed === 0) {
             if (cluster) await cluster.close();
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             if (azCluster) await azCluster.close();
         } else {
             if (cluster) await cluster.close(true);
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             if (azCluster) await azCluster.close(true);
         }
     }, CLEANUP_TIMEOUT);
@@ -3402,8 +3401,8 @@ describe("GlideClusterClient", () => {
                         await getClientCount(monitoringClient);
 
                     // We need to verify the lazy connection is working properly
-                    // Note: The connection count behavior in Node.js differs from Python
-                    // Python strictly adds 2 connections per node, but Node.js may handle connections differently
+                    // Connection count assertions are racy: prior tests may still be
+                    // closing connections asynchronously. Assert only directional change.
 
                     // Verify the ping worked (which means the lazy connection was established)
                     expect(pingResponse).toBeDefined();
