@@ -52,17 +52,16 @@ timed_tokio_test!(
         let cluster = common::ClusterHarness::start();
         let client = cluster.client().await;
 
+        skip_if_version_below!(client, 7, 0, 0);
+
         // Load the library on every primary so a routed FCALL resolves on any node.
         let lib = "#!lua name=glideclib\n\
                redis.register_function{function_name='gc_echo', \
                callback=function(keys, args) return args[1] end, flags={'no-writes'}}";
-        if let Err(e) = client
+        client
             .custom_command_with_route(&["FUNCTION", "LOAD", "REPLACE", lib], Route::AllPrimaries)
             .await
-        {
-            eprintln!("SKIP: FUNCTION unsupported: {e:?}");
-            return;
-        }
+            .expect("FUNCTION LOAD");
 
         // Routed to a single node -> scalar reply.
         let r = client

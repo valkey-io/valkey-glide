@@ -49,6 +49,7 @@ macro_rules! retry_transient {
 
 /// Start a standalone server, or `return` from the test (printing SKIP) when no
 /// server binary is available.
+// TODO #6877: a missing/broken standalone server silently skips.
 #[macro_export]
 macro_rules! server_or_skip {
     () => {{
