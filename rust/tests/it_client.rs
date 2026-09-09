@@ -7,7 +7,7 @@ mod common;
 
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
-use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, Route};
+use glide::{AsyncCommands, CustomCommand, GlideClient, GlideClientConfiguration, Route};
 use redis::Cmd;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -97,6 +97,48 @@ timed_tokio_test!(
         // A client not configured with subscriptions cannot receive.
         assert!(c.get_pubsub_message().await.is_err());
         assert!(c.try_get_pubsub_message().await.is_err());
+    }
+);
+
+// ---------------------------------------------------------------------------
+// Client library name and version
+// ---------------------------------------------------------------------------
+
+timed_tokio_test!(
+    async fn client_info_reports_lib_name_and_ver() {
+        let srv = server_or_skip!();
+        let client = srv.client().await;
+
+        let reply = client.custom_command(&["CLIENT", "INFO"]).await.unwrap();
+        let info = glide::value::to_string(reply).unwrap();
+
+        let expected_lib_name = format!("lib-name={}", "GlideRust");
+        assert!(info.contains(&expected_lib_name));
+
+        let expected_lib_ver = format!("lib-ver={}", env!("CARGO_PKG_VERSION"));
+        assert!(info.contains(&expected_lib_ver));
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_client_info_reports_lib_name_and_ver() {
+        let cluster = common::ClusterHarness::start().expect("cluster harness should start");
+        let client = cluster
+            .client()
+            .await
+            .expect("cluster client should connect");
+
+        let reply = client
+            .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
+            .await
+            .unwrap();
+        let info = glide::value::to_string(reply).unwrap();
+
+        let expected_lib_name = format!("lib-name={}", "GlideRust");
+        assert!(info.contains(&expected_lib_name));
+
+        let expected_lib_ver = format!("lib-ver={}", env!("CARGO_PKG_VERSION"));
+        assert!(info.contains(&expected_lib_ver));
     }
 );
 

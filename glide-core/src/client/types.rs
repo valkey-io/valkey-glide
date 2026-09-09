@@ -24,6 +24,7 @@ pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
     pub client_name: Option<String>,
     pub lib_name: Option<String>,
+    pub lib_ver: Option<String>,
     pub authentication_info: Option<AuthenticationInfo>,
     pub database_id: i64,
     pub protocol: Option<redis::ProtocolVersion>,
@@ -490,6 +491,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             read_from,
             client_name,
             lib_name,
+            lib_ver: None, // Protobuf-based clients set library version via `GLIDE_VERSION`.
             authentication_info,
             database_id,
             protocol,
@@ -539,6 +541,23 @@ mod tests {
         use crate::compression::CompressionBackendType;
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
+
+        #[test]
+        fn test_lib_name_and_ver() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let name = "LibraryName";
+            proto_request.lib_name = name.into();
+
+            let request: ConnectionRequest = proto_request.into();
+            assert_eq!(request.lib_name.as_deref(), Some(name));
+            assert_eq!(request.lib_ver, None);
+        }
 
         #[test]
         fn test_compression_config_conversion_none() {

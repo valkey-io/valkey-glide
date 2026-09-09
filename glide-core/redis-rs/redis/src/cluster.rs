@@ -1027,6 +1027,7 @@ pub(crate) fn get_connection_info(
             username: cluster_params.username,
             client_name: cluster_params.client_name,
             lib_name: cluster_params.lib_name,
+            lib_ver: cluster_params.lib_ver,
             protocol: cluster_params.protocol,
             db: cluster_params.database_id,
             cache: cluster_params.cache,
