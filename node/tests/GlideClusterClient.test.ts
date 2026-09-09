@@ -648,10 +648,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get with wildcard and multi node route %p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -1191,10 +1188,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate test_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -2625,10 +2619,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
             // Create a client configuration with a generous request timeout
@@ -2690,10 +2681,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "should respect connection timeout duration (protocol: %p)",
         async (protocol) => {
             // Create a client configuration
@@ -2895,10 +2883,7 @@ describe("GlideClusterClient", () => {
         },
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "batch with retry configurations using protocol %p",
         async (protocol) => {
             const client = await GlideClusterClient.createClient(
@@ -3588,10 +3573,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "latencyHistory with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -3635,10 +3617,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "latencyLatest with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
@@ -3686,10 +3665,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "latencyReset with route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(

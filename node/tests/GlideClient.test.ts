@@ -856,10 +856,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient({
@@ -957,10 +954,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate multi-key success test_%p",
         async (protocol) => {
             let destCluster: ValkeyCluster | null = null;
@@ -1284,10 +1278,7 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function kill RO func %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
@@ -1389,10 +1380,7 @@ describe("GlideClient", () => {
         FUNCTION_TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
             // Create a client configuration with a generous request timeout
@@ -1462,10 +1450,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "should respect connection timeout duration (protocol: %p)",
         async (protocol) => {
             // Create a client configuration
@@ -2435,10 +2420,7 @@ describe("GlideClient", () => {
 
     // Spin up a dedicated standalone with 1 replica so the failover
     // doesn't destabilize the shared test server.
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "failover_to_replica_%p",
         async (protocol) => {
             const testCluster = await ValkeyCluster.createCluster(
@@ -2502,10 +2484,7 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        ProtocolVersion.RESP2,
-        ProtocolVersion.RESP3,
-    ])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "replicaofNoOne_%p",
         async (protocol) => {
             client = await GlideClient.createClient(

@@ -6164,12 +6164,7 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) =>
-                    setTimeout(
-                        resolve,
-                        2000,
-                    ),
-                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Wait for subscriptions to be re-established
                 await waitForSubscriptionState(
@@ -6316,12 +6311,7 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) =>
-                    setTimeout(
-                        resolve,
-                        2000,
-                    ),
-                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 await waitForSubscriptionState(
                     listeningClient,
@@ -6469,12 +6459,7 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give some time for connection to reconnect
-                await new Promise((resolve) =>
-                    setTimeout(
-                        resolve,
-                        2000,
-                    ),
-                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 await waitForSubscriptionState(
                     listeningClient,
@@ -6607,12 +6592,7 @@ describe("PubSub", () => {
                 await killConnections(publishingClient, null);
 
                 // Give time for reconnect
-                await new Promise((resolve) =>
-                    setTimeout(
-                        resolve,
-                        2000,
-                    ),
-                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Wait for resubscription
                 await waitForSubscriptionState(
@@ -6628,12 +6608,7 @@ describe("PubSub", () => {
                     await publishingClient.publish(messageAfter, channel);
                 }
 
-                await new Promise((resolve) =>
-                    setTimeout(
-                        resolve,
-                        2000,
-                    ),
-                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Verify all messages received
                 const receivedChannels = new Set<string>();
@@ -6690,10 +6665,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([
-        true,
-        false,
-    ])(
+    it.each([true, false])(
         "test_subscription_metrics_on_acl_failure_%p",
         async (clusterMode) => {
             let listeningClient: TGlideClient | null = null;
@@ -6879,10 +6851,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([
-        true,
-        false,
-    ])(
+    it.each([true, false])(
         "test_subscription_metrics_repeated_reconciliation_failures_%p",
         async (clusterMode) => {
             let listeningClient: TGlideClient | null = null;
@@ -7177,10 +7146,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([
-        true,
-        false,
-    ])(
+    it.each([true, false])(
         "test_lazy_vs_blocking_timeout_%p",
         async (clusterMode) => {
             let client: TGlideClient | null = null;
