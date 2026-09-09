@@ -361,18 +361,18 @@ async fn cluster_from_urls_connects_and_routes() {
         .collect();
     let cfg = GlideClusterClientConfiguration::from_urls(urls.iter().map(String::as_str)).unwrap();
     assert_eq!(cfg.addresses.len(), cluster.primary_ports.len());
-    let c = match glide::GlideClusterClient::connect(cfg).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("SKIP: cluster connect failed: {e}");
-            return;
-        }
-    };
+
+    let client: glide::GlideClusterClient = glide::GlideClusterClient::connect(cfg)
+        .await
+        .expect("connect cluster client");
+
     // Keys hash to different slots; the compat typed API routes each.
     for i in 0..20 {
         let k = format!("cmd_cluster_url:{i}");
-        AsyncCommands::set::<_, _, ()>(&c, &k, i).await.unwrap();
-        let v: i64 = AsyncCommands::get(&c, &k).await.unwrap();
+        AsyncCommands::set::<_, _, ()>(&client, &k, i)
+            .await
+            .unwrap();
+        let v: i64 = AsyncCommands::get(&client, &k).await.unwrap();
         assert_eq!(v, i);
     }
 }
@@ -380,22 +380,15 @@ async fn cluster_from_urls_connects_and_routes() {
 #[test]
 fn sync_cluster_commands_trait() {
     let cluster = common::ClusterHarness::start();
-    let c = match SyncGlideClusterClient::connect(GlideClusterClientConfiguration::with_address(
-        "127.0.0.1",
-        cluster.seed_port(),
-    )) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("SKIP: sync cluster connect failed: {e}");
-            return;
-        }
-    };
+    let config = GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port());
+    let client = SyncGlideClusterClient::connect(config).expect("connect sync cluster client");
+
     // Blocking typed API on the cluster client.
     let k = format!("cmd_sync_cluster:{}", common::key("k"));
-    Commands::set::<_, _, ()>(&c, &k, 123).unwrap();
-    let v: i64 = Commands::get(&c, &k).unwrap();
+    Commands::set::<_, _, ()>(&client, &k, 123).unwrap();
+    let v: i64 = Commands::get(&client, &k).unwrap();
     assert_eq!(v, 123);
-    let v: i64 = Commands::incr(&c, &k, 7).unwrap();
+    let v: i64 = Commands::incr(&client, &k, 7).unwrap();
     assert_eq!(v, 130);
 }
 
@@ -406,20 +399,15 @@ async fn cluster_script_noscript_fallback() {
     // mode. Flush all nodes first to guarantee the miss, then invoke enough
     // times to hit multiple nodes.
     let cluster = common::ClusterHarness::start();
-    let c = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
-    let _: () = c
+    let client = cluster.client().await;
+
+    let _: () = client
         .glide_send(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
         .await
         .unwrap_or(());
     let script = Script::new("return 40 + 2");
     for _ in 0..10 {
-        let v: i64 = script.invoke_async(&c).await.unwrap();
+        let v: i64 = script.invoke_async(&client).await.unwrap();
         assert_eq!(v, 42);
     }
 }

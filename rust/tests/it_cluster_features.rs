@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Cluster-mode integration tests for the parity features (pipeline options,
 //! routed FCALL, runtime pub/sub incl. sharded) against a real multi-primary
-//! cluster. Each test SKIPs gracefully when a cluster cannot be formed.
+//! cluster.
 
 mod common;
 
@@ -12,23 +12,10 @@ use glide::{
 };
 use std::time::Duration;
 
-/// Connect a default cluster client, or SKIP.
-macro_rules! cluster_client {
-    ($cluster:expr) => {
-        match $cluster.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed");
-                return;
-            }
-        }
-    };
-}
-
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
         let cluster = common::ClusterHarness::start();
-        let c = cluster_client!(cluster);
+        let c = cluster.client().await;
 
         // Same-slot keys (hash tag) so the pipeline routes to one shard; options
         // carry a timeout + explicit (disabled) retry strategy.
@@ -63,13 +50,13 @@ timed_tokio_test!(
 timed_tokio_test!(
     async fn cluster_fcall_route() {
         let cluster = common::ClusterHarness::start();
-        let c = cluster_client!(cluster);
+        let client = cluster.client().await;
 
         // Load the library on every primary so a routed FCALL resolves on any node.
         let lib = "#!lua name=glideclib\n\
                redis.register_function{function_name='gc_echo', \
                callback=function(keys, args) return args[1] end, flags={'no-writes'}}";
-        if let Err(e) = c
+        if let Err(e) = client
             .custom_command_with_route(&["FUNCTION", "LOAD", "REPLACE", lib], Route::AllPrimaries)
             .await
         {
@@ -78,20 +65,20 @@ timed_tokio_test!(
         }
 
         // Routed to a single node -> scalar reply.
-        let r = c
+        let r = client
             .fcall_route("gc_echo", &[] as &[&str], &["hi"], Route::RandomNode)
             .await
             .unwrap();
         assert_eq!(glide::value::to_string(r).unwrap(), "hi");
 
-        let r = c
+        let r = client
             .fcall_ro_route("gc_echo", &[] as &[&str], &["ro"], Route::RandomNode)
             .await
             .unwrap();
         assert_eq!(glide::value::to_string(r).unwrap(), "ro");
 
         // Broadcast to all primaries -> one reply per node (map/array), all echo.
-        let all = c
+        let all = client
             .fcall_route("gc_echo", &[] as &[&str], &["x"], Route::AllPrimaries)
             .await
             .unwrap();
@@ -103,7 +90,7 @@ timed_tokio_test!(
 timed_tokio_test!(
     async fn cluster_runtime_subscribe_receive() {
         let cluster = common::ClusterHarness::start();
-        let publisher = cluster_client!(cluster);
+        let publisher = cluster.client().await;
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
                 .enable_pubsub(),
@@ -130,7 +117,7 @@ timed_tokio_test!(
 timed_tokio_test!(
     async fn cluster_ssubscribe_sharded_receive() {
         let cluster = common::ClusterHarness::start();
-        let publisher = cluster_client!(cluster);
+        let publisher = cluster.client().await;
 
         // Sharded pub/sub is Valkey 7.0+
         skip_if_version_below!(publisher, 7, 0, 0);
@@ -162,15 +149,16 @@ timed_tokio_test!(
 timed_tokio_test!(
     async fn cluster_zrangestore_by_score_same_slot() {
         let cluster = common::ClusterHarness::start();
-        let c = cluster_client!(cluster);
+        let client = cluster.client().await;
+
         // src + dst must share a slot in cluster mode (multi-key command).
         let src = common::tkey("czr", "src");
         let dst = common::tkey("czr", "dst");
-        let _: i64 = c
+        let _: i64 = client
             .zadd_multiple(&src, &[(1.0, "a"), (2.0, "b"), (3.0, "c")])
             .await
             .unwrap();
-        let n = c
+        let n = client
             .zrangestore_by_score(
                 &dst,
                 &src,
@@ -182,7 +170,7 @@ timed_tokio_test!(
             .await
             .unwrap();
         assert_eq!(n, 2);
-        let card: i64 = c.zcard(&dst).await.unwrap();
+        let card: i64 = client.zcard(&dst).await.unwrap();
         assert_eq!(card, 2);
     }
 );

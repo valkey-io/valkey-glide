@@ -133,10 +133,7 @@ impl ClusterHarness {
     }
 
     /// Connect a cluster client to this cluster with the given protocol.
-    pub async fn client_with_protocol(
-        &self,
-        protocol: ProtocolVersion,
-    ) -> Option<GlideClusterClient> {
+    pub async fn client_with_protocol(&self, protocol: ProtocolVersion) -> GlideClusterClient {
         let config = GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
             .protocol(protocol)
             .request_timeout(Duration::from_secs(5));
@@ -144,29 +141,35 @@ impl ClusterHarness {
         // refuse or time out the initial connection; a single attempt shouldn't
         // fail the whole test.
         let mut client = None;
+
+        let mut last_err = None;
         for attempt in 0..10u32 {
             match GlideClusterClient::connect(config.clone()).await {
                 Ok(c) => {
                     client = Some(c);
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
+                    last_err = Some(e);
                     tokio::time::sleep(Duration::from_millis(100 * (attempt + 1) as u64)).await;
                 }
             }
         }
-        let client = client?;
+        let Some(client) = client else {
+            panic!("could not connect a cluster client: {last_err:?}");
+        };
+
         // Converge the connection map before handing the client to a test: right
         // after a cluster forms, the client's topology snapshot can lag, so the
         // first routed op may hit a `MOVED` to a not-yet-connected node
         // (`ConnectionNotFoundForRoute`). A retried broadcast PING forces the
         // client to connect to every primary, eliminating that startup race.
         warm_up_cluster(&client).await;
-        Some(client)
+        client
     }
 
     /// Connect a cluster client with the default protocol (RESP3).
-    pub async fn client(&self) -> Option<GlideClusterClient> {
+    pub async fn client(&self) -> GlideClusterClient {
         self.client_with_protocol(ProtocolVersion::RESP3).await
     }
 }

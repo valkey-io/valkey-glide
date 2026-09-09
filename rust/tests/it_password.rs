@@ -140,13 +140,8 @@ fn sync_update_password_store_only() {
 #[tokio::test]
 async fn cluster_update_password_store_only() {
     let cluster = common::ClusterHarness::start();
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let client = cluster.client().await;
+
     // Store-then-clear on the cluster client (no server-side requirepass dance):
     // exercises the cluster update_connection_password path end to end.
     client

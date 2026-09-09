@@ -148,32 +148,18 @@ macro_rules! matrix_test {
             #[tokio::test]
             async fn cluster_resp2() {
                 let __h = $crate::common::ClusterHarness::start();
-                let $c = match __h
+                let $c = __h
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
-                    .await
-                {
-                    Some(c) => c,
-                    None => {
-                        eprintln!("SKIP: could not connect cluster client (RESP2)");
-                        return;
-                    }
-                };
+                    .await;
                 $crate::common::with_test_timeout(async { $body }).await;
             }
 
             #[tokio::test]
             async fn cluster_resp3() {
                 let __h = $crate::common::ClusterHarness::start();
-                let $c = match __h
+                let $c = __h
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
-                    .await
-                {
-                    Some(c) => c,
-                    None => {
-                        eprintln!("SKIP: could not connect cluster client (RESP3)");
-                        return;
-                    }
-                };
+                    .await;
                 $crate::common::with_test_timeout(async { $body }).await;
             }
         }
