@@ -90,7 +90,7 @@ pub(crate) async fn run_pipeline(
         client
             .send_transaction(pipeline, routing, timeout, raise_on_error)
             .await
-            .map_err(GlideError::from)?
+            .map_err(GlideError::from_redis_error)?
     } else {
         client
             .send_pipeline(
@@ -104,7 +104,7 @@ pub(crate) async fn run_pipeline(
                 },
             )
             .await
-            .map_err(GlideError::from)?
+            .map_err(GlideError::from_redis_error)?
     };
     match value {
         Value::Array(items) => Ok(items),

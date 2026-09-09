@@ -171,7 +171,7 @@ impl GlideClusterClientConfiguration {
     pub(crate) fn to_request(&self) -> ConnectionRequest {
         let mut req = self.common_request();
         req.cluster_mode_enabled = true;
-        req.periodic_checks = Some(self.periodic_checks.into());
+        req.periodic_checks = Some(self.periodic_checks.to_core());
         req
     }
 }

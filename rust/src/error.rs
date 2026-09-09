@@ -77,10 +77,8 @@ impl GlideError {
             | GlideError::CircuitBreaker(m) => m,
         }
     }
-}
 
-impl From<RedisError> for GlideError {
-    fn from(err: RedisError) -> Self {
+    pub(crate) fn from_redis_error(err: RedisError) -> Self {
         let msg = err.to_string();
         // Mirror glide-core's `error_type` classifier (glide-core/src/errors.rs).
         if err.is_timeout() {
@@ -96,10 +94,8 @@ impl From<RedisError> for GlideError {
             }
         }
     }
-}
 
-impl From<glide_core::client::ConnectionError> for GlideError {
-    fn from(err: glide_core::client::ConnectionError) -> Self {
+    pub(crate) fn from_connection_error(err: glide_core::client::ConnectionError) -> Self {
         use glide_core::client::ConnectionError as CE;
         match err {
             CE::Timeout => GlideError::Timeout("connection attempt timed out".to_string()),
@@ -111,9 +107,9 @@ impl From<glide_core::client::ConnectionError> for GlideError {
 
 #[cfg(test)]
 mod tests {
-    //! Pure-logic error tests: `From<RedisError>` and `From<ConnectionError>`
-    //! mapping into [`GlideError`], plus `class_name()`/`message()` for every
-    //! variant.
+    //! Pure-logic error tests: [`GlideError::from_redis_error`] and
+    //! [`GlideError::from_connection_error`] mapping into [`GlideError`], plus
+    //! `class_name()`/`message()` for every variant.
     use super::*;
     use glide_core::client::ConnectionError as CE;
 
@@ -122,7 +118,7 @@ mod tests {
     #[test]
     fn redis_exec_abort_maps_to_exec_abort() {
         let err = RedisError::from((ErrorKind::ExecAbortError, "aborted"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::ExecAbort(_)));
         assert_eq!(g.class_name(), "ExecAbortError");
     }
@@ -130,7 +126,7 @@ mod tests {
     #[test]
     fn redis_circuit_breaker_maps_to_circuit_breaker() {
         let err = RedisError::from((ErrorKind::CircuitBreakerOpen, "open"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::CircuitBreaker(_)));
         assert_eq!(g.class_name(), "CircuitBreakerError");
     }
@@ -138,7 +134,7 @@ mod tests {
     #[test]
     fn redis_invalid_client_config_maps_to_configuration() {
         let err = RedisError::from((ErrorKind::InvalidClientConfig, "bad config"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::Configuration(_)));
         assert_eq!(g.class_name(), "ConfigurationError");
     }
@@ -146,7 +142,7 @@ mod tests {
     #[test]
     fn redis_response_error_maps_to_request() {
         let err = RedisError::from((ErrorKind::ResponseError, "wrong type"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::Request(_)));
         assert_eq!(g.class_name(), "RequestError");
     }
@@ -155,7 +151,7 @@ mod tests {
     fn redis_unknown_kind_maps_to_request() {
         // A kind we do not special-case falls through to Request.
         let err = RedisError::from((ErrorKind::TypeError, "type mismatch"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::Request(_)));
     }
 
@@ -164,7 +160,7 @@ mod tests {
         let io_err = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
         let err: RedisError = io_err.into();
         assert!(err.is_unrecoverable_error());
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::Connection(_)));
         assert_eq!(g.class_name(), "ConnectionError");
     }
@@ -172,7 +168,7 @@ mod tests {
     #[test]
     fn redis_client_error_maps_to_request() {
         let err = RedisError::from((ErrorKind::ClientError, "inflight limit reached"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::Request(_)));
         assert_eq!(g.class_name(), "RequestError");
     }
@@ -182,13 +178,16 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "slow");
         let err: RedisError = io_err.into();
         assert!(err.is_timeout());
-        assert!(matches!(GlideError::from(err), GlideError::Timeout(_)));
+        assert!(matches!(
+            GlideError::from_redis_error(err),
+            GlideError::Timeout(_)
+        ));
     }
 
     #[test]
     fn redis_error_preserves_message() {
         let err = RedisError::from((ErrorKind::ResponseError, "custom detail"));
-        let g = GlideError::from(err);
+        let g = GlideError::from_redis_error(err);
         assert!(g.message().contains("custom detail"));
     }
 
@@ -196,14 +195,14 @@ mod tests {
 
     #[test]
     fn connection_timeout_maps_to_timeout() {
-        let g = GlideError::from(CE::Timeout);
+        let g = GlideError::from_connection_error(CE::Timeout);
         assert!(matches!(g, GlideError::Timeout(_)));
         assert_eq!(g.class_name(), "TimeoutError");
     }
 
     #[test]
     fn connection_configuration_maps_to_configuration() {
-        let g = GlideError::from(CE::Configuration("nope".to_string()));
+        let g = GlideError::from_connection_error(CE::Configuration("nope".to_string()));
         assert!(matches!(g, GlideError::Configuration(_)));
         assert_eq!(g.message(), "nope");
     }
@@ -211,7 +210,7 @@ mod tests {
     #[test]
     fn connection_io_error_maps_to_connection() {
         let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused");
-        let g = GlideError::from(CE::IoError(io_err));
+        let g = GlideError::from_connection_error(CE::IoError(io_err));
         assert!(matches!(g, GlideError::Connection(_)));
         assert_eq!(g.class_name(), "ConnectionError");
     }
@@ -219,7 +218,7 @@ mod tests {
     #[test]
     fn connection_cluster_error_maps_to_connection() {
         let redis_err = RedisError::from((ErrorKind::ResponseError, "cluster boom"));
-        let g = GlideError::from(CE::Cluster(redis_err));
+        let g = GlideError::from_connection_error(CE::Cluster(redis_err));
         assert!(matches!(g, GlideError::Connection(_)));
     }
 

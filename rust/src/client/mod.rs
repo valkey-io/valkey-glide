@@ -214,17 +214,12 @@ impl GlideClient {
         let (sender, pubsub_rx) = make_push_channel(has_subs || config.force_pubsub_channel);
         let inner = CoreClient::new(request, sender)
             .await
-            .map_err(GlideError::from)?;
+            .map_err(GlideError::from_connection_error)?;
         Ok(GlideClient {
             inner,
             pubsub_rx,
             db,
         })
-    }
-
-    /// Access the underlying `glide-core` client (advanced use).
-    pub fn core(&self) -> &CoreClient {
-        &self.inner
     }
 
     /// The configured logical database index (crate-internal; reported to
@@ -288,7 +283,7 @@ impl GlideClient {
         client
             .update_connection_password(password, immediate_auth)
             .await
-            .map_err(GlideError::from)?;
+            .map_err(GlideError::from_redis_error)?;
         Ok(())
     }
 }
@@ -302,7 +297,7 @@ impl CommandExecutor for GlideClient {
         client
             .send_command(&mut cmd, routing)
             .await
-            .map_err(GlideError::from)
+            .map_err(GlideError::from_redis_error)
     }
 }
 
@@ -328,13 +323,8 @@ impl GlideClusterClient {
         let (sender, pubsub_rx) = make_push_channel(has_subs || config.force_pubsub_channel);
         let inner = CoreClient::new(request, sender)
             .await
-            .map_err(GlideError::from)?;
+            .map_err(GlideError::from_connection_error)?;
         Ok(GlideClusterClient { inner, pubsub_rx })
-    }
-
-    /// Access the underlying `glide-core` client (advanced use).
-    pub fn core(&self) -> &CoreClient {
-        &self.inner
     }
 
     /// Wait for the next Pub/Sub message (including shard messages) on this
@@ -356,7 +346,7 @@ impl GlideClusterClient {
         client
             .send_command(&mut cmd, Some(routing))
             .await
-            .map_err(GlideError::from)
+            .map_err(GlideError::from_redis_error)
     }
 
     /// Execute a [`redis::Pipeline`] with GLIDE execution options,
@@ -390,7 +380,7 @@ impl GlideClusterClient {
         client
             .update_connection_password(password, immediate_auth)
             .await
-            .map_err(GlideError::from)?;
+            .map_err(GlideError::from_redis_error)?;
         Ok(())
     }
 
@@ -411,7 +401,7 @@ impl GlideClusterClient {
         let scan_state = if cursor.0.is_empty() || cursor.0 == "0" {
             ScanStateRC::new()
         } else {
-            get_cluster_scan_cursor(cursor.0.clone()).map_err(GlideError::from)?
+            get_cluster_scan_cursor(cursor.0.clone()).map_err(GlideError::from_redis_error)?
         };
 
         let mut builder = ClusterScanArgs::builder();
@@ -430,7 +420,7 @@ impl GlideClusterClient {
         let reply = client
             .cluster_scan(&scan_state, args)
             .await
-            .map_err(GlideError::from)?;
+            .map_err(GlideError::from_redis_error)?;
 
         // Reply shape: [cursor_id_or_"finished", [keys...]].
         let items = match reply {
@@ -464,7 +454,7 @@ impl CommandExecutor for GlideClusterClient {
         client
             .send_command(&mut cmd, routing)
             .await
-            .map_err(GlideError::from)
+            .map_err(GlideError::from_redis_error)
     }
 }
 
