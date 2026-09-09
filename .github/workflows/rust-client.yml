@@ -95,4 +95,4 @@ jobs:
 
             - name: Run rust client tests
               working-directory: ./rust
-              run: cargo test
+              run: cargo test -- --show-output
