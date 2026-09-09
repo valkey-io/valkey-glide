@@ -28,7 +28,7 @@ runs:
               fi
 
               echo "::group::Tracked status (first 200 entries)"
-              git -P status --short --untracked-files=no | sed -n '1,200p'
+              git -P status --short --untracked-files=all | sed -n '1,200p'
               echo "::endgroup::"
 
               echo "Reproduce the operation locally and update generated files or lockfiles intentionally."
