@@ -126,24 +126,37 @@ timed_tokio_test!(
 
         // Iterate the whole keyspace via the cluster-scan cursor.
         let mut found: HashSet<Vec<u8>> = HashSet::new();
+        let mut ids: Vec<String> = Vec::new();
+
         let mut cursor = ClusterScanCursor::new();
-        let mut guard = 0;
         loop {
             let (next, keys) =
-                retry_transient!(client.cluster_scan(&cursor, None, Some(100), None)).unwrap();
+                retry_transient!(client.cluster_scan(&cursor, None, Some(10), None)).unwrap();
+
             for k in keys {
                 found.insert(k.to_vec());
             }
+
             cursor = next;
-            guard += 1;
-            if cursor.is_finished() || guard > 100 {
+
+            if !cursor.is_finished() {
+                ids.push(cursor.id().to_owned());
+            } else {
                 break;
             }
         }
-        assert!(cursor.is_finished(), "scan did not finish");
-        // Every inserted key must have been observed.
-        for k in &expected {
-            assert!(found.contains(k), "cluster_scan missed a key");
+
+        // Verify that all inserted key were found.
+        for key in &expected {
+            assert!(found.contains(key), "cluster_scan missed a key");
+        }
+
+        // Verify that all intermediate cursors were cleaned up.
+        assert!(!ids.is_empty());
+        for id in ids {
+            assert!(
+                glide_core::cluster_scan_container::get_cluster_scan_cursor(id.clone()).is_err()
+            );
         }
     }
 );
