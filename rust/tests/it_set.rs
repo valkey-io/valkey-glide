@@ -125,6 +125,8 @@ matrix_test!(sdiff, c, {
 });
 
 matrix_test!(sintercard, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let s1 = common::tkey("st", "s1");
     let s2 = common::tkey("st", "s2");
     let _: i64 = c.sadd(&s1, &["a", "b", "c"][..]).await.unwrap();
