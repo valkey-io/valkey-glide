@@ -3868,9 +3868,18 @@ describe("GlideClusterClient", () => {
     it(
         "should connect with IPv6 address",
         async () => {
+            // Skip if no IPv6 endpoint is available in this environment
+            if (!cluster.getAddresses().some(([host]) => host.includes(":"))) {
+                return;
+            }
+
             const address = {
-                host: cluster.getAddresses()[0][0],
-                port: cluster.getAddresses()[0][1],
+                host: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![0],
+                port: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![1],
             };
             const client = await GlideClusterClient.createClient({
                 addresses: [address],

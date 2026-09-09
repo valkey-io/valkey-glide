@@ -957,9 +957,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate multi-key success test_%p",
         async (protocol) => {
-            let destCluster: ValkeyCluster | null = null;
-
-            destCluster = await ValkeyCluster.createCluster(
+            const destCluster = await ValkeyCluster.createCluster(
                 false,
                 1,
                 0,
@@ -1005,7 +1003,7 @@ describe("GlideClient", () => {
                 sourceClient.close();
                 destClient.close();
 
-                await destCluster?.close();
+                await destCluster.close();
             }
         },
         60000,
@@ -2404,9 +2402,18 @@ describe("GlideClient", () => {
     it(
         "should connect with IPv6 address",
         async () => {
+            // Skip if no IPv6 endpoint is available in this environment
+            if (!cluster.getAddresses().some(([host]) => host.includes(":"))) {
+                return;
+            }
+
             const address = {
-                host: cluster.getAddresses()[0][0],
-                port: cluster.getAddresses()[0][1],
+                host: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![0],
+                port: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![1],
             };
             const client = await GlideClient.createClient({
                 addresses: [address],

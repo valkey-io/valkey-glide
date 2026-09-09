@@ -3,13 +3,13 @@ import { afterEach, beforeAll } from "@jest/globals";
 import minimist from "minimist";
 import { Logger } from "../build-ts";
 
+// Retry failing tests up to 2 times in CI to absorb transient failures
+if (process.env.CI) {
+    jest.retryTimes(2, { logErrorsBeforeRetry: true });
+}
+
 beforeAll(() => {
     Logger.init("error", "log.log");
-
-    // Retry failing tests up to 2 times in CI to absorb transient failures
-    if (process.env.CI) {
-        jest.retryTimes(2, { logErrorsBeforeRetry: true });
-    }
 
     // When not using real AWS credentials (e.g. local dev without an IAM role),
     // set fake credentials so IAM-related test code doesn't fail on missing env vars.

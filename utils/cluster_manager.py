@@ -1156,23 +1156,33 @@ def provision_ec2(
         SubnetId=subnet_id,
         SecurityGroupIds=[security_group_id],
         IamInstanceProfile={"Name": instance_profile},
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
         TagSpecifications=[
             {
                 "ResourceType": "instance",
-                "Tags": [{"Key": "Name", "Value": name_tag}],
+                "Tags": [
+                    {"Key": "Name", "Value": name_tag},
+                    {"Key": "Project", "Value": "glide-ci"},
+                ],
             }
         ],
     )
     instance_id = resp["Instances"][0]["InstanceId"]
-    private_ip = resp["Instances"][0]["PrivateIpAddress"]
     logging.info(
-        f"[ec2] Launched {instance_id} ({private_ip}), waiting for running state..."
+        f"[ec2] Launched {instance_id}, waiting for running state..."
     )
 
-    # Wait until running
+    # Wait until running before reading PrivateIpAddress — it may not be
+    # available in the run_instances response for pending instances.
     waiter = ec2.get_waiter("instance_running")
     waiter.wait(InstanceIds=[instance_id])
-    logging.info(f"[ec2] {instance_id} is running, waiting for SSM agent...")
+    resp2 = ec2.describe_instances(InstanceIds=[instance_id])
+    private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
+    logging.info(f"[ec2] {instance_id} is running ({private_ip}), waiting for SSM agent...")
 
     # Wait for SSM agent to register (up to 5 minutes)
     deadline = time.time() + 300
@@ -1683,6 +1693,11 @@ def main():
                 cmd_parts += ["--prefix", args.prefix]
             if getattr(args, "keep_folder", False):
                 cmd_parts.append("--keep-folder")
+            if getattr(args, "tls", False):
+                cmd_parts.append("--tls")
+            if getattr(args, "auth", None):
+                import shlex as _shlex
+                cmd_parts += ["--auth", _shlex.quote(str(args.auth))]
             remote_cmd = "GLIDE_HOME_DIR=/home/ssm-user/glide CLUSTERS_FOLDER=/home/ssm-user/glide/clusters " + " ".join(cmd_parts)
             output = run_remote_command(
                 args.remote, remote_cmd, args.remote_region, timeout_seconds=120

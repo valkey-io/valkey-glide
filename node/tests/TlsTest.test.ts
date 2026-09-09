@@ -40,7 +40,8 @@ describe("tls GlideClusterClient", () => {
             cluster = await ValkeyCluster.initFromExistingCluster(
                 true,
                 parseEndpoints(tlsClusterAddresses),
-                getServerVersion,
+                (addresses, clusterMode) =>
+                    getServerVersion(addresses, clusterMode, TLS_OPTIONS),
                 true,
             );
         } else {
@@ -123,7 +124,8 @@ describe("tls GlideClient", () => {
             cluster = await ValkeyCluster.initFromExistingCluster(
                 false,
                 parseEndpoints(tlsStandaloneAddress),
-                getServerVersion,
+                (addresses, clusterMode) =>
+                    getServerVersion(addresses, clusterMode, TLS_OPTIONS),
                 true,
             );
         } else {

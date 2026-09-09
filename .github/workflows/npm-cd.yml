@@ -530,6 +530,7 @@ jobs:
                       brew install valkey || brew install redis
                   elif [[ "${{ matrix.build_type }}" == "windows" ]]; then
                       echo "Windows target tested via CodeBuild - skipping local Valkey install"
+                      exit 0
                   else
                       echo "::error::Unsupported target: ${{ matrix.TARGET }} (build_type: ${{ matrix.build_type }})"; exit 1
                   fi

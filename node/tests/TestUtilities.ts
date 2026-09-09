@@ -2552,6 +2552,7 @@ export async function getServerVersion(
     addresses: [string, number][],
     clusterMode = false,
     tlsConfig?: TestTLSConfig,
+    readOnly = false,
 ): Promise<string> {
     let info: string;
 
@@ -2581,6 +2582,7 @@ export async function getServerVersion(
                 connectionTimeout: 10000,
                 ...(tlsConfig?.advancedConfiguration ?? {}),
             },
+            ...(readOnly && { readFrom: "preferReplica" }),
         });
         info = await glideClient.info([InfoOptions.Server]);
         await flushAndCloseClient(

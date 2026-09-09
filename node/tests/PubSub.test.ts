@@ -6372,6 +6372,7 @@ describe("PubSub", () => {
                 [cmeCluster.getAddresses()[0]],
                 false,
                 undefined,
+                true,
             );
 
             if (version < "7.0.0") {
