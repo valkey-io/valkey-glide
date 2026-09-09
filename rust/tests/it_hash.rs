@@ -193,9 +193,9 @@ matrix_test!(hset_wrong_type_errors, c, {
 // ---------------------------------------------------------------------------
 
 matrix_test!(hexpire_and_httl, c, {
-    skip_unless_command!(c, "HEXPIRE");
-    let k = common::key("h_ttl");
+    skip_if_version_below!(c, 9, 0, 0);
 
+    let k = common::key("h_ttl");
     let _: () = c
         .hset_multiple(&k, &[("f1", "v1"), ("f2", "v2")])
         .await
@@ -213,7 +213,8 @@ matrix_test!(hexpire_and_httl, c, {
 });
 
 matrix_test!(hexpire_conditions, c, {
-    skip_unless_command!(c, "HEXPIRE");
+    skip_if_version_below!(c, 9, 0, 0);
+
     let k = common::key("h_ttlc");
     let _: () = c.hset_multiple(&k, &[("f", "v")]).await.unwrap();
     // NX: set only when no TTL exists -> succeeds.
@@ -240,7 +241,8 @@ matrix_test!(hexpire_conditions, c, {
 });
 
 matrix_test!(hpexpire_and_hpttl, c, {
-    skip_unless_command!(c, "HEXPIRE");
+    skip_if_version_below!(c, 9, 0, 0);
+
     let k = common::key("h_pttl");
     let _: () = c.hset_multiple(&k, &[("f", "v")]).await.unwrap();
 
@@ -254,7 +256,8 @@ matrix_test!(hpexpire_and_hpttl, c, {
 });
 
 matrix_test!(hexpiretime_absolute, c, {
-    skip_unless_command!(c, "HEXPIRE");
+    skip_if_version_below!(c, 9, 0, 0);
+
     let k = common::key("h_et");
     let _: () = c.hset_multiple(&k, &[("f", "v")]).await.unwrap();
     let future = 4_102_444_800; // year 2100 (seconds)
@@ -271,7 +274,8 @@ matrix_test!(hexpiretime_absolute, c, {
 // ---------------------------------------------------------------------------
 
 matrix_test!(hgetex, c, {
-    skip_unless_command!(c, "HGETEX");
+    skip_if_version_below!(c, 9, 0, 0);
+
     let k = common::key("h_getex");
     let _: () = c.hset(&k, "f", "v").await.unwrap();
 
@@ -316,10 +320,10 @@ matrix_test!(hgetex, c, {
 });
 
 matrix_test!(hsetex, c, {
-    skip_unless_command!(c, "HSETEX");
-    let k = common::key("h_setex");
+    skip_if_version_below!(c, 9, 0, 0);
 
     // HSETEX with FNX and EX.
+    let k = common::key("h_setex");
     let res = c
         .hsetex(
             &k,

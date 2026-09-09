@@ -188,26 +188,6 @@ macro_rules! skip_if_version_below {
     }};
 }
 
-/// Skip the current test (printing SKIP) unless the server recognises `$cmd` —
-/// a robust, version-agnostic capability gate (preferred over version math for
-/// commands whose availability differs across Redis/Valkey releases).
-///
-/// ```ignore
-/// matrix_test!(hexpire_sets_ttl, c, {
-///     skip_unless_command!(c, "HEXPIRE");
-///     // ...
-/// });
-/// ```
-#[macro_export]
-macro_rules! skip_unless_command {
-    ($c:expr, $cmd:expr) => {{
-        if !$crate::common::command_exists(&$c, $cmd).await {
-            eprintln!("SKIP: server does not support {}", $cmd);
-            return;
-        }
-    }};
-}
-
 /// Assert that an expression evaluated to `Err(GlideError::Request(_))` — the
 /// mapped form of a server-side error (e.g. `WRONGTYPE`).
 #[macro_export]
