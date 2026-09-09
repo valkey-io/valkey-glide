@@ -606,12 +606,14 @@ mod cluster_scan_cursor_tests {
         let cursor = ClusterScanCursor::new();
         let id = cursor.id().to_owned();
         assert!(get_cluster_scan_cursor(id.clone()).is_err());
+
         drop(cursor);
         assert!(get_cluster_scan_cursor(id).is_err());
 
         // Intermediate cursor: owns a container entry that drop must remove.
         let id = insert_cluster_scan_cursor(ScanStateRC::new());
         assert!(get_cluster_scan_cursor(id.clone()).is_ok());
+
         drop(ClusterScanCursor(id.clone()));
         assert!(get_cluster_scan_cursor(id).is_err());
 
@@ -619,6 +621,7 @@ mod cluster_scan_cursor_tests {
         let cursor = ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned());
         let id = cursor.id().to_owned();
         assert!(get_cluster_scan_cursor(id.clone()).is_err());
+
         drop(cursor);
         assert!(get_cluster_scan_cursor(id).is_err());
     }

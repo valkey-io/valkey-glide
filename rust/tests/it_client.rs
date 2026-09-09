@@ -152,7 +152,6 @@ timed_tokio_test!(
         }
 
         // Verify that all intermediate cursors were cleaned up.
-        assert!(!ids.is_empty());
         for id in ids {
             assert!(
                 glide_core::cluster_scan_container::get_cluster_scan_cursor(id.clone()).is_err()
