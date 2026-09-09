@@ -648,6 +648,9 @@ pub struct ConnectionState {
     /// server-side waiter armed. A still-set connection is discarded on release;
     /// clean protocol errors clear it so the connection is reused.
     pub blocking_in_flight: bool,
+    /// Set when IAM re-authentication failed. The generation bookmark advances only
+    /// on success, so reusing this connection would retry the same failing AUTH.
+    pub must_discard: bool,
 }
 
 impl ConnectionState {
@@ -669,6 +672,7 @@ impl ConnectionState {
             && !self.client_name_changed
             && self.subscriptions.is_empty()
             && !self.blocking_in_flight
+            && !self.must_discard
     }
 
     /// Legacy check — clean means no state mutations at all (db must be 0).
@@ -916,10 +920,9 @@ impl ScopePool {
                     drop(conn);
                     self.idle.push_back(idle_conn);
                 } else {
-                    // A blocking command left the connection unrecoverable (armed
-                    // waiter); no cleanup command fixes that, so discard rather than
-                    // return to idle.
-                    if conn.state.blocking_in_flight {
+                    // An armed waiter or a failed re-auth is unrecoverable by any
+                    // cleanup command, so discard rather than return to idle.
+                    if conn.state.blocking_in_flight || conn.state.must_discard {
                         drop(conn);
                         self.total_count.fetch_sub(1, Ordering::AcqRel);
                         return true;

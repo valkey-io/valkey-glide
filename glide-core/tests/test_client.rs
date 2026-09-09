@@ -4569,6 +4569,94 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A rejected IAM re-authentication must not leave the connection in the pool:
+    /// the bookmark advances only on success, so a retained connection would retry
+    /// the same failing AUTH for the next borrower.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_failed_iam_reauth_discards_the_scoped_connection() {
+        use ::protobuf::Message as _;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let bytes = proto_request
+                .clone()
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            let scope = ScopeHandle::setup(client.clone(), bytes, 0).await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            scope
+                .send("ACL", &mut args)
+                .await
+                .expect("the scope should work before the credentials change");
+
+            // Revoke `nopass` so the generated IAM token no longer authenticates.
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr,
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let mut revoke = redis::cmd("ACL");
+            revoke
+                .arg("SETUSER")
+                .arg(iam_username)
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg("resetpass")
+                .arg(">not-the-iam-token");
+            admin_conn
+                .send_packed_command(&revoke)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let err = scope
+                .send("ACL", &mut args)
+                .await
+                .expect_err("the rotation's AUTH is rejected, so the command must fail");
+            assert_eq!(
+                err.kind(),
+                redis::ErrorKind::AuthenticationFailed,
+                "a failed re-auth must be identifiable by the caller, got: {err:?}"
+            );
+
+            scope.release();
+
+            let pool = scope.pool.lock().await;
+            assert!(
+                pool.idle.is_empty(),
+                "a connection whose re-auth failed must not be returned to idle"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                0,
+                "discarding the connection must free its slot"
+            );
+        });
+    }
+
     /// Regression test for the scope path's IAM rotation re-authentication.
     ///
     /// Drives the real consumer, `Client::send_command_on_connection`, with two

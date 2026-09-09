@@ -168,10 +168,9 @@ pub async fn execute_scope_command(
 
     // State tracking (for conditional cleanup on release)
     let arg_refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
-    // Captured before the update below, since it clears multi_active/subscriptions
-    // on the very command that closes them (EXEC/DISCARD, last UNSUBSCRIBE) — the
-    // server is still in the old mode when that command's AUTH would run, so using
-    // the post-update state would attempt (and fail) AUTH on the closing command.
+    // Captured before the update below, which clears multi_active on the very
+    // command that closes the transaction (EXEC/DISCARD); the post-update state
+    // would attempt AUTH while the server is still in the old mode.
     let multi_active_before_command = conn.state.multi_active;
     let subscribed_before_command = conn.state.has_subscriptions();
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
@@ -235,6 +234,11 @@ pub async fn execute_scope_command(
         }
         None => conn.connection.send_packed_command(&cmd).await,
     };
+
+    // A failed re-auth makes this connection unusable for every later command.
+    if matches!(&result, Err(e) if e.kind() == redis::ErrorKind::AuthenticationFailed) {
+        conn.state.must_discard = true;
+    }
 
     // A timeout, IO error, dropped connection, or protocol desync can leave a
     // server-side waiter armed on the connection (or the connection itself in an

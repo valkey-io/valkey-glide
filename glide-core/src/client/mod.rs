@@ -1468,12 +1468,12 @@ impl Client {
         last_seen_generation: &AtomicU64,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
-        // IAM token refresh: if token rotated (generation advanced since this
-        // connection last applied one), re-authenticate this connection.
-        // `defer_reauth` skips this when AUTH can't run normally — an open
-        // transaction (queued, corrupting the EXEC reply) or RESP2 subscribed
-        // mode (rejected outright). Bookmark stays unadvanced so it retries once
-        // the connection is back in a mode that allows AUTH.
+        // IAM token refresh: re-authenticate when the token rotated (generation
+        // advanced since this connection last applied one). `defer_reauth` skips it
+        // where AUTH can't run — an open transaction (queued, corrupting the EXEC
+        // reply) or RESP2 subscribed mode (rejected outright). The bookmark stays
+        // unadvanced, so it retries after EXEC/DISCARD, or on the next borrow for
+        // subscribed mode (subscriptions clear only on release).
         if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
             let current_generation = iam_manager.token_generation();
             if current_generation != last_seen_generation.load(Ordering::Acquire) {
@@ -1488,17 +1488,30 @@ impl Client {
                     .arg(iam_manager.username())
                     .arg(current_token.as_str())
                     .to_owned();
+                // Signals both failure modes as AuthenticationFailed so the caller
+                // discards the connection. The server never produces this kind
+                // itself, so it can't be confused with a command's own auth error.
                 match tokio::time::timeout(
                     self.request_timeout,
                     connection.send_packed_command(&auth_cmd),
                 )
                 .await
                 {
-                    Ok(result) => result?,
-                    Err(_) => {
-                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication failed",
+                            e.to_string(),
+                        )));
                     }
-                };
+                    Err(_) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication timed out",
+                        )));
+                    }
+                }
                 last_seen_generation.store(current_generation, Ordering::Release);
             }
         }
