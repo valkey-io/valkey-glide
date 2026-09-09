@@ -68,7 +68,7 @@ VENDORED_DEPENDENCIES = {
     ),
 }
 
-# Rust source for the _fast_response PyO3 extension (only Cargo.toml + src/)
+# Rust source for the _fast_response PyO3 extension
 GLIDE_SHARED_RS_SOURCE = ROOT.parent / "glide-shared"
 GLIDE_SHARED_RS_DIST = ROOT / "glide-shared-rs"
 
@@ -99,13 +99,12 @@ def vendor_dependencies():
         print(f"[INFO] Copying {folder.source} → {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
-    # Vendor only the Rust build files for glide-shared (Cargo.toml + src/)
+    # Vendor the Rust build files for glide-shared.
     if GLIDE_SHARED_RS_DIST.exists():
         remove_existing(GLIDE_SHARED_RS_DIST)
     GLIDE_SHARED_RS_DIST.mkdir()
-    shutil.copy2(
-        GLIDE_SHARED_RS_SOURCE / "Cargo.toml", GLIDE_SHARED_RS_DIST / "Cargo.toml"
-    )
+    for filename in ("Cargo.toml", "Cargo.lock"):
+        shutil.copy2(GLIDE_SHARED_RS_SOURCE / filename, GLIDE_SHARED_RS_DIST / filename)
     shutil.copytree(GLIDE_SHARED_RS_SOURCE / "src", GLIDE_SHARED_RS_DIST / "src")
 
 
