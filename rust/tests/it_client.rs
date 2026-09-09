@@ -188,7 +188,7 @@ timed_tokio_test!(
             }
         }
 
-        // Verify that all inserted key were found.
+        // Verify that all inserted keys were found.
         for key in &expected {
             assert!(found.contains(key), "cluster_scan missed a key");
         }
