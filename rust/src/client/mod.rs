@@ -564,3 +564,62 @@ mod push_tests {
         assert!(push_to_message(push).is_none());
     }
 }
+
+#[cfg(test)]
+mod cluster_scan_cursor_tests {
+    use super::*;
+    use glide_core::cluster_scan_container::{get_cluster_scan_cursor, insert_cluster_scan_cursor};
+
+    #[test]
+    fn is_initial() {
+        // Maps from cursor to the expected value.
+        let cases = [
+            (ClusterScanCursor::new(), true),
+            (ClusterScanCursor::default(), true),
+            (ClusterScanCursor("id".to_owned()), false),
+            (ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned()), false),
+        ];
+
+        for (cursor, expected) in &cases {
+            assert_eq!(cursor.is_initial(), *expected);
+        }
+    }
+
+    #[test]
+    fn is_finished() {
+        // Maps from cursor to the expected value.
+        let cases = [
+            (ClusterScanCursor::new(), false),
+            (ClusterScanCursor::default(), false),
+            (ClusterScanCursor("id".to_owned()), false),
+            (ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned()), true),
+        ];
+
+        for (cursor, expected) in &cases {
+            assert_eq!(cursor.is_finished(), *expected);
+        }
+    }
+
+    #[test]
+    fn drop_releases_container_entry() {
+        // Initial cursor: owns no container entry, so its drop is a no-op.
+        let cursor = ClusterScanCursor::new();
+        let id = cursor.id().to_owned();
+        assert!(get_cluster_scan_cursor(id.clone()).is_err());
+        drop(cursor);
+        assert!(get_cluster_scan_cursor(id).is_err());
+
+        // Intermediate cursor: owns a container entry that drop must remove.
+        let id = insert_cluster_scan_cursor(ScanStateRC::new());
+        assert!(get_cluster_scan_cursor(id.clone()).is_ok());
+        drop(ClusterScanCursor(id.clone()));
+        assert!(get_cluster_scan_cursor(id).is_err());
+
+        // Finished cursor: owns no container entry, so its drop is a no-op.
+        let cursor = ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned());
+        let id = cursor.id().to_owned();
+        assert!(get_cluster_scan_cursor(id.clone()).is_err());
+        drop(cursor);
+        assert!(get_cluster_scan_cursor(id).is_err());
+    }
+}
