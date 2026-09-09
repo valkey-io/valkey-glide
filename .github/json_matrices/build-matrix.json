@@ -88,8 +88,8 @@
     {
         "OS": "windows",
         "NAMED_OS": "windows",
-        "RUNNER": "windows-latest",
-        "CD_RUNNER": "windows-latest",
+        "RUNNER": "windows-2022",
+        "CD_RUNNER": "windows-2022",
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["maven", "npm"],

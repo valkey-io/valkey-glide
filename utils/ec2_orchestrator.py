@@ -344,7 +344,7 @@ def poll_s3_for_completion(
     checkpoint_key = f"{BUILD_ID}/checkpoint.json"
     deadline = time.time() + timeout
     last_checkpoint = None
-    last_checkpoint_log = 0
+    last_checkpoint_log: float = 0.0
     while time.time() < deadline:
         # Check for completion
         try:

@@ -464,11 +464,10 @@ jobs:
                   aws-region: us-east-1
                   role-duration-seconds: 7200
 
-            - name: Trigger CodeBuild and wait for result
+            - name: Trigger CodeBuild
               shell: bash
               env:
                   PROJECT_NAME: GlideNodeWindows
-                  REPORT_BUCKET: valkey-glide-win
               run: |
                   echo "Starting CodeBuild project ${PROJECT_NAME}..."
                   BUILD_ID=$(aws codebuild start-build \
@@ -477,17 +476,21 @@ jobs:
                     --query 'build.id' \
                     --output text)
                   echo "Build started: ${BUILD_ID}"
-                  echo "Polling for build completion..."
                   echo "CODEBUILD_BUILD_ID=${BUILD_ID}" >> "$GITHUB_ENV"
+
+            - name: Poll CodeBuild for completion
+              shell: bash
+              run: |
+                  echo "Polling for build completion (max 90 min)..."
                   POLL_START=$(date +%s)
                   MAX_POLL_SECONDS=5400
                   while true; do
                     if (( $(date +%s) - POLL_START > MAX_POLL_SECONDS )); then
-                      echo "::error::CodeBuild polling timed out after ${MAX_POLL_SECONDS}s. Build ID: ${BUILD_ID}"
+                      echo "::error::CodeBuild polling timed out after ${MAX_POLL_SECONDS}s. Build ID: ${CODEBUILD_BUILD_ID}"
                       exit 1
                     fi
                     STATUS=$(aws codebuild batch-get-builds \
-                      --ids "${BUILD_ID}" \
+                      --ids "${CODEBUILD_BUILD_ID}" \
                       --query 'builds[0].buildStatus' \
                       --output text)
                     echo "  Status: ${STATUS}"
@@ -497,7 +500,7 @@ jobs:
                         break
                         ;;
                       FAILED|FAULT|STOPPED|TIMED_OUT)
-                        echo "::error::CodeBuild build ${BUILD_ID} finished with status: ${STATUS}"
+                        echo "::error::CodeBuild build ${CODEBUILD_BUILD_ID} finished with status: ${STATUS}"
                         exit 1
                         ;;
                       IN_PROGRESS)
