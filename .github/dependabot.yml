@@ -85,6 +85,27 @@ updates:
           - "dependencies"
           - "Rust ⚙️"
 
+    # Enable version updates for Cargo (Rust - Rust client)
+    - package-ecosystem: "cargo"
+      directory: "/rust"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+          time: "09:00"
+      cooldown:
+          default-days: 7
+      open-pull-requests-limit: 10
+      groups:
+          patch-updates:
+              update-types:
+                  - "patch"
+          minor-updates:
+              update-types:
+                  - "minor"
+      labels:
+          - "dependencies"
+          - "Rust ⚙️"
+
     # Enable version updates for Cargo (Rust - Java wrapper)
     - package-ecosystem: "cargo"
       directory: "/java"
