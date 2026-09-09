@@ -122,11 +122,8 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_client_info_reports_lib_name_and_ver() {
-        let cluster = common::ClusterHarness::start().expect("cluster harness should start");
-        let client = cluster
-            .client()
-            .await
-            .expect("cluster client should connect");
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
 
         let reply = client
             .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
