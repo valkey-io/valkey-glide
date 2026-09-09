@@ -7,19 +7,7 @@
 use redis::{ErrorKind, RedisError};
 use thiserror::Error;
 
-/// The result type returned by all GLIDE client operations.
-pub type Result<T> = std::result::Result<T, GlideError>;
-
 /// Base error type for the GLIDE client.
-///
-/// Variants correspond to the Python exception classes:
-/// - [`GlideError::Closing`] → `ClosingError`
-/// - [`GlideError::Configuration`] → `ConfigurationError`
-/// - [`GlideError::Connection`] → `ConnectionError`
-/// - [`GlideError::ExecAbort`] → `ExecAbortError`
-/// - [`GlideError::Request`] → `RequestError`
-/// - [`GlideError::Timeout`] → `TimeoutError`
-/// - [`GlideError::CircuitBreaker`] → `CircuitBreakerError`
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum GlideError {
     /// The client is closed and can no longer be used. Unrecoverable.

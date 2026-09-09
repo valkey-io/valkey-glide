@@ -143,7 +143,7 @@ fn main() -> glide::RedisResult<()> {
 ```rust,no_run
 use glide::{GlideClusterClient, GlideClusterClientConfiguration, Route, CustomCommand};
 
-# async fn demo() -> glide::Result<()> {
+# async fn demo() -> glide::ValkeyResult<()> {
 let client = GlideClusterClient::connect(
     GlideClusterClientConfiguration::with_address("localhost", 7000),
 ).await?;

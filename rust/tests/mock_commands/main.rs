@@ -9,7 +9,7 @@
 //! server is involved, so the whole suite is deterministic and fast.
 
 use async_trait::async_trait;
-use glide::error::Result;
+use glide::ValkeyResult;
 use glide::executor::CommandExecutor;
 use redis::cluster_routing::RoutingInfo;
 use redis::{Arg, Cmd, Value};
@@ -92,7 +92,7 @@ impl Mock {
 
 #[async_trait]
 impl CommandExecutor for Mock {
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value> {
+    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> ValkeyResult<Value> {
         let args: Vec<Vec<u8>> = cmd
             .args_iter()
             .map(|a| match a {

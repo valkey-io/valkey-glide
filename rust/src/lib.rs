@@ -22,10 +22,18 @@ pub mod sync;
 pub use client::{
     ClusterScanCursor, GlideClient, GlideClusterClient, PubSubMessage, PubSubMessageKind,
 };
-pub use error::{GlideError, Result};
+pub use error::GlideError;
 pub use executor::{CommandExecutor, CustomCommand};
 pub use pipeline_options::PipelineOptions;
 pub use routes::{Route, SlotType};
+pub use value::{
+    FromValkeyValue, ToValkeyArgs, ValkeyServerError, ValkeyValue, ValkeyVerbatimFormat,
+};
+
+/// The result type returned by all GLIDE client operations.
+pub type ValkeyResult<T> = std::result::Result<T, GlideError>;
+// TODO #7024: add the ValkeyFuture alias here (beside ValkeyResult) when
+// glide_send_owned returns ValkeyValue (Phase 3).
 
 pub use config::{
     BackoffStrategy, ClientIdentity, GlideClientConfiguration, GlideClusterClientConfiguration,
@@ -54,10 +62,15 @@ pub use commands::stream::{
     XPendingEntry, XPendingSummary,
 };
 
+// TODO #7024: remove this redis::Value re-export; ValkeyValue replaces it (Phase 4).
 /// Re-export the underlying `redis` value type for advanced use.
 pub use redis::Value;
 
 // ---- `redis` crate re-exports ----
+//
+// TODO #7024: remove these redis re-exports (`pub use redis` and the flat
+// `pub use redis::{…}` lines below), providing Valkey-branded migration aliases
+// (Phase 4).
 //
 // GLIDE's unified command traits are source-compatible with the fork's
 // command surface, and their signatures reference fork types
@@ -124,5 +137,6 @@ pub use redis::{Pipeline, pipe};
 /// Lua script helper (`Script` — SHA-caching `EVALSHA` with `EVAL` fallback).
 pub use script::{Script, ScriptInvocation};
 
-/// Re-export `bytes::Bytes` — the byte-string type returned by binary-safe commands.
+// Re-export external types.
 pub use bytes::Bytes;
+pub use num_bigint::BigInt;

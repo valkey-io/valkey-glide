@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Hash commands. Mirrors Python's hash command surface.
 
+use crate::ValkeyResult;
 use crate::commands::options::{ExpireOptions, HashFieldConditionalChange};
-use crate::error::Result;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -17,7 +17,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<Option<Bytes>>> {
+    ) -> ValkeyResult<Vec<Option<Bytes>>> {
         let mut cmd = Cmd::new();
         cmd.arg("HMGET").arg(key);
         for f in fields {
@@ -34,14 +34,14 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         field: F,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("HSTRLEN").arg(key).arg(field);
         value::to_i64(self.execute_command(cmd, None).await?)
     }
 
     /// Get a random field from the hash (`HRANDFIELD`).
-    async fn hrandfield<K: ToRedisArgs + Send>(&self, key: K) -> Result<Option<Bytes>> {
+    async fn hrandfield<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("HRANDFIELD").arg(key);
         value::to_opt_bytes(self.execute_command(cmd, None).await?)
@@ -52,7 +52,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         count: i64,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("HRANDFIELD").arg(key).arg(count);
         collect_bytes(self.execute_command(cmd, None).await?)
@@ -64,7 +64,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         count: i64,
-    ) -> Result<Vec<(Bytes, Bytes)>> {
+    ) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
         let mut cmd = Cmd::new();
         cmd.arg("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES");
         collect_pairs(self.execute_command(cmd, None).await?)
@@ -78,7 +78,7 @@ pub trait HashCommands: CommandExecutor {
         cursor: &str,
         pattern: Option<&[u8]>,
         count: Option<i64>,
-    ) -> Result<(String, Vec<Bytes>)> {
+    ) -> ValkeyResult<(String, Vec<Bytes>)> {
         let mut cmd = Cmd::new();
         cmd.arg("HSCAN").arg(key).arg(cursor);
         if let Some(p) = pattern {
@@ -99,7 +99,7 @@ pub trait HashCommands: CommandExecutor {
         seconds: i64,
         fields: &[F],
         option: Option<ExpireOptions>,
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire("HEXPIRE", key, Some(seconds), fields, option)
             .await
     }
@@ -112,7 +112,7 @@ pub trait HashCommands: CommandExecutor {
         unix_seconds: i64,
         fields: &[F],
         option: Option<ExpireOptions>,
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire("HEXPIREAT", key, Some(unix_seconds), fields, option)
             .await
     }
@@ -123,7 +123,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire::<K, F>("HEXPIRETIME", key, None, fields, None)
             .await
     }
@@ -135,7 +135,7 @@ pub trait HashCommands: CommandExecutor {
         milliseconds: i64,
         fields: &[F],
         option: Option<ExpireOptions>,
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire("HPEXPIRE", key, Some(milliseconds), fields, option)
             .await
     }
@@ -148,7 +148,7 @@ pub trait HashCommands: CommandExecutor {
         unix_milliseconds: i64,
         fields: &[F],
         option: Option<ExpireOptions>,
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire("HPEXPIREAT", key, Some(unix_milliseconds), fields, option)
             .await
     }
@@ -159,7 +159,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire::<K, F>("HPEXPIRETIME", key, None, fields, None)
             .await
     }
@@ -169,7 +169,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire::<K, F>("HTTL", key, None, fields, None)
             .await
     }
@@ -179,7 +179,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire::<K, F>("HPTTL", key, None, fields, None)
             .await
     }
@@ -190,7 +190,7 @@ pub trait HashCommands: CommandExecutor {
         &self,
         key: K,
         fields: &[F],
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         self.hfield_expire::<K, F>("HPERSIST", key, None, fields, None)
             .await
     }
@@ -203,7 +203,7 @@ pub trait HashCommands: CommandExecutor {
         value: Option<i64>,
         fields: &[F],
         option: Option<ExpireOptions>,
-    ) -> Result<Vec<i64>> {
+    ) -> ValkeyResult<Vec<i64>> {
         let mut cmd = Cmd::new();
         cmd.arg(op).arg(key);
         if let Some(v) = value {
@@ -226,7 +226,7 @@ pub trait HashCommands: CommandExecutor {
         key: K,
         fields: &[F],
         expiry: Option<Expiry>,
-    ) -> Result<Vec<Option<Bytes>>> {
+    ) -> ValkeyResult<Vec<Option<Bytes>>> {
         let mut cmd = Cmd::new();
         cmd.arg("HGETEX").arg(key);
         if let Some(e) = expiry {
@@ -251,7 +251,7 @@ pub trait HashCommands: CommandExecutor {
         field_values: &[(F, V)],
         condition: Option<HashFieldConditionalChange>,
         expiry: Option<SetExpiry>,
-    ) -> Result<i64>
+    ) -> ValkeyResult<i64>
     where
         K: ToRedisArgs + Send + Sync,
         F: ToRedisArgs + Send + Sync,
@@ -274,7 +274,7 @@ pub trait HashCommands: CommandExecutor {
 }
 
 /// Collect an array reply into `Vec<i64>`.
-fn collect_i64(v: redis::Value) -> Result<Vec<i64>> {
+fn collect_i64(v: redis::Value) -> ValkeyResult<Vec<i64>> {
     match v {
         redis::Value::Nil => Ok(Vec::new()),
         redis::Value::Array(items) => items.into_iter().map(value::to_i64).collect(),
@@ -283,7 +283,7 @@ fn collect_i64(v: redis::Value) -> Result<Vec<i64>> {
 }
 
 /// Parse a flat `[a, b, a, b, ...]` reply into `(a, b)` pairs.
-fn collect_pairs(v: redis::Value) -> Result<Vec<(Bytes, Bytes)>> {
+fn collect_pairs(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     match v {
         redis::Value::Nil => Ok(Vec::new()),
         redis::Value::Map(pairs) => pairs
@@ -317,7 +317,7 @@ fn collect_pairs(v: redis::Value) -> Result<Vec<(Bytes, Bytes)>> {
     }
 }
 
-fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
+fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
     match v {
         redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
         redis::Value::Nil => Ok(Vec::new()),

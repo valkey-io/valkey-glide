@@ -5,8 +5,9 @@
 //! connects to a cluster. Both wrap the shared `glide_core::client::Client` and
 //! implement [`CommandExecutor`], so all command family traits apply to them.
 
+use crate::ValkeyResult;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
-use crate::error::{GlideError, Result};
+use crate::error::GlideError;
 use crate::executor::CommandExecutor;
 use crate::pipeline_options::{PipelineOptions, run_pipeline};
 use crate::routes::Route;
@@ -71,7 +72,7 @@ fn make_push_channel(
 
 /// The client's push receiver, or the error both clients report when Pub/Sub
 /// was not configured.
-fn pubsub_rx(rx: &Option<PushRx>) -> Result<&PushRx> {
+fn pubsub_rx(rx: &Option<PushRx>) -> ValkeyResult<&PushRx> {
     rx.as_ref()
         .ok_or_else(|| GlideError::Request("client has no configured pub/sub subscriptions".into()))
 }
@@ -79,7 +80,7 @@ fn pubsub_rx(rx: &Option<PushRx>) -> Result<&PushRx> {
 /// Shared implementation of `get_pubsub_message`: wait for the next Pub/Sub
 /// *message* push, skipping non-message pushes (subscribe/unsubscribe
 /// confirmations, invalidations, disconnects).
-async fn recv_pubsub_message(rx: &Option<PushRx>) -> Result<PubSubMessage> {
+async fn recv_pubsub_message(rx: &Option<PushRx>) -> ValkeyResult<PubSubMessage> {
     let mut guard = pubsub_rx(rx)?.lock().await;
     loop {
         match guard.recv().await {
@@ -95,7 +96,7 @@ async fn recv_pubsub_message(rx: &Option<PushRx>) -> Result<PubSubMessage> {
 
 /// Shared implementation of `try_get_pubsub_message`: non-blocking variant of
 /// [`recv_pubsub_message`]; returns `None` when no message is available.
-async fn try_recv_pubsub_message(rx: &Option<PushRx>) -> Result<Option<PubSubMessage>> {
+async fn try_recv_pubsub_message(rx: &Option<PushRx>) -> ValkeyResult<Option<PubSubMessage>> {
     let mut guard = pubsub_rx(rx)?.lock().await;
     loop {
         match guard.try_recv() {
@@ -204,7 +205,7 @@ pub struct GlideClient {
 
 impl GlideClient {
     /// Connect using the given standalone configuration.
-    pub async fn connect(config: GlideClientConfiguration) -> Result<Self> {
+    pub async fn connect(config: GlideClientConfiguration) -> ValkeyResult<Self> {
         let db = config.database_id;
         let request = config.to_request();
         let has_subs = config
@@ -233,14 +234,14 @@ impl GlideClient {
     /// and other non-message pushes are skipped.
     ///
     /// Returns an error if the client was not configured with subscriptions.
-    pub async fn get_pubsub_message(&self) -> Result<PubSubMessage> {
+    pub async fn get_pubsub_message(&self) -> ValkeyResult<PubSubMessage> {
         recv_pubsub_message(&self.pubsub_rx).await
     }
 
     /// Try to get the next Pub/Sub message without blocking
     /// (`try_get_pubsub_message`). Returns `None` if no message is currently
     /// available.
-    pub async fn try_get_pubsub_message(&self) -> Result<Option<PubSubMessage>> {
+    pub async fn try_get_pubsub_message(&self) -> ValkeyResult<Option<PubSubMessage>> {
         try_recv_pubsub_message(&self.pubsub_rx).await
     }
 
@@ -256,7 +257,7 @@ impl GlideClient {
         pipeline: &redis::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
+    ) -> ValkeyResult<Vec<Value>> {
         run_pipeline(&self.inner, pipeline, None, raise_on_error, options).await
     }
 
@@ -276,7 +277,7 @@ impl GlideClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         // `Client` is Clone (Arc inside) and the core method needs `&mut self`,
         // so we operate on a cheap clone — same seam as `execute_command`.
         let mut client = self.inner.clone();
@@ -290,7 +291,11 @@ impl GlideClient {
 
 #[async_trait]
 impl CommandExecutor for GlideClient {
-    async fn execute_command(&self, mut cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value> {
+    async fn execute_command(
+        &self,
+        mut cmd: Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> ValkeyResult<Value> {
         // `Client` is Clone (Arc inside) and `send_command` needs `&mut self`,
         // so we operate on a cheap clone — exactly what every wrapper does.
         let mut client = self.inner.clone();
@@ -314,7 +319,7 @@ pub struct GlideClusterClient {
 
 impl GlideClusterClient {
     /// Connect using the given cluster configuration.
-    pub async fn connect(config: GlideClusterClientConfiguration) -> Result<Self> {
+    pub async fn connect(config: GlideClusterClientConfiguration) -> ValkeyResult<Self> {
         let request = config.to_request();
         let has_subs = config
             .pubsub_subscriptions
@@ -329,18 +334,18 @@ impl GlideClusterClient {
 
     /// Wait for the next Pub/Sub message (including shard messages) on this
     /// client's configured subscriptions.
-    pub async fn get_pubsub_message(&self) -> Result<PubSubMessage> {
+    pub async fn get_pubsub_message(&self) -> ValkeyResult<PubSubMessage> {
         recv_pubsub_message(&self.pubsub_rx).await
     }
 
     /// Try to get the next Pub/Sub message without blocking. Returns `None` if
     /// no message is currently available.
-    pub async fn try_get_pubsub_message(&self) -> Result<Option<PubSubMessage>> {
+    pub async fn try_get_pubsub_message(&self) -> ValkeyResult<Option<PubSubMessage>> {
         try_recv_pubsub_message(&self.pubsub_rx).await
     }
 
     /// Execute a raw command with an explicit route.
-    pub async fn route_command(&self, mut cmd: Cmd, route: Route) -> Result<Value> {
+    pub async fn route_command(&self, mut cmd: Cmd, route: Route) -> ValkeyResult<Value> {
         let routing = route.to_routing_info(Some(&cmd));
         let mut client = self.inner.clone();
         client
@@ -357,7 +362,7 @@ impl GlideClusterClient {
         raise_on_error: bool,
         route: Option<Route>,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
+    ) -> ValkeyResult<Vec<Value>> {
         let routing = route.map(|r| r.to_routing_info(None));
         run_pipeline(&self.inner, pipeline, routing, raise_on_error, options).await
     }
@@ -375,7 +380,7 @@ impl GlideClusterClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut client = self.inner.clone();
         client
             .update_connection_password(password, immediate_auth)
@@ -397,7 +402,7 @@ impl GlideClusterClient {
         match_pattern: Option<&[u8]>,
         count: Option<u32>,
         object_type: Option<crate::commands::options::ObjectType>,
-    ) -> Result<(ClusterScanCursor, Vec<Bytes>)> {
+    ) -> ValkeyResult<(ClusterScanCursor, Vec<Bytes>)> {
         let scan_state = if cursor.0.is_empty() || cursor.0 == "0" {
             ScanStateRC::new()
         } else {
@@ -439,7 +444,7 @@ impl GlideClusterClient {
             Value::Array(elems) => elems
                 .into_iter()
                 .map(crate::value::to_bytes)
-                .collect::<Result<Vec<_>>>()?,
+                .collect::<ValkeyResult<Vec<_>>>()?,
             Value::Nil => Vec::new(),
             other => vec![crate::value::to_bytes(other)?],
         };
@@ -449,7 +454,11 @@ impl GlideClusterClient {
 
 #[async_trait]
 impl CommandExecutor for GlideClusterClient {
-    async fn execute_command(&self, mut cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value> {
+    async fn execute_command(
+        &self,
+        mut cmd: Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> ValkeyResult<Value> {
         let mut client = self.inner.clone();
         client
             .send_command(&mut cmd, routing)

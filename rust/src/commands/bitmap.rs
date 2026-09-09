@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Bitmap commands. Mirrors Python's bitmap command surface.
 
-use crate::error::Result;
+use crate::ValkeyResult;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -161,7 +161,7 @@ impl BitFieldSubcommand {
 #[async_trait]
 pub trait BitmapCommands: CommandExecutor {
     /// Find the position of the first bit set to `bit` (`BITPOS`).
-    async fn bitpos<K: ToRedisArgs + Send>(&self, key: K, bit: u8) -> Result<i64> {
+    async fn bitpos<K: ToRedisArgs + Send>(&self, key: K, bit: u8) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("BITPOS").arg(key).arg(bit);
         value::to_i64(self.execute_command(cmd, None).await?)
@@ -176,7 +176,7 @@ pub trait BitmapCommands: CommandExecutor {
         start: i64,
         end: i64,
         index_type: Option<BitmapIndexType>,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("BITPOS").arg(key).arg(bit).arg(start).arg(end);
         if let Some(it) = index_type {
@@ -191,7 +191,7 @@ pub trait BitmapCommands: CommandExecutor {
         &self,
         key: K,
         subcommands: &[BitFieldSubcommand],
-    ) -> Result<Vec<Option<i64>>> {
+    ) -> ValkeyResult<Vec<Option<i64>>> {
         let mut cmd = Cmd::new();
         cmd.arg("BITFIELD").arg(key);
         for sub in subcommands {
@@ -206,7 +206,7 @@ pub trait BitmapCommands: CommandExecutor {
         &self,
         key: K,
         subcommands: &[BitFieldSubcommand],
-    ) -> Result<Vec<Option<i64>>> {
+    ) -> ValkeyResult<Vec<Option<i64>>> {
         let mut cmd = Cmd::new();
         cmd.arg("BITFIELD_RO").arg(key);
         for sub in subcommands {
@@ -219,7 +219,7 @@ pub trait BitmapCommands: CommandExecutor {
 impl<T: CommandExecutor + ?Sized> BitmapCommands for T {}
 
 /// Parse a `BITFIELD` reply (array of ints, with `Nil` for `FAIL` overflow).
-fn parse_bitfield(v: redis::Value) -> Result<Vec<Option<i64>>> {
+fn parse_bitfield(v: redis::Value) -> ValkeyResult<Vec<Option<i64>>> {
     match v {
         redis::Value::Nil => Ok(Vec::new()),
         redis::Value::Array(items) => items

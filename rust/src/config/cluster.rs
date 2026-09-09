@@ -102,7 +102,7 @@ impl GlideClusterClientConfiguration {
     /// from builder params without validating it).
     pub fn from_urls<T: redis::IntoConnectionInfo>(
         urls: impl IntoIterator<Item = T>,
-    ) -> crate::error::Result<Self> {
+    ) -> crate::ValkeyResult<Self> {
         let mut addresses = Vec::new();
         let mut first: Option<(TlsConfig, redis::RedisConnectionInfo)> = None;
         for url in urls {

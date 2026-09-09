@@ -7,7 +7,7 @@
 //! while keeping a typed entry point per command. Replies are returned as the raw
 //! structured [`redis::Value`].
 
-use crate::error::Result;
+use crate::ValkeyResult;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -25,7 +25,7 @@ pub trait FtCommands: CommandExecutor {
         &self,
         index: I,
         args: &[A],
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.CREATE").arg(index);
         for a in args {
@@ -36,7 +36,11 @@ pub trait FtCommands: CommandExecutor {
 
     /// Drop an index (`FT.DROPINDEX`). Set `delete_docs` to also delete the
     /// indexed documents.
-    async fn ft_dropindex<I: ToRedisArgs + Send>(&self, index: I, delete_docs: bool) -> Result<()> {
+    async fn ft_dropindex<I: ToRedisArgs + Send>(
+        &self,
+        index: I,
+        delete_docs: bool,
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.DROPINDEX").arg(index);
         if delete_docs {
@@ -46,14 +50,14 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Get information about an index (`FT.INFO`).
-    async fn ft_info<I: ToRedisArgs + Send>(&self, index: I) -> Result<Value> {
+    async fn ft_info<I: ToRedisArgs + Send>(&self, index: I) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.INFO").arg(index);
         self.execute_command(cmd, None).await
     }
 
     /// List all indexes (`FT._LIST`).
-    async fn ft_list(&self) -> Result<Vec<Bytes>> {
+    async fn ft_list(&self) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("FT._LIST");
         match self.execute_command(cmd, None).await? {
@@ -75,7 +79,7 @@ pub trait FtCommands: CommandExecutor {
         index: I,
         query: Q,
         args: &[A],
-    ) -> Result<Value> {
+    ) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.SEARCH").arg(index).arg(query);
         for a in args {
@@ -94,7 +98,7 @@ pub trait FtCommands: CommandExecutor {
         index: I,
         query: Q,
         args: &[A],
-    ) -> Result<Value> {
+    ) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.AGGREGATE").arg(index).arg(query);
         for a in args {
@@ -108,7 +112,7 @@ pub trait FtCommands: CommandExecutor {
         &self,
         index: I,
         query: Q,
-    ) -> Result<Bytes> {
+    ) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.EXPLAIN").arg(index).arg(query);
         value::to_bytes(self.execute_command(cmd, None).await?)
@@ -119,7 +123,7 @@ pub trait FtCommands: CommandExecutor {
         &self,
         index: I,
         query: Q,
-    ) -> Result<Value> {
+    ) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.EXPLAINCLI").arg(index).arg(query);
         self.execute_command(cmd, None).await
@@ -130,14 +134,14 @@ pub trait FtCommands: CommandExecutor {
         &self,
         alias: A,
         index: I,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASADD").arg(alias).arg(index);
         value::to_unit(self.execute_command(cmd, None).await?)
     }
 
     /// Remove an index alias (`FT.ALIASDEL`).
-    async fn ft_aliasdel<A: ToRedisArgs + Send>(&self, alias: A) -> Result<()> {
+    async fn ft_aliasdel<A: ToRedisArgs + Send>(&self, alias: A) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASDEL").arg(alias);
         value::to_unit(self.execute_command(cmd, None).await?)
@@ -148,14 +152,14 @@ pub trait FtCommands: CommandExecutor {
         &self,
         alias: A,
         index: I,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASUPDATE").arg(alias).arg(index);
         value::to_unit(self.execute_command(cmd, None).await?)
     }
 
     /// List all index aliases (`FT._ALIASLIST`).
-    async fn ft_aliaslist(&self) -> Result<Value> {
+    async fn ft_aliaslist(&self) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT._ALIASLIST");
         self.execute_command(cmd, None).await
@@ -170,7 +174,7 @@ pub trait FtCommands: CommandExecutor {
         query_type: &str,
         limited: bool,
         args: &[A],
-    ) -> Result<Value> {
+    ) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.PROFILE").arg(index).arg(query_type);
         if limited {

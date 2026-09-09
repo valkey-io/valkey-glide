@@ -1188,6 +1188,7 @@ dependencies = [
  "futures",
  "glide-core",
  "logger_core",
+ "num-bigint",
  "once_cell",
  "redis",
  "regex",

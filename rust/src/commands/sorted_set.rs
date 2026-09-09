@@ -2,8 +2,8 @@
 //! Sorted-set commands. Mirrors Python's sorted-set command surface.
 #![allow(clippy::type_complexity)]
 
+use crate::ValkeyResult;
 use crate::commands::options::Limit;
-use crate::error::Result;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -108,7 +108,7 @@ pub trait SortedSetCommands: CommandExecutor {
         key: K,
         member: M,
         increment: f64,
-    ) -> Result<Option<f64>> {
+    ) -> ValkeyResult<Option<f64>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZADD")
             .arg(key)
@@ -123,7 +123,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         key: K,
         member: M,
-    ) -> Result<Option<(i64, f64)>> {
+    ) -> ValkeyResult<Option<(i64, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZRANK").arg(key).arg(member).arg("WITHSCORE");
         parse_rank_withscore(self.execute_command(cmd, None).await?)
@@ -135,7 +135,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         key: K,
         member: M,
-    ) -> Result<Option<(i64, f64)>> {
+    ) -> ValkeyResult<Option<(i64, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZREVRANK").arg(key).arg(member).arg("WITHSCORE");
         parse_rank_withscore(self.execute_command(cmd, None).await?)
@@ -147,7 +147,7 @@ pub trait SortedSetCommands: CommandExecutor {
         op: &'static str,
         keys: &[K],
         timeout: f64,
-    ) -> Result<Option<(Bytes, Bytes, f64)>> {
+    ) -> ValkeyResult<Option<(Bytes, Bytes, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg(op);
         for k in keys {
@@ -177,7 +177,7 @@ pub trait SortedSetCommands: CommandExecutor {
         start: i64,
         stop: i64,
         rev: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("ZRANGESTORE")
             .arg(destination)
@@ -205,7 +205,7 @@ pub trait SortedSetCommands: CommandExecutor {
         max: ScoreBound,
         rev: bool,
         limit: Option<Limit>,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         // For a reverse range the server expects the high bound first.
         let (first, second) = if rev { (max, min) } else { (min, max) };
         let mut cmd = Cmd::new();
@@ -239,7 +239,7 @@ pub trait SortedSetCommands: CommandExecutor {
         max: &LexBound,
         rev: bool,
         limit: Option<Limit>,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let (first, second) = if rev { (max, min) } else { (min, max) };
         let mut cmd = Cmd::new();
         cmd.arg("ZRANGESTORE")
@@ -258,7 +258,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     /// Compute the difference of the given sorted sets (`ZDIFF`).
-    async fn zdiff<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> Result<Vec<Bytes>> {
+    async fn zdiff<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZDIFF").arg(keys.len());
         for k in keys {
@@ -272,7 +272,7 @@ pub trait SortedSetCommands: CommandExecutor {
     async fn zdiff_withscores<K: ToRedisArgs + Send + Sync>(
         &self,
         keys: &[K],
-    ) -> Result<Vec<(Bytes, f64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZDIFF").arg(keys.len());
         for k in keys {
@@ -288,7 +288,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         destination: D,
         keys: &[K],
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("ZDIFFSTORE").arg(destination).arg(keys.len());
         for k in keys {
@@ -302,7 +302,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZUNION").arg(keys.len());
         for k in keys {
@@ -320,7 +320,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
-    ) -> Result<Vec<(Bytes, f64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZUNION").arg(keys.len());
         for k in keys {
@@ -338,7 +338,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZINTER").arg(keys.len());
         for k in keys {
@@ -356,7 +356,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
-    ) -> Result<Vec<(Bytes, f64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, f64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZINTER").arg(keys.len());
         for k in keys {
@@ -375,7 +375,7 @@ pub trait SortedSetCommands: CommandExecutor {
         &self,
         keys: &[K],
         limit: Option<i64>,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("ZINTERCARD").arg(keys.len());
         for k in keys {
@@ -394,7 +394,7 @@ pub trait SortedSetCommands: CommandExecutor {
         destination: D,
         keys: &[K],
         aggregate: Option<AggregationType>,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg(op).arg(destination).arg(keys.len());
         for k in keys {
@@ -407,7 +407,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 }
 
-fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
+fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
     match v {
         redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
         redis::Value::Nil => Ok(Vec::new()),
@@ -417,7 +417,7 @@ fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
 
 /// Parse a `WITHSCORES`/`ZPOPMIN`-style reply into `(member, score)` pairs,
 /// handling both RESP2 flat arrays and RESP3 nested pairs.
-fn collect_member_scores(v: redis::Value) -> Result<Vec<(Bytes, f64)>> {
+fn collect_member_scores(v: redis::Value) -> ValkeyResult<Vec<(Bytes, f64)>> {
     match v {
         redis::Value::Nil => Ok(Vec::new()),
         // RESP3 returns a map of member -> score.
@@ -459,7 +459,7 @@ fn collect_member_scores(v: redis::Value) -> Result<Vec<(Bytes, f64)>> {
 impl<T: CommandExecutor + ?Sized> SortedSetCommands for T {}
 
 /// Parse a `ZRANK ... WITHSCORE` reply (`[rank, score]` or nil).
-fn parse_rank_withscore(v: redis::Value) -> Result<Option<(i64, f64)>> {
+fn parse_rank_withscore(v: redis::Value) -> ValkeyResult<Option<(i64, f64)>> {
     match v {
         redis::Value::Nil => Ok(None),
         redis::Value::Array(mut items) if items.len() == 2 => {

@@ -434,7 +434,7 @@ impl TlsConfig {
 /// Map a [`redis::ConnectionAddr`] to our address + TLS mode.
 pub(crate) fn split_connection_addr(
     addr: redis::ConnectionAddr,
-) -> crate::error::Result<(NodeAddress, TlsConfig)> {
+) -> crate::ValkeyResult<(NodeAddress, TlsConfig)> {
     match addr {
         redis::ConnectionAddr::Tcp(host, port) => {
             Ok((NodeAddress::new(host, port), TlsConfig::NoTls))

@@ -12,10 +12,10 @@
 //! (a running Tokio runtime) — doing so panics with tokio's "cannot block the
 //! current thread from within a runtime".
 
+use crate::ValkeyResult;
 use crate::client::{GlideClient, GlideClusterClient};
 use crate::commands::prelude::*;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
-use crate::error::Result;
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
@@ -51,7 +51,7 @@ pub struct SyncGlideClient {
 
 impl SyncGlideClient {
     /// Connect using the given standalone configuration (blocking).
-    pub fn connect(config: GlideClientConfiguration) -> Result<Self> {
+    pub fn connect(config: GlideClientConfiguration) -> ValkeyResult<Self> {
         let inner = runtime().block_on(GlideClient::connect(config))?;
         Ok(SyncGlideClient { inner })
     }
@@ -85,7 +85,7 @@ impl SyncGlideClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         runtime().block_on(
             self.inner
                 .update_connection_password(password, immediate_auth),
@@ -93,7 +93,7 @@ impl SyncGlideClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> Result<Value> {
+    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
@@ -105,7 +105,7 @@ impl SyncGlideClient {
         pipeline: &redis::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
+    ) -> ValkeyResult<Vec<Value>> {
         runtime().block_on(
             self.inner
                 .execute_pipeline(pipeline, raise_on_error, options),
@@ -113,7 +113,7 @@ impl SyncGlideClient {
     }
 
     /// Blocking `PING`.
-    pub fn ping(&self) -> Result<String> {
+    pub fn ping(&self) -> ValkeyResult<String> {
         runtime().block_on(self.inner.ping())
     }
 }
@@ -126,7 +126,7 @@ pub struct SyncGlideClusterClient {
 
 impl SyncGlideClusterClient {
     /// Connect using the given cluster configuration (blocking).
-    pub fn connect(config: GlideClusterClientConfiguration) -> Result<Self> {
+    pub fn connect(config: GlideClusterClientConfiguration) -> ValkeyResult<Self> {
         let inner = runtime().block_on(GlideClusterClient::connect(config))?;
         Ok(SyncGlideClusterClient { inner })
     }
@@ -146,7 +146,7 @@ impl SyncGlideClusterClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> Result<Value> {
+    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
@@ -155,7 +155,7 @@ impl SyncGlideClusterClient {
         &self,
         args: &[A],
         route: Route,
-    ) -> Result<Value> {
+    ) -> ValkeyResult<Value> {
         runtime().block_on(self.inner.custom_command_with_route(args, route))
     }
 
@@ -165,7 +165,7 @@ impl SyncGlideClusterClient {
         &self,
         password: Option<String>,
         immediate_auth: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         runtime().block_on(
             self.inner
                 .update_connection_password(password, immediate_auth),
@@ -181,7 +181,7 @@ impl SyncGlideClusterClient {
         raise_on_error: bool,
         route: Option<crate::Route>,
         options: &PipelineOptions,
-    ) -> Result<Vec<Value>> {
+    ) -> ValkeyResult<Vec<Value>> {
         runtime().block_on(
             self.inner
                 .execute_pipeline(pipeline, raise_on_error, route, options),
@@ -189,7 +189,7 @@ impl SyncGlideClusterClient {
     }
 
     /// Blocking `PING`.
-    pub fn ping(&self) -> Result<String> {
+    pub fn ping(&self) -> ValkeyResult<String> {
         runtime().block_on(self.inner.ping())
     }
 }
