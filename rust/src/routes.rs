@@ -80,7 +80,7 @@ impl Route {
     ///
     /// For multi-node routes the response aggregation policy is derived from the
     /// command (when provided), exactly as `glide-core` does internally.
-    pub fn to_routing_info(&self, cmd: Option<&Cmd>) -> RoutingInfo {
+    pub(crate) fn to_routing_info(&self, cmd: Option<&Cmd>) -> RoutingInfo {
         let response_policy = || {
             cmd.and_then(|c| c.command())
                 .and_then(|name| ResponsePolicy::for_command(&name))

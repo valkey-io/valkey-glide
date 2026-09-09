@@ -77,14 +77,12 @@ impl TelemetryExporter {
     pub fn file(path: impl Into<PathBuf>) -> Self {
         TelemetryExporter::File(path.into())
     }
-}
 
-impl From<TelemetryExporter> for GlideOpenTelemetrySignalsExporter {
-    fn from(e: TelemetryExporter) -> Self {
-        match e {
-            TelemetryExporter::Grpc(s) => GlideOpenTelemetrySignalsExporter::Grpc(s),
-            TelemetryExporter::Http(s) => GlideOpenTelemetrySignalsExporter::Http(s),
-            TelemetryExporter::File(p) => GlideOpenTelemetrySignalsExporter::File(p),
+    pub(crate) fn to_core(&self) -> GlideOpenTelemetrySignalsExporter {
+        match self {
+            TelemetryExporter::Grpc(s) => GlideOpenTelemetrySignalsExporter::Grpc(s.clone()),
+            TelemetryExporter::Http(s) => GlideOpenTelemetrySignalsExporter::Http(s.clone()),
+            TelemetryExporter::File(p) => GlideOpenTelemetrySignalsExporter::File(p.clone()),
         }
     }
 }
@@ -134,14 +132,14 @@ impl OpenTelemetryConfigBuilder {
     ) -> Self {
         self.inner = self
             .inner
-            .with_trace_exporter(exporter.into(), sample_percentage);
+            .with_trace_exporter(exporter.to_core(), sample_percentage);
         self
     }
 
     /// Enable metrics export to `exporter`.
     #[must_use]
     pub fn with_metrics_exporter(mut self, exporter: TelemetryExporter) -> Self {
-        self.inner = self.inner.with_metrics_exporter(exporter.into());
+        self.inner = self.inner.with_metrics_exporter(exporter.to_core());
         self
     }
 
@@ -196,7 +194,7 @@ mod tests {
             TelemetryExporter::File(PathBuf::from("/tmp/sig"))
         );
         // Lowering to the core type preserves the variant + payload.
-        let core: GlideOpenTelemetrySignalsExporter = TelemetryExporter::grpc("g").into();
+        let core: GlideOpenTelemetrySignalsExporter = TelemetryExporter::grpc("g").to_core();
         assert!(matches!(core, GlideOpenTelemetrySignalsExporter::Grpc(s) if s == "g"));
     }
 

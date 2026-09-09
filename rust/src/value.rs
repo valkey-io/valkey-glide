@@ -11,7 +11,7 @@ use redis::{FromRedisValue, Value};
 
 /// Convert a raw [`Value`] into any type implementing [`FromRedisValue`].
 pub fn from_value<T: FromRedisValue>(value: Value) -> Result<T> {
-    redis::from_owned_redis_value(value).map_err(GlideError::from)
+    redis::from_owned_redis_value(value).map_err(GlideError::from_redis_error)
 }
 
 /// Convert a [`Value`] into `Option<Bytes>` (Nil → `None`).

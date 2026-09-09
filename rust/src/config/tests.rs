@@ -163,9 +163,9 @@ fn tls_insecure() {
 
 #[test]
 fn tls_mode_from_conversion() {
-    assert_eq!(TlsMode::from(TlsConfig::NoTls), TlsMode::NoTls);
-    assert_eq!(TlsMode::from(TlsConfig::SecureTls), TlsMode::SecureTls);
-    assert_eq!(TlsMode::from(TlsConfig::InsecureTls), TlsMode::InsecureTls);
+    assert_eq!(TlsConfig::NoTls.to_core(), TlsMode::NoTls);
+    assert_eq!(TlsConfig::SecureTls.to_core(), TlsMode::SecureTls);
+    assert_eq!(TlsConfig::InsecureTls.to_core(), TlsMode::InsecureTls);
 }
 
 #[test]
@@ -202,11 +202,11 @@ fn protocol_default_is_resp3() {
 #[test]
 fn protocol_from_conversion() {
     assert_eq!(
-        redis::ProtocolVersion::from(ProtocolVersion::RESP2),
+        ProtocolVersion::RESP2.to_core(),
         redis::ProtocolVersion::RESP2
     );
     assert_eq!(
-        redis::ProtocolVersion::from(ProtocolVersion::RESP3),
+        ProtocolVersion::RESP3.to_core(),
         redis::ProtocolVersion::RESP3
     );
 }
@@ -274,25 +274,22 @@ fn read_from_az_affinity_all_nodes_carries_az() {
 
 #[test]
 fn read_from_from_conversions() {
-    assert_eq!(CoreReadFrom::from(ReadFrom::Primary), CoreReadFrom::Primary);
+    assert_eq!(ReadFrom::Primary.to_core(), CoreReadFrom::Primary);
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::PreferReplica),
+        ReadFrom::PreferReplica.to_core(),
         CoreReadFrom::PreferReplica
     );
+    assert_eq!(ReadFrom::AllNodes.to_core(), CoreReadFrom::AllNodes);
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AllNodes),
-        CoreReadFrom::AllNodes
-    );
-    assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinity("z".into())),
+        ReadFrom::AZAffinity("z".into()).to_core(),
         CoreReadFrom::AZAffinity("z".into())
     );
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinityReplicasAndPrimary("z".into())),
+        ReadFrom::AZAffinityReplicasAndPrimary("z".into()).to_core(),
         CoreReadFrom::AZAffinityReplicasAndPrimary("z".into())
     );
     assert_eq!(
-        CoreReadFrom::from(ReadFrom::AZAffinityAllNodes("z".into())),
+        ReadFrom::AZAffinityAllNodes("z".into()).to_core(),
         CoreReadFrom::AZAffinityAllNodes("z".into())
     );
 }
@@ -606,7 +603,7 @@ fn backoff_strategy_from_conversion() {
         exponent_base: 7,
         jitter_percent: Some(6),
     }
-    .into();
+    .to_core();
     assert_eq!(s.number_of_retries, 9);
     assert_eq!(s.factor, 8);
     assert_eq!(s.exponent_base, 7);
@@ -645,14 +642,14 @@ fn periodic_checks_manual_interval() {
 #[test]
 fn periodic_checks_from_conversions() {
     assert!(matches!(
-        PeriodicCheck::from(PeriodicChecks::Enabled),
+        PeriodicChecks::Enabled.to_core(),
         PeriodicCheck::Enabled
     ));
     assert!(matches!(
-        PeriodicCheck::from(PeriodicChecks::Disabled),
+        PeriodicChecks::Disabled.to_core(),
         PeriodicCheck::Disabled
     ));
-    match PeriodicCheck::from(PeriodicChecks::ManualInterval(5)) {
+    match PeriodicChecks::ManualInterval(5).to_core() {
         PeriodicCheck::ManualInterval(d) => assert_eq!(d, Duration::from_secs(5)),
         other => panic!("unexpected: {other:?}"),
     }

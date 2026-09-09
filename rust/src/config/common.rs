@@ -89,9 +89,9 @@ pub enum ProtocolVersion {
     RESP3,
 }
 
-impl From<ProtocolVersion> for redis::ProtocolVersion {
-    fn from(v: ProtocolVersion) -> Self {
-        match v {
+impl ProtocolVersion {
+    pub(crate) fn to_core(self) -> redis::ProtocolVersion {
+        match self {
             ProtocolVersion::RESP2 => redis::ProtocolVersion::RESP2,
             ProtocolVersion::RESP3 => redis::ProtocolVersion::RESP3,
         }
@@ -119,16 +119,16 @@ pub enum ReadFrom {
     AllNodes,
 }
 
-impl From<ReadFrom> for CoreReadFrom {
-    fn from(v: ReadFrom) -> Self {
-        match v {
+impl ReadFrom {
+    pub(crate) fn to_core(&self) -> CoreReadFrom {
+        match self {
             ReadFrom::Primary => CoreReadFrom::Primary,
             ReadFrom::PreferReplica => CoreReadFrom::PreferReplica,
-            ReadFrom::AZAffinity(az) => CoreReadFrom::AZAffinity(az),
+            ReadFrom::AZAffinity(az) => CoreReadFrom::AZAffinity(az.clone()),
             ReadFrom::AZAffinityReplicasAndPrimary(az) => {
-                CoreReadFrom::AZAffinityReplicasAndPrimary(az)
+                CoreReadFrom::AZAffinityReplicasAndPrimary(az.clone())
             }
-            ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az),
+            ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az.clone()),
             ReadFrom::AllNodes => CoreReadFrom::AllNodes,
         }
     }
@@ -161,11 +161,11 @@ impl Default for NodeAddress {
     }
 }
 
-impl From<NodeAddress> for CoreNodeAddress {
-    fn from(a: NodeAddress) -> Self {
+impl NodeAddress {
+    pub(crate) fn to_core(&self) -> CoreNodeAddress {
         CoreNodeAddress {
-            host: a.host,
-            port: a.port,
+            host: self.host.clone(),
+            port: self.port,
         }
     }
 }
@@ -297,9 +297,9 @@ pub enum ServiceType {
     MemoryDB,
 }
 
-impl From<ServiceType> for CoreServiceType {
-    fn from(s: ServiceType) -> Self {
-        match s {
+impl ServiceType {
+    pub(crate) fn to_core(self) -> CoreServiceType {
+        match self {
             ServiceType::ElastiCache => CoreServiceType::ElastiCache,
             ServiceType::MemoryDB => CoreServiceType::MemoryDB,
         }
@@ -349,7 +349,7 @@ impl IamAuthConfig {
         IamAuthenticationConfig {
             cluster_name: self.cluster_name.clone(),
             region: self.region.clone(),
-            service_type: self.service_type.into(),
+            service_type: self.service_type.to_core(),
             refresh_interval_seconds: self.refresh_interval_seconds,
         }
     }
@@ -370,13 +370,13 @@ pub struct BackoffStrategy {
     pub jitter_percent: Option<u32>,
 }
 
-impl From<BackoffStrategy> for ConnectionRetryStrategy {
-    fn from(b: BackoffStrategy) -> Self {
+impl BackoffStrategy {
+    pub(crate) fn to_core(self) -> ConnectionRetryStrategy {
         ConnectionRetryStrategy {
-            exponent_base: b.exponent_base,
-            factor: b.factor,
-            number_of_retries: b.num_of_retries,
-            jitter_percent: b.jitter_percent,
+            exponent_base: self.exponent_base,
+            factor: self.factor,
+            number_of_retries: self.num_of_retries,
+            jitter_percent: self.jitter_percent,
         }
     }
 }
@@ -395,9 +395,9 @@ pub enum PeriodicChecks {
     ManualInterval(u64),
 }
 
-impl From<PeriodicChecks> for PeriodicCheck {
-    fn from(p: PeriodicChecks) -> Self {
-        match p {
+impl PeriodicChecks {
+    pub(crate) fn to_core(self) -> PeriodicCheck {
+        match self {
             PeriodicChecks::Enabled => PeriodicCheck::Enabled,
             PeriodicChecks::Disabled => PeriodicCheck::Disabled,
             PeriodicChecks::ManualInterval(secs) => {
@@ -419,9 +419,9 @@ pub enum TlsConfig {
     InsecureTls,
 }
 
-impl From<TlsConfig> for TlsMode {
-    fn from(t: TlsConfig) -> Self {
-        match t {
+impl TlsConfig {
+    pub(crate) fn to_core(self) -> TlsMode {
+        match self {
             TlsConfig::NoTls => TlsMode::NoTls,
             TlsConfig::SecureTls => TlsMode::SecureTls,
             TlsConfig::InsecureTls => TlsMode::InsecureTls,
@@ -630,10 +630,10 @@ macro_rules! impl_common_config_builders {
             pub(crate) fn common_request(&self) -> glide_core::client::ConnectionRequest {
                 use glide_core::client::ConnectionRequest;
                 let mut req = ConnectionRequest {
-                    addresses: self.addresses.iter().cloned().map(Into::into).collect(),
-                    tls_mode: Some(self.tls.into()),
-                    read_from: Some(self.read_from.clone().into()),
-                    protocol: Some(self.protocol.into()),
+                    addresses: self.addresses.iter().map(NodeAddress::to_core).collect(),
+                    tls_mode: Some(self.tls.to_core()),
+                    read_from: Some(self.read_from.to_core()),
+                    protocol: Some(self.protocol.to_core()),
                     client_name: self.client_name.clone(),
                     lib_name: Some($crate::config::common::LIB_NAME.to_string()),
                     lib_ver: Some($crate::config::common::LIB_VERSION.to_string()),
@@ -676,7 +676,7 @@ macro_rules! impl_common_config_builders {
                     req.connection_timeout = Some(duration_as_millis_u32(t));
                 }
                 if let Some(strategy) = self.reconnect_strategy {
-                    req.connection_retry_strategy = Some(strategy.into());
+                    req.connection_retry_strategy = Some(strategy.to_core());
                 }
                 req
             }
