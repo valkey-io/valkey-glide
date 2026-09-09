@@ -34,12 +34,12 @@ runs:
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
-        - run: cargo clippy --all-features --all-targets -- -D warnings
+        - run: cargo clippy --locked --all-features --all-targets -- -D warnings
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
           # We run clippy without features
-        - run: cargo clippy --all-targets -- -D warnings
+        - run: cargo clippy --locked --all-targets -- -D warnings
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
@@ -52,6 +52,6 @@ runs:
         - name: doc
           shell: bash
           working-directory: ${{ inputs.cargo-toml-folder }}
-          run: cargo doc --no-deps --document-private-items
+          run: cargo doc --locked --no-deps --document-private-items
           env:
               RUSTDOCFLAGS: -Dwarnings

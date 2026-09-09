@@ -358,7 +358,7 @@ jobs:
 
                       # Build FFI library and glide-shared native extension for async wheel
                       # Note: working directory inside container is python/glide-async
-                      cd ../../ffi && cargo build --release && cd ..
+                      cd ../../ffi && cargo build --locked --release && cd ..
                       cp ffi/target/release/libglide_ffi.so python/glide-async/python/glide_shared/
                       cd python/glide-shared
                       pip install maturin
@@ -382,7 +382,7 @@ jobs:
               shell: bash
               run: |
                   # Build FFI library
-                  cd ffi && cargo build --release --target ${{ matrix.build.TARGET }}
+                  cd ffi && cargo build --locked --release --target ${{ matrix.build.TARGET }}
                   cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
                   cd ..
                   # Build glide-shared native extension (_fast_response) for all target interpreters

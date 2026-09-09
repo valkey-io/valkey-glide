@@ -155,20 +155,20 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
               # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
-              run: cargo test
+              run: cargo test --locked
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
-              run: cargo miri test
+              run: cargo miri test --locked
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
@@ -179,13 +179,13 @@ jobs:
 
             - name: Run logger tests
               working-directory: ./logger_core
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
 
             - name: Check features
               working-directory: ./glide-core
               run: |
-                  cargo check --benches --all-features
-                  cargo check --no-default-features
+                  cargo check --locked --benches --all-features
+                  cargo check --locked --no-default-features
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
