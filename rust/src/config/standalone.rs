@@ -94,7 +94,7 @@ impl GlideClientConfiguration {
     /// `rediss://…/#insecure` disables certificate verification, as in
     /// the fork. Unix-socket URLs are not supported by glide-core and return
     /// a configuration error.
-    pub fn from_url(url: &str) -> crate::error::Result<Self> {
+    pub fn from_url(url: &str) -> crate::ValkeyResult<Self> {
         Self::from_connection_info(url)
     }
 
@@ -103,7 +103,7 @@ impl GlideClientConfiguration {
     /// [`redis::ConnectionInfo`]).
     pub fn from_connection_info<T: redis::IntoConnectionInfo>(
         info: T,
-    ) -> crate::error::Result<Self> {
+    ) -> crate::ValkeyResult<Self> {
         let info = info
             .into_connection_info()
             .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))?;

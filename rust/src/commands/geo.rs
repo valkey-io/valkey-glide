@@ -2,8 +2,8 @@
 //! Geospatial commands. Mirrors Python's geo command surface.
 #![allow(clippy::too_many_arguments)]
 
+use crate::ValkeyResult;
 use crate::commands::options::{ConditionalChange, OrderBy};
-use crate::error::Result;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -95,7 +95,7 @@ pub trait GeoCommands: CommandExecutor {
         &self,
         key: K,
         members_positions: &[(M, GeospatialData)],
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOADD").arg(key);
         for (m, pos) in members_positions {
@@ -111,7 +111,7 @@ pub trait GeoCommands: CommandExecutor {
         member1: M1,
         member2: M2,
         unit: Option<GeoUnit>,
-    ) -> Result<Option<f64>> {
+    ) -> ValkeyResult<Option<f64>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEODIST").arg(key).arg(member1).arg(member2);
         if let Some(u) = unit {
@@ -125,7 +125,7 @@ pub trait GeoCommands: CommandExecutor {
         &self,
         key: K,
         members: &[M],
-    ) -> Result<Vec<Option<Bytes>>> {
+    ) -> ValkeyResult<Vec<Option<Bytes>>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOHASH").arg(key);
         for m in members {
@@ -142,7 +142,7 @@ pub trait GeoCommands: CommandExecutor {
         &self,
         key: K,
         members: &[M],
-    ) -> Result<Vec<Option<(f64, f64)>>> {
+    ) -> ValkeyResult<Vec<Option<(f64, f64)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOPOS").arg(key);
         for m in members {
@@ -175,7 +175,7 @@ pub trait GeoCommands: CommandExecutor {
         member: M,
         radius: f64,
         unit: GeoUnit,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH")
             .arg(key)
@@ -199,7 +199,7 @@ pub trait GeoCommands: CommandExecutor {
         members_positions: &[(M, GeospatialData)],
         conditional_change: Option<ConditionalChange>,
         changed: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOADD").arg(key);
         if let Some(c) = conditional_change {
@@ -224,7 +224,7 @@ pub trait GeoCommands: CommandExecutor {
         order: Option<OrderBy>,
         count: Option<i64>,
         any: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH").arg(key).arg("FROMMEMBER").arg(member);
         shape.add_to(&mut cmd);
@@ -242,7 +242,7 @@ pub trait GeoCommands: CommandExecutor {
         order: Option<OrderBy>,
         count: Option<i64>,
         any: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH")
             .arg(key)
@@ -270,7 +270,7 @@ pub trait GeoCommands: CommandExecutor {
         count: Option<i64>,
         any: bool,
         store_dist: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
             .arg(destination)
@@ -297,7 +297,7 @@ pub trait GeoCommands: CommandExecutor {
         count: Option<i64>,
         any: bool,
         store_dist: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
             .arg(destination)
@@ -327,7 +327,7 @@ fn add_search_tail(cmd: &mut Cmd, order: Option<OrderBy>, count: Option<i64>, an
     }
 }
 
-fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
+fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
     match v {
         redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
         redis::Value::Nil => Ok(Vec::new()),

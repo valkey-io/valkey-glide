@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Set commands. Mirrors Python's set command surface.
 
-use crate::error::Result;
+use crate::ValkeyResult;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -9,7 +9,7 @@ use bytes::Bytes;
 use redis::{Cmd, ToRedisArgs};
 use std::collections::HashSet;
 
-fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
+fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
     match v {
         redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
         redis::Value::Set(items) => items.into_iter().map(value::to_bytes).collect(),
@@ -22,7 +22,7 @@ fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
 #[async_trait]
 pub trait SetCommands: CommandExecutor {
     /// Cardinality of the intersection of the given sets (`SINTERCARD`).
-    async fn sintercard<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> Result<i64> {
+    async fn sintercard<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SINTERCARD").arg(keys.len());
         for k in keys {
@@ -38,7 +38,7 @@ pub trait SetCommands: CommandExecutor {
         &self,
         keys: &[K],
         limit: i64,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SINTERCARD").arg(keys.len());
         for k in keys {
@@ -53,7 +53,7 @@ pub trait SetCommands: CommandExecutor {
         &self,
         op: &'static str,
         keys: &[K],
-    ) -> Result<HashSet<Bytes>> {
+    ) -> ValkeyResult<HashSet<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg(op);
         for k in keys {
@@ -70,7 +70,7 @@ pub trait SetCommands: CommandExecutor {
         op: &'static str,
         destination: D,
         keys: &[K],
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg(op).arg(destination);
         for k in keys {

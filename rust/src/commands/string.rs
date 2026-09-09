@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! String commands. Mirrors Python's string command surface.
 
-use crate::error::Result;
+use crate::ValkeyResult;
 use crate::executor::CommandExecutor;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -15,7 +15,7 @@ pub trait StringCommands: CommandExecutor {
         &self,
         key1: K1,
         key2: K2,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("LCS").arg(key1).arg(key2).arg("LEN");
         crate::value::to_i64(self.execute_command(cmd, None).await?)
@@ -26,7 +26,7 @@ pub trait StringCommands: CommandExecutor {
         &self,
         key1: K1,
         key2: K2,
-    ) -> Result<Bytes> {
+    ) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("LCS").arg(key1).arg(key2);
         crate::value::to_bytes(self.execute_command(cmd, None).await?)
@@ -41,7 +41,7 @@ pub trait StringCommands: CommandExecutor {
         key2: K2,
         min_match_len: Option<i64>,
         with_match_len: bool,
-    ) -> Result<redis::Value> {
+    ) -> ValkeyResult<redis::Value> {
         let mut cmd = Cmd::new();
         cmd.arg("LCS").arg(key1).arg(key2).arg("IDX");
         if let Some(m) = min_match_len {

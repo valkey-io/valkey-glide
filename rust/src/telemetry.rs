@@ -15,7 +15,7 @@
 //! use glide::telemetry::{self, OpenTelemetryConfig, TelemetryExporter};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> glide::Result<()> {
+//! # async fn main() -> glide::ValkeyResult<()> {
 //! // Export traces to a collector over gRPC, sampling 5% of commands.
 //! let config = OpenTelemetryConfig::builder()
 //!     .with_flush_interval(Duration::from_millis(1000))
@@ -35,7 +35,8 @@
 //! be called from **within a Tokio runtime context** (e.g. inside
 //! `#[tokio::main]` or a `Runtime::block_on`).
 
-use crate::error::{GlideError, Result};
+use crate::ValkeyResult;
+use crate::error::GlideError;
 use glide_core::{
     DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter,
@@ -159,7 +160,7 @@ impl OpenTelemetryConfigBuilder {
 /// Returns [`GlideError::Configuration`] if the configuration is invalid (zero
 /// flush interval, trace sample percentage > 100) or an exporter fails to
 /// initialise.
-pub fn init(config: OpenTelemetryConfig) -> Result<()> {
+pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
     GlideOpenTelemetry::initialise(config.inner.build())
         .map_err(|e| GlideError::Configuration(format!("OpenTelemetry init failed: {e}")))
 }

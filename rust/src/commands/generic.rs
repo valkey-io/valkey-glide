@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Generic (key) commands. Mirrors Python's generic command surface.
 
+use crate::ValkeyResult;
 use crate::commands::options::{Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions};
-use crate::error::Result;
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
@@ -22,7 +22,7 @@ pub trait GenericCommands: CommandExecutor {
         pattern: Option<&[u8]>,
         count: Option<i64>,
         type_filter: Option<ObjectType>,
-    ) -> Result<(String, Vec<Bytes>)> {
+    ) -> ValkeyResult<(String, Vec<Bytes>)> {
         let mut cmd = Cmd::new();
         cmd.arg("SCAN").arg(cursor);
         if let Some(p) = pattern {
@@ -39,35 +39,35 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Get the absolute expiry Unix time in seconds (`EXPIRETIME`).
-    async fn expiretime<K: ToRedisArgs + Send>(&self, key: K) -> Result<i64> {
+    async fn expiretime<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("EXPIRETIME").arg(key);
         value::to_i64(self.execute_command(cmd, None).await?)
     }
 
     /// Get the absolute expiry Unix time in milliseconds (`PEXPIRETIME`).
-    async fn pexpiretime<K: ToRedisArgs + Send>(&self, key: K) -> Result<i64> {
+    async fn pexpiretime<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("PEXPIRETIME").arg(key);
         value::to_i64(self.execute_command(cmd, None).await?)
     }
 
     /// Return a random key from the keyspace (`RANDOMKEY`).
-    async fn randomkey(&self) -> Result<Option<Bytes>> {
+    async fn randomkey(&self) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("RANDOMKEY");
         value::to_opt_bytes(self.execute_command(cmd, None).await?)
     }
 
     /// Serialize `key` (`DUMP`). Returns `None` if the key does not exist.
-    async fn dump<K: ToRedisArgs + Send>(&self, key: K) -> Result<Option<Bytes>> {
+    async fn dump<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("DUMP").arg(key);
         value::to_opt_bytes(self.execute_command(cmd, None).await?)
     }
 
     /// Touch the given keys, returning how many were touched (`TOUCH`).
-    async fn touch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> Result<i64> {
+    async fn touch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("TOUCH");
         for k in keys {
@@ -82,7 +82,7 @@ pub trait GenericCommands: CommandExecutor {
         source: S,
         destination: D,
         replace: bool,
-    ) -> Result<bool> {
+    ) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("COPY").arg(source).arg(destination);
         if replace {
@@ -99,7 +99,7 @@ pub trait GenericCommands: CommandExecutor {
         order: Option<OrderBy>,
         limit: Option<Limit>,
         alpha: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("SORT").arg(key);
         if let Some(l) = limit {
@@ -126,7 +126,7 @@ pub trait GenericCommands: CommandExecutor {
         destination: D,
         destination_db: Option<i64>,
         replace: bool,
-    ) -> Result<bool> {
+    ) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("COPY").arg(source).arg(destination);
         if let Some(db) = destination_db {
@@ -145,7 +145,7 @@ pub trait GenericCommands: CommandExecutor {
         ttl_ms: i64,
         serialized: V,
         options: RestoreOptions,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("RESTORE").arg(key).arg(ttl_ms).arg(serialized);
         options.add_to(&mut cmd);
@@ -154,7 +154,7 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Block until `numreplicas` replicas acknowledge previous writes, or until
     /// `timeout_ms` elapses (`WAIT`). Returns the number of replicas reached.
-    async fn wait(&self, numreplicas: i64, timeout_ms: i64) -> Result<i64> {
+    async fn wait(&self, numreplicas: i64, timeout_ms: i64) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("WAIT").arg(numreplicas).arg(timeout_ms);
         value::to_i64(self.execute_command(cmd, None).await?)
@@ -169,7 +169,7 @@ pub trait GenericCommands: CommandExecutor {
         order: Option<OrderBy>,
         limit: Option<Limit>,
         alpha: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SORT").arg(key);
         if let Some(l) = limit {
@@ -192,7 +192,7 @@ pub trait GenericCommands: CommandExecutor {
         order: Option<OrderBy>,
         limit: Option<Limit>,
         alpha: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("SORT_RO").arg(key);
         if let Some(l) = limit {
@@ -213,7 +213,7 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Move `key` to another logical database (`MOVE`). Returns whether the key
     /// was moved.
-    async fn move_key<K: ToRedisArgs + Send>(&self, key: K, db: i64) -> Result<bool> {
+    async fn move_key<K: ToRedisArgs + Send>(&self, key: K, db: i64) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("MOVE").arg(key).arg(db);
         value::to_bool(self.execute_command(cmd, None).await?)
@@ -228,7 +228,7 @@ pub trait GenericCommands: CommandExecutor {
         destination_db: i64,
         timeout_ms: i64,
         options: MigrateOptions,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("MIGRATE")
             .arg(host)
@@ -248,7 +248,7 @@ pub trait GenericCommands: CommandExecutor {
     /// Dedicated scoped connections are tracked in [#6917].
     ///
     /// [#6917]: https://github.com/valkey-io/valkey-glide/issues/6917
-    async fn watch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> Result<()> {
+    async fn watch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("WATCH");
         for k in keys {
@@ -261,14 +261,14 @@ pub trait GenericCommands: CommandExecutor {
     ///
     /// See [`watch`](Self::watch) for the connection-scoping caveat that
     /// applies to `WATCH`/`UNWATCH` on GLIDE's multiplexed client.
-    async fn unwatch(&self) -> Result<()> {
+    async fn unwatch(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("UNWATCH");
         value::to_unit(self.execute_command(cmd, None).await?)
     }
 }
 
-pub(crate) fn parse_scan_reply(reply: redis::Value) -> Result<(String, Vec<Bytes>)> {
+pub(crate) fn parse_scan_reply(reply: redis::Value) -> ValkeyResult<(String, Vec<Bytes>)> {
     match reply {
         redis::Value::Array(mut items) if items.len() == 2 => {
             let keys_val = items.pop().unwrap();
@@ -278,7 +278,7 @@ pub(crate) fn parse_scan_reply(reply: redis::Value) -> Result<(String, Vec<Bytes
                 redis::Value::Array(elems) => elems
                     .into_iter()
                     .map(value::to_bytes)
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<ValkeyResult<Vec<_>>>()?,
                 redis::Value::Nil => Vec::new(),
                 other => {
                     return Err(crate::error::GlideError::Request(format!(

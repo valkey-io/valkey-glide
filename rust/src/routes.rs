@@ -339,7 +339,7 @@ mod tests {
                 &self,
                 cmd: Cmd,
                 routing: Option<RoutingInfo>,
-            ) -> crate::error::Result<Value> {
+            ) -> crate::ValkeyResult<Value> {
                 let args: Vec<Vec<u8>> = cmd
                     .args_iter()
                     .map(|a| match a {

@@ -69,6 +69,8 @@ macro_rules! implement_glide_commands {
             /// the single required method; every typed command delegates to
             /// it. Also useful directly as a zero-extra-copy escape hatch for
             /// custom commands with large payloads.
+            // TODO #7024: return ValkeyFuture<'a, ValkeyValue> and roll ToValkeyArgs/
+            // FromValkeyValue bounds + Valkey return types across the command table (Phase 3).
             fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> RedisFuture<'a, Value>;
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
@@ -220,6 +222,7 @@ macro_rules! implement_glide_commands {
         pub trait Commands: Sized {
             /// Send an already-built command **by value** (no clone). This is
             /// the single required method; every typed command delegates to it.
+            // TODO #7024: return ValkeyResult<ValkeyValue> (Phase 3), matching the async trait.
             fn glide_send_owned_sync(&self, cmd: Cmd) -> RedisResult<Value>;
 
             /// Typed escape hatch (blocking counterpart of the async
