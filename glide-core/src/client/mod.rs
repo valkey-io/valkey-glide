@@ -186,29 +186,39 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
     }
 }
 
+/// Matches the optional-tag structure of a library name.
 static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\A[\x21-\x27\x2A-\x7E]+(?:\([\x21-\x27\x2A-\x7E]+\))?\z")
-        .expect("library name regex must be valid")
+    Regex::new(r"\A[^()]+(?:\([^()]+\))?\z").expect("library name tag regex must be valid")
 });
 
-/// Validate a binding-composed runtime library name before client creation.
-///
-/// Empty values are treated as absent. Non-empty values must contain only printable ASCII
-/// characters and may contain at most one ordered, matched pair of parentheses introduced by
-/// binding-local `base(tag)` composition.
-pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), String> {
-    let Some(lib_name) = lib_name else {
-        return Ok(());
-    };
-
-    if lib_name.is_empty() || LIB_NAME_PATTERN.is_match(lib_name) {
-        Ok(())
-    } else {
-        Err(
-            "library name must contain only printable ASCII characters from '!' through '~' and parentheses must form a non-empty trailing '(tag)'"
-                .to_string(),
-        )
+/// Validate whether a library name:
+///   - is non-empty;
+///   - contains only printable ASCII characters;
+///   - matches the library name pattern with optional tag – 'name' or 'name(tag)'.
+pub(crate) fn validate_effective_lib_name(lib_name: &str) -> Result<(), String> {
+    if lib_name.is_empty() {
+        return Err("library name must not be empty".to_string());
     }
+    if !lib_name.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library name must contain only printable ASCII characters".to_string());
+    }
+    if !LIB_NAME_PATTERN.is_match(lib_name) {
+        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
+    }
+    Ok(())
+}
+
+/// Validate whether a library version:
+///   - is non-empty; and
+///   - contains only printable ASCII characters.
+pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
+    if lib_ver.is_empty() {
+        return Err("library version must not be empty".to_string());
+    }
+    if !lib_ver.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library version must contain only printable ASCII characters".to_string());
+    }
+    Ok(())
 }
 
 /// Get Valkey connection info with IAM token integration
@@ -225,6 +235,7 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
+    let lib_ver = connection_request.lib_ver.clone();
     let cache = connection_request
         .client_side_cache
         .clone()
@@ -262,6 +273,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -274,6 +286,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -284,6 +297,7 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
+            lib_ver,
             cache,
             server_assisted_cache,
             ..Default::default()
@@ -507,9 +521,28 @@ fn get_timeout_from_cmd_arg(
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
     match command.as_slice() {
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // `command()` already normalizes the name to uppercase, so pass it through
+        // to the shared name-based check (empty args slice — the only arg-dependent
+        // case, XREAD/XREADGROUP, is handled above via `cmd.position`).
+        name => is_blocking_command_name(name, &[]),
+    }
+}
+
+/// Blocking-command check that avoids building a `redis::Cmd`.
+///
+/// `name` is the command name (matched case-insensitively); `args` are the
+/// remaining arguments, scanned only for the `BLOCK` token of XREAD/XREADGROUP.
+/// This lets FFI hot paths detect blocking commands without allocating a `Cmd`
+/// and copying every argument byte (e.g. a large SET payload). It recognizes the
+/// exact same set as [`is_blocking_command`].
+pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
+    let upper = name.to_ascii_uppercase();
+    match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
-        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
+        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
     }
 }
@@ -1436,7 +1469,7 @@ impl Client {
         }
 
         // Compression on write: compress command args if compression is enabled
-        let cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
+        let mut cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
             if compression_manager.is_enabled() {
                 // Clone the command and apply compression to its args
                 // Note: for scope commands, args are already serialized — this handles
@@ -1450,7 +1483,14 @@ impl Client {
             cmd.clone()
         };
 
-        let request_timeout = Some(self.request_timeout);
+        // Blocking commands must honor their own timeout, not the flat request timeout.
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        // Scoped connections use Duration::MAX as their base response timeout, so
+        // without this, the pipeline driver's slow-response warning (gated on
+        // `!is_blocking_cmd`) fires for any legitimately-blocking command that
+        // waits past its threshold — mirrors the multiplexed path (see
+        // `set_is_blocking` above in `send_command`).
+        cmd_to_send.set_is_blocking(is_blocking_command(cmd));
 
         // Send with timeout
         let raw_value = match request_timeout {
@@ -2379,6 +2419,9 @@ async fn create_cluster_client(
     if let Some(lib_name) = valkey_connection_info.lib_name {
         builder = builder.lib_name(lib_name);
     }
+    if let Some(lib_ver) = valkey_connection_info.lib_ver {
+        builder = builder.lib_ver(lib_ver);
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
@@ -2694,8 +2737,13 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        validate_effective_lib_name(request.lib_name.as_deref())
-            .map_err(ConnectionError::Configuration)?;
+        // Validate library name and version.
+        if let Some(lib_name) = request.lib_name.as_deref() {
+            validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
+        }
+        if let Some(lib_ver) = request.lib_ver.as_deref() {
+            validate_effective_lib_ver(lib_ver).map_err(ConnectionError::Configuration)?;
+        }
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
@@ -3066,25 +3114,23 @@ mod tests {
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
-        get_request_timeout, is_blocking_command,
+        get_request_timeout, is_blocking_command, is_blocking_command_name,
     };
 
     use super::{
         Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
-        validate_effective_lib_name,
+        validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
     #[test]
     fn test_validate_effective_lib_name_accepts_supported_values() {
         for lib_name in [
-            None,
-            Some(""),
-            Some("!"),
-            Some("~"),
-            Some("GlideRust"),
-            Some("client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~"),
-            Some("GlideJava(framework:1.2)"),
+            "!",
+            "~",
+            "GlideRust",
+            "client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~",
+            "GlideJava(framework:1.2)",
         ] {
             assert_eq!(
                 validate_effective_lib_name(lib_name),
@@ -3097,6 +3143,7 @@ mod tests {
     #[test]
     fn test_validate_effective_lib_name_rejects_invalid_values() {
         for lib_name in [
+            "",
             "Glide Rust",
             "Glide\tRust",
             "Glide\nRust",
@@ -3112,7 +3159,7 @@ mod tests {
             "GlideRust()",
         ] {
             assert!(
-                validate_effective_lib_name(Some(lib_name)).is_err(),
+                validate_effective_lib_name(lib_name).is_err(),
                 "{lib_name:?} should be rejected"
             );
         }
@@ -3137,6 +3184,52 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_accepts_supported_values() {
+        for lib_ver in ["unknown", "0.2.0", "1.2.3-rc.1+build.5", "255.255.255"] {
+            assert_eq!(validate_effective_lib_ver(lib_ver), Ok(()), "{lib_ver:?}");
+        }
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_rejects_invalid_values() {
+        for lib_ver in [
+            "",
+            "1.2.3 ",
+            "1.2 3",
+            "1.2\t3",
+            "1.2\n3",
+            "1.2\u{7f}3",
+            "1.2.é",
+        ] {
+            assert!(
+                validate_effective_lib_ver(lib_ver).is_err(),
+                "{lib_ver:?} should be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_invalid_lib_ver_before_lazy_client_creation() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            lib_ver: Some("bad version".to_string()),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid library version should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, ConnectionError::Configuration(_)));
+        assert!(error.to_string().contains("library version"));
     }
 
     #[test]
@@ -3825,5 +3918,84 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value");
         assert!(!is_blocking_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command_name() {
+        // Direct cases.
+        assert!(is_blocking_command_name(b"BLPOP", &[]));
+        assert!(!is_blocking_command_name(b"GET", &[]));
+
+        // XREAD/XREADGROUP block only when a BLOCK token is present in args.
+        let streams: Vec<Vec<u8>> = vec![b"STREAMS".to_vec(), b"s".to_vec(), b"$".to_vec()];
+        assert!(!is_blocking_command_name(b"XREAD", &streams));
+        let with_block: Vec<Vec<u8>> = vec![
+            b"BLOCK".to_vec(),
+            b"0".to_vec(),
+            b"STREAMS".to_vec(),
+            b"s".to_vec(),
+            b"$".to_vec(),
+        ];
+        assert!(is_blocking_command_name(b"XREAD", &with_block));
+
+        // Case-insensitive on both the command name and the BLOCK token.
+        assert!(is_blocking_command_name(b"blpop", &[]));
+        let with_block_lower: Vec<Vec<u8>> =
+            vec![b"block".to_vec(), b"0".to_vec(), b"STREAMS".to_vec()];
+        assert!(is_blocking_command_name(b"xread", &with_block_lower));
+
+        // Behavioral parity with `is_blocking_command` over a representative table.
+        // Each entry: (name, args, expected). `expected` is written out explicitly
+        // (rather than comparing `via_cmd == via_name`) so that a regression in
+        // either function's match arms is caught: for every non-XREAD/XREADGROUP
+        // name, `is_blocking_command` just forwards to `is_blocking_command_name`,
+        // so comparing the two outputs to each other can never fail if a command
+        // is accidentally dropped from `is_blocking_command_name`'s match arms —
+        // both sides would agree on the same (wrong) answer.
+        let table: &[(&str, &[&str], bool)] = &[
+            ("BLPOP", &["key", "0"], true),
+            ("BRPOP", &["key", "5"], true),
+            ("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"], true),
+            ("BRPOPLPUSH", &["src", "dst", "0"], true),
+            ("BLMPOP", &["0", "1", "key", "LEFT"], true),
+            ("BZPOPMIN", &["key", "0"], true),
+            ("BZPOPMAX", &["key", "0"], true),
+            ("BZMPOP", &["0", "1", "key", "MIN"], true),
+            ("WAIT", &["0", "100"], true),
+            ("WAITAOF", &["0", "0", "100"], true),
+            ("XREAD", &["STREAMS", "s", "$"], false),
+            ("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"], true),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "STREAMS", "s", ">"],
+                false,
+            ),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"],
+                true,
+            ),
+            ("GET", &["key"], false),
+            ("SET", &["key", "value"], false),
+            ("LPUSH", &["key", "value"], false),
+        ];
+        for (name, args, expected) in table {
+            let mut cmd = Cmd::new();
+            cmd.arg(*name);
+            for a in *args {
+                cmd.arg(*a);
+            }
+            let via_cmd = is_blocking_command(&cmd);
+            let arg_vecs: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+            let via_name = is_blocking_command_name(name.as_bytes(), &arg_vecs);
+            assert_eq!(
+                via_cmd, *expected,
+                "is_blocking_command mismatch for {name} {args:?}: got {via_cmd}, expected {expected}"
+            );
+            assert_eq!(
+                via_name, *expected,
+                "is_blocking_command_name mismatch for {name} {args:?}: got {via_name}, expected {expected}"
+            );
+        }
     }
 }
