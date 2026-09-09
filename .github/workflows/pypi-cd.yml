@@ -479,7 +479,7 @@ jobs:
 
             - name: Upload Python Async client wheels
               if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: wheels-${{ matrix.build.TARGET }}-async
                   path: python/glide-async/wheels
@@ -487,7 +487,7 @@ jobs:
 
             - name: Upload Python Sync client wheels
               if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: wheels-${{ matrix.build.TARGET }}-sync
                   path: python/glide-sync/wheels
@@ -560,7 +560,7 @@ jobs:
                   attestations: true
 
             - name: Async client - Upload built wheels and sdist as GitHub artifacts
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: python-async-packages
                   path: |
@@ -638,7 +638,7 @@ jobs:
                   attestations: true
 
             - name: Sync client - Upload built wheels and sdist as GitHub artifacts
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: python-sync-packages
                   path: |
