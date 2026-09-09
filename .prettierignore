@@ -1,2 +1,5 @@
 *.md
 *.node
+# pnpm-generated lockfile: keep pnpm's native 2-space/single-quote format,
+# don't let Prettier (via root .editorconfig indent_size=4) rewrite it
+node/hybrid-node-tests/pnpm-pubsub-test/pnpm-lock.yaml
