@@ -797,10 +797,10 @@ pub struct ScopePool {
     pub configured_database_id: u32,
 }
 
-/// Outcome of [`ScopePool::try_acquire`], which solely owns the `max_total`
-/// reservation. A caller that re-checks `total_count` against `max_total` after
-/// seeing `Reserved` rejects the last slot, because the reservation is already
-/// counted by then.
+/// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
+/// for the acquire path (prewarm currently seats connections without reserving).
+/// A caller that re-checks `total_count` against `max_total` after seeing
+/// `Reserved` rejects the last slot, because the reservation is already counted.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ScopeAcquire {
     /// An idle connection was reused; carries its scope id.
