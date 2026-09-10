@@ -48,54 +48,59 @@ func credentialProviderCallback(
 
 	var creds config.AwsCredentials
 	var callErr error
+	panicOccurred := false
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Panic in callback would crash the process; recover and signal failure.
-				callErr = nil
+				// A panic in the callback would propagate through CGo and crash the
+				// process; catch it here and return failure to the Rust caller.
+				panicOccurred = true
 				creds = config.AwsCredentials{}
+				callErr = nil
 			}
 		}()
 		creds, callErr = provider()
 	}()
 
-	if callErr != nil {
+	if panicOccurred || callErr != nil {
 		return 0
 	}
 
-	// Copy access_key_id — required
-	if len(creds.AccessKeyId) == 0 {
+	// Validate all required fields and check buffer sizes before writing anything.
+	// This ensures we never partially populate output buffers on a failure return.
+	if len(creds.AccessKeyID) == 0 {
 		return 0
 	}
-	accessKeyBytes := []byte(creds.AccessKeyId)
-	writeLen := len(accessKeyBytes)
-	if C.uintptr_t(writeLen) > accessKeyIDBufLen {
-		writeLen = int(accessKeyIDBufLen)
-	}
-	C.memcpy(unsafe.Pointer(accessKeyIDBuf), unsafe.Pointer(&accessKeyBytes[0]), C.size_t(writeLen))
-	*accessKeyIDLen = C.uintptr_t(writeLen)
-
-	// Copy secret_access_key — required
 	if len(creds.SecretAccessKey) == 0 {
 		return 0
 	}
-	secretBytes := []byte(creds.SecretAccessKey)
-	writeLen = len(secretBytes)
-	if C.uintptr_t(writeLen) > secretAccessKeyBufLen {
-		writeLen = int(secretAccessKeyBufLen)
+	accessKeyBytes := []byte(creds.AccessKeyID)
+	if C.uintptr_t(len(accessKeyBytes)) > accessKeyIDBufLen {
+		// Credential exceeds buffer; return failure without writing.
+		return 0
 	}
-	C.memcpy(unsafe.Pointer(secretAccessKeyBuf), unsafe.Pointer(&secretBytes[0]), C.size_t(writeLen))
-	*secretAccessKeyLen = C.uintptr_t(writeLen)
-
-	// Copy session_token — optional
-	if len(creds.SessionToken) > 0 {
-		tokenBytes := []byte(creds.SessionToken)
-		writeLen = len(tokenBytes)
-		if C.uintptr_t(writeLen) > sessionTokenBufLen {
-			writeLen = int(sessionTokenBufLen)
+	secretBytes := []byte(creds.SecretAccessKey)
+	if C.uintptr_t(len(secretBytes)) > secretAccessKeyBufLen {
+		return 0
+	}
+	var tokenBytes []byte
+	if creds.SessionToken != "" {
+		tokenBytes = []byte(creds.SessionToken)
+		if C.uintptr_t(len(tokenBytes)) > sessionTokenBufLen {
+			return 0
 		}
-		C.memcpy(unsafe.Pointer(sessionTokenBuf), unsafe.Pointer(&tokenBytes[0]), C.size_t(writeLen))
-		*sessionTokenLen = C.uintptr_t(writeLen)
+	}
+
+	// All validations passed — now write to output buffers.
+	C.memcpy(unsafe.Pointer(accessKeyIDBuf), unsafe.Pointer(&accessKeyBytes[0]), C.size_t(len(accessKeyBytes)))
+	*accessKeyIDLen = C.uintptr_t(len(accessKeyBytes))
+
+	C.memcpy(unsafe.Pointer(secretAccessKeyBuf), unsafe.Pointer(&secretBytes[0]), C.size_t(len(secretBytes)))
+	*secretAccessKeyLen = C.uintptr_t(len(secretBytes))
+
+	if len(tokenBytes) > 0 {
+		C.memcpy(unsafe.Pointer(sessionTokenBuf), unsafe.Pointer(&tokenBytes[0]), C.size_t(len(tokenBytes)))
+		*sessionTokenLen = C.uintptr_t(len(tokenBytes))
 	} else {
 		*sessionTokenLen = 0
 	}
