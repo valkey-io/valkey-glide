@@ -65,36 +65,20 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeExe
         None => return -2,
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&(scope_id as u64)).is_none() {
-        return -1;
-    }
+    let sid = scope_id as u64;
+
+    let client = match glide_core::scope::resolve_scope_parent(sid) {
+        Some(c) => c,
+        None => return -1,
+    };
 
     let runtime = get_runtime();
     let jvm = JVM.get().unwrap().clone();
-    let sid = scope_id as u64;
 
     runtime.spawn(async move {
-        let client_registry = glide_core::scope::get_client_registry();
-        let client = {
-            let pools = glide_core::pool::get_client_scope_pools();
-            let parent_id = pools
-                .iter()
-                .find(|e| {
-                    e.value()
-                        .try_lock()
-                        .map(|p| p.in_use.contains_key(&sid))
-                        .unwrap_or(false)
-                })
-                .map(|e| *e.key());
-
-            parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
-        };
-
         let mut args = args;
         let result =
-            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, client.as_ref()).await;
+            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, Some(&client)).await;
 
         complete_callback(jvm, callback_id, result, false);
     });

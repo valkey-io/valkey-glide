@@ -892,6 +892,7 @@ impl ScopePool {
                 scope_id,
                 ScopeEntry {
                     connection: Arc::new(TokioMutex::new(conn)),
+                    parent_client_id: self.parent_client_id,
                 },
             );
             self.in_use.insert(scope_id, ());
@@ -1127,6 +1128,16 @@ impl ScopePool {
 /// Entry in the global scope registry for command routing.
 pub struct ScopeEntry {
     pub connection: Arc<TokioMutex<ScopedConnection>>,
+    /// The client whose scope pool owns this scope, recorded at acquire time.
+    ///
+    /// Resolving the parent by scanning the scope pools instead means a contended
+    /// pool lock reads as "no parent", which silently drops the request timeout,
+    /// circuit breaker, inflight limit, IAM re-authentication and compression.
+    ///
+    /// Kept here rather than on `ScopedConnection` so there is one source of
+    /// truth: a connection outlives any single scope, so an id on both could
+    /// disagree about which client currently owns the scope.
+    pub parent_client_id: u64,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
