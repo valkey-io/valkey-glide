@@ -506,6 +506,40 @@ impl FFICredentialsProvider {
             ));
         }
 
+        // Guard against a buggy or malicious callback reporting a length larger
+        // than the buffer we allocated.  An out-of-bounds slice in safe Rust would
+        // panic and terminate the process; fail with an error instead.
+        if access_key_id_len > BUF_LEN {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "Custom credentials provider reported access_key_id length {access_key_id_len} \
+                 exceeding buffer size {BUF_LEN}"
+            )));
+        }
+        if secret_access_key_len > BUF_LEN {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "Custom credentials provider reported secret_access_key length {secret_access_key_len} \
+                 exceeding buffer size {BUF_LEN}"
+            )));
+        }
+        if session_token_len > BUF_LEN {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "Custom credentials provider reported session_token length {session_token_len} \
+                 exceeding buffer size {BUF_LEN}"
+            )));
+        }
+
+        // Reject empty required credential fields.
+        if access_key_id_len == 0 {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(
+                "Custom credentials provider returned an empty access_key_id".to_string(),
+            ));
+        }
+        if secret_access_key_len == 0 {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(
+                "Custom credentials provider returned an empty secret_access_key".to_string(),
+            ));
+        }
+
         let access_key_id = String::from_utf8(access_key_id_buf[..access_key_id_len].to_vec())
             .map_err(|e| {
                 glide_core::iam::GlideIAMError::CredentialsError(format!(
@@ -1586,6 +1620,13 @@ fn create_client_internal(
                 && let Some(iam_config) = auth_info.iam_config.as_mut()
             {
                 iam_config.credentials_provider = Some(provider_arc);
+            } else {
+                logger_core::log_warn(
+                    "credential_provider",
+                    "A credential_provider callback was supplied but the connection request \
+                     contains no IAM configuration. The callback will be ignored and the \
+                     default AWS credential chain will be used.",
+                );
             }
         }
 
@@ -1709,6 +1750,11 @@ fn create_client_internal(
 /// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response``].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `address_resolver` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `credential_provider` is non-zero, it must be a valid function pointer that lives while the client is
+///   open/active. The callback must fill the provided output buffers with valid UTF-8 credentials and set the
+///   corresponding length pointers. Pass 0 to use the default AWS credential chain from the connection request
+///   IAM configuration.
 // TODO: Consider making this async
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client(
