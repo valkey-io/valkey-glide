@@ -1,0 +1,157 @@
+name: Install Engine
+description: Install and cache Valkey server for testing
+
+inputs:
+    engine-version:
+        description: "Engine version to install"
+        required: true
+    target:
+        description: "Specified target toolchain, ex. x86_64-unknown-linux-gnu"
+        required: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+runs:
+    using: "composite"
+
+    steps:
+        - name: "Setup Environment Variables"
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+
+        # TODO: workflow improvements https://github.com/valkey-io/valkey-glide/issues/5211
+        - name: Prepare Valkey sources
+          id: prepare-sources
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
+          run: |
+              echo "Cloning and checking out Valkey $ENGINE_VERSION"
+              if [[ -d valkey ]]; then
+                  echo "Removing existing valkey directory..."
+                  rm -fR valkey
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey/src
+              git checkout $ENGINE_VERSION
+              SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
+              if [[ -z $SOURCES_VERSION ]]; then
+                  SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
+              fi
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
+
+        # Self-hosted runner images can be updated independently of this workflow, which can
+        # change the glibc (or other libc) version available on the runner. A previously cached
+        # binary built against a newer libc than the current runner provides will fail to execute
+        # (e.g. "GLIBC_2.38 not found") even though the cache key still matches on version/target
+        # alone. Fold a libc fingerprint into the cache key so a runner image/libc change
+        # automatically invalidates stale caches instead of silently reusing an incompatible binary.
+        - name: Compute libc fingerprint
+          id: libc-fingerprint
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: GITHUB_OUTPUT/p
+          run: |
+              LIBC_FP=$( (ldd --version 2>/dev/null || true) | head -1 | grep -o -E '[0-9]+\.[0-9]+' | tail -1)
+              if [[ -z $LIBC_FP ]]; then
+                  LIBC_FP="unknown"
+              fi
+              echo "LIBC_FP=$LIBC_FP" >> $GITHUB_OUTPUT
+
+        - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+          id: cache-valkey
+          with:
+              path: |
+                  valkey/src/valkey-server
+                  valkey/src/valkey-cli
+                  valkey/src/redis-server
+                  valkey/src/redis-cli
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}-${{ steps.libc-fingerprint.outputs.LIBC_FP }}
+
+        # Manual install, because makefile target rebuilds everything, we want to avoid that
+        - name: Install cached engine
+          id: install-cached-engine
+          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true'}}
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: GITHUB_OUTPUT/p
+          run: |
+              cd valkey/src
+              if command -v sudo &> /dev/null
+              then
+                  echo "sudo command exists"
+                  SUDO=sudo
+              fi
+              # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
+              $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
+              # Copy files individually, as valkey and redis usually won't exist at the same time
+              for file in valkey-server valkey-cli redis-server redis-cli; do
+                  if [[ -f $file ]]; then
+                      $SUDO cp $file /usr/local/bin/
+                  fi
+              done
+              if [[ ! -e /usr/local/bin/redis-server ]]; then
+                  $SUDO cp valkey-server /usr/local/bin/redis-server
+              fi
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+              # Defense-in-depth: the libc fingerprint in the cache key should prevent restoring a
+              # binary that is incompatible with this runner, but if a stale/incompatible cache entry
+              # is restored anyway (e.g. fingerprint didn't catch the relevant ABI difference), fail
+              # this step gracefully instead of letting the job hard-fail later. Reset the cache-hit
+              # binaries so the next step rebuilds from source on this runner.
+              if ! (/usr/local/bin/redis-server -v || /usr/local/bin/valkey-server -v); then
+                  echo "::warning::Cached engine binary failed to execute on this runner (likely an ABI/libc mismatch). Falling back to building from source."
+                  $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
+                  echo "ENGINE_READY=false" >> $GITHUB_OUTPUT
+              else
+                  echo "ENGINE_READY=true" >> $GITHUB_OUTPUT
+              fi
+
+        - name: Build and install engine
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' || steps.install-cached-engine.outputs.ENGINE_READY == 'false' }}
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          run: |
+              cd valkey
+              make BUILD_TLS=yes -j4
+              if command -v sudo &> /dev/null
+              then
+                  echo "sudo command exists"
+                  sudo make install
+              else
+                  echo "sudo command does not exist"
+                  make install
+              fi
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+
+        - name: WSL configuration (Windows)
+          if: "${{ contains(inputs.target, 'windows') }}"
+          shell: wsl-bash {0}
+          run: |
+              echo "=== Configuring WSL ==="
+              # Fix system configuration for cluster mode
+              echo 'Configuring system for cluster mode...'
+              sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
+              sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
+
+              echo 'WSL Configuration complete'
+
+        - name: Verify Valkey installation and symlinks
+          if: ${{ !contains(inputs.engine-version, '-rc') }}
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u
+          run: |
+              # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
+              # to redis-server and redis-cli. This step ensures that the engine is properly installed
+              # with the expected version and that Valkey symlinks are correctly created.
+              INSTALLED_VER=$(/usr/local/bin/redis-server -v) || INSTALLED_VER=$(/usr/local/bin/valkey-server -v)
+              if [[ $INSTALLED_VER != *"${ENGINE_VERSION}"* ]]; then
+                echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
+                exit 1
+              else
+                echo "Successfully installed the server: $INSTALLED_VER"
+              fi
