@@ -587,7 +587,18 @@ pub fn scope_execute<'a>(
             .get(&client_id_u64)
             .map(|e| e.value().clone());
 
-        match scope::execute_scope_command(scope_id_u64, &cmd_name, &args, client.as_ref()).await {
+        // Without the parent every guardrail in send_scope_command is unavailable,
+        // so fail rather than send the command raw.
+        let Some(client) = client else {
+            deferred.reject(Error::new(
+                Status::GenericFailure,
+                format!("Scope {scope_id_u64}: parent client {client_id_u64} is not registered"),
+            ));
+            return;
+        };
+
+        let mut args = args;
+        match scope::send_scope_command(scope_id_u64, &cmd_name, &mut args, &client).await {
             Ok(value) => {
                 let result = value_to_string(value);
                 deferred.resolve(|_| Ok(result));

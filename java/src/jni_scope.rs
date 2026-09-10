@@ -78,7 +78,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeExe
     runtime.spawn(async move {
         let mut args = args;
         let result =
-            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, Some(&client)).await;
+            glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, &client).await;
 
         complete_callback(jvm, callback_id, result, false);
     });
