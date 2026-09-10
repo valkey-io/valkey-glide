@@ -238,10 +238,7 @@ pub(crate) struct RefreshTaskState {
 
 impl RefreshTaskState {
     // Creates a new `RefreshTaskState` with a `Reconnecting` status.
-    pub fn new(
-        handle: JoinHandle<()>,
-        notifier: RefreshTaskNotifier,
-    ) -> Self {
+    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
             handle,

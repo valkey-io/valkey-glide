@@ -81,8 +81,7 @@ use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
     cluster::slot_cmd,
     cluster_async::connections_logic::{
-        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture,
-        RefreshConnectionType,
+        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture, RefreshConnectionType,
     },
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
@@ -1467,12 +1466,11 @@ where
                 match err.retry_method() {
                     RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
-                        request.info.set_redirect(
-                            err.redirect_node()
-                                .map(|(node, _slot)| {
-                                    Redirect::Ask(this.core.resolve_address(&node.to_string()), true)
-                                }),
-                        );
+                        request
+                            .info
+                            .set_redirect(err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Ask(this.core.resolve_address(&node.to_string()), true)
+                            }));
                         Next::Retry { request }.into()
                     }
                     RetryMethod::MovedRedirect => {
@@ -3576,8 +3574,10 @@ where
                     address));
                 // Trigger refresh task and get the single notifier
                 let mut notifiers = Self::trigger_refresh_connection_tasks(
-                    core.clone(), HashSet::from([address.clone()]),
-                    RefreshConnectionType::AllConnections, false,
+                    core.clone(),
+                    HashSet::from([address.clone()]),
+                    RefreshConnectionType::AllConnections,
+                    false,
                 )
                 .await;
 
@@ -5543,9 +5543,11 @@ mod refresh_task_resolution_tests {
         let second_done = second[0].notified();
         RELEASE_POISON_CONNECT.add_permits(2);
 
-        tokio::time::timeout(Duration::from_secs(1), async { tokio::join!(first_done, second_done); })
-            .await
-            .expect("both refresh callers should observe completion");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            tokio::join!(first_done, second_done);
+        })
+        .await
+        .expect("both refresh callers should observe completion");
 
         let connected_port = tokio::time::timeout(Duration::from_secs(1), async {
             loop {

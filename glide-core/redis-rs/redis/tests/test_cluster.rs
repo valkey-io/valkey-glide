@@ -67,7 +67,8 @@ mod cluster {
                     ("name".to_owned(), port)
                 }
                 ("name", 6380) => {
-                    self.canonical_resolutions.fetch_add(1, atomic::Ordering::SeqCst);
+                    self.canonical_resolutions
+                        .fetch_add(1, atomic::Ordering::SeqCst);
                     ("unregistered-poison".to_owned(), port)
                 }
                 _ => (host.to_owned(), port),
@@ -452,7 +453,10 @@ mod cluster {
             },
         );
 
-        assert_eq!(cmd("GET").arg("test").query::<i32>(&mut connection), Ok(123));
+        assert_eq!(
+            cmd("GET").arg("test").query::<i32>(&mut connection),
+            Ok(123)
+        );
         assert!(raw_resolutions.load(atomic::Ordering::SeqCst) >= 1);
         assert_eq!(canonical_resolutions.load(atomic::Ordering::SeqCst), 0);
     }
