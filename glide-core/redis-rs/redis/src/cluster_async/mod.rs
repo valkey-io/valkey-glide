@@ -1469,7 +1469,7 @@ where
                         request
                             .info
                             .set_redirect(err.redirect_node().map(|(node, _slot)| {
-                                Redirect::Ask(this.core.resolve_address(&node.to_string()), true)
+                                Redirect::Ask(this.core.resolve_address(node), true)
                             }));
                         Next::Retry { request }.into()
                     }
@@ -2039,12 +2039,9 @@ where
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .get(&address)
-                .map(|task| {
-                    let notifier = match &task.status {
-                        RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
-                        RefreshTaskStatus::ReconnectingTooLong => None,
-                    };
-                    notifier
+                .map(|task| match &task.status {
+                    RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                    RefreshTaskStatus::ReconnectingTooLong => None,
                 });
 
             if let Some(notifier) = existing_task {
@@ -2146,8 +2143,7 @@ where
                         let task_is_current = conn_lock
                             .refresh_conn_state
                             .refresh_address_in_progress
-                            .get(&address_clone_for_task)
-                            .is_some();
+                            .contains_key(&address_clone_for_task);
                         if task_is_current {
                             conn_lock.replace_or_add_connection_for_address(
                                 &address_clone_for_task,
@@ -2170,8 +2166,7 @@ where
                 let task_is_current = conn_lock
                     .refresh_conn_state
                     .refresh_address_in_progress
-                    .get(&address_clone_for_task)
-                    .is_some();
+                    .contains_key(&address_clone_for_task);
                 if task_is_current {
                     conn_lock
                         .refresh_conn_state

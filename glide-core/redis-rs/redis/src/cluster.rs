@@ -797,7 +797,7 @@ where
                             redirected = err.redirect_node().map(|(node, _slot)| {
                                 Redirect::Ask(
                                     resolve_address(
-                                        &node,
+                                        node,
                                         self.cluster_params.address_resolver.as_deref(),
                                     ),
                                     true,
@@ -810,7 +810,7 @@ where
                             // Request again.
                             redirected = err.redirect_node().map(|(node, _slot)| {
                                 Redirect::Moved(resolve_address(
-                                    &node,
+                                    node,
                                     self.cluster_params.address_resolver.as_deref(),
                                 ))
                             });
