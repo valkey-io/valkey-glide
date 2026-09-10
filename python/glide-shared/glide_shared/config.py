@@ -5,7 +5,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+)
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -397,18 +408,19 @@ class AwsCredentials:
 #: Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
 #: a custom STS assume-role flow) instead of the default AWS credential chain.
 #:
-#: **Sync only**: the callable must be synchronous. Async callables (coroutines)
-#: are not supported — ``IamAuthConfig`` will raise ``ValueError`` if an async
-#: function is passed. Resolve credentials asynchronously before constructing the
-#: provider, then return the resolved ``AwsCredentials`` synchronously.
+#: Both synchronous and asynchronous (``async def``) callables are accepted.
+#: Async providers are fully supported in the async glide client, which bridges
+#: them via ``asyncio.run_coroutine_threadsafe``. In the sync glide client, only
+#: synchronous providers are supported.
 #:
 #: **Thread safety**: implementations must be safe for concurrent calls -- in cluster
 #: mode, independent reconnections may invoke this callable simultaneously.
 #:
 #: **Promptness**: return quickly; this callable sits on the reconnect path and
-#: a slow implementation directly extends failover time.
+#: a slow implementation directly extends failover time. The Rust core imposes
+#: a 10-second timeout on each invocation.
 #:
-#: Example::
+#: Example (sync)::
 #:
 #:     def my_provider() -> AwsCredentials:
 #:         return AwsCredentials(
@@ -416,7 +428,20 @@ class AwsCredentials:
 #:             secret_access_key=vault_client.get_secret_access_key(),
 #:             session_token=vault_client.get_session_token(),
 #:         )
-GlideCredentialProvider = Callable[[], AwsCredentials]
+#:
+#: Example (async, async client only)::
+#:
+#:     async def my_async_provider() -> AwsCredentials:
+#:         creds = await vault_client.get_credentials_async()
+#:         return AwsCredentials(
+#:             access_key_id=creds.access_key_id,
+#:             secret_access_key=creds.secret_access_key,
+#:             session_token=creds.session_token,
+#:         )
+GlideCredentialProvider = Union[
+    Callable[[], "AwsCredentials"],
+    Callable[[], Awaitable["AwsCredentials"]],
+]
 
 
 class IamAuthConfig:
@@ -454,14 +479,9 @@ class IamAuthConfig:
                     "credential_provider must be a callable, got: "
                     f"{type(credential_provider).__name__}"
                 )
-            if inspect.iscoroutinefunction(credential_provider):
-                raise ValueError(
-                    "credential_provider must be a synchronous callable. "
-                    "Async functions (coroutines) are not supported because the "
-                    "callback runs on a blocking Rust thread. Resolve credentials "
-                    "asynchronously before constructing the provider, then return "
-                    "the resolved AwsCredentials synchronously."
-                )
+            # Note: async (coroutine) callables are accepted and supported
+            # in the async glide client via asyncio.run_coroutine_threadsafe.
+            # In the sync glide client, only synchronous providers are supported.
         self.credential_provider = credential_provider
 
 

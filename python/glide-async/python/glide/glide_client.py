@@ -634,7 +634,7 @@ class BaseClient(CoreCommands):
             )
 
         credential_provider_callback = create_credential_provider_callback(
-            self._ffi, _credential_provider_fn
+            self._ffi, _credential_provider_fn, event_loop=self._loop
         )
         if _credential_provider_fn is not None:
             self._credential_provider_callback_ref = credential_provider_callback
