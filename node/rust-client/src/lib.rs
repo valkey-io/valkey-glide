@@ -825,6 +825,11 @@ pub fn create_direct_client<'a>(
         .as_ref()
         .filter(|key| !key.is_empty())
         .map(ToString::to_string);
+    let credential_provider_key = proto_connection_request
+        .credential_provider_key
+        .as_ref()
+        .filter(|key| !key.is_empty())
+        .map(ToString::to_string);
 
     // Get the inflight requests limit from the protobuf connection request
     let inflight_requests_limit = if proto_connection_request.inflight_requests_limit > 0 {
@@ -839,6 +844,13 @@ pub fn create_direct_client<'a>(
         && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
     {
         connection_request.address_resolver = Some(resolver);
+    }
+    if let Some(key) = credential_provider_key
+        && let Some(provider) = glide_core::credential_provider_registry::remove(&key)
+        && let Some(auth_info) = connection_request.authentication_info.as_mut()
+        && let Some(iam_config) = auth_info.iam_config.as_mut()
+    {
+        iam_config.credentials_provider = Some(provider);
     }
 
     // Create shared response buffer
@@ -2621,6 +2633,116 @@ pub fn register_address_resolver(
 #[napi(js_name = "removeAddressResolver")]
 pub fn remove_address_resolver(key: String) {
     glide_core::address_resolver_registry::remove(&key);
+}
+
+/// Return value from a JavaScript GlideCredentialProvider callback.
+#[napi(object)]
+pub struct JsAwsCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    /// Optional expiry as Unix epoch milliseconds. Use 0 or None to indicate no expiry.
+    pub expires_at_epoch_millis: Option<i64>,
+}
+
+/// A Node.js credential provider wrapper.
+/// It holds a `ThreadsafeFunction` that invokes the JS callback and delivers
+/// the resulting `JsAwsCredentials` back to the calling thread via a channel.
+type CredentialProviderTsfn = ThreadsafeFunction<(), JsAwsCredentials, (), Status, false, true>;
+
+struct NodeCredentialsProvider {
+    tsfn: CredentialProviderTsfn,
+}
+
+// SAFETY: ThreadsafeFunction is designed to be called from any thread.
+unsafe impl Send for NodeCredentialsProvider {}
+unsafe impl Sync for NodeCredentialsProvider {}
+
+impl NodeCredentialsProvider {
+    fn get_credentials(
+        &self,
+    ) -> std::result::Result<
+        (
+            String,
+            String,
+            Option<String>,
+            Option<std::time::SystemTime>,
+        ),
+        glide_core::iam::GlideIAMError,
+    > {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<
+            std::result::Result<JsAwsCredentials, napi::Error<Status>>,
+        >(1);
+
+        let status = self.tsfn.call_with_return_value(
+            (),
+            ThreadsafeFunctionCallMode::Blocking,
+            move |result, _env| {
+                let _ = tx.send(result);
+                Ok(())
+            },
+        );
+
+        if status != Status::Ok {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "GlideCredentialProvider callback scheduling failed: {status:?}"
+            )));
+        }
+
+        let creds = rx
+            .recv()
+            .map_err(|e| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback channel error: {e}"
+                ))
+            })?
+            .map_err(|e| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback error: {e}"
+                ))
+            })?;
+
+        let expires_at = creds
+            .expires_at_epoch_millis
+            .filter(|&ms| ms > 0)
+            .map(|ms| {
+                std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64)
+            });
+        Ok((
+            creds.access_key_id,
+            creds.secret_access_key,
+            creds.session_token,
+            expires_at,
+        ))
+    }
+}
+
+/// Register a JavaScript GlideCredentialProvider callback in the global registry.
+/// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+/// `credential_provider_key` field so the socket listener can look it up.
+///
+/// The JS callback signature is: `() => AwsCredentials`
+#[napi(js_name = "registerCredentialProvider")]
+pub fn register_credential_provider(
+    #[napi(ts_arg_type = "() => AwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
+) -> Result<String> {
+    let tsfn = callback
+        .build_threadsafe_function::<()>()
+        .callee_handled::<false>()
+        .weak::<true>()
+        .build_callback(|_ctx| Ok(()))?;
+    let provider = Arc::new(NodeCredentialsProvider { tsfn });
+    let key = uuid::Uuid::new_v4().to_string();
+    let credentials_fn: glide_core::iam::CredentialsProvider =
+        Arc::new(move || provider.get_credentials());
+    glide_core::credential_provider_registry::register(key.clone(), credentials_fn);
+    Ok(key)
+}
+
+/// Remove a credential provider from the global registry by key.
+#[napi(js_name = "removeCredentialProvider")]
+pub fn remove_credential_provider(key: String) {
+    glide_core::credential_provider_registry::remove(&key);
 }
 
 static NEXT_MONITOR_HANDLE: AtomicU64 = AtomicU64::new(1);

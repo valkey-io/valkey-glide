@@ -75,6 +75,8 @@ import {
     createLeakedStringVec,
     registerAddressResolver,
     removeAddressResolver,
+    registerCredentialProvider,
+    removeCredentialProvider,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -802,6 +804,49 @@ export enum ServiceType {
     MemoryDB = "MemoryDB",
 }
 
+/**
+ * Represents AWS credentials returned by a custom GlideCredentialProvider.
+ * All fields match the Java AwsCredentials class for cross-language consistency.
+ */
+export interface AwsCredentials {
+    /** The AWS Access Key ID. Required; must not be blank. */
+    accessKeyId: string;
+    /** The AWS Secret Access Key. Required; must not be blank. */
+    secretAccessKey: string;
+    /** The AWS Session Token. Optional; omit for long-term (non-session) credentials. */
+    sessionToken?: string;
+    /**
+     * Optional credential expiry time as Unix epoch milliseconds.
+     * When provided, passed to the AWS SDK so it has accurate credential metadata.
+     * This does not override `refreshIntervalSeconds` — the background refresh task
+     * still fires on its configured schedule.
+     */
+    expiresAtEpochMillis?: number;
+}
+
+/**
+ * A callback that supplies AWS credentials for IAM token signing.
+ *
+ * Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
+ * a custom STS assume-role flow) instead of the default AWS credential chain.
+ *
+ * **Thread safety**: implementations must be safe for concurrent calls — in cluster
+ * mode, independent reconnections may invoke this callback simultaneously.
+ *
+ * **Promptness**: return quickly; this callback sits on the reconnect path and
+ * a slow implementation directly extends failover time.
+ *
+ * @example
+ * ```typescript
+ * const provider: GlideCredentialProvider = () => ({
+ *     accessKeyId: await vault.getAccessKeyId(),
+ *     secretAccessKey: await vault.getSecretAccessKey(),
+ *     sessionToken: await vault.getSessionToken(),
+ * });
+ * ```
+ */
+export type GlideCredentialProvider = () => AwsCredentials | Promise<AwsCredentials>;
+
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {
     /** The name of the ElastiCache/MemoryDB cluster. */
@@ -815,6 +860,13 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
+    /**
+     * Optional custom credentials provider. When set, this provider is invoked to retrieve
+     * AWS credentials for IAM token signing instead of the default AWS credential chain.
+     *
+     * @see {@link GlideCredentialProvider}
+     */
+    credentialProvider?: GlideCredentialProvider;
 }
 
 /** Represents the credentials for connecting to a server. */
@@ -1483,6 +1535,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
+    private credentialProviderKey: string | undefined;
     protected clientHandle: GlideClientHandle | null = null;
     /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
     private readonly otelSpanPointers = new Map<number, bigint>();
@@ -10052,6 +10105,22 @@ export class BaseClient {
             request.addressResolverKey = this.addressResolverKey;
         }
 
+        if (
+            "iamConfig" in (options.credentials ?? {}) &&
+            (options.credentials as { iamConfig: IamAuthConfig }).iamConfig
+                ?.credentialProvider
+        ) {
+            const iamCreds = options.credentials as {
+                username: string;
+                iamConfig: IamAuthConfig;
+            };
+            this.credentialProviderKey = registerCredentialProvider(
+                iamCreds.iamConfig
+                    .credentialProvider as () => AwsCredentials,
+            );
+            request.credentialProviderKey = this.credentialProviderKey;
+        }
+
         try {
             const connectionRequestBytes = Buffer.from(
                 connection_request.ConnectionRequest.encode(
@@ -10072,6 +10141,11 @@ export class BaseClient {
             if (this.addressResolverKey) {
                 removeAddressResolver(this.addressResolverKey);
                 this.addressResolverKey = undefined;
+            }
+
+            if (this.credentialProviderKey) {
+                removeCredentialProvider(this.credentialProviderKey);
+                this.credentialProviderKey = undefined;
             }
 
             throw err;
@@ -10131,6 +10205,12 @@ export class BaseClient {
         if (this.addressResolverKey) {
             removeAddressResolver(this.addressResolverKey);
             this.addressResolverKey = undefined;
+        }
+
+        // Clean up credential provider from the global registry
+        if (this.credentialProviderKey) {
+            removeCredentialProvider(this.credentialProviderKey);
+            this.credentialProviderKey = undefined;
         }
 
         // Clean up OTel spans for in-flight requests to prevent memory leaks

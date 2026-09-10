@@ -26,3 +26,4 @@ export * from "./server-modules/GlideFtOptions.js";
 export * from "./server-modules/GlideJson.js";
 export * from "./ClientPool.js";
 export * from "./IsolatedScope.js";
+export type { AwsCredentials, GlideCredentialProvider } from "./BaseClient.js";
