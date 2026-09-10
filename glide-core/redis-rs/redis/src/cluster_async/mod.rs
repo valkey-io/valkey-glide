@@ -607,7 +607,7 @@ where
         let port = port.parse::<u16>().ok()?;
         conn_lock
             .slot_map
-            .node_address_for_ip(ip, port)
+            .node_address_for_ip_and_port(ip, port)
             .map(|node_address| (*node_address).clone())
     }
 
@@ -4469,7 +4469,8 @@ enum ConnectionLookupResult<C> {
 /// 1. **Direct match**: If `original_addr` exists in the slot map, it is treated as
 ///    the canonical address (O(1)).
 /// 2. **IP-based match**: Otherwise, if `socket_addr` is available, attempt to find
-///    a canonical address in the slot map that matches its IP (O(n)).
+///    a canonical address in the slot map that matches its IP (O(n)); the seed
+///    socket port is intentionally ignored because topology resolution may rewrite it.
 /// 3. **Default address selection**: If no canonical address is found in the slot map,
 ///    select an address to use for a potential new connection:
 ///    - Prefer `socket_addr` if available
@@ -4511,7 +4512,7 @@ where
                 .and_then(|addr| {
                     conn_lock
                         .slot_map
-                        .node_address_for_ip(addr.ip(), addr.port())
+                        .node_address_for_ip(addr.ip())
                         .map(|a| (*a).clone())
                 })
                 // Step 3: Use socket_addr if available
