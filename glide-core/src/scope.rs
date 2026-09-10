@@ -682,8 +682,12 @@ pub fn register_client(client_id: u64, client: Client) {
 }
 
 /// Unregister a Client from the global registry (called on client close).
+///
+/// Also tears down the client's scope pool, so every binding's close path
+/// invalidates outstanding scopes without having to remember to do it.
 pub fn unregister_client(client_id: u64) {
     get_client_registry().remove(&client_id);
+    crate::pool::destroy_client_scope_pool(client_id);
 }
 
 #[cfg(all(test, feature = "proto"))]
@@ -912,6 +916,66 @@ mod tests {
             resolved,
             Some(true),
             "a contended pool lock must not hide the scope's parent client"
+        );
+    }
+
+    /// Closing the parent must invalidate its outstanding scopes, otherwise a
+    /// scope keeps executing against a connection whose owner is gone.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn closing_the_parent_invalidates_its_outstanding_scopes() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        // reserved_pool() seats the pool under parent client id 1.
+        let parent_client_id = 1;
+        let pool = reserved_pool(request_bytes.clone());
+        get_client_scope_pools().insert(parent_client_id, pool.clone());
+
+        let mut parent_request = crate::client::ConnectionRequest::default();
+        parent_request.addresses.push(crate::client::NodeAddress {
+            host: "127.0.0.1".into(),
+            port,
+        });
+        parent_request.lazy_connect = true;
+        let parent = Client::new(parent_request, None)
+            .await
+            .expect("lazy parent client creation should succeed");
+        register_client(parent_client_id, parent);
+
+        create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+        let acquired = {
+            let mut pool = pool.lock().await;
+            pool.try_acquire(get_scope_registry(), 0)
+        };
+
+        let observed = if let ScopeAcquire::Reused(scope_id) = acquired {
+            let registered_before = get_scope_registry().contains_key(&scope_id);
+
+            unregister_client(parent_client_id);
+
+            Some((
+                registered_before,
+                get_scope_registry().contains_key(&scope_id),
+                get_client_scope_pools().contains_key(&parent_client_id),
+                resolve_scope_parent(scope_id).is_some(),
+            ))
+        } else {
+            None
+        };
+
+        // Clean up before asserting so a failure cannot leak into later tests.
+        if let ScopeAcquire::Reused(scope_id) = acquired {
+            get_scope_registry().remove(&scope_id);
+        }
+        get_client_scope_pools().remove(&parent_client_id);
+        unregister_client(parent_client_id);
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+
+        assert_eq!(
+            observed,
+            Some((true, false, false, false)),
+            "closing the parent must drop the scope entry, its pool, and any parent resolution"
         );
     }
 

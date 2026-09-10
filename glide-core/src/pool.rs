@@ -294,6 +294,19 @@ impl ClientPool {
         }
 
         self.state.store(POOL_CLOSED, Ordering::Release);
+
+        // Invalidate scopes owned by this pool's clients before dropping them, so a
+        // scope cannot outlive the client it borrowed from.
+        for client_id in self
+            .idle
+            .iter()
+            .map(|c| c.client_id)
+            .chain(self.in_use.iter().map(|e| *e.key()))
+            .collect::<Vec<_>>()
+        {
+            destroy_client_scope_pool(client_id);
+        }
+
         self.idle.clear();
         self.in_use.clear();
         self.total_count.store(0, Ordering::Release);
@@ -1170,6 +1183,31 @@ pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
 
 pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePool>>> {
     CLIENT_SCOPE_POOLS.get_or_init(DashMap::new)
+}
+
+/// Invalidate every scope owned by `client_id` and drop its scope pool.
+///
+/// Called when the parent client goes away. Removing the pool stops new acquires
+/// and removing the registry entries stops dispatch on outstanding scopes, which
+/// then fail as invalid rather than executing against a connection whose owner is
+/// gone. Idle connections drop with the pool once in-flight commands release it.
+///
+/// Deliberately takes no pool lock: teardown must not be skippable, and a
+/// `try_lock` here would silently leave scopes live under contention. The owning
+/// id on each [`ScopeEntry`] is what makes that possible.
+pub fn destroy_client_scope_pool(client_id: u64) {
+    get_client_scope_pools().remove(&client_id);
+
+    let registry = get_scope_registry();
+    // Collect before removing: mutating a DashMap while holding an iterator can deadlock.
+    let owned: Vec<u64> = registry
+        .iter()
+        .filter(|entry| entry.value().parent_client_id == client_id)
+        .map(|entry| *entry.key())
+        .collect();
+    for scope_id in owned {
+        registry.remove(&scope_id);
+    }
 }
 
 /// Get or create a scope pool for a client (atomic via DashMap entry API).
