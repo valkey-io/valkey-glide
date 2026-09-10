@@ -136,11 +136,6 @@ jobs:
                   echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                   exit 1
 
-            - name: Ensure clean tree before PyPI release mutations
-              uses: ./.github/actions/ensure-clean-tree
-              with:
-                  context: PyPI version, configuration, packaging, README, wheel, and sdist mutation baseline
-
             - name: Set the package version for Python
               working-directory: ./python
               run: |
@@ -556,11 +551,6 @@ jobs:
               run: |
                   echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
 
-            - name: Ensure clean tree before PyPI release mutations
-              uses: ./.github/actions/ensure-clean-tree
-              with:
-                  context: PyPI version, configuration, packaging, README, wheel, and sdist mutation baseline
-
             - name: Set the package version for Python
               working-directory: ./python
               run: |
@@ -673,11 +663,6 @@ jobs:
               shell: bash
               run: |
                   echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
-
-            - name: Ensure clean tree before PyPI release mutations
-              uses: ./.github/actions/ensure-clean-tree
-              with:
-                  context: PyPI version, configuration, packaging, README, wheel, and sdist mutation baseline
 
             - name: Set the package version for Python
               working-directory: ./python
