@@ -15,10 +15,13 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -631,5 +634,203 @@ public class ClientPoolIntegrationTest {
                         .build();
 
         assertThrows(RuntimeException.class, () -> ClientPool.create(badConfig));
+    }
+
+    /**
+     * Regression test for issue #6971: the abandon monitor can incorrectly reclaim a client that is
+     * parked on a blocking command (e.g. BLPOP) due to a race in {@code mark_client_blocking()}.
+     *
+     * <p>The Rust implementation uses {@code try_lock} to set the {@code is_blocking} flag. If the
+     * pool lock is contended at the exact moment the blocking command is dispatched, the flag is
+     * never set. The abandon monitor then sees the client as idle-abandoned and tears it down, even
+     * though it is legitimately blocked waiting for a list push.
+     *
+     * <p>This test makes the race <em>deterministic</em> by spinning up concurrent acquire/release
+     * threads that keep the Rust-side Tokio pool mutex hot for the entire duration of the BLPOP
+     * flight. This ensures {@code try_lock} loses the contention window with high probability on
+     * every run.
+     *
+     * <p>Test flow:
+     *
+     * <ol>
+     *   <li>Create a pool with short {@code abandonTimeout} (500 ms) and {@code maxSize=5}.
+     *   <li>Start 4 contention threads, each hammering acquire → SET → release in a tight loop.
+     *   <li>Wait for all contention threads to have started (are holding or cycling the lock).
+     *   <li>Issue BLPOP (30 s server-side timeout) from a 5th pool slot — flag-set races the
+     *       contention threads.
+     *   <li>Sleep 3× the abandon timeout so the monitor fires at least once.
+     *   <li>Assert the client is still active (not reclaimed by the monitor).
+     *   <li>Unblock BLPOP via LPUSH from a helper client; assert normal completion.
+     * </ol>
+     *
+     * <p>On <em>buggy</em> code the assertion at step 6 fails: the monitor reclaimed the blocking
+     * client because {@code try_lock} lost to a contention thread. On <em>fixed</em> code it always
+     * passes.
+     */
+    @Test
+    public void testAbandonMonitorDoesNotReclaimBlockingClient() throws Exception {
+        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        String host = parts[0];
+        int port = Integer.parseInt(parts[1]);
+
+        // maxSize=6: 4 contention slots + 1 for the BLPOP client + 1 buffer slot so the BLPOP
+        // acquire never has to wait for a contention thread to release.
+        ClientPoolConfig racePoolConfig =
+                ClientPoolConfig.builder()
+                        .maxSize(6)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        .abandonTimeout(Duration.ofMillis(500))
+                        .clientConfig(
+                                GlideClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(host).port(port).build())
+                                        // 35 s client timeout > 30 s BLPOP timeout — prevents
+                                        // client-side timeout from firing first
+                                        .requestTimeout(35000)
+                                        .build())
+                        .build();
+
+        ClientPool pool = null;
+        glide.api.GlideClient helper = null;
+        glide.api.models.pool.PooledGlideClient pooledClient = null;
+        java.util.concurrent.CompletableFuture<Object> blpopFuture = null;
+        String raceKey = testKey(false, "abandon-race");
+        String contKey = testKey(false, "contention");
+
+        // Signal contention threads to stop.
+        final AtomicBoolean stopContention = new AtomicBoolean(false);
+        // Tracks how many contention threads have completed at least one acquire/release cycle.
+        final CountDownLatch contentionReady = new CountDownLatch(4);
+        final List<Thread> contentionThreads = new ArrayList<>();
+
+        try {
+            pool = ClientPool.create(racePoolConfig);
+            waitForPoolReady(pool, 1);
+            assertTrue(pool.getIdleCount() >= 1, "Pool should have at least 1 idle client before test");
+
+            // Capture for use in lambdas.
+            final ClientPool poolRef = pool;
+
+            // ── Start contention threads ────────────────────────────────────────────
+            // Each thread hammers acquire → SET → release in a tight loop to keep the
+            // Rust-side Tokio pool mutex hot.  The flag is used to signal shutdown.
+            for (int i = 0; i < 4; i++) {
+                final int idx = i;
+                Thread t =
+                        new Thread(
+                                () -> {
+                                    boolean signalledReady = false;
+                                    while (!stopContention.get()) {
+                                        try (glide.api.models.pool.PooledGlideClient c =
+                                                poolRef.acquire(Duration.ofMillis(200)).get(300, TimeUnit.MILLISECONDS)) {
+                                            c.set(contKey + idx, "v").get(2, TimeUnit.SECONDS);
+                                            if (!signalledReady) {
+                                                contentionReady.countDown();
+                                                signalledReady = true;
+                                            }
+                                        } catch (Exception ignored) {
+                                            // Pool may be exhausted momentarily — just retry.
+                                        }
+                                    }
+                                },
+                                "contention-" + i);
+                t.setDaemon(true);
+                contentionThreads.add(t);
+                t.start();
+            }
+
+            // Wait until all 4 contention threads have confirmed they're cycling.
+            assertTrue(
+                    contentionReady.await(10, TimeUnit.SECONDS),
+                    "Contention threads should all be running within 10 s");
+
+            // ── Acquire the BLPOP client while contention is hot ────────────────────
+            // Contention threads already hold some active slots — that's expected.
+            pooledClient = pool.acquire(Duration.ofSeconds(5)).get(10, TimeUnit.SECONDS);
+            assertNotNull(pooledClient, "Should acquire a client from the pool");
+
+            // Create helper BEFORE dispatching BLPOP so it is ready for cleanup.
+            helper =
+                    glide.api.GlideClient.createClient(
+                                    GlideClientConfiguration.builder()
+                                            .address(NodeAddress.builder().host(host).port(port).build())
+                                            .requestTimeout(5000)
+                                            .build())
+                            .get(10, TimeUnit.SECONDS);
+
+            // Issue BLPOP while contention threads are hammering the pool mutex.
+            // Do NOT await — future stays in-flight during the abandon window.
+            blpopFuture = pooledClient.unwrap().customCommand(new String[] {"BLPOP", raceKey, "30"});
+
+            // Sleep 3× the abandon timeout so the monitor has had time to run at least once.
+            Thread.sleep(1500);
+
+            // Stop contention threads before asserting, so only the BLPOP client counts.
+            stopContention.set(true);
+            for (Thread t : contentionThreads) {
+                t.join(3000);
+            }
+
+            // Wait a moment for the pool to process the thread releases.
+            Thread.sleep(200);
+
+            // ── Core assertion ──────────────────────────────────────────────────────
+            int activeCount = pool.getActiveCount();
+            assertEquals(
+                    1,
+                    activeCount,
+                    "Issue #6971: abandon monitor must not reclaim a client parked on BLPOP. "
+                            + "Expected exactly 1 active client (the BLPOP client), but got activeCount="
+                            + activeCount);
+            // ───────────────────────────────────────────────────────────────────────
+
+            // Unblock BLPOP.
+            helper
+                    .customCommand(new String[] {"LPUSH", raceKey, "unblock-value"})
+                    .get(5, TimeUnit.SECONDS);
+
+            // Assert the BLPOP future completes normally with the expected result.
+            Object blpopResult = blpopFuture.get(10, TimeUnit.SECONDS);
+            assertNotNull(blpopResult, "BLPOP should return a non-null result after LPUSH");
+            assertInstanceOf(Object[].class, blpopResult);
+            Object[] blpopArray = (Object[]) blpopResult;
+            assertEquals(2, blpopArray.length, "BLPOP result should be [key, value]");
+            assertEquals(raceKey, blpopArray[0], "BLPOP key should match");
+
+            System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
+        } finally {
+            // Stop contention threads (no-op if already stopped before assertion).
+            stopContention.set(true);
+            for (Thread t : contentionThreads) {
+                t.join(2000);
+            }
+            // Best-effort cleanup of contention keys.
+            if (helper != null) {
+                for (int i = 0; i < 4; i++) {
+                    try {
+                        helper.del(new String[] {contKey + i}).get(2, TimeUnit.SECONDS);
+                    } catch (Exception ignored) {
+                        /* best-effort */
+                    }
+                }
+            }
+            // Best-effort: unblock BLPOP if still in flight.
+            if (blpopFuture != null && !blpopFuture.isDone()) {
+                try {
+                    if (helper != null) {
+                        helper
+                                .customCommand(new String[] {"LPUSH", raceKey, "cleanup"})
+                                .get(2, TimeUnit.SECONDS);
+                    }
+                } catch (Exception ignored) {
+                    /* best-effort */
+                }
+            }
+            if (pooledClient != null) pooledClient.close();
+            if (helper != null) helper.close();
+            if (pool != null) pool.close();
+        }
     }
 }
