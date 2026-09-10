@@ -2741,7 +2741,7 @@ impl NodeCredentialsProvider {
 /// The JS callback signature is: `() => AwsCredentials`
 #[napi(js_name = "registerCredentialProvider")]
 pub fn register_credential_provider(
-    #[napi(ts_arg_type = "() => JsAwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
+    #[napi(ts_arg_type = "() => AwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
 ) -> Result<String> {
     let tsfn = callback
         .build_threadsafe_function::<()>()
