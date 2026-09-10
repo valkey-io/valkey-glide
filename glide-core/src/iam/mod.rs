@@ -7,7 +7,7 @@ use aws_sigv4::sign::v4;
 use logger_core::{log_debug, log_error, log_info, log_warn};
 use rand::Rng;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use std::time::SystemTime;
 use strum_macros::IntoStaticStr;
@@ -231,6 +231,13 @@ pub struct IAMTokenManager {
     shutdown_notify: Arc<Notify>,
     /// Atomic flag to signal when token has changed (for efficient change detection)
     token_changed: Arc<AtomicBool>,
+    /// Monotonically increasing generation counter, bumped on every successful refresh.
+    ///
+    /// Unlike `token_changed`, this lets multiple independent consumers (e.g. the
+    /// ordinary command path and the scope AUTH path) each track their own
+    /// "last seen generation" and detect a rotation without racing to clear a
+    /// single shared flag.
+    token_generation: Arc<AtomicU64>,
 }
 
 /// Custom Debug implementation for IAMTokenManager
@@ -242,6 +249,10 @@ impl std::fmt::Debug for IAMTokenManager {
             .field("refresh_task", &self.refresh_task.is_some())
             .field("shutdown_notify", &"<Notify>")
             .field("token_changed", &self.token_changed.load(Ordering::Relaxed))
+            .field(
+                "token_generation",
+                &self.token_generation.load(Ordering::Relaxed),
+            )
             .finish()
     }
 }
@@ -293,6 +304,10 @@ impl IAMTokenManager {
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
             token_changed: Arc::new(AtomicBool::new(true)), // Initially true to trigger first AUTH
+            // Starts at 1 (not 0) so a fresh consumer with a default "last seen
+            // generation" of 0 immediately observes a mismatch and picks up the
+            // initial token, mirroring token_changed's "initially true" behavior.
+            token_generation: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -307,6 +322,7 @@ impl IAMTokenManager {
         let token_created_at = Arc::clone(&self.token_created_at);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
         let token_changed = Arc::clone(&self.token_changed);
+        let token_generation = Arc::clone(&self.token_generation);
 
         let task = tokio::spawn(Self::token_refresh_task(
             iam_token_state,
@@ -314,6 +330,7 @@ impl IAMTokenManager {
             token_created_at,
             shutdown_notify,
             token_changed,
+            token_generation,
         ));
 
         self.refresh_task = Some(task);
@@ -326,6 +343,7 @@ impl IAMTokenManager {
         token_created_at: Arc<RwLock<tokio::time::Instant>>,
         shutdown_notify: Arc<Notify>,
         token_changed: Arc<AtomicBool>,
+        token_generation: Arc<AtomicU64>,
     ) {
         let refresh_interval = Duration::from_secs(iam_token_state.refresh_interval_seconds as u64);
 
@@ -338,7 +356,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_created_at, &token_changed).await;
+                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_created_at, &token_changed, &token_generation).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -349,13 +367,14 @@ impl IAMTokenManager {
     }
 
     /// Refresh cached token with backoff + jitter.
-    /// On success: update token + set atomic flag.
+    /// On success: update token + set atomic flag + bump generation counter.
     /// On failure: log error, keep old token.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_created_at: &Arc<RwLock<tokio::time::Instant>>,
         token_changed: &Arc<AtomicBool>,
+        token_generation: &Arc<AtomicU64>,
     ) {
         match Self::generate_token_with_backoff(iam_token_state).await {
             Ok(new_token) => {
@@ -365,6 +384,7 @@ impl IAMTokenManager {
                     *ts = tokio::time::Instant::now();
                 }
                 token_changed.store(true, Ordering::Release);
+                token_generation.fetch_add(1, Ordering::AcqRel);
             }
             Err(_err) => {
                 // Backoff routine has already logged the failure details.
@@ -454,6 +474,7 @@ impl IAMTokenManager {
             &self.cached_token,
             &self.token_created_at,
             &self.token_changed,
+            &self.token_generation,
         )
         .await;
     }
@@ -479,6 +500,11 @@ impl IAMTokenManager {
         token_guard.clone()
     }
 
+    /// Returns the IAM username configured for this manager.
+    pub(crate) fn username(&self) -> &str {
+        &self.iam_token_state.username
+    }
+
     /// Check if token has changed since last check
     pub fn token_changed(&self) -> bool {
         self.token_changed.load(Ordering::Acquire)
@@ -487,6 +513,11 @@ impl IAMTokenManager {
     /// Clear the token changed flag after handling the change
     pub fn clear_token_changed(&self) {
         self.token_changed.store(false, Ordering::Release)
+    }
+
+    /// Returns the current token generation number (see the `token_generation` field).
+    pub(crate) fn token_generation(&self) -> u64 {
+        self.token_generation.load(Ordering::Acquire)
     }
 
     /// Create a lightweight handle to the token cache for use by the reconnection path.

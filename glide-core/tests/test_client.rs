@@ -4320,4 +4320,454 @@ pub(crate) mod shared_client_tests {
             );
         });
     }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS. Distinct from the `iam_tests`-gated
+    /// `setup_mock_aws_credentials` above: this test runs under plain `proto`
+    /// (no real ElastiCache/MemoryDB endpoint needed) since the local server
+    /// accepts any AUTH password for the configured user (see `nopass` below).
+    #[cfg(feature = "proto")]
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// Starts a local server with an IAM-style `nopass` user and returns the
+    /// server, its address, and the protobuf request configured for IAM auth.
+    #[cfg(feature = "proto")]
+    async fn setup_iam_local_server(
+        iam_username: &str,
+    ) -> (
+        RedisServer,
+        redis::ConnectionAddr,
+        glide_core::connection_request::ConnectionRequest,
+    ) {
+        use ::protobuf::MessageField;
+        use glide_core::connection_request as protobuf;
+        use protobuf::TlsMode;
+        use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
+        use protobuf::{
+            ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
+        };
+
+        // `nopass` means ACL ignores the supplied password entirely (verified
+        // empirically: `AUTH iamuser <anything>` succeeds), which is the closest
+        // local stand-in for how a real ElastiCache/MemoryDB IAM-enabled user
+        // accepts a valid-looking SigV4-signed token without the test having
+        // real AWS access.
+        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let addr = server.get_client_addr();
+        let (host, port) = match &addr {
+            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+        };
+
+        let setup_client = redis::Client::open(redis::ConnectionInfo {
+            addr: addr.clone(),
+            redis: RedisConnectionInfo::default(),
+        })
+        .unwrap();
+        let mut setup_conn = retry(|| async {
+            setup_client
+                .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                .await
+                .ok()
+        })
+        .await;
+        let mut acl_cmd = redis::cmd("ACL");
+        acl_cmd
+            .arg("SETUSER")
+            .arg(iam_username)
+            .arg("on")
+            .arg("allkeys")
+            .arg("+@all")
+            .arg("nopass");
+        setup_conn
+            .send_packed_command(&acl_cmd)
+            .await
+            .expect("ACL SETUSER should succeed");
+
+        let mut proto_request = ProtoConnectionRequest::new();
+        proto_request.addresses.push(NodeAddress {
+            host: host.clone().into(),
+            port: port.into(),
+            ..Default::default()
+        });
+        proto_request.tls_mode = TlsMode::NoTls.into();
+        let mut iam_credentials = IamCredentials::new();
+        iam_credentials.cluster_name = "test-scope-iam-cluster".into();
+        iam_credentials.region = "us-east-1".into();
+        iam_credentials.service_type = ProtoServiceType::ELASTICACHE.into();
+        let mut auth_info = ProtoAuthInfo::new();
+        auth_info.username = iam_username.into();
+        auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
+        proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
+
+        (server, addr, proto_request)
+    }
+
+    /// Reads `cmdstat_auth`'s `calls=` counter from `INFO commandstats`.
+    #[cfg(feature = "proto")]
+    async fn auth_call_count(conn: &mut redis::aio::MultiplexedConnection) -> u64 {
+        let info_cmd = redis::cmd("INFO").arg("commandstats").to_owned();
+        let raw = conn
+            .send_packed_command(&info_cmd)
+            .await
+            .expect("INFO commandstats should succeed");
+        let text = match raw {
+            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Value::VerbatimString { text, .. } => text,
+            Value::SimpleString(s) => s,
+            other => panic!("Unexpected INFO reply shape: {other:?}"),
+        };
+        for line in text.lines() {
+            if let Some(rest) = line.strip_prefix("cmdstat_auth:") {
+                for field in rest.split(',') {
+                    if let Some(calls) = field.strip_prefix("calls=") {
+                        return calls.parse().expect("calls= should be numeric");
+                    }
+                }
+            }
+        }
+        0
+    }
+
+    /// Regression test for the initial AUTH on a scoped connection
+    /// (`create_scope_connection`), isolated from the command-time rotation
+    /// re-authentication that otherwise masks it.
+    ///
+    /// The command is sent with `client: None`, which routes through the raw
+    /// `send_packed_command` fallback in `execute_scope_command`. That fallback
+    /// cannot re-authenticate, so the identity observed here is whatever
+    /// `create_scope_connection`'s init pipeline established and nothing else.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_initial_connect_authenticates_as_iam_user() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, _addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let connection_request_bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            let client_id = 2u64;
+            scope::register_client(client_id, client.clone());
+
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = retry(|| {
+                let connection_request_bytes = connection_request_bytes.clone();
+                async {
+                    let result =
+                        scope::try_acquire_scope(client_id, connection_request_bytes, &runtime, 0);
+                    if result >= 0 { Some(result) } else { None }
+                }
+            })
+            .await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope::send_scope_command(scope_id as u64, "ACL", &mut args, None).await;
+
+            let value = response.expect("ACL WHOAMI through the scope should succeed");
+            let whoami = match value {
+                Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                Value::SimpleString(s) => s,
+                other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+            };
+            assert_eq!(
+                whoami, iam_username,
+                "create_scope_connection must AUTH as the IAM identity on initial connect"
+            );
+
+            scope::release_scope(scope_id as u64, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+
+    /// Regression test for the real, binding-facing scope path with IAM
+    /// configured. Checks `create_scope_connection`'s init AUTH via the
+    /// server's `cmdstat_auth` counter, read before any scope command is sent
+    /// — an identity-only check here can't catch a missing init AUTH, since
+    /// `send_command_on_connection`'s rotation-detection would silently repair
+    /// it on the first command. Then confirms the two mechanisms work
+    /// together via `ScopeHandle`'s `Some(&client)` send.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_full_path_authenticates_as_iam_user_with_client() {
+        use ::protobuf::Message as _;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let bytes = proto_request
+                .clone()
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let auth_calls_before_setup = auth_call_count(&mut admin_conn).await;
+
+            let scope = ScopeHandle::setup(client, bytes, 0).await;
+
+            // Read before sending any scope command, so a later self-healing
+            // re-auth can't cover for a missing init AUTH here.
+            let auth_calls_after_setup = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_calls_after_setup - auth_calls_before_setup,
+                1,
+                "create_scope_connection should send exactly one AUTH while establishing \
+                 the scoped connection (before={auth_calls_before_setup}, \
+                 after={auth_calls_after_setup})"
+            );
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope.send("ACL", &mut args).await;
+
+            let value = response.expect("ACL WHOAMI through the scope should succeed");
+            let whoami = match value {
+                Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                Value::SimpleString(s) => s,
+                other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+            };
+            assert_eq!(
+                whoami, iam_username,
+                "scope should authenticate as the IAM identity end-to-end through the \
+                 real Some(&client) path"
+            );
+
+            scope.release();
+        });
+    }
+
+    /// A rejected IAM re-authentication must not leave the connection in the pool:
+    /// the bookmark advances only on success, so a retained connection would retry
+    /// the same failing AUTH for the next borrower.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_failed_iam_reauth_discards_the_scoped_connection() {
+        use ::protobuf::Message as _;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let bytes = proto_request
+                .clone()
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            let scope = ScopeHandle::setup(client.clone(), bytes, 0).await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            scope
+                .send("ACL", &mut args)
+                .await
+                .expect("the scope should work before the credentials change");
+
+            // Revoke `nopass` so the generated IAM token no longer authenticates.
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr,
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let mut revoke = redis::cmd("ACL");
+            revoke
+                .arg("SETUSER")
+                .arg(iam_username)
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg("resetpass")
+                .arg(">not-the-iam-token");
+            admin_conn
+                .send_packed_command(&revoke)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let err = scope
+                .send("ACL", &mut args)
+                .await
+                .expect_err("the rotation's AUTH is rejected, so the command must fail");
+            assert_eq!(
+                err.kind(),
+                redis::ErrorKind::AuthenticationFailed,
+                "a failed re-auth must be identifiable by the caller, got: {err:?}"
+            );
+
+            scope.release();
+
+            let pool = scope.pool.lock().await;
+            assert!(
+                pool.idle.is_empty(),
+                "a connection whose re-auth failed must not be returned to idle"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                0,
+                "discarding the connection must free its slot"
+            );
+        });
+    }
+
+    /// Regression test for the scope path's IAM rotation re-authentication.
+    ///
+    /// Drives the real consumer, `Client::send_command_on_connection`, with two
+    /// independent `AtomicU64` generation bookmarks on two separate connections,
+    /// and asserts that a single token rotation makes each connection send its own
+    /// `AUTH`. That is precisely what the shared `token_changed` flag could not do:
+    /// whichever consumer looked first cleared it and the other silently missed the
+    /// rotation.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_rotation_reauthenticates_each_connection_independently() {
+        use std::sync::atomic::AtomicU64;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            // Two raw connections standing in for two scoped connections, plus an
+            // admin connection used only to read the server's AUTH counter.
+            let raw_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let open_conn = || async {
+                retry(|| async {
+                    raw_client
+                        .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                        .await
+                        .ok()
+                })
+                .await
+            };
+            let mut conn_a = open_conn().await;
+            let mut conn_b = open_conn().await;
+            let mut admin_conn = open_conn().await;
+
+            // Each connection owns its own bookmark, exactly as `ScopedConnection`
+            // does. A fresh manager sits at generation 1, so 0 always mismatches
+            // and the first command on each connection authenticates.
+            let bookmark_a = AtomicU64::new(0);
+            let bookmark_b = AtomicU64::new(0);
+
+            let whoami_cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
+            let whoami = |value: redis::RedisResult<Value>| -> String {
+                match value.expect("ACL WHOAMI through send_command_on_connection should succeed") {
+                    Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+                }
+            };
+
+            // Initial authentication on both connections. This also covers the
+            // malformed single-argument `AUTH` bug: a one-arg AUTH is rejected by
+            // the server, so an identity assertion here fails without the username.
+            let a_initial = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_initial), iam_username);
+            let b_initial = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .await;
+            assert_eq!(whoami(b_initial), iam_username);
+
+            let auth_calls_before_rotation = auth_call_count(&mut admin_conn).await;
+
+            // One rotation. Both bookmarks are now stale by exactly one generation.
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            // Connection A observes the rotation first and updates its bookmark.
+            let a_after = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_after), iam_username);
+
+            // Connection B must still observe the same rotation. Under the shared
+            // `token_changed` flag, A's re-auth above cleared it and this connection
+            // sends no AUTH at all.
+            let b_after = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .await;
+            assert_eq!(whoami(b_after), iam_username);
+
+            let auth_calls_after_rotation = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_calls_after_rotation - auth_calls_before_rotation,
+                2,
+                "a single token rotation must make each connection send its own AUTH \
+                 (before={auth_calls_before_rotation}, after={auth_calls_after_rotation})"
+            );
+
+            // And no further AUTH once both bookmarks are current again.
+            let a_settled = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_settled), iam_username);
+            assert_eq!(
+                auth_call_count(&mut admin_conn).await,
+                auth_calls_after_rotation,
+                "an up-to-date bookmark must not re-authenticate"
+            );
+        });
+    }
 }
