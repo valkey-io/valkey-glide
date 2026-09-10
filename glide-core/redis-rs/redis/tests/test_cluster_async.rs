@@ -85,6 +85,31 @@ mod cluster_async {
         raw_redirect_seen: Arc<atomic::AtomicBool>,
     }
 
+    #[derive(Debug)]
+    struct TopologyRewriteResolver {
+        resolved_name: &'static str,
+        topology_calls: Arc<atomic::AtomicUsize>,
+        redirect_calls: Arc<atomic::AtomicUsize>,
+        canonical_calls: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for TopologyRewriteResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == self.resolved_name && port == 6379 {
+                self.topology_calls.fetch_add(1, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), 6380)
+            } else if host == "internal-node" && port == 6381 {
+                self.redirect_calls.fetch_add(1, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), 6381)
+            } else if host == self.resolved_name && matches!(port, 6380 | 6381) {
+                self.canonical_calls.fetch_add(1, Ordering::SeqCst);
+                ("poison-canonical-resolution".to_owned(), port)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
     impl AddressResolver for PipelineAskResolver {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
             if host == "internal-node" {
@@ -2492,6 +2517,132 @@ mod cluster_async {
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
         assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
         assert_eq!(retry_port.load(atomic::Ordering::SeqCst), 6380);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_moved_with_rewritten_topology() {
+        let name = "test_async_cluster_moved_with_rewritten_topology";
+        let topology_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let commands = Arc::new(atomic::AtomicUsize::new(0));
+        let commands_clone = commands.clone();
+        let target_port = Arc::new(atomic::AtomicU16::new(0));
+        let target_port_clone = target_port.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                TopologyRewriteResolver {
+                    resolved_name: name,
+                    topology_calls,
+                    redirect_calls: redirect_calls.clone(),
+                    canonical_calls: canonical_calls.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup(name, cmd)?;
+                let n = commands_clone.fetch_add(1, Ordering::SeqCst);
+                match (port, n) {
+                    (6380, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6381\r\n")),
+                    (6381, 1) => {
+                        target_port_clone.store(port, Ordering::SeqCst);
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(target_port.load(Ordering::SeqCst), 6381);
+        assert_eq!(redirect_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_circular_moved_with_rewritten_topology() {
+        let name = "test_async_cluster_circular_moved_with_rewritten_topology";
+        let topology_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let commands = Arc::new(atomic::AtomicUsize::new(0));
+        let pings = Arc::new(atomic::AtomicUsize::new(0));
+        let ping_at_get_0 = Arc::new(atomic::AtomicUsize::new(0));
+        let ping_at_get_1 = Arc::new(atomic::AtomicUsize::new(0));
+        let commands_clone = commands.clone();
+        let pings_clone = pings.clone();
+        let pings_for_get = pings.clone();
+        let ping_at_get_0_clone = ping_at_get_0.clone();
+        let ping_at_get_1_clone = ping_at_get_1.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                TopologyRewriteResolver {
+                    resolved_name: name,
+                    topology_calls: topology_calls.clone(),
+                    redirect_calls: redirect_calls.clone(),
+                    canonical_calls: canonical_calls.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING") {
+                    pings_clone.fetch_add(1, Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("PONG".into())));
+                }
+                respond_startup(name, cmd)?;
+                let n = commands_clone.fetch_add(1, Ordering::SeqCst);
+                match (port, n) {
+                    (6380, 0) => {
+                        ping_at_get_0_clone
+                            .store(pings_for_get.load(Ordering::SeqCst), Ordering::SeqCst);
+                        Err(parse_redis_value(
+                            format!("-MOVED 14000 {name}:6379\r\n").as_bytes(),
+                        ))
+                    }
+                    (6380, 1) => {
+                        ping_at_get_1_clone
+                            .store(pings_for_get.load(Ordering::SeqCst), Ordering::SeqCst);
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+        let topology_calls_before = topology_calls.load(Ordering::SeqCst);
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(
+            topology_calls.load(Ordering::SeqCst),
+            topology_calls_before + 1
+        );
+        assert_eq!(redirect_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
+        assert!(
+            ping_at_get_1.load(Ordering::SeqCst) > ping_at_get_0.load(Ordering::SeqCst),
+            "expected reconnect between GETs: first PING count {}, retry PING count {}",
+            ping_at_get_0.load(Ordering::SeqCst),
+            ping_at_get_1.load(Ordering::SeqCst)
+        );
     }
 
     #[test]
