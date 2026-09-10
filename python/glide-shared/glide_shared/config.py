@@ -345,6 +345,70 @@ class ServiceType(Enum):
     """Amazon MemoryDB service."""
 
 
+class AwsCredentials:
+    """
+    Immutable value object representing AWS credentials for IAM authentication token signing.
+
+    Use the constructor to create instances. ``access_key_id`` and ``secret_access_key``
+    are required and must not be blank. ``session_token`` and ``expires_at_epoch_millis``
+    are optional.
+
+    Example::
+
+        # Long-term credentials:
+        creds = AwsCredentials(
+            access_key_id="AKIAIOSFODNN7EXAMPLE",
+            secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        )
+
+        # Session credentials with expiry:
+        creds = AwsCredentials(
+            access_key_id=vault_client.get_access_key_id(),
+            secret_access_key=vault_client.get_secret_access_key(),
+            session_token=vault_client.get_session_token(),
+            expires_at_epoch_millis=int(vault_client.get_expiry().timestamp() * 1000),
+        )
+    """
+
+    def __init__(
+        self,
+        access_key_id: str,
+        secret_access_key: str,
+        session_token: Optional[str] = None,
+        expires_at_epoch_millis: Optional[int] = None,
+    ):
+        if not access_key_id or not access_key_id.strip():
+            raise ValueError("access_key_id must not be blank")
+        if not secret_access_key or not secret_access_key.strip():
+            raise ValueError("secret_access_key must not be blank")
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.session_token = session_token
+        self.expires_at_epoch_millis = expires_at_epoch_millis
+
+
+#: A callable that returns AWS credentials for IAM token signing.
+#:
+#: Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
+#: a custom STS assume-role flow) instead of the default AWS credential chain.
+#:
+#: **Thread safety**: implementations must be safe for concurrent calls -- in cluster
+#: mode, independent reconnections may invoke this callable simultaneously.
+#:
+#: **Promptness**: return quickly; this callable sits on the reconnect path and
+#: a slow implementation directly extends failover time.
+#:
+#: Example::
+#:
+#:     def my_provider() -> AwsCredentials:
+#:         return AwsCredentials(
+#:             access_key_id=vault_client.get_access_key_id(),
+#:             secret_access_key=vault_client.get_secret_access_key(),
+#:             session_token=vault_client.get_session_token(),
+#:         )
+GlideCredentialProvider = Callable[[], AwsCredentials]
+
+
 class IamAuthConfig:
     """
     Configuration settings for IAM authentication.
@@ -355,6 +419,9 @@ class IamAuthConfig:
         region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
         refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
             If not provided, the core will use a default value of 300 seconds (5 min).
+        credential_provider (Optional[GlideCredentialProvider]): Optional callable that returns AWS credentials
+            for IAM token signing. When provided, credentials are fetched from this callable instead of the
+            default AWS credential chain.
     """
 
     def __init__(
@@ -363,11 +430,13 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        credential_provider: Optional["GlideCredentialProvider"] = None,
     ):
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        self.credential_provider = credential_provider
 
 
 class ServerCredentials:

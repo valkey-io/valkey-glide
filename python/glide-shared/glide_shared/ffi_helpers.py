@@ -296,6 +296,63 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
+def create_credential_provider_callback(
+    ffi,
+    credential_provider_fn,
+):
+    """
+    Wrap a Python GlideCredentialProvider callable into a CFFI
+    ``CredentialProviderCallback`` function pointer.
+
+    Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
+    """
+    if credential_provider_fn is None:
+        return ffi.NULL
+
+    def _credential_provider_callback(
+        client_id,
+        access_key_id_buf,
+        access_key_id_buf_len,
+        access_key_id_len_ptr,
+        secret_access_key_buf,
+        secret_access_key_buf_len,
+        secret_access_key_len_ptr,
+        session_token_buf,
+        session_token_buf_len,
+        session_token_len_ptr,
+        expires_at_millis_ptr,
+    ):
+        try:
+            creds = credential_provider_fn()
+            # access_key_id
+            encoded_key = creds.access_key_id.encode("utf-8")
+            write_len = min(len(encoded_key), access_key_id_buf_len)
+            ffi.memmove(access_key_id_buf, encoded_key, write_len)
+            access_key_id_len_ptr[0] = write_len
+            # secret_access_key
+            encoded_secret = creds.secret_access_key.encode("utf-8")
+            write_len = min(len(encoded_secret), secret_access_key_buf_len)
+            ffi.memmove(secret_access_key_buf, encoded_secret, write_len)
+            secret_access_key_len_ptr[0] = write_len
+            # session_token (optional)
+            if creds.session_token:
+                encoded_token = creds.session_token.encode("utf-8")
+                write_len = min(len(encoded_token), session_token_buf_len)
+                ffi.memmove(session_token_buf, encoded_token, write_len)
+                session_token_len_ptr[0] = write_len
+            else:
+                session_token_len_ptr[0] = 0
+            # expires_at (optional, epoch millis)
+            expires_at_millis_ptr[0] = creds.expires_at_epoch_millis or 0
+            return 1  # success
+        except Exception:
+            return 0  # failure — Rust will surface a CredentialsError
+
+    return ffi.callback(
+        "CredentialProviderCallback", _credential_provider_callback
+    )
+
+
 def handle_command_result(ffi, lib, command_result, response_handler):
     """Handle a synchronous CommandResult* from FFI.
 
