@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Closing a client or a `ClientPool` invalidates the scopes its clients own — the scope pool is dropped and outstanding scopes are removed from the registry, so a scope can no longer read or mutate keyspace after its parent is gone ([#6889](https://github.com/valkey-io/valkey-glide/issues/6889))
 * Core: A scope pool configured with `max_total = N` now permits N concurrent scopes instead of N-1. The pool reserved a slot against `max_total` and the caller then re-checked capacity after that reservation, so the last acquire was never given a connection and the borrower timed out ([#6795](https://github.com/valkey-io/valkey-glide/issues/6795))
 * Core/FFI: Scoped commands resolve their parent client from the scope registry without taking a pool lock, and fail if it cannot be resolved. Every binding, including Node, routes through the same entry point, so a scoped command always gets the parent's request timeout, circuit breaker, inflight limit, compression, IAM re-authentication and latency tracking ([#6796](https://github.com/valkey-io/valkey-glide/issues/6796))
 * Java: Map the Jedis compatibility layer's database selection onto GLIDE's `databaseId` instead of logging a warning and discarding it. A `JedisPool` configured for a non-zero database ran every command against database 0, silently writing to a database the caller did not ask for ([#6994](https://github.com/valkey-io/valkey-glide/issues/6994))

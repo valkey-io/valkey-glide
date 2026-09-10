@@ -2641,7 +2641,6 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     #[cfg(feature = "pool-support")]
     {
         let client_id = client_adapter_ptr as usize as u64;
-        glide_core::pool::get_client_scope_pools().remove(&client_id);
         glide_core::scope::unregister_client(client_id);
     }
 
