@@ -647,17 +647,15 @@ public class ClientPoolIntegrationTest {
      *
      * <p>This test makes the race <em>deterministic</em> by spinning up concurrent acquire/release
      * threads that keep the Rust-side Tokio pool mutex hot for the entire duration of the BLPOP
-     * flight. This ensures {@code try_lock} loses the contention window with high probability on
-     * every run.
+     * flight. On buggy code, this ensures the flag is silently dropped with high probability.
      *
      * <p>Test flow:
      *
      * <ol>
-     *   <li>Create a pool with short {@code abandonTimeout} (500 ms) and {@code maxSize=5}.
+     *   <li>Create a pool with short {@code abandonTimeout} (500 ms) and {@code maxSize=6}.
      *   <li>Start 4 contention threads, each hammering acquire → SET → release in a tight loop.
      *   <li>Wait for all contention threads to have started (are holding or cycling the lock).
-     *   <li>Issue BLPOP (30 s server-side timeout) from a 5th pool slot — flag-set races the
-     *       contention threads.
+     *   <li>Issue BLPOP (30 s server-side timeout) from one of the remaining pool slots.
      *   <li>Sleep 3× the abandon timeout so the monitor fires at least once.
      *   <li>Assert the client is still active (not reclaimed by the monitor).
      *   <li>Unblock BLPOP via LPUSH from a helper client; assert normal completion.
@@ -715,7 +713,7 @@ public class ClientPoolIntegrationTest {
 
             // ── Start contention threads ────────────────────────────────────────────
             // Each thread hammers acquire → SET → release in a tight loop to keep the
-            // Rust-side Tokio pool mutex hot.  The flag is used to signal shutdown.
+            // Rust-side pool mutex hot. stopContention signals when to exit.
             for (int i = 0; i < 4; i++) {
                 final int idx = i;
                 Thread t =
@@ -747,7 +745,6 @@ public class ClientPoolIntegrationTest {
                     "Contention threads should all be running within 10 s");
 
             // ── Acquire the BLPOP client while contention is hot ────────────────────
-            // Contention threads already hold some active slots — that's expected.
             pooledClient = pool.acquire(Duration.ofSeconds(5)).get(10, TimeUnit.SECONDS);
             assertNotNull(pooledClient, "Should acquire a client from the pool");
 
@@ -798,25 +795,25 @@ public class ClientPoolIntegrationTest {
             Object[] blpopArray = (Object[]) blpopResult;
             assertEquals(2, blpopArray.length, "BLPOP result should be [key, value]");
             assertEquals(raceKey, blpopArray[0], "BLPOP key should match");
+            assertEquals(
+                    "unblock-value", blpopArray[1].toString(), "BLPOP value should match the pushed value");
 
-            System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
         } finally {
-            // Stop contention threads (no-op if already stopped before assertion).
+            // Stop contention threads.
             stopContention.set(true);
             for (Thread t : contentionThreads) {
                 t.join(2000);
             }
-            // Best-effort cleanup of contention keys.
+            // Clean up contention keys.
             if (helper != null) {
                 for (int i = 0; i < 4; i++) {
                     try {
                         helper.del(new String[] {contKey + i}).get(2, TimeUnit.SECONDS);
                     } catch (Exception ignored) {
-                        /* best-effort */
                     }
                 }
             }
-            // Best-effort: unblock BLPOP if still in flight.
+            // Unblock BLPOP if still in flight.
             if (blpopFuture != null && !blpopFuture.isDone()) {
                 try {
                     if (helper != null) {
@@ -825,7 +822,6 @@ public class ClientPoolIntegrationTest {
                                 .get(2, TimeUnit.SECONDS);
                     }
                 } catch (Exception ignored) {
-                    /* best-effort */
                 }
             }
             if (pooledClient != null) pooledClient.close();
