@@ -63,7 +63,7 @@ timed_tokio_test!(
 
         // A db-0 client must not see the key; a second db-1 client must.
         let c0 = glide::GlideClient::connect(
-            GlideClientConfiguration::from_url(&format!("redis://127.0.0.1:{}", srv.port)).unwrap(),
+            GlideClientConfiguration::from_url(format!("redis://127.0.0.1:{}", srv.port)).unwrap(),
         )
         .await
         .unwrap();

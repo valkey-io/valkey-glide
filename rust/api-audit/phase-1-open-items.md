@@ -1,10 +1,11 @@
-# Phase 1 — deferred items (for Phase 3)
+# Deferred items (for later phases)
 
-Phase 1 (core Valkey types) of #7024 landed the public reply/arg types without
-touching `glide_send_owned`, the command signatures, or the parity guard. The
-items below are intentionally deferred; each has an inline `TODO #7024` marker at
-the code site (`grep -rn "TODO #7024" rust/`). This file is the longer-form
-rationale for the ones that need more than a one-line comment.
+Phases 1–2 of #7024 landed the public reply/arg types, the `Result` rename,
+`SetExpiry`, and a glide-owned `IntoConnectionInfo` — without touching
+`glide_send_owned`, the command signatures, or the parity guard. The items below
+are intentionally deferred; each has an inline `TODO #7024` marker at the code
+site (`grep -rn "TODO #7024" rust/`). This file is the longer-form rationale for
+the ones that need more than a one-line comment.
 
 ## Command layer → Valkey types (the big one)
 
@@ -22,9 +23,18 @@ This is what makes the following items actionable:
   them onto `ValkeyValue` (public) and make the `redis::Value` forms `pub(crate)`.
 - **`ValkeyFuture`** was removed from Phase 1 (nothing returned it); re-add it
   beside `ValkeyResult` in `lib.rs` when `glide_send_owned` uses it.
-- **Parity guard** needs a redis→valkey generic-bound name mapping
-  (`ToRedisArgs`→`ToValkeyArgs`, `FromRedisValue`→`FromValkeyValue`) once the
-  command bounds are renamed.
+- **Parity guard** needs a redis→valkey name mapping
+  (`ToRedisArgs`→`ToValkeyArgs`, `FromRedisValue`→`FromValkeyValue`, and the
+  param-type renames below) once the command signatures change.
+- **Command-param types** `Direction`, `Expiry`, `SetOptions`, `LposOptions`
+  (deferred from Phase 2) are macro-table params in `core.rs`, forwarded verbatim
+  to `Cmd::$name`. Converting them to glide-owned types needs the macro dispatch
+  to convert glide args first. (`Expiry` is also used in hand-written `hgetex`.)
+- **`Cmd`** — glide-owned command builder; replace at the executor seam
+  (`execute_command` / `glide_send_owned`) together with the return-type rewrite.
+- **`Pipeline`** — glide-owned pipeline; tied to redis's typed pipeline decoding
+  (`query_glide`) and glide-core `send_pipeline`/`send_transaction`
+  (`execute_pipeline`). Not a small owned type; lands with the decode rework.
 
 ## `ValkeyValue::into_redis` should disappear
 

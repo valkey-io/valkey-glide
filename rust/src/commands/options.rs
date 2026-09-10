@@ -4,6 +4,9 @@
 //! Mirrors the Python `glide_shared.commands.core_options` and
 //! `command_args` modules.
 
+// TODO #6904: investigate whether the latest redis-rs version defines equivalents
+// for these Python-mirrored option types, to mirror redis-rs instead. (`SetExpiry`
+// already mirrors redis-rs and is exempt.)
 use redis::Cmd;
 
 /// Condition under which a `SET` (or similar) should be applied.
@@ -48,6 +51,39 @@ impl ExpireOptions {
             ExpireOptions::HasExistingExpiry => cmd.arg("XX"),
             ExpireOptions::NewExpiryGreaterThanCurrent => cmd.arg("GT"),
             ExpireOptions::NewExpiryLessThanCurrent => cmd.arg("LT"),
+        };
+    }
+}
+
+/// Expiry to apply when setting a value.
+///
+/// Mirrors redis-rs's `SetExpiry` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetExpiry {
+    /// Expire after the given number of seconds (`EX`).
+    EX(usize),
+
+    /// Expire after the given number of milliseconds (`PX`).
+    PX(usize),
+
+    /// Expire at the given Unix time in seconds (`EXAT`).
+    EXAT(usize),
+
+    /// Expire at the given Unix time in milliseconds (`PXAT`).
+    PXAT(usize),
+
+    /// Retain the key's existing TTL (`KEEPTTL`).
+    KEEPTTL,
+}
+
+impl SetExpiry {
+    pub(crate) fn add_to(&self, cmd: &mut Cmd) {
+        match self {
+            SetExpiry::EX(secs) => cmd.arg("EX").arg(*secs),
+            SetExpiry::PX(millis) => cmd.arg("PX").arg(*millis),
+            SetExpiry::EXAT(ts) => cmd.arg("EXAT").arg(*ts),
+            SetExpiry::PXAT(ts) => cmd.arg("PXAT").arg(*ts),
+            SetExpiry::KEEPTTL => cmd.arg("KEEPTTL"),
         };
     }
 }
@@ -302,6 +338,22 @@ mod tests {
         let mut cmd = Cmd::new();
         ConditionalChange::OnlyIfDoesNotExist.add_to(&mut cmd);
         assert_eq!(args_of(&cmd), vec!["NX"]);
+    }
+
+    #[test]
+    fn set_expiry_args() {
+        let cases: [(SetExpiry, Vec<&str>); 5] = [
+            (SetExpiry::EX(60), vec!["EX", "60"]),
+            (SetExpiry::PX(1500), vec!["PX", "1500"]),
+            (SetExpiry::EXAT(100), vec!["EXAT", "100"]),
+            (SetExpiry::PXAT(200), vec!["PXAT", "200"]),
+            (SetExpiry::KEEPTTL, vec!["KEEPTTL"]),
+        ];
+        for (opt, expected) in cases {
+            let mut cmd = Cmd::new();
+            opt.add_to(&mut cmd);
+            assert_eq!(args_of(&cmd), expected);
+        }
     }
 
     #[test]

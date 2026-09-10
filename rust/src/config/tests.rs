@@ -768,13 +768,39 @@ fn cluster_request_full() {
 
 #[test]
 fn from_url_basic() {
-    let cfg = GlideClientConfiguration::from_url("redis://localhost:6380").unwrap();
-    assert_eq!(cfg.addresses.len(), 1);
-    assert_eq!(cfg.addresses[0].host, "localhost");
-    assert_eq!(cfg.addresses[0].port, 6380);
-    assert_eq!(cfg.tls, TlsConfig::NoTls);
-    assert_eq!(cfg.database_id, 0);
-    assert!(cfg.credentials.is_none());
+    fn check_standalone(url: impl AsRef<str>) {
+        let cfg = GlideClientConfiguration::from_url(url).unwrap();
+        assert_eq!(cfg.addresses.len(), 1);
+        assert_eq!(cfg.addresses[0].host, "localhost");
+        assert_eq!(cfg.addresses[0].port, 6380);
+        assert_eq!(cfg.tls, TlsConfig::NoTls);
+        assert_eq!(cfg.database_id, 0);
+        assert!(cfg.credentials.is_none());
+    }
+
+    fn check_cluster(url: impl AsRef<str>) {
+        let cfg = GlideClusterClientConfiguration::from_url(url).unwrap();
+        assert_eq!(cfg.addresses.len(), 1);
+        assert_eq!(cfg.addresses[0].host, "localhost");
+        assert_eq!(cfg.addresses[0].port, 6380);
+        assert_eq!(cfg.tls, TlsConfig::NoTls);
+        assert!(cfg.credentials.is_none());
+    }
+
+    // Verify types that implement `AsRef<str>`.
+    let s = "redis://localhost:6380";
+    check_standalone(s);
+    check_cluster(s);
+
+    let owned = s.to_string();
+    check_standalone(owned.clone());
+    check_standalone(&owned);
+    check_cluster(owned.clone());
+    check_cluster(&owned);
+
+    let url = s.parse::<url::Url>().unwrap();
+    check_standalone(&url);
+    check_cluster(&url);
 }
 
 #[test]

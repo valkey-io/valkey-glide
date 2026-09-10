@@ -111,6 +111,8 @@ pub fn to_unit(_value: Value) -> ValkeyResult<()> {
 
 /// A value returned by the server.
 ///
+/// Mirrors redis-rs's `Value` type.
+///
 /// TODO #7024: Revisit this documentation.
 /// Mirrors every RESP2/RESP3 reply shape. Decode into concrete Rust types with
 /// the `to_*`/`from_*` helpers in this module or via [`FromValkeyValue`].
@@ -170,6 +172,8 @@ pub enum ValkeyValue {
 }
 
 /// The declared text format of a [`ValkeyValue::VerbatimString`].
+///
+/// Mirrors redis-rs's `VerbatimFormat` type.
 /// TODO #7024: Revisit this documentation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValkeyVerbatimFormat {
@@ -186,6 +190,8 @@ pub enum ValkeyVerbatimFormat {
 // TODO #7024: revisit — flat struct vs mirroring redis's ServerError variants
 // (ExtensionError/KnownError + ServerErrorKind, unnameable from this crate today).
 /// An error reply carried in-band as a [`ValkeyValue::ServerError`].
+///
+/// Mirrors redis-rs's `ServerError` type.
 /// TODO #7024: Revisit this documentation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValkeyServerError {

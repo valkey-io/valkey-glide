@@ -23,7 +23,7 @@ pub use common::{
 };
 pub use standalone::GlideClientConfiguration;
 
-pub use glide_core::client::NodeDiscoveryMode;
+pub use glide_core::client::NodeDiscoveryMode; // TODO #7024: Extract/hide.
 
 #[cfg(test)]
 mod tests;
