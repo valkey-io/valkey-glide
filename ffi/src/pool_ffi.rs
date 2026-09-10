@@ -674,32 +674,14 @@ pub unsafe extern "C" fn glide_scope_execute_async(
         None => return -2,
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&scope_id).is_none() {
-        return -1;
-    }
+    let client = match scope::resolve_scope_parent(scope_id) {
+        Some(c) => c,
+        None => return -1,
+    };
 
     let runtime = get_pool_runtime();
 
     runtime.spawn(async move {
-        // Get the parent client for timeout/decompression/IAM
-        let client_registry = scope::get_client_registry();
-        let client = {
-            let pools = glide_core::pool::get_client_scope_pools();
-            let parent_id = pools
-                .iter()
-                .find(|e| {
-                    e.value()
-                        .try_lock()
-                        .map(|p| p.in_use.contains_key(&scope_id))
-                        .unwrap_or(false)
-                })
-                .map(|e| *e.key());
-
-            parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
-        };
-
         // OTel: create span for scope command
         let span_ptr = if GlideOpenTelemetry::is_initialized() {
             create_otel_span(RequestType::CustomCommand)
@@ -709,10 +691,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
 
         // Watchdog: register for timeout diagnostics
         let cmd_start = std::time::Instant::now();
-        let timeout_duration = client
-            .as_ref()
-            .map(|c| c.get_request_timeout())
-            .unwrap_or(std::time::Duration::from_millis(250));
+        let timeout_duration = client.get_request_timeout();
 
         // Skip the watchdog for blocking commands: it would abort them at the flat
         // request timeout. Blocking commands manage their own deadline in the core.
@@ -721,12 +700,11 @@ pub unsafe extern "C" fn glide_scope_execute_async(
         // Execute with watchdog race — send_scope_command handles CB, inflight,
         // compression, latency recording internally
         let result = if !arm_watchdog {
-            scope::send_scope_command(scope_id, &cmd_name, &mut args, client.as_ref()).await
+            scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&client)).await
         } else {
             let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
                 .register(timeout_duration, cmd_start);
-            let execute =
-                scope::send_scope_command(scope_id, &cmd_name, &mut args, client.as_ref());
+            let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&client));
             tokio::pin!(execute);
             tokio::select! {
                 result = &mut execute => result,
@@ -736,7 +714,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                         Ok(()) => {
                             let actual_elapsed = cmd_start.elapsed();
                             let pending = glide_core::timeout_watchdog::pending_count();
-                            let p99 = client.as_ref().and_then(|c| c.latency_tracker().p99());
+                            let p99 = client.latency_tracker().p99();
                             let cause = if pending > 100 {
                                 glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
                                     pending_total: pending,
@@ -927,25 +905,9 @@ pub unsafe extern "C" fn glide_scope_execute(
         None => return std::ptr::null_mut(),
     };
 
-    // Verify scope exists
-    let registry = glide_core::pool::get_scope_registry();
-    if registry.get(&scope_id).is_none() {
-        return std::ptr::null_mut();
-    }
-
-    let client_registry = scope::get_client_registry();
-    let parent_client = {
-        let pools = glide_core::pool::get_client_scope_pools();
-        let parent_id = pools
-            .iter()
-            .find(|e| {
-                e.value()
-                    .try_lock()
-                    .map(|p| p.in_use.contains_key(&scope_id))
-                    .unwrap_or(false)
-            })
-            .map(|e| *e.key());
-        parent_id.and_then(|pid| client_registry.get(&pid).map(|e| e.value().clone()))
+    let parent_client = match scope::resolve_scope_parent(scope_id) {
+        Some(c) => c,
+        None => return std::ptr::null_mut(),
     };
 
     let runtime = get_pool_runtime();
@@ -959,10 +921,7 @@ pub unsafe extern "C" fn glide_scope_execute(
 
     // Watchdog: register for timeout diagnostics
     let cmd_start = std::time::Instant::now();
-    let timeout_duration = parent_client
-        .as_ref()
-        .map(|c| c.get_request_timeout())
-        .unwrap_or(std::time::Duration::from_millis(250));
+    let timeout_duration = parent_client.get_request_timeout();
 
     // Skip the watchdog for blocking commands: it would abort them at the flat
     // request timeout. Blocking commands manage their own deadline in the core.
@@ -970,18 +929,13 @@ pub unsafe extern "C" fn glide_scope_execute(
 
     let result = runtime.block_on(async {
         if !arm_watchdog {
-            return scope::send_scope_command(
-                scope_id,
-                &cmd_name,
-                &mut args,
-                parent_client.as_ref(),
-            )
-            .await;
+            return scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&parent_client))
+                .await;
         }
         let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
             .register(timeout_duration, cmd_start);
         let execute =
-            scope::send_scope_command(scope_id, &cmd_name, &mut args, parent_client.as_ref());
+            scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&parent_client));
         tokio::pin!(execute);
         tokio::select! {
             result = &mut execute => result,
@@ -991,7 +945,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                     Ok(()) => {
                         let actual_elapsed = cmd_start.elapsed();
                         let pending = glide_core::timeout_watchdog::pending_count();
-                        let p99 = parent_client.as_ref().and_then(|c| c.latency_tracker().p99());
+                        let p99 = parent_client.latency_tracker().p99();
                         let cause = if pending > 100 {
                             glide_core::timeout_watchdog::TimeoutCause::SystemOverload {
                                 pending_total: pending,
