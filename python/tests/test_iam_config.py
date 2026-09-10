@@ -178,17 +178,21 @@ class TestGlideCredentialProvider:
         )
         assert config.credential_provider is my_provider
 
-    def test_async_provider_raises(self):
+    def test_async_provider_accepted_in_config(self):
+        """Async providers are accepted at config time; the async client bridges them."""
+        import asyncio
+
         async def async_provider() -> AwsCredentials:
             return AwsCredentials(access_key_id="key", secret_access_key="secret")
 
-        with pytest.raises(ValueError, match="synchronous"):
-            IamAuthConfig(
-                cluster_name="c",
-                service=ServiceType.ELASTICACHE,
-                region="us-east-1",
-                credential_provider=async_provider,
-            )
+        # Should NOT raise -- async providers are now supported in the async client
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=async_provider,
+        )
+        assert config.credential_provider is async_provider
 
     def test_non_callable_raises(self):
         with pytest.raises(ValueError, match="callable"):
