@@ -54,8 +54,8 @@ const (
 // AwsCredentials holds AWS credentials returned by a GlideCredentialProvider.
 // All fields match the Java AwsCredentials class for cross-language consistency.
 type AwsCredentials struct {
-	// AccessKeyId is the AWS Access Key ID. Required; must not be blank.
-	AccessKeyId string
+	// AccessKeyID is the AWS Access Key ID. Required; must not be blank.
+	AccessKeyID string
 	// SecretAccessKey is the AWS Secret Access Key. Required; must not be blank.
 	SecretAccessKey string
 	// SessionToken is the AWS Session Token. Empty string for long-term credentials.
@@ -67,7 +67,7 @@ type AwsCredentials struct {
 
 // GlideCredentialProvider is a callback that supplies AWS credentials for IAM token signing.
 //
-// Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
+// Assign a function of this type when credentials come from a custom source (e.g. HashiCorp Vault,
 // a custom STS assume-role flow) instead of the default AWS credential chain.
 //
 // Thread safety: implementations must be safe for concurrent calls -- in cluster mode,

@@ -71,12 +71,14 @@ type clientConfiguration interface {
 }
 
 type baseClient struct {
-	pending              map[uintptr]struct{}
-	coreClient           unsafe.Pointer
-	mu                   *sync.Mutex
-	messageHandler       *MessageHandler
-	resolverID           uintptr
-	credentialProviderID uintptr
+	pending        map[uintptr]struct{}
+	coreClient     unsafe.Pointer
+	mu             *sync.Mutex
+	messageHandler *MessageHandler
+	// resolverID is the shared callback ID used for both the address-resolver and the
+	// credential-provider callbacks. Both are registered under the same clientID, so a
+	// single field suffices; no separate credentialProviderID is needed.
+	resolverID uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -220,7 +222,6 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 
 	client.coreClient = cResponse.conn_ptr
 	client.resolverID = clientID
-	client.credentialProviderID = clientID
 
 	// Register the client in our registry using the pointer value from C
 	registerClient(client, uintptr(cResponse.conn_ptr))
@@ -244,12 +245,8 @@ func (client *baseClient) Close() {
 
 	if client.resolverID != 0 {
 		unregisterResolver(client.resolverID)
+		unregisterCredentialProvider(client.resolverID)
 		client.resolverID = 0
-	}
-
-	if client.credentialProviderID != 0 {
-		unregisterCredentialProvider(client.credentialProviderID)
-		client.credentialProviderID = 0
 	}
 
 	client.failPendingRequests(NewClosingError("ExecuteCommand failed: the client is closed"))
