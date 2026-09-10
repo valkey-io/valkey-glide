@@ -2066,6 +2066,8 @@ where
 
             let notifier = RefreshTaskNotifier::new();
             notifiers.push(notifier.get_notifier());
+            let task_identity = Arc::new(());
+            let task_identity_for_task = task_identity.clone();
 
             let handle = tokio::spawn(async move {
                 log_info_rate_limited!(
@@ -2116,6 +2118,9 @@ where
                                     .refresh_conn_state
                                     .refresh_address_in_progress
                                     .get_mut(&address_clone_for_task)
+                                    .filter(|state| {
+                                        state.is_same_generation(&task_identity_for_task)
+                                    })
                                 {
                                     conn_state.status.flip_status_to_too_long();
                                 }
@@ -2143,7 +2148,8 @@ where
                         let task_is_current = conn_lock
                             .refresh_conn_state
                             .refresh_address_in_progress
-                            .contains_key(&address_clone_for_task);
+                            .get(&address_clone_for_task)
+                            .is_some_and(|state| state.is_same_generation(&task_identity_for_task));
                         if task_is_current {
                             conn_lock.replace_or_add_connection_for_address(
                                 &address_clone_for_task,
@@ -2166,7 +2172,8 @@ where
                 let task_is_current = conn_lock
                     .refresh_conn_state
                     .refresh_address_in_progress
-                    .contains_key(&address_clone_for_task);
+                    .get(&address_clone_for_task)
+                    .is_some_and(|state| state.is_same_generation(&task_identity_for_task));
                 if task_is_current {
                     conn_lock
                         .refresh_conn_state
@@ -2184,7 +2191,7 @@ where
             });
 
             // Keep the task handle and notifier into the RefreshState of this address
-            let refresh_task_state = RefreshTaskState::new(handle, notifier);
+            let refresh_task_state = RefreshTaskState::new(handle, notifier, task_identity);
 
             conn_lock
                 .refresh_conn_state
