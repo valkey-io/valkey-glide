@@ -296,19 +296,24 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
-def create_credential_provider_callback(ffi, credential_provider_fn):
+def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=None):
     """
     Wrap a Python GlideCredentialProvider callable into a CFFI
     ``CredentialProviderCallback`` function pointer.
 
     Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
 
-    Note: ``credential_provider_fn`` must be a **synchronous** callable.
-    Async functions (coroutines) are not supported and will cause every
-    IAM reconnect to fail silently.
+    Both synchronous and async (coroutine function) providers are supported.
+    For async providers, ``event_loop`` must be provided -- the coroutine is
+    scheduled on that loop via ``asyncio.run_coroutine_threadsafe``. In the
+    sync glide client, only synchronous providers are supported.
     """
     if credential_provider_fn is None:
         return ffi.NULL
+
+    import inspect
+
+    is_async = inspect.iscoroutinefunction(credential_provider_fn)
 
     def _credential_provider_callback(
         client_id,  # provided by Rust; unused on the Python side
@@ -324,7 +329,24 @@ def create_credential_provider_callback(ffi, credential_provider_fn):
         expires_at_millis_ptr,
     ):
         try:
-            creds = credential_provider_fn()
+            if is_async:
+                if event_loop is None or event_loop.is_closed():
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "GlideCredentialProvider is async but no event loop is available"
+                    )
+                    return 0
+                import asyncio
+
+                future = asyncio.run_coroutine_threadsafe(
+                    credential_provider_fn(), event_loop
+                )
+                # Use a timeout slightly larger than Rust's 10-second callback timeout
+                # so that Rust's timeout fires first with a clear error message.
+                creds = future.result(timeout=12)
+            else:
+                creds = credential_provider_fn()
             # Fail fast if any required credential would be truncated.
             # Returning 0 causes Rust to surface a clear CredentialsError.
             encoded_key = creds.access_key_id.encode("utf-8")

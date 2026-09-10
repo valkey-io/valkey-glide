@@ -831,6 +831,8 @@ export interface AwsCredentials {
  * Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
  * a custom STS assume-role flow) instead of the default AWS credential chain.
  *
+ * Both synchronous and asynchronous (Promise-returning) providers are supported.
+ *
  * **Thread safety**: implementations must be safe for concurrent calls — in cluster
  * mode, independent reconnections may invoke this callback simultaneously.
  *
@@ -843,22 +845,18 @@ export interface AwsCredentials {
  * const provider: GlideCredentialProvider = () => ({
  *     accessKeyId: myVaultClient.getAccessKeyId(),
  *     secretAccessKey: myVaultClient.getSecretAccessKey(),
- *     sessionToken: myVaultClient.getSessionToken(),
  * });
  *
- * // If your source is async, resolve credentials ahead of time:
- * const creds = await myVaultClient.getCredentials();
- * const provider: GlideCredentialProvider = () => ({
- *     accessKeyId: creds.accessKeyId,
- *     secretAccessKey: creds.secretAccessKey,
+ * // Async provider:
+ * const asyncProvider: GlideCredentialProvider = async () => ({
+ *     accessKeyId: await myVaultClient.getAccessKeyId(),
+ *     secretAccessKey: await myVaultClient.getSecretAccessKey(),
+ *     sessionToken: await myVaultClient.getSessionToken(),
  * });
  * ```
- *
- * **Note**: the callback must be synchronous. Async functions (returning
- * `Promise<AwsCredentials>`) are not supported and will cause IAM authentication
- * to fail silently. Resolve credentials before constructing the provider.
  */
-export type GlideCredentialProvider = () => AwsCredentials;
+export type GlideCredentialProvider = () =>
+    AwsCredentials | Promise<AwsCredentials>;
 
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {

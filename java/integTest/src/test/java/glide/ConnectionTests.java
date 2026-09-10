@@ -1375,11 +1375,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1412,11 +1413,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1449,7 +1451,10 @@ public class ConnectionTests {
         // A provider that always throws should cause client creation to fail.
         GlideCredentialProvider throwingProvider =
                 () -> {
-                    throw new RuntimeException("injected test error from credentials provider");
+                    CompletableFuture<AwsCredentials> future = new CompletableFuture<>();
+                    future.completeExceptionally(
+                            new RuntimeException("injected test error from credentials provider"));
+                    return future;
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1482,12 +1487,13 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .expiresAt(Instant.now().plusSeconds(3600))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .expiresAt(Instant.now().plusSeconds(3600))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1516,11 +1522,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1579,11 +1586,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1618,11 +1626,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1657,11 +1666,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()

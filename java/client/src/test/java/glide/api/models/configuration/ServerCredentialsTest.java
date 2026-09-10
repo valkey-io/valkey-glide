@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 public class ServerCredentialsTest {
@@ -143,11 +144,12 @@ public class ServerCredentialsTest {
     public void testIamWithCustomCredentialsProvider() throws Exception {
         GlideCredentialProvider provider =
                 () ->
-                        AwsCredentials.builder()
-                                .accessKeyId("test_access_key")
-                                .secretAccessKey("test_secret_key")
-                                .sessionToken("test_session_token")
-                                .build();
+                        CompletableFuture.completedFuture(
+                                AwsCredentials.builder()
+                                        .accessKeyId("test_access_key")
+                                        .secretAccessKey("test_secret_key")
+                                        .sessionToken("test_session_token")
+                                        .build());
 
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -158,7 +160,7 @@ public class ServerCredentialsTest {
                         .build();
 
         assertNotNull(iamConfig.getCredentialsProvider());
-        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials();
+        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials().get();
         assertEquals("test_access_key", creds.getAccessKeyId());
         assertEquals("test_secret_key", creds.getSecretAccessKey());
         assertEquals("test_session_token", creds.getSessionToken());
@@ -169,10 +171,11 @@ public class ServerCredentialsTest {
         // Long-term credentials without a session token
         GlideCredentialProvider provider =
                 () ->
-                        AwsCredentials.builder()
-                                .accessKeyId("test_access_key")
-                                .secretAccessKey("test_secret_key")
-                                .build(); // sessionToken omitted → null
+                        CompletableFuture.completedFuture(
+                                AwsCredentials.builder()
+                                        .accessKeyId("test_access_key")
+                                        .secretAccessKey("test_secret_key")
+                                        .build()); // sessionToken omitted → null
 
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -183,7 +186,7 @@ public class ServerCredentialsTest {
                         .build();
 
         assertNotNull(iamConfig.getCredentialsProvider());
-        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials();
+        AwsCredentials creds = iamConfig.getCredentialsProvider().getCredentials().get();
         assertEquals("test_access_key", creds.getAccessKeyId());
         assertEquals("test_secret_key", creds.getSecretAccessKey());
         assertNull(creds.getSessionToken());
@@ -239,12 +242,13 @@ public class ServerCredentialsTest {
         java.time.Instant expiry = java.time.Instant.now().plusSeconds(3600);
         GlideCredentialProvider provider =
                 () ->
-                        AwsCredentials.builder()
-                                .accessKeyId("test_key")
-                                .secretAccessKey("test_secret")
-                                .expiresAt(expiry)
-                                .build();
-        AwsCredentials creds = provider.getCredentials();
+                        CompletableFuture.completedFuture(
+                                AwsCredentials.builder()
+                                        .accessKeyId("test_key")
+                                        .secretAccessKey("test_secret")
+                                        .expiresAt(expiry)
+                                        .build());
+        AwsCredentials creds = provider.getCredentials().get();
         assertEquals("test_key", creds.getAccessKeyId());
         assertEquals("test_secret", creds.getSecretAccessKey());
         assertNull(creds.getSessionToken());
