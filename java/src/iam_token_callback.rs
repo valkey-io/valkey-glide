@@ -13,6 +13,8 @@ use log::error;
 /// while the Rust `IAMTokenManager` is alive.  The callback is invoked from a
 /// `tokio::task::spawn_blocking` thread managed by the async token-refresh task.
 /// `jvm.attach_current_thread_as_daemon()` handles the necessary JNI thread attachment.
+/// The interface method `getCredentials()` returns a `CompletableFuture<AwsCredentials>`;
+/// we call `.get()` on the future to block and obtain the credentials.
 pub struct JavaIamTokenCallback {
     jvm: Arc<JavaVM>,
     callback_global: GlobalRef,
@@ -47,11 +49,11 @@ impl JavaIamTokenCallback {
             }
         };
 
-        // The Java interface method: AwsCredentials getCredentials() throws Exception
+        // The Java interface method: CompletableFuture<AwsCredentials> getCredentials()
         let get_credentials_method_id = match env.get_method_id(
             class,
             "getCredentials",
-            "()Lglide/api/models/configuration/AwsCredentials;",
+            "()Ljava/util/concurrent/CompletableFuture;",
         ) {
             Ok(mid) => mid,
             Err(e) => {
@@ -158,11 +160,49 @@ impl JavaIamTokenCallback {
             IamCallbackError::CallFailed(exception_msg)
         })?;
 
-        // Unwrap the returned AwsCredentials object.
-        let creds_obj = result.l().map_err(IamCallbackError::InvalidReturn)?;
+        // Unwrap the returned CompletableFuture<AwsCredentials>.
+        let future_obj = result.l().map_err(IamCallbackError::InvalidReturn)?;
+        if future_obj.is_null() {
+            return Err(IamCallbackError::InvalidCredentials(
+                "getCredentials() returned null CompletableFuture".to_string(),
+            ));
+        }
+
+        // Block on the future: CompletableFuture.get() -> Object
+        // This is safe because we are called from tokio::task::spawn_blocking,
+        // so blocking here does not starve the async executor.
+        let creds_result = env.call_method(&future_obj, "get", "()Ljava/lang/Object;", &[]);
+        // .get() can throw ExecutionException or InterruptedException—handle as CallFailed.
+        let creds_result = creds_result.map_err(|err| {
+            let msg = if env.exception_check().unwrap_or(false) {
+                env.exception_occurred()
+                    .ok()
+                    .and_then(|t| {
+                        let _ = env.exception_clear();
+                        let msg = env
+                            .call_method(t, "getMessage", "()Ljava/lang/String;", &[])
+                            .ok()
+                            .and_then(|v| v.l().ok())
+                            .filter(|o| !o.is_null())
+                            .and_then(|jstr| {
+                                env.get_string(&JString::from(jstr)).ok().map(|s| s.into())
+                            });
+                        if env.exception_check().unwrap_or(false) {
+                            let _ = env.exception_clear();
+                        }
+                        msg
+                    })
+                    .unwrap_or_else(|| format!("(no message): {err}"))
+            } else {
+                format!("(no Java exception): {err}")
+            };
+            IamCallbackError::CallFailed(msg)
+        })?;
+
+        let creds_obj = creds_result.l().map_err(IamCallbackError::InvalidReturn)?;
         if creds_obj.is_null() {
             return Err(IamCallbackError::InvalidCredentials(
-                "getCredentials() returned null".to_string(),
+                "CompletableFuture.get() returned null AwsCredentials".to_string(),
             ));
         }
 

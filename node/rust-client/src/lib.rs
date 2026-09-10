@@ -2665,7 +2665,9 @@ pub struct JsAwsCredentials {
 /// A Node.js credential provider wrapper.
 /// It holds a `ThreadsafeFunction` that invokes the JS callback and delivers
 /// the resulting `JsAwsCredentials` back to the calling thread via a channel.
-type CredentialProviderTsfn = ThreadsafeFunction<(), JsAwsCredentials, (), Status, false, true>;
+/// The callback may return either a plain `JsAwsCredentials` or a
+/// `Promise<JsAwsCredentials>`; both are handled transparently.
+type CredentialProviderTsfn = ThreadsafeFunction<(), Unknown<'static>, (), Status, false, true>;
 
 struct NodeCredentialsProvider {
     tsfn: CredentialProviderTsfn,
@@ -2687,15 +2689,90 @@ impl NodeCredentialsProvider {
         ),
         glide_core::iam::GlideIAMError,
     > {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<
-            std::result::Result<JsAwsCredentials, napi::Error<Status>>,
-        >(1);
+        use std::sync::Arc as StdArc;
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<std::result::Result<JsAwsCredentials, String>>(1);
+        let tx = StdArc::new(tx);
 
         let status = self.tsfn.call_with_return_value(
             (),
-            ThreadsafeFunctionCallMode::Blocking,
-            move |result, _env| {
-                let _ = tx.send(result);
+            ThreadsafeFunctionCallMode::NonBlocking,
+            move |result: Result<Unknown<'static>>, _env: Env| {
+                use napi::JsValue as NapiJsValue;
+
+                let unknown = match result {
+                    Ok(u) => u,
+                    Err(e) => {
+                        let _ = tx.send(Err(format!("GlideCredentialProvider JS error: {e}")));
+                        return Ok(());
+                    }
+                };
+
+                let val = unknown.value();
+
+                // Determine whether the JS callback returned a Promise or a plain value.
+                let mut is_promise = false;
+                // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                unsafe { napi::sys::napi_is_promise(val.env, val.value, &mut is_promise) };
+
+                if is_promise {
+                    // The JS callback returned a Promise. Attach .then() and .catch()
+                    // handlers that forward the resolved value (or rejection) over the
+                    // mpsc channel.
+                    use napi::bindgen_prelude::{FromNapiValue, PromiseRaw};
+
+                    // SAFETY: we verified this is a Promise above.
+                    let promise_raw = unsafe {
+                        PromiseRaw::<JsAwsCredentials>::from_napi_value(val.env, val.value)
+                    };
+
+                    match promise_raw {
+                        Ok(pr) => {
+                            let tx_resolve = tx.clone();
+                            let tx_reject = tx.clone();
+
+                            // Attach .then() — fires when the Promise resolves
+                            let then_result = pr.then(move |ctx| {
+                                let _ = tx_resolve.send(Ok(ctx.value));
+                                Ok(())
+                            });
+
+                            match then_result {
+                                Ok(pr2) => {
+                                    // Attach .catch() — fires when the Promise rejects
+                                    let _ = pr2.catch(
+                                        move |_ctx: napi::bindgen_prelude::CallbackContext<
+                                            Unknown<'_>,
+                                        >| {
+                                            let _ = tx_reject.send(Err(
+                                                "GlideCredentialProvider Promise rejected"
+                                                    .to_string(),
+                                            ));
+                                            Ok(())
+                                        },
+                                    );
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(Err(format!(
+                                        "Failed to attach .then() to credential Promise: {e}"
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(format!(
+                                "Failed to read GlideCredentialProvider Promise: {e}"
+                            )));
+                        }
+                    }
+                } else {
+                    // Synchronous return — deserialize the Unknown directly.
+                    use napi::bindgen_prelude::FromNapiValue;
+                    // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                    let result = unsafe { JsAwsCredentials::from_napi_value(val.env, val.value) }
+                        .map_err(|e: napi::Error| e.to_string());
+                    let _ = tx.send(result);
+                }
                 Ok(())
             },
         );
@@ -2707,10 +2784,10 @@ impl NodeCredentialsProvider {
         }
 
         let creds = rx
-            .recv()
+            .recv_timeout(std::time::Duration::from_secs(12))
             .map_err(|e| {
                 glide_core::iam::GlideIAMError::CredentialsError(format!(
-                    "GlideCredentialProvider callback channel error: {e}"
+                    "GlideCredentialProvider callback timed out or channel closed: {e}"
                 ))
             })?
             .map_err(|e| {
@@ -2738,10 +2815,15 @@ impl NodeCredentialsProvider {
 /// Returns the registry key (UUID) that must be set in the ConnectionRequest's
 /// `credential_provider_key` field so the socket listener can look it up.
 ///
-/// The JS callback signature is: `() => AwsCredentials`
+/// The JS callback signature is: `() => AwsCredentials | Promise<AwsCredentials>`
+/// Both synchronous and Promise-returning (async) callbacks are supported.
 #[napi(js_name = "registerCredentialProvider")]
 pub fn register_credential_provider(
-    #[napi(ts_arg_type = "() => AwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
+    #[napi(ts_arg_type = "() => AwsCredentials | Promise<AwsCredentials>")] callback: Function<
+        '_,
+        (),
+        Unknown<'static>,
+    >,
 ) -> Result<String> {
     let tsfn = callback
         .build_threadsafe_function::<()>()
