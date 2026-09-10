@@ -64,6 +64,7 @@ from glide_shared.ffi_helpers import (
     FFIClientTypeEnum,
     convert_commands_to_c_batch_info,
     create_c_batch_options,
+    create_credential_provider_callback,
     to_c_route_ptr_and_len,
     to_c_strings,
 )
@@ -558,6 +559,7 @@ class BaseClient(CoreCommands):
         self._callback_id_gen = itertools.count(1)
         self._lock = threading.Lock()
         self._address_resolver_callback_ref = None
+        self._credential_provider_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
         self._pending_push_notifications: List[PubSubMsg] = []
@@ -620,12 +622,28 @@ class BaseClient(CoreCommands):
         self._pipe_client_id = next(_next_client_id)
         self._create_pid = os.getpid()
 
+        # Get credential provider from IAM config if set
+        _credential_provider_fn = None
+        if (
+            self.config.credentials is not None
+            and hasattr(self.config.credentials, "iam_config")
+            and self.config.credentials.iam_config is not None
+            and self.config.credentials.iam_config.credential_provider is not None
+        ):
+            _credential_provider_fn = self.config.credentials.iam_config.credential_provider
+
+        credential_provider_callback = create_credential_provider_callback(
+            self._ffi, _credential_provider_fn
+        )
+        self._credential_provider_callback_ref = credential_provider_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
             address_resolver_callback,
+            credential_provider_callback,
             self._pipe_client_id,
         )
 
