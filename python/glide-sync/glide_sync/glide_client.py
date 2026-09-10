@@ -191,9 +191,7 @@ class BaseClient(CoreCommands):
         credential_provider_callback = self._ffi.NULL
         _credential_provider_fn = None
         if (
-            hasattr(self._config, "credentials")
-            and self._config.credentials is not None
-            and hasattr(self._config.credentials, "iam_config")
+            self._config.credentials is not None
             and self._config.credentials.iam_config is not None
             and self._config.credentials.iam_config.credential_provider is not None
         ):
@@ -202,45 +200,10 @@ class BaseClient(CoreCommands):
             )
 
         if _credential_provider_fn is not None:
-            provider_fn = _credential_provider_fn
+            from glide_shared.ffi_helpers import create_credential_provider_callback
 
-            def _credential_provider_callback(
-                client_id,
-                access_key_id_buf,
-                access_key_id_buf_len,
-                access_key_id_len_ptr,
-                secret_access_key_buf,
-                secret_access_key_buf_len,
-                secret_access_key_len_ptr,
-                session_token_buf,
-                session_token_buf_len,
-                session_token_len_ptr,
-                expires_at_millis_ptr,
-            ):
-                try:
-                    creds = provider_fn()
-                    encoded_key = creds.access_key_id.encode("utf-8")
-                    write_len = min(len(encoded_key), access_key_id_buf_len)
-                    self._ffi.memmove(access_key_id_buf, encoded_key, write_len)
-                    access_key_id_len_ptr[0] = write_len
-                    encoded_secret = creds.secret_access_key.encode("utf-8")
-                    write_len = min(len(encoded_secret), secret_access_key_buf_len)
-                    self._ffi.memmove(secret_access_key_buf, encoded_secret, write_len)
-                    secret_access_key_len_ptr[0] = write_len
-                    if creds.session_token:
-                        encoded_token = creds.session_token.encode("utf-8")
-                        write_len = min(len(encoded_token), session_token_buf_len)
-                        self._ffi.memmove(session_token_buf, encoded_token, write_len)
-                        session_token_len_ptr[0] = write_len
-                    else:
-                        session_token_len_ptr[0] = 0
-                    expires_at_millis_ptr[0] = creds.expires_at_epoch_millis or 0
-                    return 1
-                except Exception:
-                    return 0
-
-            credential_provider_callback = self._ffi.callback(
-                "CredentialProviderCallback", _credential_provider_callback
+            credential_provider_callback = create_credential_provider_callback(
+                self._ffi, _credential_provider_fn
             )
             self._credential_provider_callback_ref = credential_provider_callback
 
@@ -1121,6 +1084,8 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
+                self._address_resolver_callback_ref = None
+                self._credential_provider_callback_ref = None
 
     def __enter__(self) -> Self:
         return self

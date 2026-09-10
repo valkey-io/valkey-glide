@@ -347,7 +347,7 @@ class ServiceType(Enum):
 
 class AwsCredentials:
     """
-    Immutable value object representing AWS credentials for IAM authentication token signing.
+    Value object representing AWS credentials for IAM authentication token signing.
 
     Use the constructor to create instances. ``access_key_id`` and ``secret_access_key``
     are required and must not be blank. ``session_token`` and ``expires_at_epoch_millis``
@@ -381,6 +381,11 @@ class AwsCredentials:
             raise ValueError("access_key_id must not be blank")
         if not secret_access_key or not secret_access_key.strip():
             raise ValueError("secret_access_key must not be blank")
+        if expires_at_epoch_millis is not None and expires_at_epoch_millis < 0:
+            raise ValueError(
+                "expires_at_epoch_millis must be a non-negative integer (epoch milliseconds), "
+                f"got: {expires_at_epoch_millis}"
+            )
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
         self.session_token = session_token
@@ -391,6 +396,11 @@ class AwsCredentials:
 #:
 #: Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
 #: a custom STS assume-role flow) instead of the default AWS credential chain.
+#:
+#: **Sync only**: the callable must be synchronous. Async callables (coroutines)
+#: are not supported — ``IamAuthConfig`` will raise ``ValueError`` if an async
+#: function is passed. Resolve credentials asynchronously before constructing the
+#: provider, then return the resolved ``AwsCredentials`` synchronously.
 #:
 #: **Thread safety**: implementations must be safe for concurrent calls -- in cluster
 #: mode, independent reconnections may invoke this callable simultaneously.
@@ -436,6 +446,22 @@ class IamAuthConfig:
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        if credential_provider is not None:
+            import inspect
+
+            if not callable(credential_provider):
+                raise ValueError(
+                    "credential_provider must be a callable, got: "
+                    f"{type(credential_provider).__name__}"
+                )
+            if inspect.iscoroutinefunction(credential_provider):
+                raise ValueError(
+                    "credential_provider must be a synchronous callable. "
+                    "Async functions (coroutines) are not supported because the "
+                    "callback runs on a blocking Rust thread. Resolve credentials "
+                    "asynchronously before constructing the provider, then return "
+                    "the resolved AwsCredentials synchronously."
+                )
         self.credential_provider = credential_provider
 
 

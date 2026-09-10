@@ -626,7 +626,6 @@ class BaseClient(CoreCommands):
         _credential_provider_fn = None
         if (
             self.config.credentials is not None
-            and hasattr(self.config.credentials, "iam_config")
             and self.config.credentials.iam_config is not None
             and self.config.credentials.iam_config.credential_provider is not None
         ):
@@ -637,7 +636,8 @@ class BaseClient(CoreCommands):
         credential_provider_callback = create_credential_provider_callback(
             self._ffi, _credential_provider_fn
         )
-        self._credential_provider_callback_ref = credential_provider_callback
+        if _credential_provider_fn is not None:
+            self._credential_provider_callback_ref = credential_provider_callback
 
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
@@ -1174,6 +1174,10 @@ class BaseClient(CoreCommands):
             if self._core_client is not None and self._create_pid == os.getpid():
                 self._lib.close_client(self._core_client)
                 self._core_client = None
+
+            # Release CFFI callback refs so their memory can be reclaimed.
+            self._address_resolver_callback_ref = None
+            self._credential_provider_callback_ref = None
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""
