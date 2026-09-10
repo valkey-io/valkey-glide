@@ -930,13 +930,30 @@ async fn create_client(
 
     // Look up the credential provider from the global registry using the key
     // provided in the connection request.
-    if let Some(key) = credential_provider_key
-        && let Some(provider) = crate::credential_provider_registry::remove(&key)
-    {
-        if let Some(auth_info) = conn_request.authentication_info.as_mut()
-            && let Some(iam_config) = auth_info.iam_config.as_mut()
-        {
-            iam_config.credentials_provider = Some(provider);
+    if let Some(key) = credential_provider_key {
+        match crate::credential_provider_registry::remove(&key) {
+            Some(provider) => {
+                if let Some(auth_info) = conn_request.authentication_info.as_mut()
+                    && let Some(iam_config) = auth_info.iam_config.as_mut()
+                {
+                    iam_config.credentials_provider = Some(provider);
+                } else {
+                    log_warn(
+                        "credential_provider",
+                        "A credential_provider_key was set in the connection request but the \
+                         request contains no IAM configuration. The credential provider will \
+                         be ignored and the default AWS credential chain will be used.",
+                    );
+                }
+            }
+            None => {
+                log_warn(
+                    "credential_provider",
+                    "credential_provider_key was set in the connection request but no provider \
+                     was found in the registry. The key may have been consumed already or was \
+                     never registered.",
+                );
+            }
         }
     }
 
