@@ -296,21 +296,22 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
-def create_credential_provider_callback(
-    ffi,
-    credential_provider_fn,
-):
+def create_credential_provider_callback(ffi, credential_provider_fn):
     """
     Wrap a Python GlideCredentialProvider callable into a CFFI
     ``CredentialProviderCallback`` function pointer.
 
     Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
+
+    Note: ``credential_provider_fn`` must be a **synchronous** callable.
+    Async functions (coroutines) are not supported and will cause every
+    IAM reconnect to fail silently.
     """
     if credential_provider_fn is None:
         return ffi.NULL
 
     def _credential_provider_callback(
-        client_id,
+        client_id,  # provided by Rust; unused on the Python side
         access_key_id_buf,
         access_key_id_buf_len,
         access_key_id_len_ptr,
@@ -324,28 +325,40 @@ def create_credential_provider_callback(
     ):
         try:
             creds = credential_provider_fn()
-            # access_key_id
+            # Fail fast if any required credential would be truncated.
+            # Returning 0 causes Rust to surface a clear CredentialsError.
             encoded_key = creds.access_key_id.encode("utf-8")
-            write_len = min(len(encoded_key), access_key_id_buf_len)
-            ffi.memmove(access_key_id_buf, encoded_key, write_len)
-            access_key_id_len_ptr[0] = write_len
-            # secret_access_key
+            if len(encoded_key) > access_key_id_buf_len:
+                return 0
             encoded_secret = creds.secret_access_key.encode("utf-8")
-            write_len = min(len(encoded_secret), secret_access_key_buf_len)
-            ffi.memmove(secret_access_key_buf, encoded_secret, write_len)
-            secret_access_key_len_ptr[0] = write_len
-            # session_token (optional)
-            if creds.session_token:
-                encoded_token = creds.session_token.encode("utf-8")
-                write_len = min(len(encoded_token), session_token_buf_len)
-                ffi.memmove(session_token_buf, encoded_token, write_len)
-                session_token_len_ptr[0] = write_len
+            if len(encoded_secret) > secret_access_key_buf_len:
+                return 0
+            encoded_token = (
+                creds.session_token.encode("utf-8") if creds.session_token else b""
+            )
+            if len(encoded_token) > session_token_buf_len:
+                return 0
+            # Write access_key_id
+            ffi.memmove(access_key_id_buf, encoded_key, len(encoded_key))
+            access_key_id_len_ptr[0] = len(encoded_key)
+            # Write secret_access_key
+            ffi.memmove(secret_access_key_buf, encoded_secret, len(encoded_secret))
+            secret_access_key_len_ptr[0] = len(encoded_secret)
+            # Write session_token (optional)
+            if encoded_token:
+                ffi.memmove(session_token_buf, encoded_token, len(encoded_token))
+                session_token_len_ptr[0] = len(encoded_token)
             else:
                 session_token_len_ptr[0] = 0
-            # expires_at (optional, epoch millis)
+            # Write expires_at (0 = no expiry)
             expires_at_millis_ptr[0] = creds.expires_at_epoch_millis or 0
             return 1  # success
-        except Exception:
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "GlideCredentialProvider raised an exception: %s", e
+            )
             return 0  # failure — Rust will surface a CredentialsError
 
     return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
