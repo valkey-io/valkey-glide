@@ -32,18 +32,6 @@ pub enum RefreshConnectionType {
     AllConnections,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum AddressResolution {
-    Resolve,
-    AlreadyResolved,
-}
-
-impl AddressResolution {
-    pub(crate) fn supersedes(self, existing: Self) -> bool {
-        matches!((self, existing), (Self::AlreadyResolved, Self::Resolve))
-    }
-}
-
 fn failed_management_connection<C>(
     addr: &str,
     user_conn: ConnectionDetails<ConnectionFuture<C>>,
@@ -67,7 +55,6 @@ pub(crate) async fn get_or_create_conn<C>(
     node: Option<AsyncClusterNode<C>>,
     params: &ClusterParams,
     conn_type: RefreshConnectionType,
-    address_resolution: AddressResolution,
     glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<AsyncClusterNode<C>>
 where
@@ -84,7 +71,7 @@ where
                 None,
                 conn_type,
                 Some(node),
-                address_resolution,
+                true,
                 glide_connection_options,
             )
             .await
@@ -97,7 +84,7 @@ where
             None,
             conn_type,
             None,
-            address_resolution,
+            true,
             glide_connection_options,
         )
         .await
@@ -122,7 +109,7 @@ pub(crate) async fn connect_and_check_all_connections<C>(
     addr: &str,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
-    address_resolution: AddressResolution,
+    address_resolution: bool,
     glide_connection_options: GlideConnectionOptions,
 ) -> ConnectAndCheckResult<C>
 where
@@ -189,7 +176,7 @@ async fn connect_and_check_only_management_conn<C>(
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     prev_node: AsyncClusterNode<C>,
-    address_resolution: AddressResolution,
+    address_resolution: bool,
     disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
 ) -> ConnectAndCheckResult<C>
 where
@@ -308,7 +295,7 @@ where
         socket_addr,
         conn_type,
         node,
-        AddressResolution::Resolve,
+        false,
         glide_connection_options,
     )
     .await
@@ -320,7 +307,7 @@ pub(crate) async fn connect_and_check_with_resolution<C>(
     socket_addr: Option<SocketAddr>,
     conn_type: RefreshConnectionType,
     node: Option<AsyncClusterNode<C>>,
-    address_resolution: AddressResolution,
+    address_resolution: bool,
     glide_connection_options: GlideConnectionOptions,
 ) -> ConnectAndCheckResult<C>
 where
@@ -386,7 +373,7 @@ async fn create_and_setup_user_connection<C>(
     node: &str,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
-    address_resolution: AddressResolution,
+    address_resolution: bool,
     glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<ConnectionDetails<C>>
 where
@@ -445,7 +432,7 @@ async fn create_connection<C>(
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     is_management: bool,
-    address_resolution: AddressResolution,
+    address_resolution: bool,
     mut glide_connection_options: GlideConnectionOptions,
 ) -> RedisResult<ConnectionDetails<C>>
 where
@@ -453,11 +440,10 @@ where
 {
     let connection_timeout = params.connection_timeout;
     let response_timeout = params.response_timeout;
-    let info = match address_resolution {
-        AddressResolution::Resolve => get_connection_info(node, params)?,
-        AddressResolution::AlreadyResolved => {
-            get_connection_info_for_resolved_address(node, params)?
-        }
+    let info = if address_resolution {
+        get_connection_info_for_resolved_address(node, params)?
+    } else {
+        get_connection_info(node, params)?
     };
     // management connection does not require notifications or disconnect notifications
     // or pubsub synchronizer (subscriptions only exist on user connections)
@@ -563,17 +549,4 @@ pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     };
 
     Some((host, port))
-}
-
-#[cfg(test)]
-mod address_resolution_tests {
-    use super::AddressResolution;
-
-    #[test]
-    fn already_resolved_refresh_supersedes_resolver_aware_refresh() {
-        assert!(AddressResolution::AlreadyResolved.supersedes(AddressResolution::Resolve));
-        assert!(!AddressResolution::Resolve.supersedes(AddressResolution::AlreadyResolved));
-        assert!(!AddressResolution::Resolve.supersedes(AddressResolution::Resolve));
-        assert!(!AddressResolution::AlreadyResolved.supersedes(AddressResolution::AlreadyResolved));
-    }
 }

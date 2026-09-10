@@ -81,7 +81,7 @@ use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
     cluster::slot_cmd,
     cluster_async::connections_logic::{
-        get_host_and_port_from_addr, get_or_create_conn, AddressResolution, ConnectionFuture,
+        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture,
         RefreshConnectionType,
     },
     cluster_client::{ClusterParams, RetryParams},
@@ -2017,48 +2017,14 @@ where
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
-    // If a compatible refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned. An already-resolved refresh
-    // supersedes a resolver-aware task so the final address is never resolved again.
+    // If a refresh task is already running for an address, no new task is created;
+    // instead, the notifier from the existing task is returned.
     // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<String>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
-    ) -> Vec<Arc<Notify>> {
-        Self::trigger_refresh_connection_tasks_with_resolution(
-            inner,
-            addresses,
-            conn_type,
-            check_existing_conn,
-            AddressResolution::Resolve,
-        )
-        .await
-    }
-
-    async fn trigger_refresh_resolved_connection_task(
-        inner: Arc<InnerCore<C>>,
-        address: String,
-        conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
-    ) -> Vec<Arc<Notify>> {
-        Self::trigger_refresh_connection_tasks_with_resolution(
-            inner,
-            HashSet::from([address]),
-            conn_type,
-            check_existing_conn,
-            AddressResolution::AlreadyResolved,
-        )
-        .await
-    }
-
-    async fn trigger_refresh_connection_tasks_with_resolution(
-        inner: Arc<InnerCore<C>>,
-        addresses: HashSet<String>,
-        conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
-        address_resolution: AddressResolution,
     ) -> Vec<Arc<Notify>> {
         log_debug_lazy!(
             "cluster",
@@ -2068,8 +2034,6 @@ where
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
         for address in addresses {
-            // Keep task arbitration and insertion under one lock so concurrent
-            // refreshes cannot choose incompatible address-resolution semantics.
             let mut conn_lock = inner.conn_lock.write();
             let existing_task = conn_lock
                 .refresh_conn_state
@@ -2080,32 +2044,18 @@ where
                         RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
                         RefreshTaskStatus::ReconnectingTooLong => None,
                     };
-                    (task.address_resolution, notifier)
+                    notifier
                 });
 
-            if let Some((existing_resolution, notifier)) = existing_task {
-                if !address_resolution.supersedes(existing_resolution) {
-                    if let Some(notifier) = notifier {
-                        notifiers.push(notifier);
-                    }
+            if let Some(notifier) = existing_task {
+                if let Some(notifier) = notifier {
+                    notifiers.push(notifier);
                     log_debug_lazy!(
                         "cluster",
                         format!("Skipping refresh for {}: already in progress", address)
                     );
-                    continue;
                 }
-
-                log_debug_lazy!(
-                    "cluster",
-                    format!(
-                        "Replacing resolver-aware refresh for {} with already-resolved refresh",
-                        address
-                    )
-                );
-                conn_lock
-                    .refresh_conn_state
-                    .refresh_address_in_progress
-                    .remove(&address);
+                continue;
             }
 
             let inner_clone = inner.clone();
@@ -2153,7 +2103,6 @@ where
                         node_option.clone(),
                         &cluster_params,
                         conn_type,
-                        address_resolution,
                         inner_clone.glide_connection_options.clone(),
                     )
                     .await;
@@ -2171,9 +2120,7 @@ where
                                     .refresh_address_in_progress
                                     .get_mut(&address_clone_for_task)
                                 {
-                                    if conn_state.address_resolution == address_resolution {
-                                        conn_state.status.flip_status_to_too_long();
-                                    }
+                                    conn_state.status.flip_status_to_too_long();
                                 }
 
                                 first_attempt = false;
@@ -2200,7 +2147,7 @@ where
                             .refresh_conn_state
                             .refresh_address_in_progress
                             .get(&address_clone_for_task)
-                            .is_some_and(|task| task.address_resolution == address_resolution);
+                            .is_some();
                         if task_is_current {
                             conn_lock.replace_or_add_connection_for_address(
                                 &address_clone_for_task,
@@ -2224,7 +2171,7 @@ where
                     .refresh_conn_state
                     .refresh_address_in_progress
                     .get(&address_clone_for_task)
-                    .is_some_and(|task| task.address_resolution == address_resolution);
+                    .is_some();
                 if task_is_current {
                     conn_lock
                         .refresh_conn_state
@@ -2242,7 +2189,7 @@ where
             });
 
             // Keep the task handle and notifier into the RefreshState of this address
-            let refresh_task_state = RefreshTaskState::new(handle, notifier, address_resolution);
+            let refresh_task_state = RefreshTaskState::new(handle, notifier);
 
             conn_lock
                 .refresh_conn_state
@@ -2941,7 +2888,6 @@ where
                         node,
                         &cluster_params,
                         RefreshConnectionType::AllConnections,
-                        AddressResolution::Resolve,
                         glide_connection_options,
                     )
                     .await
@@ -3628,11 +3574,9 @@ where
                     "MOVED target address {} not found in current connection map, triggering refresh",
                     address));
                 // Trigger refresh task and get the single notifier
-                let mut notifiers = Self::trigger_refresh_resolved_connection_task(
-                    core.clone(),
-                    address.clone(),
-                    RefreshConnectionType::AllConnections,
-                    false,
+                let mut notifiers = Self::trigger_refresh_connection_tasks(
+                    core.clone(), HashSet::from([address.clone()]),
+                    RefreshConnectionType::AllConnections, false,
                 )
                 .await;
 
@@ -5536,7 +5480,7 @@ mod refresh_task_resolution_tests {
     }
 
     fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
-        let address = "resolved-node:6380".to_owned();
+        let address = "resolved-node:6381".to_owned();
         let slot_map = SlotMap::new(
             vec![Slot::new(0, 16383, address, vec![])],
             HashMap::new(),
@@ -5566,33 +5510,40 @@ mod refresh_task_resolution_tests {
     }
 
     #[tokio::test]
-    async fn resolved_refresh_supersedes_concurrent_resolver_aware_refresh() {
+    async fn concurrent_refresh_requests_share_one_task_and_both_complete() {
         let core = core_with_non_idempotent_resolver();
-        let address = "resolved-node:6380".to_owned();
+        let address = "resolved-node:6381".to_owned();
 
-        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+        let first = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
             HashSet::from([address.clone()]),
             RefreshConnectionType::AllConnections,
             false,
-            AddressResolution::Resolve,
         )
         .await;
 
         tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
             .await
-            .expect("resolver-aware refresh should start the poisoned connection");
+            .expect("canonical refresh should start the connection without re-resolution");
 
-        ClusterConnInner::trigger_refresh_connection_tasks_with_resolution(
+        let second = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
             HashSet::from([address.clone()]),
             RefreshConnectionType::AllConnections,
             false,
-            AddressResolution::AlreadyResolved,
         )
         .await;
 
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+
+        let first_done = first[0].notified();
+        let second_done = second[0].notified();
         RELEASE_POISON_CONNECT.add_permits(2);
+
+        tokio::time::timeout(Duration::from_secs(1), async { tokio::join!(first_done, second_done); })
+            .await
+            .expect("both refresh callers should observe completion");
 
         let connected_port = tokio::time::timeout(Duration::from_secs(1), async {
             loop {
@@ -5610,6 +5561,6 @@ mod refresh_task_resolution_tests {
         .await
         .expect("already-resolved refresh should install a connection");
 
-        assert_eq!(connected_port, 6380);
+        assert_eq!(connected_port, 6381);
     }
 }
