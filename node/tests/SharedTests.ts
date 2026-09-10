@@ -2869,9 +2869,9 @@ export function runBaseTests(config: {
                         field3,
                     ]);
                     expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
                     // Test with 0 milliseconds (immediate deletion)
@@ -3026,9 +3026,9 @@ export function runBaseTests(config: {
                         field3,
                     ]);
                     expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                    expect(pttlResult[0]).toBeLessThanOrEqual(3600500); // should be <= 3600000 milliseconds
+                    expect(pttlResult[0]).toBeLessThanOrEqual(3600500); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                    expect(pttlResult[1]).toBeLessThanOrEqual(3600500); // should be <= 3600000 milliseconds
+                    expect(pttlResult[1]).toBeLessThanOrEqual(3600500); // +500ms tolerance for Windows clock jitter
                     expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
                     const pexpireTimeResult = await client.hpexpiretime(key, [

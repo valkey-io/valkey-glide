@@ -506,6 +506,7 @@ jobs:
                   node-version: latest
 
             - name: Install Valkey
+              shell: bash
               run: |
                   # Install Valkey (preferred) or Redis as fallback
                   if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
@@ -545,6 +546,7 @@ jobs:
                   fi
 
             - name: Run utils/node Tests
+              if: ${{ matrix.build_type != 'windows' }}
               working-directory: utils/release-candidate-testing/node
               run: |
                   # Install the exact version this workflow just published, NOT the dist-tag

@@ -1676,9 +1676,9 @@ def main():
             # Validate cluster_folder and prefix to prevent shell injection
             # in the SSM command string (runs as root on the Linux EC2).
             _path_safe = _re.compile(r'^[a-zA-Z0-9/_.-]+$')
-            if args.cluster_folder and not _path_safe.match(args.cluster_folder):
+            if args.cluster_folder and not _path_safe.fullmatch(args.cluster_folder):
                 parser.error(f"--cluster-folder contains invalid characters: {args.cluster_folder!r}")
-            if getattr(args, 'prefix', None) and not _path_safe.match(args.prefix):
+            if getattr(args, 'prefix', None) and not _path_safe.fullmatch(args.prefix):
                 parser.error(f"--prefix contains invalid characters: {args.prefix!r}")
             cmd_parts = [
                 "python3",

@@ -3,7 +3,10 @@ import { afterEach, beforeAll } from "@jest/globals";
 import minimist from "minimist";
 import { Logger } from "../build-ts";
 
-// Retry failing tests up to 2 times in CI to absorb transient failures
+// Retry failing tests up to 2 times in CI to absorb transient failures.
+// Retried tests are still reported individually so flakes remain visible;
+// retries only prevent re-triggering full CI runs for isolated flaky tests.
+// Consider moving this to a dedicated flaky-test quarantine mechanism in a follow-up PR.
 if (process.env.CI) {
     jest.retryTimes(2, { logErrorsBeforeRetry: true });
 }

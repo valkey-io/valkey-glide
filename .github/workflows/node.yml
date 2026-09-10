@@ -473,6 +473,7 @@ jobs:
                   BUILD_ID=$(aws codebuild start-build \
                     --project-name "${PROJECT_NAME}" \
                     --source-version "${GITHUB_SHA}" \
+                    --environment-variables-override name=GHA_RUN_ID,value=${GITHUB_RUN_ID},type=PLAINTEXT \
                     --query 'build.id' \
                     --output text)
                   echo "Build started: ${BUILD_ID}"

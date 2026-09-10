@@ -38,6 +38,7 @@ BUILD_ID = os.environ.get("BUILD_ID", "")
 COMMIT_SHA = os.environ.get("COMMIT_SHA", "")
 REPORT_BUCKET = os.environ.get("REPORT_BUCKET", "")
 NODE_VERSION = os.environ.get("NODE_VERSION", "20.18.0")
+GHA_RUN_ID = os.environ.get("GHA_RUN_ID", "")
 
 
 def launch_linux_ec2(ec2_client) -> tuple[str, str]:
@@ -65,6 +66,7 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
                 "Tags": [
                     {"Key": "Name", "Value": f"glide-ci-valkey-{BUILD_ID}"},
                     {"Key": "Project", "Value": "glide-ci"},
+                    {"Key": "GHA_RUN_ID", "Value": os.environ.get("GHA_RUN_ID", BUILD_ID)},
                 ],
             }
         ],
@@ -72,12 +74,20 @@ def launch_linux_ec2(ec2_client) -> tuple[str, str]:
     instance_id = resp["Instances"][0]["InstanceId"]
     log.info(f"Linux EC2 launched: {instance_id}")
 
-    waiter = ec2_client.get_waiter("instance_running")
-    waiter.wait(InstanceIds=[instance_id])
-    resp2 = ec2_client.describe_instances(InstanceIds=[instance_id])
-    private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
-    log.info(f"Linux EC2 running: {instance_id} ({private_ip})")
-    return instance_id, private_ip
+    try:
+        waiter = ec2_client.get_waiter("instance_running")
+        waiter.wait(InstanceIds=[instance_id])
+        resp2 = ec2_client.describe_instances(InstanceIds=[instance_id])
+        private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
+        log.info(f"Linux EC2 running: {instance_id} ({private_ip})")
+        return instance_id, private_ip
+    except Exception:
+        log.error(f"Linux EC2 post-launch setup failed; terminating {instance_id}")
+        try:
+            ec2_client.terminate_instances(InstanceIds=[instance_id])
+        except Exception as te:
+            log.error(f"Failed to terminate {instance_id} during error cleanup: {te}")
+        raise
 
 
 def setup_linux_ec2(ssm_client, instance_id: str) -> None:
@@ -153,17 +163,17 @@ def build_windows_userdata(
     _sha      = _re.compile(r'^[0-9a-f]{40}$')
     _bucket   = _re.compile(r'^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$')
     _region   = _re.compile(r'^[a-z]{2}-[a-z]+-\d$')
-    if not _ec2_id.match(linux_instance_id):
+    if not _ec2_id.fullmatch(linux_instance_id):
         raise ValueError(f"Invalid linux_instance_id: {linux_instance_id!r}")
-    if not _ipv4.match(linux_private_ip):
+    if not _ipv4.fullmatch(linux_private_ip):
         raise ValueError(f"Invalid linux_private_ip: {linux_private_ip!r}")
-    if not _alphanum.match(BUILD_ID):
+    if not _alphanum.fullmatch(BUILD_ID):
         raise ValueError(f"Invalid BUILD_ID: {BUILD_ID!r}")
-    if not COMMIT_SHA or not _sha.match(COMMIT_SHA):
+    if not COMMIT_SHA or not _sha.fullmatch(COMMIT_SHA):
         raise ValueError(f"COMMIT_SHA is required and must be a 40-char hex string, got: {COMMIT_SHA!r}")
-    if not _bucket.match(REPORT_BUCKET):
+    if not _bucket.fullmatch(REPORT_BUCKET):
         raise ValueError(f"Invalid REPORT_BUCKET: {REPORT_BUCKET!r}")
-    if not _region.match(REGION):
+    if not _region.fullmatch(REGION):
         raise ValueError(f"Invalid REGION: {REGION!r}")
     lines = [
         "<powershell>",
@@ -269,6 +279,7 @@ def build_windows_userdata(
         "    Push-Checkpoint 'ssm-warmed'",
         "",
         "    Write-Log '=== Running tests ==='",
+        "    $env:CI_WINDOWS_EC2 = 'true'",
         "    $testArgs = @('test', '--', '--forceExit', '--maxWorkers=4')",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
         "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
@@ -327,6 +338,7 @@ def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
                 "Tags": [
                     {"Key": "Name", "Value": f"glide-ci-windows-{BUILD_ID}"},
                     {"Key": "Project", "Value": "glide-ci"},
+                    {"Key": "GHA_RUN_ID", "Value": os.environ.get("GHA_RUN_ID", BUILD_ID)},
                 ],
             }
         ],

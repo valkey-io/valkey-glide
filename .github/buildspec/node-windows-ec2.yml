@@ -48,6 +48,7 @@ phases:
             - |
                 export BUILD_ID=$(echo "$CODEBUILD_BUILD_ID" | tr ':' '-')
                 export COMMIT_SHA="$CODEBUILD_RESOLVED_SOURCE_VERSION"
+                export GHA_RUN_ID="${GHA_RUN_ID:-${BUILD_ID}}"
                 mkdir -p node
                 python3 utils/ec2_orchestrator.py
 
