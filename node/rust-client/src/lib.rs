@@ -2696,7 +2696,7 @@ impl NodeCredentialsProvider {
 
         let status = self.tsfn.call_with_return_value(
             (),
-            ThreadsafeFunctionCallMode::NonBlocking,
+            ThreadsafeFunctionCallMode::Blocking,
             move |result: Result<Unknown<'static>>, _env: Env| {
                 use napi::JsValue as NapiJsValue;
 
@@ -2713,7 +2713,14 @@ impl NodeCredentialsProvider {
                 // Determine whether the JS callback returned a Promise or a plain value.
                 let mut is_promise = false;
                 // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
-                unsafe { napi::sys::napi_is_promise(val.env, val.value, &mut is_promise) };
+                let np_status =
+                    unsafe { napi::sys::napi_is_promise(val.env, val.value, &mut is_promise) };
+                if np_status != napi::sys::Status::napi_ok {
+                    let _ = tx.send(Err(format!(
+                        "napi_is_promise failed with status: {np_status:?}"
+                    )));
+                    return Ok(());
+                }
 
                 if is_promise {
                     // The JS callback returned a Promise. Attach .then() and .catch()
@@ -2741,13 +2748,21 @@ impl NodeCredentialsProvider {
                                 Ok(pr2) => {
                                     // Attach .catch() — fires when the Promise rejects
                                     let _ = pr2.catch(
-                                        move |_ctx: napi::bindgen_prelude::CallbackContext<
+                                        move |ctx: napi::bindgen_prelude::CallbackContext<
                                             Unknown<'_>,
                                         >| {
-                                            let _ = tx_reject.send(Err(
-                                                "GlideCredentialProvider Promise rejected"
-                                                    .to_string(),
-                                            ));
+                                            // Try to extract a useful rejection message from the
+                                            // Promise rejection value.
+                                            let reason = ctx
+                                                .value
+                                                .coerce_to_string()
+                                                .and_then(|s| s.into_utf8())
+                                                .map(|s| s.as_str().unwrap_or("").to_string())
+                                                .unwrap_or_else(|_| {
+                                                    "GlideCredentialProvider Promise rejected"
+                                                        .to_string()
+                                                });
+                                            let _ = tx_reject.send(Err(reason));
                                             Ok(())
                                         },
                                     );

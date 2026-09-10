@@ -403,22 +403,19 @@ class AwsCredentials:
         self.expires_at_epoch_millis = expires_at_epoch_millis
 
 
-#: A callable that returns AWS credentials for IAM token signing.
+#: A callable that returns AWS credentials for IAM token signing, either
+#: synchronously or asynchronously.
 #:
-#: Implement this when credentials come from a custom source (e.g. HashiCorp Vault,
-#: a custom STS assume-role flow) instead of the default AWS credential chain.
+#: Both synchronous and async (``async def``) callables are accepted.
+#: Async providers are supported in the **async glide client** — they are driven
+#: via ``asyncio.run_coroutine_threadsafe``. The **sync glide client** only
+#: supports synchronous providers and will raise ``ValueError`` at connection
+#: time if an async callable is supplied.
 #:
-#: Both synchronous and asynchronous (``async def``) callables are accepted.
-#: Async providers are fully supported in the async glide client, which bridges
-#: them via ``asyncio.run_coroutine_threadsafe``. In the sync glide client, only
-#: synchronous providers are supported.
+#: **Thread safety**: implementations must be safe for concurrent calls.
 #:
-#: **Thread safety**: implementations must be safe for concurrent calls -- in cluster
-#: mode, independent reconnections may invoke this callable simultaneously.
-#:
-#: **Promptness**: return quickly; this callable sits on the reconnect path and
-#: a slow implementation directly extends failover time. The Rust core imposes
-#: a 10-second timeout on each invocation.
+#: **Promptness**: return quickly; this callable sits on the reconnect path.
+#: The Rust core imposes a 10-second timeout for each credential fetch.
 #:
 #: Example (sync)::
 #:
@@ -483,6 +480,13 @@ class IamAuthConfig:
             # in the async glide client via asyncio.run_coroutine_threadsafe.
             # In the sync glide client, only synchronous providers are supported.
         self.credential_provider = credential_provider
+        # Track whether the provider is async so bindings can validate at connection time.
+        import inspect
+
+        self._credential_provider_is_async = (
+            credential_provider is not None
+            and inspect.iscoroutinefunction(credential_provider)
+        )
 
 
 class ServerCredentials:

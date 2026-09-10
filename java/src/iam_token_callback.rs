@@ -94,14 +94,16 @@ impl JavaIamTokenCallback {
         // Use a local frame so that all JNI local references created inside
         // are freed when the frame is popped.  This prevents local-ref
         // accumulation on reused tokio blocking threads across many refreshes.
-        // Capacity 8 covers: result object, creds object, 3 String fields,
-        // and a few intermediate refs.
+        // Capacity 16 covers the maximum case: CompletableFuture object,
+        // AwsCredentials object (returned by .get()), 3 String fields each
+        // accessed as JObject + JString, and the optional Instant object for
+        // expiresAt — plus headroom for exception throwables and intermediates.
         //
         // `with_local_frame` requires E: From<jni::errors::Error>; we satisfy
         // that by wrapping in `Result<Result<...>, jni::errors::Error>` and
         // flattening afterwards.
         let inner_result: Result<Result<_, IamCallbackError>, jni::errors::Error> =
-            env.with_local_frame(8, |env| Ok(self.try_get_credentials_inner(env)));
+            env.with_local_frame(16, |env| Ok(self.try_get_credentials_inner(env)));
         inner_result
             .map_err(|e| IamCallbackError::CallFailed(format!("local frame error: {e}")))
             .and_then(|r| r)
@@ -172,15 +174,24 @@ impl JavaIamTokenCallback {
         // This is safe because we are called from tokio::task::spawn_blocking,
         // so blocking here does not starve the async executor.
         let creds_result = env.call_method(&future_obj, "get", "()Ljava/lang/Object;", &[]);
-        // .get() can throw ExecutionException or InterruptedException—handle as CallFailed.
+        // .get() throws ExecutionException wrapping the provider's exception, or
+        // InterruptedException. Walk the cause chain to surface the root message.
         let creds_result = creds_result.map_err(|err| {
-            let msg = if env.exception_check().unwrap_or(false) {
+            let exception_msg = if env.exception_check().unwrap_or(false) {
                 env.exception_occurred()
                     .ok()
-                    .and_then(|t| {
+                    .and_then(|throwable| {
                         let _ = env.exception_clear();
+                        // Try getCause() first to unwrap ExecutionException.
+                        let cause = env
+                            .call_method(&throwable, "getCause", "()Ljava/lang/Throwable;", &[])
+                            .ok()
+                            .and_then(|v| v.l().ok())
+                            .filter(|o| !o.is_null());
+                        // Use the cause's message if available, otherwise the outer message.
+                        let target = cause.as_ref().unwrap_or(&throwable);
                         let msg = env
-                            .call_method(t, "getMessage", "()Ljava/lang/String;", &[])
+                            .call_method(target, "getMessage", "()Ljava/lang/String;", &[])
                             .ok()
                             .and_then(|v| v.l().ok())
                             .filter(|o| !o.is_null())
@@ -196,7 +207,7 @@ impl JavaIamTokenCallback {
             } else {
                 format!("(no Java exception): {err}")
             };
-            IamCallbackError::CallFailed(msg)
+            IamCallbackError::CallFailed(exception_msg)
         })?;
 
         let creds_obj = creds_result.l().map_err(IamCallbackError::InvalidReturn)?;

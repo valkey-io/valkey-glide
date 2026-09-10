@@ -837,7 +837,9 @@ export interface AwsCredentials {
  * mode, independent reconnections may invoke this callback simultaneously.
  *
  * **Promptness**: return quickly; this callback sits on the reconnect path and
- * a slow implementation directly extends failover time.
+ * a slow implementation directly extends failover time. The Rust core imposes
+ * a **10-second timeout** — providers that do not complete within that window
+ * will cause token generation to fail.
  *
  * @example
  * ```typescript
