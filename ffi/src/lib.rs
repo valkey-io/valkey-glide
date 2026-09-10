@@ -418,6 +418,134 @@ impl redis::AddressResolver for FFIAddressResolver {
     }
 }
 
+/// Callback type for custom AWS credential providers used with C FFI bindings (Go, Python sync/async).
+///
+/// Called by the Rust core each time a fresh IAM token needs to be generated.
+/// The callback must write the credentials into the provided output buffers and return 1 on success,
+/// 0 on failure. All string output parameters are UTF-8 encoded.
+///
+/// # Parameters
+/// * `client_id` - The client identifier passed to `create_client`.
+/// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
+/// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
+/// * `access_key_id_len` - Output: actual length written to `access_key_id_buf`.
+/// * `secret_access_key_buf` - Buffer to write the AWS Secret Access Key into.
+/// * `secret_access_key_buf_len` - Capacity of `secret_access_key_buf`.
+/// * `secret_access_key_len` - Output: actual length written to `secret_access_key_buf`.
+/// * `session_token_buf` - Buffer to write the optional Session Token into (may be left empty).
+/// * `session_token_buf_len` - Capacity of `session_token_buf`.
+/// * `session_token_len` - Output: actual length written to `session_token_buf`. Write 0 for no session token.
+/// * `expires_at_epoch_millis` - Output: optional expiry as Unix epoch milliseconds. Write 0 to indicate no expiry.
+///
+/// # Safety
+/// All pointer parameters must be valid for the duration of the call.
+pub type CredentialProviderCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
+    access_key_id_buf: *mut u8,
+    access_key_id_buf_len: usize,
+    access_key_id_len: *mut usize,
+    secret_access_key_buf: *mut u8,
+    secret_access_key_buf_len: usize,
+    secret_access_key_len: *mut usize,
+    session_token_buf: *mut u8,
+    session_token_buf_len: usize,
+    session_token_len: *mut usize,
+    expires_at_epoch_millis: *mut i64,
+) -> u8; // 1 = success, 0 = failure
+
+/// Wraps a C `CredentialProviderCallback` function pointer as a `glide_core::iam::CredentialsProvider`.
+struct FFICredentialsProvider {
+    callback: CredentialProviderCallback,
+    client_id: usize,
+}
+// SAFETY: The callback is a C function pointer safe to share across threads.
+unsafe impl Send for FFICredentialsProvider {}
+unsafe impl Sync for FFICredentialsProvider {}
+
+impl FFICredentialsProvider {
+    /// Invoke the callback and return the AWS credentials.
+    fn call(
+        &self,
+    ) -> Result<
+        (
+            String,
+            String,
+            Option<String>,
+            Option<std::time::SystemTime>,
+        ),
+        glide_core::iam::GlideIAMError,
+    > {
+        const BUF_LEN: usize = 2048;
+        let mut access_key_id_buf = vec![0u8; BUF_LEN];
+        let mut secret_access_key_buf = vec![0u8; BUF_LEN];
+        let mut session_token_buf = vec![0u8; BUF_LEN];
+        let mut access_key_id_len: usize = 0;
+        let mut secret_access_key_len: usize = 0;
+        let mut session_token_len: usize = 0;
+        let mut expires_at_millis: i64 = 0;
+
+        let ok = unsafe {
+            (self.callback)(
+                self.client_id,
+                access_key_id_buf.as_mut_ptr(),
+                BUF_LEN,
+                &mut access_key_id_len,
+                secret_access_key_buf.as_mut_ptr(),
+                BUF_LEN,
+                &mut secret_access_key_len,
+                session_token_buf.as_mut_ptr(),
+                BUF_LEN,
+                &mut session_token_len,
+                &mut expires_at_millis,
+            )
+        };
+
+        if ok == 0 {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(
+                "Custom credentials provider callback returned failure".to_string(),
+            ));
+        }
+
+        let access_key_id = String::from_utf8(access_key_id_buf[..access_key_id_len].to_vec())
+            .map_err(|e| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "Invalid UTF-8 in access_key_id: {e}"
+                ))
+            })?;
+        let secret_access_key = String::from_utf8(
+            secret_access_key_buf[..secret_access_key_len].to_vec(),
+        )
+        .map_err(|e| {
+            glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "Invalid UTF-8 in secret_access_key: {e}"
+            ))
+        })?;
+        let session_token = if session_token_len > 0 {
+            Some(
+                String::from_utf8(session_token_buf[..session_token_len].to_vec()).map_err(
+                    |e| {
+                        glide_core::iam::GlideIAMError::CredentialsError(format!(
+                            "Invalid UTF-8 in session_token: {e}"
+                        ))
+                    },
+                )?,
+            )
+        } else {
+            None
+        };
+        let expires_at = if expires_at_millis > 0 {
+            Some(
+                std::time::SystemTime::UNIX_EPOCH
+                    + std::time::Duration::from_millis(expires_at_millis as u64),
+            )
+        } else {
+            None
+        };
+
+        Ok((access_key_id, secret_access_key, session_token, expires_at))
+    }
+}
+
 /// The connection response.
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
@@ -1369,6 +1497,7 @@ fn create_client_internal(
     client_type: ClientType,
     pubsub_callback: Option<PubSubCallback>,
     address_resolver: Option<AddressResolverCallback>,
+    credential_provider: Option<CredentialProviderCallback>,
     client_id: usize,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
@@ -1443,6 +1572,21 @@ fn create_client_internal(
                 callback: resolver_callback,
                 client_id,
             }));
+        }
+
+        // Set the credential provider if provided
+        if let Some(cp_callback) = credential_provider {
+            let provider = FFICredentialsProvider {
+                callback: cp_callback,
+                client_id,
+            };
+            let provider_arc: glide_core::iam::CredentialsProvider =
+                Arc::new(move || provider.call());
+            if let Some(auth_info) = connection_request.authentication_info.as_mut()
+                && let Some(iam_config) = auth_info.iam_config.as_mut()
+            {
+                iam_config.credentials_provider = Some(provider_arc);
+            }
         }
 
         create_rt
@@ -1573,6 +1717,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
     address_resolver: AddressResolverCallback,
+    credential_provider: CredentialProviderCallback,
     client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
@@ -1594,11 +1739,19 @@ pub unsafe extern "C-unwind" fn create_client(
         Some(address_resolver)
     };
 
+    // Convert credential provider pointer to Option - 0 means no provider
+    let credential_provider_opt = if credential_provider as usize == 0 {
+        None
+    } else {
+        Some(credential_provider)
+    };
+
     let response = match create_client_internal(
         request_bytes,
         client_type.clone(),
         callback_opt,
         resolver_opt,
+        credential_provider_opt,
         client_id,
     ) {
         Err(err) => ConnectionResponse {
@@ -1790,8 +1943,14 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0)
-                    {
+                    match create_client_internal(
+                        &bytes,
+                        client_type.clone(),
+                        callback_opt,
+                        None,
+                        None,
+                        0,
+                    ) {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(

@@ -911,6 +911,13 @@ async fn create_client(
         .filter(|k| !k.is_empty())
         .map(|k| k.to_string());
 
+    // Extract the credential provider key before converting (protobuf field won't survive into())
+    let credential_provider_key = request
+        .credential_provider_key
+        .as_ref()
+        .filter(|k| !k.is_empty())
+        .map(|k| k.to_string());
+
     let mut conn_request: crate::client::ConnectionRequest = request.into();
 
     // Look up the address resolver from the global registry using the key
@@ -919,6 +926,18 @@ async fn create_client(
         && let Some(resolver) = crate::address_resolver_registry::remove(&key)
     {
         conn_request.address_resolver = Some(resolver);
+    }
+
+    // Look up the credential provider from the global registry using the key
+    // provided in the connection request.
+    if let Some(key) = credential_provider_key
+        && let Some(provider) = crate::credential_provider_registry::remove(&key)
+    {
+        if let Some(auth_info) = conn_request.authentication_info.as_mut()
+            && let Some(iam_config) = auth_info.iam_config.as_mut()
+        {
+            iam_config.credentials_provider = Some(provider);
+        }
     }
 
     let client = match Client::new(conn_request, push_tx).await {
