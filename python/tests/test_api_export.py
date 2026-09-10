@@ -132,6 +132,7 @@ excluded_shared_symbols = [
     "convert_commands_to_c_batch_info",  # FunctionDef
     "create_c_batch_options",  # FunctionDef
     "create_address_resolver_callback",  # FunctionDef
+    "create_credential_provider_callback",  # FunctionDef
     "handle_command_result",  # FunctionDef
     "parse_inline_pubsub",  # FunctionDef
     # python/glide-shared/glide_shared/request_type.py
