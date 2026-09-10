@@ -41,21 +41,6 @@ mod cluster_async {
     use crate::support::*;
 
     #[derive(Debug)]
-    struct InternalNodeResolver {
-        resolved_name: &'static str,
-    }
-
-    impl AddressResolver for InternalNodeResolver {
-        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
-            if host == "internal-node" {
-                (self.resolved_name.to_string(), port)
-            } else {
-                (host.to_string(), port)
-            }
-        }
-    }
-
-    #[derive(Debug)]
     struct NonIdempotentRedirectResolver {
         resolved_name: &'static str,
         redirect_resolutions: Arc<atomic::AtomicUsize>,
@@ -5208,17 +5193,12 @@ mod cluster_async {
                     asking_called_clone.fetch_add(1, Ordering::SeqCst);
                 }
                 if port == 6380 && cmd_str.contains("baz") {
-                    return Err(parse_redis_value(
-                        format!("-ASK 14000 internal-node:6382\r\n").as_bytes(),
-                    ));
+                    return Err(parse_redis_value(b"-ASK 14000 internal-node:6382\r\n"));
                 }
                 let results = ["foo", "bar", "baz"]
                     .iter()
-                    .filter_map(|key| {
-                        cmd_str
-                            .contains(key)
-                            .then(|| Value::BulkString(format!("{key}-{port}").into_bytes().into()))
-                    })
+                    .filter(|&&key| cmd_str.contains(key))
+                    .map(|&key| Value::BulkString(format!("{key}-{port}").into_bytes().into()))
                     .collect();
                 Err(Ok(Value::Array(results)))
             },
