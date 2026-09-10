@@ -2499,7 +2499,7 @@ mod cluster_async {
         );
 
         assert_eq!(value, Ok(Some(123)));
-        assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
         assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
         assert_eq!(retry_port.load(atomic::Ordering::SeqCst), 6380);
     }
