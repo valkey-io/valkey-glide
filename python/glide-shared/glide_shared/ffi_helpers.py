@@ -333,18 +333,22 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
                 if event_loop is None or event_loop.is_closed():
                     import logging
 
-                    logging.getLogger(__name__).warning(
-                        "GlideCredentialProvider is async but no event loop is available"
+                    msg = (
+                        "GlideCredentialProvider is an async callable but no asyncio event "
+                        "loop is available. Async providers are only supported in the async "
+                        "glide client. Use a synchronous callable for the sync client."
                     )
-                    return 0
+                    logging.getLogger(__name__).error(msg)
+                    raise RuntimeError(msg)
                 import asyncio
 
                 future = asyncio.run_coroutine_threadsafe(
                     credential_provider_fn(), event_loop
                 )
-                # Use a timeout slightly larger than Rust's 10-second callback timeout
-                # so that Rust's timeout fires first with a clear error message.
-                creds = future.result(timeout=12)
+                # Use a timeout slightly less than Rust's 10-second callback timeout
+                # so the Python layer surfaces a clean TimeoutError before Rust's
+                # outer timeout fires.
+                creds = future.result(timeout=9)
             else:
                 creds = credential_provider_fn()
             # Fail fast if any required credential would be truncated.

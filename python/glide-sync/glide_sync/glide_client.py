@@ -200,6 +200,18 @@ class BaseClient(CoreCommands):
             )
 
         if _credential_provider_fn is not None:
+            # Async providers require an asyncio event loop, which the sync client
+            # does not have. Fail with a clear error at connection time.
+            if getattr(
+                self._config.credentials.iam_config,
+                "_credential_provider_is_async",
+                False,
+            ):
+                raise ValueError(
+                    "GlideCredentialProvider is an async callable but the sync glide client "
+                    "does not support async providers. Use a synchronous callable, or switch "
+                    "to the async glide client."
+                )
             from glide_shared.ffi_helpers import create_credential_provider_callback
 
             credential_provider_callback = create_credential_provider_callback(
