@@ -845,12 +845,29 @@ pub fn create_direct_client<'a>(
     {
         connection_request.address_resolver = Some(resolver);
     }
-    if let Some(key) = credential_provider_key
-        && let Some(provider) = glide_core::credential_provider_registry::remove(&key)
-        && let Some(auth_info) = connection_request.authentication_info.as_mut()
-        && let Some(iam_config) = auth_info.iam_config.as_mut()
-    {
-        iam_config.credentials_provider = Some(provider);
+    if let Some(key) = credential_provider_key {
+        match glide_core::credential_provider_registry::remove(&key) {
+            Some(provider) => {
+                if let Some(auth_info) = connection_request.authentication_info.as_mut()
+                    && let Some(iam_config) = auth_info.iam_config.as_mut()
+                {
+                    iam_config.credentials_provider = Some(provider);
+                } else {
+                    log_warn(
+                        "create_direct_client",
+                        "credential_provider_key was set but the connection request contains \
+                         no IAM configuration. The credential provider will be ignored.",
+                    );
+                }
+            }
+            None => {
+                log_warn(
+                    "create_direct_client",
+                    "credential_provider_key was set but no provider was found in the registry. \
+                     The key may have been consumed already or was never registered.",
+                );
+            }
+        }
     }
 
     // Create shared response buffer
@@ -2724,7 +2741,7 @@ impl NodeCredentialsProvider {
 /// The JS callback signature is: `() => AwsCredentials`
 #[napi(js_name = "registerCredentialProvider")]
 pub fn register_credential_provider(
-    #[napi(ts_arg_type = "() => AwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
+    #[napi(ts_arg_type = "() => JsAwsCredentials")] callback: Function<'_, (), JsAwsCredentials>,
 ) -> Result<String> {
     let tsfn = callback
         .build_threadsafe_function::<()>()

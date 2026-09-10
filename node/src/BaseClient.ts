@@ -77,6 +77,7 @@ import {
     removeAddressResolver,
     registerCredentialProvider,
     removeCredentialProvider,
+    JsAwsCredentials,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -818,8 +819,9 @@ export interface AwsCredentials {
     /**
      * Optional credential expiry time as Unix epoch milliseconds.
      * When provided, passed to the AWS SDK so it has accurate credential metadata.
-     * This does not override `refreshIntervalSeconds` — the background refresh task
-     * still fires on its configured schedule.
+     * This does not override {@link IamAuthConfig.refreshIntervalSeconds}.
+     * Omit or pass `undefined` if credentials have no known expiry. Pass `0` or
+     * a negative value to indicate no expiry (treated the same as omitting the field).
      */
     expiresAtEpochMillis?: number;
 }
@@ -838,15 +840,26 @@ export interface AwsCredentials {
  *
  * @example
  * ```typescript
+ * // Synchronous provider:
  * const provider: GlideCredentialProvider = () => ({
- *     accessKeyId: await vault.getAccessKeyId(),
- *     secretAccessKey: await vault.getSecretAccessKey(),
- *     sessionToken: await vault.getSessionToken(),
+ *     accessKeyId: myVaultClient.getAccessKeyId(),
+ *     secretAccessKey: myVaultClient.getSecretAccessKey(),
+ *     sessionToken: myVaultClient.getSessionToken(),
+ * });
+ *
+ * // If your source is async, resolve credentials ahead of time:
+ * const creds = await myVaultClient.getCredentials();
+ * const provider: GlideCredentialProvider = () => ({
+ *     accessKeyId: creds.accessKeyId,
+ *     secretAccessKey: creds.secretAccessKey,
  * });
  * ```
+ *
+ * **Note**: the callback must be synchronous. Async functions (returning
+ * `Promise<AwsCredentials>`) are not supported and will cause IAM authentication
+ * to fail silently. Resolve credentials before constructing the provider.
  */
-export type GlideCredentialProvider = () =>
-    AwsCredentials | Promise<AwsCredentials>;
+export type GlideCredentialProvider = () => AwsCredentials;
 
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {
@@ -10116,7 +10129,8 @@ export class BaseClient {
                 iamConfig: IamAuthConfig;
             };
             this.credentialProviderKey = registerCredentialProvider(
-                iamCreds.iamConfig.credentialProvider as () => AwsCredentials,
+                iamCreds.iamConfig
+                    .credentialProvider as unknown as () => JsAwsCredentials,
             );
             request.credentialProviderKey = this.credentialProviderKey;
         }
@@ -10207,7 +10221,9 @@ export class BaseClient {
             this.addressResolverKey = undefined;
         }
 
-        // Clean up credential provider from the global registry
+        // Remove the credential provider key from the global registry if it was
+        // not already consumed by create_direct_client (e.g. connection failed
+        // between registerCredentialProvider and CreateDirectClient being called).
         if (this.credentialProviderKey) {
             removeCredentialProvider(this.credentialProviderKey);
             this.credentialProviderKey = undefined;
