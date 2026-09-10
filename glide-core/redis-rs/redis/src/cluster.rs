@@ -356,7 +356,7 @@ where
                     }
                 }
 
-                if let Ok(mut conn) = self.connect(&addr) {
+                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                     if conn.check_connection() {
                         return Some((addr.to_string(), conn));
                     }
@@ -418,7 +418,20 @@ where
     }
 
     fn connect(&self, node: &str) -> RedisResult<C> {
-        let info = get_connection_info(node, self.cluster_params.clone())?;
+        self.connect_with_resolver(node, self.cluster_params.address_resolver.as_deref())
+    }
+
+    fn connect_to_resolved_address(&self, node: &str) -> RedisResult<C> {
+        self.connect_with_resolver(node, None)
+    }
+
+    fn connect_with_resolver(
+        &self,
+        node: &str,
+        address_resolver: Option<&dyn AddressResolver>,
+    ) -> RedisResult<C> {
+        let info =
+            get_connection_info_with_resolver(node, self.cluster_params.clone(), address_resolver)?;
 
         let mut conn = C::connect(info, Some(self.cluster_params.connection_timeout))?;
         if self.cluster_params.read_from_replicas
@@ -441,7 +454,7 @@ where
         if let Some(addr) = slots.slot_addr_for_route(route) {
             Ok((
                 addr.to_string(),
-                self.get_connection_by_addr(connections, &addr)?,
+                self.get_connection_by_canonical_addr(connections, &addr)?,
             ))
         } else {
             // try a random node next.  This is safe if slots are involved
@@ -450,7 +463,7 @@ where
         }
     }
 
-    fn get_connection_by_addr<'a>(
+    fn get_connection_by_canonical_addr<'a>(
         &self,
         connections: &'a mut HashMap<String, C>,
         addr: &str,
@@ -460,7 +473,7 @@ where
         } else {
             // Create new connection.
             // TODO: error handling
-            let conn = self.connect(addr)?;
+            let conn = self.connect_to_resolved_address(addr)?;
             Ok(connections.entry(addr.to_string()).or_insert(conn))
         }
     }
@@ -515,7 +528,7 @@ where
         addresses
             .into_iter()
             .map(|addr| {
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 match input {
                     Input::Slice { cmd, routable: _ } => connection.req_packed_command(cmd),
                     Input::Cmd(cmd) => connection.req_command(cmd),
@@ -571,7 +584,7 @@ where
                     ErrorKind::IoError,
                     "Couldn't find connection",
                 )))?;
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 let (_, indices) = routes.get(index).unwrap();
                 let cmd =
                     crate::cluster_routing::command_for_multi_slot_indices(&input, indices.iter());
@@ -740,7 +753,7 @@ where
                         Redirect::Moved(addr) => (addr, false),
                         Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
                     };
-                    let conn = self.get_connection_by_addr(&mut connections, &addr)?;
+                    let conn = self.get_connection_by_canonical_addr(&mut connections, &addr)?;
                     if is_asking {
                         // if we are in asking mode we want to feed a single
                         // ASKING command into the connection before what we
@@ -758,8 +771,12 @@ where
                             self.get_connection(&mut connections, &Route::new_random_primary())?
                         }
                         SingleNodeRoutingInfo::ByAddress { host, port } => {
-                            let address = format!("{host}:{port}");
-                            let conn = self.get_connection_by_addr(&mut connections, &address)?;
+                            let address = resolve_address(
+                                &format!("{host}:{port}"),
+                                self.cluster_params.address_resolver.as_deref(),
+                            );
+                            let conn =
+                                self.get_connection_by_canonical_addr(&mut connections, &address)?;
                             (address, conn)
                         }
                     }
@@ -777,17 +794,26 @@ where
 
                     match err.retry_method() {
                         RetryMethod::AskRedirect => {
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Ask(
+                                    resolve_address(
+                                        node,
+                                        self.cluster_params.address_resolver.as_deref(),
+                                    ),
+                                    true,
+                                )
+                            });
                         }
                         RetryMethod::MovedRedirect => {
                             // Refresh slots.
                             self.refresh_slots()?;
                             // Request again.
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Moved(node.to_string()));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Moved(resolve_address(
+                                    node,
+                                    self.cluster_params.address_resolver.as_deref(),
+                                ))
+                            });
                         }
                         RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica
                         | RetryMethod::WaitAndRetry => {
@@ -800,7 +826,7 @@ where
                         }
                         RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                             if *self.auto_reconnect.borrow() {
-                                if let Ok(mut conn) = self.connect(&addr) {
+                                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                                     if conn.check_connection() {
                                         self.connections.borrow_mut().insert(addr, conn);
                                     }
@@ -853,7 +879,7 @@ where
 
         let node_cmds = self.map_cmds_to_nodes(cmds)?;
         for nc in &node_cmds {
-            self.get_connection_by_addr(&mut connections, &nc.addr)?
+            self.get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                 .send_packed_command(&nc.pipe)?;
         }
         Ok(node_cmds)
@@ -872,7 +898,7 @@ where
         for nc in node_cmds {
             for cmd_idx in &nc.indexes {
                 match self
-                    .get_connection_by_addr(&mut connections, &nc.addr)?
+                    .get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                     .recv_response()
                 {
                     Ok(item) => results[*cmd_idx] = item,
@@ -1003,6 +1029,22 @@ pub(crate) fn get_connection_info(
     node: &str,
     cluster_params: ClusterParams,
 ) -> RedisResult<ConnectionInfo> {
+    let address_resolver = cluster_params.address_resolver.clone();
+    get_connection_info_with_resolver(node, cluster_params, address_resolver.as_deref())
+}
+
+pub(crate) fn get_connection_info_for_resolved_address(
+    node: &str,
+    cluster_params: ClusterParams,
+) -> RedisResult<ConnectionInfo> {
+    get_connection_info_with_resolver(node, cluster_params, None)
+}
+
+fn get_connection_info_with_resolver(
+    node: &str,
+    cluster_params: ClusterParams,
+    address_resolver: Option<&dyn AddressResolver>,
+) -> RedisResult<ConnectionInfo> {
     let invalid_error = || (ErrorKind::InvalidClientConfig, "Invalid node string");
 
     let (host, port) = node
@@ -1020,7 +1062,7 @@ pub(crate) fn get_connection_info(
             port,
             cluster_params.tls,
             cluster_params.tls_params.clone(),
-            cluster_params.address_resolver.as_ref().map(Arc::as_ref),
+            address_resolver,
         ),
         redis: RedisConnectionInfo {
             password: cluster_params.password,
@@ -1034,6 +1076,26 @@ pub(crate) fn get_connection_info(
             server_assisted_cache: cluster_params.server_assisted_cache,
         },
     })
+}
+
+/// Resolves a raw `"host:port"` address string through the given address resolver.
+/// If no resolver is provided, or the address cannot be parsed, returns the original
+/// address unchanged.
+pub(crate) fn resolve_address(address: &str, resolver: Option<&dyn AddressResolver>) -> String {
+    let resolver = match resolver {
+        Some(resolver) => resolver,
+        None => return address.to_string(),
+    };
+
+    if let Some((host, port_str)) = address.rsplit_once(':') {
+        if let Ok(port) = port_str.parse::<u16>() {
+            let host = host.trim_start_matches('[').trim_end_matches(']');
+            let (resolved_host, resolved_port) = resolver.resolve(host, port);
+            return format!("{resolved_host}:{resolved_port}");
+        }
+    }
+
+    address.to_string()
 }
 
 pub(crate) fn get_connection_addr(
@@ -1076,6 +1138,24 @@ pub(crate) fn slot_cmd() -> Cmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug)]
+    struct BracketlessIpv6Resolver;
+
+    impl AddressResolver for BracketlessIpv6Resolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            assert_eq!(host, "2001:db8::1");
+            ("canonical-node".to_owned(), port + 1)
+        }
+    }
+
+    #[test]
+    fn resolve_address_strips_ipv6_brackets_before_custom_resolution() {
+        assert_eq!(
+            resolve_address("[2001:db8::1]:6379", Some(&BracketlessIpv6Resolver)),
+            "canonical-node:6380"
+        );
+    }
 
     #[test]
     fn parse_cluster_node_host_port() {

@@ -230,6 +230,8 @@ impl RefreshTaskStatus {
 // - `status`: The current state of the refresh task.
 #[derive(Debug)]
 pub(crate) struct RefreshTaskState {
+    // Unique identity for this refresh task generation.
+    pub identity: Arc<()>,
     // Handle to the background reconnection task.
     pub handle: JoinHandle<()>,
     // Current status of the refresh task.
@@ -238,12 +240,17 @@ pub(crate) struct RefreshTaskState {
 
 impl RefreshTaskState {
     // Creates a new `RefreshTaskState` with a `Reconnecting` status.
-    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
+    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier, identity: Arc<()>) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
+            identity,
             handle,
             status: RefreshTaskStatus::with_notifier(notifier),
         }
+    }
+
+    pub fn is_same_generation(&self, identity: &Arc<()>) -> bool {
+        Arc::ptr_eq(&self.identity, identity)
     }
 }
 
@@ -809,6 +816,34 @@ mod tests {
     use crate::cluster_routing::Slot;
 
     use super::*;
+
+    #[tokio::test]
+    async fn refresh_task_generation_identity_does_not_survive_clear_and_reinsert() {
+        let address = "node:6379".to_owned();
+        let old_token = Arc::new(());
+        let old_state = RefreshTaskState::new(
+            tokio::spawn(async {}),
+            RefreshTaskNotifier::new(),
+            old_token.clone(),
+        );
+        let mut states = HashMap::new();
+        states.insert(address.clone(), old_state);
+
+        let new_token = Arc::new(());
+        states.clear();
+        states.insert(
+            address,
+            RefreshTaskState::new(
+                tokio::spawn(async {}),
+                RefreshTaskNotifier::new(),
+                new_token.clone(),
+            ),
+        );
+
+        let current = states.values().next().unwrap();
+        assert!(!current.is_same_generation(&old_token));
+        assert!(current.is_same_generation(&new_token));
+    }
     impl<Connection> ClusterNode<Connection>
     where
         Connection: Clone,

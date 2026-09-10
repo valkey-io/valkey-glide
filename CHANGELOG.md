@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Resolve cluster redirect addresses ([#6788](https://github.com/valkey-io/valkey-glide/pull/6788))
 * Java: Map the Jedis compatibility layer's database selection onto GLIDE's `databaseId` instead of logging a warning and discarding it. A `JedisPool` configured for a non-zero database ran every command against database 0, silently writing to a database the caller did not ask for ([#6994](https://github.com/valkey-io/valkey-glide/issues/6994))
 * Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
 * Core/FFI: Scoped connections honor blocking-command timeouts (e.g. `BLPOP key 0` blocks instead of timing out at the request timeout), and a scoped connection whose blocking command timed out or was cancelled is discarded on release instead of being reused with a stale server-side waiter ([#6780](https://github.com/valkey-io/valkey-glide/issues/6780), [#6794](https://github.com/valkey-io/valkey-glide/issues/6794))
