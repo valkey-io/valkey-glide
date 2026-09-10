@@ -45,15 +45,15 @@ static POOL_CLIENTS: std::sync::OnceLock<dashmap::DashMap<u64, PoolClientEntry>>
 /// Reverse lookup: adapter_ptr → (pool_id, client_id).
 /// Populated at client creation, used by command dispatch to detect pool-borrowed clients
 /// and mark them as blocking when executing blocking commands.
+///
+/// Note: FFI-managed pool clients are NOT registered in glide-core's CLIENT_TO_POOL
+/// map. Pool membership and activity refresh for FFI clients are tracked via
+/// POOL_ADAPTER_MAP (adapter_ptr → (pool_id, client_id)) in this file.
+/// The is_pool_client() and refresh_activity_by_client() glide-core APIs therefore
+/// do not apply to FFI clients; activity refresh happens directly via
+/// refresh_client_activity(pool_id, client_id) at dispatch time.
 static POOL_ADAPTER_MAP: std::sync::OnceLock<dashmap::DashMap<usize, (u64, u64)>> =
     std::sync::OnceLock::new();
-
-#[allow(dead_code)]
-struct PoolClientEntry {
-    adapter_ptr: usize, // *const ClientAdapter as usize (for command dispatch)
-    client: glide_core::client::Client,
-    created_at: std::time::Instant,
-}
 
 fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
     POOL_RUNTIME.get_or_init(|| {
@@ -64,6 +64,13 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
             .build()
             .expect("Failed to create pool runtime")
     })
+}
+
+#[allow(dead_code)]
+struct PoolClientEntry {
+    adapter_ptr: usize, // *const ClientAdapter as usize (for command dispatch)
+    client: glide_core::client::Client,
+    created_at: std::time::Instant,
 }
 
 fn get_pool_clients() -> &'static dashmap::DashMap<u64, PoolClientEntry> {
@@ -225,9 +232,19 @@ pub unsafe extern "C" fn glide_pool_create(
                         rt.block_on(async {
                             let mut pool = pool_clone.lock().await;
                             if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                                // Reconstruct and drop the Arc to avoid a memory leak:
+                                // create_pool_client transferred ownership into a raw pointer
+                                // via mem::forget; glide_pool_destroy cannot find this orphaned
+                                // pointer because it was never stored in get_pool_clients().
+                                unsafe {
+                                    drop(Arc::from_raw(adapter_ptr as *const ClientAdapter));
+                                }
                                 return;
                             }
+                            // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
+                            // p.next_id() would generate a different ID, breaking the adapter lookup.
                             let client_id = pre_cid as u64;
+                            let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                             let entry = PooledClient {
                                 client_id,
                                 client: client.clone(),
@@ -235,12 +252,11 @@ pub unsafe extern "C" fn glide_pool_create(
                                 last_idle_at: std::time::Instant::now(),
                                 borrowed_at: None,
                                 state: ClientState::Idle,
-                                is_blocking: std::sync::Arc::new(
-                                    std::sync::atomic::AtomicBool::new(false),
-                                ),
+                                is_blocking: flag.clone(),
                             };
                             pool.idle.push_back(entry);
                             pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+                            glide_core::pool::register_blocking_flag(client_id, flag);
                             // Store adapter mapping
                             get_pool_clients().insert(
                                 client_id,
@@ -280,6 +296,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
             // Clean up any clients discarded by the abandon monitor
             let discarded = pool.drain_discarded_ids();
             for cid in discarded {
+                glide_core::pool::unregister_blocking_flag(cid);
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     // Release the adapter Arc that was kept alive via mem::forget
@@ -318,9 +335,19 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                 let mut pool = pool_clone.lock().await;
                                 if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                     pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                    // Reconstruct and drop the Arc to avoid a memory leak:
+                                    // create_pool_client transferred ownership into a raw pointer
+                                    // via mem::forget; glide_pool_destroy cannot find this orphaned
+                                    // pointer because it was never stored in get_pool_clients().
+                                    unsafe {
+                                        drop(Arc::from_raw(adapter_ptr as *const ClientAdapter));
+                                    }
                                     return;
                                 }
+                                // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
+                                // p.next_id() would generate a different ID, breaking the adapter lookup.
                                 let client_id = pre_cid as u64;
+                                let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                                 let entry = PooledClient {
                                     client_id,
                                     client: client.clone(),
@@ -328,11 +355,10 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                     last_idle_at: std::time::Instant::now(),
                                     borrowed_at: None,
                                     state: ClientState::Idle,
-                                    is_blocking: std::sync::Arc::new(
-                                        std::sync::atomic::AtomicBool::new(false),
-                                    ),
+                                    is_blocking: flag.clone(),
                                 };
                                 pool.idle.push_back(entry);
+                                glide_core::pool::register_blocking_flag(client_id, flag);
                                 get_pool_clients().insert(
                                     client_id,
                                     PoolClientEntry {
@@ -398,6 +424,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                 // Clean up any clients discarded by the abandon monitor
                 let discarded = pool.drain_discarded_ids();
                 for cid in discarded {
+                    glide_core::pool::unregister_blocking_flag(cid);
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         unsafe {
@@ -432,9 +459,19 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                     let mut p = pool_clone.lock().await;
                                     if p.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
                                         p.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                        // Reconstruct and drop the Arc to avoid a memory leak:
+                                        // create_pool_client transferred ownership into a raw pointer
+                                        // via mem::forget; glide_pool_destroy cannot find this orphaned
+                                        // pointer because it was never stored in get_pool_clients().
+                                        unsafe {
+                                            drop(Arc::from_raw(adapter_ptr as *const ClientAdapter));
+                                        }
                                         return;
                                     }
-                                    let cid = p.next_id();
+                                    // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
+                                    // p.next_id() would generate a different ID, breaking the adapter lookup.
+                                    let cid = pre_cid as u64;
+                                    let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                                     let entry = PooledClient {
                                         client_id: cid,
                                         client: client.clone(),
@@ -442,11 +479,10 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                         last_idle_at: std::time::Instant::now(),
                                         borrowed_at: None,
                                         state: ClientState::Idle,
-                                        is_blocking: std::sync::Arc::new(
-                                            std::sync::atomic::AtomicBool::new(false),
-                                        ),
+                                        is_blocking: flag.clone(),
                                     };
                                     p.idle.push_back(entry);
+                                    glide_core::pool::register_blocking_flag(cid, flag);
                                     get_pool_clients().insert(
                                         cid,
                                         PoolClientEntry {
@@ -503,6 +539,13 @@ pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
         None => return -1,
     };
 
+    // Do NOT call unregister_blocking_flag here: the registry entry must live for
+    // the entire lifetime the client_id exists in the pool (from creation until
+    // permanent discard). Removing it on a normal release (return-to-idle) would
+    // delete the entry so the next acquire of the recycled client has no registry
+    // entry and cannot set the flag. Cleanup happens only on permanent discard:
+    // in glide_pool_destroy, in the discard loop inside glide_pool_try_acquire, and
+    // in release_client_async's discard (failed reset) path.
     let rt = get_pool_runtime();
     rt.spawn(pool::release_client_async(pool_arc, client_id));
     0
@@ -531,6 +574,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 .chain(discarded)
                 .collect();
             for cid in client_ids {
+                glide_core::pool::unregister_blocking_flag(cid);
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     unsafe {
@@ -553,6 +597,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                     .chain(discarded)
                     .collect();
                 for cid in client_ids {
+                    glide_core::pool::unregister_blocking_flag(cid);
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         unsafe {

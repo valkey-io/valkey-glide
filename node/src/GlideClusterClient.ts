@@ -2,7 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    ClusterScanCursor,
+    GlideClientHandle,
+    Script,
+} from "../build-ts/native";
 import {
     command_request,
     connection_request,
@@ -776,6 +780,61 @@ export class GlideClusterClient extends BaseClient {
             options,
             (options?: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
+     * `GlideClusterClient` instance.  No network connection is made — the handle
+     * already owns a live connection managed by the pool.
+     */
+    public static createFromHandle(
+        handle: GlideClientHandle,
+        options: GlideClusterClientConfiguration,
+    ): GlideClusterClient {
+        return super.createClientFromHandle<GlideClusterClient>(
+            handle,
+            options,
+            (options?: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(options),
+        );
+    }
+
+    /**
+     * Acquire a pool client by ID and wrap it as a GlideClusterClient.
+     *
+     * Called by {@link ClientPool} after a successful `poolTryAcquire` or
+     * `poolAcquireBlocking`. Spins up a fresh worker thread for the
+     * already-connected pool client and returns a fully operational instance.
+     *
+     * @internal - intended for use by ClientPool only.
+     */
+    public static async fromPoolClientId(
+        clientId: number,
+        options: GlideClusterClientConfiguration,
+    ): Promise<GlideClusterClient> {
+        const { poolBuildHandle } = await import("../build-ts/native");
+        const temp = new GlideClusterClient(options);
+        const wakeCallback = (
+            temp as unknown as { handleResponsesAvailable: () => void }
+        ).handleResponsesAvailable;
+        const handle = await poolBuildHandle(clientId, wakeCallback);
+        return GlideClusterClient.createFromHandle(handle, options);
+    }
+
+    /**
+     * @internal
+     * Serialise a {@link GlideClusterClientConfiguration} into the protobuf
+     * bytes used by the pool Rust APIs.  Does not open a network connection.
+     */
+    public static serializeConfig(
+        options: GlideClusterClientConfiguration,
+    ): Uint8Array {
+        return super.serializeConnectionRequest(
+            options,
+            (opts?: BaseClientConfiguration) =>
+                new GlideClusterClient(opts as GlideClusterClientConfiguration),
         );
     }
 

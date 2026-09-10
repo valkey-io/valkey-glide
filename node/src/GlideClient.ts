@@ -3,6 +3,7 @@
  */
 
 import { connection_request } from "../build-ts/ProtobufMessage";
+import { GlideClientHandle } from "../build-ts/native";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -340,6 +341,62 @@ export class GlideClient extends BaseClient {
         return super.createClientInternal<GlideClient>(
             options,
             (options?: GlideClientConfiguration) => new GlideClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
+     * `GlideClient` instance.  No network connection is made — the handle
+     * already owns a live connection managed by the pool.
+     *
+     * Used by `ClientPool.acquire()` after `poolBuildHandle` returns a handle.
+     */
+    public static createFromHandle(
+        handle: GlideClientHandle,
+        options: GlideClientConfiguration,
+    ): GlideClient {
+        return super.createClientFromHandle<GlideClient>(
+            handle,
+            options,
+            (options?: GlideClientConfiguration) => new GlideClient(options),
+        );
+    }
+
+    /**
+     * Acquire a pool client by ID and wrap it as a GlideClient.
+     *
+     * Called by {@link ClientPool} after a successful `poolTryAcquire` or
+     * `poolAcquireBlocking`. Spins up a fresh worker thread for the
+     * already-connected pool client and returns a fully operational instance.
+     *
+     * @internal - intended for use by ClientPool only.
+     */
+    public static async fromPoolClientId(
+        clientId: number,
+        options: GlideClientConfiguration,
+    ): Promise<GlideClient> {
+        const { poolBuildHandle } = await import("../build-ts/native");
+        const temp = new GlideClient(options);
+        const wakeCallback = (
+            temp as unknown as { handleResponsesAvailable: () => void }
+        ).handleResponsesAvailable;
+        const handle = await poolBuildHandle(clientId, wakeCallback);
+        return GlideClient.createFromHandle(handle, options);
+    }
+
+    /**
+     * @internal
+     * Serialise a {@link GlideClientConfiguration} into the protobuf bytes
+     * used by the pool Rust APIs.  Does not open a network connection.
+     */
+    public static serializeConfig(
+        options: GlideClientConfiguration,
+    ): Uint8Array {
+        return super.serializeConnectionRequest(
+            options,
+            (opts?: BaseClientConfiguration) =>
+                new GlideClient(opts as GlideClientConfiguration),
         );
     }
 
