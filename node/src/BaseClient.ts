@@ -784,7 +784,9 @@ export type ReturnTypeXinfoStream = Record<
  * See {@link ReturnTypeXinfoStream}.
  */
 export type StreamEntries =
-    GlideString | number | (GlideString | number | GlideString[])[][];
+    | GlideString
+    | number
+    | (GlideString | number | GlideString[])[][];
 
 /**
  * @internal
@@ -845,7 +847,9 @@ export interface AwsCredentials {
  * });
  * ```
  */
-export type GlideCredentialProvider = () => AwsCredentials | Promise<AwsCredentials>;
+export type GlideCredentialProvider = () =>
+    | AwsCredentials
+    | Promise<AwsCredentials>;
 
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {
@@ -1540,7 +1544,8 @@ export interface PubSubMsg {
  */
 type BaseOptions = RouteOption & DecoderOption;
 type WritePromiseOptions =
-    BaseOptions | (BaseOptions & (ClusterBatchOptions | BatchOptions));
+    | BaseOptions
+    | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
 /**
  * Base client interface for GLIDE
@@ -9932,7 +9937,8 @@ export class BaseClient {
 
         // Build a protobuf AuthenticationInfo
         let authenticationInfo:
-            connection_request.IAuthenticationInfo | undefined;
+            | connection_request.IAuthenticationInfo
+            | undefined;
 
         if (creds) {
             if ("iamConfig" in creds) {
@@ -9975,7 +9981,8 @@ export class BaseClient {
         }
 
         const protocol = options.protocol as
-            connection_request.ProtocolVersion | undefined;
+            | connection_request.ProtocolVersion
+            | undefined;
 
         // Normalize clientAz: trim surrounding whitespace and treat a blank value as
         // absent. The core compares availability zones with exact equality and never
@@ -10150,8 +10157,7 @@ export class BaseClient {
                 iamConfig: IamAuthConfig;
             };
             this.credentialProviderKey = registerCredentialProvider(
-                iamCreds.iamConfig
-                    .credentialProvider as () => AwsCredentials,
+                iamCreds.iamConfig.credentialProvider as () => AwsCredentials,
             );
             request.credentialProviderKey = this.credentialProviderKey;
         }
