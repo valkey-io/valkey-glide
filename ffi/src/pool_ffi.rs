@@ -700,11 +700,11 @@ pub unsafe extern "C" fn glide_scope_execute_async(
         // Execute with watchdog race — send_scope_command handles CB, inflight,
         // compression, latency recording internally
         let result = if !arm_watchdog {
-            scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&client)).await
+            scope::send_scope_command(scope_id, &cmd_name, &mut args, &client).await
         } else {
             let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
                 .register(timeout_duration, cmd_start);
-            let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&client));
+            let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, &client);
             tokio::pin!(execute);
             tokio::select! {
                 result = &mut execute => result,
@@ -929,13 +929,11 @@ pub unsafe extern "C" fn glide_scope_execute(
 
     let result = runtime.block_on(async {
         if !arm_watchdog {
-            return scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&parent_client))
-                .await;
+            return scope::send_scope_command(scope_id, &cmd_name, &mut args, &parent_client).await;
         }
         let timeout_rx = glide_core::timeout_watchdog::TimeoutWatchdog::global()
             .register(timeout_duration, cmd_start);
-        let execute =
-            scope::send_scope_command(scope_id, &cmd_name, &mut args, Some(&parent_client));
+        let execute = scope::send_scope_command(scope_id, &cmd_name, &mut args, &parent_client);
         tokio::pin!(execute);
         tokio::select! {
             result = &mut execute => result,
