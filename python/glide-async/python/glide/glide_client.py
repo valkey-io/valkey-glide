@@ -630,7 +630,9 @@ class BaseClient(CoreCommands):
             and self.config.credentials.iam_config is not None
             and self.config.credentials.iam_config.credential_provider is not None
         ):
-            _credential_provider_fn = self.config.credentials.iam_config.credential_provider
+            _credential_provider_fn = (
+                self.config.credentials.iam_config.credential_provider
+            )
 
         credential_provider_callback = create_credential_provider_callback(
             self._ffi, _credential_provider_fn
