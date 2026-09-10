@@ -48,6 +48,7 @@ pub use commands::prelude::*;
 pub use commands::options::{
     ClientPauseMode, ConditionalChange, ExpireOptions, FlushMode, FunctionRestorePolicy,
     HashFieldConditionalChange, Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions,
+    SetExpiry,
 };
 
 /// Family-specific option/type re-exports.
@@ -105,6 +106,8 @@ pub use commands::scan::ScanIter;
 /// Blocking counterpart of [`ScanIter`] (implements [`Iterator`]).
 #[cfg(feature = "sync")]
 pub use commands::scan::SyncScanIter;
+
+// TODO #7024: Don't expose.
 /// The **whole vendored `redis` crate**, re-exported. Downstream crates cannot
 /// name the path-dep fork directly, and the curated flat re-exports above are
 /// deliberately incomplete where names collide with other exported types
@@ -123,17 +126,20 @@ pub use commands::scan::SyncScanIter;
 /// **Semver note:** this makes the fork's API part of this crate's public
 /// surface — changing the vendored fork's API is a breaking change.
 pub use redis;
-/// Connection-description types, accepted by
-/// [`GlideClientConfiguration::from_connection_info`] and
-/// [`GlideClusterClientConfiguration::from_urls`].
-pub use redis::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
+
+// TODO #7024: Don't expose.
 /// Argument types appearing in command signatures (`lmpop`, `lpos`, …).
 pub use redis::{Direction, LposOptions};
+
+// TODO #7024: Don't expose.
 /// Error and conversion types (`RedisResult`, `FromRedisValue`, …).
 pub use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, ToRedisArgs, cmd};
+
+// TODO #7024: Don't expose.
 /// Pipeline / transaction builder (`pipe()`; run with
 /// [`PipelineExt::query_glide`] or `execute_pipeline`).
 pub use redis::{Pipeline, pipe};
+
 /// Lua script helper (`Script` — SHA-caching `EVALSHA` with `EVAL` fallback).
 pub use script::{Script, ScriptInvocation};
 

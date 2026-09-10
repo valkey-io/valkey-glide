@@ -3,8 +3,8 @@
 use super::Mock;
 use bytes::Bytes;
 use glide::commands::hash::HashCommands;
-use glide::commands::options::ExpireOptions;
-use redis::{Expiry, SetExpiry, Value};
+use glide::commands::options::{ExpireOptions, SetExpiry};
+use redis::{Expiry, Value}; // TODO #7024: Extract
 
 #[tokio::test]
 async fn hmget_vec() {

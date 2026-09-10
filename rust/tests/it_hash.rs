@@ -5,8 +5,9 @@ mod common;
 
 use glide::AsyncCommands;
 use glide::HashCommands;
+use glide::SetExpiry;
 use glide::commands::options::{ExpireOptions, HashFieldConditionalChange};
-use redis::{Expiry, SetExpiry};
+use redis::Expiry; // TODO #7024: Extract
 
 /// Max seconds and milliseconds for future expiry.
 const FUTURE_EXPIRY_SECS: usize = (i64::MAX / 1_000_i64) as usize;

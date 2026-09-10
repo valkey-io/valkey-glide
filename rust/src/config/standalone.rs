@@ -5,6 +5,7 @@ use super::common::{
     BackoffStrategy, ClientIdentity, NodeAddress, ProtocolVersion, PubSubSubscriptions, ReadFrom,
     ServerCredentials, TlsConfig, credentials_from_info, duration_as_millis_u32,
     from_redis_protocol, impl_common_config_builders, split_connection_addr,
+    to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
 use std::time::Duration;
@@ -80,39 +81,33 @@ impl GlideClientConfiguration {
         }
     }
 
-    /// Build a configuration from a Redis connection URL, using the exact URL
-    /// semantics of the vendored fork (`redis://` and `rediss://`, with
-    /// `[user][:password@]host[:port][/db]`):
+    /// Build a configuration from a connection URL.
+    ///
+    /// Supports Redis URLs:
     ///
     /// ```
     /// use glide::GlideClientConfiguration;
-    /// let cfg = GlideClientConfiguration::from_url("redis://user:pass@localhost:6379/2").unwrap();
+    /// let url = "redis://user:pass@localhost:6379/2";
+    /// let cfg = GlideClientConfiguration::from_url(url).unwrap();
     /// assert_eq!(cfg.database_id, 2);
     /// ```
     ///
     /// `rediss://` enables TLS with full verification;
-    /// `rediss://…/#insecure` disables certificate verification, as in
-    /// the fork. Unix-socket URLs are not supported by glide-core and return
-    /// a configuration error.
-    pub fn from_url(url: &str) -> crate::ValkeyResult<Self> {
-        Self::from_connection_info(url)
-    }
-
-    /// Build a configuration from anything implementing
-    /// [`redis::IntoConnectionInfo`] (a URL string, or a prebuilt
-    /// [`redis::ConnectionInfo`]).
-    pub fn from_connection_info<T: redis::IntoConnectionInfo>(
-        info: T,
-    ) -> crate::ValkeyResult<Self> {
-        let info = info
-            .into_connection_info()
-            .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))?;
+    /// `rediss://…/#insecure` disables certificate verification.
+    ///
+    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
+    pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
+        let info = to_redis_connection_info(url)?;
         let (address, tls) = split_connection_addr(info.addr)?;
+
         let mut cfg = Self::new(vec![address]).tls(tls);
         cfg.database_id = info.redis.db;
         cfg.protocol = from_redis_protocol(info.redis.protocol);
         cfg.client_name = info.redis.client_name;
         cfg.credentials = credentials_from_info(info.redis.username, info.redis.password);
+
         Ok(cfg)
     }
 

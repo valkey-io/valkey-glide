@@ -32,6 +32,10 @@
 //! invocation at the bottom of this file; the parity-guard test will flag any
 //! divergence from the fork's table (see DEVELOPER.md).
 
+// TODO #7024: replace the redis command-param types below (Direction, Expiry,
+// LposOptions, SetOptions) with glide-owned equivalents. Deferred from Phase 2:
+// these are macro-table params forwarded verbatim to `Cmd::$name`, so converting
+// them requires the Phase 3 macro-dispatch rework.
 use redis::{
     Cmd, Direction, Expiry, FromRedisValue, LposOptions, RedisFuture, SetOptions, ToRedisArgs,
     Value, from_owned_redis_value,

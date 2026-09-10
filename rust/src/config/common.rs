@@ -431,6 +431,14 @@ impl TlsConfig {
 
 // ---- shared request-lowering helpers -------------------------------------------
 
+/// Parse a connection URL string into `ConnectionInfo`.
+pub(crate) fn to_redis_connection_info(
+    url: impl AsRef<str>,
+) -> crate::ValkeyResult<redis::ConnectionInfo> {
+    redis::IntoConnectionInfo::into_connection_info(url.as_ref())
+        .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))
+}
+
 /// Map a [`redis::ConnectionAddr`] to our address + TLS mode.
 pub(crate) fn split_connection_addr(
     addr: redis::ConnectionAddr,
@@ -511,10 +519,9 @@ pub(crate) fn duration_as_millis_u32(d: Duration) -> u32 {
 ///
 /// Both structs carry the same common public fields (same names, same types), so
 /// the generated methods access them directly. Mode-specific fields/setters
-/// (`database_id`, `periodic_checks`, `from_url*`) stay in each struct's own
-/// `impl` block, as does `to_request()`, which starts from the generated
-/// generated `common_request` and layers the mode-specific fields
-/// on top.
+/// stay in each struct's own `impl` block, as does `to_request()`, which starts
+/// from the generated generated `common_request` and layers the mode-specific
+/// fields on top.
 macro_rules! impl_common_config_builders {
     ($ty:ty) => {
         impl $ty {

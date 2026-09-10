@@ -5,7 +5,7 @@ use super::common::{
     BackoffStrategy, ClientIdentity, NodeAddress, PeriodicChecks, ProtocolVersion,
     PubSubSubscriptions, ReadFrom, ServerCredentials, TlsConfig, credentials_from_info,
     duration_as_millis_u32, from_redis_protocol, impl_common_config_builders,
-    split_connection_addr,
+    split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
 use std::time::Duration;
@@ -80,37 +80,61 @@ impl GlideClusterClientConfiguration {
         }
     }
 
-    /// Build a cluster configuration from one or more Redis connection URLs
-    /// (seed nodes), using the fork's exact URL semantics
-    /// (`ClusterClient::new(initial_nodes)` accepts the same URLs):
+    /// Build a configuration from a connection URL.
+    ///
+    /// Supports Redis URLs:
     ///
     /// ```
     /// use glide::GlideClusterClientConfiguration;
-    /// let cfg = GlideClusterClientConfiguration::from_urls([
-    ///     "redis://n1:7000",
-    ///     "redis://n2:7001",
-    /// ]).unwrap();
-    /// assert_eq!(cfg.addresses.len(), 2);
+    /// let url = "redis://user:pass@localhost:6379";
+    /// let cfg = GlideClusterClientConfiguration::from_url(url).unwrap();
+    /// assert_eq!(cfg.addresses.len(), 1);
     /// ```
     ///
-    /// Credentials / client-name / database / TLS mode must be identical
-    /// across all URLs — conflicting settings are rejected with a
-    /// configuration error (matching the fork's `ClusterClient`). A URL selecting
-    /// a non-zero database is rejected — clusters only support database 0.
-    /// The RESP `protocol` is taken from the **first** URL and not
-    /// cross-validated (matching the fork, which overwrites per-node protocol
-    /// from builder params without validating it).
-    pub fn from_urls<T: redis::IntoConnectionInfo>(
-        urls: impl IntoIterator<Item = T>,
+    /// `rediss://` enables TLS with full verification;
+    /// `rediss://…/#insecure` disables certificate verification.
+    ///
+    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
+    pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
+        Self::from_urls([url])
+    }
+
+    /// Build a configuration from one or more connection URL.
+    ///
+    /// Configuration must be identical across all URLs: conflicting settings are
+    /// rejected with a configuration error. A URL selecting a non-zero database is
+    /// also rejected because clusters only support database 0.
+    ///
+    /// The RESP `protocol` is taken from the **first** URL and not cross-validated.
+    ///
+    /// Supports Redis URLs:
+    ///
+    /// ```
+    /// use glide::GlideClusterClientConfiguration;
+    /// let urls = ["redis://user:pass@localhost:6379", "redis://user:pass@localhost:6380"];
+    /// let cfg = GlideClusterClientConfiguration::from_url(urls).unwrap();
+    /// assert_eq!(cfg.addresses.len(), 1);
+    /// ```
+    ///
+    /// `rediss://` enables TLS with full verification;
+    /// `rediss://…/#insecure` disables certificate verification.
+    ///
+    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
+    pub fn from_urls<S: AsRef<str>>(
+        urls: impl IntoIterator<Item = S>,
     ) -> crate::ValkeyResult<Self> {
         let mut addresses = Vec::new();
         let mut first: Option<(TlsConfig, redis::RedisConnectionInfo)> = None;
+
         for url in urls {
-            let info = url
-                .into_connection_info()
-                .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))?;
+            let info = to_redis_connection_info(url)?;
             let (address, tls) = split_connection_addr(info.addr)?;
             addresses.push(address);
+
             // Reject conflicting per-URL settings, matching the fork's
             // `ClusterClient` validation — silently ignoring the settings of
             // URLs 2..N would misconfigure the client.
@@ -145,20 +169,24 @@ impl GlideClusterClientConfiguration {
                 }
             }
         }
+
         let Some((tls, redis_info)) = first else {
             return Err(crate::error::GlideError::Configuration(
                 "at least one node URL is required".into(),
             ));
         };
+
         if redis_info.db != 0 {
             return Err(crate::error::GlideError::Configuration(
                 "cluster deployments only support database 0".into(),
             ));
         }
+
         let mut cfg = Self::new(addresses).tls(tls);
         cfg.protocol = from_redis_protocol(redis_info.protocol);
         cfg.client_name = redis_info.client_name;
         cfg.credentials = credentials_from_info(redis_info.username, redis_info.password);
+
         Ok(cfg)
     }
 

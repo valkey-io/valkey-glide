@@ -2,12 +2,14 @@
 //! Hash commands. Mirrors Python's hash command surface.
 
 use crate::ValkeyResult;
-use crate::commands::options::{ExpireOptions, HashFieldConditionalChange};
+use crate::commands::options::{ExpireOptions, HashFieldConditionalChange, SetExpiry};
 use crate::executor::CommandExecutor;
 use crate::value;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, Expiry, SetExpiry, ToRedisArgs};
+// TODO #7024: replace `Expiry` (hgetex) with a glide-owned type; deferred because
+// `Expiry` is also a macro-table param (get_ex), handled in the Phase 3 rework.
+use redis::{Cmd, Expiry, ToRedisArgs};
 
 /// Hash commands (`HSET`, `HGET`, `HGETALL`, `HDEL`, ...).
 #[async_trait]
@@ -245,6 +247,8 @@ pub trait HashCommands: CommandExecutor {
 
     /// Set hash field values with an optional field condition and expiry
     /// (`HSETEX`). Returns `1` if all fields were set, `0` otherwise.
+    // TODO #6904: investigate whether the latest redis-rs version defines HSETEX and
+    // its option types, to mirror redis-rs instead of the Python-shaped signature.
     async fn hsetex<K, F, V>(
         &self,
         key: K,
@@ -263,7 +267,7 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(c.as_arg());
         }
         if let Some(e) = expiry {
-            cmd.arg(e);
+            e.add_to(&mut cmd);
         }
         cmd.arg("FIELDS").arg(field_values.len());
         for (f, v) in field_values {
