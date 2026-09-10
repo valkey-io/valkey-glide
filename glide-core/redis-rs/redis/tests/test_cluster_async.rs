@@ -78,6 +78,30 @@ mod cluster_async {
         }
     }
 
+    #[derive(Debug)]
+    struct PipelineAskResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+        raw_redirect_seen: Arc<atomic::AtomicBool>,
+    }
+
+    impl AddressResolver for PipelineAskResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "internal-node" {
+                self.redirect_resolutions.fetch_add(1, Ordering::SeqCst);
+                self.raw_redirect_seen.store(true, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), port)
+            } else if host == self.resolved_name
+                && port == 6382
+                && self.raw_redirect_seen.load(Ordering::SeqCst)
+            {
+                (self.resolved_name.to_owned(), 6399)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
             std::io::ErrorKind::BrokenPipe,
@@ -4998,6 +5022,63 @@ mod cluster_async {
             .unwrap();
         assert_eq!(result, vec!["foo-6382", "bar-6380", "baz-6382"]);
         assert_eq!(asking_called.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_pipeline_ask_redirect_resolves_target_once() {
+        let name = "test_async_cluster_pipeline_ask_redirect_resolves_target_once";
+        let mut cmd = cmd("MGET");
+        cmd.arg("foo").arg("bar").arg("baz");
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let resolutions = redirect_resolutions.clone();
+        let raw_redirect_seen = Arc::new(atomic::AtomicBool::new(false));
+        let asking_called = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_called_clone = asking_called.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .read_from_replicas()
+                .address_resolver(Arc::new(PipelineAskResolver {
+                    resolved_name: name,
+                    redirect_resolutions: resolutions,
+                    raw_redirect_seen,
+                })),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                let cmd_str = std::str::from_utf8(received_cmd).unwrap();
+                if cmd_str.contains("ASKING") {
+                    assert_eq!(port, 6382);
+                    asking_called_clone.fetch_add(1, Ordering::SeqCst);
+                }
+                if port == 6380 && cmd_str.contains("baz") {
+                    return Err(parse_redis_value(
+                        format!("-ASK 14000 internal-node:6382\r\n").as_bytes(),
+                    ));
+                }
+                let results = ["foo", "bar", "baz"]
+                    .iter()
+                    .filter_map(|key| {
+                        cmd_str
+                            .contains(key)
+                            .then(|| Value::BulkString(format!("{key}-{port}").into_bytes().into()))
+                    })
+                    .collect();
+                Err(Ok(Value::Array(results)))
+            },
+        );
+
+        let result = runtime
+            .block_on(cmd.query_async::<_, Vec<String>>(&mut connection))
+            .unwrap();
+        assert_eq!(result, vec!["foo-6382", "bar-6380", "baz-6382"]);
+        assert_eq!(redirect_resolutions.load(Ordering::SeqCst), 1);
+        assert_eq!(asking_called.load(Ordering::SeqCst), 1);
     }
 
     #[test]

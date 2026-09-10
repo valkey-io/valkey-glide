@@ -1141,7 +1141,12 @@ where
             RetryMethod::MovedRedirect => {
                 resolved_moved_redirect.map(|redirect| Redirect::Moved(redirect.address))
             }
-            _ => redis_error.redirect(false),
+            _ => redis_error.redirect(false).map(|redirect| match redirect {
+                Redirect::Ask(address, should_exec_asking) => {
+                    Redirect::Ask(core.resolve_address(&address), should_exec_asking)
+                }
+                redirect => redirect,
+            }),
         };
         if let Some(redirect_info) = redirect_info {
             let routing = InternalSingleNodeRouting::Redirect {
