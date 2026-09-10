@@ -757,6 +757,15 @@ impl Default for ScopePoolConfig {
     }
 }
 
+/// Topology-aware destination for a scoped connection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScopeTarget {
+    /// The configured server for a standalone client.
+    Standalone,
+    /// The cluster primary that owns this concrete hash slot.
+    ClusterSlot(u16),
+}
+
 /// A dedicated connection for isolated execution.
 ///
 /// Cluster mode support:
@@ -773,9 +782,8 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
-    /// The target slot this connection was created for (cluster routing).
-    /// Used to match idle connections to acquire requests for the same slot range.
-    pub target_slot: u16,
+    /// The topology-aware destination this connection was created for.
+    pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
     /// `IAMTokenManager::token_generation`). Per-connection rather than on the
     /// shared `Client` since scoped connections are reused independently.
@@ -795,6 +803,8 @@ pub struct ScopePool {
     pub parent_client_id: u64,
     /// The database_id from the connection config (for reset on release).
     pub configured_database_id: u32,
+    /// Whether this pool belongs to a cluster client.
+    pub cluster_mode_enabled: bool,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -818,19 +828,19 @@ impl ScopePool {
         connection_request_bytes: Vec<u8>,
         parent_client_id: u64,
     ) -> Self {
-        // Parse configured_database_id from the connection request
+        // Parse topology and configured database from the existing request schema.
         #[cfg(feature = "proto")]
-        let configured_database_id = {
+        let (configured_database_id, cluster_mode_enabled) = {
             use protobuf::Message as _;
             crate::connection_request::ConnectionRequest::parse_from_bytes(
                 &connection_request_bytes,
             )
             .ok()
-            .map(|req| req.database_id)
-            .unwrap_or(0)
+            .map(|req| (req.database_id, req.cluster_mode_enabled))
+            .unwrap_or((0, false))
         };
         #[cfg(not(feature = "proto"))]
-        let configured_database_id = 0u32;
+        let (configured_database_id, cluster_mode_enabled) = (0u32, false);
 
         Self {
             config,
@@ -841,6 +851,16 @@ impl ScopePool {
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
+            cluster_mode_enabled,
+        }
+    }
+
+    /// Convert the binding's existing numeric routing slot into an explicit target.
+    pub fn target_for_slot(&self, routing_slot: u16) -> ScopeTarget {
+        if self.cluster_mode_enabled {
+            ScopeTarget::ClusterSlot(routing_slot)
+        } else {
+            ScopeTarget::Standalone
         }
     }
 
@@ -852,7 +872,7 @@ impl ScopePool {
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
-        routing_slot: u16,
+        target: ScopeTarget,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
@@ -870,9 +890,8 @@ impl ScopePool {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
-            // Slot 0 is the default/standalone wildcard — always matches.
-            // Otherwise, only reuse if target_slot matches.
-            if conn.target_slot == routing_slot || routing_slot == 0 || conn.target_slot == 0 {
+            // Scoped connections are reusable only for the exact same topology target.
+            if conn.target == target {
                 found = Some(conn);
                 break;
             }
@@ -933,7 +952,7 @@ impl ScopePool {
                         borrowed_at: None,
                         state: ConnectionState::default(),
                         pinned_slot: None,
-                        target_slot: conn.target_slot,
+                        target: conn.target,
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
                         ),
@@ -1054,7 +1073,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
-                                    target_slot: guard.target_slot,
+                                    target: guard.target,
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
                                     ),

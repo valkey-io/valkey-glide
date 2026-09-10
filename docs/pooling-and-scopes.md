@@ -63,11 +63,11 @@ async with await client.scoped_connection(routing_key="user:123") as scope:
 
 The client computes `CRC16(key) % 16384` to determine the slot, then connects to the node owning it. Hash tags are supported (`{tag}` content is extracted before hashing).
 
-If `routing_key` is omitted, defaults to slot 0's node. In standalone mode, `routing_key` is ignored (only one node).
+If `routing_key` is omitted, a cluster scope targets the primary that owns concrete slot 0. Slot 0 is a real cluster slot, not a wildcard. In standalone mode, routing keys and the omitted default both normalize to the same standalone target because there is only one server.
 
 ### Slot-Aware Reuse
 
-The scope pool filters idle connections by `target_slot` on acquire. A connection previously used for slot 5000 will not be handed to a caller requesting slot 8000 — a new connection is created instead. This prevents MOVED errors from stale connections.
+The scope pool records each idle connection's topology-aware target. Cluster connections are reused only for an exact slot match, including slot 0: a connection for slot 0 cannot satisfy a request for slot 5000, and a slot-5000 connection cannot satisfy a slot-0 request. Standalone connections remain reusable regardless of the ignored numeric routing value. Demand-created and prewarmed connections use the same normalization rules, so cluster prewarming targets concrete slot 0 while standalone prewarming targets the configured server.
 
 ### Cross-Slot Rejection
 
