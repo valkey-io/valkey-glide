@@ -99,6 +99,7 @@ fn create_pool_client(
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
+        None, // no credential provider (uses the one in ConnectionRequest if any)
         client_id,
     )?;
 
