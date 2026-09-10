@@ -1469,7 +1469,9 @@ where
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true)),
+                                .map(|(node, _slot)| {
+                                    Redirect::Ask(this.core.resolve_address(&node.to_string()), true)
+                                }),
                         );
                         Next::Retry { request }.into()
                     }
@@ -3470,12 +3472,11 @@ where
                 ..
             } => {
                 asking = should_exec_asking;
-                let resolved_addr = core.resolve_address(&ask_addr);
                 core.conn_lock
                     .read()
-                    .connection_for_address(resolved_addr.as_str())
+                    .connection_for_address(ask_addr.as_str())
                     .map_or(
-                        ConnectionCheck::OnlyAddress(resolved_addr),
+                        ConnectionCheck::OnlyAddress(ask_addr),
                         ConnectionCheck::Found,
                     )
             }
