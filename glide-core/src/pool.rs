@@ -165,12 +165,16 @@ impl ClientPool {
         NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Non-blocking acquire. Returns client_id on success.
-    /// Returns -1 if pool is closed/closing, -3 if no idle client available.
+    /// Non-blocking acquire. Returns `(client_id, Some(is_blocking_arc))` on success.
+    /// Returns `(-1, None)` if pool is closed/closing, `(-3, None)` if no idle client available.
     /// Evicts idle connections past idle_timeout internally.
-    pub fn try_acquire(&mut self) -> i64 {
+    ///
+    /// The returned `Arc<AtomicBool>` is the `is_blocking` flag for the acquired client.
+    /// Callers can set it directly without acquiring the pool lock, eliminating
+    /// the `try_lock` race in `mark_client_blocking` (see issue #6971).
+    pub fn try_acquire(&mut self) -> (i64, Option<Arc<AtomicBool>>) {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            return -1;
+            return (-1, None);
         }
 
         while let Some(mut entry) = self.idle.pop_back() {
@@ -187,13 +191,14 @@ impl ClientPool {
                 continue;
             }
             let client_id = entry.client_id;
+            let blocking_flag = entry.is_blocking.clone();
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
             self.in_use.insert(client_id, entry);
-            return client_id as i64;
+            return (client_id as i64, Some(blocking_flag));
         }
 
-        -3
+        (-3, None)
     }
 
     /// Whether background creation should be triggered (room below max_size).
@@ -532,6 +537,10 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 /// Mark a borrowed client as currently executing a blocking command.
 /// The abandon monitor will skip this client until unmarked.
 /// This is a no-op if the client is not found in any pool's `in_use` map.
+///
+/// Note: this function uses `try_lock()` and can silently no-op under contention.
+/// Java JNI callers should use the lock-free Arc approach via `try_acquire()` instead
+/// (see issue #6971). This function is retained for non-Java FFI callers (ffi/src/lib.rs).
 pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) -> bool {
     let pool_arc = match get_pool(pool_id) {
         Some(arc) => arc,
@@ -557,19 +566,6 @@ pub fn mark_client_blocking(pool_id: u64, client_id: u64, blocking: bool) -> boo
         return true;
     }
     false
-}
-
-/// Get the `is_blocking` flag Arc for a client (for use by the command dispatch path).
-/// Returns None if the client is not currently borrowed from this pool.
-pub fn get_client_blocking_flag(pool_id: u64, client_id: u64) -> Option<Arc<AtomicBool>> {
-    let pool_arc = get_pool(pool_id)?;
-    #[allow(clippy::collapsible_if)]
-    if let Ok(pool) = pool_arc.try_lock() {
-        if let Some(entry) = pool.in_use.get(&client_id) {
-            return Some(entry.value().is_blocking.clone());
-        }
-    }
-    None
 }
 
 /// Refresh a borrowed client's `borrowed_at` timestamp to the current instant.

@@ -24,6 +24,20 @@ pub(crate) fn get_pool_client_map() -> &'static dashmap::DashMap<u64, u64> {
     JNI_POOL_CLIENT_MAP.get_or_init(dashmap::DashMap::new)
 }
 
+/// Maps handle_id (== client_id for pool clients) → Arc<AtomicBool> (is_blocking flag).
+/// Populated at borrow time: after `try_acquire` returns, the acquire function
+/// (still holding the pool lock) inserts the Arc into this map.
+/// Allows the JNI dispatch path to set is_blocking lock-free — no pool mutex needed,
+/// eliminating the try_lock race described in issue #6971.
+static JNI_POOL_BLOCKING_FLAG_MAP: std::sync::OnceLock<
+    dashmap::DashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+> = std::sync::OnceLock::new();
+
+pub(crate) fn get_pool_blocking_flag_map(
+) -> &'static dashmap::DashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>> {
+    JNI_POOL_BLOCKING_FLAG_MAP.get_or_init(dashmap::DashMap::new)
+}
+
 /// Create a new pool. Returns pool_id > 0 on success, -1 on invalid config.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreate(
@@ -122,9 +136,16 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                 get_handle_table().remove(&cid);
                 glide_core::scope::unregister_client(cid);
                 get_pool_client_map().remove(&cid);
+                get_pool_blocking_flag_map().remove(&cid);
             }
 
-            let result = pool.try_acquire();
+            let (result, blocking_flag) = pool.try_acquire();
+            // Cache the Arc so the dispatch path can set is_blocking without the pool mutex (#6971).
+            if result >= 0
+                && let Some(flag) = blocking_flag
+            {
+                get_pool_blocking_flag_map().insert(result as u64, flag);
+            }
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
                 let pool_clone = pool_arc.clone();
@@ -172,6 +193,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolRelea
     };
 
     let runtime = get_runtime();
+    // Drop the cached Arc; the client is back in the pool (#6971).
+    get_pool_blocking_flag_map().remove(&(client_id as u64));
     runtime.spawn(pool::release_client_async(pool_arc, client_id as u64));
     0
 }
@@ -198,16 +221,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
             handle_table.remove(&entry.client_id);
             glide_core::scope::unregister_client(entry.client_id);
             get_pool_client_map().remove(&entry.client_id);
+            get_pool_blocking_flag_map().remove(&entry.client_id);
         }
         for entry in pool.in_use.iter() {
             handle_table.remove(entry.key());
             glide_core::scope::unregister_client(*entry.key());
             get_pool_client_map().remove(entry.key());
+            get_pool_blocking_flag_map().remove(entry.key());
         }
         for cid in discarded {
             handle_table.remove(&cid);
             glide_core::scope::unregister_client(cid);
             get_pool_client_map().remove(&cid);
+            get_pool_blocking_flag_map().remove(&cid);
         }
         pool.destroy();
     });
