@@ -857,14 +857,17 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     // Create the scope pool (registers it if not exists)
     let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
 
-    // Spawn min_idle background connection creation tasks on the scope runtime
+    // Spawn min_idle background connection creation tasks on the scope runtime.
+    // Normalize the existing slot-zero input through the pool topology so cluster
+    // prewarming targets concrete slot 0 while standalone prewarming targets its server.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();
         let cid = client_id;
         runtime.spawn(async move {
+            let target = pool_clone.lock().await.target_for_slot(0);
             let client = scope::get_parent_client(cid).await;
-            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, 0).await;
+            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, target).await;
         });
     }
 }
