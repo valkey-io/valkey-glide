@@ -197,7 +197,9 @@ class BaseClient(CoreCommands):
             and self._config.credentials.iam_config is not None
             and self._config.credentials.iam_config.credential_provider is not None
         ):
-            _credential_provider_fn = self._config.credentials.iam_config.credential_provider
+            _credential_provider_fn = (
+                self._config.credentials.iam_config.credential_provider
+            )
 
         if _credential_provider_fn is not None:
             provider_fn = _credential_provider_fn

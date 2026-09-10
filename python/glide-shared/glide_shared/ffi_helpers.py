@@ -348,9 +348,7 @@ def create_credential_provider_callback(
         except Exception:
             return 0  # failure — Rust will surface a CredentialsError
 
-    return ffi.callback(
-        "CredentialProviderCallback", _credential_provider_callback
-    )
+    return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
 
 
 def handle_command_result(ffi, lib, command_result, response_handler):
