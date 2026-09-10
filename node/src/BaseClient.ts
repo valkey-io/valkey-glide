@@ -10199,8 +10199,7 @@ export class BaseClient {
                 iamConfig: IamAuthConfig;
             };
             this.credentialProviderKey = registerCredentialProvider(
-                iamCreds.iamConfig
-                    .credentialProvider as unknown as () => JsAwsCredentials,
+                iamCreds.iamConfig.credentialProvider!,
             );
             request.credentialProviderKey = this.credentialProviderKey;
         }
