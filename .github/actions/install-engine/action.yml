@@ -49,7 +49,7 @@ runs:
         # binary built against a newer libc than the current runner provides will fail to execute
         # (e.g. "GLIBC_2.38 not found") even though the cache key still matches on version/target
         # alone. Fold a libc fingerprint into the cache key so a runner image/libc change
-        # automatically invalidates stale caches instead of silsilently reusing an incompatible binary.
+        # automatically invalidates stale caches instead of silently reusing an incompatible binary.
         - name: Compute libc fingerprint
           id: libc-fingerprint
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
