@@ -2636,6 +2636,8 @@ mod cluster_async {
         let name = "test_async_cluster_ask_redirect_with_address_resolver";
         let requests = Arc::new(atomic::AtomicUsize::new(0));
         let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
         let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
 
         let MockEnv {
@@ -2654,6 +2656,7 @@ mod cluster_async {
             move |cmd: &[u8], port| {
                 if contains_slice(cmd, b"ASKING") {
                     assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
                     return Err(Ok(Value::SimpleString("OK".into())));
                 }
 
@@ -2677,6 +2680,7 @@ mod cluster_async {
 
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 2);
         assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
     }
 
