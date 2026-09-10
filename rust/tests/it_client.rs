@@ -7,7 +7,7 @@ mod common;
 
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
-use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, Route};
+use glide::{AsyncCommands, CustomCommand, GlideClient, GlideClientConfiguration, Route};
 use redis::Cmd;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -101,19 +101,56 @@ timed_tokio_test!(
 );
 
 // ---------------------------------------------------------------------------
+// Client library name and version
+// ---------------------------------------------------------------------------
+
+timed_tokio_test!(
+    async fn client_info_reports_lib_name_and_ver() {
+        let server = server_or_skip!();
+        let client = server.client().await;
+
+        skip_if_version_below!(client, 7, 2, 0);
+
+        let reply = client.custom_command(&["CLIENT", "INFO"]).await.unwrap();
+        let info = glide::value::to_string(reply).unwrap();
+
+        let expected_lib_name = format!("lib-name={}", "GlideRust");
+        assert!(info.contains(&expected_lib_name));
+
+        let expected_lib_ver = format!("lib-ver={}", env!("CARGO_PKG_VERSION"));
+        assert!(info.contains(&expected_lib_ver));
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_client_info_reports_lib_name_and_ver() {
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
+        skip_if_version_below!(client, 7, 2, 0);
+
+        let reply = client
+            .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
+            .await
+            .unwrap();
+        let info = glide::value::to_string(reply).unwrap();
+
+        let expected_lib_name = format!("lib-name={}", "GlideRust");
+        assert!(info.contains(&expected_lib_name));
+
+        let expected_lib_ver = format!("lib-ver={}", env!("CARGO_PKG_VERSION"));
+        assert!(info.contains(&expected_lib_ver));
+    }
+);
+
+// ---------------------------------------------------------------------------
 // Cluster: cluster_scan + route_command
 // ---------------------------------------------------------------------------
 
 timed_tokio_test!(
     async fn cluster_scan_iterates_all_keys() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
 
         // Insert a known set of keys (routed automatically across shards).
         let prefix = common::key("cscan");
@@ -150,11 +187,9 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_with_match_pattern() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => return,
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
         let uniq = common::key("m");
         let matching = format!("{uniq}:match:1");
         let _: () = client.set(&matching, "v").await.unwrap();
@@ -186,11 +221,8 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn route_command_ping_variants() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => return,
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
 
         // ECHO to all primaries returns reply per primary node.
         let msg = "glide-route-probe";

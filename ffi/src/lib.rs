@@ -6020,6 +6020,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         } else {
             Some(connection_request.lib_name.to_string())
         },
+        lib_ver: None,
         server_assisted_cache: false,
         cache: None,
     };

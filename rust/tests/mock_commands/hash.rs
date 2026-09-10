@@ -3,8 +3,8 @@
 use super::Mock;
 use bytes::Bytes;
 use glide::commands::hash::HashCommands;
-use glide::commands::options::{ExpireOptions, ExpirySet};
-use redis::Value;
+use glide::commands::options::ExpireOptions;
+use redis::{Expiry, SetExpiry, Value};
 
 #[tokio::test]
 async fn hmget_vec() {
@@ -74,10 +74,7 @@ async fn httl_and_hpersist() {
 #[tokio::test]
 async fn hgetex_and_hsetex() {
     let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into())]);
-    let v = m
-        .hgetex("h", &["f1"], Some(ExpirySet::Seconds(60)))
-        .await
-        .unwrap();
+    let v = m.hgetex("h", &["f1"], Some(Expiry::EX(60))).await.unwrap();
     m.assert_args(&["HGETEX", "h", "EX", "60", "FIELDS", "1", "f1"]);
     assert_eq!(v, vec![Some(Bytes::from_static(b"v1"))]);
 
@@ -160,13 +157,7 @@ async fn hgetex_encoding() {
     assert_eq!(r[1], None);
 
     let m = Mock::array(vec![Value::BulkString(b"v1".to_vec().into())]);
-    m.hgetex(
-        "h",
-        &["f1"],
-        Some(glide::commands::options::ExpirySet::Seconds(60)),
-    )
-    .await
-    .unwrap();
+    m.hgetex("h", &["f1"], Some(Expiry::EX(60))).await.unwrap();
     m.assert_args(&["HGETEX", "h", "EX", "60", "FIELDS", "1", "f1"]);
 }
 
@@ -182,7 +173,7 @@ async fn hsetex_encoding() {
         "h",
         &[("f1", "v1")],
         Some(glide::commands::options::HashFieldConditionalChange::OnlyIfNoneExist),
-        Some(glide::commands::options::ExpirySet::Seconds(60)),
+        Some(SetExpiry::EX(60)),
     )
     .await
     .unwrap();

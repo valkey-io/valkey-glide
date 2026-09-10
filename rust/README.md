@@ -88,28 +88,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 Once the dependency chain is published to crates.io, this section will document
 the versioned-dependency setup.
 
-### 2. Provide the required build-time environment (important)
-
-The vendored `redis-rs` fork reads two variables **at compile time** (via
-`env!`), so *any* crate that builds it — including yours — must define them, or
-the build fails with `environment variable GLIDE_VERSION not defined`. Add a
-`.cargo/config.toml` at your project (or workspace) root:
-
-```toml
-# .cargo/config.toml
-[env]
-GLIDE_NAME = "GlideRust"
-GLIDE_VERSION = "0.2.0"   # set to the glide-rust version you pinned
-# Optional: avoids an aws-lc-rs CPU-jitter-entropy connection-latency regression.
-AWS_LC_SYS_NO_JITTER_ENTROPY = "1"
-```
-
-These identify the client library/version reported to the server on the
-connection handshake (any non-empty strings work; keep `GLIDE_VERSION` in sync
-with the `glide-rust` version you depend on so server-side client listings stay
-meaningful).
-
-### 3. Build
+### 2. Build
 
 ```bash
 cargo build

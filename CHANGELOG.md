@@ -5,6 +5,9 @@
 ### Fixes
 
 * Core: Resolve cluster redirect addresses ([#6788](https://github.com/valkey-io/valkey-glide/pull/6788))
+* Java: Map the Jedis compatibility layer's database selection onto GLIDE's `databaseId` instead of logging a warning and discarding it. A `JedisPool` configured for a non-zero database ran every command against database 0, silently writing to a database the caller did not ask for ([#6994](https://github.com/valkey-io/valkey-glide/issues/6994))
+* Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
+* Core/FFI: Scoped connections honor blocking-command timeouts (e.g. `BLPOP key 0` blocks instead of timing out at the request timeout), and a scoped connection whose blocking command timed out or was cancelled is discarded on release instead of being reused with a stale server-side waiter ([#6780](https://github.com/valkey-io/valkey-glide/issues/6780), [#6794](https://github.com/valkey-io/valkey-glide/issues/6794))
 * Java: Fix scoped connection truncating values larger than 16 KB ([#6893](https://github.com/valkey-io/valkey-glide/issues/6893))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
@@ -30,8 +33,10 @@
 
 ### Changes
 
+* Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, pooled, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
+* Java: Add `GlideCredentialProvider` support to `IamAuthConfig`. When set, the Rust core calls back into Java to retrieve AWS credentials (via the new `AwsCredentials` builder, which supports optional expiry) for each IAM token signing operation. When not set, the default AWS credential chain is used — fully backwards compatible. ([#6825](https://github.com/valkey-io/valkey-glide/pull/6825))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * Go: Convert FFI string payloads with `GoStringN` (one copy, interior NULs preserved) instead of `GoBytes`+`string` in GET/MGET response parsing, pubsub callbacks, MONITOR client/command strings, and script hashes ([#6751](https://github.com/valkey-io/valkey-glide/issues/6751))
 * Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
