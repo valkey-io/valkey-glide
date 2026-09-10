@@ -356,7 +356,7 @@ where
                     }
                 }
 
-                if let Ok(mut conn) = self.connect(&addr) {
+                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                     if conn.check_connection() {
                         return Some((addr.to_string(), conn));
                     }
@@ -454,7 +454,7 @@ where
         if let Some(addr) = slots.slot_addr_for_route(route) {
             Ok((
                 addr.to_string(),
-                self.get_connection_by_addr(connections, &addr)?,
+                self.get_connection_by_canonical_addr(connections, &addr)?,
             ))
         } else {
             // try a random node next.  This is safe if slots are involved
@@ -463,7 +463,7 @@ where
         }
     }
 
-    fn get_connection_by_addr<'a>(
+    fn get_connection_by_canonical_addr<'a>(
         &self,
         connections: &'a mut HashMap<String, C>,
         addr: &str,
@@ -473,21 +473,8 @@ where
         } else {
             // Create new connection.
             // TODO: error handling
-            let conn = self.connect(addr)?;
-            Ok(connections.entry(addr.to_string()).or_insert(conn))
-        }
-    }
-
-    fn get_connection_by_resolved_addr<'a>(
-        &self,
-        connections: &'a mut HashMap<String, C>,
-        addr: &str,
-    ) -> RedisResult<&'a mut C> {
-        if connections.contains_key(addr) {
-            Ok(connections.get_mut(addr).unwrap())
-        } else {
             let conn = self.connect_to_resolved_address(addr)?;
-            Ok(connections.entry(addr.to_owned()).or_insert(conn))
+            Ok(connections.entry(addr.to_string()).or_insert(conn))
         }
     }
 
@@ -541,7 +528,7 @@ where
         addresses
             .into_iter()
             .map(|addr| {
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 match input {
                     Input::Slice { cmd, routable: _ } => connection.req_packed_command(cmd),
                     Input::Cmd(cmd) => connection.req_command(cmd),
@@ -597,7 +584,7 @@ where
                     ErrorKind::IoError,
                     "Couldn't find connection",
                 )))?;
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 let (_, indices) = routes.get(index).unwrap();
                 let cmd =
                     crate::cluster_routing::command_for_multi_slot_indices(&input, indices.iter());
@@ -762,21 +749,11 @@ where
             let (addr, rv) = {
                 let mut connections = self.connections.borrow_mut();
                 let (addr, conn) = if let Some(redirected) = redirected.take() {
-                    // Async routing can reverse-map raw IPs through IP metadata
-                    // collected during topology refresh. The synchronous client
-                    // does not collect that metadata, so raw-IP redirects here
-                    // rely on the configured AddressResolver.
                     let (addr, is_asking) = match redirected {
-                        Redirect::Moved(addr) => (
-                            resolve_address(&addr, self.cluster_params.address_resolver.as_deref()),
-                            false,
-                        ),
-                        Redirect::Ask(addr, should_exec_asking) => (
-                            resolve_address(&addr, self.cluster_params.address_resolver.as_deref()),
-                            should_exec_asking,
-                        ),
+                        Redirect::Moved(addr) => (addr, false),
+                        Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
                     };
-                    let conn = self.get_connection_by_resolved_addr(&mut connections, &addr)?;
+                    let conn = self.get_connection_by_canonical_addr(&mut connections, &addr)?;
                     if is_asking {
                         // if we are in asking mode we want to feed a single
                         // ASKING command into the connection before what we
@@ -794,8 +771,12 @@ where
                             self.get_connection(&mut connections, &Route::new_random_primary())?
                         }
                         SingleNodeRoutingInfo::ByAddress { host, port } => {
-                            let address = format!("{host}:{port}");
-                            let conn = self.get_connection_by_addr(&mut connections, &address)?;
+                            let address = resolve_address(
+                                &format!("{host}:{port}"),
+                                self.cluster_params.address_resolver.as_deref(),
+                            );
+                            let conn =
+                                self.get_connection_by_canonical_addr(&mut connections, &address)?;
                             (address, conn)
                         }
                     }
@@ -813,17 +794,26 @@ where
 
                     match err.retry_method() {
                         RetryMethod::AskRedirect => {
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Ask(
+                                    resolve_address(
+                                        &node,
+                                        self.cluster_params.address_resolver.as_deref(),
+                                    ),
+                                    true,
+                                )
+                            });
                         }
                         RetryMethod::MovedRedirect => {
                             // Refresh slots.
                             self.refresh_slots()?;
                             // Request again.
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Moved(node.to_string()));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Moved(resolve_address(
+                                    &node,
+                                    self.cluster_params.address_resolver.as_deref(),
+                                ))
+                            });
                         }
                         RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica
                         | RetryMethod::WaitAndRetry => {
@@ -836,7 +826,7 @@ where
                         }
                         RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                             if *self.auto_reconnect.borrow() {
-                                if let Ok(mut conn) = self.connect(&addr) {
+                                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                                     if conn.check_connection() {
                                         self.connections.borrow_mut().insert(addr, conn);
                                     }
@@ -889,7 +879,7 @@ where
 
         let node_cmds = self.map_cmds_to_nodes(cmds)?;
         for nc in &node_cmds {
-            self.get_connection_by_addr(&mut connections, &nc.addr)?
+            self.get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                 .send_packed_command(&nc.pipe)?;
         }
         Ok(node_cmds)
@@ -908,7 +898,7 @@ where
         for nc in node_cmds {
             for cmd_idx in &nc.indexes {
                 match self
-                    .get_connection_by_addr(&mut connections, &nc.addr)?
+                    .get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                     .recv_response()
                 {
                     Ok(item) => results[*cmd_idx] = item,
