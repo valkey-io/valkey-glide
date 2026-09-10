@@ -14,12 +14,7 @@ const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     [undefined, undefined],
 ]);
 export type LevelOptions =
-    | "error"
-    | "warn"
-    | "info"
-    | "debug"
-    | "trace"
-    | "off";
+    "error" | "warn" | "info" | "debug" | "trace" | "off";
 
 /**
  * A singleton class that allows logging which is consistent with logs from the internal GLIDE core.

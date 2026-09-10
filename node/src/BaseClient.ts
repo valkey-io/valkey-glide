@@ -77,7 +77,6 @@ import {
     removeAddressResolver,
     registerCredentialProvider,
     removeCredentialProvider,
-    JsAwsCredentials,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,

@@ -140,8 +140,7 @@ export class ClientPool {
 
         // Reject pubsub subscriptions
         const cfg = clientConfig as
-            | GlideClientConfiguration
-            | GlideClusterClientConfiguration;
+            GlideClientConfiguration | GlideClusterClientConfiguration;
 
         if ("pubsubSubscriptions" in cfg && cfg.pubsubSubscriptions) {
             throw new Error(
