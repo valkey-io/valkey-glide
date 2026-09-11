@@ -122,9 +122,18 @@ public abstract class BaseClientConfiguration {
     private final ClientCircuitBreakerConfiguration clientCircuitBreakerConfiguration;
 
     /**
-     * Availability Zone of the client. If ReadFrom strategy is AZAffinity or
-     * AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes
-     * within the specified AZ if exits.
+     * Availability Zone of the client.
+     *
+     * <p>If ReadFrom strategy is {@link ReadFrom#AZ_AFFINITY}, this setting ensures that readonly
+     * commands are directed to replicas within the specified AZ if they exist. If ReadFrom strategy
+     * is {@link ReadFrom#AZ_AFFINITY_REPLICAS_AND_PRIMARY}, this setting ensures that readonly
+     * commands are directed to nodes (first replicas, then primary) within the specified AZ if they
+     * exist. If ReadFrom strategy is {@link ReadFrom#AZ_AFFINITY_ALL_NODES}, this setting ensures
+     * that readonly commands are spread equally among all nodes (primary and replicas) within the
+     * specified AZ if they exist.
+     *
+     * <p>Required when any of the above AZ-affinity strategies is selected: the future returned by
+     * {@code createClient} completes exceptionally with a {@code ConfigurationError} if it is unset.
      */
     private final String clientAZ;
 
