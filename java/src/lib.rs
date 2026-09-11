@@ -1738,12 +1738,84 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     .unwrap_or(())
 }
 
+/// Java command arguments after JNI extraction. `Packed` uses the private MGET-only framing
+/// documented by [`append_packed_command_args`].
+enum CommandArgs {
+    Separate(Vec<Vec<u8>>),
+    Packed(Vec<u8>),
+}
+
+fn end_and_release_otel_span(span_ptr: jlong) {
+    if span_ptr != 0
+        && let Ok(span) =
+            unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
+    {
+        span.end();
+        unsafe {
+            Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+        }
+    }
+}
+
+fn read_packed_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+    let end = offset.checked_add(std::mem::size_of::<u32>())?;
+    let encoded = bytes.get(offset..end)?;
+    Some(u32::from_be_bytes(encoded.try_into().ok()?))
+}
+
+/// Append private packed JNI arguments in `[count:u32be][length:u32be][bytes]...` format.
+///
+/// Java emits this framing only for large MGETs. Exact consumption is mandatory: accepting a
+/// truncated or trailing payload would make the Java and Rust command boundaries disagree.
+fn append_packed_command_args(cmd: &mut redis::Cmd, bytes: &[u8]) -> Result<(), String> {
+    const HEADER_SIZE: usize = std::mem::size_of::<u32>();
+    let count = read_packed_u32(bytes, 0)
+        .ok_or_else(|| "Packed command arguments are missing the count header".to_string())?
+        as usize;
+    let minimum_payload = count
+        .checked_mul(HEADER_SIZE)
+        .ok_or_else(|| "Packed command argument count overflow".to_string())?;
+    let remaining_after_count = bytes
+        .len()
+        .checked_sub(HEADER_SIZE)
+        .ok_or_else(|| "Packed command arguments are missing the count header".to_string())?;
+    if minimum_payload > remaining_after_count {
+        return Err("Packed command argument count exceeds the encoded payload".to_string());
+    }
+
+    // A valid packed MGET contains only the count/length headers plus argument
+    // bytes. Reserve that exact upper bound before appending so the command's
+    // metadata and inline-data vectors do not grow repeatedly.
+    cmd.reserve_args(count, remaining_after_count - minimum_payload);
+
+    let mut offset = HEADER_SIZE;
+    for index in 0..count {
+        let length = read_packed_u32(bytes, offset).ok_or_else(|| {
+            format!("Packed command argument {index} is missing its length header")
+        })? as usize;
+        offset += HEADER_SIZE;
+        let end = offset.checked_add(length).ok_or_else(|| {
+            format!("Packed command argument {index} length overflowed the encoded payload")
+        })?;
+        let argument = bytes.get(offset..end).ok_or_else(|| {
+            format!("Packed command argument {index} length exceeds the encoded payload")
+        })?;
+        cmd.arg(argument);
+        offset = end;
+    }
+
+    if offset != bytes.len() {
+        return Err("Packed command arguments contain trailing bytes".to_string());
+    }
+    Ok(())
+}
+
 /// Execute a Valkey command asynchronously.
-/// Takes command parameters directly via JNI: requestType as int, args as byte[][],
-/// and routing as primitives.
+/// Takes command parameters directly via JNI: requestType as int, args as byte[][] or one packed
+/// byte[], and routing as primitives.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
@@ -1755,6 +1827,87 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
     expect_utf8: jni::sys::jboolean,
     span_ptr: jlong,
 ) {
+    execute_command_async(ExecuteCommandParams {
+        env,
+        client_ptr,
+        callback_id,
+        request_type,
+        args,
+        packed_args: JByteArray::from(JObject::null()),
+        has_route,
+        route_type,
+        route_param,
+        expect_utf8,
+        response_conversion: generic_response_conversion(),
+        span_ptr,
+    });
+}
+
+/// Execute MGET through the private Java entry point whose built-in decoder consumes the direct
+/// buffer synchronously. Unlike the generic bridge, callers cannot select this conversion mode or
+/// provide a different request type.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideCoreClient_executeMgetCommandAsyncNative(
+    env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    callback_id: jlong,
+    args: JObjectArray,
+    packed_args: JByteArray,
+    expect_utf8: jni::sys::jboolean,
+    span_ptr: jlong,
+) {
+    execute_command_async(ExecuteCommandParams {
+        env,
+        client_ptr,
+        callback_id,
+        request_type: glide_core::request_type::RequestType::MGet as jint,
+        args,
+        packed_args,
+        has_route: 0,
+        route_type: 0,
+        route_param: JString::from(JObject::null()),
+        expect_utf8,
+        response_conversion: typed_mget_response_conversion(),
+        span_ptr,
+    });
+}
+
+/// Internal arguments shared by the public JNI entry points.
+///
+/// Keeping the JNI surface in the three exported functions and grouping the shared state here
+/// prevents the implementation from silently accumulating another positional parameter.
+struct ExecuteCommandParams<'local> {
+    env: JNIEnv<'local>,
+    client_ptr: jlong,
+    callback_id: jlong,
+    request_type: jint,
+    args: JObjectArray<'local>,
+    packed_args: JByteArray<'local>,
+    has_route: jni::sys::jboolean,
+    route_type: jint,
+    route_param: JString<'local>,
+    expect_utf8: jni::sys::jboolean,
+    response_conversion: jni_client::ResponseConversion,
+    span_ptr: jlong,
+}
+
+fn execute_command_async(params: ExecuteCommandParams<'_>) {
+    let ExecuteCommandParams {
+        mut env,
+        client_ptr,
+        callback_id,
+        request_type,
+        args,
+        packed_args,
+        has_route,
+        route_type,
+        route_param,
+        expect_utf8,
+        response_conversion,
+        span_ptr,
+    } = params;
+
     run_ffi(|| {
         let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
         else {
@@ -1762,13 +1915,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         };
 
         let handle_id = client_ptr as u64;
+        let is_mget = request_type == glide_core::request_type::RequestType::MGet as jint;
 
-        // Synchronous inflight check
-        {
+        // MGET uses the core's authoritative inflight and circuit-breaker
+        // checks below. Other commands retain their existing synchronous JNI
+        // rejection behavior.
+        if !is_mget {
             let handle_table = jni_client::get_handle_table();
             if let Some(client_ref) = handle_table.get(&handle_id) {
                 if client_ref.available_inflight_count() <= 0 {
                     drop(client_ref);
+                    end_and_release_otel_span(span_ptr);
                     jni_client::complete_error_sync(
                         &mut env,
                         callback_id,
@@ -1779,6 +1936,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 }
                 if !client_ref.is_circuit_breaker_healthy() {
                     drop(client_ref);
+                    end_and_release_otel_span(span_ptr);
                     jni_client::complete_error_sync(
                         &mut env,
                         callback_id,
@@ -1790,24 +1948,41 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             }
         }
 
-        // Extract args from byte[][]
-        let args_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
-            if args.is_null() {
-                return Ok(Vec::new());
+        // Larger MGETs use one length-prefixed byte[] to avoid one JNI extraction per key.
+        let args_vec: Result<CommandArgs, String> = (|| {
+            if !packed_args.is_null() {
+                if !args.is_null() && env.get_array_length(&args).map_err(|e| e.to_string())? != 0 {
+                    return Err(
+                        "Both regular and packed command arguments were provided".to_string()
+                    );
+                }
+                let packed = env
+                    .convert_byte_array(&packed_args)
+                    .map_err(|e| e.to_string())?;
+                return Ok(CommandArgs::Packed(packed));
             }
-            let length = env.get_array_length(&args)? as usize;
+
+            if args.is_null() {
+                return Ok(CommandArgs::Separate(Vec::new()));
+            }
+            let length = env.get_array_length(&args).map_err(|e| e.to_string())? as usize;
             let mut args_data = Vec::with_capacity(length);
             for i in 0..length {
-                let arg_obj = env.get_object_array_element(&args, i as i32)?;
-                let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
+                let arg_obj = env
+                    .get_object_array_element(&args, i as i32)
+                    .map_err(|e| e.to_string())?;
+                let arg_bytes = env
+                    .convert_byte_array(JByteArray::from(arg_obj))
+                    .map_err(|e| e.to_string())?;
                 args_data.push(arg_bytes);
             }
-            Ok(args_data)
+            Ok(CommandArgs::Separate(args_data))
         })();
 
         let args_data = match args_vec {
             Ok(a) => a,
             Err(e) => {
+                end_and_release_otel_span(span_ptr);
                 jni_client::complete_error_sync(
                     &mut env,
                     callback_id,
@@ -1856,8 +2031,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                         format!("request_type={}", request_type),
                     )));
                 };
-                for arg in &args_data {
-                    cmd.arg(arg.as_slice());
+                match &args_data {
+                    CommandArgs::Separate(args) => {
+                        for arg in args {
+                            cmd.arg(arg.as_slice());
+                        }
+                    }
+                    CommandArgs::Packed(packed) => {
+                        append_packed_command_args(&mut cmd, packed).map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Invalid packed command arguments",
+                                e,
+                            ))
+                        })?;
+                    }
                 }
 
                 // Apply compression
@@ -1906,7 +2094,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                         }
                     });
 
-                let result = client.send_command(&mut cmd, routing).await;
+                let result = client.send_command_owned(cmd, routing).await;
 
                 // Unmark blocking after command completes
                 if let Some(pool_id) = blocking_flag {
@@ -1917,23 +2105,110 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             }
             .await;
 
-            // End OpenTelemetry span if one was created
-            if span_ptr != 0
-                && let Ok(span) =
-                    unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
-            {
-                span.end();
-                unsafe {
-                    std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-                }
-            }
+            end_and_release_otel_span(span_ptr);
 
-            complete_callback(jvm, callback_id, result, !expect_utf8_bool);
+            if matches!(response_conversion, jni_client::ResponseConversion::Mget) {
+                complete_mget_callback(jvm, callback_id, result, !expect_utf8_bool);
+            } else {
+                complete_callback(jvm, callback_id, result, !expect_utf8_bool);
+            }
         });
 
         Some(())
     })
     .unwrap_or(())
+}
+
+#[inline]
+fn generic_response_conversion() -> jni_client::ResponseConversion {
+    jni_client::ResponseConversion::Default
+}
+
+#[inline]
+fn typed_mget_response_conversion() -> jni_client::ResponseConversion {
+    jni_client::ResponseConversion::Mget
+}
+
+#[cfg(test)]
+mod packed_command_arg_tests {
+    use jni::sys::jlong;
+    use std::sync::{Arc, Weak};
+
+    use super::{append_packed_command_args, end_and_release_otel_span};
+
+    #[test]
+    fn accepts_complete_packed_arguments() {
+        let bytes = [0, 0, 0, 2, 0, 0, 0, 3, b'o', b'n', b'e', 0, 0, 0, 0];
+        let mut cmd = redis::cmd("MGET");
+
+        assert!(append_packed_command_args(&mut cmd, &bytes).is_ok());
+        assert_eq!(cmd.arg_idx(1), Some(b"one".as_slice()));
+        assert_eq!(cmd.arg_idx(2), Some(b"".as_slice()));
+    }
+
+    #[test]
+    fn rejects_truncated_or_trailing_packed_arguments() {
+        let truncated = [0, 0, 0, 1, 0, 0, 0, 3, b'o'];
+        let trailing = [0, 0, 0, 0, b'x'];
+
+        assert!(append_packed_command_args(&mut redis::cmd("MGET"), &truncated).is_err());
+        assert!(append_packed_command_args(&mut redis::cmd("MGET"), &trailing).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_or_impossible_packed_headers_without_panicking() {
+        let missing_count = [];
+        let count_exceeds_payload = [0, 0, 0, 2, 0, 0, 0, 0];
+        let missing_length = [0, 0, 0, 1];
+
+        assert!(append_packed_command_args(&mut redis::cmd("MGET"), &missing_count).is_err());
+        assert!(
+            append_packed_command_args(&mut redis::cmd("MGET"), &count_exceeds_payload).is_err()
+        );
+        assert!(append_packed_command_args(&mut redis::cmd("MGET"), &missing_length).is_err());
+    }
+
+    fn assert_sync_rejection_releases_span() {
+        let span = Arc::new(glide_core::GlideOpenTelemetry::new_span("test"));
+        let weak_span: Weak<glide_core::GlideSpan> = Arc::downgrade(&span);
+        let span_ptr = Arc::into_raw(span) as jlong;
+
+        end_and_release_otel_span(span_ptr);
+
+        assert!(weak_span.upgrade().is_none());
+    }
+
+    #[test]
+    fn inflight_limit_rejection_releases_span() {
+        assert_sync_rejection_releases_span();
+    }
+
+    #[test]
+    fn circuit_breaker_rejection_releases_span() {
+        assert_sync_rejection_releases_span();
+    }
+}
+
+#[cfg(test)]
+mod command_response_conversion_tests {
+    use super::{generic_response_conversion, typed_mget_response_conversion};
+    use crate::jni_client::ResponseConversion;
+
+    #[test]
+    fn generic_commands_keep_cleaner_owned_response_lifetime() {
+        assert!(matches!(
+            generic_response_conversion(),
+            ResponseConversion::Default
+        ));
+    }
+
+    #[test]
+    fn fixed_mget_entry_uses_immediate_response_conversion() {
+        assert!(matches!(
+            typed_mget_response_conversion(),
+            ResponseConversion::Mget
+        ));
+    }
 }
 
 /// Execute a script asynchronously using FFI-imported logic

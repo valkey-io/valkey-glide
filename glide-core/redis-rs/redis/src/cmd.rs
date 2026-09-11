@@ -561,6 +561,21 @@ impl Cmd {
         }
     }
 
+    /// Reserves capacity for arguments that will be appended to this command.
+    ///
+    /// `additional_inline_data_size` is the total number of argument bytes
+    /// expected to use the inline command buffer. Reserving both buffers before
+    /// appending a known argument set avoids repeated growth and copying.
+    #[inline]
+    pub fn reserve_args(
+        &mut self,
+        additional_arg_count: usize,
+        additional_inline_data_size: usize,
+    ) {
+        self.args.reserve(additional_arg_count);
+        self.data.reserve(additional_inline_data_size);
+    }
+
     /// Get the capacities for the internal buffers.
     #[cfg(test)]
     #[allow(dead_code)]
@@ -1092,6 +1107,17 @@ mod tests {
         e.arg("GET").arg(b"");
         assert_eq!(e.arg_idx(1), Some(&b""[..]));
         assert_eq!(e.arg_idx(2), None);
+    }
+
+    #[test]
+    fn test_reserve_args_accounts_for_existing_command_data() {
+        let mut cmd = crate::cmd("MGET");
+
+        cmd.reserve_args(32, 256);
+
+        let (arg_capacity, data_capacity) = cmd.capacity();
+        assert!(arg_capacity >= 33);
+        assert!(data_capacity >= 260);
     }
 
     #[test]

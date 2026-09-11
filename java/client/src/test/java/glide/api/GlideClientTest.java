@@ -96,7 +96,6 @@ import static command_request.CommandRequestOuterClass.RequestType.LatencyHistor
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
-import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
@@ -2032,9 +2031,7 @@ public class GlideClientTest {
         CompletableFuture<String[]> testResponse = new CompletableFuture<>();
         testResponse.complete(values);
 
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(MGet), eq(keys), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitMgetCommand(eq(keys))).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String[]> response = service.mget(keys);
@@ -2060,8 +2057,7 @@ public class GlideClientTest {
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
         testResponse.complete(values);
 
-        when(commandManager.<GlideString[]>submitNewCommand(eq(MGet), eq(keys), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitMgetCommand(eq(keys))).thenReturn(testResponse);
 
         CompletableFuture<GlideString[]> response = service.mget(keys);
         GlideString[] payload = response.get();
@@ -2087,8 +2083,7 @@ public class GlideClientTest {
         CompletableFuture<String[]> testResponse = new CompletableFuture<>();
         testResponse.complete(values);
 
-        when(commandManager.<String[]>submitNewCommand(eq(MGet), eq(keys), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitMgetCommand(eq(keys))).thenReturn(testResponse);
 
         CompletableFuture<String[]> response = service.mget(keys);
         String[] payload = response.get();
