@@ -222,6 +222,8 @@ clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
+// Ensure Az cluster starts after regular cluster to reduce resource contention
+tasks.named('startClusterForAz').configure { mustRunAfter 'startCluster', 'startClusterTls' }
 // Run comprehensive cleanup after entire build finishes
 gradle.buildFinished {
     // Skip pkill when servers are managed by Docker (e.g. test-modules-linux CI job)
