@@ -319,8 +319,9 @@ class TestClientPool:
     def test_scope_stops_executing_after_pool_close(self, cluster_mode):
         """A scope must not outlive the pool its client was borrowed from.
 
-        Closing the pool has to invalidate outstanding scopes; otherwise the scope
-        keeps reading and mutating keyspace on a connection whose owner is gone.
+        Closing the pool has to invalidate outstanding scopes before it returns;
+        otherwise the scope keeps reading and mutating keyspace on a connection
+        whose owner is gone.
         """
         config = _get_pool_client_config(cluster_mode)
         pool = ClientPool.create(config, PoolConfig(max_size=3, min_idle=1))
@@ -341,27 +342,12 @@ class TestClientPool:
                 # client still borrowed — how #6889 was reported.
                 pool.close()
 
-                # Teardown can be asynchronous when the pool lock is contended,
-                # so poll rather than asserting on the next command. A write, so
-                # a regression is the actual harm: mutating keyspace through a
+                # No polling: invalidation happens before glide_pool_destroy
+                # returns, so the very next command must fail. A write, so a
+                # regression is the actual harm — mutating keyspace through a
                 # scope whose owner is gone.
-                failure = None
-                deadline = time.monotonic() + 15
-                while time.monotonic() < deadline:
-                    try:
-                        scope.set(key, "after")
-                        time.sleep(0.05)
-                    except RuntimeError as exc:
-                        failure = exc
-                        break
-
-                assert (
-                    failure is not None
-                ), "a scope must stop executing once its pool is closed"
-                assert "invalid scope" in str(failure), (
-                    "an invalidated scope should fail as an invalid scope, got: "
-                    f"{failure}"
-                )
+                with pytest.raises(RuntimeError, match="invalid scope"):
+                    scope.set(key, "after")
         finally:
             if scope is not None and not scope.is_released:
                 scope.close()
