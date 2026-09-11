@@ -472,7 +472,7 @@ jobs:
                   echo "Starting CodeBuild project ${PROJECT_NAME}..."
                   BUILD_ID=$(aws codebuild start-build \
                     --project-name "${PROJECT_NAME}" \
-                    --source-version "${GITHUB_SHA}" \
+                    --source-version "${{ github.event.pull_request.head.sha || github.sha }}" \
                     --environment-variables-override name=GHA_RUN_ID,value=${GITHUB_RUN_ID},type=PLAINTEXT \
                     --query 'build.id' \
                     --output text)
