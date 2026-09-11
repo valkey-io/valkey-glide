@@ -7,8 +7,9 @@ use test_env_helpers::*;
 #[after_all]
 #[before_all]
 mod tests {
-    use logger_core::{init, log_debug, log_trace};
+    use logger_core::{init, log_debug, log_structured, log_trace, structured_fields};
     use rand::{Rng, distributions::Alphanumeric};
+    use serde_json::Value;
     use std::{
         fs::{read_dir, read_to_string, remove_dir_all},
         path::Path,
@@ -81,6 +82,34 @@ mod tests {
             "Contents: {contents}"
         );
         assert!(contents.contains("foo"), "Contents: {contents}");
+    }
+
+    #[test]
+    fn structured_log_to_file_is_json_line() {
+        let identifier = generate_random_string(10);
+        init(Some(logger_core::Level::Debug), Some(identifier.as_str()));
+
+        log_structured(
+            logger_core::Level::Debug,
+            "resp_decode_error",
+            structured_fields!(
+                "parser_phase" => "frame_scan",
+                "buffer_len" => 512_usize,
+                "recoverable" => false,
+            ),
+        );
+
+        let contents = get_file_contents(identifier.as_str());
+        let lines: Vec<&str> = contents.lines().collect();
+        assert_eq!(lines.len(), 1, "Contents: {contents}");
+
+        let event: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(event["glide_structured"], true);
+        assert_eq!(event["glide_event"], "resp_decode_error");
+        assert_eq!(event["level"], "debug");
+        assert_eq!(event["parser_phase"], "frame_scan");
+        assert_eq!(event["buffer_len"], 512);
+        assert_eq!(event["recoverable"], false);
     }
 
     #[test]
