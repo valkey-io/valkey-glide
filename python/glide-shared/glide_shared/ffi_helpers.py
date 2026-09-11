@@ -296,6 +296,48 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
+def _invoke_async_credential_provider(credential_provider_fn, event_loop):
+    """
+    Invoke an async credential provider from a non-async (Rust callback) thread.
+
+    Tries the asyncio path first (if *event_loop* is set and open), then falls
+    back to trio's ``from_thread.run`` if trio is installed and the caller is
+    running inside a trio worker thread.
+    """
+    if event_loop is not None and not event_loop.is_closed():
+        # asyncio path: schedule coroutine on the asyncio event loop
+        import asyncio
+
+        future = asyncio.run_coroutine_threadsafe(credential_provider_fn(), event_loop)
+        # Timeout slightly less than Rust's 10-second callback timeout so the
+        # Python layer surfaces a clean TimeoutError before Rust's fires.
+        return future.result(timeout=9)
+
+    # No asyncio loop — try the Trio path.
+    try:
+        import trio
+
+        return trio.from_thread.run(credential_provider_fn)
+    except ImportError:
+        import logging
+
+        msg = (
+            "GlideCredentialProvider is an async callable but no event loop "
+            "is available. Async providers require an asyncio or trio event "
+            "loop. Use a synchronous callable if no async event loop exists."
+        )
+        logging.getLogger(__name__).error(msg)
+        raise RuntimeError(msg)
+    except RuntimeError as e:
+        # trio.from_thread.run raises RuntimeError if not called from a trio worker.
+        import logging
+
+        logging.getLogger(__name__).error(
+            "GlideCredentialProvider async bridge failed for trio: %s", e
+        )
+        raise
+
+
 def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=None):
     """
     Wrap a Python GlideCredentialProvider callable into a CFFI
@@ -304,9 +346,9 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
     Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
 
     Both synchronous and async (coroutine function) providers are supported.
-    For async providers, ``event_loop`` must be provided -- the coroutine is
-    scheduled on that loop via ``asyncio.run_coroutine_threadsafe``. In the
-    sync glide client, only synchronous providers are supported.
+    For async providers, either ``event_loop`` (asyncio) must be provided,
+    or the callback must be called from a trio worker thread (trio.from_thread
+    is used automatically in that case).
     """
     if credential_provider_fn is None:
         return ffi.NULL
@@ -330,25 +372,9 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
     ):
         try:
             if is_async:
-                if event_loop is None or event_loop.is_closed():
-                    import logging
-
-                    msg = (
-                        "GlideCredentialProvider is an async callable but no asyncio event "
-                        "loop is available. Async providers are only supported in the async "
-                        "glide client. Use a synchronous callable for the sync client."
-                    )
-                    logging.getLogger(__name__).error(msg)
-                    raise RuntimeError(msg)
-                import asyncio
-
-                future = asyncio.run_coroutine_threadsafe(
-                    credential_provider_fn(), event_loop
+                creds = _invoke_async_credential_provider(
+                    credential_provider_fn, event_loop
                 )
-                # Use a timeout slightly less than Rust's 10-second callback timeout
-                # so the Python layer surfaces a clean TimeoutError before Rust's
-                # outer timeout fires.
-                creds = future.result(timeout=9)
             else:
                 creds = credential_provider_fn()
             # Fail fast if any required credential would be truncated.
