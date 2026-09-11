@@ -2,7 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    ClusterScanCursor,
+    GlideClientHandle,
+    Script,
+} from "../build-ts/native";
 import {
     command_request,
     connection_request,
@@ -776,6 +780,39 @@ export class GlideClusterClient extends BaseClient {
             options,
             (options?: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
+     * `GlideClusterClient` instance.  No network connection is made — the handle
+     * already owns a live connection managed by the pool.
+     */
+    public static createFromHandle(
+        handle: GlideClientHandle,
+        options: GlideClusterClientConfiguration,
+    ): GlideClusterClient {
+        return super.createClientFromHandle<GlideClusterClient>(
+            handle,
+            options,
+            (options?: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Serialise a {@link GlideClusterClientConfiguration} into the protobuf
+     * bytes used by the pool Rust APIs.  Does not open a network connection.
+     */
+    public static serializeConfig(
+        options: GlideClusterClientConfiguration,
+    ): Uint8Array {
+        return super.serializeConnectionRequest(
+            options,
+            (opts?: BaseClientConfiguration) =>
+                new GlideClusterClient(opts as GlideClusterClientConfiguration),
         );
     }
 

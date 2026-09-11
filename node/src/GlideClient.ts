@@ -3,6 +3,7 @@
  */
 
 import { connection_request } from "../build-ts/ProtobufMessage";
+import { GlideClientHandle } from "../build-ts/native";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -340,6 +341,40 @@ export class GlideClient extends BaseClient {
         return super.createClientInternal<GlideClient>(
             options,
             (options?: GlideClientConfiguration) => new GlideClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
+     * `GlideClient` instance.  No network connection is made — the handle
+     * already owns a live connection managed by the pool.
+     *
+     * Used by `ClientPool.acquire()` after `poolBuildHandle` returns a handle.
+     */
+    public static createFromHandle(
+        handle: GlideClientHandle,
+        options: GlideClientConfiguration,
+    ): GlideClient {
+        return super.createClientFromHandle<GlideClient>(
+            handle,
+            options,
+            (options?: GlideClientConfiguration) => new GlideClient(options),
+        );
+    }
+
+    /**
+     * @internal
+     * Serialise a {@link GlideClientConfiguration} into the protobuf bytes
+     * used by the pool Rust APIs.  Does not open a network connection.
+     */
+    public static serializeConfig(
+        options: GlideClientConfiguration,
+    ): Uint8Array {
+        return super.serializeConnectionRequest(
+            options,
+            (opts?: BaseClientConfiguration) =>
+                new GlideClient(opts as GlideClientConfiguration),
         );
     }
 
