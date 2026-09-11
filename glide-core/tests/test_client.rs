@@ -1515,6 +1515,7 @@ pub(crate) mod shared_client_tests {
     /// slot from the parent client when one is supplied).
     fn scope_request_bytes(server: &BackingServer, configuration: &TestConfiguration) -> Vec<u8> {
         use protobuf::Message as _;
+        let cluster_mode_enabled = matches!(server, BackingServer::Cluster(_));
         let addresses: Vec<redis::ConnectionAddr> = match server {
             BackingServer::Standalone(server) => vec![
                 server
@@ -1527,7 +1528,9 @@ pub(crate) mod shared_client_tests {
                 .map(|c| c.get_server_addresses())
                 .unwrap_or_else(|| get_shared_cluster_addresses(configuration.use_tls)),
         };
-        create_connection_request(&addresses, configuration)
+        let mut request = create_connection_request(&addresses, configuration);
+        request.cluster_mode_enabled = cluster_mode_enabled;
+        request
             .write_to_bytes()
             .expect("serialize scope connection request")
     }
@@ -1565,17 +1568,13 @@ pub(crate) mod shared_client_tests {
                 .await
                 .total_count
                 .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-            glide_core::scope::create_scope_connection(
-                pool.clone(),
-                Some(&client),
-                &bytes,
-                routing_slot,
-            )
-            .await;
+            let target = pool.lock().await.target_for_slot(routing_slot);
+            glide_core::scope::create_scope_connection(pool.clone(), Some(&client), &bytes, target)
+                .await;
 
             let scope_id = {
                 let mut guard = pool.lock().await;
-                match guard.try_acquire(glide_core::pool::get_scope_registry(), routing_slot) {
+                match guard.try_acquire(glide_core::pool::get_scope_registry(), target) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
                 }

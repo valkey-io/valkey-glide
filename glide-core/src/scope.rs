@@ -9,10 +9,10 @@
 //! - Background connection creation
 //!
 //! Each client has a per-client `ScopePool` (stored in `CLIENT_SCOPE_POOLS`).
-//! The pool maintains idle `ScopedConnection`s, each pinned to a cluster slot's node.
-//! On acquire, idle connections are filtered by `target_slot` — only matching connections
-//! are reused; mismatched ones are preserved for future acquires. When no match exists,
-//! a new connection is created targeting the correct node.
+//! The pool maintains idle `ScopedConnection`s with explicit standalone or cluster-slot targets.
+//! On acquire, idle connections are filtered by exact target equality; mismatched connections
+//! are preserved for future acquires. When no match exists, a new connection is created
+//! targeting the configured standalone server or the primary owning the concrete cluster slot.
 //! Language bindings (Java JNI, Python CFFI, Node N-API, Go CGO) should call
 //! these functions rather than duplicating the logic.
 
@@ -24,7 +24,7 @@ use crate::pool::{
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool};
+use crate::pool::{ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopeTarget};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -341,20 +341,20 @@ pub async fn send_scope_command(
 
 /// Create a new scope connection in the background and add it to the pool.
 ///
-/// This function resolves the target address (cluster-aware via the parent Client,
-/// or falling back to the seed node for standalone mode) and opens a new
-/// MultiplexedConnection.
+/// This function resolves the target address from the explicit topology-aware target
+/// and opens a new `MultiplexedConnection`.
 ///
 /// # Arguments
 /// - `pool`: Arc to the scope pool (locked async)
 /// - `client`: Optional reference to the parent Client (for cluster slot resolution)
 /// - `connection_request_bytes`: Serialized protobuf ConnectionRequest
+/// - `target`: Standalone server or concrete cluster slot destination
 #[cfg(feature = "proto")]
 pub async fn create_scope_connection(
     pool: Arc<TokioMutex<ScopePool>>,
     client: Option<&Client>,
     connection_request_bytes: &[u8],
-    routing_slot: u16,
+    target: ScopeTarget,
 ) {
     use protobuf::Message as _;
 
@@ -376,24 +376,8 @@ pub async fn create_scope_connection(
     let use_tls = proto.tls_mode.value() != 0;
     let scheme = if use_tls { "rediss" } else { "redis" };
 
-    // Determine target address:
-    // - Cluster mode: use Client::address_for_slot() to get a primary node address.
-    //   Connects to the node owning the requested routing_slot. In cluster mode,
-    //   scoped connections only work for keys that hash to this node's slots. Keys on
-    //   other nodes will receive MOVED errors (scopes cannot follow redirects due to
-    //   per-connection state).
-    // - Standalone mode: fall back to the seed node address from the config
-    let url = {
-        let cluster_addr = match client {
-            Some(c) => c.address_for_slot(routing_slot).await,
-            None => None,
-        };
-
-        if let Some(addr) = cluster_addr {
-            // address_for_slot returns "host:port"
-            format!("{}://{}", scheme, addr)
-        } else {
-            // Standalone mode or cluster lookup failed — use seed node
+    let url = match target {
+        ScopeTarget::Standalone => {
             let addr = match proto.addresses.first() {
                 Some(a) => a,
                 None => {
@@ -407,6 +391,17 @@ pub async fn create_scope_connection(
                 addr.port as u16
             };
             format!("{}://{}:{}", scheme, addr.host, port)
+        }
+        ScopeTarget::ClusterSlot(slot) => {
+            let cluster_addr = match client {
+                Some(client) => client.address_for_slot(slot).await,
+                None => None,
+            };
+            let Some(addr) = cluster_addr else {
+                pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+                return;
+            };
+            format!("{}://{}", scheme, addr)
         }
     };
 
@@ -541,7 +536,7 @@ pub async fn create_scope_connection(
         borrowed_at: None,
         state: ConnectionState::with_configured_db(database_id as u8),
         pinned_slot: None,
-        target_slot: routing_slot,
+        target,
         last_iam_generation: std::sync::atomic::AtomicU64::new(initial_iam_generation),
     };
     pool_guard.idle.push_back(entry);
@@ -578,27 +573,29 @@ pub fn try_acquire_scope(
     let registry = get_scope_registry();
 
     match scope_pool.try_lock() {
-        Ok(mut pool) => match pool.try_acquire(registry, routing_slot) {
-            ScopeAcquire::Reused(scope_id) => {
-                let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
-                scope_id as i64
+        Ok(mut pool) => {
+            let target = pool.target_for_slot(routing_slot);
+            match pool.try_acquire(registry, target) {
+                ScopeAcquire::Reused(scope_id) => {
+                    let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
+                    scope_id as i64
+                }
+                ScopeAcquire::Reserved => {
+                    // Spawn background connection creation with the same normalized target
+                    // used for idle matching.
+                    let pool_clone = scope_pool.clone();
+                    let conn_bytes = pool.connection_request_bytes.clone();
+                    let parent_client_id = pool.parent_client_id;
+                    runtime.spawn(async move {
+                        let client = get_parent_client(parent_client_id).await;
+                        create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target)
+                            .await;
+                    });
+                    -1
+                }
+                ScopeAcquire::Exhausted => -1,
             }
-            ScopeAcquire::Reserved => {
-                // Fill the slot try_acquire reserved. The caller retries and picks
-                // the connection up once it lands in the idle queue.
-                let pool_clone = scope_pool.clone();
-                let conn_bytes = pool.connection_request_bytes.clone();
-                let parent_client_id = pool.parent_client_id;
-                let target_slot = routing_slot;
-                runtime.spawn(async move {
-                    let client = get_parent_client(parent_client_id).await;
-                    create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target_slot)
-                        .await;
-                });
-                -1
-            }
-            ScopeAcquire::Exhausted => -1,
-        },
+        }
         Err(_) => -1,
     }
 }
@@ -689,9 +686,21 @@ mod tests {
 
     use super::{create_scope_connection, try_acquire_scope};
     use crate::connection_request::{ConnectionRequest, NodeAddress};
-    use crate::pool::{ScopePool, ScopePoolConfig, get_client_scope_pools};
+    use crate::pool::{
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, get_client_scope_pools,
+    };
 
-    fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
+    const DEFAULT_ROUTING_SLOT: u16 = 0;
+    const MAX_CLUSTER_SLOT: u16 = 16_383;
+
+    fn reused_scope_id(outcome: ScopeAcquire) -> u64 {
+        match outcome {
+            ScopeAcquire::Reused(scope_id) => scope_id,
+            other => panic!("expected reused scope, got {other:?}"),
+        }
+    }
+
+    fn request_bytes_with_mode(lib_name: &str, port: u16, cluster_mode_enabled: bool) -> Vec<u8> {
         let mut request = ConnectionRequest::new();
         request.addresses.push(NodeAddress {
             host: "127.0.0.1".into(),
@@ -699,7 +708,12 @@ mod tests {
             ..Default::default()
         });
         request.lib_name = lib_name.into();
+        request.cluster_mode_enabled = cluster_mode_enabled;
         request.write_to_bytes().expect("serialize scope request")
+    }
+
+    fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
+        request_bytes_with_mode(lib_name, port, false)
     }
 
     fn reserved_pool(request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
@@ -722,7 +736,7 @@ mod tests {
         let request_bytes = request_bytes(lib_name, port);
         let pool = reserved_pool(request_bytes.clone());
 
-        create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
 
         let pool = pool.lock().await;
         assert_eq!(pool.total_count.load(Ordering::Acquire), 0, "{lib_name}");
@@ -775,18 +789,50 @@ mod tests {
             let request_bytes = request_bytes(lib_name, port);
             let pool = reserved_pool(request_bytes.clone());
 
-            create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+            create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone)
+                .await;
 
             {
                 let pool = pool.lock().await;
                 assert_eq!(pool.total_count.load(Ordering::Acquire), 1, "{lib_name}");
                 assert_eq!(pool.idle.len(), 1, "{lib_name}");
+                assert_eq!(pool.idle[0].target, ScopeTarget::Standalone, "{lib_name}");
                 assert!(pool.in_use.is_empty(), "{lib_name}");
             }
 
             shutdown_sender.send(()).expect("stop mock server");
             server.join().expect("mock server exits cleanly");
         }
+    }
+
+    #[tokio::test]
+    async fn unresolved_cluster_target_does_not_use_seed_and_releases_reservation() {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes_with_mode("", port, true);
+        let pool = reserved_pool(request_bytes.clone());
+
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::ClusterSlot(42),
+        )
+        .await;
+
+        {
+            let pool = pool.lock().await;
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert!(pool.idle.is_empty());
+            assert!(pool.in_use.is_empty());
+        }
+        assert_eq!(
+            listener
+                .accept()
+                .expect_err("unresolved cluster target must not connect to the seed")
+                .kind(),
+            ErrorKind::WouldBlock
+        );
     }
 
     /// Polls the listener, awaiting between attempts so the spawned creation task
@@ -846,6 +892,169 @@ mod tests {
             accept_within(&listener, Duration::from_secs(5)).await,
             "reserving the last slot must still create its connection"
         );
+    }
+
+    #[test]
+    fn normalizes_scope_targets_from_pool_topology() {
+        let standalone = ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes_with_mode("", 6379, false),
+            1,
+        );
+        assert_eq!(standalone.target_for_slot(0), ScopeTarget::Standalone);
+        assert_eq!(
+            standalone.target_for_slot(MAX_CLUSTER_SLOT),
+            ScopeTarget::Standalone
+        );
+
+        let cluster = ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes_with_mode("", 6379, true),
+            1,
+        );
+        assert_eq!(cluster.target_for_slot(0), ScopeTarget::ClusterSlot(0));
+        assert_eq!(
+            cluster.target_for_slot(MAX_CLUSTER_SLOT),
+            ScopeTarget::ClusterSlot(MAX_CLUSTER_SLOT)
+        );
+    }
+
+    #[tokio::test]
+    async fn standalone_reuses_released_connection_across_ignored_routing_slots() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let config = ScopePoolConfig {
+            max_total: 1,
+            ..ScopePoolConfig::default()
+        };
+        let pool = ScopePool::new(config, request_bytes.clone(), 1);
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(TokioMutex::new(pool));
+
+        let initial_target = pool.lock().await.target_for_slot(DEFAULT_ROUTING_SLOT);
+        assert_eq!(initial_target, ScopeTarget::Standalone);
+        create_scope_connection(pool.clone(), None, &request_bytes, initial_target).await;
+
+        let registry = crate::pool::get_scope_registry();
+        let first_scope_id = {
+            let mut pool = pool.lock().await;
+            assert_eq!(pool.idle.len(), 1);
+            let target = pool.target_for_slot(DEFAULT_ROUTING_SLOT);
+            reused_scope_id(pool.try_acquire(registry, target))
+        };
+
+        {
+            let mut pool = pool.lock().await;
+            assert!(pool.release(first_scope_id, registry));
+            assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        let second_scope_id = {
+            let mut pool = pool.lock().await;
+            let alternate_target = pool.target_for_slot(MAX_CLUSTER_SLOT);
+            assert_eq!(alternate_target, ScopeTarget::Standalone);
+            reused_scope_id(pool.try_acquire(registry, alternate_target))
+        };
+        assert_eq!(second_scope_id, first_scope_id);
+
+        {
+            let mut pool = pool.lock().await;
+            assert!(pool.release(second_scope_id, registry));
+            assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    #[tokio::test]
+    async fn cluster_reuses_released_connection_for_same_concrete_slot() {
+        const CONCRETE_SLOT: u16 = 42;
+
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = reserved_pool(request_bytes.clone());
+        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+
+        let registry = crate::pool::get_scope_registry();
+        let target = ScopeTarget::ClusterSlot(CONCRETE_SLOT);
+        let first_scope_id = {
+            let mut pool = pool.lock().await;
+            pool.idle[0].target = target;
+            reused_scope_id(pool.try_acquire(registry, target))
+        };
+
+        {
+            let mut pool = pool.lock().await;
+            assert!(pool.release(first_scope_id, registry));
+            assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.idle[0].target, target);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        let second_scope_id = {
+            let mut pool = pool.lock().await;
+            reused_scope_id(pool.try_acquire(registry, target))
+        };
+        assert_eq!(second_scope_id, first_scope_id);
+
+        {
+            let mut pool = pool.lock().await;
+            assert!(pool.release(second_scope_id, registry));
+            assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.idle[0].target, target);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    #[tokio::test]
+    async fn exact_target_matching_preserves_mismatches_and_release_target() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = reserved_pool(request_bytes.clone());
+        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+
+        let registry = crate::pool::get_scope_registry();
+        let scope_id = {
+            let mut pool = pool.lock().await;
+            pool.idle[0].target = ScopeTarget::ClusterSlot(0);
+            assert_eq!(
+                pool.try_acquire(registry, ScopeTarget::ClusterSlot(42)),
+                ScopeAcquire::Reserved
+            );
+            assert_eq!(pool.idle.len(), 1);
+
+            pool.idle[0].target = ScopeTarget::ClusterSlot(42);
+            assert_eq!(
+                pool.try_acquire(registry, ScopeTarget::ClusterSlot(0)),
+                ScopeAcquire::Reserved
+            );
+            assert_eq!(pool.idle.len(), 1);
+
+            pool.idle[0].target = ScopeTarget::Standalone;
+            reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone))
+        };
+
+        {
+            let entry = registry.get(&(scope_id)).expect("registered scope");
+            entry.connection.lock().await.pinned_slot = Some(0);
+        }
+        {
+            let mut pool = pool.lock().await;
+            assert!(pool.release(scope_id, registry));
+            assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
+            assert_eq!(pool.idle[0].pinned_slot, None);
+        }
+
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 
     /// Mirrors the poison predicate from `execute_scope_command` directly against
