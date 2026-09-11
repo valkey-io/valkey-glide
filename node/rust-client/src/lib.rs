@@ -1162,20 +1162,34 @@ pub fn create_direct_client<'a>(
         connection_request.address_resolver = Some(resolver);
     }
 
+    // Create shared response buffer
+    let response_buffer = Arc::new(ResponseBuffer::new());
+    let response_buffer_worker = Arc::clone(&response_buffer);
+
+    // Create channel for sending commands to the worker thread
+    let (command_tx, mut command_rx) = mpsc::unbounded_channel::<WorkerMessage>();
+
+    // Share wake callback with worker as a weak handle so
+    // in-flight tasks do not keep the JS callback alive after close().
+    let wake_tsfn_worker = Arc::downgrade(&wake_tsfn);
+
+    // Acquire a reference to the worker pool (increments client count).
+    // The pool will be released when the GlideClientHandle is dropped.
+    let worker_pool = acquire_worker_pool();
+
     // Create push notification channel for pub/sub
-    let (push_sender, push_receiver) = mpsc::unbounded_channel::<PushInfo>();
+    let (push_sender, mut push_receiver) = mpsc::unbounded_channel::<PushInfo>();
+    let response_buffer_push = Arc::clone(&response_buffer);
+    let wake_tsfn_push = Arc::downgrade(&wake_tsfn);
 
-    let rt = match get_or_init_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            return Err(napi::Error::new(
-                Status::Unknown,
-                format!("Failed to initialise Glide runtime: {e}"),
-            ));
-        }
-    };
-
-    rt.runtime.spawn(async move {
+    // Spawn a pinned worker task that owns the Client and processes commands.
+    // Client::new is called INSIDE spawn_pinned so the push listener is set up
+    // atomically with the connection — this prevents a race where PubSub push
+    // notifications (subscription confirmations) arrive before the listener task
+    // is running, which would cause them to buffer silently with no wake_callback
+    // fired, resulting in PubSub tests timing out.
+    worker_pool.spawn_pinned(move || async move {
+        // Create the client on this worker thread
         let client = match Client::new(connection_request, Some(push_sender)).await {
             Ok(c) => c,
             Err(err) => {
@@ -1183,22 +1197,83 @@ pub fn create_direct_client<'a>(
                     Status::Unknown,
                     format!("Failed to create client: {err}"),
                 ));
+                // Release pool reference since client creation failed
+                release_worker_pool();
                 return;
             }
         };
 
-        match create_handle_for_client(
-            client,
-            push_receiver,
-            wake_tsfn,
-            inflight_requests_limit,
-            None,
-        )
-        .await
-        {
-            Ok(handle) => deferred.resolve(|_| Ok(handle)),
-            Err(e) => deferred.reject(e),
+        // Create handle to return to JavaScript.
+        // Clone command_tx for the handle — the original will be dropped after this.
+        // This ensures the channel closes when the handle is dropped,
+        // which allows the message loop below to exit.
+        let command_tx_for_handle = command_tx.clone();
+        drop(command_tx);
+
+        let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
+        let client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+
+        // Register client in scope registry so scoped connections can find
+        // their parent client for compression, timeout, IAM, and CB checks.
+        glide_core::scope::register_client(client_id, client.clone());
+
+        let handle = GlideClientHandle {
+            command_tx: Some(command_tx_for_handle),
+            inflight_requests: inflight_counter.clone(),
+            response_buffer: Arc::clone(&response_buffer_worker),
+            wake_callback: Some(Arc::clone(&wake_tsfn)),
+            client_id,
+        };
+
+        // Resolve the promise with the handle
+        deferred.resolve(|_| Ok(handle));
+
+        // Store worker-local references to avoid Arc::clone per command.
+        // These are cloned ONCE here and reused for all commands.
+        let worker_inflight = inflight_counter;
+
+        // Spawn a local task to listen for push notifications (pub/sub).
+        // Use a weak wake handle to avoid extending callback lifetime after close().
+        // Push messages arrive from glide-core via the push_receiver channel.
+        task::spawn_local(async move {
+            while let Some(push_info) = push_receiver.recv().await {
+                let push_value = Value::Push {
+                    kind: push_info.kind,
+                    data: push_info.data,
+                };
+                let value_ptr = from_mut(Box::leak(Box::new(push_value)));
+                let [low, high] = split_pointer(value_ptr);
+                let response = CommandResponse {
+                    callback_idx: 0,
+                    resp_pointer_high: Some(high),
+                    resp_pointer_low: Some(low),
+                    constant_response: None,
+                    request_error: None,
+                    closing_error: None,
+                    is_push: true,
+                };
+                if response_buffer_push.push(response)
+                    && let Some(wake_callback) = wake_tsfn_push.upgrade()
+                {
+                    wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                }
+            }
+        });
+
+        // Process messages from the channel.
+        // Each message spawns a local task for concurrent execution within this thread.
+        while let Some(msg) = command_rx.recv().await {
+            run_worker_message(
+                msg,
+                &client,
+                &worker_inflight,
+                &response_buffer_worker,
+                &wake_tsfn_worker,
+            );
         }
+
+        // Message loop has exited (channel closed by handle.close()).
+        release_worker_pool();
     });
 
     Ok(promise)
