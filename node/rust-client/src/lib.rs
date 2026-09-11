@@ -840,8 +840,8 @@ pub(crate) async fn create_handle_for_client(
         drop(command_tx);
 
         let inflight_counter = Arc::new(AtomicIsize::new(inflight_requests_limit));
-        let client_id = provided_client_id
-            .unwrap_or_else(|| NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed));
+        let client_id =
+            provided_client_id.unwrap_or_else(|| NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed));
 
         // Register client in the scope registry.
         glide_core::scope::register_client(client_id, client.clone());
@@ -937,14 +937,11 @@ fn run_worker_message(
                 if let Some(ref span) = cmd.span() {
                     set_db_attributes(span, &cmd, &client_clone);
                 }
-                let result = match prepare_command_for_execution(
-                    &mut cmd,
-                    &client_clone,
-                    "send_command",
-                ) {
-                    Ok(()) => client_clone.send_command(&mut cmd, routing).await,
-                    Err(err) => Err(err),
-                };
+                let result =
+                    match prepare_command_for_execution(&mut cmd, &client_clone, "send_command") {
+                        Ok(()) => client_clone.send_command(&mut cmd, routing).await,
+                        Err(err) => Err(err),
+                    };
                 if let Some(client_id) = pool_blocking_ids {
                     pool::mark_blocking(client_id, false);
                 }
@@ -1000,10 +997,8 @@ fn run_worker_message(
             let wake = wake_tsfn_worker.clone();
 
             task::spawn_local(async move {
-                let keys: Vec<&[u8]> =
-                    script_msg.keys.iter().map(|k| k.as_ref()).collect();
-                let args: Vec<&[u8]> =
-                    script_msg.args.iter().map(|a| a.as_ref()).collect();
+                let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
+                let args: Vec<&[u8]> = script_msg.args.iter().map(|a| a.as_ref()).collect();
                 let result = client_clone
                     .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                     .await;
@@ -1192,8 +1187,14 @@ pub fn create_direct_client<'a>(
             }
         };
 
-        match create_handle_for_client(client, push_receiver, wake_tsfn, inflight_requests_limit, None)
-            .await
+        match create_handle_for_client(
+            client,
+            push_receiver,
+            wake_tsfn,
+            inflight_requests_limit,
+            None,
+        )
+        .await
         {
             Ok(handle) => deferred.resolve(|_| Ok(handle)),
             Err(e) => deferred.reject(e),
