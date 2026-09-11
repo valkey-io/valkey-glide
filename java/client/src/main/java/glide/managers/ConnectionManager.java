@@ -25,6 +25,7 @@ import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.ClientLibraryNameResolver;
@@ -333,19 +334,9 @@ public class ConnectionManager {
                                             .build());
                         }
 
-                        // Set read from strategy
-                        String readFromName = configuration.getReadFrom().name();
-                        if ("PRIMARY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.Primary);
-                        } else if ("PREFER_REPLICA".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.PreferReplica);
-                        } else if ("AZ_AFFINITY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AZAffinity);
-                        } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
-                        } else if ("ALL_NODES".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AllNodes);
-                        }
+                        // Validate and set read from strategy
+                        validateClientAz(configuration);
+                        requestBuilder.setReadFrom(mapReadFrom(configuration.getReadFrom()));
 
                         // Set client metadata
                         if (configuration.getClientAZ() != null) {
@@ -737,5 +728,57 @@ public class ConnectionManager {
     private static ClientCertReloadConfig buildCertReloadConfig(
             BaseClientConfiguration configuration) {
         return TlsConfigHelper.buildCertReloadConfig(configuration);
+    }
+
+    /**
+     * Maps a client {@link glide.api.models.configuration.ReadFrom} strategy onto its protobuf
+     * counterpart.
+     *
+     * <p>Note that within this class the unqualified name {@code ReadFrom} refers to the protobuf
+     * enum, hence the fully-qualified parameter type.
+     *
+     * @throws IllegalArgumentException if the strategy has no protobuf mapping. This makes a newly
+     *     added strategy fail loudly rather than silently defaulting to {@code Primary}.
+     */
+    static ReadFrom mapReadFrom(glide.api.models.configuration.ReadFrom readFrom) {
+        switch (readFrom) {
+            case PRIMARY:
+                return ReadFrom.Primary;
+            case PREFER_REPLICA:
+                return ReadFrom.PreferReplica;
+            case AZ_AFFINITY:
+                return ReadFrom.AZAffinity;
+            case AZ_AFFINITY_REPLICAS_AND_PRIMARY:
+                return ReadFrom.AZAffinityReplicasAndPrimary;
+            case ALL_NODES:
+                return ReadFrom.AllNodes;
+            case AZ_AFFINITY_ALL_NODES:
+                return ReadFrom.AZAffinityAllNodes;
+        }
+        throw new IllegalArgumentException("Unsupported ReadFrom strategy: " + readFrom);
+    }
+
+    /**
+     * Rejects an AZ-affinity read strategy that has no {@code clientAZ} to affinitize to.
+     *
+     * <p>Without this check the core silently downgrades the strategy to {@code PreferReplica}, so
+     * reads would land on arbitrary nodes while the configuration suggested otherwise.
+     *
+     * <p>Called from the {@code connectToValkey} async body, so callers observe this as an {@code
+     * ExecutionException} on the returned future rather than a synchronous throw. Note that
+     * pool-borrowed clients build their request in {@code ClientPool} and do not pass through here —
+     * see <a href="https://github.com/valkey-io/valkey-glide/issues/7043">#7043</a>.
+     *
+     * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
+     */
+    static void validateClientAz(BaseClientConfiguration configuration) {
+        glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
+        if (!readFrom.requiresClientAz()) {
+            return;
+        }
+        String clientAz = configuration.getClientAZ();
+        if (clientAz == null || clientAz.isEmpty()) {
+            throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
+        }
     }
 }
