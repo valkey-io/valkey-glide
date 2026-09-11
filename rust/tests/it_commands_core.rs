@@ -223,7 +223,7 @@ resp_test!(scan_match_iterator, c, {
     {
         let mut iter = c.scan_match(format!("{prefix}:*")).await.unwrap();
         while let Some(k) = iter.next_item().await {
-            found.push(k);
+            found.push(k.unwrap());
         }
     }
     assert_eq!(found.len(), 10);
