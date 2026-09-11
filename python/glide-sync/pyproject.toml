@@ -99,3 +99,7 @@ else
     exit 1
 fi
 """
+
+[tool.cibuildwheel.windows]
+# Rust and protoc are installed on the runner before cibuildwheel starts.
+before-build = ""
