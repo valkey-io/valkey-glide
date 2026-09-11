@@ -1293,7 +1293,9 @@ mod connection_state_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+    use super::{
+        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+    };
 
     /// `max_total = N` must grant exactly N reservations before reporting
     /// exhaustion. The slot is counted as the reservation is granted, so the Nth is
@@ -1310,13 +1312,13 @@ mod scope_pool_tests {
 
             for slot in 0..max_total {
                 assert_eq!(
-                    pool.try_acquire(&registry, 0),
+                    pool.try_acquire(&registry, ScopeTarget::Standalone),
                     ScopeAcquire::Reserved,
                     "max_total={max_total}: reservation {slot} must be granted"
                 );
             }
             assert_eq!(
-                pool.try_acquire(&registry, 0),
+                pool.try_acquire(&registry, ScopeTarget::Standalone),
                 ScopeAcquire::Exhausted,
                 "max_total={max_total}: only N reservations fit"
             );

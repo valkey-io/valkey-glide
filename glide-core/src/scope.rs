@@ -376,31 +376,33 @@ pub async fn create_scope_connection(
     let use_tls = proto.tls_mode.value() != 0;
     let scheme = if use_tls { "rediss" } else { "redis" };
 
-    // Cluster targets prefer the primary currently owning the requested slot. Preserve
-    // the existing configured-seed fallback when topology lookup is unavailable.
-    let cluster_addr = match target {
-        ScopeTarget::Standalone => None,
-        ScopeTarget::ClusterSlot(slot) => match client {
-            Some(client) => client.address_for_slot(slot).await,
-            None => None,
-        },
-    };
-    let url = if let Some(addr) = cluster_addr {
-        format!("{}://{}", scheme, addr)
-    } else {
-        let addr = match proto.addresses.first() {
-            Some(a) => a,
-            None => {
+    let url = match target {
+        ScopeTarget::Standalone => {
+            let addr = match proto.addresses.first() {
+                Some(a) => a,
+                None => {
+                    pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+                    return;
+                }
+            };
+            let port = if addr.port == 0 {
+                6379
+            } else {
+                addr.port as u16
+            };
+            format!("{}://{}:{}", scheme, addr.host, port)
+        }
+        ScopeTarget::ClusterSlot(slot) => {
+            let cluster_addr = match client {
+                Some(client) => client.address_for_slot(slot).await,
+                None => None,
+            };
+            let Some(addr) = cluster_addr else {
                 pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
                 return;
-            }
-        };
-        let port = if addr.port == 0 {
-            6379
-        } else {
-            addr.port as u16
-        };
-        format!("{}://{}:{}", scheme, addr.host, port)
+            };
+            format!("{}://{}", scheme, addr)
+        }
     };
 
     let redis_client = match redis::Client::open(url.as_str()) {
@@ -571,33 +573,29 @@ pub fn try_acquire_scope(
     let registry = get_scope_registry();
 
     match scope_pool.try_lock() {
-        Ok(mut pool) => 
+        Ok(mut pool) => {
             let target = pool.target_for_slot(routing_slot);
-        match pool.try_acquire(registry, target) {
-            ScopeAcquire::Reused(scope_id) => {
-                let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
-                scope_id as i64
+            match pool.try_acquire(registry, target) {
+                ScopeAcquire::Reused(scope_id) => {
+                    let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
+                    scope_id as i64
+                }
+                ScopeAcquire::Reserved => {
+                    // Spawn background connection creation with the same normalized target
+                    // used for idle matching.
+                    let pool_clone = scope_pool.clone();
+                    let conn_bytes = pool.connection_request_bytes.clone();
+                    let parent_client_id = pool.parent_client_id;
+                    runtime.spawn(async move {
+                        let client = get_parent_client(parent_client_id).await;
+                        create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target)
+                            .await;
+                    });
+                    -1
+                }
+                ScopeAcquire::Exhausted => -1,
             }
-            ScopeAcquire::Reserved => {
-                // Fill the slot try_acquire reserved. The caller retries and picks
-                // the connection up once it lands in the idle queue.
-            //if result >= 0 {
-            //    let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
-            //}
-            //if result < 0 && pool.total_count.load(Ordering::Acquire) < pool.config.max_total {
-                // Spawn background connection creation with the same normalized target
-                // used for idle matching.
-                let pool_clone = scope_pool.clone();
-                let conn_bytes = pool.connection_request_bytes.clone();
-                let parent_client_id = pool.parent_client_id;
-                runtime.spawn(async move {
-                    let client = get_parent_client(parent_client_id).await;
-                    create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target).await;
-                });
-                -1
-            }
-            ScopeAcquire::Exhausted => -1,
-        },
+        }
         Err(_) => -1,
     }
 }
@@ -688,10 +686,19 @@ mod tests {
 
     use super::{create_scope_connection, try_acquire_scope};
     use crate::connection_request::{ConnectionRequest, NodeAddress};
-    use crate::pool::{ScopePool, ScopePoolConfig, get_client_scope_pools, ScopeTarget};
+    use crate::pool::{
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, get_client_scope_pools,
+    };
 
     const DEFAULT_ROUTING_SLOT: u16 = 0;
     const MAX_CLUSTER_SLOT: u16 = 16_383;
+
+    fn reused_scope_id(outcome: ScopeAcquire) -> u64 {
+        match outcome {
+            ScopeAcquire::Reused(scope_id) => scope_id,
+            other => panic!("expected reused scope, got {other:?}"),
+        }
+    }
 
     fn request_bytes_with_mode(lib_name: &str, port: u16, cluster_mode_enabled: bool) -> Vec<u8> {
         let mut request = ConnectionRequest::new();
@@ -798,6 +805,36 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn unresolved_cluster_target_does_not_use_seed_and_releases_reservation() {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes_with_mode("", port, true);
+        let pool = reserved_pool(request_bytes.clone());
+
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::ClusterSlot(42),
+        )
+        .await;
+
+        {
+            let pool = pool.lock().await;
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert!(pool.idle.is_empty());
+            assert!(pool.in_use.is_empty());
+        }
+        assert_eq!(
+            listener
+                .accept()
+                .expect_err("unresolved cluster target must not connect to the seed")
+                .kind(),
+            ErrorKind::WouldBlock
+        );
+    }
+
     /// Polls the listener, awaiting between attempts so the spawned creation task
     /// gets to run on a current-thread runtime.
     async fn accept_within(listener: &TcpListener, timeout: Duration) -> bool {
@@ -890,7 +927,7 @@ mod tests {
             max_total: 1,
             ..ScopePoolConfig::default()
         };
-                let pool = ScopePool::new(config, request_bytes.clone(), 1);
+        let pool = ScopePool::new(config, request_bytes.clone(), 1);
         pool.total_count.store(1, Ordering::Release);
         let pool = Arc::new(TokioMutex::new(pool));
 
@@ -903,13 +940,12 @@ mod tests {
             let mut pool = pool.lock().await;
             assert_eq!(pool.idle.len(), 1);
             let target = pool.target_for_slot(DEFAULT_ROUTING_SLOT);
-            pool.try_acquire(registry, target)
+            reused_scope_id(pool.try_acquire(registry, target))
         };
-        assert!(first_scope_id >= 0);
 
         {
             let mut pool = pool.lock().await;
-            assert!(pool.release(first_scope_id as u64, registry));
+            assert!(pool.release(first_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
         }
@@ -918,13 +954,13 @@ mod tests {
             let mut pool = pool.lock().await;
             let alternate_target = pool.target_for_slot(MAX_CLUSTER_SLOT);
             assert_eq!(alternate_target, ScopeTarget::Standalone);
-            pool.try_acquire(registry, alternate_target)
+            reused_scope_id(pool.try_acquire(registry, alternate_target))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
         {
             let mut pool = pool.lock().await;
-            assert!(pool.release(second_scope_id as u64, registry));
+            assert!(pool.release(second_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
@@ -948,13 +984,12 @@ mod tests {
         let first_scope_id = {
             let mut pool = pool.lock().await;
             pool.idle[0].target = target;
-            pool.try_acquire(registry, target)
+            reused_scope_id(pool.try_acquire(registry, target))
         };
-        assert!(first_scope_id >= 0);
 
         {
             let mut pool = pool.lock().await;
-            assert!(pool.release(first_scope_id as u64, registry));
+            assert!(pool.release(first_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, target);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
@@ -962,13 +997,13 @@ mod tests {
 
         let second_scope_id = {
             let mut pool = pool.lock().await;
-            pool.try_acquire(registry, target)
+            reused_scope_id(pool.try_acquire(registry, target))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
         {
             let mut pool = pool.lock().await;
-            assert!(pool.release(second_scope_id as u64, registry));
+            assert!(pool.release(second_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, target);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
@@ -989,25 +1024,30 @@ mod tests {
         let scope_id = {
             let mut pool = pool.lock().await;
             pool.idle[0].target = ScopeTarget::ClusterSlot(0);
-            assert_eq!(pool.try_acquire(registry, ScopeTarget::ClusterSlot(42)), -1);
+            assert_eq!(
+                pool.try_acquire(registry, ScopeTarget::ClusterSlot(42)),
+                ScopeAcquire::Reserved
+            );
             assert_eq!(pool.idle.len(), 1);
 
             pool.idle[0].target = ScopeTarget::ClusterSlot(42);
-            assert_eq!(pool.try_acquire(registry, ScopeTarget::ClusterSlot(0)), -1);
+            assert_eq!(
+                pool.try_acquire(registry, ScopeTarget::ClusterSlot(0)),
+                ScopeAcquire::Reserved
+            );
             assert_eq!(pool.idle.len(), 1);
 
             pool.idle[0].target = ScopeTarget::Standalone;
-            pool.try_acquire(registry, ScopeTarget::Standalone)
+            reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone))
         };
-        assert!(scope_id >= 0);
 
         {
-            let entry = registry.get(&(scope_id as u64)).expect("registered scope");
+            let entry = registry.get(&(scope_id)).expect("registered scope");
             entry.connection.lock().await.pinned_slot = Some(0);
         }
         {
             let mut pool = pool.lock().await;
-            assert!(pool.release(scope_id as u64, registry));
+            assert!(pool.release(scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
             assert_eq!(pool.idle[0].pinned_slot, None);
@@ -1015,7 +1055,7 @@ mod tests {
 
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
-
+    }
 
     /// Mirrors the poison predicate from `execute_scope_command` directly against
     /// synthetic errors, since constructing a real `FatalReceiveError`/`FatalSendError`
