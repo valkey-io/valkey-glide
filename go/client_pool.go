@@ -6,6 +6,14 @@ package glide
 //
 // void successCallback(uintptr_t requestID, struct CommandResponse *message);
 // void failureCallback(uintptr_t requestID, char *errMessage, RequestErrorType errType);
+// uint8_t credentialProviderCallback(uintptr_t client_id,
+//                                    uint8_t *access_key_id_buf, uintptr_t access_key_id_buf_len,
+//                                    uintptr_t *access_key_id_len,
+//                                    uint8_t *secret_access_key_buf, uintptr_t secret_access_key_buf_len,
+//                                    uintptr_t *secret_access_key_len,
+//                                    uint8_t *session_token_buf, uintptr_t session_token_buf_len,
+//                                    uintptr_t *session_token_len,
+//                                    int64_t *expires_at_epoch_millis);
 import "C"
 
 import (
@@ -57,12 +65,13 @@ func DefaultPoolConfig() PoolConfig {
 // Use [NewClientPool] to create a pool. Borrow clients via [Acquire] and
 // return them via [Release].
 type ClientPool struct {
-	poolID     int64
-	config     PoolConfig
-	clientConf *config.ClientConfiguration
-	connReq    []byte // serialized ConnectionRequest protobuf
-	mu         sync.Mutex
-	closed     bool
+	poolID       int64
+	config       PoolConfig
+	clientConf   *config.ClientConfiguration
+	connReq      []byte // serialized ConnectionRequest protobuf
+	mu           sync.Mutex
+	closed       bool
+	credClientID uintptr // clientID used for credential provider registration (0 if none)
 	// pooledCache maps client_id → *PooledClient wrapper (reused across borrows)
 	pooledCache map[int64]*PooledClient
 }
@@ -136,6 +145,15 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		return nil, err
 	}
 
+	// Register credential provider if set
+	var credProviderCallback C.CredentialProviderCallback
+	var credClientID uintptr
+	if provider := clientConfig.GetCredentialProvider(); provider != nil {
+		credClientID = uintptr(clientIDCounter.Add(1))
+		registerCredentialProvider(credClientID, provider)
+		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
+	}
+
 	poolID := C.glide_pool_create(
 		C.uint32_t(poolConfig.MaxSize),
 		C.uint32_t(poolConfig.MinIdle),
@@ -145,17 +163,22 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
+		credProviderCallback,
 	)
 	if poolID < 0 {
+		if credClientID != 0 {
+			unregisterCredentialProvider(credClientID)
+		}
 		return nil, errors.New("failed to create pool")
 	}
 
 	pool := &ClientPool{
-		poolID:      int64(poolID),
-		config:      poolConfig,
-		clientConf:  clientConfig,
-		connReq:     connReqBytes,
-		pooledCache: make(map[int64]*PooledClient),
+		poolID:       int64(poolID),
+		config:       poolConfig,
+		clientConf:   clientConfig,
+		connReq:      connReqBytes,
+		credClientID: credClientID,
+		pooledCache:  make(map[int64]*PooledClient),
 	}
 
 	// Connectivity probe: create one client to validate the config eagerly.
@@ -299,6 +322,10 @@ func (p *ClientPool) Close() {
 	}
 	p.closed = true
 	C.glide_pool_destroy(C.uint64_t(p.poolID))
+	if p.credClientID != 0 {
+		unregisterCredentialProvider(p.credClientID)
+		p.credClientID = 0
+	}
 	p.pooledCache = nil
 }
 
@@ -355,6 +382,15 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		return nil, err
 	}
 
+	// Register credential provider if set
+	var credProviderCallback C.CredentialProviderCallback
+	var credClientID uintptr
+	if provider := clientConfig.GetCredentialProvider(); provider != nil {
+		credClientID = uintptr(clientIDCounter.Add(1))
+		registerCredentialProvider(credClientID, provider)
+		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
+	}
+
 	poolID := C.glide_pool_create(
 		C.uint32_t(poolConfig.MaxSize),
 		C.uint32_t(poolConfig.MinIdle),
@@ -364,17 +400,22 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
+		credProviderCallback,
 	)
 	if poolID < 0 {
+		if credClientID != 0 {
+			unregisterCredentialProvider(credClientID)
+		}
 		return nil, errors.New("failed to create pool")
 	}
 
 	pool := &ClientPool{
-		poolID:      int64(poolID),
-		config:      poolConfig,
-		clientConf:  nil, // cluster config — standalone field unused
-		connReq:     connReqBytes,
-		pooledCache: make(map[int64]*PooledClient),
+		poolID:       int64(poolID),
+		config:       poolConfig,
+		clientConf:   nil, // cluster config — standalone field unused
+		connReq:      connReqBytes,
+		credClientID: credClientID,
+		pooledCache:  make(map[int64]*PooledClient),
 	}
 
 	// Connectivity probe: create one client to validate the config eagerly.
