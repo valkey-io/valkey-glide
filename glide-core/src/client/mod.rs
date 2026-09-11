@@ -4069,6 +4069,7 @@ mod tests {
             "us-east-1".to_string(),
             crate::iam::ServiceType::ElastiCache,
             None,
+            None,
         )
         .await
         .expect("IAMTokenManager creation should succeed with fake credentials");
@@ -4097,6 +4098,7 @@ mod tests {
                     region: "us-east-1".to_string(),
                     service_type: crate::iam::ServiceType::ElastiCache,
                     refresh_interval_seconds: None,
+                    credentials_provider: None,
                 }),
             }),
             ..Default::default()
