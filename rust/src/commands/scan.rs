@@ -206,12 +206,19 @@ mod tests {
             }
         }
 
+        /// Pops and returns a queued reply.
+        /// Panics if there are none remaining.
         fn pop(&self) -> RedisResult<Value> {
             self.replies
                 .lock()
                 .unwrap()
                 .pop_front()
                 .expect("scan iterator requested more pages than the test queued")
+        }
+
+        /// The number of queued replies remaining.
+        fn remaining(&self) -> usize {
+            self.replies.lock().unwrap().len()
         }
     }
 
@@ -254,11 +261,15 @@ mod tests {
     }
 
     /// Returns all the items from an async scan iterator.
-    async fn get_items(iter: &mut ScanIter<'_, MockConnection, String>) -> Vec<String> {
+    async fn get_items(
+        con: &MockConnection,
+        iter: &mut ScanIter<'_, MockConnection, String>,
+    ) -> Vec<String> {
         let mut items = Vec::new();
         while let Some(item) = iter.next_item().await {
             items.push(item.expect("unexpected error during scan"));
         }
+        assert_eq!(con.remaining(), 0, "scan did not fetch every queued page");
         items
     }
 
@@ -266,21 +277,21 @@ mod tests {
     async fn async_success_empty_page() {
         let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&mut iter).await, Vec::<String>::new());
+        assert_eq!(get_items(&con, &mut iter).await, Vec::<String>::new());
     }
 
     #[tokio::test]
     async fn async_success_one_page() {
         let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&mut iter).await, ["a", "b"]);
+        assert_eq!(get_items(&con, &mut iter).await, ["a", "b"]);
     }
 
     #[tokio::test]
     async fn async_success_multi_page() {
         let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&mut iter).await, ["a", "b", "c"]);
+        assert_eq!(get_items(&con, &mut iter).await, ["a", "b", "c"]);
     }
 
     #[tokio::test]
@@ -310,9 +321,15 @@ mod tests {
 
     /// Returns all the items from an sync scan iterator.
     #[cfg(feature = "sync")]
-    fn sync_get_items(iter: SyncScanIter<'_, MockConnection, String>) -> Vec<String> {
-        iter.collect::<RedisResult<Vec<String>>>()
-            .expect("unexpected error during scan")
+    fn sync_get_items(
+        con: &MockConnection,
+        iter: SyncScanIter<'_, MockConnection, String>,
+    ) -> Vec<String> {
+        let items = iter
+            .collect::<RedisResult<Vec<String>>>()
+            .expect("unexpected error during scan");
+        assert_eq!(con.remaining(), 0, "scan did not fetch every queued page");
+        items
     }
 
     #[cfg(feature = "sync")]
@@ -320,7 +337,7 @@ mod tests {
     fn sync_success_empty_page() {
         let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
         assert_eq!(
-            sync_get_items(sync_scan_iter(&con).unwrap()),
+            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
             Vec::<String>::new()
         );
     }
@@ -329,7 +346,10 @@ mod tests {
     #[test]
     fn sync_success_one_page() {
         let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
-        assert_eq!(sync_get_items(sync_scan_iter(&con).unwrap()), ["a", "b"]);
+        assert_eq!(
+            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
+            ["a", "b"]
+        );
     }
 
     #[cfg(feature = "sync")]
@@ -337,7 +357,7 @@ mod tests {
     fn sync_success_multi_page() {
         let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
         assert_eq!(
-            sync_get_items(sync_scan_iter(&con).unwrap()),
+            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
             ["a", "b", "c"]
         );
     }
