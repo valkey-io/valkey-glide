@@ -177,9 +177,31 @@ impl RedisCluster {
             script_args.push("-r");
             script_args.push(&replicas_num);
         }
-        let (stdout, stderr) =
-            Self::execute_cluster_script(script_args, use_tls, None, tls_paths.as_ref());
-        let (cluster_folder, servers) = Self::parse_start_script_output(&stdout, &stderr);
+
+        let max_retries = 3;
+        let mut last_err = String::new();
+        let (cluster_folder, servers) = (|| {
+            for attempt in 0..max_retries {
+                let (stdout, stderr) = Self::execute_cluster_script(
+                    script_args.clone(),
+                    use_tls,
+                    None,
+                    tls_paths.as_ref(),
+                );
+                match Self::parse_start_script_output(&stdout, &stderr) {
+                    Ok(result) => return result,
+                    Err(e) => {
+                        last_err = e;
+                        if attempt < max_retries - 1 {
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                        }
+                    }
+                }
+            }
+            panic!(
+                "Failed to start cluster after {max_retries} attempts. Last error: {last_err}"
+            );
+        })();
         let mut password: Option<String> = None;
         if let Some(info) = conn_info {
             password.clone_from(&info.password);
@@ -199,7 +221,10 @@ impl RedisCluster {
         Some(line[prefix.len()..].to_string())
     }
 
-    fn parse_start_script_output(output: &str, _errors: &str) -> (String, Vec<ValkeyServerInfo>) {
+    fn parse_start_script_output(
+        output: &str,
+        errors: &str,
+    ) -> Result<(String, Vec<ValkeyServerInfo>), String> {
         let prefixes = vec!["CLUSTER_FOLDER", "SERVERS_JSON"];
         let mut values = std::collections::HashMap::<String, String>::new();
         let lines: Vec<&str> = output.split('\n').map(|line| line.trim()).collect();
@@ -215,10 +240,17 @@ impl RedisCluster {
             }
         }
 
-        let cluster_folder = values.get("CLUSTER_FOLDER").unwrap();
-        let cluster_nodes_json = values.get("SERVERS_JSON").unwrap();
-        let servers: Vec<ValkeyServerInfo> = serde_json::from_str(cluster_nodes_json).unwrap();
-        (cluster_folder.clone(), servers)
+        let cluster_folder = values.get("CLUSTER_FOLDER").ok_or_else(|| {
+            format!(
+                "CLUSTER_FOLDER not found in script output.\nStdout: {output}\nStderr: {errors}"
+            )
+        })?;
+        let cluster_nodes_json = values.get("SERVERS_JSON").ok_or_else(|| {
+            format!("SERVERS_JSON not found in script output.\nStdout: {output}\nStderr: {errors}")
+        })?;
+        let servers: Vec<ValkeyServerInfo> = serde_json::from_str(cluster_nodes_json)
+            .map_err(|e| format!("Failed to parse SERVERS_JSON: {e}\nJSON: {cluster_nodes_json}"))?;
+        Ok((cluster_folder.clone(), servers))
     }
 
     fn execute_cluster_script(
@@ -412,7 +444,7 @@ INFO:root:Created Cluster Redis in 24.8926 seconds
 CLUSTER_FOLDER=/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS
 CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,127.0.0.1:48252,127.0.0.1:19544,127.0.0.1:37455,127.0.0.1:9282,127.0.0.1:19843
         "#;
-        let (folder, servers) = RedisCluster::parse_start_script_output(script_output, "");
+        let (folder, servers) = RedisCluster::parse_start_script_output(script_output, "").unwrap();
         assert_eq!(servers.len(), 9);
         assert_eq!(
             folder,
