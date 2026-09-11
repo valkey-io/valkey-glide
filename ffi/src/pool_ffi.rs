@@ -283,6 +283,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     // Release the adapter Arc that was kept alive via mem::forget
                     // in create_pool_client. This drops the connection properly.
                     unsafe {
@@ -402,6 +403,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                         }
@@ -517,6 +519,20 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         Some(arc) => arc,
         None => return -1,
     };
+
+    // Invalidate this pool's scopes before returning. The cleanup below may be
+    // deferred to a spawned task when the pool lock is contended, and until it ran
+    // a caller could still dispatch on a scope whose pool is already destroyed.
+    // The adapter map is keyed independently of the pool lock, so this needs no lock.
+    let owned: Vec<usize> = get_pool_adapter_map()
+        .iter()
+        .filter(|e| e.value().0 == pool_id)
+        .map(|e| *e.key())
+        .collect();
+    for adapter_ptr in owned {
+        glide_core::scope::unregister_client(adapter_ptr as u64);
+    }
+
     {
         // try_lock rather than blocking_lock: the abandon monitor may hold the
         // lock briefly during a scan. Using blocking_lock here can deadlock if
@@ -535,6 +551,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             for cid in client_ids {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     unsafe {
                         drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
@@ -558,6 +575,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 for cid in client_ids {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));

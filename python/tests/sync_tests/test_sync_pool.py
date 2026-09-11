@@ -19,7 +19,7 @@ from glide_shared.config import (
 )
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
-from glide_sync.glide_client import GlideClusterClient
+from glide_sync.glide_client import GlideClient, GlideClusterClient
 
 from tests.utils.utils import get_cluster_addresses as _get_cluster_addresses
 from tests.utils.utils import get_standalone_address as _get_standalone_address
@@ -366,6 +366,13 @@ class TestClientPool:
             if scope is not None and not scope.is_released:
                 scope.close()
             pool.close()
+            # This test builds its own pool, so no fixture FLUSHALL runs. If the
+            # scope got one write in before invalidation, drop the key.
+            cleanup = GlideClient.create(config)
+            try:
+                cleanup.delete([key])
+            finally:
+                cleanup.close()
 
 
 def _has_client_info_field(client_info: str, field: str, expected: str) -> bool:
