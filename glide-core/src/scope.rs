@@ -318,11 +318,22 @@ pub async fn send_scope_command(
         // Resolve command type for compression routing
         let effective_type = crate::request_type::RequestType::from_command_name(cmd_name)
             .unwrap_or(crate::request_type::RequestType::CustomCommand);
-        let _ = crate::compression::process_command_args_for_compression(
+        if let Err(e) = crate::compression::process_command_args_for_compression(
             args,
             effective_type,
             Some(cm.as_ref()),
-        );
+        ) {
+            // An incompatible command would operate on compressed bytes — e.g. INCR or
+            // APPEND against a compressed value — so reject it as the ordinary dispatch
+            // paths do. Other compression failures fall back to the original args.
+            if e.is_incompatible_command() {
+                return Err(RedisError::from((
+                    redis::ErrorKind::ClientError,
+                    "Command is incompatible with compression",
+                    e.to_string(),
+                )));
+            }
+        }
     }
 
     // 4. Execute
@@ -685,6 +696,10 @@ pub fn register_client(client_id: u64, client: Client) {
 ///
 /// Also tears down the client's scope pool, so every binding's close path
 /// invalidates outstanding scopes without having to remember to do it.
+///
+/// `client_id` must be the handle the binding registered and opens scopes with —
+/// the adapter pointer for the C FFI, the client id for JNI. Passing the other id
+/// silently tears down nothing.
 pub fn unregister_client(client_id: u64) {
     get_client_registry().remove(&client_id);
     crate::pool::destroy_client_scope_pool(client_id);

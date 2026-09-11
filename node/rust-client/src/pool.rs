@@ -567,7 +567,10 @@ pub fn scope_execute<'a>(
     let (deferred, promise) = env.create_deferred()?;
     let cmd_data = cmd_bytes.as_ref().to_vec();
     let scope_id_u64 = scope_id as u64;
-    let client_id_u64 = client_id as u64;
+    // client_id is accepted for API compatibility but no longer trusted: the scope's
+    // own registry entry records its owner, so a mismatched pair cannot apply one
+    // client's guardrails to another client's connection.
+    let _ = client_id;
 
     get_pool_runtime().spawn(async move {
         let parsed = scope::deserialize_command(&cmd_data);
@@ -582,17 +585,12 @@ pub fn scope_execute<'a>(
             }
         };
 
-        let client_registry = scope::get_client_registry();
-        let client = client_registry
-            .get(&client_id_u64)
-            .map(|e| e.value().clone());
-
         // Without the parent every guardrail in send_scope_command is unavailable,
         // so fail rather than send the command raw.
-        let Some(client) = client else {
+        let Some(client) = scope::resolve_scope_parent(scope_id_u64) else {
             deferred.reject(Error::new(
                 Status::GenericFailure,
-                format!("Scope {scope_id_u64}: parent client {client_id_u64} is not registered"),
+                format!("Scope {scope_id_u64}: parent client is not registered"),
             ));
             return;
         };
