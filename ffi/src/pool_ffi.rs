@@ -282,6 +282,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
             for cid in discarded {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     // Release the adapter Arc that was kept alive via mem::forget
                     // in create_pool_client. This drops the connection properly.
                     unsafe {
@@ -400,6 +401,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                 for cid in discarded {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                         }
@@ -533,6 +535,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             for cid in client_ids {
                 if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                     get_pool_adapter_map().remove(&entry.adapter_ptr);
+                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                     unsafe {
                         drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                     }
@@ -555,6 +558,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                 for cid in client_ids {
                     if let Some((_, entry)) = get_pool_clients().remove(&cid) {
                         get_pool_adapter_map().remove(&entry.adapter_ptr);
+                        glide_core::scope::unregister_client(entry.adapter_ptr as u64);
                         unsafe {
                             drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                         }
