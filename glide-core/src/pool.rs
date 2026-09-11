@@ -797,6 +797,21 @@ pub struct ScopePool {
     pub configured_database_id: u32,
 }
 
+/// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
+/// for the acquire path (prewarm currently seats connections without reserving).
+/// A caller that re-checks `total_count` against `max_total` after seeing
+/// `Reserved` rejects the last slot, because the reservation is already counted.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ScopeAcquire {
+    /// An idle connection was reused; carries its scope id.
+    Reused(u64),
+    /// A slot was reserved against `max_total`; the caller must create a
+    /// connection to fill it.
+    Reserved,
+    /// No idle connection and the pool is at `max_total`.
+    Exhausted,
+}
+
 impl ScopePool {
     pub fn new(
         config: ScopePoolConfig,
@@ -833,10 +848,14 @@ impl ScopePool {
         allocate_scope_id()
     }
 
-    /// Non-blocking acquire. Returns scope_id >= 0, -1 if exhausted.
-    pub fn try_acquire(&mut self, registry: &DashMap<u64, ScopeEntry>, routing_slot: u16) -> i64 {
+    /// Non-blocking acquire. See [`ScopeAcquire`].
+    pub fn try_acquire(
+        &mut self,
+        registry: &DashMap<u64, ScopeEntry>,
+        routing_slot: u16,
+    ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            return -1;
+            return ScopeAcquire::Exhausted;
         }
 
         // Scan idle connections for one matching the requested routing slot.
@@ -876,13 +895,15 @@ impl ScopePool {
                 },
             );
             self.in_use.insert(scope_id, ());
-            return scope_id as i64;
+            return ScopeAcquire::Reused(scope_id);
         }
 
         if self.total_count.load(Ordering::Acquire) < self.config.max_total {
             self.total_count.fetch_add(1, Ordering::AcqRel);
+            ScopeAcquire::Reserved
+        } else {
+            ScopeAcquire::Exhausted
         }
-        -1
     }
 
     /// Release a scope. Zero-cost if state is clean.
@@ -1248,5 +1269,43 @@ mod connection_state_tests {
             ..Default::default()
         };
         assert!(!blocking_only.is_clean_for(CONFIGURED_DB));
+    }
+}
+
+#[cfg(test)]
+mod scope_pool_tests {
+    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+
+    /// `max_total = N` must grant exactly N reservations before reporting
+    /// exhaustion. The slot is counted as the reservation is granted, so the Nth is
+    /// the one an off-by-one drops.
+    #[test]
+    fn reserves_exactly_max_total_slots() {
+        for max_total in [1_u32, 2, 64] {
+            let config = ScopePoolConfig {
+                max_total,
+                ..ScopePoolConfig::default()
+            };
+            let mut pool = ScopePool::new(config, Vec::new(), 1);
+            let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+
+            for slot in 0..max_total {
+                assert_eq!(
+                    pool.try_acquire(&registry, 0),
+                    ScopeAcquire::Reserved,
+                    "max_total={max_total}: reservation {slot} must be granted"
+                );
+            }
+            assert_eq!(
+                pool.try_acquire(&registry, 0),
+                ScopeAcquire::Exhausted,
+                "max_total={max_total}: only N reservations fit"
+            );
+            assert_eq!(
+                pool.total_count.load(Ordering::Acquire),
+                max_total,
+                "max_total={max_total}: a rejected acquire must not reserve"
+            );
+        }
     }
 }
