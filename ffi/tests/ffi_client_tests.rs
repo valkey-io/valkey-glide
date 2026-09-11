@@ -452,6 +452,22 @@ fn test_ffi_client_command_executions(#[values(false, true)] async_client: bool)
                     resolved_host_len: *mut usize,
                 ) -> u16,
             >(std::ptr::null_mut()),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_id: usize,
+                    access_key_id_buf: *mut u8,
+                    access_key_id_buf_len: usize,
+                    access_key_id_len: *mut usize,
+                    secret_access_key_buf: *mut u8,
+                    secret_access_key_buf_len: usize,
+                    secret_access_key_len: *mut usize,
+                    session_token_buf: *mut u8,
+                    session_token_buf_len: usize,
+                    session_token_len: *mut usize,
+                    expires_at_epoch_millis: *mut i64,
+                ) -> u8,
+            >(std::ptr::null_mut()),
             0,
         );
 
@@ -519,6 +535,22 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
             &client_type,
             no_op_pubsub_callback,
             no_op_address_resolver,
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_id: usize,
+                    access_key_id_buf: *mut u8,
+                    access_key_id_buf_len: usize,
+                    access_key_id_len: *mut usize,
+                    secret_access_key_buf: *mut u8,
+                    secret_access_key_buf_len: usize,
+                    secret_access_key_len: *mut usize,
+                    session_token_buf: *mut u8,
+                    session_token_buf_len: usize,
+                    session_token_len: *mut usize,
+                    expires_at_epoch_millis: *mut i64,
+                ) -> u8,
+            >(std::ptr::null_mut()),
             0,
         );
 
@@ -732,6 +764,22 @@ fn test_inflight_request_limit_sync_client() {
                     resolved_host_buf_len: usize,
                     resolved_host_len: *mut usize,
                 ) -> u16,
+            >(std::ptr::null_mut()),
+            std::mem::transmute::<
+                *mut c_void,
+                unsafe extern "C-unwind" fn(
+                    client_id: usize,
+                    access_key_id_buf: *mut u8,
+                    access_key_id_buf_len: usize,
+                    access_key_id_len: *mut usize,
+                    secret_access_key_buf: *mut u8,
+                    secret_access_key_buf_len: usize,
+                    secret_access_key_len: *mut usize,
+                    session_token_buf: *mut u8,
+                    session_token_buf_len: usize,
+                    session_token_len: *mut usize,
+                    expires_at_epoch_millis: *mut i64,
+                ) -> u8,
             >(std::ptr::null_mut()),
             0,
         );

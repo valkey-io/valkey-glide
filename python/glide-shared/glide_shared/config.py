@@ -481,8 +481,6 @@ class IamAuthConfig:
             # In the sync glide client, only synchronous providers are supported.
         self.credential_provider = credential_provider
         # Track whether the provider is async so bindings can validate at connection time.
-        import inspect
-
         self._credential_provider_is_async = (
             credential_provider is not None
             and inspect.iscoroutinefunction(credential_provider)

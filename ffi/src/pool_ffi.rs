@@ -82,6 +82,27 @@ fn get_pool_client_types() -> &'static dashmap::DashMap<u64, ClientType> {
     POOL_CLIENT_TYPES.get_or_init(dashmap::DashMap::new)
 }
 
+/// Maps pool_id → CredentialProviderCallback (stored as usize) for background client creation.
+/// A zero value means no credential provider.
+static POOL_CREDENTIAL_PROVIDERS: std::sync::OnceLock<dashmap::DashMap<u64, usize>> =
+    std::sync::OnceLock::new();
+
+fn get_pool_credential_providers() -> &'static dashmap::DashMap<u64, usize> {
+    POOL_CREDENTIAL_PROVIDERS.get_or_init(dashmap::DashMap::new)
+}
+
+/// Retrieve a stored credential provider for a pool.
+fn get_pool_credential_provider(pool_id: u64) -> Option<CredentialProviderCallback> {
+    get_pool_credential_providers().get(&pool_id).and_then(|v| {
+        if *v == 0 {
+            None
+        } else {
+            // SAFETY: The function pointer was stored from a valid C function pointer.
+            Some(unsafe { std::mem::transmute::<usize, CredentialProviderCallback>(*v) })
+        }
+    })
+}
+
 /// Create a GlideClient + ClientAdapter for the pool.
 /// Runs on a dedicated thread (not inside an existing runtime) to avoid nesting.
 /// Create a pool client using the standard create_client_internal path.
@@ -92,6 +113,7 @@ fn get_pool_client_types() -> &'static dashmap::DashMap<u64, ClientType> {
 fn create_pool_client(
     connection_request_bytes: &[u8],
     client_type: ClientType,
+    credential_provider: Option<CredentialProviderCallback>,
     client_id: usize,
 ) -> Result<(usize, glide_core::client::Client), String> {
     let adapter_ptr = create_client_internal(
@@ -99,7 +121,7 @@ fn create_pool_client(
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
-        None, // no credential provider (uses the one in ConnectionRequest if any)
+        credential_provider,
         client_id,
     )?;
 
@@ -119,7 +141,7 @@ fn create_pool_client(
 /// Create a new client-instance pool.
 ///
 /// Creates pooled clients of the specified type. All languages use this single
-/// entry point — pass the appropriate ClientType:
+/// entry point — pass the appropriate ClientType:\
 /// - Python sync/Ruby: `ClientType { tag: SyncClient }`
 /// - Go/Java: `ClientType { tag: AsyncClient, success_callback, failure_callback }`
 /// - Python async: `ClientType { tag: AsyncClient }` with pipe (no callbacks needed)
@@ -129,6 +151,8 @@ fn create_pool_client(
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
 /// `client_type` must be a valid pointer to a `ClientType`.
+/// If `credential_provider` is non-zero, it must be a valid function pointer that lives
+/// while the pool is alive.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn glide_pool_create(
     max_size: u32,
@@ -139,6 +163,7 @@ pub unsafe extern "C" fn glide_pool_create(
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
+    credential_provider: CredentialProviderCallback,
 ) -> i64 {
     let connection_request = if connection_request_ptr.is_null() || connection_request_len == 0 {
         Vec::new()
@@ -154,6 +179,13 @@ pub unsafe extern "C" fn glide_pool_create(
     };
 
     let is_async = !matches!(ct, ClientType::SyncClient);
+
+    // Convert credential provider pointer to Option — 0 means no provider
+    let credential_provider_opt = if credential_provider as usize == 0 {
+        None
+    } else {
+        Some(credential_provider)
+    };
 
     // Parse database_id from connection request for state reset on release
     let configured_database_id = {
@@ -208,6 +240,9 @@ pub unsafe extern "C" fn glide_pool_create(
     // Store the ClientType for background creation
     get_pool_client_types().insert(pool_id, ct.clone());
 
+    // Store the credential provider for background creation (as usize; 0 = none)
+    get_pool_credential_providers().insert(pool_id, credential_provider as usize);
+
     // Spawn min_idle background client creation
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
@@ -215,9 +250,10 @@ pub unsafe extern "C" fn glide_pool_create(
             let pool_clone = pool_arc.clone();
             let bytes = connection_request.clone();
             let ct_clone = ct.clone();
+            let cp_opt = credential_provider_opt;
             std::thread::spawn(move || {
                 let pre_cid = glide_core::pool::allocate_client_id() as usize;
-                match create_pool_client(&bytes, ct_clone, pre_cid) {
+                match create_pool_client(&bytes, ct_clone, cp_opt, pre_cid) {
                     Ok((adapter_ptr, client)) => {
                         // Use block_on for warmup — this runs during pool creation
                         // (initialization), not during acquire/release contention,
@@ -312,7 +348,8 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                         .get(&pool_id)
                         .map(|e| e.value().clone())
                         .unwrap_or(ClientType::SyncClient);
-                    match create_pool_client(&bytes, bg_ct, pre_cid) {
+                    let bg_cp = get_pool_credential_provider(pool_id);
+                    match create_pool_client(&bytes, bg_ct, bg_cp, pre_cid) {
                         Ok((adapter_ptr, client)) => {
                             let rt = get_pool_runtime();
                             rt.spawn(async move {
@@ -423,7 +460,8 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                             .get(&pool_id)
                             .map(|e| e.value().clone())
                             .unwrap_or(ClientType::SyncClient);
-                        match create_pool_client(&bytes, bg_ct, pre_cid) {
+                        let bg_cp = get_pool_credential_provider(pool_id);
+                        match create_pool_client(&bytes, bg_ct, bg_cp, pre_cid) {
                             Ok((adapter_ptr, client)) => {
                                 // Spawn pool insertion as an async task instead of
                                 // block_on to avoid starving the pool runtime and
@@ -565,8 +603,9 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             });
         }
     }
-    // Clean up stored ClientType for this pool
+    // Clean up stored ClientType and CredentialProvider for this pool
     get_pool_client_types().remove(&pool_id);
+    get_pool_credential_providers().remove(&pool_id);
     0
 }
 

@@ -180,7 +180,6 @@ class TestGlideCredentialProvider:
 
     def test_async_provider_accepted_in_config(self):
         """Async providers are accepted at config time; the async client bridges them."""
-        import asyncio
 
         async def async_provider() -> AwsCredentials:
             return AwsCredentials(access_key_id="key", secret_access_key="secret")
