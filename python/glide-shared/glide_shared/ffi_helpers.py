@@ -332,8 +332,10 @@ def _invoke_async_credential_provider(credential_provider_fn, event_loop):
         # trio.from_thread.run raises RuntimeError if not called from a trio worker.
         import logging
 
-        logging.getLogger(__name__).error(
-            "GlideCredentialProvider async bridge failed for trio: %s", e
+        logging.getLogger(
+            __name__
+        ).error(  # nosemgrep: python-logger-credential-disclosure
+            "IAM provider async bridge failed for trio: %s", e
         )
         raise
 
@@ -408,8 +410,10 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
         except Exception as e:
             import logging
 
-            logging.getLogger(__name__).warning(
-                "GlideCredentialProvider raised an exception: %s", e
+            logging.getLogger(
+                __name__
+            ).warning(  # nosemgrep: python-logger-credential-disclosure
+                "IAM provider raised an exception: %s", e
             )
             return 0  # failure — Rust will surface a CredentialsError
 
