@@ -1474,7 +1474,6 @@ mod scope_pool_tests {
     }
 }
 
-
 /// Tests for the abandon-monitor race fix (issue #6971).
 ///
 /// The abandon monitor must skip `PooledClient` entries whose `is_blocking` flag
@@ -1528,8 +1527,7 @@ mod abandon_monitor_tests {
 
         // ── 2. Pool setup ───────────────────────────────────────────────────────
         let pool_id = {
-            let pool = ClientPool::new(test_pool_config(abandon_timeout))
-                .expect("ClientPool::new");
+            let pool = ClientPool::new(test_pool_config(abandon_timeout)).expect("ClientPool::new");
             register_pool(pool)
         };
         let pool_arc = get_pool(pool_id).expect("pool registered");
@@ -1630,8 +1628,7 @@ mod abandon_monitor_tests {
 
         // ── 2. Pool setup ───────────────────────────────────────────────────────
         let pool_id = {
-            let pool = ClientPool::new(test_pool_config(abandon_timeout))
-                .expect("ClientPool::new");
+            let pool = ClientPool::new(test_pool_config(abandon_timeout)).expect("ClientPool::new");
             register_pool(pool)
         };
         let pool_arc = get_pool(pool_id).expect("pool registered");
