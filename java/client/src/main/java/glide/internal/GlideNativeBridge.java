@@ -60,24 +60,6 @@ public class GlideNativeBridge {
             long spanPtr);
 
     /**
-     * Execute a command whose arguments are packed into one byte array.
-     *
-     * <p>The internal JNI format is {@code [count][length][bytes]...}, with four-byte big-endian
-     * headers. Native code validates every boundary and rejects trailing bytes before constructing
-     * the command.
-     */
-    public static native void executeCommandAsyncPacked(
-            long clientPtr,
-            long callbackId,
-            int requestType,
-            byte[] packedArgs,
-            boolean hasRoute,
-            int routeType,
-            String routeParam,
-            boolean expectUtf8Response,
-            long spanPtr);
-
-    /**
      * Execute a batch of commands asynchronously, passing parameters directly via JNI.
      *
      * @param requestTypes array of request type integers, one per command

@@ -1843,36 +1843,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsyncPacked(
-    env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    callback_id: jlong,
-    request_type: jint,
-    packed_args: JByteArray,
-    has_route: jni::sys::jboolean,
-    route_type: jint,
-    route_param: JString,
-    expect_utf8: jni::sys::jboolean,
-    span_ptr: jlong,
-) {
-    execute_command_async(ExecuteCommandParams {
-        env,
-        client_ptr,
-        callback_id,
-        request_type,
-        args: JObjectArray::from(JObject::null()),
-        packed_args,
-        has_route,
-        route_type,
-        route_param,
-        expect_utf8,
-        response_conversion: generic_response_conversion(),
-        span_ptr,
-    });
-}
-
 /// Execute MGET through the private Java entry point whose built-in decoder consumes the direct
 /// buffer synchronously. Unlike the generic bridge, callers cannot select this conversion mode or
 /// provide a different request type.

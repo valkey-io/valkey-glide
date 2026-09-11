@@ -2,7 +2,6 @@
 package glide.internal;
 
 import command_request.CommandRequestOuterClass.CacheMetricsType;
-import command_request.CommandRequestOuterClass.RequestType;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.BaseClient;
 import glide.api.logging.Logger;
@@ -393,65 +392,12 @@ public class GlideCoreClient implements AutoCloseable {
         return executeCommandAsync(
                 requestType,
                 args,
-                null,
                 hasRoute,
                 routeType,
                 routeParam,
                 expectUtf8Response,
                 timeoutMs,
                 spanPtr);
-    }
-
-    /** Execute a command whose length-prefixed arguments are packed into one JNI byte array. */
-    public CompletableFuture<Object> executeCommandAsyncPacked(
-            int requestType,
-            byte[] packedArgs,
-            boolean hasRoute,
-            int routeType,
-            String routeParam,
-            boolean expectUtf8Response,
-            long timeoutMs,
-            long spanPtr) {
-        return executeCommandAsync(
-                requestType,
-                EMPTY_2D_BYTE_ARRAY,
-                packedArgs,
-                hasRoute,
-                routeType,
-                routeParam,
-                expectUtf8Response,
-                timeoutMs,
-                spanPtr);
-    }
-
-    /**
-     * Execute MGET with a caller-supplied completion handler and cleaner-owned response storage.
-     *
-     * <p>This compatibility path deliberately uses the generic JNI entry point. Its response buffer
-     * remains valid if the handler retains or returns it. Performance-sensitive callers should use
-     * one of the typed MGET methods, whose fixed decoders cannot expose native storage.
-     */
-    public <T> CompletableFuture<T> executeMgetCommandAsync(
-            byte[][] args,
-            byte[] packedArgs,
-            boolean expectUtf8Response,
-            long timeoutMs,
-            long spanPtr,
-            BiFunction<Object, Throwable, ? extends T> completionHandler) {
-        if (completionHandler == null) {
-            throw new IllegalArgumentException("Completion handler cannot be null");
-        }
-        return executeCommandAsync(
-                        RequestType.MGet.getNumber(),
-                        args,
-                        packedArgs,
-                        false,
-                        0,
-                        null,
-                        expectUtf8Response,
-                        timeoutMs,
-                        spanPtr)
-                .handle(completionHandler);
     }
 
     /** Execute UTF-8 MGET through a fixed synchronous decoder. */
@@ -523,12 +469,9 @@ public class GlideCoreClient implements AutoCloseable {
         return decodeMgetBinaryArray(result);
     }
 
-    private void throwMgetError(Throwable error) {
+    static void throwMgetError(Throwable error) {
         if (error == null) {
             return;
-        }
-        if (error instanceof ClosingException) {
-            close();
         }
         if (error instanceof RuntimeException) {
             throw (RuntimeException) error;
@@ -718,7 +661,6 @@ public class GlideCoreClient implements AutoCloseable {
     private CompletableFuture<Object> executeCommandAsync(
             int requestType,
             byte[][] args,
-            byte[] packedArgs,
             boolean hasRoute,
             int routeType,
             String routeParam,
@@ -734,10 +676,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            CompletableFuture<Object> future =
-                    requestType == RequestType.MGet.getNumber()
-                            ? AsyncRegistry.newManagedFuture()
-                            : new CompletableFuture<>();
+            CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
                 correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
@@ -746,29 +685,16 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            if (packedArgs == null) {
-                GlideNativeBridge.executeCommandAsync(
-                        handle,
-                        correlationId,
-                        requestType,
-                        args != null ? args : EMPTY_2D_BYTE_ARRAY,
-                        hasRoute,
-                        routeType,
-                        routeParam,
-                        expectUtf8Response,
-                        spanPtr);
-            } else {
-                GlideNativeBridge.executeCommandAsyncPacked(
-                        handle,
-                        correlationId,
-                        requestType,
-                        packedArgs,
-                        hasRoute,
-                        routeType,
-                        routeParam,
-                        expectUtf8Response,
-                        spanPtr);
-            }
+            GlideNativeBridge.executeCommandAsync(
+                    handle,
+                    correlationId,
+                    requestType,
+                    args != null ? args : EMPTY_2D_BYTE_ARRAY,
+                    hasRoute,
+                    routeType,
+                    routeParam,
+                    expectUtf8Response,
+                    spanPtr);
 
             return future;
 

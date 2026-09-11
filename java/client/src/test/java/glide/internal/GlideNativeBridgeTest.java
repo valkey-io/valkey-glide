@@ -3,8 +3,11 @@ package glide.internal;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.models.exceptions.ClosingException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import org.junit.jupiter.api.Test;
@@ -12,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class GlideNativeBridgeTest {
 
     @Test
-    void genericCommandEntryPointsCannotRequestImmediateMgetBufferRelease() {
+    void genericCommandEntryPointCannotRequestImmediateMgetBufferRelease() {
         assertDoesNotThrow(
                 () ->
                         GlideNativeBridge.class.getDeclaredMethod(
@@ -26,7 +29,9 @@ class GlideNativeBridgeTest {
                                 String.class,
                                 boolean.class,
                                 long.class));
-        assertDoesNotThrow(
+        assertEquals(1, countMethodsNamed(GlideNativeBridge.class, "executeCommandAsync"));
+        assertThrows(
+                NoSuchMethodException.class,
                 () ->
                         GlideNativeBridge.class.getDeclaredMethod(
                                 "executeCommandAsyncPacked",
@@ -39,8 +44,44 @@ class GlideNativeBridgeTest {
                                 String.class,
                                 boolean.class,
                                 long.class));
-        assertEquals(1, countMethodsNamed(GlideNativeBridge.class, "executeCommandAsync"));
-        assertEquals(1, countMethodsNamed(GlideNativeBridge.class, "executeCommandAsyncPacked"));
+    }
+
+    @Test
+    void unusedGenericPackedMgetWrappersAreAbsent() {
+        assertThrows(
+                NoSuchMethodException.class,
+                () ->
+                        GlideCoreClient.class.getDeclaredMethod(
+                                "executeCommandAsyncPacked",
+                                int.class,
+                                byte[].class,
+                                boolean.class,
+                                int.class,
+                                String.class,
+                                boolean.class,
+                                long.class,
+                                long.class));
+        assertThrows(
+                NoSuchMethodException.class,
+                () ->
+                        GlideCoreClient.class.getDeclaredMethod(
+                                "executeMgetCommandAsync",
+                                byte[][].class,
+                                byte[].class,
+                                boolean.class,
+                                long.class,
+                                long.class,
+                                java.util.function.BiFunction.class));
+    }
+
+    @Test
+    void typedMgetDisconnectPropagatesWithoutClosingTheClient() {
+        ClosingException error = new ClosingException("Will attempt to reconnect");
+
+        ClosingException thrown =
+                assertThrows(ClosingException.class, () -> GlideCoreClient.throwMgetError(error));
+
+        assertSame(error, thrown);
     }
 
     @Test
