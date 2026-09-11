@@ -18,12 +18,13 @@
 
 use crate::client::Client;
 use crate::pool::{
-    get_client_scope_pools, get_scope_registry, update_state_for_command, validate_scope_slot,
+    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
+    validate_scope_slot,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool, ScopedConnection};
+use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -167,6 +168,11 @@ pub async fn execute_scope_command(
 
     // State tracking (for conditional cleanup on release)
     let arg_refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
+    // Captured before the update below, which clears multi_active on the very
+    // command that closes the transaction (EXEC/DISCARD); the post-update state
+    // would attempt AUTH while the server is still in the old mode.
+    let multi_active_before_command = conn.state.multi_active;
+    let subscribed_before_command = conn.state.has_subscriptions();
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
 
     // Cluster mode: validate slot consistency (skip in standalone — no slots)
@@ -199,14 +205,58 @@ pub async fn execute_scope_command(
         cmd.arg(arg.as_slice());
     }
 
+    // Presume a blocking command's connection unsafe until we know the outcome;
+    // set before dispatch so a mid-flight cancellation (future dropped) leaves it
+    // poisoned and release discards it. Remember whether a *previous* command on
+    // this scope already poisoned the connection, so a later command that
+    // completes cleanly can't clear that earlier poison.
+    let is_blocking = crate::client::is_blocking_command(&cmd);
+    let already_poisoned = conn.state.blocking_in_flight;
+    if is_blocking {
+        conn.state.blocking_in_flight = true;
+    }
+
     // Execute via Client (gets timeout, decompression, IAM refresh) or raw fallback
-    match client {
+    let result = match client {
         Some(c) => {
-            c.send_command_on_connection(&cmd, &mut conn.connection)
-                .await
+            let ScopedConnection {
+                connection,
+                last_iam_generation,
+                ..
+            } = &mut *conn;
+            c.send_command_on_connection(
+                &cmd,
+                connection,
+                last_iam_generation,
+                multi_active_before_command || subscribed_before_command,
+            )
+            .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
+    };
+
+    // A failed re-auth makes this connection unusable for every later command.
+    if matches!(&result, Err(e) if e.kind() == redis::ErrorKind::AuthenticationFailed) {
+        conn.state.must_discard = true;
     }
+
+    // A timeout, IO error, dropped connection, or protocol desync can leave a
+    // server-side waiter armed on the connection (or the connection itself in an
+    // unknown state after a failover/CLIENT KILL/restart); a clean protocol error
+    // (WRONGTYPE, MOVED/ASK, NOAUTH, or a client-side rejected timeout arg) never
+    // reached that state, so the connection stays reusable. Keep the flag set only
+    // for the poisoning cases — and never clear a poison a prior command left behind.
+    if is_blocking {
+        // `is_timeout()` is a strict subset of `is_io_error()` in redis-rs (it only
+        // checks for IO errors of kind TimedOut/WouldBlock), so it adds no coverage
+        // beyond `is_io_error()` and is omitted here.
+        let poisoned = matches!(&result, Err(e) if e.is_io_error()
+            || e.is_connection_dropped()
+            || e.kind() == redis::ErrorKind::ProtocolDesync);
+        conn.state.blocking_in_flight = already_poisoned || poisoned;
+    }
+
+    result
 }
 
 /// Full-featured scope command execution with all cross-cutting concerns.
@@ -317,7 +367,9 @@ pub async fn create_scope_connection(
             return;
         }
     };
-    if crate::client::validate_effective_lib_name(Some(proto.lib_name.as_ref())).is_err() {
+    if !proto.lib_name.is_empty()
+        && crate::client::validate_effective_lib_name(proto.lib_name.as_ref()).is_err()
+    {
         pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
         return;
     }
@@ -394,8 +446,40 @@ pub async fn create_scope_connection(
     let mut init_pipe = redis::Pipeline::new();
     let mut init_count = 0;
 
-    // AUTH: send credentials if configured
-    if let Some(ref auth_info) = proto.authentication_info.0 {
+    // Generation observed at AUTH-build time, so send_command_on_connection can
+    // detect whether the token has rotated again since this connection's initial
+    // AUTH (rather than always re-authenticating on the very first command, or
+    // missing a rotation that lands between here and the first command).
+    let mut initial_iam_generation: u64 = 0;
+
+    // AUTH: IAM authentication takes priority when configured on the parent client
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
+    // fall back to the protobuf-configured password/username.
+    if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
+        // Read the generation before the token: if a refresh lands in this gap,
+        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // so the mismatch on the first scope command still triggers a
+        // reauthentication. Reading generation after the token could otherwise
+        // suppress it — a refresh landing there would mean the initial AUTH used
+        // the old token, but the recorded generation already matches the new one.
+        let generation_before_auth = manager.token_generation();
+        let current_token = manager.get_token().await;
+        if !current_token.is_empty() {
+            initial_iam_generation = generation_before_auth;
+            init_pipe
+                .cmd("AUTH")
+                .arg(manager.username())
+                .arg(current_token.as_str());
+            init_count += 1;
+        } else {
+            logger_core::log_warn(
+                "create_scope_connection",
+                "IAM token unavailable; skipping AUTH for scoped connection",
+            );
+            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+            return;
+        }
+    } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
         if !password.is_empty() {
@@ -458,6 +542,7 @@ pub async fn create_scope_connection(
         state: ConnectionState::with_configured_db(database_id as u8),
         pinned_slot: None,
         target_slot: routing_slot,
+        last_iam_generation: std::sync::atomic::AtomicU64::new(initial_iam_generation),
     };
     pool_guard.idle.push_back(entry);
 }
@@ -699,5 +784,55 @@ mod tests {
             shutdown_sender.send(()).expect("stop mock server");
             server.join().expect("mock server exits cleanly");
         }
+    }
+
+    /// Mirrors the poison predicate from `execute_scope_command` directly against
+    /// synthetic errors, since constructing a real `FatalReceiveError`/`FatalSendError`
+    /// (multiplexed connection driver errors) or `ProtocolDesync` requires a live
+    /// server round-trip and isn't practical to reproduce as a pure unit test here.
+    fn is_poisoning_error(e: &redis::RedisError) -> bool {
+        e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
+    }
+
+    #[test]
+    fn poison_predicate_catches_dropped_connections_and_protocol_desync() {
+        use std::io;
+
+        // A broken pipe / connection reset is an IO error AND a dropped-connection
+        // error (both is_io_error() and is_connection_dropped() are true) — the
+        // connection is dead either way.
+        let broken_pipe = redis::RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe));
+        assert!(is_poisoning_error(&broken_pipe));
+
+        // FatalSendError/FatalReceiveError are dropped-connection errors from the
+        // multiplexed connection driver but are NOT is_io_error() (they don't wrap
+        // an io::Error) — this is the case the earlier `is_io_error()`-only
+        // predicate missed.
+        let fatal_send =
+            redis::RedisError::from((redis::ErrorKind::FatalSendError, "failed to send command"));
+        assert!(fatal_send.is_connection_dropped());
+        assert!(!fatal_send.is_io_error());
+        assert!(is_poisoning_error(&fatal_send));
+
+        let fatal_receive = redis::RedisError::from((
+            redis::ErrorKind::FatalReceiveError,
+            "failed to receive response",
+        ));
+        assert!(is_poisoning_error(&fatal_receive));
+
+        // ProtocolDesync means the client and server have lost sync on the wire
+        // protocol (e.g. after a failover mid-response) — also neither an IO error
+        // nor a "dropped connection" error by redis-rs's own classification, so it
+        // must be matched explicitly.
+        let protocol_desync =
+            redis::RedisError::from((redis::ErrorKind::ProtocolDesync, "protocol desync"));
+        assert!(!protocol_desync.is_io_error());
+        assert!(!protocol_desync.is_connection_dropped());
+        assert!(is_poisoning_error(&protocol_desync));
+
+        // A clean protocol-level error (e.g. WRONGTYPE) never leaves the
+        // connection in a bad state and must not be treated as poisoning.
+        let wrong_type = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE"));
+        assert!(!is_poisoning_error(&wrong_type));
     }
 }

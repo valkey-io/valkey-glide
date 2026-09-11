@@ -1509,6 +1509,591 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// Serialized `ConnectionRequest` pointing at the backing test server, for
+    /// seeding a scope pool. Standalone uses the single server address; cluster
+    /// uses the node addresses (the scope layer resolves the concrete node for a
+    /// slot from the parent client when one is supplied).
+    fn scope_request_bytes(server: &BackingServer, configuration: &TestConfiguration) -> Vec<u8> {
+        use protobuf::Message as _;
+        let addresses: Vec<redis::ConnectionAddr> = match server {
+            BackingServer::Standalone(server) => vec![
+                server
+                    .as_ref()
+                    .map(|s| s.get_client_addr())
+                    .unwrap_or(get_shared_server_address(configuration.use_tls)),
+            ],
+            BackingServer::Cluster(cluster) => cluster
+                .as_ref()
+                .map(|c| c.get_server_addresses())
+                .unwrap_or_else(|| get_shared_cluster_addresses(configuration.use_tls)),
+        };
+        create_connection_request(&addresses, configuration)
+            .write_to_bytes()
+            .expect("serialize scope connection request")
+    }
+
+    /// A live scope backed by a real connection to the test server, ready to
+    /// execute commands via `send_scope_command`. Callers must invoke `release`
+    /// when done to avoid leaking global scope-registry state between tests.
+    struct ScopeHandle {
+        client: Client,
+        client_id: u64,
+        scope_id: u64,
+        pool: std::sync::Arc<tokio::sync::Mutex<glide_core::pool::ScopePool>>,
+        released: std::cell::Cell<bool>,
+    }
+
+    impl ScopeHandle {
+        /// Seat a real scoped connection and acquire a scope_id for it.
+        ///
+        /// `routing_slot` selects the cluster node in cluster mode; it is ignored
+        /// in standalone mode. A unique `client_id` avoids collisions in the
+        /// process-global scope registry across serial test runs.
+        async fn setup(client: Client, bytes: Vec<u8>, routing_slot: u16) -> ScopeHandle {
+            let client_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos() as u64;
+
+            glide_core::scope::register_client(client_id, client.clone());
+            let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone());
+
+            // Reserve capacity, then synchronously seat one idle connection. This
+            // mirrors the reserve-before-create contract that `try_acquire_scope`
+            // relies on: `create_scope_connection` only decrements on failure.
+            pool.lock()
+                .await
+                .total_count
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            glide_core::scope::create_scope_connection(
+                pool.clone(),
+                Some(&client),
+                &bytes,
+                routing_slot,
+            )
+            .await;
+
+            let scope_id = {
+                let mut guard = pool.lock().await;
+                guard.try_acquire(glide_core::pool::get_scope_registry(), routing_slot)
+            };
+            assert!(
+                scope_id >= 0,
+                "failed to acquire scope (connection not seated): {scope_id}"
+            );
+
+            ScopeHandle {
+                client,
+                client_id,
+                scope_id: scope_id as u64,
+                pool,
+                released: std::cell::Cell::new(false),
+            }
+        }
+
+        async fn send(&self, cmd_name: &str, args: &mut [Vec<u8>]) -> redis::RedisResult<Value> {
+            glide_core::scope::send_scope_command(self.scope_id, cmd_name, args, Some(&self.client))
+                .await
+        }
+
+        fn release(&self) {
+            if self.released.replace(true) {
+                return;
+            }
+            let handle = tokio::runtime::Handle::current();
+            glide_core::scope::release_scope(self.scope_id, self.client_id, &handle);
+            glide_core::scope::unregister_client(self.client_id);
+        }
+    }
+
+    impl Drop for ScopeHandle {
+        /// Teardown runs unconditionally, even when a test asserts before calling
+        /// `release`, so a failed assertion cannot leak this client's registration
+        /// into the process-global registry and poison the next serial test.
+        fn drop(&mut self) {
+            self.release();
+        }
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_with_zero_timeout_blocks_indefinitely(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // A blocking command issued through a scoped connection must honour the
+        // command's own timeout (0 = block forever), not the client's flat
+        // request_timeout. With request_timeout set to 1ms, a naive implementation
+        // would abort BLPOP almost immediately; the correct behaviour is to keep
+        // blocking. We confirm this by racing the scoped BLPOP against a Tokio
+        // timeout: if the scope still hasn't returned when the Tokio timeout
+        // fires, the command was (correctly) still blocking.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            let future = async {
+                // `0` should block indefinitely; nothing is ever pushed to `key`.
+                let mut args = vec![key.into_bytes(), b"0".to_vec()];
+                scope.send("BLPOP", &mut args).await
+            };
+
+            // If BLPOP were incorrectly bounded by the 1ms request_timeout, this
+            // future would resolve well before the Tokio timeout. An elapsed error
+            // means it was still blocking, which is what we want.
+            let tokio_timeout_result =
+                tokio::time::timeout(DEFAULT_RESPONSE_TIMEOUT * 2, future).await;
+            assert!(
+                tokio_timeout_result.is_err(),
+                "scoped BLPOP with a 0 timeout returned early instead of blocking: {tokio_timeout_result:?}"
+            );
+
+            scope.release();
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_honours_finite_command_timeout(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // A blocking command with a FINITE timeout must honour its own command-level
+        // deadline through the scope layer, not the much shorter flat request_timeout.
+        // With request_timeout = 1s and BLPOP <key> 5, a naive implementation bounded
+        // by request_timeout would return at ~1s; the correct behaviour (get_request_timeout
+        // -> Some(5s) for the blocking arg) keeps blocking until the command's own 5s
+        // deadline. We assert the call lasted clearly longer than the flat 1s timeout
+        // (> 2s, generous to avoid flakiness) rather than an exact 5s.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1000), // 1s flat request timeout
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            let started = std::time::Instant::now();
+            // `5` = block up to 5 seconds; nothing is ever pushed to `key`, so this
+            // returns only when the command's own deadline elapses.
+            let mut args = vec![key.into_bytes(), b"5".to_vec()];
+            let result = scope.send("BLPOP", &mut args).await;
+            let elapsed = started.elapsed();
+
+            assert!(
+                elapsed > std::time::Duration::from_secs(2),
+                "scoped BLPOP with a 5s timeout returned after {elapsed:?}, which is at \
+                 or below the 1s flat request_timeout — the per-command timeout was not honoured"
+            );
+
+            // The command must reach its own 5s server-side deadline cleanly: BLPOP on
+            // an empty key at its timeout returns a nil reply. Asserting the nil success
+            // (rather than merely `is_ok()` or just the timing) rejects both a spurious
+            // non-nil success and any post-2s connection/protocol error, which would
+            // otherwise satisfy the timing check alone.
+            assert_eq!(
+                result,
+                Ok(Value::Nil),
+                "scoped BLPOP should return a nil reply at its command deadline, got {result:?}"
+            );
+
+            scope.release();
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_clean_protocol_error_reuses_connection(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // A blocking command that fails with a clean protocol error never armed a
+        // server-side waiter, so its connection stays reusable and must be returned
+        // to the idle pool on release — not churned. We trigger the deterministic
+        // WRONGTYPE case: SET a string key, then BLPOP it (BLPOP on a non-list
+        // returns WRONGTYPE immediately). Pre-fix (poison-on-any-error) the released
+        // connection was discarded; post-fix it is reused.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1000),
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // Make the key a string so BLPOP on it fails fast with WRONGTYPE.
+            let mut set_args = vec![key.clone().into_bytes(), b"not-a-list".to_vec()];
+            scope
+                .send("SET", &mut set_args)
+                .await
+                .expect("SET should succeed");
+
+            let mut blpop_args = vec![key.into_bytes(), b"0".to_vec()];
+            let result = scope.send("BLPOP", &mut blpop_args).await;
+            assert!(
+                result.is_err(),
+                "expected WRONGTYPE error from BLPOP on a string key, got {result:?}"
+            );
+            let err = result.unwrap_err();
+            assert!(
+                !err.is_timeout() && !err.is_io_error(),
+                "WRONGTYPE must be a clean protocol error, not timeout/io: {err:?}"
+            );
+
+            scope.release();
+
+            // A clean protocol error leaves the connection reusable: it is returned
+            // to idle and still counted, rather than discarded.
+            let pool = scope.pool.lock().await;
+            assert!(
+                !pool.idle.is_empty(),
+                "connection with a clean protocol error was discarded instead of reused"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                1,
+                "reusable connection was dropped from the pool total"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_command_cancelled_connection_is_not_reused(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // When a scoped blocking command is cancelled while still in flight (its
+        // future dropped before the server responds), the underlying connection
+        // may still have an armed server-side waiter. Returning such a connection
+        // to the idle pool would let it silently swallow a later, unrelated push
+        // to the same key instead of delivering it to a legitimate consumer. The
+        // fix marks the connection unrecoverable and discards it on release. We
+        // assert that observable outcome: after cancelling an in-flight scoped
+        // BLPOP and releasing the scope, the connection is neither returned to the
+        // idle pool nor left counted, so it cannot be handed out again.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // Start a blocking BLPOP that will never complete (nothing is pushed),
+            // then cancel it by letting a short Tokio timeout elapse. Dropping the
+            // future mid-flight leaves the connection's blocking-in-flight marker
+            // set, which release must treat as unrecoverable.
+            let cancelled = {
+                let key = key.clone();
+                tokio::time::timeout(std::time::Duration::from_millis(300), async {
+                    let mut args = vec![key.into_bytes(), b"0".to_vec()];
+                    scope.send("BLPOP", &mut args).await
+                })
+                .await
+            };
+            assert!(
+                cancelled.is_err(),
+                "expected the in-flight scoped BLPOP to be cancelled, got {cancelled:?}"
+            );
+
+            scope.release();
+
+            // The discarded connection must not be reusable: not parked as idle,
+            // not tracked as in-use, and not counted toward the pool total.
+            let pool = scope.pool.lock().await;
+            assert!(
+                pool.idle.is_empty(),
+                "cancelled blocking connection was returned to the idle pool"
+            );
+            assert!(
+                pool.in_use.is_empty(),
+                "released scope is still marked in-use"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                0,
+                "discarded blocking connection was still counted in the pool total"
+            );
+            drop(pool);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_release_contended_lock_reclaims_slot_synchronously(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // Regression for the release() Err(_) branch: when a scoped blocking
+        // command is still holding the connection lock at release time (its
+        // binding-side await was cancelled but the native task kept running and
+        // is parked in an unbounded BLPOP), release() cannot lock the connection
+        // and takes the try_lock -> Err path. The pool slot MUST be reclaimed
+        // synchronously there; the earlier code deferred the total_count
+        // decrement into a spawned task gated on acquiring that same connection
+        // lock, so for an unbounded blocking command the lock never freed and the
+        // slot leaked forever (total_count stuck at 1).
+        //
+        // We force the contended path deterministically: hold a clone of the
+        // connection's Arc<Mutex> for the whole test, then call release(). The
+        // internal try_lock is guaranteed to fail, so we exercise exactly the
+        // Err(_) branch. We assert total_count returns to 0 immediately, WITHOUT
+        // ever releasing our held lock (mirroring a never-completing BLPOP).
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // A seated + acquired scope means the slot is counted.
+            {
+                let pool = scope.pool.lock().await;
+                assert_eq!(
+                    pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                    1,
+                    "expected one counted connection before release"
+                );
+            }
+
+            // Grab and hold the connection lock the way an in-flight, never
+            // completing blocking command would. This clone keeps the Arc alive
+            // and the lock held for the duration of release().
+            let registry = glide_core::pool::get_scope_registry();
+            let conn_arc = registry
+                .get(&scope.scope_id)
+                .expect("scope entry present before release")
+                .connection
+                .clone();
+            let _held = conn_arc
+                .try_lock()
+                .expect("test should be sole holder before release");
+
+            // Drive release() directly so the branch is deterministic. We hold the
+            // pool lock ourselves (as release_scope's Ok arm does) and stay inside
+            // the runtime so the best-effort cleanup task has a reactor.
+            {
+                let mut pool = scope.pool.lock().await;
+                let reclaimed = pool.release(scope.scope_id, registry);
+                assert!(reclaimed, "release should report the scope was reclaimed");
+
+                // The decrement must have happened synchronously in the Err(_)
+                // branch — we are STILL holding the connection lock, so any
+                // lock-gated deferred decrement (the buggy path) could not have
+                // run yet. Pre-fix this reads 1 (leaked); post-fix it reads 0.
+                assert_eq!(
+                    pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                    0,
+                    "pool slot was not reclaimed synchronously on the contended \
+                     release path — the blocking command's held lock leaked it"
+                );
+                assert!(
+                    pool.in_use.is_empty(),
+                    "released scope is still marked in-use"
+                );
+            }
+
+            // Never released `_held`, mirroring an unbounded BLPOP that never
+            // completes; the slot must already be reclaimed regardless.
+            drop(_held);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[ignore = "Fails on the pre-existing gap tracked in #7000: dropping the \
+                MultiplexedConnection doesn't close the socket while a command is \
+                outstanding, so a cancelled BLPOP's server-side waiter can still steal \
+                a later push. Not a regression from this PR."]
+    fn test_scoped_blocking_command_expired_does_not_steal_later_push(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // Full end-to-end version of the "no silent consumption" guarantee: a
+        // scoped BLPOP is cancelled in flight and its scope released; a later
+        // legitimate consumer then blocks on the same key and must receive a
+        // subsequent push, proving the stale scoped connection did not intercept it.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client.clone(), bytes, routing_slot).await;
+
+            // Cancel an in-flight scoped BLPOP, then release (connection discarded).
+            let cancelled = {
+                let key = key.clone();
+                tokio::time::timeout(std::time::Duration::from_millis(300), async {
+                    let mut args = vec![key.clone().into_bytes(), b"0".to_vec()];
+                    scope.send("BLPOP", &mut args).await
+                })
+                .await
+            };
+            assert!(
+                cancelled.is_err(),
+                "expected cancellation, got {cancelled:?}"
+            );
+            scope.release();
+
+            // A legitimate consumer blocks on the same key with a finite timeout.
+            let consumer = {
+                let mut consumer_client = test_basics.client.clone();
+                let key = key.clone();
+                tokio::spawn(async move {
+                    let mut cmd = redis::Cmd::new();
+                    cmd.arg("BLPOP").arg(&key).arg(2); // seconds
+                    consumer_client.send_command(&mut cmd, None).await
+                })
+            };
+
+            // Give the consumer time to register its waiter, then push once.
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            let mut push_cmd = redis::Cmd::new();
+            push_cmd.arg("RPUSH").arg(&key).arg("payload");
+            let _ = test_basics.client.send_command(&mut push_cmd, None).await;
+
+            // The push must reach the legitimate consumer, not a stale scoped waiter.
+            let consumed = consumer.await.expect("consumer task join");
+            let value = consumed.expect("consumer BLPOP result");
+            match value {
+                Value::Array(items) => {
+                    assert_eq!(items.len(), 2, "BLPOP should return [key, value]");
+                    assert_eq!(items[1], Value::BulkString(b"payload".to_vec().into()));
+                }
+                other => panic!("legitimate consumer did not receive the push: {other:?}"),
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_scoped_blocking_connection_discarded_on_concurrent_release(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // Guards the clear-then-requeue race on the deferred release path. When
+        // `release` races a command still holding the connection lock, `try_lock`
+        // fails and the work is deferred to a spawned task. A binding may cancel a
+        // blocking command and release the scope while the native command is still
+        // parked; if a push then satisfies it, the command completes and clears its
+        // in-flight marker. A release that re-inspected state *after* the command
+        // finished would see a clean connection and requeue it — even though the
+        // push was already consumed. Correct behaviour is to discard from the fact
+        // that release raced an in-flight command, not from post-completion state.
+        //
+        // We reproduce deterministically: hold the lock so release defers, then
+        // reset the state to clean BEFORE the deferred task runs, then release the
+        // lock and assert the connection is still discarded.
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &config);
+            let key = generate_random_string(10);
+            let routing_slot = glide_core::pool::slot_for_key(key.as_bytes());
+
+            let scope = ScopeHandle::setup(test_basics.client, bytes, routing_slot).await;
+
+            // Clone the registry entry's connection Arc and hold its lock so that
+            // release's `try_lock` fails and the spawned (deferred) path is taken.
+            let registry = glide_core::pool::get_scope_registry();
+            let conn_arc = registry
+                .get(&scope.scope_id)
+                .expect("scope entry present before release")
+                .connection
+                .clone();
+            let mut guard = conn_arc.lock().await;
+
+            // Release while the lock is held -> Err(_)/try_lock-contention branch.
+            let released = {
+                let mut pool = scope.pool.lock().await;
+                pool.release(scope.scope_id, registry)
+            };
+            assert!(released, "release should report success even when deferred");
+
+            // Simulate the racing blocking command completing (a late push arrived)
+            // and clearing every marker before the deferred task runs. This is the
+            // exact window the old post-completion state check got wrong: the
+            // connection now looks perfectly clean.
+            guard.state = glide_core::pool::ConnectionState::with_configured_db(0);
+            assert!(
+                guard.state.is_clean_for(0),
+                "precondition: state must look clean so a post-completion check \
+                 would (wrongly) requeue"
+            );
+
+            // Let the spawned task acquire the connection now that we release it.
+            drop(guard);
+
+            // Wait (bounded) for the deferred task to finish adjusting pool state.
+            let discarded = {
+                let mut discarded = false;
+                for _ in 0..200 {
+                    let pool = scope.pool.lock().await;
+                    if pool.idle.is_empty()
+                        && pool.total_count.load(std::sync::atomic::Ordering::Acquire) == 0
+                    {
+                        discarded = true;
+                        break;
+                    }
+                    drop(pool);
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+                discarded
+            };
+
+            let pool = scope.pool.lock().await;
+            assert!(
+                discarded,
+                "deferred release requeued a connection that raced an in-flight \
+                 blocking command (clear-then-requeue race): idle={}, total_count={}",
+                pool.idle.len(),
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire)
+            );
+            drop(pool);
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -3732,6 +4317,456 @@ pub(crate) mod shared_client_tests {
             assert_eq!(
                 get_result2,
                 Value::BulkString(b"value_after_rotation".to_vec().into())
+            );
+        });
+    }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS. Distinct from the `iam_tests`-gated
+    /// `setup_mock_aws_credentials` above: this test runs under plain `proto`
+    /// (no real ElastiCache/MemoryDB endpoint needed) since the local server
+    /// accepts any AUTH password for the configured user (see `nopass` below).
+    #[cfg(feature = "proto")]
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    /// Starts a local server with an IAM-style `nopass` user and returns the
+    /// server, its address, and the protobuf request configured for IAM auth.
+    #[cfg(feature = "proto")]
+    async fn setup_iam_local_server(
+        iam_username: &str,
+    ) -> (
+        RedisServer,
+        redis::ConnectionAddr,
+        glide_core::connection_request::ConnectionRequest,
+    ) {
+        use ::protobuf::MessageField;
+        use glide_core::connection_request as protobuf;
+        use protobuf::TlsMode;
+        use protobuf::{AuthenticationInfo as ProtoAuthInfo, IamCredentials, NodeAddress};
+        use protobuf::{
+            ConnectionRequest as ProtoConnectionRequest, ServiceType as ProtoServiceType,
+        };
+
+        // `nopass` means ACL ignores the supplied password entirely (verified
+        // empirically: `AUTH iamuser <anything>` succeeds), which is the closest
+        // local stand-in for how a real ElastiCache/MemoryDB IAM-enabled user
+        // accepts a valid-looking SigV4-signed token without the test having
+        // real AWS access.
+        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let addr = server.get_client_addr();
+        let (host, port) = match &addr {
+            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
+        };
+
+        let setup_client = redis::Client::open(redis::ConnectionInfo {
+            addr: addr.clone(),
+            redis: RedisConnectionInfo::default(),
+        })
+        .unwrap();
+        let mut setup_conn = retry(|| async {
+            setup_client
+                .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                .await
+                .ok()
+        })
+        .await;
+        let mut acl_cmd = redis::cmd("ACL");
+        acl_cmd
+            .arg("SETUSER")
+            .arg(iam_username)
+            .arg("on")
+            .arg("allkeys")
+            .arg("+@all")
+            .arg("nopass");
+        setup_conn
+            .send_packed_command(&acl_cmd)
+            .await
+            .expect("ACL SETUSER should succeed");
+
+        let mut proto_request = ProtoConnectionRequest::new();
+        proto_request.addresses.push(NodeAddress {
+            host: host.clone().into(),
+            port: port.into(),
+            ..Default::default()
+        });
+        proto_request.tls_mode = TlsMode::NoTls.into();
+        let mut iam_credentials = IamCredentials::new();
+        iam_credentials.cluster_name = "test-scope-iam-cluster".into();
+        iam_credentials.region = "us-east-1".into();
+        iam_credentials.service_type = ProtoServiceType::ELASTICACHE.into();
+        let mut auth_info = ProtoAuthInfo::new();
+        auth_info.username = iam_username.into();
+        auth_info.iam_credentials = MessageField(Some(Box::new(iam_credentials)));
+        proto_request.authentication_info = MessageField(Some(Box::new(auth_info)));
+
+        (server, addr, proto_request)
+    }
+
+    /// Reads `cmdstat_auth`'s `calls=` counter from `INFO commandstats`.
+    #[cfg(feature = "proto")]
+    async fn auth_call_count(conn: &mut redis::aio::MultiplexedConnection) -> u64 {
+        let info_cmd = redis::cmd("INFO").arg("commandstats").to_owned();
+        let raw = conn
+            .send_packed_command(&info_cmd)
+            .await
+            .expect("INFO commandstats should succeed");
+        let text = match raw {
+            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Value::VerbatimString { text, .. } => text,
+            Value::SimpleString(s) => s,
+            other => panic!("Unexpected INFO reply shape: {other:?}"),
+        };
+        for line in text.lines() {
+            if let Some(rest) = line.strip_prefix("cmdstat_auth:") {
+                for field in rest.split(',') {
+                    if let Some(calls) = field.strip_prefix("calls=") {
+                        return calls.parse().expect("calls= should be numeric");
+                    }
+                }
+            }
+        }
+        0
+    }
+
+    /// Regression test for the initial AUTH on a scoped connection
+    /// (`create_scope_connection`), isolated from the command-time rotation
+    /// re-authentication that otherwise masks it.
+    ///
+    /// The command is sent with `client: None`, which routes through the raw
+    /// `send_packed_command` fallback in `execute_scope_command`. That fallback
+    /// cannot re-authenticate, so the identity observed here is whatever
+    /// `create_scope_connection`'s init pipeline established and nothing else.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_initial_connect_authenticates_as_iam_user() {
+        use ::protobuf::Message as _;
+        use glide_core::scope;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, _addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let connection_request_bytes = proto_request
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            let client_id = 2u64;
+            scope::register_client(client_id, client.clone());
+
+            let runtime = tokio::runtime::Handle::current();
+            let scope_id = retry(|| {
+                let connection_request_bytes = connection_request_bytes.clone();
+                async {
+                    let result =
+                        scope::try_acquire_scope(client_id, connection_request_bytes, &runtime, 0);
+                    if result >= 0 { Some(result) } else { None }
+                }
+            })
+            .await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope::send_scope_command(scope_id as u64, "ACL", &mut args, None).await;
+
+            let value = response.expect("ACL WHOAMI through the scope should succeed");
+            let whoami = match value {
+                Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                Value::SimpleString(s) => s,
+                other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+            };
+            assert_eq!(
+                whoami, iam_username,
+                "create_scope_connection must AUTH as the IAM identity on initial connect"
+            );
+
+            scope::release_scope(scope_id as u64, client_id, &runtime);
+            scope::unregister_client(client_id);
+        });
+    }
+
+    /// Regression test for the real, binding-facing scope path with IAM
+    /// configured. Checks `create_scope_connection`'s init AUTH via the
+    /// server's `cmdstat_auth` counter, read before any scope command is sent
+    /// — an identity-only check here can't catch a missing init AUTH, since
+    /// `send_command_on_connection`'s rotation-detection would silently repair
+    /// it on the first command. Then confirms the two mechanisms work
+    /// together via `ScopeHandle`'s `Some(&client)` send.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_full_path_authenticates_as_iam_user_with_client() {
+        use ::protobuf::Message as _;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let bytes = proto_request
+                .clone()
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let auth_calls_before_setup = auth_call_count(&mut admin_conn).await;
+
+            let scope = ScopeHandle::setup(client, bytes, 0).await;
+
+            // Read before sending any scope command, so a later self-healing
+            // re-auth can't cover for a missing init AUTH here.
+            let auth_calls_after_setup = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_calls_after_setup - auth_calls_before_setup,
+                1,
+                "create_scope_connection should send exactly one AUTH while establishing \
+                 the scoped connection (before={auth_calls_before_setup}, \
+                 after={auth_calls_after_setup})"
+            );
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope.send("ACL", &mut args).await;
+
+            let value = response.expect("ACL WHOAMI through the scope should succeed");
+            let whoami = match value {
+                Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                Value::SimpleString(s) => s,
+                other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+            };
+            assert_eq!(
+                whoami, iam_username,
+                "scope should authenticate as the IAM identity end-to-end through the \
+                 real Some(&client) path"
+            );
+
+            scope.release();
+        });
+    }
+
+    /// A rejected IAM re-authentication must not leave the connection in the pool:
+    /// the bookmark advances only on success, so a retained connection would retry
+    /// the same failing AUTH for the next borrower.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_failed_iam_reauth_discards_the_scoped_connection() {
+        use ::protobuf::Message as _;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+            let bytes = proto_request
+                .clone()
+                .write_to_bytes()
+                .expect("serialize scope connection request");
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+            let scope = ScopeHandle::setup(client.clone(), bytes, 0).await;
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            scope
+                .send("ACL", &mut args)
+                .await
+                .expect("the scope should work before the credentials change");
+
+            // Revoke `nopass` so the generated IAM token no longer authenticates.
+            let admin_client = redis::Client::open(redis::ConnectionInfo {
+                addr,
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let mut admin_conn = retry(|| async {
+                admin_client
+                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                    .await
+                    .ok()
+            })
+            .await;
+            let mut revoke = redis::cmd("ACL");
+            revoke
+                .arg("SETUSER")
+                .arg(iam_username)
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg("resetpass")
+                .arg(">not-the-iam-token");
+            admin_conn
+                .send_packed_command(&revoke)
+                .await
+                .expect("ACL SETUSER should succeed");
+
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let err = scope
+                .send("ACL", &mut args)
+                .await
+                .expect_err("the rotation's AUTH is rejected, so the command must fail");
+            assert_eq!(
+                err.kind(),
+                redis::ErrorKind::AuthenticationFailed,
+                "a failed re-auth must be identifiable by the caller, got: {err:?}"
+            );
+
+            scope.release();
+
+            let pool = scope.pool.lock().await;
+            assert!(
+                pool.idle.is_empty(),
+                "a connection whose re-auth failed must not be returned to idle"
+            );
+            assert_eq!(
+                pool.total_count.load(std::sync::atomic::Ordering::Acquire),
+                0,
+                "discarding the connection must free its slot"
+            );
+        });
+    }
+
+    /// Regression test for the scope path's IAM rotation re-authentication.
+    ///
+    /// Drives the real consumer, `Client::send_command_on_connection`, with two
+    /// independent `AtomicU64` generation bookmarks on two separate connections,
+    /// and asserts that a single token rotation makes each connection send its own
+    /// `AUTH`. That is precisely what the shared `token_changed` flag could not do:
+    /// whichever consumer looked first cleared it and the other silently missed the
+    /// rotation.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_rotation_reauthenticates_each_connection_independently() {
+        use std::sync::atomic::AtomicU64;
+
+        block_on_all(async {
+            setup_test_credentials();
+
+            let iam_username = "iamuser";
+            let (_server, addr, proto_request) = setup_iam_local_server(iam_username).await;
+
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with IAM config should succeed against local server");
+
+            // Two raw connections standing in for two scoped connections, plus an
+            // admin connection used only to read the server's AUTH counter.
+            let raw_client = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: RedisConnectionInfo::default(),
+            })
+            .unwrap();
+            let open_conn = || async {
+                retry(|| async {
+                    raw_client
+                        .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                        .await
+                        .ok()
+                })
+                .await
+            };
+            let mut conn_a = open_conn().await;
+            let mut conn_b = open_conn().await;
+            let mut admin_conn = open_conn().await;
+
+            // Each connection owns its own bookmark, exactly as `ScopedConnection`
+            // does. A fresh manager sits at generation 1, so 0 always mismatches
+            // and the first command on each connection authenticates.
+            let bookmark_a = AtomicU64::new(0);
+            let bookmark_b = AtomicU64::new(0);
+
+            let whoami_cmd = redis::cmd("ACL").arg("WHOAMI").to_owned();
+            let whoami = |value: redis::RedisResult<Value>| -> String {
+                match value.expect("ACL WHOAMI through send_command_on_connection should succeed") {
+                    Value::BulkString(bytes) => String::from_utf8(bytes.to_vec()).unwrap(),
+                    Value::SimpleString(s) => s,
+                    other => panic!("Unexpected ACL WHOAMI response shape: {other:?}"),
+                }
+            };
+
+            // Initial authentication on both connections. This also covers the
+            // malformed single-argument `AUTH` bug: a one-arg AUTH is rejected by
+            // the server, so an identity assertion here fails without the username.
+            let a_initial = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_initial), iam_username);
+            let b_initial = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .await;
+            assert_eq!(whoami(b_initial), iam_username);
+
+            let auth_calls_before_rotation = auth_call_count(&mut admin_conn).await;
+
+            // One rotation. Both bookmarks are now stale by exactly one generation.
+            client
+                .refresh_iam_token()
+                .await
+                .expect("refresh_iam_token should succeed with IAM configured");
+
+            // Connection A observes the rotation first and updates its bookmark.
+            let a_after = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_after), iam_username);
+
+            // Connection B must still observe the same rotation. Under the shared
+            // `token_changed` flag, A's re-auth above cleared it and this connection
+            // sends no AUTH at all.
+            let b_after = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_b, &bookmark_b, false)
+                .await;
+            assert_eq!(whoami(b_after), iam_username);
+
+            let auth_calls_after_rotation = auth_call_count(&mut admin_conn).await;
+            assert_eq!(
+                auth_calls_after_rotation - auth_calls_before_rotation,
+                2,
+                "a single token rotation must make each connection send its own AUTH \
+                 (before={auth_calls_before_rotation}, after={auth_calls_after_rotation})"
+            );
+
+            // And no further AUTH once both bookmarks are current again.
+            let a_settled = client
+                .send_command_on_connection(&whoami_cmd, &mut conn_a, &bookmark_a, false)
+                .await;
+            assert_eq!(whoami(a_settled), iam_username);
+            assert_eq!(
+                auth_call_count(&mut admin_conn).await,
+                auth_calls_after_rotation,
+                "an up-to-date bookmark must not re-authenticate"
             );
         });
     }

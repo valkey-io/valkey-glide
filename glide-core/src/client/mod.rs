@@ -26,7 +26,7 @@ use redis::{
 use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
@@ -240,29 +240,39 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
     }
 }
 
+/// Matches the optional-tag structure of a library name.
 static LIB_NAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\A[\x21-\x27\x2A-\x7E]+(?:\([\x21-\x27\x2A-\x7E]+\))?\z")
-        .expect("library name regex must be valid")
+    Regex::new(r"\A[^()]+(?:\([^()]+\))?\z").expect("library name tag regex must be valid")
 });
 
-/// Validate a binding-composed runtime library name before client creation.
-///
-/// Empty values are treated as absent. Non-empty values must contain only printable ASCII
-/// characters and may contain at most one ordered, matched pair of parentheses introduced by
-/// binding-local `base(tag)` composition.
-pub(crate) fn validate_effective_lib_name(lib_name: Option<&str>) -> Result<(), String> {
-    let Some(lib_name) = lib_name else {
-        return Ok(());
-    };
-
-    if lib_name.is_empty() || LIB_NAME_PATTERN.is_match(lib_name) {
-        Ok(())
-    } else {
-        Err(
-            "library name must contain only printable ASCII characters from '!' through '~' and parentheses must form a non-empty trailing '(tag)'"
-                .to_string(),
-        )
+/// Validate whether a library name:
+///   - is non-empty;
+///   - contains only printable ASCII characters;
+///   - matches the library name pattern with optional tag – 'name' or 'name(tag)'.
+pub(crate) fn validate_effective_lib_name(lib_name: &str) -> Result<(), String> {
+    if lib_name.is_empty() {
+        return Err("library name must not be empty".to_string());
     }
+    if !lib_name.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library name must contain only printable ASCII characters".to_string());
+    }
+    if !LIB_NAME_PATTERN.is_match(lib_name) {
+        return Err("library name parentheses must form a non-empty trailing '(tag)'".to_string());
+    }
+    Ok(())
+}
+
+/// Validate whether a library version:
+///   - is non-empty; and
+///   - contains only printable ASCII characters.
+pub(crate) fn validate_effective_lib_ver(lib_ver: &str) -> Result<(), String> {
+    if lib_ver.is_empty() {
+        return Err("library version must not be empty".to_string());
+    }
+    if !lib_ver.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err("library version must contain only printable ASCII characters".to_string());
+    }
+    Ok(())
 }
 
 /// Get Valkey connection info with IAM token integration
@@ -279,6 +289,7 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
+    let lib_ver = connection_request.lib_ver.clone();
     let cache = connection_request
         .client_side_cache
         .clone()
@@ -316,6 +327,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -328,6 +340,7 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    lib_ver,
                     cache,
                     server_assisted_cache,
                 }
@@ -338,6 +351,7 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
+            lib_ver,
             cache,
             server_assisted_cache,
             ..Default::default()
@@ -587,9 +601,28 @@ fn get_timeout_from_cmd_arg(
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
     match command.as_slice() {
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // `command()` already normalizes the name to uppercase, so pass it through
+        // to the shared name-based check (empty args slice — the only arg-dependent
+        // case, XREAD/XREADGROUP, is handled above via `cmd.position`).
+        name => is_blocking_command_name(name, &[]),
+    }
+}
+
+/// Blocking-command check that avoids building a `redis::Cmd`.
+///
+/// `name` is the command name (matched case-insensitively); `args` are the
+/// remaining arguments, scanned only for the `BLOCK` token of XREAD/XREADGROUP.
+/// This lets FFI hot paths detect blocking commands without allocating a `Cmd`
+/// and copying every argument byte (e.g. a large SET payload). It recognizes the
+/// exact same set as [`is_blocking_command`].
+pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
+    let upper = name.to_ascii_uppercase();
+    match upper.as_slice() {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
-        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
+        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
     }
 }
@@ -626,6 +659,13 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Returns the parent client's IAM token manager, if IAM authentication is configured.
+    /// Used by scoped connections to authenticate as the IAM identity instead of
+    /// running unauthenticated.
+    pub(crate) fn iam_token_manager(&self) -> Option<&Arc<crate::iam::IAMTokenManager>> {
+        self.iam_token_manager.as_ref()
+    }
+
     /// Checks if the given command is a SELECT command.
     /// Returns true if the command is "SELECT", false otherwise.
     /// Handles cases where command() returns None gracefully.
@@ -1549,6 +1589,9 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
+    /// IAM change-detection here uses `last_seen_generation` (owned by the caller)
+    /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
+    ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
     /// connections operate outside the multiplexer's pipeline. OTel support for
     /// scopes is tracked as a follow-up enhancement.
@@ -1556,21 +1599,59 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
+        last_seen_generation: &AtomicU64,
+        defer_reauth: bool,
     ) -> RedisResult<Value> {
-        // IAM token refresh: if token rotated, re-authenticate this connection
-        if let Some(iam_manager) = &self.iam_token_manager
-            && iam_manager.token_changed()
-        {
-            let current_token = iam_manager.get_token().await;
-            if !current_token.is_empty() {
-                iam_manager.clear_token_changed();
-                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
-                connection.send_packed_command(&auth_cmd).await?;
+        // IAM token refresh: re-authenticate when the token rotated (generation
+        // advanced since this connection last applied one). `defer_reauth` skips it
+        // where AUTH can't run — an open transaction (queued, corrupting the EXEC
+        // reply) or RESP2 subscribed mode (rejected outright). The bookmark stays
+        // unadvanced, so it retries after EXEC/DISCARD, or on the next borrow for
+        // subscribed mode (subscriptions clear only on release).
+        if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
+            let current_generation = iam_manager.token_generation();
+            if current_generation != last_seen_generation.load(Ordering::Acquire) {
+                let current_token = iam_manager.get_token().await;
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
+                }
+                let auth_cmd = redis::cmd("AUTH")
+                    .arg(iam_manager.username())
+                    .arg(current_token.as_str())
+                    .to_owned();
+                // Signals both failure modes as AuthenticationFailed so the caller
+                // discards the connection. The server never produces this kind
+                // itself, so it can't be confused with a command's own auth error.
+                match tokio::time::timeout(
+                    self.request_timeout,
+                    connection.send_packed_command(&auth_cmd),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication failed",
+                            e.to_string(),
+                        )));
+                    }
+                    Err(_) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication timed out",
+                        )));
+                    }
+                }
+                last_seen_generation.store(current_generation, Ordering::Release);
             }
         }
 
         // Compression on write: compress command args if compression is enabled
-        let cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
+        let mut cmd_to_send = if let Some(ref compression_manager) = self.compression_manager {
             if compression_manager.is_enabled() {
                 // Clone the command and apply compression to its args
                 // Note: for scope commands, args are already serialized — this handles
@@ -1584,7 +1665,14 @@ impl Client {
             cmd.clone()
         };
 
-        let request_timeout = Some(self.request_timeout);
+        // Blocking commands must honor their own timeout, not the flat request timeout.
+        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        // Scoped connections use Duration::MAX as their base response timeout, so
+        // without this, the pipeline driver's slow-response warning (gated on
+        // `!is_blocking_cmd`) fires for any legitimately-blocking command that
+        // waits past its threshold — mirrors the multiplexed path (see
+        // `set_is_blocking` above in `send_command`).
+        cmd_to_send.set_is_blocking(is_blocking_command(cmd));
 
         // Send with timeout
         let raw_value = match request_timeout {
@@ -2160,7 +2248,7 @@ impl Client {
     /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-    ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
+    ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
@@ -2169,24 +2257,23 @@ impl Client {
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
+                    iam_config.credentials_provider.clone(),
                 )
                 .await
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
-                        Some(std::sync::Arc::new(token_manager))
+                        Ok(Some(std::sync::Arc::new(token_manager)))
                     }
-                    Err(e) => {
-                        log_error("IAM", format!("Failed to create IAM token manager: {e}"));
-                        None
-                    }
+                    Err(e) => Err(ConnectionError::IAMError(e.to_string())),
                 }
             } else {
-                log_error("IAM", "IAM authentication requires a username");
-                None
+                Err(ConnectionError::IAMError(
+                    "IAM authentication requires a username".to_string(),
+                ))
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -2513,6 +2600,9 @@ async fn create_cluster_client(
     if let Some(lib_name) = valkey_connection_info.lib_name {
         builder = builder.lib_name(lib_name);
     }
+    if let Some(lib_ver) = valkey_connection_info.lib_ver {
+        builder = builder.lib_ver(lib_ver);
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
@@ -2630,6 +2720,7 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    IAMError(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -2640,6 +2731,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
         }
     }
 }
@@ -2652,6 +2744,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
         }
     }
 }
@@ -2828,8 +2921,13 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        validate_effective_lib_name(request.lib_name.as_deref())
-            .map_err(ConnectionError::Configuration)?;
+        // Validate library name and version.
+        if let Some(lib_name) = request.lib_name.as_deref() {
+            validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
+        }
+        if let Some(lib_ver) = request.lib_ver.as_deref() {
+            validate_effective_lib_ver(lib_ver).map_err(ConnectionError::Configuration)?;
+        }
 
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
@@ -2962,7 +3060,7 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await
+                Self::create_iam_token_manager(auth_info).await?
             } else {
                 None
             };
@@ -3200,7 +3298,7 @@ mod tests {
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, CommandInput, RequestTimeoutOption, TimeUnit,
-        get_request_timeout, is_blocking_command,
+        get_request_timeout, is_blocking_command, is_blocking_command_name,
     };
 
     #[test]
@@ -3296,20 +3394,18 @@ mod tests {
         Client, ClientWrapper, ConnectionError, LazyClient, MGET_PIPELINE_MAX_KEY_BYTES,
         MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo,
         get_timeout_from_cmd_arg, should_route_multislot_mget_as_pipeline,
-        validate_effective_lib_name,
+        validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
     #[test]
     fn test_validate_effective_lib_name_accepts_supported_values() {
         for lib_name in [
-            None,
-            Some(""),
-            Some("!"),
-            Some("~"),
-            Some("GlideRust"),
-            Some("client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~"),
-            Some("GlideJava(framework:1.2)"),
+            "!",
+            "~",
+            "GlideRust",
+            "client!#$%&'*+,-./:;<=>?@[\\]^_`{|}~",
+            "GlideJava(framework:1.2)",
         ] {
             assert_eq!(
                 validate_effective_lib_name(lib_name),
@@ -3322,6 +3418,7 @@ mod tests {
     #[test]
     fn test_validate_effective_lib_name_rejects_invalid_values() {
         for lib_name in [
+            "",
             "Glide Rust",
             "Glide\tRust",
             "Glide\nRust",
@@ -3337,7 +3434,7 @@ mod tests {
             "GlideRust()",
         ] {
             assert!(
-                validate_effective_lib_name(Some(lib_name)).is_err(),
+                validate_effective_lib_name(lib_name).is_err(),
                 "{lib_name:?} should be rejected"
             );
         }
@@ -3362,6 +3459,52 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_accepts_supported_values() {
+        for lib_ver in ["unknown", "0.2.0", "1.2.3-rc.1+build.5", "255.255.255"] {
+            assert_eq!(validate_effective_lib_ver(lib_ver), Ok(()), "{lib_ver:?}");
+        }
+    }
+
+    #[test]
+    fn test_validate_effective_lib_ver_rejects_invalid_values() {
+        for lib_ver in [
+            "",
+            "1.2.3 ",
+            "1.2 3",
+            "1.2\t3",
+            "1.2\n3",
+            "1.2\u{7f}3",
+            "1.2.é",
+        ] {
+            assert!(
+                validate_effective_lib_ver(lib_ver).is_err(),
+                "{lib_ver:?} should be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_new_rejects_invalid_lib_ver_before_lazy_client_creation() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            lib_ver: Some("bad version".to_string()),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid library version should fail client creation"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, ConnectionError::Configuration(_)));
+        assert!(error.to_string().contains("library version"));
     }
 
     #[test]
@@ -4050,5 +4193,166 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value");
         assert!(!is_blocking_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command_name() {
+        // Direct cases.
+        assert!(is_blocking_command_name(b"BLPOP", &[]));
+        assert!(!is_blocking_command_name(b"GET", &[]));
+
+        // XREAD/XREADGROUP block only when a BLOCK token is present in args.
+        let streams: Vec<Vec<u8>> = vec![b"STREAMS".to_vec(), b"s".to_vec(), b"$".to_vec()];
+        assert!(!is_blocking_command_name(b"XREAD", &streams));
+        let with_block: Vec<Vec<u8>> = vec![
+            b"BLOCK".to_vec(),
+            b"0".to_vec(),
+            b"STREAMS".to_vec(),
+            b"s".to_vec(),
+            b"$".to_vec(),
+        ];
+        assert!(is_blocking_command_name(b"XREAD", &with_block));
+
+        // Case-insensitive on both the command name and the BLOCK token.
+        assert!(is_blocking_command_name(b"blpop", &[]));
+        let with_block_lower: Vec<Vec<u8>> =
+            vec![b"block".to_vec(), b"0".to_vec(), b"STREAMS".to_vec()];
+        assert!(is_blocking_command_name(b"xread", &with_block_lower));
+
+        // Behavioral parity with `is_blocking_command` over a representative table.
+        // Each entry: (name, args, expected). `expected` is written out explicitly
+        // (rather than comparing `via_cmd == via_name`) so that a regression in
+        // either function's match arms is caught: for every non-XREAD/XREADGROUP
+        // name, `is_blocking_command` just forwards to `is_blocking_command_name`,
+        // so comparing the two outputs to each other can never fail if a command
+        // is accidentally dropped from `is_blocking_command_name`'s match arms —
+        // both sides would agree on the same (wrong) answer.
+        let table: &[(&str, &[&str], bool)] = &[
+            ("BLPOP", &["key", "0"], true),
+            ("BRPOP", &["key", "5"], true),
+            ("BLMOVE", &["src", "dst", "LEFT", "RIGHT", "0"], true),
+            ("BRPOPLPUSH", &["src", "dst", "0"], true),
+            ("BLMPOP", &["0", "1", "key", "LEFT"], true),
+            ("BZPOPMIN", &["key", "0"], true),
+            ("BZPOPMAX", &["key", "0"], true),
+            ("BZMPOP", &["0", "1", "key", "MIN"], true),
+            ("WAIT", &["0", "100"], true),
+            ("WAITAOF", &["0", "0", "100"], true),
+            ("XREAD", &["STREAMS", "s", "$"], false),
+            ("XREAD", &["BLOCK", "0", "STREAMS", "s", "$"], true),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "STREAMS", "s", ">"],
+                false,
+            ),
+            (
+                "XREADGROUP",
+                &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"],
+                true,
+            ),
+            ("GET", &["key"], false),
+            ("SET", &["key", "value"], false),
+            ("LPUSH", &["key", "value"], false),
+        ];
+        for (name, args, expected) in table {
+            let mut cmd = Cmd::new();
+            cmd.arg(*name);
+            for a in *args {
+                cmd.arg(*a);
+            }
+            let via_cmd = is_blocking_command(&cmd);
+            let arg_vecs: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+            let via_name = is_blocking_command_name(name.as_bytes(), &arg_vecs);
+            assert_eq!(
+                via_cmd, *expected,
+                "is_blocking_command mismatch for {name} {args:?}: got {via_cmd}, expected {expected}"
+            );
+            assert_eq!(
+                via_name, *expected,
+                "is_blocking_command_name mismatch for {name} {args:?}: got {via_name}, expected {expected}"
+            );
+        }
+    }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS (same approach as `iam::tests::setup_test_credentials`).
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_username_accessor_returns_configured_username() {
+        setup_test_credentials();
+
+        let manager = crate::iam::IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "iam-test-user".to_string(),
+            "us-east-1".to_string(),
+            crate::iam::ServiceType::ElastiCache,
+            None,
+            None,
+        )
+        .await
+        .expect("IAMTokenManager creation should succeed with fake credentials");
+
+        assert_eq!(manager.username(), "iam-test-user");
+    }
+
+    #[tokio::test]
+    async fn test_client_iam_token_manager_accessor() {
+        setup_test_credentials();
+
+        // With IAM configured, Client::new should populate the IAM token manager,
+        // and the new accessor should expose it (used by scoped connections to
+        // authenticate as the IAM identity instead of running unauthenticated).
+        let iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let client = Client::new(iam_request, None)
+            .await
+            .expect("lazy client creation with IAM config should succeed");
+
+        let manager = client
+            .iam_token_manager()
+            .expect("iam_token_manager() should return Some when IAM is configured");
+        assert_eq!(manager.username(), "iam-test-user");
+
+        // Without IAM configured, the accessor should return None.
+        let non_iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let non_iam_client = Client::new(non_iam_request, None)
+            .await
+            .expect("lazy client creation without IAM config should succeed");
+        assert!(
+            non_iam_client.iam_token_manager().is_none(),
+            "iam_token_manager() should return None when IAM is not configured"
+        );
     }
 }

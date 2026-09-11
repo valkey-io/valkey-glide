@@ -14,6 +14,7 @@ use crate::compression::CompressionBackendType;
 use crate::compression::CompressionConfig;
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
+use crate::iam::CredentialsProvider;
 use crate::iam::ServiceType;
 #[cfg(feature = "proto")]
 #[allow(unused_imports)]
@@ -24,6 +25,7 @@ pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
     pub client_name: Option<String>,
     pub lib_name: Option<String>,
+    pub lib_ver: Option<String>,
     pub authentication_info: Option<AuthenticationInfo>,
     pub database_id: i64,
     pub protocol: Option<redis::ProtocolVersion>,
@@ -126,7 +128,7 @@ pub struct AuthenticationInfo {
 ///
 /// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
 /// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone)]
 pub struct IamAuthenticationConfig {
     /// AWS ElastiCache or MemoryDB cluster name
     pub cluster_name: String,
@@ -139,6 +141,49 @@ pub struct IamAuthenticationConfig {
 
     /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
     pub refresh_interval_seconds: Option<u32>,
+
+    /// Optional custom credentials callback.
+    ///
+    /// When `Some`, this closure is invoked to retrieve AWS credentials
+    /// `(access_key_id, secret_access_key, session_token)` for SigV4 token signing
+    /// instead of the default AWS credential chain.
+    pub credentials_provider: Option<CredentialsProvider>,
+}
+
+impl PartialEq for IamAuthenticationConfig {
+    fn eq(&self, other: &Self) -> bool {
+        // credentials_provider is not comparable; two configs are equal if all
+        // other fields match and both have (or neither has) a callback.
+        self.cluster_name == other.cluster_name
+            && self.region == other.region
+            && self.service_type == other.service_type
+            && self.refresh_interval_seconds == other.refresh_interval_seconds
+            && match (&self.credentials_provider, &other.credentials_provider) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for IamAuthenticationConfig {}
+
+impl std::fmt::Debug for IamAuthenticationConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IamAuthenticationConfig")
+            .field("cluster_name", &self.cluster_name)
+            .field("region", &self.region)
+            .field("service_type", &self.service_type)
+            .field("refresh_interval_seconds", &self.refresh_interval_seconds)
+            .field(
+                "credentials_provider",
+                &self
+                    .credentials_provider
+                    .as_ref()
+                    .map(|_| "<custom callback>"),
+            )
+            .finish()
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -300,6 +345,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     region,
                     service_type,
                     refresh_interval_seconds,
+                    credentials_provider: None,
                 }
             });
 
@@ -490,6 +536,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             read_from,
             client_name,
             lib_name,
+            lib_ver: None, // Protobuf-based clients set library version via `GLIDE_VERSION`.
             authentication_info,
             database_id,
             protocol,
@@ -539,6 +586,23 @@ mod tests {
         use crate::compression::CompressionBackendType;
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
+
+        #[test]
+        fn test_lib_name_and_ver() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let name = "LibraryName";
+            proto_request.lib_name = name.into();
+
+            let request: ConnectionRequest = proto_request.into();
+            assert_eq!(request.lib_name.as_deref(), Some(name));
+            assert_eq!(request.lib_ver, None);
+        }
 
         #[test]
         fn test_compression_config_conversion_none() {
