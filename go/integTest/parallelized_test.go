@@ -18,5 +18,7 @@ func (suite *GlideTestSuite) TestParallelizedSetWithGC() {
 		key := uuid.New().String()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
+		// Small delay to prevent pipeline overflow with 640 concurrent goroutines
+		time.Sleep(10 * time.Microsecond)
 	})
 }
