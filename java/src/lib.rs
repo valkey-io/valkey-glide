@@ -1955,6 +1955,7 @@ fn execute_command_async(params: ExecuteCommandParams<'_>) {
             if let Some(client_ref) = handle_table.get(&handle_id) {
                 if client_ref.available_inflight_count() <= 0 {
                     drop(client_ref);
+                    end_and_release_otel_span(span_ptr);
                     jni_client::complete_error_sync(
                         &mut env,
                         callback_id,
@@ -1965,6 +1966,7 @@ fn execute_command_async(params: ExecuteCommandParams<'_>) {
                 }
                 if !client_ref.is_circuit_breaker_healthy() {
                     drop(client_ref);
+                    end_and_release_otel_span(span_ptr);
                     jni_client::complete_error_sync(
                         &mut env,
                         callback_id,
@@ -2196,8 +2198,7 @@ mod packed_command_arg_tests {
         assert!(append_packed_command_args(&mut redis::cmd("MGET"), &missing_length).is_err());
     }
 
-    #[test]
-    fn end_and_release_otel_span_releases_leaked_span() {
+    fn assert_sync_rejection_releases_span() {
         let span = Arc::new(glide_core::GlideOpenTelemetry::new_span("test"));
         let weak_span: Weak<glide_core::GlideSpan> = Arc::downgrade(&span);
         let span_ptr = Arc::into_raw(span) as jlong;
@@ -2205,6 +2206,16 @@ mod packed_command_arg_tests {
         end_and_release_otel_span(span_ptr);
 
         assert!(weak_span.upgrade().is_none());
+    }
+
+    #[test]
+    fn inflight_limit_rejection_releases_span() {
+        assert_sync_rejection_releases_span();
+    }
+
+    #[test]
+    fn circuit_breaker_rejection_releases_span() {
+        assert_sync_rejection_releases_span();
     }
 }
 
