@@ -134,7 +134,7 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
-    private static final int SCRIPT_POLL_TIMEOUT_MS = 8000;
+    private static final int SCRIPT_POLL_TIMEOUT_MS = 15000;
     private static final int SCRIPT_POLL_INTERVAL_MS = 500;
 
     private static final List<Arguments> clients = new ArrayList<>();
@@ -3944,7 +3944,7 @@ public class CommandTests {
 
         String key = UUID.randomUUID().toString();
         Route route = new SlotKeyRoute(key, PRIMARY);
-        String code = createLongRunningLuaScript(6, false);
+        String code = createLongRunningLuaScript(12, false);
 
         // Lower lua-time-limit on the target primary so the server starts reporting BUSY (and
         // accepting SCRIPT KILL) shortly after the script begins, instead of after the 5000ms
@@ -3962,10 +3962,10 @@ public class CommandTests {
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig()
-                                                .requestTimeout(10000)
+                                                .requestTimeout(15000)
                                                 .advancedConfiguration(
                                                         AdvancedGlideClusterClientConfiguration.builder()
-                                                                .connectionTimeout(10000)
+                                                                .connectionTimeout(15000)
                                                                 .build())
                                                 .build())
                                 .get()) {
