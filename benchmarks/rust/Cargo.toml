@@ -13,7 +13,7 @@ glide-core = { path = "../../glide-core" }
 logger_core = { path = "../../logger_core" }
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 futures = "0.3.28"
-rand = "0.8.5"
+rand = "0.10.1"
 itoa = "1.0.6"
 clap = { version = "4.3.8", features = ["derive"] }
 chrono = "0.4.26"
