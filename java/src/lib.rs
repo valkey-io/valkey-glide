@@ -1900,11 +1900,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         // is_blocking=false in the window between spawn() and task execution on
         // a worker thread (Bug fix: pre-spawn flag race).
         let pre_blocking_arc: Option<Arc<AtomicBool>> = {
-            let proto_rt = protobuf::EnumOrUnknown::<
-                glide_core::command_request::RequestType,
-            >::from_i32(request_type);
+            let proto_rt =
+                protobuf::EnumOrUnknown::<glide_core::command_request::RequestType>::from_i32(
+                    request_type,
+                );
             let rt: glide_core::request_type::RequestType = proto_rt.into();
-            let is_blocking = if matches!(rt, glide_core::request_type::RequestType::CustomCommand) {
+            let is_blocking = if matches!(rt, glide_core::request_type::RequestType::CustomCommand)
+            {
                 // For CustomCommand the actual command name is args_data[0].
                 // Use is_blocking_command_name with the remaining args so XREAD BLOCK is
                 // handled correctly.
@@ -2287,10 +2289,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         && let Some(entry) =
                             crate::jni_pool::get_pool_client_map().get(&client_handle_id)
                     {
-                        glide_core::pool::refresh_client_activity(
-                            *entry.value(),
-                            client_handle_id,
-                        );
+                        glide_core::pool::refresh_client_activity(*entry.value(), client_handle_id);
                     }
 
                     let binary_mode = expect_utf8 == 0;

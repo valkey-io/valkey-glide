@@ -16,8 +16,8 @@ use glide_core::connection_request::ConnectionRequest as ProtobufConnectionReque
 use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
 use glide_core::scope;
 use napi::bindgen_prelude::*;
-use napi::{Env, Error, Result, Status};
 use napi::threadsafe_function::ThreadsafeFunction;
+use napi::{Env, Error, Result, Status};
 use napi_derive::napi;
 use protobuf::Message;
 use redis::PushInfo;
@@ -229,7 +229,8 @@ pub fn create_pool<'a>(
 
             // Notify caller that the first connection succeeded.
             if i == 0
-                && let Some(tx) = first_tx_opt.take() {
+                && let Some(tx) = first_tx_opt.take()
+            {
                 let _ = tx.send(Ok(()));
             }
         }
@@ -296,8 +297,14 @@ pub fn pool_build_handle<'a>(
         // push_receiver will never receive any messages.
         let (_push_sender, push_receiver) = mpsc::unbounded_channel::<PushInfo>();
 
-        match create_handle_for_client(client, push_receiver, wake_tsfn, inflight_requests_limit, Some(client_id_u64))
-            .await
+        match create_handle_for_client(
+            client,
+            push_receiver,
+            wake_tsfn,
+            inflight_requests_limit,
+            Some(client_id_u64),
+        )
+        .await
         {
             Ok(handle) => deferred.resolve(|_| Ok(handle)),
             Err(e) => deferred.reject(e),
@@ -372,10 +379,7 @@ fn maybe_spawn_on_demand_creation(
                 condvar.notify_all();
             }
             Err(e) => {
-                logger_core::log_warn(
-                    "pool",
-                    format!("On-demand pool creation failed: {e}"),
-                );
+                logger_core::log_warn("pool", format!("On-demand pool creation failed: {e}"));
                 // Release the pre-reserved slot.
                 let pg = pool_entry.lock().await;
                 pg.total_count

@@ -244,7 +244,8 @@ pub unsafe extern "C" fn glide_pool_create(
                             // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
                             // p.next_id() would generate a different ID, breaking the adapter lookup.
                             let client_id = pre_cid as u64;
-                            let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                            let flag =
+                                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                             let entry = PooledClient {
                                 client_id,
                                 client: client.clone(),
@@ -347,7 +348,8 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                                 // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
                                 // p.next_id() would generate a different ID, breaking the adapter lookup.
                                 let client_id = pre_cid as u64;
-                                let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                                let flag =
+                                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                                 let entry = PooledClient {
                                     client_id,
                                     client: client.clone(),
@@ -464,14 +466,18 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                                         // via mem::forget; glide_pool_destroy cannot find this orphaned
                                         // pointer because it was never stored in get_pool_clients().
                                         unsafe {
-                                            drop(Arc::from_raw(adapter_ptr as *const ClientAdapter));
+                                            drop(Arc::from_raw(
+                                                adapter_ptr as *const ClientAdapter,
+                                            ));
                                         }
                                         return;
                                     }
                                     // Use pre_cid (allocated before lock) to match POOL_ADAPTER_MAP entry;
                                     // p.next_id() would generate a different ID, breaking the adapter lookup.
                                     let cid = pre_cid as u64;
-                                    let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                                    let flag = std::sync::Arc::new(
+                                        std::sync::atomic::AtomicBool::new(false),
+                                    );
                                     let entry = PooledClient {
                                         client_id: cid,
                                         client: client.clone(),

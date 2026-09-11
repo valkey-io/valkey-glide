@@ -218,9 +218,7 @@ export class ClientPool {
         ).clientHandle?.closeForPoolRelease?.();
 
         // Null out the handle to prevent use-after-release.
-        (
-            client as unknown as { clientHandle: null }
-        ).clientHandle = null;
+        (client as unknown as { clientHandle: null }).clientHandle = null;
 
         // Rust state reset + return to idle.
         await poolRelease(this.poolId, clientId);

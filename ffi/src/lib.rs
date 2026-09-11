@@ -4438,9 +4438,8 @@ pub unsafe extern "C-unwind" fn invoke_script(
     }
     // Pre-fetch the blocking Arc so script execution can set is_blocking lock-free (#6971).
     #[cfg(feature = "pool-support")]
-    let script_blocking_arc = script_pool_ids.and_then(|(_, client_id)| {
-        glide_core::pool::get_blocking_flag(client_id)
-    });
+    let script_blocking_arc =
+        script_pool_ids.and_then(|(_, client_id)| glide_core::pool::get_blocking_flag(client_id));
     #[cfg(not(feature = "pool-support"))]
     let script_pool_ids: Option<(u64, u64)> = None;
     #[cfg(not(feature = "pool-support"))]
@@ -4596,9 +4595,8 @@ pub unsafe extern "C" fn batch(
     }
     // Pre-fetch the blocking Arc so batch execution can set is_blocking lock-free (#6971).
     #[cfg(feature = "pool-support")]
-    let batch_blocking_arc = batch_pool_ids.and_then(|(_, client_id)| {
-        glide_core::pool::get_blocking_flag(client_id)
-    });
+    let batch_blocking_arc =
+        batch_pool_ids.and_then(|(_, client_id)| glide_core::pool::get_blocking_flag(client_id));
     #[cfg(not(feature = "pool-support"))]
     let batch_pool_ids: Option<(u64, u64)> = None;
     #[cfg(not(feature = "pool-support"))]
