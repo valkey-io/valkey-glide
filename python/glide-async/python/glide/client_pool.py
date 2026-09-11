@@ -19,6 +19,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
 )
 from glide_shared.connection_request import _create_async_connection_request
+from glide_shared.ffi_helpers import create_credential_provider_callback
 
 from .glide_client import (
     _ASYNC_FFI,
@@ -61,6 +62,7 @@ class AsyncClientPool:
         "_pool_id",
         "_cache_lock",
         "_is_cluster",
+        "_credential_provider_callback_ref",
     )
 
     @classmethod
@@ -120,6 +122,7 @@ class AsyncClientPool:
         self._client_cache: dict = {}
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
+        self._credential_provider_callback_ref = None
 
         # Serialize connection request. Route through the shared helper so
         # pooled clients honour lib_name / client_info_tag exactly like direct
@@ -161,6 +164,35 @@ class AsyncClientPool:
         client_type.async_client.failure_callback = self._lib.noop_failure_callback
         client_type.async_client.allow_stack_response = False
 
+        # Extract credential provider from IAM config if set
+        _credential_provider_fn = None
+        if (
+            hasattr(client_config, "credentials")
+            and client_config.credentials is not None
+            and hasattr(client_config.credentials, "iam_config")
+            and client_config.credentials.iam_config is not None
+            and hasattr(client_config.credentials.iam_config, "credential_provider")
+            and client_config.credentials.iam_config.credential_provider is not None
+        ):
+            _credential_provider_fn = (
+                client_config.credentials.iam_config.credential_provider
+            )
+
+        # Get the event loop for async credential providers
+        try:
+            import asyncio as _asyncio
+
+            _event_loop = _asyncio.get_running_loop()
+        except RuntimeError:
+            _event_loop = None
+
+        credential_provider_callback = create_credential_provider_callback(
+            self._ffi, _credential_provider_fn, event_loop=_event_loop
+        )
+        if _credential_provider_fn is not None:
+            # Keep a reference so the CFFI callback is not garbage-collected
+            self._credential_provider_callback_ref = credential_provider_callback
+
         buf = self._ffi.from_buffer(self._conn_req_bytes)
         pool_id = self._lib.glide_pool_create(
             self._pool_config.max_size,
@@ -171,6 +203,7 @@ class AsyncClientPool:
             self._ffi.cast("const uint8_t*", buf),
             len(self._conn_req_bytes),
             client_type,
+            credential_provider_callback,
         )
         if pool_id < 0:
             raise RuntimeError(f"Failed to create pool: error code {pool_id}")
