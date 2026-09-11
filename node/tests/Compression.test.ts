@@ -32,7 +32,7 @@ import {
     parseEndpoints,
 } from "./TestUtilities";
 
-const TIMEOUT = 30000;
+const TIMEOUT = 50000;
 const COMPRESSIBLE_PATTERN = "A".repeat(10) + "B".repeat(10) + "C".repeat(10);
 
 function generateCompressibleText(sizeBytes: number): string {
@@ -77,22 +77,27 @@ describe("Compression", () => {
 
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT as string;
-        standaloneCluster = standaloneAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  false,
-                  parseEndpoints(standaloneAddresses),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-
         const clusterAddresses = global.CLUSTER_ENDPOINTS as string;
-        clusterCluster = clusterAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  true,
-                  parseEndpoints(clusterAddresses),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+
+        // The standalone and cluster instances are independent, so provision
+        // them concurrently to keep setup within the hook deadline on slower
+        // CI runners.
+        [standaloneCluster, clusterCluster] = await Promise.all([
+            standaloneAddresses
+                ? ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : ValkeyCluster.createCluster(false, 1, 1, getServerVersion),
+            clusterAddresses
+                ? ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : ValkeyCluster.createCluster(true, 3, 1, getServerVersion),
+        ]);
     }, TIMEOUT);
 
     afterEach(async () => {
