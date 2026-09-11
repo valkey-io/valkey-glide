@@ -23,7 +23,6 @@ func skipIfNotEnabled(suite *GlideTestSuite, useTLS bool) {
 		suite.T().Skip("DNS tests are not enabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.")
 	}
 
-	// TODO #5509: TLS tests do not currently run as part of CI.
 	if useTLS {
 		skipIfTlsDisabled(suite)
 	} else {
@@ -38,22 +37,17 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := defaultClientConfig().WithAddress(&address)
-
-	if useTLS {
-		clientConfig.WithUseTLS(true)
-
-		certData, err := getCaCertificate()
-		if err != nil {
-			return nil, err
-		}
-
-		tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-		advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
-		clientConfig.WithAdvancedConfiguration(advancedConfig)
+	if !useTLS {
+		return glide.NewClient(plaintextClientConfigFor(address))
 	}
 
-	return glide.NewClient(clientConfig)
+	certData, err := getCaCertificate()
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	return glide.NewClient(tlsClientConfigFor(tlsConfig, address))
 }
 
 // Builds and returns a cluster client with the given hostname and TLS configuration.
@@ -63,23 +57,17 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&address)
-
-	if useTLS {
-		clientConfig.WithUseTLS(true)
-
-		certData, err := getCaCertificate()
-		if err != nil {
-			return nil, err
-		}
-
-		tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-		advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
-
-		clientConfig.WithAdvancedConfiguration(advancedConfig)
+	if !useTLS {
+		return glide.NewClusterClient(plaintextClusterClientConfigFor(address))
 	}
 
-	return glide.NewClusterClient(clientConfig)
+	certData, err := getCaCertificate()
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	return glide.NewClusterClient(tlsClusterClientConfigFor(tlsConfig, address))
 }
 
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone() {

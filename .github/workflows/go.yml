@@ -189,6 +189,7 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
+                  make -k tls-test tls=true
                   make -k opentelemetry-test
 
             - name: Run Example Tests
