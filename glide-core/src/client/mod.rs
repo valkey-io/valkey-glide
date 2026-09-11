@@ -174,6 +174,14 @@ fn should_retry_multislot_mget_directly(value: &Value) -> bool {
     )
 }
 
+fn extract_multislot_mget_pipeline_response(value: Value) -> RedisResult<Option<Value>> {
+    if should_retry_multislot_mget_directly(&value) {
+        Ok(None)
+    } else {
+        value.extract_error().map(Some)
+    }
+}
+
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
 
@@ -1198,10 +1206,9 @@ impl Client {
                         )));
                     }
                     let value = values.pop().expect("response count was checked");
-                    if should_retry_multislot_mget_directly(&value) {
-                        client.route_command(&cmd, final_routing).await
-                    } else {
-                        Ok(value)
+                    match extract_multislot_mget_pipeline_response(value)? {
+                        Some(value) => Ok(value),
+                        None => client.route_command(&cmd, final_routing).await,
                     }
                 } else {
                     client.route_command(&cmd, final_routing).await
@@ -3297,7 +3304,7 @@ impl Client {
 mod tests {
     use std::time::Duration;
 
-    use redis::Cmd;
+    use redis::{Cmd, parse_redis_value};
 
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
@@ -3394,11 +3401,31 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn multi_slot_mget_pipeline_response_propagates_server_errors() {
+        let server_error = parse_redis_value(b"-ERR MGET failed\r\n").unwrap();
+
+        let error = extract_multislot_mget_pipeline_response(server_error).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::ResponseError);
+    }
+
+    #[test]
+    fn multi_slot_mget_pipeline_response_retries_readonly_errors_directly() {
+        let readonly_error = parse_redis_value(b"-READONLY replica is read-only\r\n").unwrap();
+
+        assert!(matches!(
+            extract_multislot_mget_pipeline_response(readonly_error),
+            Ok(None)
+        ));
+    }
+
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, MGET_PIPELINE_MAX_KEY_BYTES,
+        Client, ClientWrapper, ConnectionError, ErrorKind, LazyClient, MGET_PIPELINE_MAX_KEY_BYTES,
         MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo,
-        get_timeout_from_cmd_arg, should_route_multislot_mget_as_pipeline,
-        validate_effective_lib_name, validate_effective_lib_ver,
+        extract_multislot_mget_pipeline_response, get_timeout_from_cmd_arg,
+        should_route_multislot_mget_as_pipeline, validate_effective_lib_name,
+        validate_effective_lib_ver,
     };
     use std::sync::Weak;
 
