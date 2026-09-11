@@ -81,6 +81,7 @@ fn create_client_test() {
             client_type_ptr,
             pubsub_callback,
             noop_address_resolver,
+            std::mem::transmute(0usize),
             0usize,
         );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
