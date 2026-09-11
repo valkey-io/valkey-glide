@@ -767,7 +767,7 @@ public class ConnectionManager {
      * <p>Called from the {@code connectToValkey} async body, so callers observe this as an {@code
      * ExecutionException} on the returned future rather than a synchronous throw. Note that
      * pool-borrowed clients build their request in {@code ClientPool} and do not pass through here —
-     * see <a href="https://github.com/valkey-io/valkey-glide/issues/7043">#7043</a>.
+     * see <a href="https://github.com/valkey-io/valkey-glide/issues/6897">#6897</a>.
      *
      * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
      */
