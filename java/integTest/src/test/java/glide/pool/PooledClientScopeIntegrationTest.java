@@ -4,6 +4,7 @@ package glide.pool;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -18,7 +19,9 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -91,6 +94,64 @@ public class PooledClientScopeIntegrationTest {
             pooled.close();
             pool.close();
         }
+    }
+
+    /**
+     * A scope must not outlive the client it was opened on. Before the fix, closing the parent left
+     * the scope's registry entry and dedicated connection in place, so the scope kept reading and
+     * mutating keyspace after its owner was gone.
+     *
+     * <p>Pool teardown is asynchronous — {@code glidePoolDestroy} spawns the sweep and returns
+     * immediately — so poll for the failure rather than asserting on the next command.
+     */
+    @Test
+    public void testScopeStopsExecutingAfterPoolClose() throws Exception {
+        ClientPool pool = ClientPool.create(standaloneConfig());
+        waitForPoolReady(pool, 1);
+
+        PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
+        IsolatedScope scope =
+                pooled.unwrap().scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
+        assertNotNull(scope, "scopedConnection must return a scope on a pool-borrowed client");
+
+        // Prove the scope works first, so a failure after teardown cannot be a false positive.
+        String key = "pooled-scope-close-" + UUID.randomUUID();
+        assertEquals("OK", scope.set(key, "before").get(5, TimeUnit.SECONDS));
+        assertEquals("before", scope.get(key).get(5, TimeUnit.SECONDS));
+        pooled.unwrap().del(new String[] {key}).get(5, TimeUnit.SECONDS);
+
+        // Tear the parent down with the scope still outstanding: no scope.close() first, and the
+        // borrowed client is still in use, which is how #6889 was reported.
+        pool.close();
+
+        Throwable failure = null;
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                // A write, so a regression here is the actual harm: mutating keyspace through a
+                // scope whose owner is gone.
+                scope.set(key, "after").get(5, TimeUnit.SECONDS);
+                Thread.sleep(50);
+            } catch (ExecutionException e) {
+                failure = e.getCause();
+                break;
+            } catch (TimeoutException e) {
+                // Recorded rather than rethrown so the assertion below reports "hung" instead of
+                // this escaping as an unrelated test error.
+                failure = e;
+                break;
+            }
+        }
+
+        assertNotNull(failure, "a scope must stop executing once its parent pool is closed");
+        assertInstanceOf(
+                IllegalStateException.class,
+                failure,
+                "an invalidated scope should fail with an invalid-scope error, not hang or fail"
+                        + " otherwise; got: "
+                        + failure);
+
+        scope.close();
     }
 
     /** Build an ASCII string of exactly {@code size} bytes so byte length equals character length. */

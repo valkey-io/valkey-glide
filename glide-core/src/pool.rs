@@ -1126,6 +1126,11 @@ impl ScopePool {
         }
     }
 
+    /// Close this pool and drop its scopes, with the pool lock held.
+    ///
+    /// Not the parent-close path — that is [`destroy_client_scope_pool`], which
+    /// works without the lock. Currently unused; kept for a graceful shutdown
+    /// that needs to drain in-use scopes rather than abandon them.
     pub fn destroy(&mut self, registry: &DashMap<u64, ScopeEntry>) {
         self.state.store(POOL_CLOSED, Ordering::Release);
         self.idle.clear();
@@ -1195,6 +1200,11 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePoo
 /// Deliberately takes no pool lock: teardown must not be skippable, and a
 /// `try_lock` here would silently leave scopes live under contention. The owning
 /// id on each [`ScopeEntry`] is what makes that possible.
+///
+/// A scope acquired concurrently with teardown can still land in the registry
+/// after the sweep, leaking one entry. It is inert — its parent is already
+/// unregistered, so dispatch fails — and closing the window would mean taking
+/// the lock this deliberately avoids.
 pub fn destroy_client_scope_pool(client_id: u64) {
     get_client_scope_pools().remove(&client_id);
 
