@@ -42,7 +42,7 @@ fn command_table_matches_fork() {
 async fn via_glide_async_trait<C: glide::AsyncCommands>(
     con: &C,
     key: &str,
-) -> glide::RedisResult<i64> {
+) -> glide::ValkeyResult<i64> {
     con.set::<_, _, ()>(key, 7).await?;
     con.get(key).await
 }
@@ -71,7 +71,7 @@ fn generic_code_on_glide_sync_trait() {
     .unwrap();
     let k = common::key("rrs_glide_generic_sync");
     // Generic bound on GLIDE's blocking trait.
-    fn via_glide_sync_trait<C: Commands>(con: &C, key: &str) -> glide::RedisResult<i64> {
+    fn via_glide_sync_trait<C: Commands>(con: &C, key: &str) -> glide::ValkeyResult<i64> {
         con.set::<_, _, ()>(key, 9)?;
         con.get(key)
     }

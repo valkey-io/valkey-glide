@@ -5,12 +5,12 @@
 //! connects to a cluster. Both wrap the shared `glide_core::client::Client` and
 //! implement [`CommandExecutor`], so all command family traits apply to them.
 
-use crate::ValkeyResult;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::error::GlideError;
 use crate::executor::CommandExecutor;
 use crate::pipeline_options::{PipelineOptions, run_pipeline};
 use crate::routes::Route;
+use crate::{ValkeyFuture, ValkeyResult, ValkeyValue};
 use async_trait::async_trait;
 use bytes::Bytes;
 use glide_core::client::Client as CoreClient;
@@ -481,19 +481,31 @@ pub use connection::{GlidePipelineTarget, PipelineExt};
 // else — this is the client's primary command path.
 
 impl crate::commands::core::AsyncCommands for GlideClient {
-    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> redis::RedisFuture<'a, Value> {
+    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
         // `Client` is Clone (Arc inside); operate on a cheap clone so the
         // unified API can take `&self` — same pattern as `execute_command`.
         let mut client = self.inner.clone();
-        Box::pin(async move { client.send_command(&mut cmd, None).await })
+        Box::pin(async move {
+            let value = client
+                .send_command(&mut cmd, None)
+                .await
+                .map_err(GlideError::from_redis_error)?;
+            Ok(ValkeyValue::from_redis(value))
+        })
     }
 }
 
 impl crate::commands::core::AsyncCommands for GlideClusterClient {
-    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> redis::RedisFuture<'a, Value> {
+    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
         // Routing is decided by glide-core from the command's keys.
         let mut client = self.inner.clone();
-        Box::pin(async move { client.send_command(&mut cmd, None).await })
+        Box::pin(async move {
+            let value = client
+                .send_command(&mut cmd, None)
+                .await
+                .map_err(GlideError::from_redis_error)?;
+            Ok(ValkeyValue::from_redis(value))
+        })
     }
 }
 

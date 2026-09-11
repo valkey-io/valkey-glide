@@ -114,7 +114,7 @@ matrix_test!(incr_by_float, c, {
 matrix_test!(incr_non_integer_errors, c, {
     let k = common::key("nonint");
     let _: () = c.set(&k, "notanumber").await.unwrap();
-    let result: redis::RedisResult<i64> = c.incr(&k, 1i64).await;
+    let result: glide::ValkeyResult<i64> = c.incr(&k, 1i64).await;
     assert!(result.is_err());
 });
 
@@ -215,7 +215,7 @@ matrix_test!(get_wrong_type_errors, c, {
     // GET against a list key must be an error (WRONGTYPE).
     let k = common::key("wt");
     let _: i64 = c.rpush(&k, &["a"]).await.unwrap();
-    let result: redis::RedisResult<Option<String>> = c.get(&k).await;
+    let result: glide::ValkeyResult<Option<String>> = c.get(&k).await;
     assert!(result.is_err());
 });
 

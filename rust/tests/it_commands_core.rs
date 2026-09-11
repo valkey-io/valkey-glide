@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, PipelineExt, RedisResult, pipe};
+use glide::{AsyncCommands, PipelineExt, RedisResult, ValkeyResult, pipe};
 use std::collections::{HashMap, HashSet};
 
 // ---- typed AsyncCommands methods -----------------------------------------------
@@ -166,18 +166,15 @@ matrix_test!(atomic_transaction_query_glide, c, {
 
 // ---- error surface -----------------------------------------------------------
 
-matrix_test!(wrong_type_returns_redis_error, c, {
+matrix_test!(wrong_type_returns_request_error, c, {
     let c = c;
     let k = common::key("cmd_err");
     c.set::<_, _, ()>(&k, "text").await.unwrap();
-    let res: RedisResult<Vec<String>> = c.lrange(&k, 0, -1).await;
+    let res: ValkeyResult<Vec<String>> = c.lrange(&k, 0, -1).await;
     let err = res.unwrap_err();
-    // Exact fork semantics: the vendored fork (unlike upstream releases)
-    // does not map WRONGTYPE to ErrorKind::TypeError — server WRONGTYPE
-    // surfaces as ExtensionError with code() == "WRONGTYPE". Our compat path
-    // must be fork-faithful; assert both kind and code.
-    assert_eq!(err.kind(), glide::ErrorKind::ExtensionError, "got: {err}");
-    assert_eq!(err.code(), Some("WRONGTYPE"), "got: {err}");
+
+    assert_eq!(err.class_name(), "RequestError");
+    assert!(err.message().contains("WRONGTYPE"));
 });
 
 matrix_test!(error_inside_pipeline_surfaces_as_err, c, {

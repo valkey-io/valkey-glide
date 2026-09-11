@@ -12,13 +12,13 @@
 //! (a running Tokio runtime) — doing so panics with tokio's "cannot block the
 //! current thread from within a runtime".
 
-use crate::ValkeyResult;
 use crate::client::{GlideClient, GlideClusterClient};
 use crate::commands::prelude::*;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
+use crate::{ValkeyResult, ValkeyValue};
 use redis::{ToRedisArgs, Value};
 use std::future::Future;
 use std::sync::OnceLock;
@@ -67,7 +67,7 @@ impl SyncGlideClient {
     /// ```rust,no_run
     /// # use glide::sync::SyncGlideClient;
     /// # use glide::{AsyncCommands, GlideClientConfiguration};
-    /// # fn demo(client: SyncGlideClient) -> glide::RedisResult<()> {
+    /// # fn demo(client: SyncGlideClient) -> glide::ValkeyResult<()> {
     /// let value: Option<String> = client.run(|c| async move { c.get("key").await })?;
     /// # let _ = value; Ok(()) }
     /// ```
@@ -201,7 +201,7 @@ impl SyncGlideClusterClient {
 macro_rules! impl_sync_owned_send {
     ($sync_ty:ty) => {
         impl crate::commands::core::Commands for $sync_ty {
-            fn glide_send_owned_sync(&self, cmd: redis::Cmd) -> redis::RedisResult<Value> {
+            fn glide_send_owned_sync(&self, cmd: redis::Cmd) -> ValkeyResult<ValkeyValue> {
                 runtime().block_on(crate::commands::core::AsyncCommands::glide_send_owned(
                     &self.inner,
                     cmd,

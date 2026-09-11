@@ -159,7 +159,7 @@ matrix_test!(rename, c, {
 });
 
 matrix_test!(rename_missing_errors, c, {
-    let res: redis::RedisResult<()> = c
+    let res: glide::ValkeyResult<()> = c
         .rename(common::tkey("g", "nope"), common::tkey("g", "dst"))
         .await;
     assert!(res.is_err());

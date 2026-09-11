@@ -101,7 +101,7 @@ matrix_test!(lset, c, {
 matrix_test!(lset_out_of_range_errors, c, {
     let k = common::key("l");
     let _: i64 = c.rpush(&k, "a").await.unwrap();
-    let res: redis::RedisResult<()> = c.lset(&k, 5, "x").await;
+    let res: glide::ValkeyResult<()> = c.lset(&k, 5, "x").await;
     assert!(res.is_err());
 });
 
@@ -169,6 +169,6 @@ matrix_test!(lpos, c, {
 matrix_test!(list_wrong_type_errors, c, {
     let k = common::key("wt");
     let _: () = c.set(&k, "notalist").await.unwrap();
-    let res: redis::RedisResult<i64> = c.lpush(&k, "x").await;
+    let res: glide::ValkeyResult<i64> = c.lpush(&k, "x").await;
     assert!(res.is_err());
 });

@@ -114,8 +114,8 @@ impl GlideClusterClientConfiguration {
     /// ```
     /// use glide::GlideClusterClientConfiguration;
     /// let urls = ["redis://user:pass@localhost:6379", "redis://user:pass@localhost:6380"];
-    /// let cfg = GlideClusterClientConfiguration::from_url(urls).unwrap();
-    /// assert_eq!(cfg.addresses.len(), 1);
+    /// let cfg = GlideClusterClientConfiguration::from_urls(urls).unwrap();
+    /// assert_eq!(cfg.addresses.len(), 2);
     /// ```
     ///
     /// `rediss://` enables TLS with full verification;

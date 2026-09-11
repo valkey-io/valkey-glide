@@ -220,9 +220,8 @@ resp_test!(script_load_async_returns_hash, c, {
     assert_eq!(v, 7);
 });
 
-resp_test!(noscript_errorkind_passthrough, c, {
-    // migrated call sites `match err.kind()`; NOSCRIPT must surface as
-    // ErrorKind::NoScriptError outside the Script type's internal fallback.
+resp_test!(noscript_surfaces_as_request_error, c, {
+    // An unknown script hash raises a RequestError with NOSCRIPT.
     let c = c;
     let _: () = c
         .glide_send(cmd("SCRIPT").arg("FLUSH").arg("SYNC").clone())
@@ -237,7 +236,9 @@ resp_test!(noscript_errorkind_passthrough, c, {
         )
         .await
         .unwrap_err();
-    assert_eq!(err.kind(), glide::ErrorKind::NoScriptError, "got: {err}");
+
+    assert_eq!(err.class_name(), "RequestError", "got: {err}");
+    assert!(err.message().contains("NoScriptError"), "got: {err}");
 });
 
 // ---- normalized reply shapes: streams / geo / CONFIG GET ------------------------

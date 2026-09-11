@@ -3,7 +3,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, FromRedisValue, RedisResult, SetCommands};
+use glide::{AsyncCommands, SetCommands, ValkeyResult};
 use std::collections::HashSet;
 
 matrix_test!(sadd_scard, c, {
@@ -76,8 +76,7 @@ matrix_test!(spop_count, c, {
     // spop with count: not in AsyncCommands, use cmd escape hatch.
     let mut cmd = redis::Cmd::new();
     cmd.arg("SPOP").arg(&k).arg(2);
-    let popped: HashSet<String> =
-        FromRedisValue::from_owned_redis_value(c.glide_send_owned(cmd).await.unwrap()).unwrap();
+    let popped: HashSet<String> = c.glide_send(cmd).await.unwrap();
     assert_eq!(popped.len(), 2);
     let card: i64 = c.scard(&k).await.unwrap();
     assert_eq!(card, 1);
@@ -179,6 +178,6 @@ matrix_test!(smove, c, {
 matrix_test!(set_wrong_type_errors, c, {
     let k = common::key("wt");
     let _: () = c.set(&k, "notaset").await.unwrap();
-    let res: RedisResult<i64> = c.sadd(&k, "x").await;
+    let res: ValkeyResult<i64> = c.sadd(&k, "x").await;
     assert!(res.is_err());
 });
