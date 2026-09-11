@@ -116,6 +116,60 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     }
 }
 
+/// Multi-slot MGET has one legal command per slot. Routing it through the pipeline executor
+/// batches those commands per physical node while preserving the existing slot split and response
+/// aggregation behavior.
+///
+/// Adding the command to a pipeline clones it once before the existing slot split. Bound that
+/// extra copy so small MGETs and unusually large aggregate key payloads keep the lower-copy
+/// direct path.
+const MGET_PIPELINE_MIN_KEY_COUNT: usize = 26;
+const MGET_PIPELINE_MAX_KEY_BYTES: usize = 16 * 1024;
+
+fn mget_keys_fit_pipeline_path(cmd: &Cmd) -> bool {
+    let mut key_count = 0;
+    let key_bytes = cmd.args_iter().skip(1).try_fold(0usize, |total, arg| {
+        key_count += 1;
+        let arg_len = match arg {
+            redis::Arg::Simple(bytes) => bytes.len(),
+            redis::Arg::Cursor => 0,
+        };
+        total
+            .checked_add(arg_len)
+            .filter(|total| *total <= MGET_PIPELINE_MAX_KEY_BYTES)
+    });
+
+    key_count >= MGET_PIPELINE_MIN_KEY_COUNT && key_bytes.is_some()
+}
+
+fn should_route_multislot_mget_as_pipeline(
+    cmd: &Cmd,
+    routing: &RoutingInfo,
+    has_explicit_routing: bool,
+) -> bool {
+    !has_explicit_routing
+        && cmd
+            .command()
+            .is_some_and(|command| command.eq_ignore_ascii_case(b"MGET"))
+        && matches!(
+            routing,
+            RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::MultiSlot(_),
+                Some(ResponsePolicy::CombineArrays)
+            ))
+        )
+        && mget_keys_fit_pipeline_path(cmd)
+}
+
+/// Pipeline retry handling does not yet refresh slots for READONLY. Fall back to the direct
+/// request path, which already implements that refresh-and-retry behavior.
+fn should_retry_multislot_mget_directly(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::ServerError(error) if RedisError::from(error.clone()).kind() == ErrorKind::ReadOnly
+    )
+}
+
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
 
@@ -1051,6 +1105,7 @@ impl Client {
         client: ClientWrapper,
         compression_manager: Option<Arc<CompressionManager>>,
     ) -> RedisResult<Value> {
+        let has_explicit_routing = routing.is_some();
         let raw_value = match client {
             ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
             ClientWrapper::Cluster { mut client, .. } => {
@@ -1076,7 +1131,37 @@ impl Client {
                         .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
-                client.route_command(&cmd, final_routing).await
+                if should_route_multislot_mget_as_pipeline(
+                    cmd.as_ref(),
+                    &final_routing,
+                    has_explicit_routing,
+                ) {
+                    let mut pipeline = redis::Pipeline::with_capacity(1);
+                    pipeline.add_command(cmd.as_ref().clone());
+                    let mut values = client
+                        .route_pipeline(
+                            &pipeline,
+                            0,
+                            1,
+                            None,
+                            Some(PipelineRetryStrategy::new(true, true)),
+                        )
+                        .await?;
+                    if values.len() != 1 {
+                        return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Unexpected number of responses from multi-slot MGET pipeline",
+                        )));
+                    }
+                    let value = values.pop().expect("response count was checked");
+                    if should_retry_multislot_mget_directly(&value) {
+                        client.route_command(&cmd, final_routing).await
+                    } else {
+                        Ok(value)
+                    }
+                } else {
+                    client.route_command(&cmd, final_routing).await
+                }
             }
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }?;
@@ -3143,8 +3228,74 @@ mod tests {
         assert_ne!(cloned.arg_idx(1).unwrap().as_ptr(), original_ptr);
     }
 
+    #[test]
+    fn multi_slot_mget_pipeline_path_requires_implicit_combine_arrays_routing() {
+        use redis::cluster_routing::MultiSlotArgPattern;
+
+        let mut mget = redis::cmd("MGET");
+        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+            mget.arg(format!("key-{key_index}"));
+        }
+        let routing = RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::MultiSlot((Vec::new(), MultiSlotArgPattern::KeysOnly)),
+            Some(ResponsePolicy::CombineArrays),
+        ));
+
+        assert!(should_route_multislot_mget_as_pipeline(
+            &mget, &routing, false
+        ));
+        assert!(!should_route_multislot_mget_as_pipeline(
+            &mget, &routing, true
+        ));
+
+        let mut get = redis::cmd("GET");
+        get.arg("key-1");
+        assert!(!should_route_multislot_mget_as_pipeline(
+            &get, &routing, false
+        ));
+
+        let mut too_few_keys = redis::cmd("MGET");
+        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
+            too_few_keys.arg(format!("key-{key_index}"));
+        }
+        assert!(!should_route_multislot_mget_as_pipeline(
+            &too_few_keys,
+            &routing,
+            false
+        ));
+
+        let mut boundary = redis::cmd("MGET");
+        for _ in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
+            boundary.arg("k");
+        }
+        boundary.arg(vec![
+            b'k';
+            MGET_PIPELINE_MAX_KEY_BYTES
+                - (MGET_PIPELINE_MIN_KEY_COUNT - 1)
+        ]);
+        assert!(should_route_multislot_mget_as_pipeline(
+            &boundary, &routing, false
+        ));
+
+        let mut oversized = redis::cmd("MGET");
+        for _ in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
+            oversized.arg("k");
+        }
+        oversized.arg(vec![
+            b'k';
+            MGET_PIPELINE_MAX_KEY_BYTES
+                - (MGET_PIPELINE_MIN_KEY_COUNT - 1)
+                + 1
+        ]);
+        assert!(!should_route_multislot_mget_as_pipeline(
+            &oversized, &routing, false
+        ));
+    }
+
     use super::{
-        Client, ClientWrapper, ConnectionError, LazyClient, get_timeout_from_cmd_arg,
+        Client, ClientWrapper, ConnectionError, LazyClient, MGET_PIPELINE_MAX_KEY_BYTES,
+        MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo,
+        get_timeout_from_cmd_arg, should_route_multislot_mget_as_pipeline,
         validate_effective_lib_name,
     };
     use std::sync::Weak;
