@@ -203,8 +203,6 @@ pub struct ValkeyServerError {
 }
 
 impl ValkeyVerbatimFormat {
-    // TODO #7024: drop this allow; from_redis is used once glide_send_owned returns ValkeyValue (Phase 3).
-    #[allow(dead_code)]
     fn from_redis(format: VerbatimFormat) -> Self {
         match format {
             VerbatimFormat::Unknown(s) => ValkeyVerbatimFormat::Unknown(s),
@@ -223,8 +221,6 @@ impl ValkeyVerbatimFormat {
 }
 
 impl ValkeyValue {
-    // TODO #7024: drop this allow; from_redis is used once glide_send_owned returns ValkeyValue (Phase 3).
-    #[allow(dead_code)]
     pub(crate) fn from_redis(value: Value) -> Self {
         let pairs = |ps: Vec<(Value, Value)>| {
             ps.into_iter()
@@ -255,11 +251,7 @@ impl ValkeyValue {
                 text,
             },
             Value::BigNumber(n) => ValkeyValue::BigNumber(n),
-            // Push frames are delivered via the pub/sub channel, never as a
-            // command reply; map defensively to the payload array.
-            Value::Push { data, .. } => {
-                ValkeyValue::Array(data.into_iter().map(ValkeyValue::from_redis).collect())
-            }
+            Value::Push { .. } => unreachable!("Commands should not return Push values."),
             Value::ServerError(e) => ValkeyValue::ServerError(ValkeyServerError {
                 code: e.err_code().to_string(),
                 detail: e.details().map(str::to_string),

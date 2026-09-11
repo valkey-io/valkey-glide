@@ -6,7 +6,7 @@
 //!
 //! ```rust,no_run
 //! use glide::Script;
-//! # async fn demo(mut client: glide::GlideClient) -> glide::RedisResult<()> {
+//! # async fn demo(mut client: glide::GlideClient) -> glide::ValkeyResult<()> {
 //! let script = Script::new("return tonumber(ARGV[1]) + tonumber(ARGV[2])");
 //! let sum: i64 = script.arg(1).arg(2).invoke_async(&mut client).await?;
 //! assert_eq!(sum, 3);
@@ -22,8 +22,10 @@
 //! [`crate::GlideClusterClient`]); blocking methods take any `glide::Commands`
 //! implementor (the sync clients).
 
+use crate::ValkeyResult;
 use crate::commands::core::AsyncCommands;
-use redis::{ErrorKind, FromRedisValue, RedisResult, ToRedisArgs, cmd};
+use crate::value::FromValkeyValue;
+use redis::{ToRedisArgs, cmd};
 
 /// A cached Lua script with its SHA-1 hash.
 ///
@@ -78,38 +80,38 @@ impl Script {
     }
 
     /// Invoke the script without keys or args.
-    pub async fn invoke_async<C: AsyncCommands, T: FromRedisValue>(
+    pub async fn invoke_async<C: AsyncCommands, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
+    ) -> ValkeyResult<T> {
         self.prepare_invoke().invoke_async(con).await
     }
 
     /// Invoke the script without keys or args on a **blocking** connection
     /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]).
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromRedisValue>(
+    pub fn invoke<C: crate::commands::core::Commands, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
+    ) -> ValkeyResult<T> {
         self.prepare_invoke().invoke(con)
     }
 
     /// Load the script into the server's script cache (`SCRIPT LOAD`) without
     /// running it; returns the SHA-1 hash.
-    pub async fn load_async<C: AsyncCommands>(&self, con: &C) -> RedisResult<String> {
+    pub async fn load_async<C: AsyncCommands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        redis::from_owned_redis_value(con.glide_send_owned(load).await?)
+        String::from_owned_valkey_value(con.glide_send_owned(load).await?)
     }
 
     /// Load the script into the server's script cache (`SCRIPT LOAD`) on a
     /// **blocking** connection; returns the SHA-1 hash.
     #[cfg(feature = "sync")]
-    pub fn load<C: crate::commands::core::Commands>(&self, con: &C) -> RedisResult<String> {
+    pub fn load<C: crate::commands::core::Commands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        redis::from_owned_redis_value(con.glide_send_owned_sync(load)?)
+        String::from_owned_valkey_value(con.glide_send_owned_sync(load)?)
     }
 }
 
@@ -157,16 +159,16 @@ impl ScriptInvocation<'_> {
 
     /// Invoke the script: `EVALSHA` first, transparent `EVAL` fallback when the
     /// server does not have the script cached (`NOSCRIPT`).
-    pub async fn invoke_async<C: AsyncCommands, T: FromRedisValue>(
+    pub async fn invoke_async<C: AsyncCommands, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
+    ) -> ValkeyResult<T> {
         match con.glide_send_owned(self.evalsha_cmd()).await {
-            Err(err) if err.kind() == ErrorKind::NoScriptError => {
+            Err(err) if err.is_no_script_error() => {
                 // Not cached on the server yet — EVAL both runs and caches it.
-                redis::from_owned_redis_value(con.glide_send_owned(self.eval_cmd()).await?)
+                T::from_owned_valkey_value(con.glide_send_owned(self.eval_cmd()).await?)
             }
-            other => redis::from_owned_redis_value(other?),
+            other => T::from_owned_valkey_value(other?),
         }
     }
 
@@ -174,15 +176,15 @@ impl ScriptInvocation<'_> {
     /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]):
     /// `EVALSHA` first, transparent `EVAL` fallback on `NOSCRIPT`.
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromRedisValue>(
+    pub fn invoke<C: crate::commands::core::Commands, T: FromValkeyValue>(
         &self,
         con: &C,
-    ) -> RedisResult<T> {
+    ) -> ValkeyResult<T> {
         match con.glide_send_owned_sync(self.evalsha_cmd()) {
-            Err(err) if err.kind() == ErrorKind::NoScriptError => {
-                redis::from_owned_redis_value(con.glide_send_owned_sync(self.eval_cmd())?)
+            Err(err) if err.is_no_script_error() => {
+                T::from_owned_valkey_value(con.glide_send_owned_sync(self.eval_cmd())?)
             }
-            other => redis::from_owned_redis_value(other?),
+            other => T::from_owned_valkey_value(other?),
         }
     }
 }

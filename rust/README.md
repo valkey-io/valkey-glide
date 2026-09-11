@@ -110,7 +110,7 @@ coverage, and benchmarks).
 use glide::{AsyncCommands, GlideClient, GlideClientConfiguration};
 
 #[tokio::main]
-async fn main() -> glide::RedisResult<()> {
+async fn main() -> glide::ValkeyResult<()> {
     let config = GlideClientConfiguration::with_address("localhost", 6379);
     let client = GlideClient::connect(config).await.expect("connect");
 
@@ -127,7 +127,7 @@ async fn main() -> glide::RedisResult<()> {
 use glide::sync::SyncGlideClient;
 use glide::{Commands, GlideClientConfiguration};
 
-fn main() -> glide::RedisResult<()> {
+fn main() -> glide::ValkeyResult<()> {
     let client = SyncGlideClient::connect(
         GlideClientConfiguration::with_address("localhost", 6379),
     ).expect("connect");
@@ -180,7 +180,7 @@ command. The migrations that follow from this are mechanical:
 ```rust,no_run
 use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, PipelineExt, Script, pipe};
 
-# async fn demo() -> glide::RedisResult<()> {
+# async fn demo() -> glide::ValkeyResult<()> {
 // Standard connection-URL semantics, including rediss:// and database selection:
 let config = GlideClientConfiguration::from_url("redis://user:pass@localhost:6379/2")
     .expect("valid URL");
@@ -191,12 +191,14 @@ client.set::<_, _, ()>("key", 42).await?;
 let value: i64 = client.get("key").await?;
 
 // Pipelines and transactions (zero extra payload copies):
+// TODO #7024: Pipeline replies currently decode through the fork's result type; unwrap here so this example keeps a single `ValkeyResult` return.
 let (a, b): (i64, i64) = pipe()
     .atomic()
     .incr("counter", 1)
     .incr("counter", 1)
     .query_glide(&client)
-    .await?;
+    .await
+    .unwrap();
 
 // Lua scripts with EVALSHA caching:
 let script = Script::new("return tonumber(ARGV[1]) + 1");

@@ -27,7 +27,7 @@ resp_test!(publish_no_subscribers_returns_zero, c, {
 mod glob_import_lock {
     use glide::*;
 
-    pub async fn publish_via_glob(c: &GlideClient, chan: &str) -> RedisResult<i64> {
+    pub async fn publish_via_glob(c: &GlideClient, chan: &str) -> ValkeyResult<i64> {
         c.publish(chan, "nobody-listens").await
     }
 }

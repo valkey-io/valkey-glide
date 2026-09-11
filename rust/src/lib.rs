@@ -30,10 +30,11 @@ pub use value::{
     FromValkeyValue, ToValkeyArgs, ValkeyServerError, ValkeyValue, ValkeyVerbatimFormat,
 };
 
-/// The result type returned by all GLIDE client operations.
+/// The result type for GLIDE sync operations.
 pub type ValkeyResult<T> = std::result::Result<T, GlideError>;
-// TODO #7024: add the ValkeyFuture alias here (beside ValkeyResult) when
-// glide_send_owned returns ValkeyValue (Phase 3).
+
+/// The future returned by GLIDE async commands.
+pub type ValkeyFuture<'a, T> = futures::future::BoxFuture<'a, ValkeyResult<T>>;
 
 pub use config::{
     BackoffStrategy, ClientIdentity, GlideClientConfiguration, GlideClusterClientConfiguration,

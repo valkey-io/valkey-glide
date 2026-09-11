@@ -9,32 +9,54 @@ the ones that need more than a one-line comment.
 
 ## Command layer → Valkey types (the big one)
 
-`glide_send_owned` / `glide_send_owned_sync` still return `RedisFuture<Value>` /
-`RedisResult<Value>`, and every command stays bound on redis's
-`ToRedisArgs`/`FromRedisValue` with `redis::Value` returns. Phase 3 rewires them
-to `ValkeyFuture<ValkeyValue>` / `ValkeyResult<ValkeyValue>` and rolls the
-`ToValkeyArgs`/`FromValkeyValue` bounds + Valkey return types across the table.
-This is what makes the following items actionable:
+**Return side — DONE (Phase 3a).** `glide_send_owned` / `glide_send_owned_sync`
+now return `ValkeyFuture<ValkeyValue>` / `ValkeyResult<ValkeyValue>`; the client
+seam converts the reply via `ValkeyValue::from_redis` and classifies the error
+via `GlideError::from_redis_error`. The `core.rs` command table, `glide_send*`,
+and `Script` are rolled to `RV: FromValkeyValue` with `ValkeyResult`/`ValkeyFuture`
+returns. `ValkeyFuture` was added beside `ValkeyResult` in `lib.rs`;
+`ValkeyValue::from_redis` (+ nested `from_redis`) lost their `dead_code` allows.
 
-- **`ValkeyValue::from_redis` (+ nested `from_redis`)** are `#[allow(dead_code)]`
-  until a command actually produces a `ValkeyValue`.
+**Arg side — still deferred (coupled to `Cmd`).** Every command still builds via
+`Cmd::$name(args)` / `cmd.arg(a)`, which require redis's `ToRedisArgs`, so command
+args (and `Script`/`custom_command` args, and the `scan*` `write_redis_args`
+paths) stay bound on `ToRedisArgs`. Rolling them to `ToValkeyArgs` needs the
+glide-owned `Cmd` (below): a `ToValkeyArgs: ToRedisArgs` supertrait would both
+re-leak `redis::ToRedisArgs` into the public surface and block downstream user
+impls, so the arg-bound roll must land *with* `Cmd`, not before.
+
+Remaining, still actionable once the above lands:
+
 - **`value.rs` `to_*` / `from_value` decoders** take `redis::Value` and are
-  public only because the command surface still hands back `redis::Value`. Move
-  them onto `ValkeyValue` (public) and make the `redis::Value` forms `pub(crate)`.
-- **`ValkeyFuture`** was removed from Phase 1 (nothing returned it); re-add it
-  beside `ValkeyResult` in `lib.rs` when `glide_send_owned` uses it.
+  public only because per-family command traits still hand back `redis::Value`
+  via `execute_command`. Move them onto `ValkeyValue` (public) and make the
+  `redis::Value` forms `pub(crate)`.
+- **`scan` composite decode** still bounds `RV: FromRedisValue` and bridges the
+  page through `ValkeyValue::into_redis()` → `from_owned_redis_value`, because the
+  provisional blanket `FromValkeyValue` cannot decode `(u64, Vec<RV>)` from an
+  `RV: FromValkeyValue` bound (needs redis's `Vec`/tuple decode). Rolls with
+  native decode. Inline `TODO #7024` in `commands/scan.rs`.
+- **`CommandExecutor::execute_command` / `CustomCommand`** still return
+  `redis::Value` and take `ToRedisArgs`; roll with the `Cmd`/arg change (this is
+  "the Cmd seam").
+- **`Script` NOSCRIPT detection** — `GlideError::from_redis_error` collapses the
+  fork's `ErrorKind::NoScriptError` into `Request(msg)`, dropping the code, so the
+  `EVALSHA`→`EVAL` fallback matches the stringified message
+  (`GlideError::is_no_script_error`). Replace with a preserved server error code.
+  Inline `TODO #7024` in `error.rs`.
 - **Parity guard** needs a redis→valkey name mapping
   (`ToRedisArgs`→`ToValkeyArgs`, `FromRedisValue`→`FromValkeyValue`, and the
-  param-type renames below) once the command signatures change.
+  param-type renames below) once the arg-side signatures change.
 - **Command-param types** `Direction`, `Expiry`, `SetOptions`, `LposOptions`
   (deferred from Phase 2) are macro-table params in `core.rs`, forwarded verbatim
   to `Cmd::$name`. Converting them to glide-owned types needs the macro dispatch
   to convert glide args first. (`Expiry` is also used in hand-written `hgetex`.)
 - **`Cmd`** — glide-owned command builder; replace at the executor seam
-  (`execute_command` / `glide_send_owned`) together with the return-type rewrite.
+  (`execute_command` / `glide_send_owned`) together with the arg-bound roll.
 - **`Pipeline`** — glide-owned pipeline; tied to redis's typed pipeline decoding
-  (`query_glide`) and glide-core `send_pipeline`/`send_transaction`
-  (`execute_pipeline`). Not a small owned type; lands with the decode rework.
+  (`query_glide`, still `RedisResult`) and glide-core `send_pipeline`/
+  `send_transaction` (`execute_pipeline`). Not a small owned type; lands with the
+  decode rework.
 
 ## `ValkeyValue::into_redis` should disappear
 

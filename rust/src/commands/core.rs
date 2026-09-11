@@ -32,17 +32,20 @@
 //! invocation at the bottom of this file; the parity-guard test will flag any
 //! divergence from the fork's table (see DEVELOPER.md).
 
+use crate::ValkeyFuture;
+
+// TODO #6872: should FromValkeyValue be public?
+use crate::value::{FromValkeyValue, ValkeyValue};
+
 // TODO #7024: replace the redis command-param types below (Direction, Expiry,
 // LposOptions, SetOptions) with glide-owned equivalents. Deferred from Phase 2:
 // these are macro-table params forwarded verbatim to `Cmd::$name`, so converting
 // them requires the Phase 3 macro-dispatch rework.
-use redis::{
-    Cmd, Direction, Expiry, FromRedisValue, LposOptions, RedisFuture, SetOptions, ToRedisArgs,
-    Value, from_owned_redis_value,
-};
-// Only the blocking (`Commands`) flavor names `RedisResult` directly.
+use redis::{Cmd, Direction, Expiry, FromRedisValue, LposOptions, SetOptions, ToRedisArgs};
+
+// Only exposed by sync commands.
 #[cfg(feature = "sync")]
-use redis::RedisResult;
+use crate::ValkeyResult;
 
 /// Defines the unified [`AsyncCommands`] and [`Commands`] traits from one
 /// command table.
@@ -73,17 +76,15 @@ macro_rules! implement_glide_commands {
             /// the single required method; every typed command delegates to
             /// it. Also useful directly as a zero-extra-copy escape hatch for
             /// custom commands with large payloads.
-            // TODO #7024: return ValkeyFuture<'a, ValkeyValue> and roll ToValkeyArgs/
-            // FromValkeyValue bounds + Valkey return types across the command table (Phase 3).
-            fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> RedisFuture<'a, Value>;
+            fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`. This replaces
             /// `cmd(...).query_async(&mut con)` call sites — same decode, no
             /// connection-object machinery, no payload copy.
             #[inline]
-            fn glide_send<'a, RV: FromRedisValue>(&'a self, cmd: Cmd) -> RedisFuture<'a, RV> {
-                Box::pin(async move { from_owned_redis_value(self.glide_send_owned(cmd).await?) })
+            fn glide_send<'a, RV: FromValkeyValue>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, RV> {
+                Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_owned(cmd).await?) })
             }
 
             $(
@@ -93,12 +94,12 @@ macro_rules! implement_glide_commands {
                 #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
                 fn $name<$lifetime, $($($g: $b + Send + Sync + $lifetime,)+)? RV>(
                     &$lifetime self $(, $arg: $ty)*
-                ) -> RedisFuture<$lifetime, RV>
+                ) -> ValkeyFuture<$lifetime, RV>
                 where
-                    RV: FromRedisValue,
+                    RV: FromValkeyValue,
                 {
                     let cmd = Cmd::$name($($arg),*);
-                    Box::pin(async move { from_owned_redis_value(self.glide_send_owned(cmd).await?) })
+                    Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_owned(cmd).await?) })
                 }
             )*
 
@@ -112,7 +113,7 @@ macro_rules! implement_glide_commands {
     #[inline]
     fn scan<'s, RV: FromRedisValue + Send + 's>(
         &'s self,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         Box::pin(crate::commands::scan::ScanIter::new(
             self,
             vec![b"SCAN".to_vec()],
@@ -126,7 +127,7 @@ macro_rules! implement_glide_commands {
     fn scan_match<'s, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
         &'s self,
         pattern: P,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut suffix = vec![b"MATCH".to_vec()];
         pattern.write_redis_args(&mut suffix);
         Box::pin(crate::commands::scan::ScanIter::new(
@@ -141,7 +142,7 @@ macro_rules! implement_glide_commands {
     fn hscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
         &'s self,
         key: K,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
@@ -153,7 +154,7 @@ macro_rules! implement_glide_commands {
         &'s self,
         key: K,
         pattern: P,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
@@ -166,7 +167,7 @@ macro_rules! implement_glide_commands {
     fn sscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
         &'s self,
         key: K,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
@@ -178,7 +179,7 @@ macro_rules! implement_glide_commands {
         &'s self,
         key: K,
         pattern: P,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
@@ -191,7 +192,7 @@ macro_rules! implement_glide_commands {
     fn zscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
         &'s self,
         key: K,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
@@ -203,7 +204,7 @@ macro_rules! implement_glide_commands {
         &'s self,
         key: K,
         pattern: P,
-    ) -> RedisFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
+    ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
@@ -226,15 +227,14 @@ macro_rules! implement_glide_commands {
         pub trait Commands: Sized {
             /// Send an already-built command **by value** (no clone). This is
             /// the single required method; every typed command delegates to it.
-            // TODO #7024: return ValkeyResult<ValkeyValue> (Phase 3), matching the async trait.
-            fn glide_send_owned_sync(&self, cmd: Cmd) -> RedisResult<Value>;
+            fn glide_send_owned_sync(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
 
             /// Typed escape hatch (blocking counterpart of the async
             /// `glide_send`): send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`.
             #[inline]
-            fn glide_send_sync<RV: FromRedisValue>(&self, cmd: Cmd) -> RedisResult<RV> {
-                from_owned_redis_value(self.glide_send_owned_sync(cmd)?)
+            fn glide_send_sync<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
+                RV::from_owned_valkey_value(self.glide_send_owned_sync(cmd)?)
             }
 
             $(
@@ -242,10 +242,10 @@ macro_rules! implement_glide_commands {
                 #[inline]
                 #[allow(deprecated)]
                 #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
-                fn $name<$lifetime, $($($g: $b,)+)? RV: FromRedisValue>(
+                fn $name<$lifetime, $($($g: $b,)+)? RV: FromValkeyValue>(
                     &self $(, $arg: $ty)*
-                ) -> RedisResult<RV> {
-                    from_owned_redis_value(self.glide_send_owned_sync(Cmd::$name($($arg),*))?)
+                ) -> ValkeyResult<RV> {
+                    RV::from_owned_valkey_value(self.glide_send_owned_sync(Cmd::$name($($arg),*))?)
                 }
             )*
 
@@ -257,7 +257,7 @@ macro_rules! implement_glide_commands {
     #[inline]
     fn scan<RV: FromRedisValue>(
         &self,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], Vec::new())
     }
 
@@ -267,7 +267,7 @@ macro_rules! implement_glide_commands {
     fn scan_match<P: ToRedisArgs, RV: FromRedisValue>(
         &self,
         pattern: P,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut suffix = vec![b"MATCH".to_vec()];
         pattern.write_redis_args(&mut suffix);
         crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], suffix)
@@ -278,7 +278,7 @@ macro_rules! implement_glide_commands {
     fn hscan<K: ToRedisArgs, RV: FromRedisValue>(
         &self,
         key: K,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
@@ -290,7 +290,7 @@ macro_rules! implement_glide_commands {
         &self,
         key: K,
         pattern: P,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
@@ -303,7 +303,7 @@ macro_rules! implement_glide_commands {
     fn sscan<K: ToRedisArgs, RV: FromRedisValue>(
         &self,
         key: K,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
@@ -315,7 +315,7 @@ macro_rules! implement_glide_commands {
         &self,
         key: K,
         pattern: P,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
@@ -328,7 +328,7 @@ macro_rules! implement_glide_commands {
     fn zscan<K: ToRedisArgs, RV: FromRedisValue>(
         &self,
         key: K,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
@@ -340,7 +340,7 @@ macro_rules! implement_glide_commands {
         &self,
         key: K,
         pattern: P,
-    ) -> RedisResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
+    ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
         key.write_redis_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
