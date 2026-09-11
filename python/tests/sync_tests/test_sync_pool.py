@@ -19,7 +19,7 @@ from glide_shared.config import (
 )
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
-from glide_sync.glide_client import GlideClusterClient
+from glide_sync.glide_client import GlideClient, GlideClusterClient
 
 from tests.utils.utils import get_cluster_addresses as _get_cluster_addresses
 from tests.utils.utils import get_standalone_address as _get_standalone_address
@@ -314,6 +314,51 @@ class TestClientPool:
                 client.delete([key])
         finally:
             pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    def test_scope_stops_executing_after_pool_close(self, cluster_mode):
+        """A scope must not outlive the pool its client was borrowed from.
+
+        Closing the pool has to invalidate outstanding scopes before it returns;
+        otherwise the scope keeps reading and mutating keyspace on a connection
+        whose owner is gone.
+        """
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool.create(config, PoolConfig(max_size=3, min_idle=1))
+        _wait_for_pool_ready(pool, 1)
+        key = _make_key(cluster_mode, "scope-after-pool-close")
+        scope = None
+        try:
+            with pool.borrow() as client:
+                scope = client.scoped_connection()
+
+                # Prove the scope works first, so a later failure cannot be a
+                # false positive.
+                scope.set(key, "before")
+                assert scope.get(key) == "before"
+                client.delete([key])
+
+                # Tear the pool down with the scope still outstanding and the
+                # client still borrowed — how #6889 was reported.
+                pool.close()
+
+                # No polling: invalidation happens before glide_pool_destroy
+                # returns, so the very next command must fail. A write, so a
+                # regression is the actual harm — mutating keyspace through a
+                # scope whose owner is gone.
+                with pytest.raises(RuntimeError, match="invalid scope"):
+                    scope.set(key, "after")
+        finally:
+            if scope is not None and not scope.is_released:
+                scope.close()
+            pool.close()
+            # This test builds its own pool, so no fixture FLUSHALL runs. If the
+            # scope got one write in before invalidation, drop the key.
+            cleanup = GlideClient.create(config)
+            try:
+                cleanup.delete([key])
+            finally:
+                cleanup.close()
 
 
 def _has_client_info_field(client_info: str, field: str, expected: str) -> bool:

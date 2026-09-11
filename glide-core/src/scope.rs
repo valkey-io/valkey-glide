@@ -133,17 +133,22 @@ pub fn extract_key_args<'a>(cmd_name: &str, args: &[&'a [u8]]) -> Vec<&'a [u8]> 
 
 /// Execute a command on a scoped connection.
 ///
-/// This is the core function that all language bindings should call. It handles:
+/// Command execution against a scope's connection.
+///
+/// Bindings should call [`send_scope_command`] instead: it adds the circuit
+/// breaker, inflight limit, compression and latency recording, and requires a
+/// parent client. This function handles:
 /// - State tracking (WATCH, MULTI, SELECT, subscriptions, etc.)
 /// - Cluster slot validation (cross-slot errors)
 /// - Command execution via Client::send_command_on_connection (timeout, decompression, IAM)
-/// - Fallback to raw send if no parent client is available
 ///
 /// # Arguments
 /// - `scope_id`: The scope identifier (must be currently in-use)
 /// - `cmd_name`: The command name (e.g., "GET", "SET", "WATCH")
 /// - `args`: Command arguments as byte slices
-/// - `client`: Optional reference to the parent Client (for timeout, decompression, IAM)
+/// - `client`: The parent Client. `None` sends the command raw — no timeout, no
+///   decompression and no IAM re-authentication — which is only useful for tests
+///   that need to observe a connection's state before any re-auth can mask it.
 ///
 /// # Returns
 /// `Ok(Value)` on success, `Err(RedisError)` on failure (including cross-slot errors).
@@ -273,6 +278,10 @@ pub async fn execute_scope_command(
 /// because it requires wrapping the future at the call site. Callers should
 /// wrap `send_scope_command` in a watchdog select if desired.
 ///
+/// The parent client is required: every concern above is derived from it, so a
+/// caller without one must fail rather than send. Resolve it with
+/// [`resolve_scope_parent`].
+///
 /// # Errors
 /// - `CircuitBreakerOpen` if parent's circuit breaker is open
 /// - `ClientError("Reached maximum inflight requests")` if inflight is exhausted
@@ -281,12 +290,10 @@ pub async fn send_scope_command(
     scope_id: u64,
     cmd_name: &str,
     args: &mut [Vec<u8>],
-    client: Option<&Client>,
+    client: &Client,
 ) -> RedisResult<Value> {
     // 1. Circuit breaker check
-    if let Some(c) = client
-        && !c.is_circuit_breaker_healthy()
-    {
+    if !client.is_circuit_breaker_healthy() {
         return Err(RedisError::from((
             redis::ErrorKind::CircuitBreakerOpen,
             "Client circuit breaker is open - core unhealthy",
@@ -294,43 +301,47 @@ pub async fn send_scope_command(
     }
 
     // 2. Inflight request reservation (reject if exhausted)
-    let _inflight_tracker = if let Some(c) = client {
-        match c.reserve_inflight_request() {
-            Some(t) => Some(t),
-            None => {
-                return Err(RedisError::from((
-                    redis::ErrorKind::ClientError,
-                    "Reached maximum inflight requests",
-                )));
-            }
+    let _inflight_tracker = match client.reserve_inflight_request() {
+        Some(t) => t,
+        None => {
+            return Err(RedisError::from((
+                redis::ErrorKind::ClientError,
+                "Reached maximum inflight requests",
+            )));
         }
-    } else {
-        None
     };
 
     // 3. Compression on write
-    if let Some(c) = client
-        && let Some(cm) = c.compression_manager()
+    if let Some(cm) = client.compression_manager()
         && cm.is_enabled()
     {
         // Resolve command type for compression routing
         let effective_type = crate::request_type::RequestType::from_command_name(cmd_name)
             .unwrap_or(crate::request_type::RequestType::CustomCommand);
-        let _ = crate::compression::process_command_args_for_compression(
+        if let Err(e) = crate::compression::process_command_args_for_compression(
             args,
             effective_type,
             Some(cm.as_ref()),
-        );
+        ) {
+            // An incompatible command would operate on compressed bytes — e.g. INCR or
+            // APPEND against a compressed value — so reject it as the ordinary dispatch
+            // paths do. Other compression failures fall back to the original args.
+            if e.is_incompatible_command() {
+                return Err(RedisError::from((
+                    redis::ErrorKind::ClientError,
+                    "Command is incompatible with compression",
+                    e.to_string(),
+                )));
+            }
+        }
     }
 
     // 4. Execute
     let cmd_start = std::time::Instant::now();
-    let result = execute_scope_command(scope_id, cmd_name, args, client).await;
+    let result = execute_scope_command(scope_id, cmd_name, args, Some(client)).await;
 
     // 5. Record latency
-    if let Some(c) = client {
-        c.latency_tracker().record(cmd_start.elapsed());
-    }
+    client.latency_tracker().record(cmd_start.elapsed());
 
     result
 }
@@ -654,6 +665,18 @@ pub async fn get_parent_client(client_id: u64) -> Option<Client> {
     registry.get(&client_id).map(|e| e.value().clone())
 }
 
+/// Resolve the client that owns `scope_id` without taking a pool lock.
+///
+/// `None` means the scope is unregistered or its parent has been closed. Callers
+/// must fail the command: dispatch used to carry on without a parent, silently
+/// running it with none of the guardrails listed on `ScopeEntry::parent_client_id`.
+pub fn resolve_scope_parent(scope_id: u64) -> Option<Client> {
+    let parent_client_id = get_scope_registry().get(&scope_id)?.parent_client_id;
+    get_client_registry()
+        .get(&parent_client_id)
+        .map(|e| e.value().clone())
+}
+
 /// Global client registry: client_id → Client.
 /// Language bindings register their Client instances here so that
 /// scope execution can access timeout, decompression, and IAM features.
@@ -670,8 +693,16 @@ pub fn register_client(client_id: u64, client: Client) {
 }
 
 /// Unregister a Client from the global registry (called on client close).
+///
+/// Also tears down the client's scope pool, so every binding's close path
+/// invalidates outstanding scopes without having to remember to do it.
+///
+/// `client_id` must be the handle the binding registered and opens scopes with —
+/// the adapter pointer for the C FFI, the client id for JNI. Passing the other id
+/// silently tears down nothing.
 pub fn unregister_client(client_id: u64) {
     get_client_registry().remove(&client_id);
+    crate::pool::destroy_client_scope_pool(client_id);
 }
 
 #[cfg(all(test, feature = "proto"))]
@@ -688,8 +719,12 @@ mod tests {
     use tokio::sync::Mutex as TokioMutex;
 
     use super::{create_scope_connection, try_acquire_scope};
+    use super::{register_client, resolve_scope_parent, unregister_client};
+    use crate::client::Client;
     use crate::connection_request::{ConnectionRequest, NodeAddress};
-    use crate::pool::{ScopePool, ScopePoolConfig, get_client_scope_pools};
+    use crate::pool::{
+        ScopeAcquire, ScopePool, ScopePoolConfig, get_client_scope_pools, get_scope_registry,
+    };
 
     fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
         let mut request = ConnectionRequest::new();
@@ -845,6 +880,117 @@ mod tests {
         assert!(
             accept_within(&listener, Duration::from_secs(5)).await,
             "reserving the last slot must still create its connection"
+        );
+    }
+
+    /// Holding the pool lock reproduces the contention that made the old
+    /// try_lock scan report no parent.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn parent_resolves_while_the_pool_lock_is_held() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        // reserved_pool() seats the pool under parent client id 1.
+        let pool = reserved_pool(request_bytes.clone());
+        let parent_client_id = 1;
+
+        let mut parent_request = crate::client::ConnectionRequest::default();
+        parent_request.addresses.push(crate::client::NodeAddress {
+            host: "127.0.0.1".into(),
+            port,
+        });
+        parent_request.lazy_connect = true;
+        let parent = Client::new(parent_request, None)
+            .await
+            .expect("lazy parent client creation should succeed");
+        register_client(parent_client_id, parent);
+
+        create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+        let acquired = {
+            let mut pool = pool.lock().await;
+            pool.try_acquire(get_scope_registry(), 0)
+        };
+
+        let resolved = if let ScopeAcquire::Reused(scope_id) = acquired {
+            let held = pool.lock().await;
+            let resolved = resolve_scope_parent(scope_id).is_some();
+            drop(held);
+            get_scope_registry().remove(&scope_id);
+            Some(resolved)
+        } else {
+            None
+        };
+
+        // Clean up the global registries before asserting, so a failure here
+        // cannot leak this client into later tests in the same binary.
+        unregister_client(parent_client_id);
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+
+        assert_eq!(
+            resolved,
+            Some(true),
+            "a contended pool lock must not hide the scope's parent client"
+        );
+    }
+
+    /// Closing the parent must invalidate its outstanding scopes, otherwise a
+    /// scope keeps executing against a connection whose owner is gone.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn closing_the_parent_invalidates_its_outstanding_scopes() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        // reserved_pool() seats the pool under parent client id 1.
+        let parent_client_id = 1;
+        let pool = reserved_pool(request_bytes.clone());
+        get_client_scope_pools().insert(parent_client_id, pool.clone());
+
+        let mut parent_request = crate::client::ConnectionRequest::default();
+        parent_request.addresses.push(crate::client::NodeAddress {
+            host: "127.0.0.1".into(),
+            port,
+        });
+        parent_request.lazy_connect = true;
+        let parent = Client::new(parent_request, None)
+            .await
+            .expect("lazy parent client creation should succeed");
+        register_client(parent_client_id, parent);
+
+        create_scope_connection(pool.clone(), None, &request_bytes, 0).await;
+        let acquired = {
+            let mut pool = pool.lock().await;
+            pool.try_acquire(get_scope_registry(), 0)
+        };
+
+        let observed = if let ScopeAcquire::Reused(scope_id) = acquired {
+            let registered_before = get_scope_registry().contains_key(&scope_id);
+
+            unregister_client(parent_client_id);
+
+            Some((
+                registered_before,
+                get_scope_registry().contains_key(&scope_id),
+                get_client_scope_pools().contains_key(&parent_client_id),
+                resolve_scope_parent(scope_id).is_some(),
+            ))
+        } else {
+            None
+        };
+
+        // Clean up before asserting so a failure cannot leak into later tests.
+        if let ScopeAcquire::Reused(scope_id) = acquired {
+            get_scope_registry().remove(&scope_id);
+        }
+        get_client_scope_pools().remove(&parent_client_id);
+        unregister_client(parent_client_id);
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+
+        assert_eq!(
+            observed,
+            Some((true, false, false, false)),
+            "closing the parent must drop the scope entry, its pool, and any parent resolution"
         );
     }
 
