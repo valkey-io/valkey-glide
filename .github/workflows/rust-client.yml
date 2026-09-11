@@ -19,6 +19,7 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
     pull_request:
         paths:
             - rust/**
@@ -30,6 +31,7 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
     workflow_dispatch:
 
 concurrency:
@@ -95,4 +97,9 @@ jobs:
 
             - name: Run rust client tests
               working-directory: ./rust
-              run: cargo test -- --show-output
+              run: cargo test --locked -- --show-output
+
+            - name: Ensure Rust client tests leave tracked files clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust client tests

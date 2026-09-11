@@ -15,6 +15,7 @@ on:
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -29,6 +30,7 @@ on:
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -160,6 +162,19 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Ensure tracked tree is clean before RC changes
+              if: ${{ github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go RC pre-script baseline
+
+            - name: Record declared RC import edit paths
+              if: ${{ github.event.inputs.rc-version }}
+              run: |
+                  find go/integTest -name '*.go' -type f \
+                    -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
+                    | sort > "$RUNNER_TEMP/go-rc-import-paths"
+
             - name: Run patch to test with RC
               working-directory: go
               if: ${{ github.event.inputs.rc-version }}
@@ -167,6 +182,42 @@ jobs:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Validate RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC script:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
 
             - uses: ./.github/actions/setup-dns-tests
               with:
@@ -201,6 +252,48 @@ jobs:
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.go == env.BASE_GO_VERSION }}
               with:
                   language-flag: -go
+
+            - name: Validate final RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC workload:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
+
+            - name: Ensure build and tests leave tracked files unchanged
+              if: ${{ !github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go build, tests, examples, and benchmarks
 
             - name: Upload logs and reports
               if: always()
@@ -251,6 +344,11 @@ jobs:
               working-directory: go
               run: |
                   make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
+
+            - name: Ensure lint and generation leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go cbindgen, protobuf generation, and lint
 
     get-containers:
         runs-on: ubuntu-latest
@@ -338,6 +436,19 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Ensure tracked tree is clean before RC changes
+              if: ${{ github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go RC pre-script baseline
+
+            - name: Record declared RC import edit paths
+              if: ${{ github.event.inputs.rc-version }}
+              run: |
+                  find go/integTest -name '*.go' -type f \
+                    -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
+                    | sort > "$RUNNER_TEMP/go-rc-import-paths"
+
             - name: Run patch to test with RC
               working-directory: go
               if: ${{ github.event.inputs.rc-version }}
@@ -345,6 +456,42 @@ jobs:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Validate RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC script:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
 
             - uses: ./.github/actions/setup-dns-tests
               with:
@@ -367,6 +514,48 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
+
+            - name: Validate final RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC workload:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
+
+            - name: Ensure container build and tests leave tracked files unchanged
+              if: ${{ !github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go container build and tests
 
             - name: Upload test reports
               if: always()
@@ -424,6 +613,19 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Ensure tracked tree is clean before RC changes
+              if: ${{ github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go RC pre-script baseline
+
+            - name: Record declared RC import edit paths
+              if: ${{ github.event.inputs.rc-version }}
+              run: |
+                  find go/integTest -name '*.go' -type f \
+                    -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
+                    | sort > "$RUNNER_TEMP/go-rc-import-paths"
+
             - name: Run patch to test with RC
               working-directory: go
               if: ${{ github.event.inputs.rc-version }}
@@ -431,6 +633,42 @@ jobs:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Validate RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC script:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
 
             - name: Install & build & test
               working-directory: go
@@ -445,6 +683,48 @@ jobs:
                     make -k long-timeout-test test-filter=TestLongTimeout
                   fi
                   make -k pubsub-test
+
+            - name: Validate final RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC workload:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
+
+            - name: Ensure long-timeout tests leave tracked files unchanged
+              if: ${{ !github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go long-timeout and PubSub tests
 
             - name: Upload logs and reports
               if: always()

@@ -15,6 +15,7 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -29,6 +30,7 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
@@ -241,6 +243,11 @@ jobs:
               with:
                   language-flag: -java
 
+            - name: Ensure Java build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java build, test, lint, and benchmark operations
+
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
@@ -342,6 +349,11 @@ jobs:
                       fi
                   fi
 
+            - name: Ensure Java PubSub tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java PubSub tests
+
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
@@ -408,6 +420,11 @@ jobs:
                       exit 1
                   fi
 
+            - name: Ensure Java Lambda test leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java Lambda build and Docker test
+
             - name: Cleanup Docker
               if: always()
               working-directory: java/e2e/lambda-test
@@ -443,6 +460,11 @@ jobs:
             - name: Run Docker Test
               working-directory: java/e2e/dns-failover-test
               run: ./run-test.sh
+
+            - name: Ensure Java DNS failover test leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java DNS failover build and Docker test
 
             - name: Cleanup Docker
               if: always()
@@ -588,6 +610,11 @@ jobs:
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi
                   ./gradlew --stacktrace --build-cache --continue build -x javadoc
+
+            - name: Ensure Java container build leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java container build and tests
 
             - name: Upload test & spotbugs reports
               if: always()

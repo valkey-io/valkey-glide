@@ -12,6 +12,7 @@ on:
             - glide-core/redis-rs/redis/src/**/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -28,6 +29,7 @@ on:
             - glide-core/redis-rs/redis/src/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -244,6 +246,11 @@ jobs:
               with:
                   language-flag: -python
 
+            - name: Ensure Python build, tests, and benchmark leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python wrapper build, tests, and optional benchmark
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -355,6 +362,11 @@ jobs:
               run: |
                   python3 dev.py test --mock-pubsub --args -k 'pubsub' tests/async_tests --html=pytest_report.html --self-contained-html
 
+            - name: Ensure Python PubSub build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python PubSub wrapper builds and tests
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -389,6 +401,11 @@ jobs:
               run: |
                   python3 dev.py lint --check
 
+            - name: Ensure Python lint leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python lint and protobuf generation
+
     docs-test:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.containers-only != 'true' }}
@@ -410,6 +427,11 @@ jobs:
                   sphinx-apidoc -o glide_shared ../glide-shared/glide_shared
                   make clean
                   make html SPHINXOPTS="-W --keep-going"
+
+            - name: Ensure Python docs leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python Sphinx API and HTML documentation generation
 
     get-containers:
         runs-on: ubuntu-latest
@@ -498,6 +520,11 @@ jobs:
                   AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Ensure Python container build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python container wrapper build and tests
 
             - name: Upload test reports
               if: always()

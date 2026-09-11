@@ -6,6 +6,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/npm-cd.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/json_matrices/**
             - node/package.json
             - node/npm/**
@@ -256,11 +257,11 @@ jobs:
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
-                    npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    npx napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags -- --locked
 
                   # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
                   else
-                    npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                    npx napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags -- --locked
                   fi
 
                   # Create directory for this target's node file
@@ -272,6 +273,11 @@ jobs:
                   # Report what we've built
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
+
+            - name: Ensure native build leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Node native module build for ${{ matrix.TARGET }}
 
             - name: Smoke test native module
               working-directory: ./node
@@ -345,6 +351,11 @@ jobs:
               shell: bash
               run: |
                   npm ci
+
+            - name: Ensure clean tree before package assembly
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: npm release package assembly baseline
 
             # Setup npm package directories using NAPI-RS artifacts command
             - name: Setup npm package directories
@@ -421,7 +432,41 @@ jobs:
                   sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
                   echo "Base package version is now: $(jq -r .version package.json)"
 
-            # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
+            # Run prepublishOnly explicitly so its tracked manifest updates can be validated before publication.
+            - name: Prepare packages for publication
+              if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: npm run prepublishOnly
+
+            - name: Validate npm release tracked changes
+              if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
+              shell: bash
+              run: |
+                  unexpected=0
+                  while IFS= read -r -d '' path; do
+                      case "$path" in
+                          node/npm/darwin-arm64/package.json|\
+                          node/npm/darwin-x64/package.json|\
+                          node/npm/linux-arm64-gnu/package.json|\
+                          node/npm/linux-arm64-musl/package.json|\
+                          node/npm/linux-x64-gnu/package.json|\
+                          node/npm/linux-x64-musl/package.json)
+                              ;;
+                          *)
+                              unexpected=1
+                              ;;
+                      esac
+                  done < <(git diff --name-only --diff-filter=ACDMRTUXB -z HEAD)
+
+                  if [[ "$unexpected" -ne 0 ]]; then
+                      echo "::group::Tracked repository status (first 200 entries)"
+                      git status --short --untracked-files=no | sed -n '1,200p'
+                      echo "::endgroup::"
+                      echo "::error::npm release preparation changed tracked paths outside the six platform package manifests. Reproduce the release preparation locally and commit any required source or metadata updates separately."
+                      exit 1
+                  fi
+
             - name: Publish packages
               if: ${{ needs.get-build-parameters.outputs.should_publish == 'true' }}
               shell: bash
@@ -433,7 +478,7 @@ jobs:
                   package_name=$(cat package.json | jq -r .name)
                   version=$(cat package.json | jq -r .version)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public --provenance --scope=@valkey
+                  npm publish --ignore-scripts --tag ${NPM_TAG} --access public --provenance --scope=@valkey
 
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
@@ -535,6 +580,11 @@ jobs:
                       echo "::error::Neither Valkey nor Redis server found"; exit 1
                   fi
 
+            - name: Ensure clean tree before release-candidate smoke tests
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: npm release-candidate smoke-test baseline for ${{ matrix.TARGET }}
+
             - name: Run utils/node Tests
               working-directory: utils/release-candidate-testing/node
               run: |
@@ -578,6 +628,29 @@ jobs:
                   done
                   npm run build:utils
                   npm test
+
+            - name: Validate release-candidate tracked changes
+              shell: bash
+              run: |
+                  unexpected=0
+                  while IFS= read -r -d '' path; do
+                      case "$path" in
+                          utils/release-candidate-testing/node/package.json|\
+                          utils/release-candidate-testing/node/package-lock.json)
+                              ;;
+                          *)
+                              unexpected=1
+                              ;;
+                      esac
+                  done < <(git diff --name-only --diff-filter=ACDMRTUXB -z HEAD)
+
+                  if [[ "$unexpected" -ne 0 ]]; then
+                      echo "::group::Tracked repository status (first 200 entries)"
+                      git status --short --untracked-files=no | sed -n '1,200p'
+                      echo "::endgroup::"
+                      echo "::error::npm release-candidate smoke tests changed tracked paths outside their package manifest and lockfile. Reproduce the smoke test locally and commit any required source or metadata updates separately."
+                      exit 1
+                  fi
 
     cleanup-artifacts:
         needs: [test-published-release, get-build-parameters]

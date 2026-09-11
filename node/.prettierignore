@@ -5,3 +5,8 @@ rust-client/*
 !rust-client/tsconfig.json
 # ignore docs dir
 docs/*
+# pnpm-generated lockfile: keep pnpm's native 2-space/single-quote format,
+# don't let Prettier (via root .editorconfig indent_size=4) rewrite it
+# (kept here too since Prettier resolves .prettierignore relative to the
+# invocation cwd, e.g. running `prettier --check node` from `node/`)
+hybrid-node-tests/pnpm-pubsub-test/pnpm-lock.yaml

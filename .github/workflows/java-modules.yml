@@ -17,6 +17,7 @@ on:
             - java/client/src/main/java/glide/api/models/commands/json/**
             - java/integTest/src/test/java/glide/modules/**
             - .github/workflows/java-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -29,6 +30,7 @@ on:
             - java/client/src/main/java/glide/api/models/commands/json/**
             - java/integTest/src/test/java/glide/modules/**
             - .github/workflows/java-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -112,6 +114,11 @@ jobs:
                     -Dstandalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     -Dcluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
+            - name: Ensure Java module tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java module tests with Docker
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -161,6 +168,11 @@ jobs:
             - name: Test java wrapper
               working-directory: java
               run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
+
+            - name: Ensure Java module tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java module tests with MemoryDB
 
             - name: Upload test reports
               if: always()

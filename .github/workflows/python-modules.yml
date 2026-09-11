@@ -22,6 +22,7 @@ on:
             - python/tests/async_tests/tests_server_modules/**
             - python/tests/sync_tests/tests_server_modules/**
             - .github/workflows/python-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
@@ -38,6 +39,7 @@ on:
             - python/tests/async_tests/tests_server_modules/**
             - python/tests/sync_tests/tests_server_modules/**
             - .github/workflows/python-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
@@ -106,6 +108,11 @@ jobs:
                     --html=pytest_report.html \
                     --self-contained-html
 
+            - name: Ensure Python module build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python module wrapper build and tests
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -151,6 +158,11 @@ jobs:
               working-directory: ./python
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+
+            - name: Ensure Python module build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python module wrapper build and tests
 
             - name: Upload test reports
               if: always()

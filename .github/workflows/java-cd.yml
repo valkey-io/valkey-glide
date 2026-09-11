@@ -4,6 +4,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/java-cd.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
@@ -221,6 +222,11 @@ jobs:
                       -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                     fi
                   fi
+
+            - name: Ensure Java publication builds leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java native and compatibility publication builds
 
             - name: Bundle JAR
               working-directory: java
@@ -447,6 +453,11 @@ jobs:
                   -Psigning.secretKeyRingFile=secring.gpg \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Ensure Java uber JAR builds leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java uber JAR and compatibility publication builds
 
             - name: Bundle jedis-4-compatibility no-classifier JAR
               working-directory: java
@@ -709,6 +720,11 @@ jobs:
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }}"
+
+            - name: Ensure Java deployment test leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Java Maven deployment smoke test
 
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
