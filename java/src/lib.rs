@@ -1804,7 +1804,7 @@ fn append_packed_command_args(cmd: &mut redis::Cmd, bytes: &[u8]) -> Result<(), 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
     env: JNIEnv,
-    class: JClass,
+    _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
     request_type: jint,
@@ -1815,27 +1815,26 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
     expect_utf8: jni::sys::jboolean,
     span_ptr: jlong,
 ) {
-    execute_command_async(
+    execute_command_async(ExecuteCommandParams {
         env,
-        class,
         client_ptr,
         callback_id,
         request_type,
         args,
-        JByteArray::from(JObject::null()),
+        packed_args: JByteArray::from(JObject::null()),
         has_route,
         route_type,
         route_param,
         expect_utf8,
-        generic_response_conversion(),
+        response_conversion: generic_response_conversion(),
         span_ptr,
-    );
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsyncPacked(
     env: JNIEnv,
-    class: JClass,
+    _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
     request_type: jint,
@@ -1846,21 +1845,20 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
     expect_utf8: jni::sys::jboolean,
     span_ptr: jlong,
 ) {
-    execute_command_async(
+    execute_command_async(ExecuteCommandParams {
         env,
-        class,
         client_ptr,
         callback_id,
         request_type,
-        JObjectArray::from(JObject::null()),
+        args: JObjectArray::from(JObject::null()),
         packed_args,
         has_route,
         route_type,
         route_param,
         expect_utf8,
-        generic_response_conversion(),
+        response_conversion: generic_response_conversion(),
         span_ptr,
-    );
+    });
 }
 
 /// Execute MGET through the private Java entry point whose built-in decoder consumes the direct
@@ -1869,46 +1867,65 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideCoreClient_executeMgetCommandAsyncNative(
     env: JNIEnv,
-    class: JClass,
-    client_ptr: jlong,
-    callback_id: jlong,
-    args: JObjectArray,
-    packed_args: JByteArray,
-    expect_utf8: jni::sys::jboolean,
-    span_ptr: jlong,
-) {
-    execute_command_async(
-        env,
-        class,
-        client_ptr,
-        callback_id,
-        glide_core::request_type::RequestType::MGet as jint,
-        args,
-        packed_args,
-        0,
-        0,
-        JString::from(JObject::null()),
-        expect_utf8,
-        typed_mget_response_conversion(),
-        span_ptr,
-    );
-}
-
-fn execute_command_async(
-    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
-    request_type: jint,
     args: JObjectArray,
     packed_args: JByteArray,
+    expect_utf8: jni::sys::jboolean,
+    span_ptr: jlong,
+) {
+    execute_command_async(ExecuteCommandParams {
+        env,
+        client_ptr,
+        callback_id,
+        request_type: glide_core::request_type::RequestType::MGet as jint,
+        args,
+        packed_args,
+        has_route: 0,
+        route_type: 0,
+        route_param: JString::from(JObject::null()),
+        expect_utf8,
+        response_conversion: typed_mget_response_conversion(),
+        span_ptr,
+    });
+}
+
+/// Internal arguments shared by the public JNI entry points.
+///
+/// Keeping the JNI surface in the three exported functions and grouping the shared state here
+/// prevents the implementation from silently accumulating another positional parameter.
+struct ExecuteCommandParams<'local> {
+    env: JNIEnv<'local>,
+    client_ptr: jlong,
+    callback_id: jlong,
+    request_type: jint,
+    args: JObjectArray<'local>,
+    packed_args: JByteArray<'local>,
     has_route: jni::sys::jboolean,
     route_type: jint,
-    route_param: JString,
+    route_param: JString<'local>,
     expect_utf8: jni::sys::jboolean,
     response_conversion: jni_client::ResponseConversion,
     span_ptr: jlong,
-) {
+}
+
+fn execute_command_async(params: ExecuteCommandParams<'_>) {
+    let ExecuteCommandParams {
+        mut env,
+        client_ptr,
+        callback_id,
+        request_type,
+        args,
+        packed_args,
+        has_route,
+        route_type,
+        route_param,
+        expect_utf8,
+        response_conversion,
+        span_ptr,
+    } = params;
+
     run_ffi(|| {
         let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
         else {
