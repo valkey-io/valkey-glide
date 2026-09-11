@@ -7,6 +7,7 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import anyio
 import pytest
+import sniffio
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
@@ -58,17 +59,27 @@ def _get_worker_id() -> str:
 
 
 def _rebind_client_to_current_loop(client: TGlideClient) -> None:
-    """TEST-ONLY: Rebind a pooled client's pipe reader to the current event loop.
+    """TEST-ONLY: Rebind a pooled client's pipe reader to the current backend.
 
     This is intentionally coupled to GlideClient internals. It exists solely to
-    support connection pooling in tests where anyio creates a new event loop per
-    test function. General users should create a new client per event loop instead.
+    support connection pooling in tests where anyio creates a new event loop (or
+    a new trio run) per test function. General users should create a new client
+    per event loop instead.
+
+    The backend is detected with sniffio rather than assumed to be asyncio. Under
+    trio there is no asyncio loop, so binding one and forcing ``_is_asyncio`` on
+    would misregister the pipe reader; instead we mark the client as non-asyncio
+    and let ``_setup_pipe`` re-register the trio reader for the current run.
 
     Internals accessed: _loop, _is_asyncio, _setup_pipe()
     If these change, the PING health check in _client_is_usable() will fail loudly.
     """
-    client._loop = asyncio.get_running_loop()
-    client._is_asyncio = True
+    if sniffio.current_async_library() == "asyncio":
+        client._loop = asyncio.get_running_loop()
+        client._is_asyncio = True
+    else:
+        client._loop = None
+        client._is_asyncio = False
     client._setup_pipe()
 
 

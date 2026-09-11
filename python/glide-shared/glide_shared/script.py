@@ -30,6 +30,7 @@ class Script:
         self._ffi = _ffi
         self._lib = _lib
         self._hash = None
+        self._dropped = False
 
         # Convert code to bytes if it's a string
         if isinstance(code, str):
@@ -67,6 +68,14 @@ class Script:
         """
         Clean up the script from the cache when the object is garbage collected.
         """
+        # A finalizer can run more than once, for example when it is called
+        # directly and then again during garbage collection. The cache tracks
+        # each script by a reference count, so dropping it twice would corrupt
+        # that count and could evict a script another instance still needs.
+        if getattr(self, "_dropped", False):
+            return
+        self._dropped = True
+
         try:
             hash_bytes = self.hash.encode(ENCODING)
             hash_buffer = self._ffi.from_buffer(hash_bytes)
