@@ -44,6 +44,24 @@ runs:
               fi
               echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
 
+        # Self-hosted runner images can be updated independently of this workflow, which can
+        # change the glibc (or other libc) version available on the runner. A previously cached
+        # binary built against a newer libc than the current runner provides will fail to execute
+        # (e.g. "GLIBC_2.38 not found") even though the cache key still matches on version/target
+        # alone. Fold a libc fingerprint into the cache key so a runner image/libc change
+        # automatically invalidates stale caches instead of silently reusing an incompatible binary.
+        - name: Compute libc fingerprint
+          id: libc-fingerprint
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: GITHUB_OUTPUT/p
+          run: |
+              LIBC_FP=$( (ldd --version 2>/dev/null || true) | head -1 | grep -o -E '[0-9]+\.[0-9]+' | tail -1)
+              if [[ -z $LIBC_FP ]]; then
+                  LIBC_FP="unknown"
+              fi
+              echo "LIBC_FP=$LIBC_FP" >> $GITHUB_OUTPUT
+
         - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
           id: cache-valkey
           with:
@@ -52,7 +70,7 @@ runs:
                   valkey/src/valkey-cli
                   valkey/src/redis-server
                   valkey/src/redis-cli
-              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}-${{ steps.libc-fingerprint.outputs.LIBC_FP }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
         - name: Install cached engine
