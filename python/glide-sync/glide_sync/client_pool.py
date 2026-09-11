@@ -158,6 +158,7 @@ class ClientPool:
             self._conn_req_bytes,
             len(self._conn_req_bytes),
             client_type,
+            self._ffi.NULL,  # credential_provider: not supported in sync pool
         )
 
         if pool_id == -1:
