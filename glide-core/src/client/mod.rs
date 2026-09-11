@@ -3036,6 +3036,11 @@ impl Client {
     /// SELECT is always sent to guarantee the connection is on the correct database.
     ///
     /// This ensures the next borrower gets a connection in a known-good state.
+    ///
+    /// Does not send UNSUBSCRIBE, so a borrower that subscribed leaves the
+    /// connection in push-message mode for whoever gets it next. Callers must not
+    /// subscribe on a pooled client; use the parent client's pub/sub API, which
+    /// keeps its own dedicated connections.
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
         // Send DISCARD — ignore ERR if no MULTI is active
         let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;

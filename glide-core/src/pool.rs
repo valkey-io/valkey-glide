@@ -119,7 +119,8 @@ pub struct PooledClient {
 /// The client-instance pool. Thread-safe via TokioMutex at the registry level.
 pub struct ClientPool {
     pub config: PoolConfig,
-    /// LIFO idle stack — most recently returned client is at the back.
+    /// LIFO idle stack — most recently returned client is at the back, so the
+    /// warmest connection is reused first and long-idle ones age out.
     pub idle: VecDeque<PooledClient>,
     /// Currently borrowed clients (client_id → PooledClient).
     pub in_use: DashMap<u64, PooledClient>,
@@ -763,6 +764,12 @@ impl Default for ScopePoolConfig {
 /// - `pinned_slot`: set after first command with keys (from key hash slot)
 /// - Subsequent commands must target the same slot or have no keys
 /// - MOVED errors surface to caller (WATCH state can't survive migration)
+///
+/// Never auto-reconnects. A dropped connection loses its WATCH keys, queued MULTI
+/// commands, CLIENT TRACKING registrations and slot affinity, so reconnecting
+/// transparently would hand back a connection that looks healthy but holds none of
+/// the state the caller depends on — an EXEC could commit where it should have
+/// aborted. The command fails and the scope becomes unusable instead.
 pub struct ScopedConnection {
     pub scope_id: u64,
     pub connection: redis::aio::MultiplexedConnection,
@@ -907,6 +914,13 @@ impl ScopePool {
     }
 
     /// Release a scope. Zero-cost if state is clean.
+    ///
+    /// Five outcomes, in order of precedence: a closed pool just decrements the
+    /// count; a clean connection goes straight back to idle with no round-trip; a
+    /// contended lock discards, since release must not block; an armed blocking
+    /// waiter or a failed re-auth discards, because no cleanup command can undo
+    /// either; anything else dirty runs the cleanup pipeline and discards if it
+    /// fails.
     #[allow(clippy::needless_borrow)]
     pub fn release(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
         if self.in_use.remove(&scope_id).is_none() {

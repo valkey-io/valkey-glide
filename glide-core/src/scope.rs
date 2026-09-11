@@ -15,6 +15,11 @@
 //! a new connection is created targeting the correct node.
 //! Language bindings (Java JNI, Python CFFI, Node N-API, Go CGO) should call
 //! these functions rather than duplicating the logic.
+//!
+//! Pub/sub is not supported on a scoped connection. SUBSCRIBE puts the connection
+//! into push-message mode, which needs a dedicated message handler that scopes do
+//! not wire up; use the parent client's pub/sub API, which keeps its own
+//! subscription connections.
 
 use crate::client::Client;
 use crate::pool::{
