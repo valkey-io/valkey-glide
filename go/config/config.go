@@ -51,6 +51,32 @@ const (
 	MemoryDB
 )
 
+// AwsCredentials holds AWS credentials returned by a GlideCredentialProvider.
+// All fields match the Java AwsCredentials class for cross-language consistency.
+type AwsCredentials struct {
+	// AccessKeyID is the AWS Access Key ID. Required; must not be blank.
+	AccessKeyID string
+	// SecretAccessKey is the AWS Secret Access Key. Required; must not be blank.
+	SecretAccessKey string
+	// SessionToken is the AWS Session Token. Empty string for long-term credentials.
+	SessionToken string
+	// ExpiresAtEpochMillis is the optional credential expiry as Unix epoch milliseconds.
+	// Use 0 to indicate no expiry.
+	ExpiresAtEpochMillis int64
+}
+
+// GlideCredentialProvider is a callback that supplies AWS credentials for IAM token signing.
+//
+// Assign a function of this type when credentials come from a custom source (e.g. HashiCorp Vault,
+// a custom STS assume-role flow) instead of the default AWS credential chain.
+//
+// Thread safety: implementations must be safe for concurrent calls -- in cluster mode,
+// independent reconnections may invoke this callback simultaneously.
+//
+// Promptness: return quickly; this callback sits on the reconnect path and a slow
+// implementation directly extends failover time.
+type GlideCredentialProvider func() (AwsCredentials, error)
+
 // IamAuthConfig represents configuration settings for IAM authentication.
 type IamAuthConfig struct {
 	// The name of the ElastiCache/MemoryDB cluster.
@@ -62,6 +88,9 @@ type IamAuthConfig struct {
 	// Optional refresh interval in seconds for renewing IAM authentication tokens.
 	// If not provided, the core will use its default value.
 	refreshIntervalSeconds *uint32
+	// credentialProvider is an optional custom credential provider for IAM authentication.
+	// When nil, the default AWS credential chain is used.
+	credentialProvider GlideCredentialProvider
 }
 
 // NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
@@ -77,6 +106,19 @@ func NewIamAuthConfig(clusterName string, service ServiceType, region string) *I
 func (config *IamAuthConfig) WithRefreshIntervalSeconds(seconds uint32) *IamAuthConfig {
 	config.refreshIntervalSeconds = &seconds
 	return config
+}
+
+// WithCredentialProvider sets a custom credential provider for IAM authentication.
+// When set, this provider is invoked to retrieve AWS credentials for IAM token signing
+// instead of the default AWS credential chain.
+func (config *IamAuthConfig) WithCredentialProvider(provider GlideCredentialProvider) *IamAuthConfig {
+	config.credentialProvider = provider
+	return config
+}
+
+// GetCredentialProvider returns the configured credential provider, or nil if none is set.
+func (config *IamAuthConfig) GetCredentialProvider() GlideCredentialProvider {
+	return config.credentialProvider
 }
 
 func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
@@ -744,6 +786,13 @@ func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
 
+func (config *ClientConfiguration) GetCredentialProvider() GlideCredentialProvider {
+	if config.credentials != nil && config.credentials.iamConfig != nil {
+		return config.credentials.iamConfig.credentialProvider
+	}
+	return nil
+}
+
 func (config *ClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -1024,6 +1073,13 @@ func (config *ClusterClientConfiguration) HasSubscription() bool {
 
 func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
+}
+
+func (config *ClusterClientConfiguration) GetCredentialProvider() GlideCredentialProvider {
+	if config.credentials != nil && config.credentials.iamConfig != nil {
+		return config.credentials.iamConfig.credentialProvider
+	}
+	return nil
 }
 
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {

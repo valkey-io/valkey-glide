@@ -296,6 +296,130 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
+def _invoke_async_credential_provider(credential_provider_fn, event_loop):
+    """
+    Invoke an async credential provider from a non-async (Rust callback) thread.
+
+    Tries the asyncio path first (if *event_loop* is set and open), then falls
+    back to trio's ``from_thread.run`` if trio is installed and the caller is
+    running inside a trio worker thread.
+    """
+    if event_loop is not None and not event_loop.is_closed():
+        # asyncio path: schedule coroutine on the asyncio event loop
+        import asyncio
+
+        future = asyncio.run_coroutine_threadsafe(credential_provider_fn(), event_loop)
+        # Timeout slightly less than Rust's 10-second callback timeout so the
+        # Python layer surfaces a clean TimeoutError before Rust's fires.
+        return future.result(timeout=9)
+
+    # No asyncio loop — try the Trio path.
+    try:
+        import trio
+
+        return trio.from_thread.run(credential_provider_fn)
+    except ImportError:
+        import logging
+
+        msg = (
+            "GlideCredentialProvider is an async callable but no event loop "
+            "is available. Async providers require an asyncio or trio event "
+            "loop. Use a synchronous callable if no async event loop exists."
+        )
+        logging.getLogger(__name__).error(msg)
+        raise RuntimeError(msg)
+    except RuntimeError as e:
+        # trio.from_thread.run raises RuntimeError if not called from a trio worker.
+        import logging
+
+        logging.getLogger(
+            __name__
+        ).error(  # nosemgrep: python-logger-credential-disclosure
+            "IAM provider async bridge failed for trio: %s", e
+        )
+        raise
+
+
+def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=None):
+    """
+    Wrap a Python GlideCredentialProvider callable into a CFFI
+    ``CredentialProviderCallback`` function pointer.
+
+    Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
+
+    Both synchronous and async (coroutine function) providers are supported.
+    For async providers, either ``event_loop`` (asyncio) must be provided,
+    or the callback must be called from a trio worker thread (trio.from_thread
+    is used automatically in that case).
+    """
+    if credential_provider_fn is None:
+        return ffi.NULL
+
+    import inspect
+
+    is_async = inspect.iscoroutinefunction(credential_provider_fn)
+
+    def _credential_provider_callback(
+        client_id,  # provided by Rust; unused on the Python side
+        access_key_id_buf,
+        access_key_id_buf_len,
+        access_key_id_len_ptr,
+        secret_access_key_buf,
+        secret_access_key_buf_len,
+        secret_access_key_len_ptr,
+        session_token_buf,
+        session_token_buf_len,
+        session_token_len_ptr,
+        expires_at_millis_ptr,
+    ):
+        try:
+            if is_async:
+                creds = _invoke_async_credential_provider(
+                    credential_provider_fn, event_loop
+                )
+            else:
+                creds = credential_provider_fn()
+            # Fail fast if any required credential would be truncated.
+            # Returning 0 causes Rust to surface a clear CredentialsError.
+            encoded_key = creds.access_key_id.encode("utf-8")
+            if len(encoded_key) > access_key_id_buf_len:
+                return 0
+            encoded_secret = creds.secret_access_key.encode("utf-8")
+            if len(encoded_secret) > secret_access_key_buf_len:
+                return 0
+            encoded_token = (
+                creds.session_token.encode("utf-8") if creds.session_token else b""
+            )
+            if len(encoded_token) > session_token_buf_len:
+                return 0
+            # Write access_key_id
+            ffi.memmove(access_key_id_buf, encoded_key, len(encoded_key))
+            access_key_id_len_ptr[0] = len(encoded_key)
+            # Write secret_access_key
+            ffi.memmove(secret_access_key_buf, encoded_secret, len(encoded_secret))
+            secret_access_key_len_ptr[0] = len(encoded_secret)
+            # Write session_token (optional)
+            if encoded_token:
+                ffi.memmove(session_token_buf, encoded_token, len(encoded_token))
+                session_token_len_ptr[0] = len(encoded_token)
+            else:
+                session_token_len_ptr[0] = 0
+            # Write expires_at (0 = no expiry)
+            expires_at_millis_ptr[0] = creds.expires_at_epoch_millis or 0
+            return 1  # success
+        except Exception as e:
+            import logging
+
+            logging.getLogger(
+                __name__
+            ).warning(  # nosemgrep: python-logger-credential-disclosure
+                "IAM provider raised an exception: %s", e
+            )
+            return 0  # failure — Rust will surface a CredentialsError
+
+    return ffi.callback("CredentialProviderCallback", _credential_provider_callback)
+
+
 def handle_command_result(ffi, lib, command_result, response_handler):
     """Handle a synchronous CommandResult* from FFI.
 

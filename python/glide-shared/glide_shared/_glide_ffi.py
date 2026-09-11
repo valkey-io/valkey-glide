@@ -223,6 +223,20 @@ class _GlideFFI:
                 size_t* resolved_host_len
             );
 
+            typedef uint8_t (*CredentialProviderCallback)(
+                uintptr_t client_id,
+                uint8_t* access_key_id_buf,
+                size_t access_key_id_buf_len,
+                size_t* access_key_id_len,
+                uint8_t* secret_access_key_buf,
+                size_t secret_access_key_buf_len,
+                size_t* secret_access_key_len,
+                uint8_t* session_token_buf,
+                size_t session_token_buf_len,
+                size_t* session_token_len,
+                int64_t* expires_at_epoch_millis
+            );
+
             typedef struct {
                 int _type;
                 union {
@@ -245,6 +259,7 @@ class _GlideFFI:
                 const ClientType* client_type,
                 PubSubCallback pubsub_callback,
                 AddressResolverCallback address_resolver,
+                CredentialProviderCallback credential_provider,
                 uintptr_t client_id
             );
             void close_client(const void* client_adapter_ptr);
@@ -416,7 +431,8 @@ class _GlideFFI:
                 uint64_t abandon_timeout_ms,
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
-                const ClientType* client_type
+                const ClientType* client_type,
+                CredentialProviderCallback credential_provider
             );
             int64_t glide_pool_try_acquire(uint64_t pool_id);
             int64_t glide_pool_acquire_blocking(uint64_t pool_id, uint64_t timeout_ms);

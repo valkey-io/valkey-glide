@@ -336,8 +336,21 @@ pub fn create_pool(
                 Ok(req) => req,
                 Err(_) => break,
             };
+            // Look up credential_provider_key (same as create_direct_client does)
+            let credential_provider_key = connection_request
+                .credential_provider_key
+                .as_ref()
+                .filter(|key| !key.is_empty())
+                .map(ToString::to_string);
             let mut internal_req: ConnectionRequest = connection_request.into();
             internal_req.address_resolver = None;
+            if let Some(key) = credential_provider_key
+                && let Some(provider) = glide_core::credential_provider_registry::remove(&key)
+                && let Some(auth_info) = internal_req.authentication_info.as_mut()
+                && let Some(iam_config) = auth_info.iam_config.as_mut()
+            {
+                iam_config.credentials_provider = Some(provider);
+            }
 
             match Client::new(internal_req, None).await {
                 Ok(client) => {

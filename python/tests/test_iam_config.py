@@ -1,7 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-from glide_shared.config import IamAuthConfig, ServerCredentials, ServiceType
+from glide_shared.config import (
+    AwsCredentials,
+    IamAuthConfig,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.exceptions import ConfigurationError
 
 
@@ -117,3 +122,82 @@ class TestServerCredentialsWithIam:
             ServerCredentials(username="myUser")
 
         assert "Either password or iam_config must be provided" in str(exc_info.value)
+
+
+class TestAwsCredentials:
+    def test_valid_long_term_credentials(self):
+        creds = AwsCredentials(
+            access_key_id="AKIAIOSFODNN7EXAMPLE",
+            secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        )
+        assert creds.access_key_id == "AKIAIOSFODNN7EXAMPLE"
+        assert creds.session_token is None
+        assert creds.expires_at_epoch_millis is None
+
+    def test_valid_session_credentials(self):
+        creds = AwsCredentials(
+            access_key_id="ASIA...",
+            secret_access_key="secret",
+            session_token="token",
+            expires_at_epoch_millis=9999999999000,
+        )
+        assert creds.session_token == "token"
+        assert creds.expires_at_epoch_millis == 9999999999000
+
+    def test_blank_access_key_id_raises(self):
+        with pytest.raises(ValueError, match="access_key_id"):
+            AwsCredentials(access_key_id="", secret_access_key="secret")
+
+    def test_whitespace_access_key_id_raises(self):
+        with pytest.raises(ValueError, match="access_key_id"):
+            AwsCredentials(access_key_id="   ", secret_access_key="secret")
+
+    def test_blank_secret_raises(self):
+        with pytest.raises(ValueError, match="secret_access_key"):
+            AwsCredentials(access_key_id="key", secret_access_key="")
+
+    def test_negative_expires_at_raises(self):
+        with pytest.raises(ValueError, match="expires_at_epoch_millis"):
+            AwsCredentials(
+                access_key_id="key",
+                secret_access_key="secret",
+                expires_at_epoch_millis=-1,
+            )
+
+
+class TestGlideCredentialProvider:
+    def test_valid_provider_accepted(self):
+        def my_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=my_provider,
+        )
+        assert config.credential_provider is my_provider
+
+    def test_async_provider_accepted_in_config(self):
+        """Async providers are accepted at config time; the async client bridges them."""
+
+        async def async_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        # Should NOT raise -- async providers are now supported in the async client
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=async_provider,
+        )
+        assert config.credential_provider is async_provider
+
+    def test_non_callable_raises(self):
+        with pytest.raises(ValueError, match="callable"):
+            IamAuthConfig(
+                cluster_name="c",
+                service=ServiceType.ELASTICACHE,
+                region="us-east-1",
+                credential_provider="not_a_function",  # type: ignore
+            )

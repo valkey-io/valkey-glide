@@ -14,6 +14,7 @@ mod socket_listener;
 pub use socket_listener::*;
 pub mod address_resolver_registry;
 pub mod compression;
+pub mod credential_provider_registry;
 pub mod errors;
 pub mod scripts_container;
 pub mod timeout_watchdog;

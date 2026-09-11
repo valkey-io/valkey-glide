@@ -103,6 +103,8 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        self._address_resolver_callback_ref = None  # Keep callback alive
+        self._credential_provider_callback_ref = None  # Keep callback alive
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -185,12 +187,45 @@ class BaseClient(CoreCommands):
             # Store reference to prevent garbage collection
             self._address_resolver_callback_ref = address_resolver_callback
 
+        # Create credential provider callback if configured in IAM config
+        credential_provider_callback = self._ffi.NULL
+        _credential_provider_fn = None
+        if (
+            self._config.credentials is not None
+            and self._config.credentials.iam_config is not None
+            and self._config.credentials.iam_config.credential_provider is not None
+        ):
+            _credential_provider_fn = (
+                self._config.credentials.iam_config.credential_provider
+            )
+
+        if _credential_provider_fn is not None:
+            # Async providers require an asyncio event loop, which the sync client
+            # does not have. Fail with a clear error at connection time.
+            if getattr(
+                self._config.credentials.iam_config,
+                "_credential_provider_is_async",
+                False,
+            ):
+                raise ValueError(
+                    "GlideCredentialProvider is an async callable but the sync glide client "
+                    "does not support async providers. Use a synchronous callable, or switch "
+                    "to the async glide client."
+                )
+            from glide_shared.ffi_helpers import create_credential_provider_callback
+
+            credential_provider_callback = create_credential_provider_callback(
+                self._ffi, _credential_provider_fn
+            )
+            self._credential_provider_callback_ref = credential_provider_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
             address_resolver_callback,
+            credential_provider_callback,
             0,  # client_id is not used by the Python client
         )
 
@@ -1061,6 +1096,8 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = self._ffi.NULL
                 self._pubsub_callback_ref = None
+                self._address_resolver_callback_ref = None
+                self._credential_provider_callback_ref = None
 
     def __enter__(self) -> Self:
         return self

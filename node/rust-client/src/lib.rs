@@ -825,6 +825,11 @@ pub fn create_direct_client<'a>(
         .as_ref()
         .filter(|key| !key.is_empty())
         .map(ToString::to_string);
+    let credential_provider_key = proto_connection_request
+        .credential_provider_key
+        .as_ref()
+        .filter(|key| !key.is_empty())
+        .map(ToString::to_string);
 
     // Get the inflight requests limit from the protobuf connection request
     let inflight_requests_limit = if proto_connection_request.inflight_requests_limit > 0 {
@@ -839,6 +844,30 @@ pub fn create_direct_client<'a>(
         && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
     {
         connection_request.address_resolver = Some(resolver);
+    }
+    if let Some(key) = credential_provider_key {
+        match glide_core::credential_provider_registry::remove(&key) {
+            Some(provider) => {
+                if let Some(auth_info) = connection_request.authentication_info.as_mut()
+                    && let Some(iam_config) = auth_info.iam_config.as_mut()
+                {
+                    iam_config.credentials_provider = Some(provider);
+                } else {
+                    log_warn(
+                        "create_direct_client",
+                        "credential_provider_key was set but the connection request contains \
+                         no IAM configuration. The credential provider will be ignored.",
+                    );
+                }
+            }
+            None => {
+                log_warn(
+                    "create_direct_client",
+                    "credential_provider_key was set but no provider was found in the registry. \
+                     The key may have been consumed already or was never registered.",
+                );
+            }
+        }
     }
 
     // Create shared response buffer
@@ -2621,6 +2650,213 @@ pub fn register_address_resolver(
 #[napi(js_name = "removeAddressResolver")]
 pub fn remove_address_resolver(key: String) {
     glide_core::address_resolver_registry::remove(&key);
+}
+
+/// Return value from a JavaScript GlideCredentialProvider callback.
+#[napi(object)]
+pub struct JsAwsCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    /// Optional expiry as Unix epoch milliseconds. Use 0 or None to indicate no expiry.
+    pub expires_at_epoch_millis: Option<i64>,
+}
+
+/// A Node.js credential provider wrapper.
+/// It holds a `ThreadsafeFunction` that invokes the JS callback and delivers
+/// the resulting `JsAwsCredentials` back to the calling thread via a channel.
+/// The callback may return either a plain `JsAwsCredentials` or a
+/// `Promise<JsAwsCredentials>`; both are handled transparently.
+type CredentialProviderTsfn = ThreadsafeFunction<(), Unknown<'static>, (), Status, false, true>;
+
+struct NodeCredentialsProvider {
+    tsfn: CredentialProviderTsfn,
+}
+
+// SAFETY: ThreadsafeFunction is designed to be called from any thread.
+unsafe impl Send for NodeCredentialsProvider {}
+unsafe impl Sync for NodeCredentialsProvider {}
+
+impl NodeCredentialsProvider {
+    fn get_credentials(
+        &self,
+    ) -> std::result::Result<
+        (
+            String,
+            String,
+            Option<String>,
+            Option<std::time::SystemTime>,
+        ),
+        glide_core::iam::GlideIAMError,
+    > {
+        use std::sync::Arc as StdArc;
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<std::result::Result<JsAwsCredentials, String>>(1);
+        let tx = StdArc::new(tx);
+
+        let status = self.tsfn.call_with_return_value(
+            (),
+            ThreadsafeFunctionCallMode::Blocking,
+            move |result: Result<Unknown<'static>>, _env: Env| {
+                use napi::JsValue as NapiJsValue;
+
+                let unknown = match result {
+                    Ok(u) => u,
+                    Err(e) => {
+                        let _ = tx.send(Err(format!("GlideCredentialProvider JS error: {e}")));
+                        return Ok(());
+                    }
+                };
+
+                let val = unknown.value();
+
+                // Determine whether the JS callback returned a Promise or a plain value.
+                let mut is_promise = false;
+                // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                let np_status =
+                    unsafe { napi::sys::napi_is_promise(val.env, val.value, &mut is_promise) };
+                if np_status != napi::sys::Status::napi_ok {
+                    let _ = tx.send(Err(format!(
+                        "napi_is_promise failed with status: {np_status:?}"
+                    )));
+                    return Ok(());
+                }
+
+                if is_promise {
+                    // The JS callback returned a Promise. Attach .then() and .catch()
+                    // handlers that forward the resolved value (or rejection) over the
+                    // mpsc channel.
+                    use napi::bindgen_prelude::{FromNapiValue, PromiseRaw};
+
+                    // SAFETY: we verified this is a Promise above.
+                    let promise_raw = unsafe {
+                        PromiseRaw::<JsAwsCredentials>::from_napi_value(val.env, val.value)
+                    };
+
+                    match promise_raw {
+                        Ok(pr) => {
+                            let tx_resolve = tx.clone();
+                            let tx_reject = tx.clone();
+
+                            // Attach .then() — fires when the Promise resolves
+                            let then_result = pr.then(move |ctx| {
+                                let _ = tx_resolve.send(Ok(ctx.value));
+                                Ok(())
+                            });
+
+                            match then_result {
+                                Ok(pr2) => {
+                                    // Attach .catch() — fires when the Promise rejects
+                                    let _ = pr2.catch(
+                                        move |ctx: napi::bindgen_prelude::CallbackContext<
+                                            Unknown<'_>,
+                                        >| {
+                                            // Try to extract a useful rejection message from the
+                                            // Promise rejection value.
+                                            let reason = ctx
+                                                .value
+                                                .coerce_to_string()
+                                                .and_then(|s| s.into_utf8())
+                                                .map(|s| s.as_str().unwrap_or("").to_string())
+                                                .unwrap_or_else(|_| {
+                                                    "GlideCredentialProvider Promise rejected"
+                                                        .to_string()
+                                                });
+                                            let _ = tx_reject.send(Err(reason));
+                                            Ok(())
+                                        },
+                                    );
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(Err(format!(
+                                        "Failed to attach .then() to credential Promise: {e}"
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(format!(
+                                "Failed to read GlideCredentialProvider Promise: {e}"
+                            )));
+                        }
+                    }
+                } else {
+                    // Synchronous return — deserialize the Unknown directly.
+                    use napi::bindgen_prelude::FromNapiValue;
+                    // SAFETY: val.env / val.value are valid napi pointers on this JS thread.
+                    let result = unsafe { JsAwsCredentials::from_napi_value(val.env, val.value) }
+                        .map_err(|e: napi::Error| e.to_string());
+                    let _ = tx.send(result);
+                }
+                Ok(())
+            },
+        );
+
+        if status != Status::Ok {
+            return Err(glide_core::iam::GlideIAMError::CredentialsError(format!(
+                "GlideCredentialProvider callback scheduling failed: {status:?}"
+            )));
+        }
+
+        let creds = rx
+            .recv_timeout(std::time::Duration::from_secs(12))
+            .map_err(|e| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback timed out or channel closed: {e}"
+                ))
+            })?
+            .map_err(|e| {
+                glide_core::iam::GlideIAMError::CredentialsError(format!(
+                    "GlideCredentialProvider callback error: {e}"
+                ))
+            })?;
+
+        let expires_at = creds
+            .expires_at_epoch_millis
+            .filter(|&ms| ms > 0)
+            .map(|ms| {
+                std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64)
+            });
+        Ok((
+            creds.access_key_id,
+            creds.secret_access_key,
+            creds.session_token,
+            expires_at,
+        ))
+    }
+}
+
+/// Register a JavaScript GlideCredentialProvider callback in the global registry.
+/// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+/// `credential_provider_key` field so the socket listener can look it up.
+///
+/// The JS callback signature is: `() => AwsCredentials | Promise<AwsCredentials>`
+/// Both synchronous and Promise-returning (async) callbacks are supported.
+#[napi(js_name = "registerCredentialProvider")]
+pub fn register_credential_provider(
+    #[napi(ts_arg_type = "() => JsAwsCredentials | Promise<JsAwsCredentials>")] callback: Function<
+        '_,
+        (),
+        Unknown<'static>,
+    >,
+) -> Result<String> {
+    let tsfn = callback
+        .build_threadsafe_function::<()>()
+        .callee_handled::<false>()
+        .weak::<true>()
+        .build_callback(|_ctx| Ok(()))?;
+    let provider = Arc::new(NodeCredentialsProvider { tsfn });
+    let key = uuid::Uuid::new_v4().to_string();
+    let credentials_fn: glide_core::iam::CredentialsProvider =
+        Arc::new(move || provider.get_credentials());
+    glide_core::credential_provider_registry::register(key.clone(), credentials_fn);
+    Ok(key)
+}
+
+/// Remove a credential provider from the global registry by key.
+#[napi(js_name = "removeCredentialProvider")]
+pub fn remove_credential_provider(key: String) {
+    glide_core::credential_provider_registry::remove(&key);
 }
 
 static NEXT_MONITOR_HANDLE: AtomicU64 = AtomicU64::new(1);
