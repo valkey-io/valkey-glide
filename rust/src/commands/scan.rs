@@ -263,15 +263,11 @@ mod tests {
     }
 
     /// Returns all the items from an async scan iterator.
-    async fn get_items(
-        con: &MockConnection,
-        iter: &mut ScanIter<'_, MockConnection, String>,
-    ) -> Vec<String> {
+    async fn get_items(iter: &mut ScanIter<'_, MockConnection, String>) -> Vec<String> {
         let mut items = Vec::new();
         while let Some(item) = iter.next_item().await {
             items.push(item.expect("unexpected error during scan"));
         }
-        assert_eq!(con.remaining(), 0, "scan did not fetch every queued page");
         items
     }
 
@@ -279,21 +275,24 @@ mod tests {
     async fn async_success_empty_page() {
         let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&con, &mut iter).await, Vec::<String>::new());
+        assert_eq!(get_items(&mut iter).await, Vec::<String>::new());
+        assert_eq!(con.remaining(), 0);
     }
 
     #[tokio::test]
     async fn async_success_one_page() {
         let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&con, &mut iter).await, ["a", "b"]);
+        assert_eq!(get_items(&mut iter).await, ["a", "b"]);
+        assert_eq!(con.remaining(), 0);
     }
 
     #[tokio::test]
     async fn async_success_multi_page() {
         let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
         let mut iter = scan_iter(&con).await.unwrap();
-        assert_eq!(get_items(&con, &mut iter).await, ["a", "b", "c"]);
+        assert_eq!(get_items(&mut iter).await, ["a", "b", "c"]);
+        assert_eq!(con.remaining(), 0);
     }
 
     #[tokio::test]
@@ -321,47 +320,38 @@ mod tests {
         SyncScanIter::new(con, vec![b"SCAN".to_vec()], Vec::new())
     }
 
-    /// Returns all the items from an sync scan iterator.
+    /// Returns all the items from a sync scan iterator.
     #[cfg(feature = "sync")]
-    fn sync_get_items(
-        con: &MockConnection,
-        iter: SyncScanIter<'_, MockConnection, String>,
-    ) -> Vec<String> {
-        let items = iter
-            .collect::<RedisResult<Vec<String>>>()
-            .expect("unexpected error during scan");
-        assert_eq!(con.remaining(), 0, "scan did not fetch every queued page");
-        items
+    fn sync_get_items(iter: SyncScanIter<'_, MockConnection, String>) -> Vec<String> {
+        iter.collect::<RedisResult<Vec<String>>>()
+            .expect("unexpected error during scan")
     }
 
     #[cfg(feature = "sync")]
     #[test]
     fn sync_success_empty_page() {
         let con = MockConnection::new(vec![Ok(page("4", &[])), Ok(page("0", &[]))]);
-        assert_eq!(
-            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
-            Vec::<String>::new()
-        );
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, Vec::<String>::new());
+        assert_eq!(con.remaining(), 0);
     }
 
     #[cfg(feature = "sync")]
     #[test]
     fn sync_success_one_page() {
         let con = MockConnection::new(vec![Ok(page("0", &["a", "b"]))]);
-        assert_eq!(
-            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
-            ["a", "b"]
-        );
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, ["a", "b"]);
+        assert_eq!(con.remaining(), 0);
     }
 
     #[cfg(feature = "sync")]
     #[test]
     fn sync_success_multi_page() {
         let con = MockConnection::new(vec![Ok(page("6", &["a", "b"])), Ok(page("0", &["c"]))]);
-        assert_eq!(
-            sync_get_items(&con, sync_scan_iter(&con).unwrap()),
-            ["a", "b", "c"]
-        );
+        let items = sync_get_items(sync_scan_iter(&con).unwrap());
+        assert_eq!(items, ["a", "b", "c"]);
+        assert_eq!(con.remaining(), 0);
     }
 
     #[cfg(feature = "sync")]
