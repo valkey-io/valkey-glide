@@ -3036,7 +3036,7 @@ impl NodeCredentialsProvider {
 /// Both synchronous and Promise-returning (async) callbacks are supported.
 #[napi(js_name = "registerCredentialProvider")]
 pub fn register_credential_provider(
-    #[napi(ts_arg_type = "() => AwsCredentials | Promise<AwsCredentials>")] callback: Function<
+    #[napi(ts_arg_type = "() => JsAwsCredentials | Promise<JsAwsCredentials>")] callback: Function<
         '_,
         (),
         Unknown<'static>,
