@@ -123,6 +123,10 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
 /// Adding the command to a pipeline clones it once before the existing slot split. Bound that
 /// extra copy so small MGETs and unusually large aggregate key payloads keep the lower-copy
 /// direct path.
+///
+/// These are benchmark-selected crossover points, not protocol or routing limits: the pipeline
+/// path starts above 25 keys and avoids cloning more than 16 KiB of aggregate key data. Recalibrate
+/// them only with the loopback MGET benchmark.
 const MGET_PIPELINE_MIN_KEY_COUNT: usize = 26;
 const MGET_PIPELINE_MAX_KEY_BYTES: usize = 16 * 1024;
 

@@ -1738,6 +1738,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     .unwrap_or(())
 }
 
+/// Java command arguments after JNI extraction. `Packed` uses the private MGET-only framing
+/// documented by [`append_packed_command_args`].
 enum CommandArgs {
     Separate(Vec<Vec<u8>>),
     Packed(Vec<u8>),
@@ -1749,6 +1751,10 @@ fn read_packed_u32(bytes: &[u8], offset: usize) -> Option<u32> {
     Some(u32::from_be_bytes(encoded.try_into().ok()?))
 }
 
+/// Append private packed JNI arguments in `[count:u32be][length:u32be][bytes]...` format.
+///
+/// Java emits this framing only for large MGETs. Exact consumption is mandatory: accepting a
+/// truncated or trailing payload would make the Java and Rust command boundaries disagree.
 fn append_packed_command_args(cmd: &mut redis::Cmd, bytes: &[u8]) -> Result<(), String> {
     const HEADER_SIZE: usize = std::mem::size_of::<u32>();
     let count = read_packed_u32(bytes, 0)

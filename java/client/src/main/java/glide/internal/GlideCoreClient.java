@@ -585,6 +585,8 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     private static String[] deserializeMgetStringArray(ByteBuffer buffer) {
+        // The first pass validates the whole native frame and finds the largest element. The second
+        // pass intentionally rewinds and reuses one byte array instead of allocating per value.
         int count = readMgetArrayLength(buffer);
         int maxValueLength = 0;
         for (int index = 0; index < count; index++) {
@@ -624,6 +626,8 @@ public class GlideCoreClient implements AutoCloseable {
         for (int index = 0; index < count; index++) {
             int length = readMgetBulkStringLength(buffer, index);
             if (length != -1) {
+                // The typed MGET callback releases the native buffer when it returns, so each
+                // GlideString must copy its bounded slice before the buffer can escape this method.
                 int originalLimit = buffer.limit();
                 buffer.limit(buffer.position() + length);
                 try {

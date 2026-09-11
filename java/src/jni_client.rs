@@ -84,6 +84,7 @@ static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 // The connection's internal reader task must run concurrently with command sends.
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
+// Benchmark-selected crossover for the typed MGET response path, not a response-shape limit.
 const MGET_CONTIGUOUS_MIN_ELEMENTS: usize = 8;
 
 // =========================
@@ -98,6 +99,11 @@ fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
     NATIVE_BUFFER_REGISTRY.get_or_init(dashmap::DashMap::new)
 }
 
+/// Retain bytes that back a Java `DirectByteBuffer` until its sole release path removes them.
+///
+/// The registry owns the `Vec`, keeping its allocation stable even though the `Vec` value moves
+/// into the map. Its data pointer is also the release id. Generic responses release through the
+/// Java cleaner; typed MGET releases synchronously after its fixed Java decoder returns.
 pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
     assert!(
         !bytes.is_empty(),
@@ -471,6 +477,9 @@ fn process_callback_job_with_env(
                     && should_use_mget_contiguous_response(&server_value);
             let use_direct_buffer =
                 use_mget_contiguous_response || should_use_direct_buffer(&server_value);
+            // Typed MGET decodes the buffer during completeCallback and does not expose it to the
+            // caller, so Rust can release it when that call returns. Generic responses may retain
+            // the buffer and must instead use the Java cleaner.
             let release_direct_buffer_after_callback =
                 use_direct_buffer && matches!(response_conversion, ResponseConversion::Mget);
             let java_result = if use_direct_buffer {
@@ -619,6 +628,10 @@ fn enqueue_callback(
     }
 }
 
+/// Select the MGET-only response encoding that one fixed Java decoder can consume synchronously.
+///
+/// Arrays with any other element type retain generic conversion so their full RESP shape is
+/// preserved. The element threshold is only a benchmark-selected crossover point.
 fn should_use_mget_contiguous_response(value: &ServerValue) -> bool {
     match value {
         redis::Value::Array(values) if values.len() >= MGET_CONTIGUOUS_MIN_ELEMENTS => values
@@ -826,6 +839,11 @@ fn create_direct_byte_buffer<'local>(
     }
 }
 
+/// Create a direct buffer whose lifetime is either cleaner-owned or callback-owned.
+///
+/// `release_after_callback` is valid only for the typed MGET path, where the Java decoder copies
+/// all bytes before `complete_java_callback` returns. All other callers must register the cleaner
+/// because the `ByteBuffer` can escape the callback.
 fn create_native_direct_byte_buffer<'local>(
     env: &mut JNIEnv<'local>,
     bytes: Vec<u8>,

@@ -44,6 +44,13 @@ import response.ResponseOuterClass.Response;
  */
 public class CommandManager {
 
+    /**
+     * Benchmark-selected crossover for packing MGET arguments, not a protocol constraint.
+     *
+     * <p>The private Java-to-Rust layout is {@code [count][length][bytes]...}, with each header a
+     * four-byte big-endian unsigned integer. Packing only avoids the per-key JNI array traversal
+     * at or above this count; adjust it with the loopback MGET benchmark.
+     */
     private static final int MGET_PACKED_ARGUMENT_MIN_COUNT = 8;
 
     private static final Set<String> BLOCKING_COMMAND_NAMES =
