@@ -1745,6 +1745,18 @@ enum CommandArgs {
     Packed(Vec<u8>),
 }
 
+fn end_and_release_otel_span(span_ptr: jlong) {
+    if span_ptr != 0
+        && let Ok(span) =
+            unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
+    {
+        span.end();
+        unsafe {
+            Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+        }
+    }
+}
+
 fn read_packed_u32(bytes: &[u8], offset: usize) -> Option<u32> {
     let end = offset.checked_add(std::mem::size_of::<u32>())?;
     let encoded = bytes.get(offset..end)?;
@@ -1998,6 +2010,7 @@ fn execute_command_async(params: ExecuteCommandParams<'_>) {
         let args_data = match args_vec {
             Ok(a) => a,
             Err(e) => {
+                end_and_release_otel_span(span_ptr);
                 jni_client::complete_error_sync(
                     &mut env,
                     callback_id,
@@ -2120,16 +2133,7 @@ fn execute_command_async(params: ExecuteCommandParams<'_>) {
             }
             .await;
 
-            // End OpenTelemetry span if one was created
-            if span_ptr != 0
-                && let Ok(span) =
-                    unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
-            {
-                span.end();
-                unsafe {
-                    std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-                }
-            }
+            end_and_release_otel_span(span_ptr);
 
             if matches!(response_conversion, jni_client::ResponseConversion::Mget) {
                 complete_mget_callback(jvm, callback_id, result, !expect_utf8_bool);
@@ -2155,7 +2159,10 @@ fn typed_mget_response_conversion() -> jni_client::ResponseConversion {
 
 #[cfg(test)]
 mod packed_command_arg_tests {
-    use super::append_packed_command_args;
+    use jni::sys::jlong;
+    use std::sync::{Arc, Weak};
+
+    use super::{append_packed_command_args, end_and_release_otel_span};
 
     #[test]
     fn accepts_complete_packed_arguments() {
@@ -2187,6 +2194,17 @@ mod packed_command_arg_tests {
             append_packed_command_args(&mut redis::cmd("MGET"), &count_exceeds_payload).is_err()
         );
         assert!(append_packed_command_args(&mut redis::cmd("MGET"), &missing_length).is_err());
+    }
+
+    #[test]
+    fn end_and_release_otel_span_releases_leaked_span() {
+        let span = Arc::new(glide_core::GlideOpenTelemetry::new_span("test"));
+        let weak_span: Weak<glide_core::GlideSpan> = Arc::downgrade(&span);
+        let span_ptr = Arc::into_raw(span) as jlong;
+
+        end_and_release_otel_span(span_ptr);
+
+        assert!(weak_span.upgrade().is_none());
     }
 }
 
