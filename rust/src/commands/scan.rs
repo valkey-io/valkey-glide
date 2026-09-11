@@ -50,7 +50,8 @@ pub struct ScanIter<'a, C: ?Sized, RV> {
 }
 
 impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
-    /// Start iteration
+    /// Returns an iterator for the scan, or
+    /// an error if fetching the first page fails.
     pub(crate) async fn new(
         con: &'a C,
         prefix: Vec<Vec<u8>>,
@@ -127,7 +128,8 @@ pub struct SyncScanIter<'a, C: ?Sized, RV> {
 
 #[cfg(feature = "sync")]
 impl<'a, C: Commands, RV: FromRedisValue> SyncScanIter<'a, C, RV> {
-    /// Start iteration
+    /// Returns an iterator for the scan, or
+    /// an error if fetching the first page fails.
     pub(crate) fn new(
         con: &'a C,
         prefix: Vec<Vec<u8>>,
