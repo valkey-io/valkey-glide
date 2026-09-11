@@ -24,7 +24,7 @@ use crate::pool::{
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool};
+use crate::pool::{ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -578,13 +578,14 @@ pub fn try_acquire_scope(
     let registry = get_scope_registry();
 
     match scope_pool.try_lock() {
-        Ok(mut pool) => {
-            let result = pool.try_acquire(registry, routing_slot);
-            if result >= 0 {
+        Ok(mut pool) => match pool.try_acquire(registry, routing_slot) {
+            ScopeAcquire::Reused(scope_id) => {
                 let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
+                scope_id as i64
             }
-            if result < 0 && pool.total_count.load(Ordering::Acquire) < pool.config.max_total {
-                // Spawn background connection creation
+            ScopeAcquire::Reserved => {
+                // Fill the slot try_acquire reserved. The caller retries and picks
+                // the connection up once it lands in the idle queue.
                 let pool_clone = scope_pool.clone();
                 let conn_bytes = pool.connection_request_bytes.clone();
                 let parent_client_id = pool.parent_client_id;
@@ -594,9 +595,10 @@ pub fn try_acquire_scope(
                     create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target_slot)
                         .await;
                 });
+                -1
             }
-            result
-        }
+            ScopeAcquire::Exhausted => -1,
+        },
         Err(_) => -1,
     }
 }
@@ -680,13 +682,14 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::{self, Sender};
     use std::thread::JoinHandle;
+    use std::time::{Duration, Instant};
 
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
-    use super::create_scope_connection;
+    use super::{create_scope_connection, try_acquire_scope};
     use crate::connection_request::{ConnectionRequest, NodeAddress};
-    use crate::pool::{ScopePool, ScopePoolConfig};
+    use crate::pool::{ScopePool, ScopePoolConfig, get_client_scope_pools};
 
     fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
         let mut request = ConnectionRequest::new();
@@ -784,6 +787,65 @@ mod tests {
             shutdown_sender.send(()).expect("stop mock server");
             server.join().expect("mock server exits cleanly");
         }
+    }
+
+    /// Polls the listener, awaiting between attempts so the spawned creation task
+    /// gets to run on a current-thread runtime.
+    async fn accept_within(listener: &TcpListener, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            match listener.accept() {
+                Ok(_) => return true,
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                Err(e) => panic!("unexpected listener error: {e}"),
+            }
+        }
+        false
+    }
+
+    /// `max_total = N` must permit N concurrent scopes, which means the Nth
+    /// reservation has to be filled like any other. `max_total = 1` makes the very
+    /// first acquire that boundary case: the pool reserves the only slot, so a
+    /// caller that re-checks capacity after the reservation sees the pool already
+    /// full, never creates the connection, and the borrower times out.
+    #[tokio::test]
+    async fn acquire_creates_the_connection_for_the_final_slot() {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes("GlideRust", port);
+
+        let client_id = 67_950_000_u64;
+        let config = ScopePoolConfig {
+            max_total: 1,
+            ..ScopePoolConfig::default()
+        };
+        get_client_scope_pools().insert(
+            client_id,
+            Arc::new(TokioMutex::new(ScopePool::new(
+                config,
+                request_bytes.clone(),
+                client_id,
+            ))),
+        );
+
+        let acquired = try_acquire_scope(
+            client_id,
+            request_bytes.clone(),
+            &tokio::runtime::Handle::current(),
+            0,
+        );
+        get_client_scope_pools().remove(&client_id);
+
+        assert_eq!(
+            acquired, -1,
+            "no idle connection yet, so the caller retries"
+        );
+        assert!(
+            accept_within(&listener, Duration::from_secs(5)).await,
+            "reserving the last slot must still create its connection"
+        );
     }
 
     /// Mirrors the poison predicate from `execute_scope_command` directly against
