@@ -70,7 +70,8 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
     }
 
     /// The next element, an error if fetching a page fails,
-    /// or `None` if the scan completed normally.
+    /// or `None` if the scan completed. An error ends the iteration:
+    /// subsequent call returns `None`.
     pub async fn next_item(&mut self) -> Option<RedisResult<RV>> {
         // Page may be empty, so keep fetching until an
         // item is produced or the cursor wraps to 0.
@@ -162,7 +163,8 @@ impl<C: Commands, RV: FromRedisValue> Iterator for SyncScanIter<'_, C, RV> {
     type Item = RedisResult<RV>;
 
     /// The next element, an error if fetching a page fails,
-    /// or `None` if the scan completed normally.
+    /// or `None` if the scan completed. An error ends the iteration:
+    /// subsequent call returns `None`.
     fn next(&mut self) -> Option<RedisResult<RV>> {
         // Page may be empty, so keep fetching until an
         // item is produced or the cursor wraps to 0.
