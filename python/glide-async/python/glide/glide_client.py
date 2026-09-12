@@ -858,33 +858,33 @@ class BaseClient(CoreCommands):
                     self._ffi, self._lib, span_name_cstr, parent_ctx
                 )
 
-        if route is None:
-            self._lib.command(
-                self._core_client,
-                callback_id,
-                request_type,
-                len(args),
-                c_args,
-                c_lengths,
-                self._ffi.NULL,
-                0,
-                span,
-            )
-        else:
-            route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
-            self._lib.command(
-                self._core_client,
-                callback_id,
-                request_type,
-                len(args),
-                c_args,
-                c_lengths,
-                route_ptr,
-                route_len,
-                span,
-            )
-
         try:
+            if route is None:
+                self._lib.command(
+                    self._core_client,
+                    callback_id,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    self._ffi.NULL,
+                    0,
+                    span,
+                )
+            else:
+                route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
+                self._lib.command(
+                    self._core_client,
+                    callback_id,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    span,
+                )
+
             return await fut
         finally:
             if span:
