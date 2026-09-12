@@ -352,6 +352,42 @@ current_rate = OpenTelemetry.get_sample_percentage()
 
 **Note**: OpenTelemetry can only be initialized once per process. To change configuration, restart your application.
 
+### Trace Context Propagation
+
+If your application already creates its own OpenTelemetry spans, GLIDE creates its command, batch and script spans as children of whichever span is active, so a trace has no gap at the database boundary. You pass nothing to GLIDE: because the OpenTelemetry Python API propagates the active span through `contextvars`, the parent is picked up implicitly in synchronous code and inside `asyncio`/`trio` tasks alike.
+
+GLIDE itself needs only the OpenTelemetry API package:
+
+```bash
+pip install opentelemetry-api
+```
+
+The example below additionally assumes your application configures a tracer provider with `opentelemetry-sdk`, as any OTel-instrumented application does. With `opentelemetry-api` alone there is no recording tracer provider, so `start_as_current_span` yields a non-recording span with no valid context and GLIDE has no parent to attach to.
+
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+async def checkout():                        # Sync client: drop the await/async
+    with tracer.start_as_current_span("checkout"):
+        await client.set("cart:42", "...")   # "Set" span, child of "checkout"
+        await client.get("cart:42")          # "Get" span, child of "checkout"
+```
+
+#### Where GLIDE's Spans Are Exported
+
+GLIDE exports its spans itself, through the `endpoint` given to `OpenTelemetryTracesConfig` — **not** through your application's OpenTelemetry SDK exporter. The two halves of a trace share a trace ID but travel as two independent streams, so both endpoints must feed the same backend for the joined trace to appear. Point `OpenTelemetryTracesConfig(endpoint=...)` at the same collector your application exports to.
+
+#### Sampling and the Parent Span
+
+- **A valid parent span is active**: GLIDE always creates a child span, whatever `sample_percentage` says — including `0`. The parent span's sampled flag controls whether the Rust OpenTelemetry SDK exports that child: sampled parents produce exported children, while unsampled parents produce no exported children. In this case, GLIDE's `sample_percentage` does not cap span volume or create independent trace roots.
+- **No valid parent span is active**: `sample_percentage` decides whether GLIDE creates an independent trace root.
+
+#### Without `opentelemetry-api`
+
+The package is optional. Without it installed, propagation is off and GLIDE spans behave as they always have: independent trace roots governed by `sample_percentage` alone. If reading the active span context ever fails, it never fails your command — GLIDE logs each failure at debug level and continues as if no span were active, leaving `sample_percentage` to decide.
+
 ---
 
 ## Compression Configuration (EXPERIMENTAL)
