@@ -917,28 +917,28 @@ class BaseClient(CoreCommands):
             if parent_ctx is not None or OpenTelemetry.should_sample():
                 span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
-        batch_info, batch_refs = convert_commands_to_c_batch_info(
-            self._ffi, commands, is_atomic
-        )
-        batch_options, opts_refs = create_c_batch_options(
-            self._ffi,
-            route,
-            retry_server_error=retry_server_error,
-            retry_connection_error=retry_connection_error,
-            timeout=timeout,
-        )
-        _refs = batch_refs + opts_refs  # noqa: F841  prevent GC
-
-        self._lib.batch(
-            self._core_client,
-            callback_id,
-            batch_info,
-            raise_on_error,
-            batch_options,
-            span,
-        )
-
         try:
+            batch_info, batch_refs = convert_commands_to_c_batch_info(
+                self._ffi, commands, is_atomic
+            )
+            batch_options, opts_refs = create_c_batch_options(
+                self._ffi,
+                route,
+                retry_server_error=retry_server_error,
+                retry_connection_error=retry_connection_error,
+                timeout=timeout,
+            )
+            _refs = batch_refs + opts_refs  # noqa: F841  prevent GC
+
+            self._lib.batch(
+                self._core_client,
+                callback_id,
+                batch_info,
+                raise_on_error,
+                batch_options,
+                span,
+            )
+
             return await fut
         finally:
             if span != 0:
