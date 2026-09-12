@@ -60,6 +60,28 @@ pub(crate) async fn get_or_create_conn<C>(
 where
     C: ConnectionLike + Send + Clone + Sync + Connect + 'static,
 {
+    get_or_create_conn_with_resolution(
+        addr,
+        node,
+        params,
+        conn_type,
+        true,
+        glide_connection_options,
+    )
+    .await
+}
+
+pub(crate) async fn get_or_create_conn_with_resolution<C>(
+    addr: &str,
+    node: Option<AsyncClusterNode<C>>,
+    params: &ClusterParams,
+    conn_type: RefreshConnectionType,
+    address_resolution: bool,
+    glide_connection_options: GlideConnectionOptions,
+) -> RedisResult<AsyncClusterNode<C>>
+where
+    C: ConnectionLike + Send + Clone + Sync + Connect + 'static,
+{
     if let Some(node) = node {
         // We won't check whether the DNS address of this node has changed and now points to a new IP.
         // Instead, we depend on managed Redis services to close the connection for refresh if the node has changed.
@@ -71,7 +93,7 @@ where
                 None,
                 conn_type,
                 Some(node),
-                true,
+                address_resolution,
                 glide_connection_options,
             )
             .await
@@ -84,7 +106,7 @@ where
             None,
             conn_type,
             None,
-            true,
+            address_resolution,
             glide_connection_options,
         )
         .await
