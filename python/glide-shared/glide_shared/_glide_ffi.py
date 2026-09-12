@@ -374,7 +374,7 @@ class _GlideFFI:
                 const char* trace_id,
                 const char* span_id,
                 uint8_t trace_flags,
-                const char* trace_stat
+                const char* trace_state
             );
             void drop_otel_span(uint64_t span_ptr);
             const char* init_open_telemetry(const OpenTelemetryConfig* open_telemetry_config);
