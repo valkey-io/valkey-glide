@@ -43,12 +43,119 @@ Validation Rules
 * sample_percentage must be between 0 and 100
 * File exporter paths must start with file:// and have an existing parent directory
 * Invalid configuration will throw an error when calling OpenTelemetry.init()
+
+Trace Context Propagation
+-------------------------
+
+When the application has its own active OpenTelemetry span, GLIDE creates its command,
+batch and script spans as children of it, so a trace has no gap at the database
+boundary. The parent is read from the OpenTelemetry Python API, which propagates the
+active span through ``contextvars``, so nothing is passed to GLIDE. It requires the
+optional ``opentelemetry-api`` package. Without it, propagation is off and spans are
+created as independent trace roots.
+
+See the "Trace Context Propagation" section of the Python README for the user-facing
+description, including how ``sample_percentage`` interacts with the parent span and
+where GLIDE's spans are exported.
 """
 
 import random
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
 
 from glide_shared.exceptions import ConfigurationError
+
+try:
+    from opentelemetry import trace as _otel_trace
+except ImportError:
+    _otel_trace = None  # type: ignore[assignment]
+
+
+@dataclass
+class _ParentSpanContext:
+    """A valid parent span context extracted from the OpenTelemetry context."""
+
+    __slots__ = ("trace_id", "span_id", "trace_flags", "trace_state")
+
+    trace_id: bytes
+    span_id: bytes
+    trace_flags: int
+    trace_state: Optional[bytes]
+
+    def to_cstrings(self, ffi: Any) -> Tuple[Any, Any, Any]:
+        """Marshal the trace context into C strings for an FFI span creation call.
+
+        The returned ``char[]`` buffers must stay referenced for the duration of the
+        FFI call, the caller keeps them alive by holding them until the call returns.
+
+        Args:
+            ffi: The CFFI ``ffi`` object from ``GlideFFI``.
+
+        Returns:
+            Tuple[Any, Any, Any]: The trace_id, span_id and trace_state buffers, the
+                last being ``ffi.NULL`` when there is no tracestate.
+        """
+        return (
+            ffi.new("char[]", self.trace_id),
+            ffi.new("char[]", self.span_id),
+            (
+                ffi.new("char[]", self.trace_state)
+                if self.trace_state is not None
+                else ffi.NULL
+            ),
+        )
+
+
+def _create_command_span(
+    ffi: Any, lib: Any, span_name_cstr: Any, parent: Optional[_ParentSpanContext]
+) -> int:
+    """Create a command span, parented to ``parent`` when one was extracted.
+
+    Args:
+        ffi: The CFFI ``ffi`` object from ``GlideFFI``.
+        lib: The CFFI ``lib`` object from ``GlideFFI``.
+        span_name_cstr: A ``char[]`` holding the span name.
+        parent: The extracted parent context, or ``None`` for an independent root span.
+
+    Returns:
+        int: The span pointer, or 0 if span creation failed.
+    """
+    if parent is None:
+        return lib.create_named_otel_span(span_name_cstr)
+
+    # The buffers stay referenced by these locals across the call below.
+    trace_id_cstr, span_id_cstr, trace_state_cstr = parent.to_cstrings(ffi)
+    return lib.create_named_otel_span_with_trace_context(
+        span_name_cstr,
+        trace_id_cstr,
+        span_id_cstr,
+        parent.trace_flags,
+        trace_state_cstr,
+    )
+
+
+def _create_batch_span(ffi: Any, lib: Any, parent: Optional[_ParentSpanContext]) -> int:
+    """Create a batch span, parented to ``parent`` when one was extracted.
+
+    Args:
+        ffi: The CFFI ``ffi`` object from ``GlideFFI``.
+        lib: The CFFI ``lib`` object from ``GlideFFI``.
+        parent: The extracted parent context, or ``None`` for an independent root span.
+
+    Returns:
+        int: The span pointer, or 0 if span creation failed.
+    """
+    if parent is None:
+        return lib.create_batch_otel_span()
+
+    # The buffers stay referenced by these locals across the call below.
+    trace_id_cstr, span_id_cstr, trace_state_cstr = parent.to_cstrings(ffi)
+    return lib.create_batch_otel_span_with_trace_context(
+        trace_id_cstr,
+        span_id_cstr,
+        parent.trace_flags,
+        trace_state_cstr,
+    )
 
 
 class OpenTelemetryTracesConfig:
@@ -221,6 +328,19 @@ class OpenTelemetry:
         return cls._instance is not None
 
     @classmethod
+    def is_tracing_enabled(cls) -> bool:
+        """Check whether trace exporting was successfully initialized.
+
+        Returns:
+            bool: True if OpenTelemetry is initialized with traces configured.
+        """
+        return (
+            cls._instance is not None
+            and cls._config is not None
+            and cls._config.traces is not None
+        )
+
+    @classmethod
     def get_sample_percentage(cls) -> Optional[int]:
         """Get the current trace sampling percentage.
 
@@ -245,6 +365,44 @@ class OpenTelemetry:
             return False
         percentage = cls.get_sample_percentage()
         return percentage is not None and random.random() * 100 < percentage
+
+    @classmethod
+    def _get_parent_span_context(cls) -> Optional[_ParentSpanContext]:
+        """Extract the OpenTelemetry span context, if it is usable as a parent.
+
+        Returns:
+            Optional[_ParentSpanContext]: The active span context, or None if
+                ``opentelemetry-api`` is not installed, no valid span is active,
+                or the context could not be read.
+        """
+        if _otel_trace is None:
+            return None
+
+        try:
+            span_context = _otel_trace.get_current_span().get_span_context()
+            if not span_context.is_valid:
+                return None
+            trace_flags = span_context.trace_flags
+
+            # to_header() is the W3C `tracestate` serialization
+            trace_state = span_context.trace_state
+            trace_state_header = trace_state.to_header() if trace_state else ""
+            return _ParentSpanContext(
+                trace_id=format(span_context.trace_id, "032x").encode(),
+                span_id=format(span_context.span_id, "016x").encode(),
+                trace_flags=int(trace_flags),
+                trace_state=trace_state_header.encode() or None,
+            )
+        except Exception as e:
+            from glide_shared.logger import Level, Logger
+
+            Logger.log(
+                Level.DEBUG,
+                "GlideOpenTelemetry",
+                f"Failed to read the active span context: {e}. "
+                "Continuing as if no span were active.",
+            )
+            return None
 
     @classmethod
     def set_sample_percentage(cls, percentage: int) -> None:

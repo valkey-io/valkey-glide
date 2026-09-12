@@ -15,6 +15,7 @@ sphinx >= 7.4.7
 sphinx-rtd-theme
 psutil
 pytest_asyncio
+opentelemetry-api
 
 # Sync Client
 types-cffi
