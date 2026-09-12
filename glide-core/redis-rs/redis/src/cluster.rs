@@ -748,10 +748,12 @@ where
             // Get target address and response.
             let (addr, rv) = {
                 let mut connections = self.connections.borrow_mut();
-                let (addr, conn) = if let Some(redirected) = redirected.take() {
+                let (addr, conn) = if let Some(redirected) = redirected.as_ref() {
                     let (addr, is_asking) = match redirected {
-                        Redirect::Moved(addr) => (addr, false),
-                        Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
+                        Redirect::Moved(addr) => (addr.clone(), false),
+                        Redirect::Ask(addr, should_exec_asking) => {
+                            (addr.clone(), *should_exec_asking)
+                        }
                     };
                     let conn = self.get_connection_by_canonical_addr(&mut connections, &addr)?;
                     if is_asking {
