@@ -81,7 +81,8 @@ use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
     cluster::slot_cmd,
     cluster_async::connections_logic::{
-        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture, RefreshConnectionType,
+        get_host_and_port_from_addr, get_or_create_conn, get_or_create_conn_with_resolution,
+        ConnectionFuture, RefreshConnectionType,
     },
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
@@ -2885,11 +2886,12 @@ where
                         }
                     };
 
-                    get_or_create_conn(
+                    get_or_create_conn_with_resolution(
                         &addr,
                         node,
                         &cluster_params,
                         RefreshConnectionType::AllConnections,
+                        false,
                         glide_connection_options,
                     )
                     .await
