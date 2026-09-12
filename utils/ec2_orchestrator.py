@@ -279,6 +279,7 @@ def build_windows_userdata(
         "    Push-Checkpoint 'ssm-warmed'",
         "",
         "    Write-Log '=== Running tests ==='",
+        "    $env:CI = 'true'",
         "    $env:CI_WINDOWS_EC2 = 'true'",
         "    $testArgs = @('test', '--', '--forceExit', '--maxWorkers=4')",
         "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
