@@ -67,6 +67,7 @@ from glide_shared.ffi_helpers import (
     to_c_route_ptr_and_len,
     to_c_strings,
 )
+from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.routes import Route
 
 from .async_commands.cluster_commands import ClusterCommands
@@ -844,13 +845,18 @@ class BaseClient(CoreCommands):
 
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
-        # OTel span creation only when initialized (rare)
+        # OTel span creation only when initialized (rare). When the caller has an active
+        # OTel span, the command span is created as its child.
         span = 0
-        if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
-            span_name_cstr = self._ffi.new(
-                "char[]", RequestType.Name(request_type).encode()
-            )
-            span = self._lib.create_named_otel_span(span_name_cstr)
+        if OpenTelemetry.is_tracing_enabled():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
+            if parent_ctx is not None or OpenTelemetry.should_sample():
+                span_name_cstr = self._ffi.new(
+                    "char[]", RequestType.Name(request_type).encode()
+                )
+                span = _create_command_span(
+                    self._ffi, self._lib, span_name_cstr, parent_ctx
+                )
 
         if route is None:
             self._lib.command(
@@ -906,8 +912,10 @@ class BaseClient(CoreCommands):
         self._register_future(callback_id, fut)
 
         span = 0
-        if OpenTelemetry.should_sample():
-            span = self._lib.create_batch_otel_span()
+        if OpenTelemetry.is_tracing_enabled():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
+            if parent_ctx is not None or OpenTelemetry.should_sample():
+                span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
         batch_info, batch_refs = convert_commands_to_c_batch_info(
             self._ffi, commands, is_atomic
@@ -970,8 +978,12 @@ class BaseClient(CoreCommands):
         # OTel span creation only when initialized (rare). The core attaches the
         # EVALSHA DB semantic convention attributes to the span via invoke_script.
         span = 0
-        if OpenTelemetry.should_sample():
-            span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
+        if OpenTelemetry.is_tracing_enabled():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
+            if parent_ctx is not None or OpenTelemetry.should_sample():
+                span = _create_command_span(
+                    self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
+                )
 
         try:
             self._lib.invoke_script(
