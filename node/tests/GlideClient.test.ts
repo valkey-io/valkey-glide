@@ -31,7 +31,6 @@ import {
     convertGlideRecordToRecord,
 } from "../build-ts";
 import { runBaseTests } from "./SharedTests";
-import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertClientTrackingInfo,
     assertConnected,
@@ -47,6 +46,7 @@ import {
     getRandomKey,
     getServerVersion,
     parseEndpoints,
+    socketDrainDelay,
     validateBatchResponse,
     waitForNotBusy,
 } from "./TestUtilities";
@@ -114,13 +114,11 @@ describe("GlideClient", () => {
 
         if (testsFailed === 0) {
             await cluster.close();
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             await azCluster.close();
         } else {
             await cluster.close(true);
-            // Add small delay between cluster closures to prevent socket contention
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await socketDrainDelay();
             await azCluster.close();
         }
     }, CLEANUP_TIMEOUT);
@@ -861,11 +859,18 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate test_%p",
         async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 5000,
-                }),
-            );
+            const client = await GlideClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    {
+                        requestTimeout: 10000,
+                    },
+                ),
+                advancedConfiguration: {
+                    connectionTimeout: 10000,
+                },
+            });
 
             const key = getRandomKey();
             const [serverHost, serverPort] = cluster.getAddresses()[0];
@@ -958,6 +963,7 @@ describe("GlideClient", () => {
                 0,
                 getServerVersion,
             );
+
             const sourceClient = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -996,6 +1002,7 @@ describe("GlideClient", () => {
             } finally {
                 sourceClient.close();
                 destClient.close();
+
                 await destCluster.close();
             }
         },
@@ -1431,7 +1438,7 @@ describe("GlideClient", () => {
                 // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
                 await Promise.all([
                     debugCommandPromise, // Run the long-running command
-                    connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+                    connectWithLargeTimeout(), // Verify a long timeout (10s) allows successful connection
                 ]);
             } finally {
                 // Clean up the test client and ensure everything is flushed and closed
@@ -2349,7 +2356,10 @@ describe("GlideClient", () => {
             // Test explicit true
             const clientTrue = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: true },
+                advancedConfiguration: {
+                    tcpNoDelay: true,
+                    connectionTimeout: 10000,
+                },
             });
             expect(await clientTrue.ping()).toBe("PONG");
             expect(await clientTrue.set("key2", "value2")).toBe("OK");
@@ -2359,7 +2369,10 @@ describe("GlideClient", () => {
             // Test explicit false
             const clientFalse = await GlideClient.createClient({
                 ...config,
-                advancedConfiguration: { tcpNoDelay: false },
+                advancedConfiguration: {
+                    tcpNoDelay: false,
+                    connectionTimeout: 10000,
+                },
             });
             expect(await clientFalse.ping()).toBe("PONG");
             expect(await clientFalse.set("key3", "value3")).toBe("OK");
@@ -2373,8 +2386,8 @@ describe("GlideClient", () => {
         "should connect with IPv4 address",
         async () => {
             const address = {
-                host: IP_ADDRESS_V4,
-                port: cluster.ports()[0],
+                host: cluster.getAddresses()[0][0],
+                port: cluster.getAddresses()[0][1],
             };
             const client = await GlideClient.createClient({
                 addresses: [address],
@@ -2389,9 +2402,18 @@ describe("GlideClient", () => {
     it(
         "should connect with IPv6 address",
         async () => {
+            // Skip if no IPv6 endpoint is available in this environment
+            if (!cluster.getAddresses().some(([host]) => host.includes(":"))) {
+                return;
+            }
+
             const address = {
-                host: IP_ADDRESS_V6,
-                port: cluster.ports()[0],
+                host: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![0],
+                port: cluster
+                    .getAddresses()
+                    .find(([host]) => host.includes(":"))![1],
             };
             const client = await GlideClient.createClient({
                 addresses: [address],

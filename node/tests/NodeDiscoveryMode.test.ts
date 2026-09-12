@@ -108,7 +108,7 @@ describe("NodeDiscoveryMode", () => {
                 3,
                 getServerVersion,
             );
-        }, 40000);
+        }, 120000);
 
         afterAll(async () => {
             await discoveryCluster.close();

@@ -5,7 +5,56 @@
 import { execFile } from "child_process";
 import { lt } from "semver";
 
+const PYTHON_CMD = process.platform === "win32" ? "python" : "python3";
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
+
+// Read remote config from C:\glide-remote.json if present (Windows EC2 CI).
+// This is done at module load time so appendRemoteArgs works correctly.
+// Env vars are also checked as fallback for non-Windows environments.
+function _loadRemoteConfig(): { instanceId?: string; privateIp?: string; region: string } {
+    // Check env vars first
+    if (process.env.GLIDE_REMOTE_INSTANCE_ID) {
+        return {
+            instanceId: process.env.GLIDE_REMOTE_INSTANCE_ID,
+            privateIp: process.env.GLIDE_REMOTE_IP,
+            region: process.env.GLIDE_REMOTE_REGION ?? "us-east-1",
+        };
+    }
+    // Fall back to file (Windows EC2 CI)
+    try {
+        const configPath = "C:\\glide-remote.json";
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require("fs") as typeof import("fs");
+        if (fs.existsSync(configPath)) {
+            const cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            return { instanceId: cfg.instanceId, privateIp: cfg.privateIp, region: cfg.region ?? "us-east-1" };
+        }
+    } catch { /* ignore */ }
+    return { region: "us-east-1" };
+}
+const _remoteConfig = _loadRemoteConfig();
+const REMOTE_INSTANCE_ID = _remoteConfig.instanceId;
+const REMOTE_IP = _remoteConfig.privateIp;
+const REMOTE_REGION = _remoteConfig.region;
+
+/**
+ * Appends --remote flags to cluster_manager.py args when running on Windows CI.
+ * This transparently redirects server start/stop to the Linux EC2.
+ */
+function appendRemoteArgs(args: string[]): string[] {
+    if (REMOTE_INSTANCE_ID && REMOTE_IP) {
+        return [
+            ...args,
+            "--remote",
+            REMOTE_INSTANCE_ID,
+            "--remote-ip",
+            REMOTE_IP,
+            "--remote-region",
+            REMOTE_REGION,
+        ];
+    }
+    return args;
+}
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -121,8 +170,8 @@ export class ValkeyCluster {
             }
 
             execFile(
-                "python3",
-                [PY_SCRIPT_PATH, ...commandArgs],
+                PYTHON_CMD,
+                appendRemoteArgs([PY_SCRIPT_PATH, ...commandArgs]),
                 (error, stdout) => {
                     if (error) {
                         reject(error);
@@ -203,7 +252,7 @@ export class ValkeyCluster {
                     commandArgs.push(`--keep-folder`);
                 }
 
-                execFile("python3", commandArgs, (error, _, stderr) => {
+                execFile(PYTHON_CMD, appendRemoteArgs(commandArgs), (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
