@@ -47,10 +47,10 @@ Validation Rules
 Trace Context Propagation
 -------------------------
 
-When the application has its own active OpenTelemetry span, GLIDE creates its command,
-batch and script spans as children of it, so a trace has no gap at the database
-boundary. The parent is read from the OpenTelemetry Python API, which propagates the
-active span through ``contextvars``, so nothing is passed to GLIDE. It requires the
+When sampling selects a GLIDE command, batch or script span and the application has
+an active OpenTelemetry span, GLIDE creates the selected span as its child. The parent
+is read from the OpenTelemetry Python API, which propagates the active span through
+``contextvars``, so nothing is passed to GLIDE. It requires the
 optional ``opentelemetry-api`` package. Without it, propagation is off and spans are
 created as independent trace roots.
 

@@ -381,7 +381,7 @@ GLIDE exports its spans itself, through the `endpoint` given to `OpenTelemetryTr
 
 #### Sampling and the Parent Span
 
-- **A valid parent span is active**: GLIDE always creates a child span, whatever `sample_percentage` says — including `0`. The parent span's sampled flag controls whether the Rust OpenTelemetry SDK exports that child: sampled parents produce exported children, while unsampled parents produce no exported children. In this case, GLIDE's `sample_percentage` does not cap span volume or create independent trace roots.
+- **A valid parent span is active**: `sample_percentage` decides whether GLIDE creates a child span. At `0`, no GLIDE span is created. When a span is selected, it uses the active span as its parent. The parent's sampled flag then controls whether the Rust OpenTelemetry SDK exports the child. An unsampled parent produces no exported GLIDE child spans, even when `sample_percentage` is `100`.
 - **No valid parent span is active**: `sample_percentage` decides whether GLIDE creates an independent trace root.
 
 #### Without `opentelemetry-api`

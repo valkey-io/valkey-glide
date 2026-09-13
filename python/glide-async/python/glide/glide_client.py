@@ -845,18 +845,17 @@ class BaseClient(CoreCommands):
 
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
-        # OTel span creation only when initialized (rare). When the caller has an active
-        # OTel span, the command span is created as its child.
+        # Sample before reading the caller's context. A sampled command span uses
+        # the active OTel span as its parent when one is available.
         span = 0
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                span_name_cstr = self._ffi.new(
-                    "char[]", RequestType.Name(request_type).encode()
-                )
-                span = _create_command_span(
-                    self._ffi, self._lib, span_name_cstr, parent_ctx
-                )
+            span_name_cstr = self._ffi.new(
+                "char[]", RequestType.Name(request_type).encode()
+            )
+            span = _create_command_span(
+                self._ffi, self._lib, span_name_cstr, parent_ctx
+            )
 
         try:
             if route is None:
@@ -912,10 +911,9 @@ class BaseClient(CoreCommands):
         self._register_future(callback_id, fut)
 
         span = 0
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                span = _create_batch_span(self._ffi, self._lib, parent_ctx)
+            span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
         try:
             batch_info, batch_refs = convert_commands_to_c_batch_info(
@@ -978,12 +976,11 @@ class BaseClient(CoreCommands):
         # OTel span creation only when initialized (rare). The core attaches the
         # EVALSHA DB semantic convention attributes to the span via invoke_script.
         span = 0
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                span = _create_command_span(
-                    self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
-                )
+            span = _create_command_span(
+                self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
+            )
 
         try:
             self._lib.invoke_script(
