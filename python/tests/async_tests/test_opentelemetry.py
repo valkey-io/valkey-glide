@@ -813,11 +813,10 @@ class TestOpenTelemetryGlide:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sampled_parent_span_overrides_sample_percentage(
-        self, request, protocol, cluster_mode
+    async def test_sampled_parent_span_obeys_sample_percentage(
+        self, request, protocol, cluster_mode, monkeypatch
     ):
-        """A sampled parent span forces span creation even at 0% sampling, and the
-        command spans are parented to it."""
+        """A parent cannot bypass 0% sampling, selected spans keep that parent."""
         client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol
         )
@@ -827,11 +826,37 @@ class TestOpenTelemetryGlide:
             await anyio.sleep(0.5)
             remove_span_file()
 
-            with use_parent_span(sampled=True):
-                await client.set(
-                    "GlideClient_test_sampled_parent_overrides_sampling", "value"
+            def unexpected_parent(cls):
+                pytest.fail(
+                    "Parent context must not be read when GLIDE does not sample"
                 )
-                await client.get("GlideClient_test_sampled_parent_overrides_sampling")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    OpenTelemetry,
+                    "_get_parent_span_context",
+                    classmethod(unexpected_parent),
+                )
+                with use_parent_span(sampled=True):
+                    await client.set("GlideClient_test_sampled_parent", "value")
+                    await client.get("GlideClient_test_sampled_parent")
+                    batch = (
+                        ClusterBatch(is_atomic=False)
+                        if cluster_mode
+                        else Batch(is_atomic=False)
+                    )
+                    batch.get("GlideClient_test_sampled_parent")
+                    await client.exec(batch, raise_on_error=True)
+                    assert (
+                        await client.invoke_script(Script("return 'Hello'")) == b"Hello"
+                    )
+
+            assert not os.path.exists(VALID_ENDPOINT_TRACES)
+
+            OpenTelemetry.set_sample_percentage(100)
+            with use_parent_span(sampled=True):
+                await client.set("GlideClient_test_sampled_parent", "value")
+                await client.get("GlideClient_test_sampled_parent")
 
             await wait_for_spans_to_be_flushed(
                 VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
@@ -846,13 +871,10 @@ class TestOpenTelemetryGlide:
         await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_unsampled_parent_span_bypasses_sample_percentage(
+    async def test_unsampled_parent_span_obeys_sample_percentage(
         self, request, cluster_mode, monkeypatch
     ):
-        """An unsampled parent reaches the core at either configured sample rate.
-
-        The core's parent-based sampler drops the child instead of exporting a root.
-        """
+        """Only selected spans reach an unsampled parent, the core drops them."""
         client = await create_client(request, cluster_mode=cluster_mode)
         create_command_span = glide_client_module._create_command_span
         parented_spans = 0
@@ -866,13 +888,7 @@ class TestOpenTelemetryGlide:
             parented_spans += 1
             return create_command_span(ffi, lib, span_name, parent)
 
-        def unexpected_sample(cls):
-            pytest.fail("GLIDE sampling must not run with a valid parent context")
-
         monkeypatch.setattr(glide_client_module, "_create_command_span", capture_parent)
-        monkeypatch.setattr(
-            OpenTelemetry, "should_sample", classmethod(unexpected_sample)
-        )
 
         with restore_sample_percentage():
             OpenTelemetry.set_sample_percentage(0)
@@ -881,13 +897,14 @@ class TestOpenTelemetryGlide:
 
             with use_parent_span(sampled=False):
                 await client.set("GlideClient_test_unsampled_parent", "value")
+            assert parented_spans == 0
 
             OpenTelemetry.set_sample_percentage(100)
             with use_parent_span(sampled=False):
                 await client.get("GlideClient_test_unsampled_parent")
 
             await anyio.sleep(0.5)
-            assert parented_spans == 2
+            assert parented_spans == 1
             assert not os.path.exists(VALID_ENDPOINT_TRACES)
 
         await client.close()

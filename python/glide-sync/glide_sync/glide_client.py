@@ -491,24 +491,22 @@ class BaseClient(CoreCommands):
         if response_buffers is not None:
             self._validate_response_buffers(response_buffers)
 
-        # Create span if OpenTelemetry is configured and sampling indicates we should
-        # trace. When the caller has an active OTel span, the command span is created as
-        # its child.
+        # Sample before reading the caller's context. A sampled command span uses
+        # the active OTel span as its parent when one is available.
         from .opentelemetry import OpenTelemetry
 
         span = 0
         span_name_cstr = None
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                from glide_shared.opentelemetry import _create_command_span
-                from glide_shared.protobuf.command_request_pb2 import RequestType
+            from glide_shared.opentelemetry import _create_command_span
+            from glide_shared.protobuf.command_request_pb2 import RequestType
 
-                command_name = RequestType.Name(request_type)
-                span_name_cstr = self._ffi.new("char[]", command_name.encode())
-                span = _create_command_span(
-                    self._ffi, self._lib, span_name_cstr, parent_ctx
-                )
+            command_name = RequestType.Name(request_type)
+            span_name_cstr = self._ffi.new("char[]", command_name.encode())
+            span = _create_command_span(
+                self._ffi, self._lib, span_name_cstr, parent_ctx
+            )
 
         try:
             # Convert the arguments to C-compatible pointers
@@ -652,12 +650,11 @@ class BaseClient(CoreCommands):
         from .opentelemetry import OpenTelemetry
 
         span = 0
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                from glide_shared.opentelemetry import _create_batch_span
+            from glide_shared.opentelemetry import _create_batch_span
 
-                span = _create_batch_span(self._ffi, self._lib, parent_ctx)
+            span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
         try:
             # Note: batch_refs and option_refs must remain in scope
@@ -885,14 +882,13 @@ class BaseClient(CoreCommands):
         from .opentelemetry import OpenTelemetry
 
         span = 0
-        if OpenTelemetry.is_tracing_enabled():
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            if parent_ctx is not None or OpenTelemetry.should_sample():
-                from glide_shared.opentelemetry import _create_command_span
+            from glide_shared.opentelemetry import _create_command_span
 
-                span = _create_command_span(
-                    self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
-                )
+            span = _create_command_span(
+                self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
+            )
 
         try:
             result = self._lib.invoke_script(

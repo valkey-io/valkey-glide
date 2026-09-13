@@ -784,11 +784,10 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_sampled_parent_span_overrides_sample_percentage(
-        self, request, protocol, cluster_mode
+    def test_sync_sampled_parent_span_obeys_sample_percentage(
+        self, request, protocol, cluster_mode, monkeypatch
     ):
-        """A sampled parent span forces span creation even at 0% sampling, and the
-        command spans are parented to it."""
+        """A parent cannot bypass 0% sampling, selected spans keep that parent."""
         client = create_sync_client(
             request, cluster_mode=cluster_mode, protocol=protocol
         )
@@ -798,9 +797,35 @@ class TestOpenTelemetryGlideSync:
             time.sleep(0.5)
             remove_span_file()
 
+            def unexpected_parent(cls):
+                pytest.fail(
+                    "Parent context must not be read when GLIDE does not sample"
+                )
+
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    OpenTelemetry,
+                    "_get_parent_span_context",
+                    classmethod(unexpected_parent),
+                )
+                with use_parent_span(sampled=True):
+                    client.set("GlideSync_test_sampled_parent", "value")
+                    client.get("GlideSync_test_sampled_parent")
+                    batch = (
+                        ClusterBatch(is_atomic=False)
+                        if cluster_mode
+                        else Batch(is_atomic=False)
+                    )
+                    batch.get("GlideSync_test_sampled_parent")
+                    client.exec(batch, raise_on_error=True)
+                    assert client.invoke_script(Script("return 'Hello'")) == b"Hello"
+
+            assert not os.path.exists(VALID_ENDPOINT_TRACES)
+
+            OpenTelemetry.set_sample_percentage(100)
             with use_parent_span(sampled=True):
-                client.set("GlideSync_test_sampled_parent_overrides_sampling", "value")
-                client.get("GlideSync_test_sampled_parent_overrides_sampling")
+                client.set("GlideSync_test_sampled_parent", "value")
+                client.get("GlideSync_test_sampled_parent")
 
             _wait_for_spans_to_be_flushed(
                 VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
@@ -815,13 +840,10 @@ class TestOpenTelemetryGlideSync:
         client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_unsampled_parent_span_bypasses_sample_percentage(
+    def test_sync_unsampled_parent_span_obeys_sample_percentage(
         self, request, cluster_mode, monkeypatch
     ):
-        """An unsampled parent reaches the core at either configured sample rate.
-
-        The core's parent-based sampler drops the child instead of exporting a root.
-        """
+        """Only selected spans reach an unsampled parent, the core drops them."""
         client = create_sync_client(request, cluster_mode=cluster_mode)
         create_command_span = glide_shared.opentelemetry._create_command_span
         parented_spans = 0
@@ -835,14 +857,8 @@ class TestOpenTelemetryGlideSync:
             parented_spans += 1
             return create_command_span(ffi, lib, span_name, parent)
 
-        def unexpected_sample(cls):
-            pytest.fail("GLIDE sampling must not run with a valid parent context")
-
         monkeypatch.setattr(
             glide_shared.opentelemetry, "_create_command_span", capture_parent
-        )
-        monkeypatch.setattr(
-            OpenTelemetry, "should_sample", classmethod(unexpected_sample)
         )
 
         with restore_sample_percentage():
@@ -852,13 +868,14 @@ class TestOpenTelemetryGlideSync:
 
             with use_parent_span(sampled=False):
                 client.set("GlideSync_test_unsampled_parent", "value")
+            assert parented_spans == 0
 
             OpenTelemetry.set_sample_percentage(100)
             with use_parent_span(sampled=False):
                 client.get("GlideSync_test_unsampled_parent")
 
             time.sleep(0.5)
-            assert parented_spans == 2
+            assert parented_spans == 1
             assert not os.path.exists(VALID_ENDPOINT_TRACES)
 
         client.close()
