@@ -1030,9 +1030,6 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ReadyToDialAddress(String);
 impl ReadyToDialAddress {
-    pub(crate) fn from_resolved(address: String) -> Self {
-        Self(address)
-    }
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
@@ -1040,13 +1037,13 @@ impl ReadyToDialAddress {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ClusterAddress {
     Raw(String),
-    ReadyToDial(ReadyToDialAddress),
+    ReadyToDial(String),
 }
 impl ClusterAddress {
     pub(crate) fn prepare(self, resolver: Option<&dyn AddressResolver>) -> ReadyToDialAddress {
         match self {
             Self::Raw(a) => ReadyToDialAddress(resolve_address(&a, resolver)),
-            Self::ReadyToDial(a) => a,
+            Self::ReadyToDial(a) => ReadyToDialAddress(a),
         }
     }
 }
@@ -1194,7 +1191,7 @@ mod tests {
         let resolver = NonIdempotentResolver(std::sync::atomic::AtomicU32::new(0));
         let ready = ClusterAddress::Raw("node:6379".into()).prepare(Some(&resolver));
         assert_eq!(ready.as_str(), "node-1:6379");
-        let ready = ClusterAddress::ReadyToDial(ready).prepare(Some(&resolver));
+        let ready = ClusterAddress::ReadyToDial(ready.as_str().to_owned()).prepare(Some(&resolver));
         assert_eq!(ready.as_str(), "node-1:6379");
         assert_eq!(resolver.0.load(std::sync::atomic::Ordering::SeqCst), 1);
     }

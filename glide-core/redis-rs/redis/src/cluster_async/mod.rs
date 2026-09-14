@@ -1977,9 +1977,7 @@ where
             // connection object might be present despite the transport being closed
             if con.is_closed() {
                 // transport is closed, need to refresh
-                addrs_to_refresh.insert(ClusterAddress::ReadyToDial(
-                    crate::cluster::ReadyToDialAddress::from_resolved(addr.clone()),
-                ));
+                addrs_to_refresh.insert(ClusterAddress::ReadyToDial(addr.clone()));
             }
         }
 
@@ -1988,11 +1986,7 @@ where
             all_nodes_with_slots
                 .iter()
                 .filter(|addr| !all_valid_conns.contains_key(addr.as_str()))
-                .map(|addr| {
-                    ClusterAddress::ReadyToDial(crate::cluster::ReadyToDialAddress::from_resolved(
-                        addr.to_string(),
-                    ))
-                }),
+                .map(|addr| ClusterAddress::ReadyToDial(addr.to_string())),
         );
 
         if !addrs_to_refresh.is_empty() {
@@ -2128,9 +2122,10 @@ where
                     let cluster_params = inner_clone.get_cluster_param(|params| params.clone());
 
                     node_result = get_or_create_conn(
-                        &crate::cluster::ReadyToDialAddress::from_resolved(
+                        &crate::cluster::ClusterAddress::ReadyToDial(
                             address_clone_for_task.clone(),
-                        ),
+                        )
+                        .prepare(cluster_params.address_resolver.as_deref()),
                         node_option.clone(),
                         &cluster_params,
                         conn_type,
@@ -2814,11 +2809,7 @@ where
                     inner,
                     failed
                         .into_iter()
-                        .map(|a| {
-                            ClusterAddress::ReadyToDial(
-                                crate::cluster::ReadyToDialAddress::from_resolved(a),
-                            )
-                        })
+                        .map(|a| ClusterAddress::ReadyToDial(a))
                         .collect(),
                     RefreshConnectionType::OnlyManagementConnection,
                     true,
@@ -2925,7 +2916,8 @@ where
                     };
 
                     get_or_create_conn(
-                        &crate::cluster::ReadyToDialAddress::from_resolved(addr.clone()),
+                        &crate::cluster::ClusterAddress::ReadyToDial(addr.clone())
+                            .prepare(cluster_params.address_resolver.as_deref()),
                         node,
                         &cluster_params,
                         RefreshConnectionType::AllConnections,
@@ -3616,9 +3608,7 @@ where
                 // Trigger refresh task and get the single notifier
                 let mut notifiers = Self::trigger_refresh_connection_tasks(
                     core.clone(),
-                    HashSet::from([ClusterAddress::ReadyToDial(
-                        crate::cluster::ReadyToDialAddress::from_resolved(address.clone()),
-                    )]),
+                    HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
                     RefreshConnectionType::AllConnections,
                     false,
                 )
@@ -4337,11 +4327,7 @@ where
                         inner,
                         addresses
                             .into_iter()
-                            .map(|a| {
-                                ClusterAddress::ReadyToDial(
-                                    crate::cluster::ReadyToDialAddress::from_resolved(a),
-                                )
-                            })
+                            .map(|a| ClusterAddress::ReadyToDial(a))
                             .collect(),
                         RefreshConnectionType::OnlyUserConnection,
                         true,
@@ -4583,9 +4569,7 @@ where
     match conn_opt {
         Some(conn) => ConnectionLookupResult::Found(conn),
         None => ConnectionLookupResult::NeedsConnectionRefresh(match canonical_addr {
-            Some(addr) => {
-                ClusterAddress::ReadyToDial(crate::cluster::ReadyToDialAddress::from_resolved(addr))
-            }
+            Some(addr) => ClusterAddress::ReadyToDial(addr),
             None => ClusterAddress::Raw(original_addr.to_string()),
         }),
     }
@@ -4696,9 +4680,9 @@ where
         topology_join_results
             .iter()
             .filter_map(|(address, res)| match res {
-                Err(err) if err.is_unrecoverable_error() => Some(ClusterAddress::ReadyToDial(
-                    crate::cluster::ReadyToDialAddress::from_resolved(address.clone()),
-                )),
+                Err(err) if err.is_unrecoverable_error() => {
+                    Some(ClusterAddress::ReadyToDial(address.clone()))
+                }
                 _ => None,
             }),
     );
@@ -5503,7 +5487,7 @@ mod circular_moved_address_normalization_tests {
 #[cfg(test)]
 mod refresh_task_resolution_tests {
     use super::*;
-    use crate::cluster::{ClusterAddress, ReadyToDialAddress};
+    use crate::cluster::ClusterAddress;
     use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
@@ -5703,9 +5687,7 @@ mod refresh_task_resolution_tests {
 
         let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([ClusterAddress::ReadyToDial(
-                ReadyToDialAddress::from_resolved(address.clone()),
-            )]),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
             false,
         )
@@ -5735,9 +5717,7 @@ mod refresh_task_resolution_tests {
 
         let first = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([ClusterAddress::ReadyToDial(
-                ReadyToDialAddress::from_resolved(address.clone()),
-            )]),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
             false,
         )
@@ -5749,9 +5729,7 @@ mod refresh_task_resolution_tests {
 
         let second = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([ClusterAddress::ReadyToDial(
-                ReadyToDialAddress::from_resolved(address.clone()),
-            )]),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
             false,
         )
@@ -5796,9 +5774,7 @@ mod refresh_task_resolution_tests {
         let core = core_with_non_idempotent_resolver();
         let addresses = HashSet::from([
             ClusterAddress::Raw("resolved-node:6380".into()),
-            ClusterAddress::ReadyToDial(ReadyToDialAddress::from_resolved(
-                "resolved-node:6381".into(),
-            )),
+            ClusterAddress::ReadyToDial("resolved-node:6381".into()),
         ]);
 
         let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
