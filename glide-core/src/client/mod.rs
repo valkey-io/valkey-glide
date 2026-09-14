@@ -1601,6 +1601,20 @@ impl Client {
         }
     }
 
+    /// Non-blocking variant of [`Client::address_for_slot`] for synchronous callers
+    /// (the scope acquire path runs without a runtime context).
+    ///
+    /// Returns `None` in standalone mode, if the slot is unmapped, or if the client
+    /// wrapper is currently write-locked (e.g. mid-reconnect); callers treat all of
+    /// these as "unresolved" and retry rather than falling back to a seed node.
+    pub fn try_address_for_slot(&self, slot: u16) -> Option<String> {
+        let client = self.internal_client.try_read().ok()?;
+        match &*client {
+            ClientWrapper::Cluster { client, .. } => client.address_for_slot(slot),
+            _ => None,
+        }
+    }
+
     /// Returns true if this client is connected in cluster mode.
     /// Used by scope connections to determine whether slot validation is needed.
     pub fn is_cluster_mode(&self) -> bool {

@@ -759,12 +759,25 @@ impl Default for ScopePoolConfig {
 }
 
 /// Topology-aware destination for a scoped connection.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+///
+/// Cluster targets are keyed on the primary's canonical `host:port` (the same key
+/// redis-rs uses for its connection map), not on the hash slot. Every slot owned by
+/// one primary therefore shares idle connections, and a slot whose owner changed
+/// (failover, migration) stops matching sockets to the former owner because the
+/// address is re-resolved against the live slot map on each acquire.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScopeTarget {
     /// The configured server for a standalone client.
     Standalone,
-    /// The cluster primary that owns this concrete hash slot.
-    ClusterSlot(u16),
+    /// The cluster primary at this canonical `host:port`.
+    ClusterPrimary(Arc<String>),
+}
+
+impl ScopeTarget {
+    /// Build a cluster target from a resolved primary address.
+    pub fn cluster_primary(address: impl Into<String>) -> Self {
+        ScopeTarget::ClusterPrimary(Arc::new(address.into()))
+    }
 }
 
 /// A dedicated connection for isolated execution.
@@ -825,7 +838,8 @@ pub enum ScopeAcquire {
     /// A slot was reserved against `max_total`; the caller must create a
     /// connection to fill it.
     Reserved,
-    /// No idle connection and the pool is at `max_total`.
+    /// Nothing idle at all and the pool is at `max_total` (an idle connection to a
+    /// different target is evicted to make room, so it never causes exhaustion).
     Exhausted,
 }
 
@@ -862,12 +876,17 @@ impl ScopePool {
         }
     }
 
-    /// Convert the binding's existing numeric routing slot into an explicit target.
-    pub fn target_for_slot(&self, routing_slot: u16) -> ScopeTarget {
+    /// Normalize a resolved primary address into an explicit target.
+    ///
+    /// Standalone pools ignore the address (every routing slot maps to the one
+    /// configured server). Cluster pools require it and return `None` when the
+    /// owner of the requested slot could not be resolved, so the caller fails
+    /// closed instead of falling back to a seed node.
+    pub fn target_for_primary(&self, primary: Option<&str>) -> Option<ScopeTarget> {
         if self.cluster_mode_enabled {
-            ScopeTarget::ClusterSlot(routing_slot)
+            primary.map(ScopeTarget::cluster_primary)
         } else {
-            ScopeTarget::Standalone
+            Some(ScopeTarget::Standalone)
         }
     }
 
@@ -885,8 +904,8 @@ impl ScopePool {
             return ScopeAcquire::Exhausted;
         }
 
-        // Scan idle connections for one matching the requested routing slot.
-        // Connections targeting a different slot are kept aside and pushed back.
+        // Scan idle connections for one matching the requested target.
+        // Connections to a different target are kept aside and pushed back.
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut found: Option<ScopedConnection> = None;
 
@@ -897,7 +916,7 @@ impl ScopePool {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
-            // Scoped connections are reusable only for the exact same topology target.
+            // Scoped connections are reusable only for the same physical target.
             if conn.target == target {
                 found = Some(conn);
                 break;
@@ -924,12 +943,27 @@ impl ScopePool {
             return ScopeAcquire::Reused(scope_id);
         }
 
-        if self.total_count.load(Ordering::Acquire) < self.config.max_total {
-            self.total_count.fetch_add(1, Ordering::AcqRel);
-            ScopeAcquire::Reserved
-        } else {
-            ScopeAcquire::Exhausted
+        if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
+            // Full, and every idle connection points at a different target. Evict
+            // the oldest idle one (front of the LIFO deque) to make room rather
+            // than reporting exhaustion while capacity sits idle on other primaries.
+            // Only when nothing is idle at all is the pool truly exhausted.
+            let Some(evicted) = self.idle.pop_front() else {
+                return ScopeAcquire::Exhausted;
+            };
+            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            logger_core::log_debug(
+                "pool",
+                format!(
+                    "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                    evicted.scope_id, evicted.target, target
+                ),
+            );
+            drop(evicted);
         }
+
+        self.total_count.fetch_add(1, Ordering::AcqRel);
+        ScopeAcquire::Reserved
     }
 
     /// Release a scope. Zero-cost if state is clean.
@@ -966,7 +1000,7 @@ impl ScopePool {
                         borrowed_at: None,
                         state: ConnectionState::default(),
                         pinned_slot: None,
-                        target: conn.target,
+                        target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
                         ),
@@ -1087,7 +1121,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
-                                    target: guard.target,
+                                    target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
                                     ),
