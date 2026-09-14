@@ -1157,10 +1157,9 @@ fn resolve_by_address(
     resolver: Option<&dyn AddressResolver>,
 ) -> Option<String> {
     match routing {
-        SingleNodeRoutingInfo::ByAddress { host, port } => Some(resolve_address(
-            &format!("{host}:{port}"),
-            resolver,
-        )),
+        SingleNodeRoutingInfo::ByAddress { host, port } => {
+            Some(resolve_address(&format!("{host}:{port}"), resolver))
+        }
         _ => None,
     }
 }
@@ -1205,6 +1204,7 @@ pub(crate) fn slot_cmd() -> Cmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Debug)]
     struct NonIdempotentResolver(std::sync::atomic::AtomicU32);
@@ -1315,5 +1315,125 @@ mod tests {
                 ))),
             );
         }
+    }
+
+    #[derive(Debug)]
+    struct ByAddressResolver {
+        calls: AtomicUsize,
+    }
+
+    impl AddressResolver for ByAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            (format!("{host}-1"), port)
+        }
+    }
+
+    #[derive(Debug)]
+    struct ByAddressConnection {
+        sends: Arc<AtomicUsize>,
+    }
+
+    impl ConnectionLike for ByAddressConnection {
+        fn req_packed_command(&mut self, _cmd: &[u8]) -> RedisResult<Value> {
+            unreachable!("the ByAddress pipeline test uses req_packed_commands")
+        }
+
+        fn req_packed_commands(
+            &mut self,
+            _cmd: &[u8],
+            _offset: usize,
+            _count: usize,
+        ) -> RedisResult<Vec<Value>> {
+            let attempt = self.sends.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                Err(RedisError::from((ErrorKind::TryAgain, "retry")))
+            } else {
+                Ok(vec![Value::SimpleString("OK".to_owned())])
+            }
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn check_connection(&mut self) -> bool {
+            true
+        }
+
+        fn is_open(&self) -> bool {
+            true
+        }
+    }
+
+    impl Connect for ByAddressConnection {
+        fn connect<T>(_info: T, _timeout: Option<Duration>) -> RedisResult<Self>
+        where
+            T: IntoConnectionInfo,
+        {
+            unreachable!("the canonical test connection is inserted before request")
+        }
+
+        fn send_packed_command(&mut self, _cmd: &[u8]) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn set_write_timeout(&self, _dur: Option<Duration>) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn set_read_timeout(&self, _dur: Option<Duration>) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn recv_response(&mut self) -> RedisResult<Value> {
+            Ok(Value::SimpleString("OK".to_owned()))
+        }
+    }
+
+    #[test]
+    fn by_address_resolves_once_across_tryagain_retry() {
+        let resolver = Arc::new(ByAddressResolver {
+            calls: AtomicUsize::new(0),
+        });
+        let sends = Arc::new(AtomicUsize::new(0));
+        let mut connections = HashMap::new();
+        connections.insert(
+            "node-1:6379".to_owned(),
+            ByAddressConnection {
+                sends: sends.clone(),
+            },
+        );
+        let mut params = ClusterParams::default_for_test(None);
+        params.address_resolver = Some(resolver.clone());
+        params.retry_params.number_of_retries = 1;
+        let cluster = ClusterConnection {
+            initial_nodes: vec![],
+            connections: RefCell::new(connections),
+            slots: RefCell::new(SlotMap::new(
+                vec![],
+                HashMap::new(),
+                params.read_from_replicas.clone(),
+            )),
+            auto_reconnect: RefCell::new(true),
+            read_timeout: RefCell::new(None),
+            write_timeout: RefCell::new(None),
+            cluster_params: params,
+        };
+        let cmd = b"*1\r\n$4\r\nPING\r\n";
+        let result = cluster.request(Input::Commands {
+            cmd,
+            route: SingleNodeRoutingInfo::ByAddress {
+                host: "node".to_owned(),
+                port: 6379,
+            },
+            offset: 0,
+            count: 1,
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(sends.load(Ordering::SeqCst), 2);
+        assert_eq!(resolver.calls.load(Ordering::SeqCst), 1);
+        assert!(cluster.connections.borrow().contains_key("node-1:6379"));
     }
 }
