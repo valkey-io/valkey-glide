@@ -2715,6 +2715,64 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
+    fn test_async_cluster_moved_redirect_with_bracketed_ipv6_address() {
+        let name = "test_async_cluster_moved_redirect_with_bracketed_ipv6_address";
+        let redirect_host = "2001:db8::1";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let resolver_resolutions = resolutions.clone();
+        let handler = Arc::new(move |cmd: &[u8], port| {
+            if contains_slice(cmd, b"PING") || contains_slice(cmd, b"SETNAME") {
+                return Err(Ok(Value::SimpleString("OK".into())));
+            }
+            if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                return Err(Ok(Value::Array(vec![Value::Array(vec![
+                    Value::Int(0),
+                    Value::Int(16383),
+                    Value::Array(vec![
+                        Value::BulkString(name.as_bytes().to_vec().into()),
+                        Value::Int(6379),
+                    ]),
+                ])])));
+            }
+            let count = requests.fetch_add(1, Ordering::SeqCst);
+            match (port, count) {
+                (6379, 0) => Err(parse_redis_value(b"-MOVED 123 [2001:db8::1]:6380\r\n")),
+                (6380, 1) => Err(Ok(Value::BulkString(b"ipv6-ok".to_vec().into()))),
+                _ => panic!("unexpected request on port {port}: {cmd:?}"),
+            }
+        });
+        let _initial_handler = MockConnectionBehavior::register_new(name, handler.clone());
+        let _redirect_handler = MockConnectionBehavior::register_new(redirect_host, handler);
+        #[derive(Debug)]
+        struct BareIpv6Resolver(Arc<atomic::AtomicUsize>);
+        impl AddressResolver for BareIpv6Resolver {
+            fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+                if host == "2001:db8::1" {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                }
+                (host.to_owned(), port)
+            }
+        }
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .address_resolver(Arc::new(BareIpv6Resolver(resolver_resolutions)))
+            .build()
+            .unwrap();
+        let runtime = Runtime::new().unwrap();
+        let mut connection: redis::cluster_async::ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .unwrap();
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"ipv6-ok".to_vec().into())));
+        assert_eq!(resolutions.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_async_cluster_moved_raw_ip_redirect_with_shared_ip() {
         let name = "test_async_cluster_moved_raw_ip_redirect_with_shared_ip";
         let requests = Arc::new(atomic::AtomicUsize::new(0));
