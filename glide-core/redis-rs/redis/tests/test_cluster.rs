@@ -671,7 +671,7 @@ mod cluster {
                 match (port, count) {
                     (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6380\r\n")),
                     (6380, 1) => Err(Err((ErrorKind::IoError, "force reconnect").into())),
-                    (6379, 2) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    (6380, 2) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
                     _ => panic!("Unexpected command on port {port}: {cmd:?}"),
                 }
             },
