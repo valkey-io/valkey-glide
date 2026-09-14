@@ -4442,6 +4442,12 @@ where
     // Only refresh and retry if we have no connections at all
     if connections.is_empty() && !addresses_needing_refresh.is_empty() {
         let connection_timeout = inner.get_cluster_param(|p| p.connection_timeout);
+        let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
+        let prepared_addresses: HashSet<ClusterAddress> = addresses_needing_refresh
+            .iter()
+            .map(|addr| ClusterAddress::ReadyToDial(addr.clone().prepare(resolver.as_deref()).as_str().to_owned()))
+            .collect();
+        addresses_needing_refresh = prepared_addresses;
 
         // Wait for connection refresh to complete (with timeout)
         let _ = tokio::time::timeout(
@@ -4459,10 +4465,7 @@ where
         for addr in addresses_needing_refresh.drain() {
             if let ConnectionLookupResult::Found(conn) = lookup_management_connection(
                 inner,
-                match &addr {
-                    ClusterAddress::Raw(a) => a,
-                    ClusterAddress::ReadyToDial(a) => a.as_str(),
-                },
+                match &addr { ClusterAddress::Raw(a) | ClusterAddress::ReadyToDial(a) => a },
                 None,
             ) {
                 connections.push(conn);
@@ -4570,7 +4573,11 @@ where
         Some(conn) => ConnectionLookupResult::Found(conn),
         None => ConnectionLookupResult::NeedsConnectionRefresh(match canonical_addr {
             Some(addr) => ClusterAddress::ReadyToDial(addr),
-            None => ClusterAddress::Raw(original_addr.to_string()),
+            None => ClusterAddress::Raw(
+                socket_addr
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| original_addr.to_owned()),
+            ),
         }),
     }
 }
@@ -5700,7 +5707,7 @@ mod refresh_task_resolution_tests {
         let connection = core
             .conn_lock
             .read()
-            .connection_for_address(&address)
+            .connection_for_address("seed-node:6382")
             .map(|(_, connection)| connection);
         let connected_port = connection
             .expect("raw seed refresh should install a connection")
