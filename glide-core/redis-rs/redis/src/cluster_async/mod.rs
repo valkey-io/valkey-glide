@@ -5511,11 +5511,22 @@ mod refresh_task_resolution_tests {
     use crate::ConnectionAddr;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Mutex, MutexGuard};
     use tokio::sync::{Notify, Semaphore};
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
     static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
     static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
+    // RecordingConnection uses process-wide gates because Connect has no test
+    // context. Serialize the tests which exercise those gates and remove
+    // permits left by a previous test before starting.
+    static GATED_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn gated_test_guard() -> MutexGuard<'static, ()> {
+        let guard = GATED_TEST_LOCK.lock().expect("gated test lock is healthy");
+        while RELEASE_POISON_CONNECT.try_acquire().is_ok() {}
+        guard
+    }
 
     #[derive(Clone, Debug)]
     struct RecordingConnection {
@@ -5718,6 +5729,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn concurrent_refresh_requests_share_one_task_and_both_complete() {
+        let _guard = gated_test_guard();
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
 
@@ -5779,6 +5791,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn mixed_raw_and_ready_refresh_prepares_once_and_deduplicates() {
+        let _guard = gated_test_guard();
         RESOLVER_CALLS.store(0, Ordering::SeqCst);
         let core = core_with_non_idempotent_resolver();
         let addresses = HashSet::from([
