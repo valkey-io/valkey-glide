@@ -2,9 +2,7 @@
 //! Read-from-strategy integration tests, mirroring Python's
 //! `test_read_from_strategy.py`. Verifies that reads return correct data under
 //! each [`ReadFrom`] strategy — on a standalone server (replica-less: strategies
-//! fall back to the primary) and on a real cluster with **replicas** (only when
-//! the cluster_manager.py backend is active; the native backend has no replicas
-//! and those tests SKIP).
+//! fall back to the primary) and on a real cluster with **replicas**.
 
 mod common;
 
@@ -56,14 +54,10 @@ async fn standalone_prefer_replica_resp3() {
 }
 
 /// PreferReplica on a real replica-ful cluster: the value written to a primary is
-/// eventually readable via a replica. SKIPs on the native (replica-less) backend.
+/// eventually readable via a replica.
 #[tokio::test]
 async fn cluster_prefer_replica_reads_data() {
-    let h = cluster_or_skip!();
-    if h.replica_ports.is_empty() {
-        eprintln!("SKIP: cluster has no replicas (native backend); set GLIDE_CLUSTER_MANAGER");
-        return;
-    }
+    let h = common::ClusterHarness::start();
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::PreferReplica)
         .request_timeout(Duration::from_secs(5));
@@ -80,7 +74,7 @@ async fn cluster_prefer_replica_reads_data() {
 /// falls back gracefully so commands still succeed. Works on any cluster backend.
 #[tokio::test]
 async fn cluster_az_affinity_config_is_accepted() {
-    let h = cluster_or_skip!();
+    let h = common::ClusterHarness::start();
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::AZAffinity("use1-az1".to_string()))
         .request_timeout(Duration::from_secs(5));
@@ -93,7 +87,7 @@ async fn cluster_az_affinity_config_is_accepted() {
 /// AllNodes read strategy is accepted and commands succeed on a cluster.
 #[tokio::test]
 async fn cluster_all_nodes_config_is_accepted() {
-    let h = cluster_or_skip!();
+    let h = common::ClusterHarness::start();
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::AllNodes)
         .request_timeout(Duration::from_secs(5));

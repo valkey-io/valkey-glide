@@ -66,7 +66,7 @@ async fn standalone_lazy_defers_connection_error() {
 /// A lazy cluster client connects on first use and works normally.
 #[tokio::test]
 async fn cluster_lazy_connect() {
-    let h = cluster_or_skip!();
+    let h = common::ClusterHarness::start();
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .lazy_connect(true)
         .request_timeout(Duration::from_secs(5));

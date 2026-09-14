@@ -12,8 +12,8 @@ use crate::pipeline_options::{PipelineOptions, run_pipeline};
 use crate::routes::Route;
 use async_trait::async_trait;
 use bytes::Bytes;
-use glide_core::client::Client as CoreClient;
-use glide_core::cluster_scan_container::get_cluster_scan_cursor;
+use glide_core::client::{Client as CoreClient, FINISHED_SCAN_CURSOR};
+use glide_core::cluster_scan_container::{get_cluster_scan_cursor, remove_scan_state_cursor};
 use redis::cluster_routing::RoutingInfo;
 use redis::{ClusterScanArgs, Cmd, PushInfo, PushKind, ScanStateRC, Value};
 use std::sync::Arc;
@@ -154,40 +154,46 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
 /// Start a new scan with [`ClusterScanCursor::new`]. After each
 /// [`GlideClusterClient::cluster_scan`] call, use the returned cursor for the
 /// next iteration until [`ClusterScanCursor::is_finished`] returns `true`.
-///
-/// Mirrors Python's `ClusterScanCursor`.
-// TODO #6875: intermediate cursor ids are never released.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ClusterScanCursor(String);
 
 impl ClusterScanCursor {
-    /// The sentinel returned by the core when a scan has completed.
-    const FINISHED: &'static str = "finished";
+    /// The id of an initial cursor.
+    const INITIAL_CURSOR: &'static str = "";
 
-    /// Create a fresh cursor to begin a new cluster scan.
+    /// Create a cursor for a new cluster scan.
     pub fn new() -> Self {
-        ClusterScanCursor(String::new())
+        ClusterScanCursor(Self::INITIAL_CURSOR.to_owned())
     }
 
-    /// Create a cursor from a previously-returned cursor id.
-    pub fn from_id(id: impl Into<String>) -> Self {
-        ClusterScanCursor(id.into())
-    }
-
-    /// The underlying cursor id.
+    /// The cursor id.
     pub fn id(&self) -> &str {
         &self.0
     }
 
-    /// Whether the scan has completed (no more keys to return).
+    /// Whether the scan has not started.
+    fn is_initial(&self) -> bool {
+        self.0 == Self::INITIAL_CURSOR
+    }
+
+    /// Whether the scan has completed.
     pub fn is_finished(&self) -> bool {
-        self.0 == Self::FINISHED
+        self.0 == FINISHED_SCAN_CURSOR
     }
 }
 
 impl Default for ClusterScanCursor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for ClusterScanCursor {
+    fn drop(&mut self) {
+        // Initial and finished cursors have no scan state to clean up.
+        if !self.is_initial() && !self.is_finished() {
+            remove_scan_state_cursor(std::mem::take(&mut self.0));
+        }
     }
 }
 
@@ -408,7 +414,7 @@ impl GlideClusterClient {
         count: Option<u32>,
         object_type: Option<crate::commands::options::ObjectType>,
     ) -> Result<(ClusterScanCursor, Vec<Bytes>)> {
-        let scan_state = if cursor.0.is_empty() || cursor.0 == "0" {
+        let scan_state = if cursor.is_initial() {
             ScanStateRC::new()
         } else {
             get_cluster_scan_cursor(cursor.0.clone()).map_err(GlideError::from)?
@@ -556,5 +562,67 @@ mod push_tests {
             data: vec![bulk("chan")],
         };
         assert!(push_to_message(push).is_none());
+    }
+}
+
+#[cfg(test)]
+mod cluster_scan_cursor_tests {
+    use super::*;
+    use glide_core::cluster_scan_container::{get_cluster_scan_cursor, insert_cluster_scan_cursor};
+
+    #[test]
+    fn is_initial() {
+        // Maps from cursor to the expected value.
+        let cases = [
+            (ClusterScanCursor::new(), true),
+            (ClusterScanCursor::default(), true),
+            (ClusterScanCursor("id".to_owned()), false),
+            (ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned()), false),
+        ];
+
+        for (cursor, expected) in &cases {
+            assert_eq!(cursor.is_initial(), *expected);
+        }
+    }
+
+    #[test]
+    fn is_finished() {
+        // Maps from cursor to the expected value.
+        let cases = [
+            (ClusterScanCursor::new(), false),
+            (ClusterScanCursor::default(), false),
+            (ClusterScanCursor("id".to_owned()), false),
+            (ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned()), true),
+        ];
+
+        for (cursor, expected) in &cases {
+            assert_eq!(cursor.is_finished(), *expected);
+        }
+    }
+
+    #[test]
+    fn drop_releases_container_entry() {
+        // Initial cursor: owns no container entry, so its drop is a no-op.
+        let cursor = ClusterScanCursor::new();
+        let id = cursor.id().to_owned();
+        assert!(get_cluster_scan_cursor(id.clone()).is_err());
+
+        drop(cursor);
+        assert!(get_cluster_scan_cursor(id).is_err());
+
+        // Intermediate cursor: owns a container entry that drop must remove.
+        let id = insert_cluster_scan_cursor(ScanStateRC::new());
+        assert!(get_cluster_scan_cursor(id.clone()).is_ok());
+
+        drop(ClusterScanCursor(id.clone()));
+        assert!(get_cluster_scan_cursor(id).is_err());
+
+        // Finished cursor: owns no container entry, so its drop is a no-op.
+        let cursor = ClusterScanCursor(FINISHED_SCAN_CURSOR.to_owned());
+        let id = cursor.id().to_owned();
+        assert!(get_cluster_scan_cursor(id.clone()).is_err());
+
+        drop(cursor);
+        assert!(get_cluster_scan_cursor(id).is_err());
     }
 }

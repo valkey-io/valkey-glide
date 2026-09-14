@@ -49,6 +49,7 @@ macro_rules! retry_transient {
 
 /// Start a standalone server, or `return` from the test (printing SKIP) when no
 /// server binary is available.
+// TODO #6877: a missing/broken standalone server silently skips.
 #[macro_export]
 macro_rules! server_or_skip {
     () => {{
@@ -56,21 +57,6 @@ macro_rules! server_or_skip {
             Some(s) => s,
             None => {
                 eprintln!("SKIP: no valkey-server binary available");
-                return;
-            }
-        }
-    }};
-}
-
-/// Start a cluster, or `return` from the test (printing SKIP) when a cluster is
-/// not feasible in this environment.
-#[macro_export]
-macro_rules! cluster_or_skip {
-    () => {{
-        match $crate::common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible in this environment");
                 return;
             }
         }
@@ -162,45 +148,19 @@ macro_rules! matrix_test {
 
             #[tokio::test]
             async fn cluster_resp2() {
-                let __h = match $crate::common::ClusterHarness::start() {
-                    Some(h) => h,
-                    None => {
-                        eprintln!("SKIP: cluster harness not feasible in this environment");
-                        return;
-                    }
-                };
-                let $c = match __h
+                let __h = $crate::common::ClusterHarness::start();
+                let $c = __h
                     .client_with_protocol(glide::ProtocolVersion::RESP2)
-                    .await
-                {
-                    Some(c) => c,
-                    None => {
-                        eprintln!("SKIP: could not connect cluster client (RESP2)");
-                        return;
-                    }
-                };
+                    .await;
                 $crate::common::with_test_timeout(async { $body }).await;
             }
 
             #[tokio::test]
             async fn cluster_resp3() {
-                let __h = match $crate::common::ClusterHarness::start() {
-                    Some(h) => h,
-                    None => {
-                        eprintln!("SKIP: cluster harness not feasible in this environment");
-                        return;
-                    }
-                };
-                let $c = match __h
+                let __h = $crate::common::ClusterHarness::start();
+                let $c = __h
                     .client_with_protocol(glide::ProtocolVersion::RESP3)
-                    .await
-                {
-                    Some(c) => c,
-                    None => {
-                        eprintln!("SKIP: could not connect cluster client (RESP3)");
-                        return;
-                    }
-                };
+                    .await;
                 $crate::common::with_test_timeout(async { $body }).await;
             }
         }
@@ -223,26 +183,6 @@ macro_rules! skip_if_version_below {
     ($c:expr, $major:expr, $minor:expr, $patch:expr) => {{
         if $crate::common::version_below(&$c, ($major, $minor, $patch)).await {
             eprintln!("SKIP: requires server >= {}.{}.{}", $major, $minor, $patch);
-            return;
-        }
-    }};
-}
-
-/// Skip the current test (printing SKIP) unless the server recognises `$cmd` —
-/// a robust, version-agnostic capability gate (preferred over version math for
-/// commands whose availability differs across Redis/Valkey releases).
-///
-/// ```ignore
-/// matrix_test!(hexpire_sets_ttl, c, {
-///     skip_unless_command!(c, "HEXPIRE");
-///     // ...
-/// });
-/// ```
-#[macro_export]
-macro_rules! skip_unless_command {
-    ($c:expr, $cmd:expr) => {{
-        if !$crate::common::command_exists(&$c, $cmd).await {
-            eprintln!("SKIP: server does not support {}", $cmd);
             return;
         }
     }};

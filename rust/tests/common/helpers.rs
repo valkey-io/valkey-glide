@@ -105,35 +105,6 @@ where
     None
 }
 
-/// Whether the server recognises `name` (via `COMMAND INFO`). This is a
-/// version- and product-agnostic capability check — more robust than version
-/// math for commands whose availability differs between Redis and Valkey
-/// releases (e.g. hash-field TTL). Fails **closed** (returns `false`) if the
-/// capability cannot be determined, so gated tests SKIP rather than error.
-pub async fn command_exists<C>(c: &C, name: &str) -> bool
-where
-    C: glide::CustomCommand + Sync,
-{
-    match c.custom_command(&["COMMAND", "INFO", name]).await {
-        Ok(v) => command_info_present(&v),
-        Err(_) => false,
-    }
-}
-
-/// `COMMAND INFO <name>` returns `[[ <details> ]]` when known and `[nil]` when
-/// unknown. On cluster it may be a per-node Map. Present ⇔ a non-empty details
-/// array exists somewhere in the reply.
-fn command_info_present(v: &glide::Value) -> bool {
-    use glide::Value;
-    match v {
-        Value::Array(items) => items
-            .iter()
-            .any(|it| matches!(it, Value::Array(inner) if !inner.is_empty())),
-        Value::Map(pairs) => pairs.iter().any(|(_, val)| command_info_present(val)),
-        _ => false,
-    }
-}
-
 /// True when the server version is strictly below `min`. Returns `false` if the
 /// version cannot be determined (fail-open: run the test rather than skip).
 pub async fn version_below<C>(c: &C, min: (u32, u32, u32)) -> bool

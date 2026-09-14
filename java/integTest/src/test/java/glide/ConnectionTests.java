@@ -5,6 +5,10 @@ import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
+import static glide.TestUtilities.IAM_TEST_CLUSTER_NAME;
+import static glide.TestUtilities.IAM_TEST_REGION_US_EAST_1;
+import static glide.TestUtilities.IAM_USERNAME;
+import static glide.TestUtilities.createTestIamConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -26,10 +30,13 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.AwsCredentials;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.GlideCredentialProvider;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
@@ -37,9 +44,12 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.ResolvedAddress;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,10 +59,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -1189,5 +1201,419 @@ public class ConnectionTests {
                         .get();
         assertEquals("PONG", standaloneClient.ping().get());
         standaloneClient.close();
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    public void test_iam_authentication_standalone_with_mock_credentials() {
+        // See DEVELOPER.md for instructions on running IAM authentication tests
+        try (GlideClient client = createStandaloneClientWithIam(5)) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+            client.refreshIamToken().get();
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    public void test_iam_authentication_standalone_automatic_token_refresh() {
+        try (GlideClient client = createStandaloneClientWithIam(2)) {
+            TestUtilities.assertConnected(client);
+            waitForScheduledRefresh(3000);
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_invoked_on_scheduled_refresh() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(2)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            int afterConnect = invocations.get();
+            assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
+            waitForProviderInvocation(invocations, afterConnect, 8000);
+            assertEquals(
+                    "OK", client.set("iam_scheduled_refresh_key", "iam_scheduled_refresh_value").get());
+            assertEquals("iam_scheduled_refresh_value", client.get("iam_scheduled_refresh_key").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_with_custom_credentials_provider() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(5)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
+            assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
+        }
+        assertTrue(
+                invocations.get() > 0,
+                "Custom credentials provider was never invoked — JNI may have silently dropped the"
+                        + " provider");
+    }
+
+    @Test
+    @Timeout(30)
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_throws_exception() {
+        // A provider that always throws should cause client creation to fail.
+        GlideCredentialProvider throwingProvider =
+                () -> {
+                    throw new RuntimeException("injected test error from credentials provider");
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(throwingProvider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                GlideClient.createClient(commonClientConfig().credentials(credentials).build())
+                                        .get());
+        // Verify the injected error message propagates through the exception chain.
+        String fullMessage = getFullExceptionMessage(exception);
+        assertTrue(
+                fullMessage.contains("injected test error"),
+                "Expected injected error message in exception chain, got: " + fullMessage);
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_with_expires_at() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .expiresAt(Instant.now().plusSeconds(3600))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_expires_at_key", "iam_expires_at_value").get());
+            assertEquals("iam_expires_at_value", client.get("iam_expires_at_key").get());
+        }
+        assertTrue(invocations.get() > 0, "Provider was never invoked");
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_standalone_custom_provider_invoked_on_manual_refresh() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+            TestUtilities.assertConnected(client);
+            int afterConnect = invocations.get();
+            assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
+            client.refreshIamToken().get();
+            assertTrue(
+                    invocations.get() > afterConnect, "Provider not invoked on manual refreshIamToken()");
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    public void test_iam_authentication_cluster_with_mock_credentials() {
+        try (GlideClusterClient client = createClusterClientWithIam(5)) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+            client.refreshIamToken().get();
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    public void test_iam_authentication_cluster_automatic_token_refresh() {
+        try (GlideClusterClient client = createClusterClientWithIam(2)) {
+            TestUtilities.assertConnected(client);
+            waitForScheduledRefresh(3000);
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_cluster_custom_provider_invoked_on_scheduled_refresh() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(2)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().credentials(credentials).build())
+                        .get()) {
+            TestUtilities.assertConnected(client);
+            int afterConnect = invocations.get();
+            assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
+            waitForProviderInvocation(invocations, afterConnect, 8000);
+            assertEquals(
+                    "OK", client.set("iam_scheduled_refresh_key", "iam_scheduled_refresh_value").get());
+            assertEquals("iam_scheduled_refresh_value", client.get("iam_scheduled_refresh_key").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_cluster_with_custom_credentials_provider() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .refreshIntervalSeconds(5)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().credentials(credentials).build())
+                        .get()) {
+            TestUtilities.assertConnected(client);
+            assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
+            assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
+        }
+        assertTrue(
+                invocations.get() > 0,
+                "Custom credentials provider was never invoked — JNI may have silently dropped the"
+                        + " provider");
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "AWS_SECRET_ACCESS_KEY", matches = ".+")
+    public void test_iam_authentication_cluster_custom_provider_invoked_on_manual_refresh() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        GlideCredentialProvider provider =
+                () -> {
+                    invocations.incrementAndGet();
+                    return AwsCredentials.builder()
+                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                            .build();
+                };
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName(IAM_TEST_CLUSTER_NAME)
+                        .service(ServiceType.ELASTICACHE)
+                        .region(IAM_TEST_REGION_US_EAST_1)
+                        .credentialsProvider(provider)
+                        .build();
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().credentials(credentials).build())
+                        .get()) {
+            TestUtilities.assertConnected(client);
+            int afterConnect = invocations.get();
+            assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
+            client.refreshIamToken().get();
+            assertTrue(
+                    invocations.get() > afterConnect, "Provider not invoked on manual refreshIamToken()");
+        }
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().credentials(credentials).build())
+                .get();
+    }
+
+    /** Collects all exception messages in the cause chain into a single string. */
+    private static String getFullExceptionMessage(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        while (t != null) {
+            if (t.getMessage() != null) {
+                sb.append(t.getMessage()).append(" | ");
+            }
+            t = t.getCause();
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Polls until {@code counter.get() > baseline} or {@code timeoutMs} elapses.
+     *
+     * @throws AssertionError if the counter does not increase within the deadline
+     */
+    @SneakyThrows
+    private static void waitForProviderInvocation(
+            AtomicInteger counter, int baseline, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (counter.get() <= baseline) {
+            if (System.currentTimeMillis() >= deadline) {
+                throw new AssertionError(
+                        "Custom credentials provider was not re-invoked within "
+                                + timeoutMs
+                                + "ms (baseline="
+                                + baseline
+                                + ", current="
+                                + counter.get()
+                                + ")");
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    /**
+     * Waits at least {@code millis} milliseconds to allow a background token refresh to occur.
+     *
+     * <p>This is intentionally a fixed sleep: these tests use the default AWS credential chain and
+     * have no counter or hook to poll. The sleep gives the background refresh task (running at {@code
+     * refreshIntervalSeconds=2}) time to fire at least once before the assertions.
+     */
+    @SneakyThrows
+    private static void waitForScheduledRefresh(long millis) {
+        Thread.sleep(millis);
     }
 }

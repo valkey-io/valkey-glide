@@ -55,26 +55,19 @@ matrix_test!(generic_code_on_glide_async_trait, c, {
 
 #[test]
 fn generic_code_on_glide_sync_trait() {
-    let srv = match common::TestServer::start() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server");
-            return;
-        }
-    };
     use glide::Commands;
     use glide::sync::SyncGlideClient;
-    let c = SyncGlideClient::connect(glide::GlideClientConfiguration::with_address(
-        "127.0.0.1",
-        srv.port,
-    ))
-    .unwrap();
+
+    let server = server_or_skip!();
+    let config = glide::GlideClientConfiguration::with_address("127.0.0.1", server.port);
+    let client = SyncGlideClient::connect(config).unwrap();
+
     let k = common::key("rrs_glide_generic_sync");
     // Generic bound on GLIDE's blocking trait.
     fn via_glide_sync_trait<C: Commands>(con: &C, key: &str) -> glide::RedisResult<i64> {
         con.set::<_, _, ()>(key, 9)?;
         con.get(key)
     }
-    let v = via_glide_sync_trait(&c, &k).unwrap();
+    let v = via_glide_sync_trait(&client, &k).unwrap();
     assert_eq!(v, 9);
 }

@@ -15,15 +15,21 @@
 //! a new connection is created targeting the correct node.
 //! Language bindings (Java JNI, Python CFFI, Node N-API, Go CGO) should call
 //! these functions rather than duplicating the logic.
+//!
+//! Pub/sub is not supported on a scoped connection. SUBSCRIBE puts the connection
+//! into push-message mode, which needs a dedicated message handler that scopes do
+//! not wire up; use the parent client's pub/sub API, which keeps its own
+//! subscription connections.
 
 use crate::client::Client;
 use crate::pool::{
-    get_client_scope_pools, get_scope_registry, update_state_for_command, validate_scope_slot,
+    ScopedConnection, get_client_scope_pools, get_scope_registry, update_state_for_command,
+    validate_scope_slot,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopePool, ScopedConnection};
+use crate::pool::{ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -167,6 +173,11 @@ pub async fn execute_scope_command(
 
     // State tracking (for conditional cleanup on release)
     let arg_refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
+    // Captured before the update below, which clears multi_active on the very
+    // command that closes the transaction (EXEC/DISCARD); the post-update state
+    // would attempt AUTH while the server is still in the old mode.
+    let multi_active_before_command = conn.state.multi_active;
+    let subscribed_before_command = conn.state.has_subscriptions();
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
 
     // Cluster mode: validate slot consistency (skip in standalone — no slots)
@@ -213,11 +224,26 @@ pub async fn execute_scope_command(
     // Execute via Client (gets timeout, decompression, IAM refresh) or raw fallback
     let result = match client {
         Some(c) => {
-            c.send_command_on_connection(&cmd, &mut conn.connection)
-                .await
+            let ScopedConnection {
+                connection,
+                last_iam_generation,
+                ..
+            } = &mut *conn;
+            c.send_command_on_connection(
+                &cmd,
+                connection,
+                last_iam_generation,
+                multi_active_before_command || subscribed_before_command,
+            )
+            .await
         }
         None => conn.connection.send_packed_command(&cmd).await,
     };
+
+    // A failed re-auth makes this connection unusable for every later command.
+    if matches!(&result, Err(e) if e.kind() == redis::ErrorKind::AuthenticationFailed) {
+        conn.state.must_discard = true;
+    }
 
     // A timeout, IO error, dropped connection, or protocol desync can leave a
     // server-side waiter armed on the connection (or the connection itself in an
@@ -425,8 +451,40 @@ pub async fn create_scope_connection(
     let mut init_pipe = redis::Pipeline::new();
     let mut init_count = 0;
 
-    // AUTH: send credentials if configured
-    if let Some(ref auth_info) = proto.authentication_info.0 {
+    // Generation observed at AUTH-build time, so send_command_on_connection can
+    // detect whether the token has rotated again since this connection's initial
+    // AUTH (rather than always re-authenticating on the very first command, or
+    // missing a rotation that lands between here and the first command).
+    let mut initial_iam_generation: u64 = 0;
+
+    // AUTH: IAM authentication takes priority when configured on the parent client
+    // (matching the documented priority in `AuthenticationInfo`'s doc comment), otherwise
+    // fall back to the protobuf-configured password/username.
+    if let Some(manager) = client.and_then(|c| c.iam_token_manager()) {
+        // Read the generation before the token: if a refresh lands in this gap,
+        // `initial_iam_generation` records the (now-stale) pre-refresh generation,
+        // so the mismatch on the first scope command still triggers a
+        // reauthentication. Reading generation after the token could otherwise
+        // suppress it — a refresh landing there would mean the initial AUTH used
+        // the old token, but the recorded generation already matches the new one.
+        let generation_before_auth = manager.token_generation();
+        let current_token = manager.get_token().await;
+        if !current_token.is_empty() {
+            initial_iam_generation = generation_before_auth;
+            init_pipe
+                .cmd("AUTH")
+                .arg(manager.username())
+                .arg(current_token.as_str());
+            init_count += 1;
+        } else {
+            logger_core::log_warn(
+                "create_scope_connection",
+                "IAM token unavailable; skipping AUTH for scoped connection",
+            );
+            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
+            return;
+        }
+    } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
         if !password.is_empty() {
@@ -489,6 +547,7 @@ pub async fn create_scope_connection(
         state: ConnectionState::with_configured_db(database_id as u8),
         pinned_slot: None,
         target_slot: routing_slot,
+        last_iam_generation: std::sync::atomic::AtomicU64::new(initial_iam_generation),
     };
     pool_guard.idle.push_back(entry);
 }
@@ -524,13 +583,14 @@ pub fn try_acquire_scope(
     let registry = get_scope_registry();
 
     match scope_pool.try_lock() {
-        Ok(mut pool) => {
-            let result = pool.try_acquire(registry, routing_slot);
-            if result >= 0 {
+        Ok(mut pool) => match pool.try_acquire(registry, routing_slot) {
+            ScopeAcquire::Reused(scope_id) => {
                 let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
+                scope_id as i64
             }
-            if result < 0 && pool.total_count.load(Ordering::Acquire) < pool.config.max_total {
-                // Spawn background connection creation
+            ScopeAcquire::Reserved => {
+                // Fill the slot try_acquire reserved. The caller retries and picks
+                // the connection up once it lands in the idle queue.
                 let pool_clone = scope_pool.clone();
                 let conn_bytes = pool.connection_request_bytes.clone();
                 let parent_client_id = pool.parent_client_id;
@@ -540,9 +600,10 @@ pub fn try_acquire_scope(
                     create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target_slot)
                         .await;
                 });
+                -1
             }
-            result
-        }
+            ScopeAcquire::Exhausted => -1,
+        },
         Err(_) => -1,
     }
 }
@@ -626,13 +687,14 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::{self, Sender};
     use std::thread::JoinHandle;
+    use std::time::{Duration, Instant};
 
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
-    use super::create_scope_connection;
+    use super::{create_scope_connection, try_acquire_scope};
     use crate::connection_request::{ConnectionRequest, NodeAddress};
-    use crate::pool::{ScopePool, ScopePoolConfig};
+    use crate::pool::{ScopePool, ScopePoolConfig, get_client_scope_pools};
 
     fn request_bytes(lib_name: &str, port: u16) -> Vec<u8> {
         let mut request = ConnectionRequest::new();
@@ -730,6 +792,65 @@ mod tests {
             shutdown_sender.send(()).expect("stop mock server");
             server.join().expect("mock server exits cleanly");
         }
+    }
+
+    /// Polls the listener, awaiting between attempts so the spawned creation task
+    /// gets to run on a current-thread runtime.
+    async fn accept_within(listener: &TcpListener, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            match listener.accept() {
+                Ok(_) => return true,
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                Err(e) => panic!("unexpected listener error: {e}"),
+            }
+        }
+        false
+    }
+
+    /// `max_total = N` must permit N concurrent scopes, which means the Nth
+    /// reservation has to be filled like any other. `max_total = 1` makes the very
+    /// first acquire that boundary case: the pool reserves the only slot, so a
+    /// caller that re-checks capacity after the reservation sees the pool already
+    /// full, never creates the connection, and the borrower times out.
+    #[tokio::test]
+    async fn acquire_creates_the_connection_for_the_final_slot() {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes("GlideRust", port);
+
+        let client_id = 67_950_000_u64;
+        let config = ScopePoolConfig {
+            max_total: 1,
+            ..ScopePoolConfig::default()
+        };
+        get_client_scope_pools().insert(
+            client_id,
+            Arc::new(TokioMutex::new(ScopePool::new(
+                config,
+                request_bytes.clone(),
+                client_id,
+            ))),
+        );
+
+        let acquired = try_acquire_scope(
+            client_id,
+            request_bytes.clone(),
+            &tokio::runtime::Handle::current(),
+            0,
+        );
+        get_client_scope_pools().remove(&client_id);
+
+        assert_eq!(
+            acquired, -1,
+            "no idle connection yet, so the caller retries"
+        );
+        assert!(
+            accept_within(&listener, Duration::from_secs(5)).await,
+            "reserving the last slot must still create its connection"
+        );
     }
 
     /// Mirrors the poison predicate from `execute_scope_command` directly against
