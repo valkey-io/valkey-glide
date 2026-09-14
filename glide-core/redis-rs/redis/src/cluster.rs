@@ -1049,6 +1049,7 @@ impl ClusterAddress {
 }
 pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
     let (host, port) = address.rsplit_once(':')?;
+    let bracketed = host.starts_with('[') && host.ends_with(']');
     if host.starts_with('[') != host.ends_with(']') {
         return None;
     }
@@ -1059,7 +1060,19 @@ pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
     if host.contains('[') || host.contains(']') {
         return None;
     }
-    (!host.is_empty()).then_some((host, port.parse().ok()?))
+    if host.is_empty() {
+        return None;
+    }
+    if bracketed || host.contains(':') {
+        let (ipv6, scope) = host.split_once('%').unwrap_or((host, ""));
+        if scope.is_empty() || scope.contains('%') {
+            if host.contains('%') {
+                return None;
+            }
+        }
+        ipv6.parse::<std::net::Ipv6Addr>().ok()?;
+    }
+    Some((host, port.parse().ok()?))
 }
 pub(crate) fn format_cluster_address(host: &str, port: u16) -> String {
     let host = host
@@ -1202,6 +1215,13 @@ mod tests {
             parse_cluster_address("[2001:db8::1]:6379"),
             Some(("2001:db8::1", 6379))
         );
+        assert_eq!(parse_cluster_address("[not-an-ip]:6379"), None);
+        assert_eq!(
+            parse_cluster_address("[fe80::cafe:beef%en1]:30001"),
+            Some(("fe80::cafe:beef%en1", 30001))
+        );
+        assert_eq!(parse_cluster_address("[fe80::1%]:6379"), None);
+        assert_eq!(parse_cluster_address("[fe80::1%a%b]:6379"), None);
         assert_eq!(
             format_cluster_address("2001:db8::1", 6379),
             "[2001:db8::1]:6379"
