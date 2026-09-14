@@ -5633,7 +5633,7 @@ mod refresh_task_resolution_tests {
     use crate::ConnectionAddr;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Barrier, Mutex, MutexGuard};
+    use std::sync::{Condvar, Mutex, MutexGuard};
     use tokio::sync::{Notify, Semaphore};
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
@@ -5650,8 +5650,48 @@ mod refresh_task_resolution_tests {
         generation: AtomicUsize,
         tail_generation: AtomicUsize,
         old_tail_finished: Notify,
-        release_old: Barrier,
-        release_new: Barrier,
+        release_old: GateRelease,
+        release_new: GateRelease,
+    }
+
+    struct GateRelease {
+        released: Mutex<bool>,
+        condvar: Condvar,
+    }
+    impl GateRelease {
+        fn new() -> Self {
+            Self {
+                released: Mutex::new(false),
+                condvar: Condvar::new(),
+            }
+        }
+        fn wait(&self) {
+            let mut released = self.released.lock().unwrap_or_else(|e| e.into_inner());
+            while !*released {
+                released = self
+                    .condvar
+                    .wait(released)
+                    .unwrap_or_else(|e| e.into_inner());
+            }
+        }
+        fn release(&self) {
+            *self.released.lock().unwrap_or_else(|e| e.into_inner()) = true;
+            self.condvar.notify_all();
+        }
+    }
+    struct PostConnectGateRegistration(Arc<PostConnectGate>);
+    impl Drop for PostConnectGateRegistration {
+        fn drop(&mut self) {
+            self.0.release_old.release();
+            self.0.release_new.release();
+            let mut current = POST_CONNECT_GATE.lock().unwrap_or_else(|e| e.into_inner());
+            if current
+                .as_ref()
+                .is_some_and(|gate| Arc::ptr_eq(gate, &self.0))
+            {
+                *current = None;
+            }
+        }
     }
 
     pub(super) fn park_after_connect_for_test() {
@@ -5952,9 +5992,10 @@ mod refresh_task_resolution_tests {
             generation: AtomicUsize::new(0),
             tail_generation: AtomicUsize::new(0),
             old_tail_finished: Notify::new(),
-            release_old: Barrier::new(2),
-            release_new: Barrier::new(2),
+            release_old: GateRelease::new(),
+            release_new: GateRelease::new(),
         });
+        let _gate_registration = PostConnectGateRegistration(gate.clone());
         *POST_CONNECT_GATE
             .lock()
             .expect("post-connect gate is healthy") = Some(gate.clone());
@@ -5997,7 +6038,7 @@ mod refresh_task_resolution_tests {
             .await
             .expect("new generation should park after connecting");
 
-        gate.release_old.wait();
+        gate.release_old.release();
         tokio::time::timeout(Duration::from_secs(1), gate.old_tail_finished.notified())
             .await
             .expect("old generation should finish its guarded tail");
@@ -6017,7 +6058,7 @@ mod refresh_task_resolution_tests {
             "old generation must not remove new state"
         );
 
-        gate.release_new.wait();
+        gate.release_new.release();
 
         tokio::time::timeout(Duration::from_secs(1), new[0].notified())
             .await
