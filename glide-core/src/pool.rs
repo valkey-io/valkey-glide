@@ -297,7 +297,10 @@ impl ClientPool {
         self.state.store(POOL_CLOSED, Ordering::Release);
 
         // Invalidate scopes owned by this pool's clients before dropping them, so a
-        // scope cannot outlive the client it borrowed from.
+        // scope cannot outlive the client it borrowed from. Goes through
+        // `scope::unregister_client` (not `destroy_client_scope_pool` directly) so the
+        // client is also dropped from `CLIENT_REGISTRY` — Node registers pooled clients
+        // there under this same id, and without this it never sheds the entry.
         for client_id in self
             .idle
             .iter()
@@ -305,7 +308,7 @@ impl ClientPool {
             .chain(self.in_use.iter().map(|e| *e.key()))
             .collect::<Vec<_>>()
         {
-            destroy_client_scope_pool(client_id);
+            crate::scope::unregister_client(client_id);
         }
 
         self.idle.clear();
@@ -1216,9 +1219,11 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePoo
 /// id on each [`ScopeEntry`] is what makes that possible.
 ///
 /// A scope acquired concurrently with teardown can still land in the registry
-/// after the sweep, leaking one entry. It is inert — its parent is already
-/// unregistered, so dispatch fails — and closing the window would mean taking
-/// the lock this deliberately avoids.
+/// after the sweep, leaking one entry. It is inert *provided the caller has
+/// already removed `client_id` from `CLIENT_REGISTRY`* — dispatch then fails on
+/// an unresolvable parent regardless. Call via [`crate::scope::unregister_client`]
+/// rather than directly; a caller that skips the registry removal leaves the
+/// parent resolvable and this leaked entry live.
 pub fn destroy_client_scope_pool(client_id: u64) {
     get_client_scope_pools().remove(&client_id);
 

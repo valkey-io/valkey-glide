@@ -586,11 +586,14 @@ pub fn scope_execute<'a>(
         };
 
         // Without the parent every guardrail in send_scope_command is unavailable,
-        // so fail rather than send the command raw.
+        // so fail rather than send the command raw. Neutral wording: resolve_scope_parent
+        // returns None for both an unknown/released scope_id and a registered scope
+        // whose parent was unregistered — the two are indistinguishable to a caller
+        // and other bindings use the same neutral phrasing for this failure.
         let Some(client) = scope::resolve_scope_parent(scope_id_u64) else {
             deferred.reject(Error::new(
                 Status::GenericFailure,
-                format!("Scope {scope_id_u64}: parent client is not registered"),
+                format!("Scope execute failed: invalid scope {scope_id_u64}"),
             ));
             return;
         };
