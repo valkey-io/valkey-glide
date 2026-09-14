@@ -1056,9 +1056,16 @@ pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
         .strip_prefix('[')
         .and_then(|h| h.strip_suffix(']'))
         .unwrap_or(host);
+    if host.contains('[') || host.contains(']') {
+        return None;
+    }
     (!host.is_empty()).then_some((host, port.parse().ok()?))
 }
 pub(crate) fn format_cluster_address(host: &str, port: u16) -> String {
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
     if host.contains(':') {
         format!("[{host}]:{port}")
     } else {
@@ -1198,8 +1205,14 @@ mod tests {
             format_cluster_address("2001:db8::1", 6379),
             "[2001:db8::1]:6379"
         );
+        assert_eq!(
+            format_cluster_address("[2001:db8::1]", 6379),
+            "[2001:db8::1]:6379"
+        );
         assert_eq!(parse_cluster_address("[node:6379"), None);
         assert_eq!(parse_cluster_address("node]:6379"), None);
+        assert_eq!(parse_cluster_address("[[2001:db8::1]]:6379"), None);
+        assert_eq!(parse_cluster_address("2001:db8::1]:6379"), None);
         assert_eq!(parse_cluster_address(" node:6379 "), None);
         let resolver = BracketlessIpv6Resolver;
         assert_eq!(
