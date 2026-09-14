@@ -2226,6 +2226,9 @@ where
                         .remove(&address_clone_for_task);
                 }
 
+                #[cfg(test)]
+                refresh_task_resolution_tests::signal_old_tail_finished_for_test();
+
                 log_debug_lazy!(
                     "cluster",
                     format!(
@@ -5645,6 +5648,8 @@ mod refresh_task_resolution_tests {
     struct PostConnectGate {
         entered: Notify,
         generation: AtomicUsize,
+        tail_generation: AtomicUsize,
+        old_tail_finished: Notify,
         release_old: Barrier,
         release_new: Barrier,
     }
@@ -5661,6 +5666,18 @@ mod refresh_task_resolution_tests {
             gate.release_old.wait();
         } else {
             gate.release_new.wait();
+        }
+    }
+
+    pub(super) fn signal_old_tail_finished_for_test() {
+        let gate = POST_CONNECT_GATE
+            .lock()
+            .expect("post-connect gate is healthy")
+            .clone();
+        if let Some(gate) = gate {
+            if gate.tail_generation.fetch_add(1, Ordering::SeqCst) == 0 {
+                gate.old_tail_finished.notify_one();
+            }
         }
     }
 
@@ -5933,6 +5950,8 @@ mod refresh_task_resolution_tests {
         let gate = Arc::new(PostConnectGate {
             entered: Notify::new(),
             generation: AtomicUsize::new(0),
+            tail_generation: AtomicUsize::new(0),
+            old_tail_finished: Notify::new(),
             release_old: Barrier::new(2),
             release_new: Barrier::new(2),
         });
@@ -5979,7 +5998,9 @@ mod refresh_task_resolution_tests {
             .expect("new generation should park after connecting");
 
         gate.release_old.wait();
-        tokio::task::yield_now().await;
+        tokio::time::timeout(Duration::from_secs(1), gate.old_tail_finished.notified())
+            .await
+            .expect("old generation should finish its guarded tail");
         assert!(
             core.conn_lock
                 .read()
