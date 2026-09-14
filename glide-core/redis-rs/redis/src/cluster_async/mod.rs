@@ -2074,7 +2074,13 @@ where
                 .get(&address)
                 .map(|task| match &task.status {
                     RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
-                    RefreshTaskStatus::ReconnectingTooLong => None,
+                    RefreshTaskStatus::ReconnectingTooLong => {
+                        log_debug_lazy!(
+                            "cluster",
+                            format!("Skipping refresh for {}: reconnecting too long", address)
+                        );
+                        None
+                    }
                 });
 
             if let Some(notifier) = existing_task {
@@ -5891,6 +5897,98 @@ mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn refresh_generation_is_replaced_through_production_path() {
+        let _guard = gated_test_guard();
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381".to_owned();
+
+        let old = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("old generation should enter connection creation");
+
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .clear_refresh_state();
+
+        let new = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+        assert_eq!(old.len(), 1);
+        assert_eq!(new.len(), 1);
+
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("new generation should enter connection creation");
+        RELEASE_POISON_CONNECT.add_permits(2);
+
+        tokio::time::timeout(Duration::from_secs(1), new[0].notified())
+            .await
+            .expect("new generation should complete");
+
+        let connection = core
+            .conn_lock
+            .read()
+            .connection_for_address(&address)
+            .expect("new generation should install its connection")
+            .1
+            .await;
+        assert_eq!(connection.port, 6381);
+        assert!(
+            core.conn_lock
+                .read()
+                .refresh_conn_state
+                .refresh_address_in_progress
+                .get(&address)
+                .is_none(),
+            "completed generation should remove only itself"
+        );
+    }
+
+    #[tokio::test]
+    async fn reconnecting_too_long_refresh_is_skipped() {
+        let _guard = gated_test_guard();
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381".to_owned();
+        let identity = Arc::new(());
+        let state =
+            RefreshTaskState::new(tokio::spawn(async {}), RefreshTaskNotifier::new(), identity);
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .insert(address.clone(), state);
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get_mut(&address)
+            .expect("refresh state inserted")
+            .status
+            .flip_status_to_too_long();
+
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core,
+            HashSet::from([ClusterAddress::ReadyToDial(address)]),
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+        assert!(notifiers.is_empty());
     }
 
     #[tokio::test]
