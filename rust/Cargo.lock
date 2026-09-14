@@ -1192,6 +1192,7 @@ dependencies = [
  "once_cell",
  "redis",
  "regex",
+ "ryu",
  "serde_json",
  "sha1_smol",
  "thiserror 2.0.19",

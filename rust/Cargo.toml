@@ -31,6 +31,7 @@ async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
 num-bigint = "0.4"
+ryu = "1"
 sha1_smol = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
 thiserror = "2"
