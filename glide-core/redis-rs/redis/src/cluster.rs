@@ -60,12 +60,12 @@ use crate::{
 use rand::seq::IteratorRandom;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
+use tracing::warn;
 
 use crate::tls::TlsConnParams;
 
@@ -1027,14 +1027,14 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 // The node string passed to this function will always be in the format host:port as it is either:
 // - Created by calling ConnectionAddr::to_string (unix connections are not supported in cluster mode)
 // - Returned from redis via the ASK/MOVED response
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ReadyToDialAddress(String);
 impl ReadyToDialAddress {
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ClusterAddress {
     Raw(String),
     ReadyToDial(ReadyToDialAddress),
@@ -1120,16 +1120,12 @@ pub(crate) fn resolve_address(address: &str, resolver: Option<&dyn AddressResolv
         Some(resolver) => resolver,
         None => return address.to_string(),
     };
-
-    if let Some((host, port_str)) = address.rsplit_once(':') {
-        if let Ok(port) = port_str.parse::<u16>() {
-            let host = host.trim_start_matches('[').trim_end_matches(']');
-            let (resolved_host, resolved_port) = resolver.resolve(host, port);
-            return format!("{resolved_host}:{resolved_port}");
-        }
-    }
-
-    address.to_string()
+    let Some((host, port)) = parse_cluster_address(address) else {
+        warn!(address, "Unable to parse cluster address for resolution");
+        return address.to_string();
+    };
+    let (resolved_host, resolved_port) = resolver.resolve(host, port);
+    format_cluster_address(&resolved_host, resolved_port)
 }
 
 pub(crate) fn get_connection_addr(
@@ -1177,19 +1173,19 @@ mod tests {
     struct NonIdempotentResolver(std::sync::atomic::AtomicU32);
     impl AddressResolver for NonIdempotentResolver {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
-            let n = self.0.fetch_add(1, Ordering::SeqCst) + 1;
+            let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
             (format!("{host}-{n}"), port)
         }
     }
 
     #[test]
     fn cluster_address_prepares_once_and_ready_bypasses_resolver() {
-        let resolver = NonIdempotentResolver(AtomicU32::new(0));
+        let resolver = NonIdempotentResolver(std::sync::atomic::AtomicU32::new(0));
         let ready = ClusterAddress::Raw("node:6379".into()).prepare(Some(&resolver));
         assert_eq!(ready.as_str(), "node-1:6379");
         let ready = ClusterAddress::ReadyToDial(ready).prepare(Some(&resolver));
         assert_eq!(ready.as_str(), "node-1:6379");
-        assert_eq!(resolver.0.load(Ordering::SeqCst), 1);
+        assert_eq!(resolver.0.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]
@@ -1205,6 +1201,13 @@ mod tests {
         assert_eq!(parse_cluster_address("[node:6379"), None);
         assert_eq!(parse_cluster_address("node]:6379"), None);
         assert_eq!(parse_cluster_address(" node:6379 "), None);
+        let resolver = BracketlessIpv6Resolver;
+        assert_eq!(
+            ClusterAddress::Raw("[node:6379".into())
+                .prepare(Some(&resolver))
+                .as_str(),
+            "[node:6379"
+        );
     }
 
     #[derive(Debug)]
