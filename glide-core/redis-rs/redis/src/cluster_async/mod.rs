@@ -4445,7 +4445,14 @@ where
         let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
         let prepared_addresses: HashSet<ClusterAddress> = addresses_needing_refresh
             .iter()
-            .map(|addr| ClusterAddress::ReadyToDial(addr.clone().prepare(resolver.as_deref()).as_str().to_owned()))
+            .map(|addr| {
+                ClusterAddress::ReadyToDial(
+                    addr.clone()
+                        .prepare(resolver.as_deref())
+                        .as_str()
+                        .to_owned(),
+                )
+            })
             .collect();
         addresses_needing_refresh = prepared_addresses;
 
@@ -4465,7 +4472,9 @@ where
         for addr in addresses_needing_refresh.drain() {
             if let ConnectionLookupResult::Found(conn) = lookup_management_connection(
                 inner,
-                match &addr { ClusterAddress::Raw(a) | ClusterAddress::ReadyToDial(a) => a },
+                match &addr {
+                    ClusterAddress::Raw(a) | ClusterAddress::ReadyToDial(a) => a,
+                },
                 None,
             ) {
                 connections.push(conn);
@@ -5810,5 +5819,79 @@ mod refresh_task_resolution_tests {
             .1
             .await;
         assert_eq!(connection.port, 6381);
+    }
+
+    #[derive(Debug)]
+    struct InitialRecoveryResolver;
+
+    impl AddressResolver for InitialRecoveryResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            RESOLVER_CALLS.fetch_add(1, Ordering::SeqCst);
+            (host.to_owned(), if port == 6379 { 6390 } else { port })
+        }
+    }
+
+    #[tokio::test]
+    async fn initial_recovery_resolves_ambiguous_socket_fallback_once() {
+        RESOLVER_CALLS.store(0, Ordering::SeqCst);
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "127.0.0.1:6380".into(), vec![]),
+                Slot::new(8192, 16383, "127.0.0.1:6381".into(), vec![]),
+            ],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert!(slot_map
+            .node_address_for_ip("127.0.0.1".parse().unwrap())
+            .is_none());
+        let (pending_requests_tx, pending_requests_rx) =
+            mpsc::unbounded_channel::<PendingRequest<RecordingConnection>>();
+        let mut cluster_params = ClusterParams::default_for_test(None);
+        cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
+        let core = Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(cluster_params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: vec!["redis://127.0.0.1:6379".parse().unwrap()],
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        });
+
+        let result = get_random_connections_from_initial_nodes(&core, 1)
+            .await
+            .expect("initial recovery should succeed");
+        assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 1);
+        assert!(!result.connections.is_empty());
+        let node = core
+            .conn_lock
+            .read()
+            .node_for_address("127.0.0.1:6390")
+            .expect("resolved final address should be the connection-map key");
+        assert!(core
+            .conn_lock
+            .read()
+            .node_for_address("127.0.0.1:6379")
+            .is_none());
+        assert_eq!(node.user_connection.conn.await.port, 6390);
+        assert_eq!(
+            node.management_connection
+                .as_ref()
+                .expect("management connection should be installed")
+                .conn
+                .clone()
+                .await
+                .port,
+            6390
+        );
     }
 }
