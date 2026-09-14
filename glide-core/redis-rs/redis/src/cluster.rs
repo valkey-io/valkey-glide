@@ -743,6 +743,13 @@ where
 
         let mut retries = 0;
         let mut redirected = None::<Redirect>;
+        let by_address = match &single_node_routing {
+            SingleNodeRoutingInfo::ByAddress { host, port } => Some(resolve_address(
+                &format!("{host}:{port}"),
+                self.cluster_params.address_resolver.as_deref(),
+            )),
+            _ => None,
+        };
 
         loop {
             // Get target address and response.
@@ -772,14 +779,13 @@ where
                         SingleNodeRoutingInfo::RandomPrimary => {
                             self.get_connection(&mut connections, &Route::new_random_primary())?
                         }
-                        SingleNodeRoutingInfo::ByAddress { host, port } => {
-                            let address = resolve_address(
-                                &format!("{host}:{port}"),
-                                self.cluster_params.address_resolver.as_deref(),
-                            );
+                        SingleNodeRoutingInfo::ByAddress { .. } => {
+                            let address = by_address
+                                .as_ref()
+                                .expect("ByAddress must have a resolved address");
                             let conn =
-                                self.get_connection_by_canonical_addr(&mut connections, &address)?;
-                            (address, conn)
+                                self.get_connection_by_canonical_addr(&mut connections, address)?;
+                            (address.clone(), conn)
                         }
                     }
                 };

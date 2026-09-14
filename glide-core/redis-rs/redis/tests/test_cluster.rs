@@ -717,6 +717,10 @@ mod cluster {
                     (6379, 0) => Err(parse_redis_value(b"-ASK 14000 internal-node:6380\r\n")),
                     (6380, 1) => {
                         assert!(contains_slice(cmd, b"GET"));
+                        Err(parse_redis_value(b"-TRYAGAIN transient\r\n"))
+                    }
+                    (6380, 2) => {
+                        assert!(contains_slice(cmd, b"GET"));
                         Err(Ok(Value::BulkString(b"123".to_vec().into())))
                     }
                     _ => panic!("Unexpected command on port {port}: {cmd:?}"),
@@ -727,8 +731,8 @@ mod cluster {
         let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
 
         assert_eq!(value, Ok(Some(123)));
-        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
-        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 1);
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 2);
     }
 
     #[test]
