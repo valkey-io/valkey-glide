@@ -6184,6 +6184,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn initial_recovery_resolves_ambiguous_socket_fallback_once() {
+        let _guard = gated_test_guard();
         RESOLVER_CALLS.store(0, Ordering::SeqCst);
         let slot_map = SlotMap::new(
             vec![
