@@ -572,9 +572,7 @@ pub fn try_acquire_scope(
             // Resolve the slot's current primary before touching the pool so a
             // stale or unmapped slot never matches (or creates) a connection to the
             // wrong node. Unresolved means "retry", not "use the seed".
-            let client = get_client_registry()
-                .get(&pool.parent_client_id)
-                .map(|e| e.value().clone());
+            let client = get_parent_client(pool.parent_client_id);
             let Some(target) = try_resolve_scope_target(&pool, client.as_ref(), routing_slot)
             else {
                 return -1;
@@ -637,18 +635,15 @@ pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Ha
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Get the parent Client for a given client_id.
+/// Look up the parent `Client` that owns a scope pool, by the `client_id` the
+/// binding registered it under (see [`register_client`]).
 ///
-/// This uses the client registry that each language binding populates.
-/// The registry is in `glide-core::pool` (via the client_scope_pools map)
-/// but the actual Client instances are stored per-binding. This function
-/// is a hook point — language bindings should register their clients in a
-/// shared registry accessible from glide-core.
-///
-/// For now, we use the scope pool's parent_client_id to look up from the
-/// global CLIENT_REGISTRY that language bindings populate.
+/// Synchronous and cheap (a `DashMap` read plus an `Arc` bump), so it is safe to
+/// call from the non-blocking acquire path as well as from async creation tasks.
+/// Returns `None` if the binding has not registered the client or has already
+/// unregistered it on close.
 #[cfg(feature = "proto")]
-pub async fn get_parent_client(client_id: u64) -> Option<Client> {
+pub fn get_parent_client(client_id: u64) -> Option<Client> {
     let registry = get_client_registry();
     registry.get(&client_id).map(|e| e.value().clone())
 }

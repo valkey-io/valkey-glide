@@ -866,7 +866,7 @@ pub unsafe extern "C" fn glide_scope_prewarm(
         let bytes = conn_bytes.clone();
         let cid = client_id;
         runtime.spawn(async move {
-            let client = scope::get_parent_client(cid).await;
+            let client = scope::get_parent_client(cid);
             let Some(target) = scope::resolve_scope_target(&pool_clone, client.as_ref(), 0).await
             else {
                 return;
