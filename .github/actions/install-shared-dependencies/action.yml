@@ -33,8 +33,11 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              sudo apt update -y
-              sudo apt install -y git gcc pkg-config openssl libssl-dev
+              # Wait up to 60s for any running apt/dpkg process to release its lock
+              # before proceeding. This prevents failures on persistent self-hosted runners
+              # where a previous job or background unattended-upgrades may still hold the lock.
+              sudo apt-get -o DPkg::Lock::Timeout=60 update -y
+              sudo apt-get -o DPkg::Lock::Timeout=60 install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for MUSL
           shell: bash
