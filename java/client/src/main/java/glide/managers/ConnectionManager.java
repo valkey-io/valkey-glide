@@ -334,8 +334,8 @@ public class ConnectionManager {
                                             .build());
                         }
 
-                        // Validate and set read from strategy
-                        validateClientAz(configuration);
+                        // Set read from strategy. The clientAZ requirement is validated synchronously
+                        // in BaseClient.createClient, before this async body runs.
                         requestBuilder.setReadFrom(mapReadFrom(configuration.getReadFrom()));
 
                         // Set client metadata
@@ -764,20 +764,24 @@ public class ConnectionManager {
      * <p>Without this check the core silently downgrades the strategy to {@code PreferReplica}, so
      * reads would land on arbitrary nodes while the configuration suggested otherwise.
      *
-     * <p>Called from the {@code connectToValkey} async body, so callers observe this as an {@code
-     * ExecutionException} on the returned future rather than a synchronous throw. Note that
-     * pool-borrowed clients build their request in {@code ClientPool} and do not pass through here —
-     * see <a href="https://github.com/valkey-io/valkey-glide/issues/6897">#6897</a>.
+     * <p>Called synchronously from {@code BaseClient.createClient}, alongside the PubSub/RESP2 check,
+     * so callers see a direct throw rather than an {@code ExecutionException} on the returned future.
+     * Note that pool-borrowed clients build their request in {@code ClientPool} and never reach
+     * {@code createClient}, so they remain unvalidated — see <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/6897">#6897</a>.
      *
      * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
      */
-    static void validateClientAz(BaseClientConfiguration configuration) {
+    public static void validateClientAz(BaseClientConfiguration configuration) {
         glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
         if (!readFrom.requiresClientAz()) {
             return;
         }
         String clientAz = configuration.getClientAZ();
-        if (clientAz == null || clientAz.isEmpty()) {
+        // Trim for the emptiness check only. The core compares the AZ exactly and never trims, so a
+        // whitespace-only value would engage the strategy, match no node, and silently fall back to
+        // routing across all nodes. The value itself is forwarded unnormalized.
+        if (clientAz == null || clientAz.trim().isEmpty()) {
             throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
         }
     }

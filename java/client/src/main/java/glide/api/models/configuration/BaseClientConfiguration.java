@@ -132,8 +132,8 @@ public abstract class BaseClientConfiguration {
      * that readonly commands are spread equally among all nodes (primary and replicas) within the
      * specified AZ if they exist.
      *
-     * <p>Required when any of the above AZ-affinity strategies is selected: the future returned by
-     * {@code createClient} completes exceptionally with a {@code ConfigurationError} if it is unset.
+     * <p>Required when any of the above AZ-affinity strategies is selected: {@code createClient}
+     * throws a {@code ConfigurationError} if it is unset or blank.
      */
     private final String clientAZ;
 

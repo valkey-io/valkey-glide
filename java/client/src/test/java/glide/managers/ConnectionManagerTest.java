@@ -4,7 +4,10 @@ package glide.managers;
 import static org.junit.jupiter.api.Assertions.*;
 
 import connection_request.ConnectionRequestOuterClass;
+import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ConfigurationError;
 import java.util.Arrays;
@@ -85,6 +88,55 @@ public class ConnectionManagerTest {
 
         assertThrows(
                 ConfigurationError.class, () -> ConnectionManager.validateClientAz(config(readFrom, "")));
+    }
+
+    /**
+     * A whitespace-only AZ is not "set" in any useful sense: the core compares AZs exactly and never
+     * trims, so it would engage the strategy, match no node, and silently fall back to routing across
+     * all nodes.
+     */
+    @ParameterizedTest
+    @MethodSource("azStrategies")
+    void validateClientAz_rejectsWhitespaceOnlyClientAz(ReadFrom readFrom) {
+        for (String blank : new String[] {" ", "   ", "\t", "\n", " \t\n "}) {
+            assertThrows(
+                    ConfigurationError.class,
+                    () -> ConnectionManager.validateClientAz(config(readFrom, blank)),
+                    "Expected rejection for blank clientAZ " + blank.replace("\n", "\\n"));
+        }
+    }
+
+    /** A legitimate AZ with incidental surrounding whitespace is accepted and left unnormalized. */
+    @ParameterizedTest
+    @MethodSource("azStrategies")
+    void validateClientAz_acceptsClientAzWithSurroundingWhitespace(ReadFrom readFrom) {
+        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, " " + AZ + " ")));
+    }
+
+    /**
+     * The check runs on the synchronous path in {@code BaseClient.createClient}, so callers see a
+     * direct throw rather than an {@code ExecutionException} on the returned future. Asserting on
+     * {@code createClient} itself — with no {@code get()} — is what pins that; the throw happens
+     * before any connection is attempted, so no server is needed.
+     */
+    @Test
+    void createClient_throwsSynchronouslyWhenAzStrategyHasNoClientAz() {
+        assertThrows(
+                ConfigurationError.class,
+                () ->
+                        GlideClient.createClient(
+                                GlideClientConfiguration.builder()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES)
+                                        .build()));
+
+        assertThrows(
+                ConfigurationError.class,
+                () ->
+                        GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES)
+                                        .clientAZ("   ")
+                                        .build()));
     }
 
     @ParameterizedTest
