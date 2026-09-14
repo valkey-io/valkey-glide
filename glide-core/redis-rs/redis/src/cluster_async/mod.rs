@@ -79,7 +79,7 @@ use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
-    cluster::{slot_cmd, ClusterAddress},
+    cluster::{parse_cluster_address, slot_cmd, ClusterAddress},
     cluster_async::connections_logic::{
         get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture, RefreshConnectionType,
     },
@@ -600,10 +600,8 @@ where
 
         // Valkey redirects can contain raw IPs. Prefer the exact node address
         // already known from topology, including its port.
-        let (host, port) = address.rsplit_once(':')?;
-        let host = host.trim_start_matches('[').trim_end_matches(']');
+        let (host, port) = parse_cluster_address(address)?;
         let ip = host.parse::<IpAddr>().ok()?;
-        let port = port.parse::<u16>().ok()?;
         conn_lock
             .slot_map
             .node_address_for_ip_and_port(ip, port)
@@ -611,26 +609,37 @@ where
     }
 
     pub(crate) fn normalize_current_address(&self, address: &str) -> String {
-        if let Some(address) = self.reverse_lookup_address(address) {
-            return address;
-        }
-
-        let current_address_is_canonical = {
+        // Classify the address from one snapshot.  In particular, an address
+        // already used by either topology or a live connection is ready to
+        // dial and must not be sent through the (possibly non-idempotent)
+        // user resolver.
+        let address_kind = {
             let conn_lock = self.conn_lock.read();
-            conn_lock
+            let reverse_match = parse_cluster_address(address).and_then(|(host, port)| {
+                let ip = host.parse::<IpAddr>().ok()?;
+                conn_lock
+                    .slot_map
+                    .node_address_for_ip_and_port(ip, port)
+                    .map(|canonical| (*canonical).clone())
+            });
+            if let Some(canonical) = reverse_match {
+                ClusterAddress::ReadyToDial(canonical)
+            } else if conn_lock
                 .slot_map
                 .nodes_map()
                 .contains_key(&address.to_owned())
+                || conn_lock.connection_map().contains_key(address)
+            {
+                ClusterAddress::ReadyToDial(address.to_owned())
+            } else {
+                ClusterAddress::Raw(address.to_owned())
+            }
         };
-        if current_address_is_canonical {
-            address.to_owned()
-        } else {
-            cluster::resolve_address(
-                address,
-                self.get_cluster_param(|params| params.address_resolver.clone())
-                    .as_deref(),
-            )
-        }
+        let resolver = self.get_cluster_param(|params| params.address_resolver.clone());
+        address_kind
+            .prepare(resolver.as_deref())
+            .as_str()
+            .to_owned()
     }
 
     pub(crate) fn is_circular_moved_redirect(
