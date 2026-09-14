@@ -155,6 +155,6 @@ jobs:
                   echo "Total .class files: $(find java -name "*.class" | wc -l)"
 
             - name: Perform CodeQL Analysis
-              uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+              uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v3
               with:
                   category: "/language:${{matrix.language}}"
