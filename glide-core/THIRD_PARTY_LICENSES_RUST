@@ -6512,7 +6512,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.13.1
+Package: bitflags:2.13.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9335,7 +9335,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crc32fast:1.5.1
+Package: crc32fast:1.5.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9564,7 +9564,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-channel:0.5.16
+Package: crossbeam-channel:0.5.17
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9793,7 +9793,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-utils:0.8.22
+Package: crossbeam-utils:0.8.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22038,7 +22038,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: indexmap:2.14.1
+Package: indexmap:2.14.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22292,7 +22292,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ipnet:2.12.1
+Package: ipnet:2.12.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24582,7 +24582,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libredox:0.1.23
+Package: libredox:0.1.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36927,7 +36927,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.43
+Package: rustls:0.23.44
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -41002,7 +41002,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: smallvec:1.16.0
+Package: smallvec:1.16.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47223,7 +47223,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.26.0
+Package: uuid:1.26.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57510,7 +57510,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.56
+Package: zerocopy:0.8.57
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -57762,7 +57762,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.56
+Package: zerocopy-derive:0.8.57
 
 The following copyrights and licenses were found in the source code of this package:
 
