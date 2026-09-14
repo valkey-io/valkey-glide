@@ -743,13 +743,10 @@ where
 
         let mut retries = 0;
         let mut redirected = None::<Redirect>;
-        let by_address = match &single_node_routing {
-            SingleNodeRoutingInfo::ByAddress { host, port } => Some(resolve_address(
-                &format!("{host}:{port}"),
-                self.cluster_params.address_resolver.as_deref(),
-            )),
-            _ => None,
-        };
+        let by_address = resolve_by_address(
+            &single_node_routing,
+            self.cluster_params.address_resolver.as_deref(),
+        );
 
         loop {
             // Get target address and response.
@@ -1153,6 +1150,19 @@ pub(crate) fn resolve_address(address: &str, resolver: Option<&dyn AddressResolv
     };
     let (resolved_host, resolved_port) = resolver.resolve(host, port);
     format_cluster_address(&resolved_host, resolved_port)
+}
+
+fn resolve_by_address(
+    routing: &SingleNodeRoutingInfo,
+    resolver: Option<&dyn AddressResolver>,
+) -> Option<String> {
+    match routing {
+        SingleNodeRoutingInfo::ByAddress { host, port } => Some(resolve_address(
+            &format!("{host}:{port}"),
+            resolver,
+        )),
+        _ => None,
+    }
 }
 
 pub(crate) fn get_connection_addr(
