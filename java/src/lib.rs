@@ -24,7 +24,7 @@ use jni::sys::{jint, jlong};
 use parking_lot::Mutex;
 use redis::Value;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, OnceLock};
 
 mod address_resolver;
@@ -514,14 +514,20 @@ fn array_to_java_array<'local>(
     Ok(items.into())
 }
 
-/// RAII guard that clears the `is_blocking` flag when dropped.
-/// Ensures the flag is always unset on every exit path from a blocking
+/// RAII guard that decrements the `is_blocking` counter when dropped.
+/// Ensures the counter is always decremented on every exit path from a blocking
 /// command dispatch (normal completion, early return, cancellation).
-struct UnmarkOnDrop(Option<Arc<AtomicBool>>);
+struct UnmarkOnDrop(Option<Arc<AtomicU32>>);
 impl Drop for UnmarkOnDrop {
     fn drop(&mut self) {
         if let Some(arc) = self.0.take() {
-            arc.store(false, std::sync::atomic::Ordering::Release);
+            // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
+            // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
+            let _ = arc.fetch_update(
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+                |v| if v > 0 { Some(v - 1) } else { None },
+            );
         }
     }
 }
@@ -1569,9 +1575,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         };
 
         // Synchronously detect if any command in the batch is a blocking command and
-        // raise the flag BEFORE spawning, so the abandon monitor cannot observe
-        // is_blocking=false in the window between spawn() and task execution.
-        let batch_pre_blocking_arc: Option<Arc<AtomicBool>> = {
+        // raise the counter BEFORE spawning, so the abandon monitor cannot observe
+        // is_blocking=0 in the window between spawn() and task execution.
+        let batch_pre_blocking_arc: Option<Arc<AtomicU32>> = {
             let has_blocking = req_types.iter().enumerate().any(|(i, rt_int)| {
                 let proto_rt = protobuf::EnumOrUnknown::<
                     glide_core::command_request::RequestType,
@@ -1592,15 +1598,26 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         })
                         .unwrap_or(false)
                 } else {
+                    // Build the full Cmd with arguments so that XREAD BLOCK and
+                    // XREADGROUP BLOCK are detected correctly — they are only
+                    // identifiable by the presence of the BLOCK keyword in the
+                    // args, not by command name alone.
                     rt.get_command()
-                        .map(|cmd| glide_core::client::is_blocking_command(&cmd))
+                        .map(|mut cmd| {
+                            if let Some(args) = all_args.get(i) {
+                                for arg in args {
+                                    cmd.arg(arg.as_slice());
+                                }
+                            }
+                            glide_core::client::is_blocking_command(&cmd)
+                        })
                         .unwrap_or(false)
                 }
             });
             if has_blocking {
                 let arc = glide_core::pool::get_blocking_flag(handle_id);
                 if let Some(ref a) = arc {
-                    a.store(true, std::sync::atomic::Ordering::Release);
+                    a.fetch_add(1, std::sync::atomic::Ordering::Release);
                 }
                 arc
             } else {
@@ -1609,10 +1626,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         };
 
         get_runtime().spawn(async move {
-            // RAII guard: ensures is_blocking is cleared on every exit path —
+            // RAII guard: ensures is_blocking counter is decremented on every exit path —
             // client-not-found, routing/pipeline errors (via ?), normal completion,
             // or cancellation.
-            // Guard arms immediately on task entry — flag was already set true before spawn.
+            // Guard arms immediately on task entry — counter was already incremented before spawn.
             let _unmark_guard = UnmarkOnDrop(batch_pre_blocking_arc.clone());
 
             let client_result = jni_client::ensure_client_for_handle(handle_id).await;
@@ -1897,9 +1914,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 
         // Synchronously detect if this is a blocking command and raise the flag
         // BEFORE spawning the async task, so the abandon monitor cannot observe
-        // is_blocking=false in the window between spawn() and task execution on
-        // a worker thread (Bug fix: pre-spawn flag race).
-        let pre_blocking_arc: Option<Arc<AtomicBool>> = {
+        // is_blocking=0 in the window between spawn() and task execution on
+        // a worker thread (Bug fix: pre-spawn counter race).
+        let pre_blocking_arc: Option<Arc<AtomicU32>> = {
             let proto_rt =
                 protobuf::EnumOrUnknown::<glide_core::command_request::RequestType>::from_i32(
                     request_type,
@@ -1919,7 +1936,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                         )
                     })
                     .unwrap_or(false)
-            } else if let Some(cmd) = rt.get_command() {
+            } else if let Some(mut cmd) = rt.get_command() {
+                // Append args so blocking-command detection works for arg-gated
+                // commands like XREAD BLOCK and XREADGROUP BLOCK.
+                for arg in &args_data {
+                    cmd.arg(arg.as_slice());
+                }
                 glide_core::client::is_blocking_command(&cmd)
             } else {
                 false
@@ -1927,7 +1949,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             if is_blocking {
                 let arc = glide_core::pool::get_blocking_flag(handle_id);
                 if let Some(ref a) = arc {
-                    a.store(true, std::sync::atomic::Ordering::Release);
+                    a.fetch_add(1, std::sync::atomic::Ordering::Release);
                 }
                 arc
             } else {
@@ -1936,11 +1958,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         };
 
         get_runtime().spawn(async move {
-            // Guard arms immediately on task entry — flag was already set true before spawn.
-            // This ensures the flag is cleared on every exit path: normal completion,
+            // Guard arms immediately on task entry — counter was already incremented before spawn.
+            // This ensures the counter is decremented on every exit path: normal completion,
             // early ?-return inside the inner async block, and task cancellation.
-            // Safe: the pool enforces exclusive borrow — at most one blocking command
-            // is in flight per pooled client at any time.
             let _unmark_guard = UnmarkOnDrop(pre_blocking_arc.clone());
             let result: Result<redis::Value, redis::RedisError> = async {
                 let mut client = jni_client::ensure_client_for_handle(handle_id)
@@ -2183,27 +2203,32 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             None
         };
 
-        // Synchronously raise the blocking flag for scripts BEFORE spawning: scripts
+        // Synchronously raise the blocking counter for scripts BEFORE spawning: scripts
         // execute synchronously on the server (EVALSHA blocks until completion), so the
-        // client must be considered blocking for the duration. Raising the flag here
+        // client must be considered blocking for the duration. Raising the counter here
         // prevents the abandon monitor from reclaiming the client in the window between
         // spawn() and when the async task actually runs on a worker thread.
         // Conservative: mark blocking for the full batch/script duration regardless
         // of whether the payload contains a blocking command.
-        let script_pre_blocking_arc: Option<Arc<AtomicBool>> = {
-            let arc = glide_core::pool::get_blocking_flag(client_handle_id);
-            if let Some(ref a) = arc {
-                a.store(true, std::sync::atomic::Ordering::Release);
+        // Gate on pool membership so non-pool clients are unaffected.
+        let script_pre_blocking_arc: Option<Arc<AtomicU32>> = {
+            if crate::jni_pool::get_pool_client_map().contains_key(&client_handle_id) {
+                let arc = glide_core::pool::get_blocking_flag(client_handle_id);
+                if let Some(ref a) = arc {
+                    a.fetch_add(1, std::sync::atomic::Ordering::Release);
+                }
+                arc
+            } else {
+                None
             }
-            arc
         };
 
         // Spawn async task for script execution using FFI-imported patterns
         let runtime = get_runtime();
         runtime.spawn(async move {
-            // RAII guard: ensures is_blocking is cleared on every exit path —
+            // RAII guard: ensures is_blocking counter is decremented on every exit path —
             // routing errors, client-not-found, normal completion, or cancellation.
-            // Guard arms immediately on task entry — flag was already set true before spawn.
+            // Guard arms immediately on task entry — counter was already incremented before spawn.
             let _unmark_guard = UnmarkOnDrop(script_pre_blocking_arc.clone());
 
             let client_result = ensure_client_for_handle(client_handle_id).await;

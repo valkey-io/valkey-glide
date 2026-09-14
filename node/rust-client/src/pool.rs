@@ -44,12 +44,20 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Mark/unmark a pool-borrowed client as executing a blocking command.
+/// Uses an atomic counter: increment on blocking=true, saturating decrement on blocking=false.
 /// Returns true if the mark was applied (client is registered).
 pub fn mark_blocking(client_id: u64, blocking: bool) -> bool {
     if let Some(arc) = glide_core::pool::get_blocking_flag(client_id) {
-        arc.store(blocking, Ordering::Release);
-        if !blocking {
-            glide_core::pool::refresh_activity_by_client(client_id);
+        if blocking {
+            arc.fetch_add(1, Ordering::Release);
+        } else {
+            // Best-effort activity refresh BEFORE decrementing.
+            let _ = glide_core::pool::try_refresh_activity_by_client(client_id);
+            // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
+            // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
+            let _ = arc.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+                if v > 0 { Some(v - 1) } else { None }
+            });
         }
         true
     } else {
@@ -153,14 +161,12 @@ pub fn create_pool<'a>(
     get_pool_runtime().spawn(async move {
         let mut first_tx_opt = Some(first_tx);
 
-        if min_idle == 0 {
-            if let Some(tx) = first_tx_opt.take() {
-                let _ = tx.send(Ok(()));
-            }
-            return;
-        }
+        // Always probe at least one connection for connectivity validation, even
+        // when min_idle=0.  If the probe succeeds and min_idle=0 was requested,
+        // we remove the extra client from the idle list after reporting success.
+        let probe_count = if min_idle == 0 { 1 } else { min_idle };
 
-        for i in 0..min_idle {
+        for i in 0..probe_count {
             let connection_request = match ProtobufConnectionRequest::parse_from_bytes(&conn_bytes)
             {
                 Ok(req) => req,
@@ -184,9 +190,12 @@ pub fn create_pool<'a>(
 
             let mut internal_req: ConnectionRequest = connection_request.into();
 
-            // Apply address resolver if configured (mirrors create_direct_client).
+            // Pool connections share the resolver — use get() not remove() so
+            // subsequent pool connections (warmup, on-demand, reconnects) also
+            // have the resolver.  The resolver is cleaned up in ClientPool.close()
+            // on the TypeScript side.
             if let Some(key) = resolver_key
-                && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
+                && let Some(resolver) = glide_core::address_resolver_registry::get(&key)
             {
                 internal_req.address_resolver = Some(resolver);
             }
@@ -227,6 +236,26 @@ pub fn create_pool<'a>(
                 }
             }
 
+            // For min_idle=0: remove the probe from idle BEFORE signalling success
+            // so the TS layer cannot acquire the probe client between the signal
+            // and the removal (TOCTOU race).  We already hold no lock here, so
+            // re-acquire it for the removal then drop before the send.
+            if min_idle == 0 && i == 0 {
+                let registry = pool::get_pool_registry();
+                if let Some(pool_entry) = registry.get(&(pool_id as u64)) {
+                    let mut pool_guard = pool_entry.value().lock().await;
+                    if let Some(entry) = pool_guard.idle.pop_back() {
+                        pool_guard
+                            .total_count
+                            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                        // Clean up global registries that add_client populated.
+                        pool::unregister_blocking_flag(entry.client_id);
+                        scope::unregister_client(entry.client_id);
+                    }
+                }
+                // Lock released here before signalling.
+            }
+
             // Notify caller that the first connection succeeded.
             if i == 0
                 && let Some(tx) = first_tx_opt.take()
@@ -245,15 +274,23 @@ pub fn create_pool<'a>(
     get_pool_runtime().spawn(async move {
         match first_rx.await {
             Ok(Ok(())) => deferred.resolve(move |_| Ok(pool_id)),
-            Ok(Err(msg)) => deferred.reject(Error::new(Status::Unknown, msg)),
-            Err(_) => deferred.reject(Error::new(Status::Unknown, "Pool warmup task dropped")),
+            Ok(Err(msg)) => {
+                // Warmup failed — unregister the pool before rejecting so the
+                // registry doesn't accumulate dead entries.
+                pool::unregister_pool(pool_id as u64);
+                deferred.reject(Error::new(Status::Unknown, msg));
+            }
+            Err(_) => {
+                pool::unregister_pool(pool_id as u64);
+                deferred.reject(Error::new(Status::Unknown, "Pool warmup task dropped"));
+            }
         }
     });
 
     Ok(promise)
 }
 
-/// Build a [`GlideClientHandle`] for a pool-acquired client identified by `client_id`.
+/// Build a `GlideClientHandle` for a pool-acquired client identified by `client_id`.
 ///
 /// Called by TS after `pool_try_acquire` or `pool_acquire_blocking` returns a
 /// non-negative `client_id`.  Looks up the [`Client`] in the scope registry
@@ -278,7 +315,6 @@ pub fn pool_build_handle<'a>(
         Arc::new(wake_callback.build_threadsafe_function().build()?);
 
     let client_id_u64 = client_id as u64;
-    let inflight_requests_limit = glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as isize;
 
     get_pool_runtime().spawn(async move {
         // Retrieve the Client from the scope registry.
@@ -291,6 +327,28 @@ pub fn pool_build_handle<'a>(
                 ));
                 return;
             }
+        };
+
+        // Resolve the inflight_requests_limit from the pool config stored for
+        // this client.  Falls back to the global default if not found so
+        // pool_build_handle is always safe to call even without pool context.
+        let inflight_requests_limit = if let Some(pool_id) =
+            glide_core::pool::get_pool_id_for_client(client_id_u64)
+        {
+            if let Some(pool_arc) = glide_core::pool::get_pool(pool_id) {
+                let pool_guard = pool_arc.lock().await;
+                let req = ProtobufConnectionRequest::parse_from_bytes(
+                    &pool_guard.config.connection_request,
+                );
+                match req {
+                    Ok(r) if r.inflight_requests_limit > 0 => r.inflight_requests_limit as isize,
+                    _ => glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as isize,
+                }
+            } else {
+                glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as isize
+            }
+        } else {
+            glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as isize
         };
 
         // Create a dummy push channel.  Pool clients don't use pub/sub, so
@@ -334,9 +392,12 @@ async fn create_raw_pool_client(conn_bytes: &[u8]) -> std::result::Result<Client
 
     let mut internal_req: ConnectionRequest = connection_request.into();
 
-    // Apply address resolver if configured (mirrors create_direct_client).
+    // Pool connections share the resolver — use get() not remove() so
+    // subsequent pool connections (warmup, on-demand, reconnects) also
+    // have the resolver.  The resolver is cleaned up in ClientPool.close()
+    // on the TypeScript side.
     if let Some(key) = resolver_key
-        && let Some(resolver) = glide_core::address_resolver_registry::remove(&key)
+        && let Some(resolver) = glide_core::address_resolver_registry::get(&key)
     {
         internal_req.address_resolver = Some(resolver);
     }
@@ -477,11 +538,14 @@ pub fn pool_acquire_blocking<'a>(
                 break;
             }
             if result == -1 {
+                // -1 from try_acquire means pool is closed/closing; map to -2 (destroyed)
+                // so the TypeScript caller can distinguish "closed" from "timed out".
                 result_value = -2;
                 break;
             }
 
             if tokio::time::Instant::now() >= deadline {
+                // Timed out waiting for an idle slot; map to -1 (exhausted/timeout).
                 result_value = -1;
                 break;
             }

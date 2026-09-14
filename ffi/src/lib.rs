@@ -40,7 +40,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Condvar;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -49,16 +49,22 @@ use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-/// RAII guard that clears the `is_blocking` flag when dropped.
-/// Ensures the flag is always unset on every exit path from a blocking
+/// RAII guard that decrements the `is_blocking` counter when dropped.
+/// Ensures the counter is always decremented on every exit path from a blocking
 /// command dispatch (normal completion, early return, cancellation).
 #[cfg(feature = "pool-support")]
-struct UnmarkOnDrop(Option<Arc<AtomicBool>>);
+struct UnmarkOnDrop(Option<Arc<AtomicU32>>);
 #[cfg(feature = "pool-support")]
 impl Drop for UnmarkOnDrop {
     fn drop(&mut self) {
         if let Some(arc) = self.0.take() {
-            arc.store(false, std::sync::atomic::Ordering::Release);
+            // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
+            // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
+            let _ = arc.fetch_update(
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+                |v| if v > 0 { Some(v - 1) } else { None },
+            );
         }
     }
 }
@@ -3620,9 +3626,9 @@ unsafe fn execute_command(
         .and_then(|(pool_id, client_id)| {
             glide_core::pool::refresh_client_activity(pool_id, client_id);
             if glide_core::client::is_blocking_command(&cmd) {
-                // Set is_blocking via pre-fetched Arc — no pool mutex (#6971).
+                // Increment is_blocking counter via pre-fetched Arc — no pool mutex (#6971).
                 glide_core::pool::get_blocking_flag(client_id).map(|arc| {
-                    arc.store(true, std::sync::atomic::Ordering::Release);
+                    arc.fetch_add(1, std::sync::atomic::Ordering::Release);
                     (pool_id, client_id, arc)
                 })
             } else {
@@ -3630,7 +3636,7 @@ unsafe fn execute_command(
             }
         });
     #[cfg(not(feature = "pool-support"))]
-    let blocking_flag: Option<(u64, u64, std::sync::Arc<std::sync::atomic::AtomicBool>)> = None;
+    let blocking_flag: Option<(u64, u64, std::sync::Arc<std::sync::atomic::AtomicU32>)> = None;
 
     client_adapter.execute_request_with_buffer(
         request_id,
@@ -3638,17 +3644,19 @@ unsafe fn execute_command(
             // Guard arms immediately on task entry — flag was already set true before request.
             // This ensures the flag is cleared on every exit path including task abort.
             // UnmarkOnDrop(None) is a no-op for the non-blocking case.
+            #[cfg(feature = "pool-support")]
             let _unmark_guard = blocking_flag
                 .as_ref()
                 .map(|(_, _, arc)| UnmarkOnDrop(Some(arc.clone())));
+            // No pool support — blocking flag guard not needed (blocking_flag is always None).
             let result = client.send_command(&mut cmd, routing_info).await;
-            // Unmark blocking after command completes and refresh the activity
-            // timestamp so the abandon monitor does not reclaim this client
-            // immediately after a long blocking command (e.g. BLPOP).
-            // The _unmark_guard provides a safety net; store(false) is idempotent.
+            // Refresh activity BEFORE the UnmarkOnDrop guard fires so the abandon
+            // monitor never observes counter=0 with a stale borrowed_at.
+            // UnmarkOnDrop handles the counter decrement on all exit paths
+            // (normal completion, early return, task abort) — consistent with
+            // invoke_script and batch which use only the guard.
             #[cfg(feature = "pool-support")]
-            if let Some((pool_id, client_id, arc)) = blocking_flag {
-                arc.store(false, std::sync::atomic::Ordering::Release);
+            if let Some((pool_id, client_id, _arc)) = blocking_flag {
                 glide_core::pool::refresh_client_activity(pool_id, client_id);
             }
             result
@@ -4442,22 +4450,22 @@ pub unsafe extern "C-unwind" fn invoke_script(
     #[cfg(not(feature = "pool-support"))]
     let script_pool_ids: Option<(u64, u64)> = None;
     #[cfg(not(feature = "pool-support"))]
-    let script_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
+    let script_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicU32>> = None;
 
-    // Mark as blocking BEFORE spawning — on the synchronous caller's thread — so the
-    // abandon monitor cannot observe a window where the task is in-flight but the flag
-    // is still false (#6971).
+    // Increment the blocking counter BEFORE spawning — on the synchronous caller's thread — so the
+    // abandon monitor cannot observe a window where the task is in-flight but the counter
+    // is still 0 (#6971).
     // Conservative: mark blocking for the full batch/script duration regardless
     // of whether the payload contains a blocking command.
     #[cfg(feature = "pool-support")]
     if let Some(ref arc) = script_blocking_arc {
-        arc.store(true, std::sync::atomic::Ordering::Release);
+        arc.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
 
     client_adapter.execute_request(request_id, async move {
-        // RAII guard: ensures is_blocking is cleared on every exit path —
+        // RAII guard: ensures is_blocking counter is decremented on every exit path —
         // routing errors (get_route ?), normal completion, or cancellation.
-        // Guard arms immediately on task entry — flag was already set true before spawn.
+        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
         let _unmark_guard = UnmarkOnDrop(script_blocking_arc.clone());
 
@@ -4599,7 +4607,7 @@ pub unsafe extern "C" fn batch(
     #[cfg(not(feature = "pool-support"))]
     let batch_pool_ids: Option<(u64, u64)> = None;
     #[cfg(not(feature = "pool-support"))]
-    let batch_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
+    let batch_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicU32>> = None;
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
@@ -4629,20 +4637,20 @@ pub unsafe extern "C" fn batch(
 
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
-    // Mark as blocking BEFORE spawning — on the synchronous caller's thread — so the
-    // abandon monitor cannot observe a window where the task is in-flight but the flag
-    // is still false (#6971).
+    // Increment the blocking counter BEFORE spawning — on the synchronous caller's thread — so the
+    // abandon monitor cannot observe a window where the task is in-flight but the counter
+    // is still 0 (#6971).
     // Conservative: mark blocking for the full batch/script duration regardless
     // of whether the payload contains a blocking command.
     #[cfg(feature = "pool-support")]
     if let Some(ref arc) = batch_blocking_arc {
-        arc.store(true, std::sync::atomic::Ordering::Release);
+        arc.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
 
     client_adapter.execute_request(callback_index, async move {
-        // RAII guard: ensures is_blocking is cleared on every exit path —
+        // RAII guard: ensures is_blocking counter is decremented on every exit path —
         // normal completion, decompression error, or cancellation.
-        // Guard arms immediately on task entry — flag was already set true before spawn.
+        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
         let _unmark_guard = UnmarkOnDrop(batch_blocking_arc.clone());
 

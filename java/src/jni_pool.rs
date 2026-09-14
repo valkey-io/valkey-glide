@@ -90,8 +90,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                         get_handle_table().insert(client_id, client.clone());
                         // Register in scope client registry too
                         glide_core::scope::register_client(client_id, client);
-                        // Map handle_id → pool_id for abandon monitor integration
-                        get_pool_client_map().insert(client_id, pool_id as u64);
+                        // pool_client_map is populated only when the client is actually
+                        // acquired (borrowed), not here at idle-creation time.
                     }
                     Err(e) => log::error!("Pool background client creation failed: {}", e),
                 }
@@ -126,6 +126,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
             }
 
             let result = pool.try_acquire();
+            if result >= 0 {
+                // Register in CLIENT_TO_POOL and pool_client_map so activity refresh
+                // fires at command dispatch time for this borrowed client.
+                glide_core::pool::register_pool_client(pool_id as u64, result as u64);
+                get_pool_client_map().insert(result as u64, pool_id as u64);
+            }
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
                 let pool_clone = pool_arc.clone();
@@ -143,7 +149,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                             let client_id = pool.add_client_reserved(client.clone());
                             get_handle_table().insert(client_id, client.clone());
                             glide_core::scope::register_client(client_id, client);
-                            get_pool_client_map().insert(client_id, pool_id as u64);
+                            // pool_client_map is populated only when the client is actually
+                            // acquired (borrowed), not here at idle-creation time.
                         }
                         Err(e) => {
                             log::error!("Pool background client creation failed: {}", e);
