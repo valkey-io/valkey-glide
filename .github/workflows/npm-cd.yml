@@ -236,8 +236,13 @@ jobs:
 
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
-                    sudo apt update
-                    sudo apt install -y gcc pkg-config openssl libssl-dev
+                    # Wait for all apt/dpkg locks to be released before proceeding
+                    while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                      echo "Waiting for apt/dpkg lock to be released..."
+                      sleep 5
+                    done
+                    sudo apt-get update
+                    sudo apt-get install -y gcc pkg-config openssl libssl-dev
                     # Install zig via direct binary download (works on all runners without snap/pip)
                     ZIG_VERSION="0.13.0"
                     ZIG_ARCH="$(uname -m)"
@@ -504,8 +509,13 @@ jobs:
                   # Install Valkey (preferred) or Redis as fallback
                   if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       echo "Installing Valkey on GNU/Linux..."
-                      sudo apt update
-                      sudo apt install -y valkey || {
+                      # Wait for all apt/dpkg locks to be released before proceeding
+                      while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                        echo "Waiting for apt/dpkg lock to be released..."
+                        sleep 5
+                      done
+                      sudo apt-get update
+                      sudo apt-get install -y valkey || {
                           echo "Valkey not found in default repos, trying alternative source..."
                           curl -fsSL https://packages.redis.io/valkey/setup-valkey | sudo bash -
                           sudo apt install -y valkey || {

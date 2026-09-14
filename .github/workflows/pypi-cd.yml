@@ -156,8 +156,13 @@ jobs:
                   # are added to the matrix for CD pipelines, update this step to conditionally use:
                   #     brew install python@3.14 && brew link python@3.14
                   if ! command -v python3.14 &> /dev/null; then
-                      sudo apt update
-                      sudo apt install -y python3.14 python3.14-dev
+                      # Wait for all apt/dpkg locks to be released before proceeding
+                      while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                        echo "Waiting for apt/dpkg lock to be released..."
+                        sleep 5
+                      done
+                      sudo apt-get update
+                      sudo apt-get install -y python3.14 python3.14-dev
                       python3.14 -m ensurepip --upgrade
                       python3.14 -m pip install --upgrade pip
                   fi
@@ -314,8 +319,13 @@ jobs:
                       if [[ $(`which apt`) != '' ]]
                       then
                         echo "installing unzip and curl"
+                        # Wait for all apt/dpkg locks to be released before proceeding
+                        while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                          echo "Waiting for apt/dpkg lock to be released..."
+                          sleep 5
+                        done
                         apt-get update
-                        apt install unzip curl python3.14 pypy3 -y
+                        apt-get install -y unzip curl python3.14 pypy3
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -716,8 +726,13 @@ jobs:
             - name: Install engine build dependencies (ephemeral runners)
               if: ${{ contains(matrix.build.RUNNER, 'ephemeral') }}
               run: |
-                  sudo apt update -y
-                  sudo apt install -y pkg-config libssl-dev
+                  # Wait for all apt/dpkg locks to be released before proceeding
+                  while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                    echo "Waiting for apt/dpkg lock to be released..."
+                    sleep 5
+                  done
+                  sudo apt-get update -y
+                  sudo apt-get install -y pkg-config libssl-dev
 
             - name: Install engine
               uses: ./.github/actions/install-engine

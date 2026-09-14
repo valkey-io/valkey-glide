@@ -33,8 +33,17 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              sudo apt update -y
-              sudo apt install -y git gcc pkg-config openssl libssl-dev
+              # Wait for any running apt/dpkg process to release ALL locks before proceeding.
+              # This covers both /var/lib/apt/lists/lock (held by apt-get update / apt-daily.service)
+              # and /var/lib/dpkg/lock-frontend (held by dpkg / unattended-upgrades).
+              # Needed on ephemeral self-hosted runners where the instance user_data script
+              # or unattended-upgrades may still be running when the job starts.
+              while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+                echo "Waiting for apt/dpkg lock to be released..."
+                sleep 5
+              done
+              sudo apt-get update -y
+              sudo apt-get install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for MUSL
           shell: bash
