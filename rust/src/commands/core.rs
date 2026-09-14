@@ -41,7 +41,7 @@ use crate::value::{FromValkeyValue, ValkeyValue};
 // LposOptions, SetOptions) with glide-owned equivalents. Deferred from Phase 2:
 // these are macro-table params forwarded verbatim to `Cmd::$name`, so converting
 // them requires the Phase 3 macro-dispatch rework.
-use redis::{Cmd, Direction, Expiry, FromRedisValue, LposOptions, SetOptions, ToRedisArgs};
+use redis::{Cmd, Direction, Expiry, LposOptions, SetOptions, ToRedisArgs};
 
 // Only exposed by sync commands.
 #[cfg(feature = "sync")]
@@ -51,7 +51,7 @@ use crate::ValkeyResult;
 /// command table.
 ///
 /// Each `fn name<G: Bound>(args);` entry expands to an async method (generic
-/// `RV: FromRedisValue` return, `&self` receiver, owned-send dispatch) and its
+/// `RV: FromValkeyValue` return, `&self` receiver, owned-send dispatch) and its
 /// blocking counterpart. The method body is always
 /// `Cmd::name(args) -> glide_send_owned`, delegating argument encoding to the
 /// fork's generated constructors.
@@ -111,7 +111,7 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the whole keyspace.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan<'s, RV: FromRedisValue + Send + 's>(
+    fn scan<'s, RV: FromValkeyValue + Send + 's>(
         &'s self,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         Box::pin(crate::commands::scan::ScanIter::new(
@@ -124,7 +124,7 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan_match<'s, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn scan_match<'s, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         pattern: P,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
@@ -139,7 +139,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `HSCAN` over a hash's fields and values.
     #[inline]
-    fn hscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn hscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
@@ -150,7 +150,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
     #[inline]
-    fn hscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn hscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
@@ -164,7 +164,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `SSCAN` over a set's members.
     #[inline]
-    fn sscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn sscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
@@ -175,7 +175,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn sscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn sscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
@@ -189,7 +189,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
     #[inline]
-    fn zscan<'s, K: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn zscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
@@ -200,7 +200,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn zscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue + Send + 's>(
+    fn zscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
@@ -255,7 +255,7 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the whole keyspace.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan<RV: FromRedisValue>(
+    fn scan<RV: FromValkeyValue>(
         &self,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], Vec::new())
@@ -264,7 +264,7 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan_match<P: ToRedisArgs, RV: FromRedisValue>(
+    fn scan_match<P: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         pattern: P,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
@@ -275,7 +275,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `HSCAN` over a hash's fields and values.
     #[inline]
-    fn hscan<K: ToRedisArgs, RV: FromRedisValue>(
+    fn hscan<K: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
@@ -286,7 +286,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
     #[inline]
-    fn hscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue>(
+    fn hscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
@@ -300,7 +300,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `SSCAN` over a set's members.
     #[inline]
-    fn sscan<K: ToRedisArgs, RV: FromRedisValue>(
+    fn sscan<K: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
@@ -311,7 +311,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn sscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue>(
+    fn sscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
@@ -325,7 +325,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
     #[inline]
-    fn zscan<K: ToRedisArgs, RV: FromRedisValue>(
+    fn zscan<K: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
@@ -336,7 +336,7 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn zscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromRedisValue>(
+    fn zscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
