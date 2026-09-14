@@ -27,7 +27,8 @@ pub use executor::{CommandExecutor, CustomCommand};
 pub use pipeline_options::PipelineOptions;
 pub use routes::{Route, SlotType};
 pub use value::{
-    FromValkeyValue, ToValkeyArgs, ValkeyServerError, ValkeyValue, ValkeyVerbatimFormat,
+    FromValkeyValue, ToValkeyArgs, ValkeyNumericBehavior, ValkeyServerError, ValkeyValue,
+    ValkeyVerbatimFormat,
 };
 
 /// The result type for GLIDE sync operations.
