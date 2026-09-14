@@ -12,6 +12,8 @@ use crate::cluster_routing::{Route, ShardAddrs, Slot, SlotAddr};
 use crate::ErrorKind;
 use crate::RedisError;
 use crate::RedisResult;
+
+type ExactIpPortIndex = RwLock<HashMap<(IpAddr, u16), Option<Arc<String>>>>;
 /// Maps node addresses to their IP address and shard information.
 pub(crate) type NodesMap = DashMap<Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>)>;
 
@@ -57,7 +59,7 @@ pub enum ReadFromReplicaStrategy {
 pub struct SlotMap {
     slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
-    exact_ip_port_index: RwLock<HashMap<(IpAddr, u16), Option<Arc<String>>>>,
+    exact_ip_port_index: ExactIpPortIndex,
     read_from_replica: ReadFromReplicaStrategy,
 }
 

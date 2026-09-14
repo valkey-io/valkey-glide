@@ -1068,10 +1068,8 @@ pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
     }
     if bracketed || host.contains(':') {
         let (ipv6, scope) = host.split_once('%').unwrap_or((host, ""));
-        if scope.is_empty() || scope.contains('%') {
-            if host.contains('%') {
-                return None;
-            }
+        if (scope.is_empty() || scope.contains('%')) && host.contains('%') {
+            return None;
         }
         ipv6.parse::<std::net::Ipv6Addr>().ok()?;
     }

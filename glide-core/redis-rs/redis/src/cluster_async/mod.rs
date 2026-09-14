@@ -2836,7 +2836,7 @@ where
                     inner,
                     failed
                         .into_iter()
-                        .map(|a| ClusterAddress::ReadyToDial(a))
+                        .map(ClusterAddress::ReadyToDial)
                         .collect(),
                     RefreshConnectionType::OnlyManagementConnection,
                     true,
@@ -4354,7 +4354,7 @@ where
                         inner,
                         addresses
                             .into_iter()
-                            .map(|a| ClusterAddress::ReadyToDial(a))
+                            .map(ClusterAddress::ReadyToDial)
                             .collect(),
                         RefreshConnectionType::OnlyUserConnection,
                         true,
@@ -5639,8 +5639,8 @@ mod refresh_task_resolution_tests {
     use crate::ConnectionAddr;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Condvar, Mutex, MutexGuard};
-    use tokio::sync::{Notify, Semaphore};
+    use std::sync::{Condvar, Mutex};
+    use tokio::sync::{Mutex as TokioMutex, Notify, Semaphore};
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
     static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
@@ -5648,7 +5648,7 @@ mod refresh_task_resolution_tests {
     // RecordingConnection uses process-wide gates because Connect has no test
     // context. Serialize the tests which exercise those gates and remove
     // permits left by a previous test before starting.
-    static GATED_TEST_LOCK: Mutex<()> = Mutex::new(());
+    static GATED_TEST_LOCK: TokioMutex<()> = TokioMutex::const_new(());
     static POST_CONNECT_GATE: Mutex<Option<Arc<PostConnectGate>>> = Mutex::new(None);
 
     struct PostConnectGate {
@@ -5735,8 +5735,8 @@ mod refresh_task_resolution_tests {
         }
     }
 
-    fn gated_test_guard() -> MutexGuard<'static, ()> {
-        let guard = GATED_TEST_LOCK.lock().expect("gated test lock is healthy");
+    async fn gated_test_guard() -> tokio::sync::MutexGuard<'static, ()> {
+        let guard = GATED_TEST_LOCK.lock().await;
         while RELEASE_POISON_CONNECT.try_acquire().is_ok() {}
         guard
     }
@@ -5940,7 +5940,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn concurrent_refresh_requests_share_one_task_and_both_complete() {
-        let _guard = gated_test_guard();
+        let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
 
@@ -5998,7 +5998,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn refresh_generation_is_replaced_through_production_path() {
-        let _guard = gated_test_guard();
+        let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
         let gate = Arc::new(PostConnectGate {
@@ -6080,21 +6080,22 @@ mod refresh_task_resolution_tests {
             .await
             .expect("new generation should complete");
 
-        let connection = core
-            .conn_lock
-            .read()
-            .connection_for_address(&address)
-            .expect("new generation should install its connection")
-            .1
-            .await;
+        let connection_future = {
+            core.conn_lock
+                .read()
+                .connection_for_address(&address)
+                .expect("new generation should install its connection")
+                .1
+        };
+        let connection = connection_future.await;
         assert_eq!(connection.port, 6381);
         assert!(
-            core.conn_lock
+            !core
+                .conn_lock
                 .read()
                 .refresh_conn_state
                 .refresh_address_in_progress
-                .get(&address)
-                .is_none(),
+                .contains_key(&address),
             "completed generation should remove only itself"
         );
         *POST_CONNECT_GATE
@@ -6104,7 +6105,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn reconnecting_too_long_refresh_is_skipped() {
-        let _guard = gated_test_guard();
+        let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
         let identity = Arc::new(());
@@ -6136,7 +6137,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn mixed_raw_and_ready_refresh_prepares_once_and_deduplicates() {
-        let _guard = gated_test_guard();
+        let _guard = gated_test_guard().await;
         RESOLVER_CALLS.store(0, Ordering::SeqCst);
         let core = core_with_non_idempotent_resolver();
         let addresses = HashSet::from([
@@ -6162,13 +6163,14 @@ mod refresh_task_resolution_tests {
         tokio::time::timeout(Duration::from_secs(1), done)
             .await
             .expect("refresh should complete");
-        let connection = core
-            .conn_lock
-            .read()
-            .connection_for_address("resolved-node:6381")
-            .expect("final ready address should be installed")
-            .1
-            .await;
+        let connection_future = {
+            core.conn_lock
+                .read()
+                .connection_for_address("resolved-node:6381")
+                .expect("final ready address should be installed")
+                .1
+        };
+        let connection = connection_future.await;
         assert_eq!(connection.port, 6381);
     }
 
@@ -6184,7 +6186,7 @@ mod refresh_task_resolution_tests {
 
     #[tokio::test]
     async fn initial_recovery_resolves_ambiguous_socket_fallback_once() {
-        let _guard = gated_test_guard();
+        let _guard = gated_test_guard().await;
         RESOLVER_CALLS.store(0, Ordering::SeqCst);
         let slot_map = SlotMap::new(
             vec![
