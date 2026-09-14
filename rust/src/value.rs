@@ -5,7 +5,7 @@ use crate::ValkeyResult;
 use crate::error::GlideError;
 use bytes::Bytes;
 use num_bigint::BigInt;
-use redis::{ErrorKind, FromRedisValue, RedisError, ToRedisArgs, Value, VerbatimFormat};
+use redis::{FromRedisValue, ToRedisArgs, Value, VerbatimFormat};
 
 /// Convert a raw [`Value`] into any type implementing [`FromRedisValue`].
 // TODO #7024: do not expose.
@@ -139,14 +139,6 @@ pub enum ValkeyValue {
     /// An unordered key/value map (RESP3).
     Map(Vec<(ValkeyValue, ValkeyValue)>),
 
-    /// A value carrying RESP3 attribute metadata.
-    Attribute {
-        /// The value the attributes annotate.
-        data: Box<ValkeyValue>,
-        /// The attached attribute key/value pairs.
-        attributes: Vec<(ValkeyValue, ValkeyValue)>,
-    },
-
     /// An unordered set (RESP3).
     Set(Vec<ValkeyValue>),
 
@@ -210,14 +202,6 @@ impl ValkeyVerbatimFormat {
             VerbatimFormat::Text => ValkeyVerbatimFormat::Text,
         }
     }
-
-    fn into_redis(self) -> VerbatimFormat {
-        match self {
-            ValkeyVerbatimFormat::Unknown(s) => VerbatimFormat::Unknown(s),
-            ValkeyVerbatimFormat::Markdown => VerbatimFormat::Markdown,
-            ValkeyVerbatimFormat::Text => VerbatimFormat::Text,
-        }
-    }
 }
 
 impl ValkeyValue {
@@ -237,10 +221,6 @@ impl ValkeyValue {
             Value::SimpleString(s) => ValkeyValue::SimpleString(s),
             Value::Okay => ValkeyValue::Okay,
             Value::Map(ps) => ValkeyValue::Map(pairs(ps)),
-            Value::Attribute { data, attributes } => ValkeyValue::Attribute {
-                data: Box::new(ValkeyValue::from_redis(*data)),
-                attributes: pairs(attributes),
-            },
             Value::Set(items) => {
                 ValkeyValue::Set(items.into_iter().map(ValkeyValue::from_redis).collect())
             }
@@ -251,54 +231,13 @@ impl ValkeyValue {
                 text,
             },
             Value::BigNumber(n) => ValkeyValue::BigNumber(n),
-            Value::Push { .. } => unreachable!("Commands should not return Push values."),
             Value::ServerError(e) => ValkeyValue::ServerError(ValkeyServerError {
                 code: e.err_code().to_string(),
                 detail: e.details().map(str::to_string),
             }),
-        }
-    }
 
-    // TODO #7024: remove this; decode ValkeyValue natively in FromValkeyValue
-    // (erroring on ServerError nodes directly) instead of round-tripping through
-    // redis::Value, so no ServerError→redis reconstruction is needed (Phase 3).
-    pub(crate) fn into_redis(self) -> Value {
-        let pairs = |ps: Vec<(ValkeyValue, ValkeyValue)>| {
-            ps.into_iter()
-                .map(|(k, v)| (k.into_redis(), v.into_redis()))
-                .collect()
-        };
-        match self {
-            ValkeyValue::Nil => Value::Nil,
-            ValkeyValue::Int(i) => Value::Int(i),
-            ValkeyValue::BulkString(b) => Value::BulkString(b),
-            ValkeyValue::Array(items) => {
-                Value::Array(items.into_iter().map(ValkeyValue::into_redis).collect())
-            }
-            ValkeyValue::SimpleString(s) => Value::SimpleString(s),
-            ValkeyValue::Okay => Value::Okay,
-            ValkeyValue::Map(ps) => Value::Map(pairs(ps)),
-            ValkeyValue::Attribute { data, attributes } => Value::Attribute {
-                data: Box::new(data.into_redis()),
-                attributes: pairs(attributes),
-            },
-            ValkeyValue::Set(items) => {
-                Value::Set(items.into_iter().map(ValkeyValue::into_redis).collect())
-            }
-            ValkeyValue::Double(d) => Value::Double(d),
-            ValkeyValue::Boolean(b) => Value::Boolean(b),
-            ValkeyValue::VerbatimString { format, text } => Value::VerbatimString {
-                format: format.into_redis(),
-                text,
-            },
-            ValkeyValue::BigNumber(n) => Value::BigNumber(n),
-            ValkeyValue::ServerError(e) => {
-                let redis_err = match e.detail {
-                    Some(detail) => RedisError::from((ErrorKind::ResponseError, "", detail)),
-                    None => RedisError::from((ErrorKind::ResponseError, "server error")),
-                };
-                Value::ServerError(redis_err.into())
-            }
+            Value::Attribute { .. } => unreachable!("Attributes are not supported."),
+            Value::Push { .. } => unreachable!("Commands should not return Push values."),
         }
     }
 }
@@ -329,33 +268,10 @@ impl<T: ToRedisArgs> ToValkeyArgs for T {
     }
 }
 
-/// Decodes a [`ValkeyValue`] reply into a Rust type: the Valkey-branded
-/// replacement for redis-rs's `FromRedisValue`.
-///
-/// Implemented for every type that implements the redis fork's `FromRedisValue`,
-/// so return types migrated from redis-rs work unchanged. Implement it for your
-/// own types to decode replies into them directly.
-pub trait FromValkeyValue: Sized {
-    /// Decode an owned [`ValkeyValue`] into `Self`.
-    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self>;
-
-    /// Decode a borrowed [`ValkeyValue`] into `Self`.
-    fn from_valkey_value(value: &ValkeyValue) -> ValkeyResult<Self> {
-        Self::from_owned_valkey_value(value.clone())
-    }
-}
-
-// TODO #7024: revisit blanket impl vs explicit standard-type impls (blanket
-// blocks downstream user impls) when this becomes a command bound (Phase 3).
-impl<T: FromRedisValue> FromValkeyValue for T {
-    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
-        redis::from_owned_redis_value(value.into_redis()).map_err(GlideError::from_redis_error)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use redis::{ErrorKind, RedisError};
 
     #[test]
     fn opt_bytes_nil_is_none() {
@@ -390,11 +306,11 @@ mod tests {
         );
     }
 
-    // ---- ValkeyValue conversions ----------------------------------------
+    // ---- ValkeyValue::from_redis ----------------------------------------
 
     #[test]
-    fn valkey_value_round_trip() {
-        let original = Value::Array(vec![
+    fn from_redis_maps_variants() {
+        let rv = Value::Array(vec![
             Value::Nil,
             Value::Int(-5),
             Value::BulkString(Bytes::from_static(b"hi")),
@@ -409,21 +325,33 @@ mod tests {
             },
             Value::Map(vec![(Value::Int(1), Value::Int(2))]),
             Value::Set(vec![Value::Int(9)]),
-            Value::Attribute {
-                data: Box::new(Value::Int(1)),
-                attributes: vec![(Value::SimpleString("k".into()), Value::Int(2))],
-            },
         ]);
-        let round = ValkeyValue::from_redis(original.clone()).into_redis();
-        assert_eq!(round, original);
+        let vv = ValkeyValue::from_redis(rv);
+        assert_eq!(
+            vv,
+            ValkeyValue::Array(vec![
+                ValkeyValue::Nil,
+                ValkeyValue::Int(-5),
+                ValkeyValue::BulkString(Bytes::from_static(b"hi")),
+                ValkeyValue::SimpleString("s".into()),
+                ValkeyValue::Okay,
+                ValkeyValue::Double(1.5),
+                ValkeyValue::Boolean(true),
+                ValkeyValue::BigNumber(BigInt::from(i64::MAX) + 1),
+                ValkeyValue::VerbatimString {
+                    format: ValkeyVerbatimFormat::Markdown,
+                    text: "md".into(),
+                },
+                ValkeyValue::Map(vec![(ValkeyValue::Int(1), ValkeyValue::Int(2))]),
+                ValkeyValue::Set(vec![ValkeyValue::Int(9)]),
+            ])
+        );
     }
 
-    // TODO #7024: Reevaluate whether needed.
     #[test]
-    fn server_error_reads_code_and_detail() {
-        let v = Value::ServerError(
-            RedisError::from((ErrorKind::ResponseError, "boom", "detail".to_string())).into(),
-        );
+    fn from_redis_reads_server_error_code_and_detail() {
+        let error = RedisError::from((ErrorKind::ResponseError, "boom", "detail".to_string()));
+        let v = Value::ServerError(error.into());
         match ValkeyValue::from_redis(v) {
             ValkeyValue::ServerError(e) => {
                 assert_eq!(e.code, "ERR");
@@ -433,20 +361,8 @@ mod tests {
         }
     }
 
-    // TODO #7024: remove with ValkeyValue::into_redis when FromValkeyValue decodes natively (Phase 3).
-    #[test]
-    fn server_error_into_redis_is_a_server_error() {
-        let v = ValkeyValue::ServerError(ValkeyServerError {
-            code: "ERR".into(),
-            detail: Some("nope".into()),
-        });
-        assert!(matches!(v.into_redis(), Value::ServerError(_)));
-    }
+    // ---- ToValkeyArgs ---------------------------------------------------
 
-    // ---- ToValkeyArgs / FromValkeyValue ---------------------------------
-
-    // TODO #7024: one representative type suffices for the type-agnostic blanket impl;
-    // broaden to a case per standard type if the impl becomes explicit per-type (Phase 3).
     #[test]
     fn to_valkey_args_matches_redis_encoding() {
         assert_eq!(42i64.to_valkey_args(), 42i64.to_redis_args());
@@ -454,21 +370,514 @@ mod tests {
         "hello".write_valkey_args(&mut out);
         assert_eq!(out, vec![b"hello".to_vec()]);
     }
+}
 
-    // TODO #7024: one representative type suffices for the type-agnostic blanket impl;
-    // broaden to a case per standard type if the impl becomes explicit per-type (Phase 3).
+// ==== FromValkeyValue ====================================================
+
+/// Converts a [`ValkeyValue`] reply into a Rust type.
+pub trait FromValkeyValue: Sized {
+    /// Converts an owned [`ValkeyValue`] into `Self`.
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self>;
+
+    /// Converts a borrowed [`ValkeyValue`] into `Self`.
+    fn from_valkey_value(value: &ValkeyValue) -> ValkeyResult<Self> {
+        Self::from_owned_valkey_value(value.clone())
+    }
+
+    /// Converts a `Vec<ValkeyValue>` into a `Vec<Self>`.
+    #[doc(hidden)]
+    fn from_owned_valkey_values(items: Vec<ValkeyValue>) -> ValkeyResult<Vec<Self>> {
+        items
+            .into_iter()
+            .map(Self::from_owned_valkey_value)
+            .collect()
+    }
+
+    /// Converts a `Vec<u8>` into a `Vec<Self>`.
+    #[doc(hidden)]
+    fn from_owned_byte_vec(bytes: Vec<u8>) -> ValkeyResult<Vec<Self>> {
+        Self::from_owned_valkey_value(ValkeyValue::BulkString(Bytes::from(bytes))).map(|v| vec![v])
+    }
+}
+
+/// Build a error for the given `ValkeyValue` and message.
+fn to_glide_error(value: ValkeyValue, msg: &str) -> GlideError {
+    GlideError::Request(format!("{msg} (response was {value:?})"))
+}
+
+/// Converts a `ValkeyValue` to a `Vec<ValkeyValue>`.
+fn into_sequence(value: ValkeyValue) -> Result<Vec<ValkeyValue>, ValkeyValue> {
+    match value {
+        ValkeyValue::Array(items) => Ok(items),
+        ValkeyValue::Set(items) => Ok(items),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        other => Err(other),
+    }
+}
+
+/// Converts a `ValkeyValue` to a `Vec<(ValkeyValue, ValkeyValue)`.
+fn into_pairs(value: ValkeyValue) -> Result<Vec<(ValkeyValue, ValkeyValue)>, ValkeyValue> {
+    match value {
+        ValkeyValue::Map(pairs) => Ok(pairs),
+        ValkeyValue::Array(items) if items.len() % 2 == 0 => {
+            let mut it = items.into_iter();
+            let mut pairs = Vec::with_capacity(it.len() / 2);
+            while let (Some(k), Some(v)) = (it.next(), it.next()) {
+                pairs.push((k, v));
+            }
+            Ok(pairs)
+        }
+        other => Err(other),
+    }
+}
+
+/// Converts a `ValkeyValue` to a number.
+macro_rules! impl_from_valkey_num {
+    ($($t:ty),* $(,)?) => {$(
+        impl FromValkeyValue for $t {
+            fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<$t> {
+                match value {
+                    ValkeyValue::Int(v) => Ok(v as $t),
+                    ValkeyValue::Double(v) => Ok(v as $t),
+                    ValkeyValue::SimpleString(s) => s
+                        .parse::<$t>()
+                        .map_err(|_| GlideError::Request("Could not convert from string.".into())),
+                    ValkeyValue::BulkString(bytes) => std::str::from_utf8(&bytes)
+                        .ok()
+                        .and_then(|s| s.parse::<$t>().ok())
+                        .ok_or_else(|| GlideError::Request("Could not convert from string.".into())),
+                    other => Err(to_glide_error(other, "Response type not convertible to numeric.")),
+                }
+            }
+        }
+    )*};
+}
+
+impl_from_valkey_num!(
+    i8, i16, i32, i64, i128, u16, u32, u64, u128, f32, f64, isize, usize
+);
+
+impl FromValkeyValue for u8 {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<u8> {
+        match value {
+            ValkeyValue::Int(v) => Ok(v as u8),
+            ValkeyValue::Double(v) => Ok(v as u8),
+            ValkeyValue::SimpleString(s) => s
+                .parse::<u8>()
+                .map_err(|_| GlideError::Request("Could not convert from string.".into())),
+            ValkeyValue::BulkString(bytes) => std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|s| s.parse::<u8>().ok())
+                .ok_or_else(|| GlideError::Request("Could not convert from string.".into())),
+            other => Err(to_glide_error(
+                other,
+                "Response type not convertible to numeric.",
+            )),
+        }
+    }
+
+    // Specialization that makes `Vec<u8>` consume raw bulk-string bytes directly.
+    fn from_owned_byte_vec(bytes: Vec<u8>) -> ValkeyResult<Vec<u8>> {
+        Ok(bytes)
+    }
+}
+
+/// Converts a `ValkeyValue` to a boolean.
+impl FromValkeyValue for bool {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<bool> {
+        match value {
+            ValkeyValue::Nil => Ok(false),
+            ValkeyValue::Int(v) => Ok(v != 0),
+            ValkeyValue::Boolean(b) => Ok(b),
+            ValkeyValue::Okay => Ok(true),
+            ValkeyValue::SimpleString(ref s) if s == "1" => Ok(true),
+            ValkeyValue::SimpleString(ref s) if s == "0" => Ok(false),
+            ValkeyValue::BulkString(ref b) if b.as_ref() == b"1" => Ok(true),
+            ValkeyValue::BulkString(ref b) if b.as_ref() == b"0" => Ok(false),
+            other => Err(to_glide_error(other, "Response type not bool compatible.")),
+        }
+    }
+}
+
+/// Converts a `ValkeyValue` to a string.
+impl FromValkeyValue for String {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<String> {
+        match value {
+            ValkeyValue::BulkString(bytes) => String::from_utf8(bytes.to_vec())
+                .map_err(|_| GlideError::Request("Response was not valid UTF-8.".into())),
+            ValkeyValue::Okay => Ok("OK".to_string()),
+            ValkeyValue::SimpleString(s) => Ok(s),
+            ValkeyValue::VerbatimString { text, .. } => Ok(text),
+            ValkeyValue::Double(v) => Ok(v.to_string()),
+            ValkeyValue::Int(v) => Ok(v.to_string()),
+            other => Err(to_glide_error(
+                other,
+                "Response type not string compatible.",
+            )),
+        }
+    }
+}
+
+/// Converts a `ValkeyValue` into bytes.
+impl FromValkeyValue for Bytes {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Bytes> {
+        match value {
+            ValkeyValue::BulkString(bytes) => Ok(bytes),
+            other => Err(to_glide_error(other, "Not a bulk string")),
+        }
+    }
+}
+
+impl FromValkeyValue for () {
+    fn from_owned_valkey_value(_value: ValkeyValue) -> ValkeyResult<()> {
+        Ok(())
+    }
+}
+
+/// Converts a `ValkeyValue` to an `Option<T>` value.
+impl<T: FromValkeyValue> FromValkeyValue for Option<T> {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Option<T>> {
+        match value {
+            ValkeyValue::Nil => Ok(None),
+            other => Ok(Some(T::from_owned_valkey_value(other)?)),
+        }
+    }
+}
+
+/// Converts a `ValkeyValue` to an `Vec<T>` value.
+impl<T: FromValkeyValue> FromValkeyValue for Vec<T> {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Vec<T>> {
+        match value {
+            ValkeyValue::BulkString(bytes) => T::from_owned_byte_vec(bytes.to_vec()),
+            ValkeyValue::Array(items) => T::from_owned_valkey_values(items),
+            ValkeyValue::Set(items) => T::from_owned_valkey_values(items),
+            ValkeyValue::Map(pairs) => {
+                // Each pair decodes as one element (used when `T` is a tuple).
+                let mut out = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    out.push(T::from_owned_valkey_value(ValkeyValue::Map(vec![(k, v)]))?);
+                }
+                Ok(out)
+            }
+            ValkeyValue::Nil => Ok(Vec::new()),
+            other => Err(to_glide_error(
+                other,
+                "Response type not vector compatible.",
+            )),
+        }
+    }
+}
+
+/// Converts a `ValkeyValue` to a `HashMap<K, V, S>` value.
+impl<K, V, S> FromValkeyValue for std::collections::HashMap<K, V, S>
+where
+    K: FromValkeyValue + std::cmp::Eq + std::hash::Hash,
+    V: FromValkeyValue,
+    S: std::hash::BuildHasher + Default,
+{
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        if value == ValkeyValue::Nil {
+            return Ok(Self::default());
+        }
+        let pairs = into_pairs(value)
+            .map_err(|v| to_glide_error(v, "Response type not hashmap compatible"))?;
+        pairs
+            .into_iter()
+            .map(|(k, v)| {
+                Ok((
+                    K::from_owned_valkey_value(k)?,
+                    V::from_owned_valkey_value(v)?,
+                ))
+            })
+            .collect()
+    }
+}
+
+/// Converts a `ValkeyValue` to a `HashSet<T, S>` value.
+impl<T, S> FromValkeyValue for std::collections::HashSet<T, S>
+where
+    T: FromValkeyValue + std::cmp::Eq + std::hash::Hash,
+    S: std::hash::BuildHasher + Default,
+{
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        let items = into_sequence(value)
+            .map_err(|v| to_glide_error(v, "Response type not hashset compatible"))?;
+        items.into_iter().map(T::from_owned_valkey_value).collect()
+    }
+}
+
+/// Converts a `ValkeyValue` to a tuple.
+macro_rules! impl_from_valkey_tuple {
+    ($( ($($name:ident),+) ),+ $(,)?) => {$(
+        #[doc(hidden)]
+        impl<$($name: FromValkeyValue),*> FromValkeyValue for ($($name,)*) {
+            #[allow(non_snake_case, unused_variables)]
+            fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<($($name,)*)> {
+                match value {
+                    ValkeyValue::Array(mut items) => {
+                        let mut n = 0;
+                        $(let $name = (); n += 1;)*
+                        if items.len() != n {
+                            return Err(GlideError::Request("Array response of wrong dimension".into()));
+                        }
+                        let mut i = 0;
+                        Ok(($({ let $name = (); $name::from_owned_valkey_value(
+                            std::mem::replace(&mut items[{ i += 1; i - 1 }], ValkeyValue::Nil))? },)*))
+                    }
+                    ValkeyValue::Map(items) => {
+                        let mut n = 0;
+                        $(let $name = (); n += 1;)*
+                        if n != 2 {
+                            return Err(GlideError::Request("Map response of wrong dimension".into()));
+                        }
+                        let mut flat = Vec::with_capacity(items.len() * 2);
+                        for (k, v) in items {
+                            flat.push(k);
+                            flat.push(v);
+                        }
+                        let mut i = 0;
+                        Ok(($({ let $name = (); $name::from_owned_valkey_value(
+                            std::mem::replace(&mut flat[{ i += 1; i - 1 }], ValkeyValue::Nil))? },)*))
+                    }
+                    other => Err(to_glide_error(other, "Not an Array response")),
+                }
+            }
+            #[allow(non_snake_case, unused_variables)]
+            fn from_owned_valkey_values(items: Vec<ValkeyValue>) -> ValkeyResult<Vec<($($name,)*)>> {
+                let mut n = 0;
+                $(let $name = (); n += 1;)*
+                if items.is_empty() {
+                    return Ok(Vec::new());
+                }
+                // First try array-of-arrays: each element is itself an N-array.
+                let mut rv = Vec::with_capacity(items.len());
+                for item in &items {
+                    if let ValkeyValue::Array(ch) = item {
+                        if let [$($name),*] = &ch[..] {
+                            rv.push(($($name::from_valkey_value($name)?,)*));
+                        }
+                    }
+                }
+                if !rv.is_empty() {
+                    return Ok(rv);
+                }
+                // Otherwise treat the flat sequence as chunks of N.
+                let mut items = items;
+                let mut rv = Vec::with_capacity(items.len() / n);
+                for chunk in items.chunks_mut(n) {
+                    if let [$($name),*] = chunk {
+                        rv.push(($($name::from_owned_valkey_value(
+                            std::mem::replace($name, ValkeyValue::Nil))?,)*));
+                    }
+                }
+                Ok(rv)
+            }
+        }
+    )+};
+}
+
+impl_from_valkey_tuple! {
+    (T1),
+    (T1, T2),
+    (T1, T2, T3),
+    (T1, T2, T3, T4),
+    (T1, T2, T3, T4, T5),
+    (T1, T2, T3, T4, T5, T6),
+    (T1, T2, T3, T4, T5, T6, T7),
+    (T1, T2, T3, T4, T5, T6, T7, T8),
+    (T1, T2, T3, T4, T5, T6, T7, T8, T9),
+    (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10),
+    (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
+    (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12),
+}
+
+#[cfg(test)]
+mod from_valkey_value_tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    // `ValkeyValue`s constants for testing.
+    const NIL: ValkeyValue = ValkeyValue::Nil;
+    const INT: ValkeyValue = ValkeyValue::Int(7);
+    const OKAY: ValkeyValue = ValkeyValue::Okay;
+    const DOUBLE: ValkeyValue = ValkeyValue::Double(1.5);
+    const BOOLEAN: ValkeyValue = ValkeyValue::Boolean(true);
+    const BULK: ValkeyValue = ValkeyValue::BulkString(Bytes::from_static(b"hi"));
+    const BYTES_A: ValkeyValue = ValkeyValue::BulkString(Bytes::from_static(b"a"));
+    const BYTES_B: ValkeyValue = ValkeyValue::BulkString(Bytes::from_static(b"b"));
+    const BYTES_1: ValkeyValue = ValkeyValue::BulkString(Bytes::from_static(b"1"));
+    const BYTES_2: ValkeyValue = ValkeyValue::BulkString(Bytes::from_static(b"2"));
+
+    // `ValkeyValue`s functions for testing.
+    // (`SimpleString`/`VerbatimString` carry a `String`, so they can't be `const`.)
+    fn simple() -> ValkeyValue {
+        ValkeyValue::SimpleString("s".into())
+    }
+    fn verbatim() -> ValkeyValue {
+        ValkeyValue::VerbatimString {
+            format: ValkeyVerbatimFormat::Text,
+            text: "vt".into(),
+        }
+    }
+
+    fn decode<T: FromValkeyValue>(v: ValkeyValue) -> T {
+        T::from_owned_valkey_value(v).unwrap()
+    }
+
     #[test]
-    fn from_valkey_value_decodes_standard_types() {
+    fn from_owned_valkey_value_numeric() {
+        let bulk_string_numeric = ValkeyValue::BulkString(Bytes::from_static(b"42"));
+        let simple_string_numeric = ValkeyValue::SimpleString("100".into());
+
+        assert_eq!(decode::<i64>(INT), 7);
+        assert_eq!(decode::<i64>(DOUBLE), 1); // 1.5 truncates to 1
+        assert_eq!(decode::<i64>(bulk_string_numeric), 42);
+        assert_eq!(decode::<i64>(simple_string_numeric), 100);
+        assert_eq!(decode::<u64>(INT), 7);
+
+        // Non-numeric input is a decode error.
+        assert!(i64::from_owned_valkey_value(OKAY).is_err());
+        assert!(i64::from_owned_valkey_value(BULK).is_err());
+    }
+
+    #[test]
+    fn from_owned_valkey_value_bool() {
+        let bulk_string_bool = ValkeyValue::BulkString(Bytes::from_static(b"0"));
+
+        assert!(decode::<bool>(INT)); // any non-zero int is true
+        assert!(!decode::<bool>(ValkeyValue::Int(0)));
+        assert!(decode::<bool>(BOOLEAN));
+        assert!(decode::<bool>(OKAY));
+        assert!(!decode::<bool>(NIL));
+        assert!(decode::<bool>(ValkeyValue::SimpleString("1".into())));
+        assert!(!decode::<bool>(bulk_string_bool));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_string() {
+        assert_eq!(decode::<String>(BULK), "hi");
+        assert_eq!(decode::<String>(simple()), "s");
+        assert_eq!(decode::<String>(OKAY), "OK");
+        assert_eq!(decode::<String>(INT), "7");
+        assert_eq!(decode::<String>(DOUBLE), "1.5");
+        assert_eq!(decode::<String>(verbatim()), "vt");
+    }
+
+    #[test]
+    fn from_owned_valkey_value_bytes() {
+        assert_eq!(decode::<Bytes>(BULK), Bytes::from_static(b"hi"));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_u8() {
+        assert_eq!(decode::<u8>(INT), 7);
+
+        // `Vec<u8>` from a bulk string consumes the raw bytes directly.
+        assert_eq!(decode::<Vec<u8>>(BULK), b"hi".to_vec());
         assert_eq!(
-            i64::from_owned_valkey_value(ValkeyValue::Int(7)).unwrap(),
-            7
+            decode::<Vec<u8>>(ValkeyValue::BulkString(Bytes::from_static(b""))),
+            Vec::<u8>::new()
         );
-        let s: String = FromValkeyValue::from_owned_valkey_value(ValkeyValue::BulkString(
-            Bytes::from_static(b"hi"),
-        ))
-        .unwrap();
-        assert_eq!(s, "hi");
-        let none: Option<String> = FromValkeyValue::from_valkey_value(&ValkeyValue::Nil).unwrap();
+
+        // `Vec<u8>` from an array decodes element-wise.
+        assert_eq!(
+            decode::<Vec<u8>>(ValkeyValue::Array(vec![INT, INT])),
+            vec![7u8, 7u8]
+        );
+    }
+
+    #[test]
+    fn from_owned_valkey_value_vec() {
+        let v = ValkeyValue::Array(vec![BYTES_A, BYTES_B]);
+        assert_eq!(
+            decode::<Vec<String>>(v),
+            vec!["a".to_string(), "b".to_string()]
+        );
+
+        assert_eq!(decode::<Vec<String>>(BULK), vec!["hi".to_string()]);
+        assert_eq!(decode::<Vec<String>>(NIL), Vec::<String>::new());
+    }
+
+    #[test]
+    fn from_owned_valkey_value_option() {
+        let none: Option<String> = decode(NIL);
         assert_eq!(none, None);
+
+        let some: Option<String> = decode(BULK);
+        assert_eq!(some.as_deref(), Some("hi"));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_unit() {
+        let _: () = decode(OKAY);
+        let _: () = decode(NIL);
+    }
+
+    #[test]
+    fn from_owned_valkey_value_hashmap() {
+        let from_map = ValkeyValue::Map(vec![(BULK, BULK)]);
+        let m: HashMap<String, String> = decode(from_map);
+        assert_eq!(m.get("hi").map(String::as_str), Some("hi"));
+
+        let from_flat = ValkeyValue::Array(vec![BYTES_A, BYTES_1, BYTES_B, BYTES_2]);
+        let m: HashMap<String, i64> = decode(from_flat);
+        assert_eq!(m.get("a"), Some(&1));
+        assert_eq!(m.get("b"), Some(&2));
+
+        let empty: HashMap<String, String> = decode(NIL);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn from_owned_valkey_value_hashset() {
+        let v = ValkeyValue::Set(vec![BYTES_A, BYTES_B]);
+        let s: HashSet<String> = decode(v);
+        assert_eq!(s, HashSet::from(["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_tuple() {
+        let t: (String, i64) = decode(ValkeyValue::Array(vec![BULK, INT]));
+        assert_eq!(t, ("hi".to_string(), 7));
+
+        let t: (String, i64, f64) = decode(ValkeyValue::Array(vec![BULK, INT, DOUBLE]));
+        assert_eq!(t, ("hi".to_string(), 7, 1.5));
+
+        assert!(<(String, i64)>::from_owned_valkey_value(ValkeyValue::Array(vec![INT])).is_err());
+    }
+
+    #[test]
+    fn from_owned_valkey_value_vec_of_pairs() {
+        // Array of 2-element arrays (normalized shape).
+        let nested = ValkeyValue::Array(vec![
+            ValkeyValue::Array(vec![BULK, DOUBLE]),
+            ValkeyValue::Array(vec![BULK, DOUBLE]),
+        ]);
+        let pairs: Vec<(String, f64)> = decode(nested);
+        assert_eq!(
+            pairs,
+            vec![("hi".to_string(), 1.5), ("hi".to_string(), 1.5)]
+        );
+
+        // Flat sequence chunked into pairs (RESP2 shape).
+        let flat = ValkeyValue::Array(vec![BULK, DOUBLE, BULK, DOUBLE]);
+        let pairs: Vec<(String, f64)> = decode(flat);
+        assert_eq!(
+            pairs,
+            vec![("hi".to_string(), 1.5), ("hi".to_string(), 1.5)]
+        );
+    }
+
+    #[test]
+    fn from_owned_valkey_value_server_error() {
+        let server_err = ValkeyServerError {
+            code: "WRONGTYPE".into(),
+            detail: Some("nope".into()),
+        };
+        let value = ValkeyValue::ServerError(server_err);
+        let request_err = i64::from_owned_valkey_value(value).unwrap_err();
+
+        assert_eq!(request_err.class_name(), "RequestError");
+        assert!(request_err.message().contains("WRONGTYPE"));
     }
 }

@@ -17,6 +17,19 @@ and `Script` are rolled to `RV: FromValkeyValue` with `ValkeyResult`/`ValkeyFutu
 returns. `ValkeyFuture` was added beside `ValkeyResult` in `lib.rs`;
 `ValkeyValue::from_redis` (+ nested `from_redis`) lost their `dead_code` allows.
 
+**Native decode — DONE (Phase 3b).** `FromValkeyValue` now decodes `ValkeyValue`
+directly with explicit per-type impls (numerics, `bool`, `String`, `Bytes`,
+`Vec<T>` incl. the `Vec<u8>` byte specialization, `Option<T>`, tuples 1..=12,
+`HashMap`, `HashSet`, `()`), mirroring redis-rs's coercions and tuple
+flat/array-of-arrays heuristic — no round-trip through `redis::Value`.
+`ValkeyValue::into_redis` (and the lossy `ServerError` reconstruction) is
+**deleted**; the trait is now open to downstream user impls (resolves the
+blanket-impl question below for the decode side). The `scan*` iterators are
+rolled to `RV: FromValkeyValue` (bridge removed). The parity guard canonicalizes
+GLIDE's renamed bounds back to the fork's names. Note: the fork's connection
+layer runs `Value::extract_error()`, so a `ServerError` never reaches decode on
+the command path — the trait handles it defensively anyway.
+
 **Arg side — still deferred (coupled to `Cmd`).** Every command still builds via
 `Cmd::$name(args)` / `cmd.arg(a)`, which require redis's `ToRedisArgs`, so command
 args (and `Script`/`custom_command` args, and the `scan*` `write_redis_args`
@@ -31,11 +44,6 @@ Remaining, still actionable once the above lands:
   public only because per-family command traits still hand back `redis::Value`
   via `execute_command`. Move them onto `ValkeyValue` (public) and make the
   `redis::Value` forms `pub(crate)`.
-- **`scan` composite decode** still bounds `RV: FromRedisValue` and bridges the
-  page through `ValkeyValue::into_redis()` → `from_owned_redis_value`, because the
-  provisional blanket `FromValkeyValue` cannot decode `(u64, Vec<RV>)` from an
-  `RV: FromValkeyValue` bound (needs redis's `Vec`/tuple decode). Rolls with
-  native decode. Inline `TODO #7024` in `commands/scan.rs`.
 - **`CommandExecutor::execute_command` / `CustomCommand`** still return
   `redis::Value` and take `ToRedisArgs`; roll with the `Cmd`/arg change (this is
   "the Cmd seam").
@@ -44,9 +52,9 @@ Remaining, still actionable once the above lands:
   `EVALSHA`→`EVAL` fallback matches the stringified message
   (`GlideError::is_no_script_error`). Replace with a preserved server error code.
   Inline `TODO #7024` in `error.rs`.
-- **Parity guard** needs a redis→valkey name mapping
-  (`ToRedisArgs`→`ToValkeyArgs`, `FromRedisValue`→`FromValkeyValue`, and the
-  param-type renames below) once the arg-side signatures change.
+- **Parity guard** already canonicalizes the renamed bounds
+  (`FromValkeyValue`→`FromRedisValue`, `ToValkeyArgs`→`ToRedisArgs`); extend it
+  with the param-type renames below when the arg-side signatures change.
 - **Command-param types** `Direction`, `Expiry`, `SetOptions`, `LposOptions`
   (deferred from Phase 2) are macro-table params in `core.rs`, forwarded verbatim
   to `Cmd::$name`. Converting them to glide-owned types needs the macro dispatch
@@ -58,16 +66,6 @@ Remaining, still actionable once the above lands:
   `send_transaction` (`execute_pipeline`). Not a small owned type; lands with the
   decode rework.
 
-## `ValkeyValue::into_redis` should disappear
-
-`FromValkeyValue` currently decodes by round-tripping a `ValkeyValue` back through
-`redis::Value` (`into_redis` → `from_owned_redis_value`). That's why `into_redis`
-exists and why it has to reconstruct a `Value::ServerError` (nested error elements
-in a decoded reply must still decode to an error). redis-rs never re-encodes a
-reply, and neither should we: decode `ValkeyValue` **natively** in
-`FromValkeyValue` (walking the tree, erroring on `ServerError` nodes directly),
-then delete `into_redis` and the `ServerError` reconstruction entirely.
-
 ## `ValkeyServerError` representation
 
 Currently a flat `{ code: String, detail: Option<String> }`, populated via redis's
@@ -77,16 +75,14 @@ crate — we can't mirror the variant split today. Revisit whether the flat stru
 the intended final shape (it captures the full observable wire content: code +
 detail) or whether the fork should re-export the richer types.
 
-## `ToValkeyArgs` / `FromValkeyValue` blanket impls
+## `ToValkeyArgs` blanket impl
 
-Implemented as blanket impls delegating to redis (`impl<T: ToRedisArgs>`,
-`impl<T: FromRedisValue>`). Trade-off: a blanket impl **blocks downstream users
-from hand-implementing** these traits for their own types — which conflicts with
-the migration goal of letting users port their custom `ToRedisArgs`/`FromRedisValue`
-types. When these become real command bounds in Phase 3, decide between keeping the
-blanket impls vs. explicit per-standard-type impls (which leave the trait open for
-user impls). If they go explicit, the two trait tests should broaden from one
-representative type to a case per standard type.
+`FromValkeyValue` is now explicit per-type (Phase 3b), so it's open to downstream
+user impls. `ToValkeyArgs` is **still** a blanket `impl<T: ToRedisArgs>`, which
+blocks users from hand-implementing it for their own arg types. It resolves with
+the arg-side / `Cmd` roll: replace the blanket with explicit per-standard-type
+impls (leaving the trait open), driven by a glide-owned `Cmd` whose constructors
+take `ToValkeyArgs`.
 
 ## Phase 4 (separate, breaking)
 

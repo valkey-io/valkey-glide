@@ -23,12 +23,8 @@
 
 use crate::ValkeyResult;
 use crate::commands::core::AsyncCommands;
-use crate::error::GlideError;
-use redis::{Cmd, FromRedisValue, from_owned_redis_value};
-
-// TODO #7024: decode scan pages natively from `ValkeyValue` and roll `RV` to
-// `FromValkeyValue`, dropping the `into_redis()` bridge, once `FromValkeyValue`
-// decodes composite types (`Vec<RV>`) without the redis bound (Phase 3).
+use crate::value::FromValkeyValue;
+use redis::Cmd;
 
 /// Argument layout of one scan page: `prefix… <cursor> suffix…`
 /// (e.g. `HSCAN key <cursor> MATCH pattern`).
@@ -63,7 +59,7 @@ pub struct ScanIter<'a, C: ?Sized, RV> {
     batch: std::vec::IntoIter<RV>,
 }
 
-impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
+impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
     /// Start an iteration: fetch the first page eagerly so errors surface at
     /// the `scan*` call (matching redis-rs iterator behaviour).
     pub(crate) async fn new(
@@ -73,8 +69,7 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
     ) -> ValkeyResult<ScanIter<'a, C, RV>> {
         let spec = PageSpec { prefix, suffix };
         let reply = con.glide_send_owned(spec.to_cmd(0)).await?;
-        let (cursor, batch): (u64, Vec<RV>) =
-            from_owned_redis_value(reply.into_redis()).map_err(GlideError::from_redis_error)?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         Ok(ScanIter {
             con,
             spec,
@@ -102,7 +97,7 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
                 .await
                 .ok()?;
             let (cursor, batch): (u64, Vec<RV>) =
-                from_owned_redis_value(reply.into_redis()).ok()?;
+                FromValkeyValue::from_owned_valkey_value(reply).ok()?;
             self.cursor = cursor;
             self.batch = batch.into_iter();
         }
@@ -122,7 +117,7 @@ pub struct SyncScanIter<'a, C: ?Sized, RV> {
 }
 
 #[cfg(feature = "sync")]
-impl<'a, C: crate::commands::core::Commands, RV: FromRedisValue> SyncScanIter<'a, C, RV> {
+impl<'a, C: crate::commands::core::Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
     /// Start an iteration (first page fetched eagerly; see [`ScanIter::new`]).
     pub(crate) fn new(
         con: &'a C,
@@ -131,8 +126,7 @@ impl<'a, C: crate::commands::core::Commands, RV: FromRedisValue> SyncScanIter<'a
     ) -> ValkeyResult<SyncScanIter<'a, C, RV>> {
         let spec = PageSpec { prefix, suffix };
         let reply = con.glide_send_owned_sync(spec.to_cmd(0))?;
-        let (cursor, batch): (u64, Vec<RV>) =
-            from_owned_redis_value(reply.into_redis()).map_err(GlideError::from_redis_error)?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         Ok(SyncScanIter {
             con,
             spec,
@@ -143,7 +137,7 @@ impl<'a, C: crate::commands::core::Commands, RV: FromRedisValue> SyncScanIter<'a
 }
 
 #[cfg(feature = "sync")]
-impl<C: crate::commands::core::Commands, RV: FromRedisValue> Iterator for SyncScanIter<'_, C, RV> {
+impl<C: crate::commands::core::Commands, RV: FromValkeyValue> Iterator for SyncScanIter<'_, C, RV> {
     type Item = RV;
 
     fn next(&mut self) -> Option<RV> {
@@ -159,7 +153,7 @@ impl<C: crate::commands::core::Commands, RV: FromRedisValue> Iterator for SyncSc
                 .glide_send_owned_sync(self.spec.to_cmd(self.cursor))
                 .ok()?;
             let (cursor, batch): (u64, Vec<RV>) =
-                from_owned_redis_value(reply.into_redis()).ok()?;
+                FromValkeyValue::from_owned_valkey_value(reply).ok()?;
             self.cursor = cursor;
             self.batch = batch.into_iter();
         }

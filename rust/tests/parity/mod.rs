@@ -47,8 +47,6 @@ type NormSig = (Vec<GenericParam>, Vec<Arg>);
 /// A normalized scan-method signature: `(name, bounds)` generics + argument list.
 type ScanSig = (Vec<(String, String)>, Vec<Arg>);
 
-// TODO #7024: add a redis→valkey generic-bound name mapping (ToRedisArgs→ToValkeyArgs,
-// FromRedisValue→FromValkeyValue, …) when the command bounds are renamed (Phase 3).
 /// Run the full parity check. `Ok` carries a human-readable summary.
 pub fn check() -> Result<String, ParityError> {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -277,11 +275,18 @@ fn norm_scan_generics(generics: &str) -> Vec<(String, String)> {
                 .split('+')
                 .map(str::trim)
                 .filter(|b| !b.is_empty() && *b != "Send" && !b.starts_with('\''))
-                .map(|b| b.replace("redis::", ""))
+                .map(bound_from_glide_to_redis)
                 .collect();
             (name.trim().to_string(), kept.join(" + "))
         })
         .collect()
+}
+
+/// Maps the given GLIDE bound to the corresponding redis-rs bound.
+fn bound_from_glide_to_redis(bound: &str) -> String {
+    bound
+        .replace("FromValkeyValue", "FromRedisValue")
+        .replace("ToValkeyArgs", "ToRedisArgs")
 }
 
 /// `name -> sorted list of normalized (generics, args)` — one element per trait
