@@ -2149,7 +2149,10 @@ where
                     .await;
 
                     #[cfg(test)]
-                    refresh_task_resolution_tests::park_after_connect_for_test();
+                    refresh_task_resolution_tests::park_after_connect_for_test(
+                        Arc::as_ptr(&inner_clone) as usize,
+                        &address_clone_for_task,
+                    );
 
                     match node_result {
                         Ok(_) => {
@@ -2227,7 +2230,10 @@ where
                 }
 
                 #[cfg(test)]
-                refresh_task_resolution_tests::signal_old_tail_finished_for_test();
+                refresh_task_resolution_tests::signal_old_tail_finished_for_test(
+                    Arc::as_ptr(&inner_clone) as usize,
+                    &address_clone_for_task,
+                );
 
                 log_debug_lazy!(
                     "cluster",
@@ -5646,6 +5652,8 @@ mod refresh_task_resolution_tests {
     static POST_CONNECT_GATE: Mutex<Option<Arc<PostConnectGate>>> = Mutex::new(None);
 
     struct PostConnectGate {
+        core_id: usize,
+        address: String,
         entered: Notify,
         generation: AtomicUsize,
         tail_generation: AtomicUsize,
@@ -5694,12 +5702,15 @@ mod refresh_task_resolution_tests {
         }
     }
 
-    pub(super) fn park_after_connect_for_test() {
+    pub(super) fn park_after_connect_for_test(core_id: usize, address: &str) {
         let gate = POST_CONNECT_GATE
             .lock()
             .expect("post-connect gate is healthy")
             .clone();
         let Some(gate) = gate else { return };
+        if gate.core_id != core_id || gate.address != address {
+            return;
+        }
         let generation = gate.generation.fetch_add(1, Ordering::SeqCst);
         gate.entered.notify_one();
         if generation == 0 {
@@ -5709,12 +5720,15 @@ mod refresh_task_resolution_tests {
         }
     }
 
-    pub(super) fn signal_old_tail_finished_for_test() {
+    pub(super) fn signal_old_tail_finished_for_test(core_id: usize, address: &str) {
         let gate = POST_CONNECT_GATE
             .lock()
             .expect("post-connect gate is healthy")
             .clone();
         if let Some(gate) = gate {
+            if gate.core_id != core_id || gate.address != address {
+                return;
+            }
             if gate.tail_generation.fetch_add(1, Ordering::SeqCst) == 0 {
                 gate.old_tail_finished.notify_one();
             }
@@ -5988,6 +6002,8 @@ mod refresh_task_resolution_tests {
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
         let gate = Arc::new(PostConnectGate {
+            core_id: Arc::as_ptr(&core) as usize,
+            address: address.clone(),
             entered: Notify::new(),
             generation: AtomicUsize::new(0),
             tail_generation: AtomicUsize::new(0),
