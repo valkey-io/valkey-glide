@@ -60,7 +60,7 @@ use crate::{
 use rand::seq::IteratorRandom;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::str::FromStr;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -1027,6 +1027,45 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 // The node string passed to this function will always be in the format host:port as it is either:
 // - Created by calling ConnectionAddr::to_string (unix connections are not supported in cluster mode)
 // - Returned from redis via the ASK/MOVED response
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ReadyToDialAddress(String);
+impl ReadyToDialAddress {
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ClusterAddress {
+    Raw(String),
+    ReadyToDial(ReadyToDialAddress),
+}
+impl ClusterAddress {
+    pub(crate) fn prepare(self, resolver: Option<&dyn AddressResolver>) -> ReadyToDialAddress {
+        match self {
+            Self::Raw(a) => ReadyToDialAddress(resolve_address(&a, resolver)),
+            Self::ReadyToDial(a) => a,
+        }
+    }
+}
+pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
+    let (host, port) = address.rsplit_once(':')?;
+    if host.starts_with('[') != host.ends_with(']') {
+        return None;
+    }
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    (!host.is_empty()).then_some((host, port.parse().ok()?))
+}
+pub(crate) fn format_cluster_address(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
 pub(crate) fn get_connection_info(
     node: &str,
     cluster_params: ClusterParams,
@@ -1049,14 +1088,7 @@ fn get_connection_info_with_resolver(
 ) -> RedisResult<ConnectionInfo> {
     let invalid_error = || (ErrorKind::InvalidClientConfig, "Invalid node string");
 
-    let (host, port) = node
-        .rsplit_once(':')
-        .and_then(|(host, port)| {
-            Some(host.trim_start_matches('[').trim_end_matches(']'))
-                .filter(|h| !h.is_empty())
-                .zip(u16::from_str(port).ok())
-        })
-        .ok_or_else(invalid_error)?;
+    let (host, port) = parse_cluster_address(node).ok_or_else(invalid_error)?;
 
     Ok(ConnectionInfo {
         addr: get_connection_addr(
@@ -1140,6 +1172,40 @@ pub(crate) fn slot_cmd() -> Cmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug)]
+    struct NonIdempotentResolver(std::sync::atomic::AtomicU32);
+    impl AddressResolver for NonIdempotentResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            let n = self.0.fetch_add(1, Ordering::SeqCst) + 1;
+            (format!("{host}-{n}"), port)
+        }
+    }
+
+    #[test]
+    fn cluster_address_prepares_once_and_ready_bypasses_resolver() {
+        let resolver = NonIdempotentResolver(AtomicU32::new(0));
+        let ready = ClusterAddress::Raw("node:6379".into()).prepare(Some(&resolver));
+        assert_eq!(ready.as_str(), "node-1:6379");
+        let ready = ClusterAddress::ReadyToDial(ready).prepare(Some(&resolver));
+        assert_eq!(ready.as_str(), "node-1:6379");
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn cluster_address_parser_and_formatter_handle_ipv6_without_broad_trimming() {
+        assert_eq!(
+            parse_cluster_address("[2001:db8::1]:6379"),
+            Some(("2001:db8::1", 6379))
+        );
+        assert_eq!(
+            format_cluster_address("2001:db8::1", 6379),
+            "[2001:db8::1]:6379"
+        );
+        assert_eq!(parse_cluster_address("[node:6379"), None);
+        assert_eq!(parse_cluster_address("node]:6379"), None);
+        assert_eq!(parse_cluster_address(" node:6379 "), None);
+    }
 
     #[derive(Debug)]
     struct BracketlessIpv6Resolver;
