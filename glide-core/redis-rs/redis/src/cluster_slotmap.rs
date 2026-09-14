@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Display,
     net::IpAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 
 use dashmap::DashMap;
@@ -57,7 +57,7 @@ pub enum ReadFromReplicaStrategy {
 pub struct SlotMap {
     slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
-    exact_ip_port_index: DashMap<(IpAddr, u16), Option<Arc<String>>>,
+    exact_ip_port_index: RwLock<HashMap<(IpAddr, u16), Option<Arc<String>>>>,
     read_from_replica: ReadFromReplicaStrategy,
 }
 
@@ -114,7 +114,7 @@ impl SlotMap {
         SlotMap {
             slots: BTreeMap::new(),
             nodes_map: DashMap::new(),
-            exact_ip_port_index: DashMap::new(),
+            exact_ip_port_index: RwLock::new(HashMap::new()),
             read_from_replica,
         }
     }
@@ -236,29 +236,33 @@ impl SlotMap {
         port: u16,
     ) -> Option<Arc<String>> {
         self.exact_ip_port_index
+            .read()
+            .unwrap()
             .get(&(ip, port))
-            .and_then(|entry| entry.value().clone())
+            .cloned()
+            .flatten()
     }
 
     fn rebuild_exact_ip_port_index(&self) {
-        self.exact_ip_port_index.clear();
+        let mut rebuilt = HashMap::new();
         for entry in self.nodes_map.iter() {
             let Some(ip) = entry.value().0 else { continue };
             let Some((_, port)) = parse_cluster_address(entry.key()) else {
                 continue;
             };
             let key = (ip, port);
-            match self.exact_ip_port_index.entry(key) {
-                dashmap::mapref::entry::Entry::Vacant(v) => {
+            match rebuilt.entry(key) {
+                std::collections::hash_map::Entry::Vacant(v) => {
                     v.insert(Some(entry.key().clone()));
                 }
-                dashmap::mapref::entry::Entry::Occupied(mut o) => {
+                std::collections::hash_map::Entry::Occupied(mut o) => {
                     if o.get().as_ref() != Some(entry.key()) {
                         o.insert(None);
                     }
                 }
             }
         }
+        *self.exact_ip_port_index.write().unwrap() = rebuilt;
     }
 
     /// Populates the IP→address reverse lookup table with freshly resolved IPs
@@ -1663,6 +1667,31 @@ mod tests_cluster_slotmap {
         // Unknown IPv6
         let result = slot_map.node_address_for_ip_and_port("2001:db8::99".parse().unwrap(), 6379);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_node_address_for_ip_and_port_with_bracketed_ipv6_slot_key() {
+        let ip = "2001:db8::1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "[2001:db8::1]:6379".to_owned(), vec![])],
+            HashMap::from([("[2001:db8::1]:6379".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(
+            slot_map.node_address_for_ip_and_port(ip, 6379),
+            Some(Arc::new("[2001:db8::1]:6379".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_node_address_for_ip_and_port_ignores_malformed_slot_key() {
+        let ip = "10.0.0.1".parse().unwrap();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "malformed".to_owned(), vec![])],
+            HashMap::from([("malformed".to_owned(), ip)]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        assert_eq!(slot_map.node_address_for_ip_and_port(ip, 6379), None);
     }
 
     #[test]
