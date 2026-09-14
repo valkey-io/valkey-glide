@@ -88,7 +88,7 @@ mod cluster_async {
                 (self.resolved_name.to_owned(), 6381)
             } else if host == self.resolved_name && matches!(port, 6380 | 6381) {
                 self.canonical_calls.fetch_add(1, Ordering::SeqCst);
-                ("poison-canonical-resolution".to_owned(), port)
+                (self.resolved_name.to_owned(), port)
             } else {
                 (host.to_owned(), port)
             }
@@ -2562,10 +2562,14 @@ mod cluster_async {
         let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
         let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
         let commands = Arc::new(atomic::AtomicUsize::new(0));
+        let moved_seen = Arc::new(atomic::AtomicBool::new(false));
+        let pings_after_moved = Arc::new(atomic::AtomicUsize::new(0));
         let pings = Arc::new(atomic::AtomicUsize::new(0));
         let ping_at_get_0 = Arc::new(atomic::AtomicUsize::new(0));
         let ping_at_get_1 = Arc::new(atomic::AtomicUsize::new(0));
         let commands_clone = commands.clone();
+        let moved_seen_clone = moved_seen.clone();
+        let pings_after_moved_clone = pings_after_moved.clone();
         let pings_clone = pings.clone();
         let pings_for_get = pings.clone();
         let ping_at_get_0_clone = ping_at_get_0.clone();
@@ -2586,14 +2590,26 @@ mod cluster_async {
             )),
             name,
             move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    assert!(
+                        !moved_seen_clone.load(Ordering::SeqCst),
+                        "circular MOVED should reconnect without refreshing slots"
+                    );
+                }
                 if contains_slice(cmd, b"PING") {
                     pings_clone.fetch_add(1, Ordering::SeqCst);
+                    if moved_seen_clone.load(Ordering::SeqCst)
+                        && pings_after_moved_clone.fetch_add(1, Ordering::SeqCst) == 0
+                    {
+                        return Err(Err((ErrorKind::IoError, "force reconnect").into()));
+                    }
                     return Err(Ok(Value::SimpleString("PONG".into())));
                 }
                 respond_startup(name, cmd)?;
                 let n = commands_clone.fetch_add(1, Ordering::SeqCst);
                 match (port, n) {
                     (6380, 0) => {
+                        moved_seen_clone.store(true, Ordering::SeqCst);
                         ping_at_get_0_clone
                             .store(pings_for_get.load(Ordering::SeqCst), Ordering::SeqCst);
                         Err(parse_redis_value(
@@ -2610,18 +2626,31 @@ mod cluster_async {
             },
         );
         let topology_calls_before = topology_calls.load(Ordering::SeqCst);
+        let mut connections_before = 0;
+        modify_mock_connection_behavior(name, |behavior| {
+            connections_before = behavior.connection_id_provider.load(Ordering::SeqCst);
+        });
         let value = runtime.block_on(
             cmd("GET")
                 .arg("test")
                 .query_async::<_, Option<i32>>(&mut connection),
         );
+        let mut connections_after = 0;
+        modify_mock_connection_behavior(name, |behavior| {
+            connections_after = behavior.connection_id_provider.load(Ordering::SeqCst);
+        });
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(
             topology_calls.load(Ordering::SeqCst),
             topology_calls_before + 1
         );
         assert_eq!(redirect_calls.load(Ordering::SeqCst), 0);
-        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
+        assert!(
+            connections_after > connections_before,
+            "expected circular MOVED to create a replacement connection, before={}, after={}",
+            connections_before,
+            connections_after
+        );
         assert!(
             ping_at_get_1.load(Ordering::SeqCst) > ping_at_get_0.load(Ordering::SeqCst),
             "expected reconnect between GETs: first PING count {}, retry PING count {}",
@@ -5175,6 +5204,8 @@ mod cluster_async {
         let raw_redirect_seen = Arc::new(atomic::AtomicBool::new(false));
         let asking_called = Arc::new(atomic::AtomicUsize::new(0));
         let asking_called_clone = asking_called.clone();
+        let redirected_attempts = Arc::new(atomic::AtomicUsize::new(0));
+        let redirected_attempts_clone = redirected_attempts.clone();
         let MockEnv {
             runtime,
             async_connection: mut connection,
@@ -5199,6 +5230,12 @@ mod cluster_async {
                 if port == 6380 && cmd_str.contains("baz") {
                     return Err(parse_redis_value(b"-ASK 14000 internal-node:6382\r\n"));
                 }
+                if port == 6382 && cmd_str.contains("baz") {
+                    let attempt = redirected_attempts_clone.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        return Err(parse_redis_value(b"-TRYAGAIN please retry\r\n"));
+                    }
+                }
                 let results = ["foo", "bar", "baz"]
                     .iter()
                     .filter(|&&key| cmd_str.contains(key))
@@ -5213,7 +5250,8 @@ mod cluster_async {
             .unwrap();
         assert_eq!(result, vec!["foo-6382", "bar-6380", "baz-6382"]);
         assert_eq!(redirect_resolutions.load(Ordering::SeqCst), 1);
-        assert_eq!(asking_called.load(Ordering::SeqCst), 1);
+        assert_eq!(redirected_attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(asking_called.load(Ordering::SeqCst), 2);
     }
 
     #[test]
