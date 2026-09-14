@@ -5447,11 +5447,15 @@ mod is_circular_moved_redirect_tests {
 #[cfg(test)]
 mod circular_moved_address_normalization_tests {
     use super::*;
-    use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
+    use crate::cluster_async::connections_container::{
+        ClusterNode, ConnectionDetails, ConnectionsContainer, ConnectionsMap,
+    };
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
     use crate::types::AddressResolver;
+    use futures::FutureExt;
     use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Debug)]
     struct CurrentAddressResolver;
@@ -5463,6 +5467,16 @@ mod circular_moved_address_normalization_tests {
             } else {
                 (host.to_owned(), port)
             }
+        }
+    }
+
+    #[derive(Debug)]
+    struct CountingResolver(AtomicUsize);
+
+    impl AddressResolver for CountingResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            (if host == "seed" { "node1" } else { host }.to_owned(), port)
         }
     }
 
@@ -5506,6 +5520,93 @@ mod circular_moved_address_normalization_tests {
         core.cluster_params.write().address_resolver = Some(Arc::new(CurrentAddressResolver));
 
         assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "seed:6379"));
+    }
+
+    #[test]
+    fn canonical_slot_map_current_address_is_not_resolved() {
+        let core = core_with_ip_mapping();
+        let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
+        core.cluster_params.write().address_resolver = Some(resolver.clone());
+
+        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "node1:6379"));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn connection_map_only_current_address_is_not_resolved() {
+        let core = core_with_ip_mapping();
+        let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
+        core.cluster_params.write().address_resolver = Some(resolver.clone());
+        let conn: ConnectionFuture<crate::aio::MultiplexedConnection> =
+            async { panic!("connection must not be polled") }
+                .boxed()
+                .shared();
+        core.conn_lock.write().connection_map().insert(
+            "connection-only:6379".to_owned(),
+            ClusterNode::new(
+                ConnectionDetails {
+                    conn,
+                    ip: None,
+                    az: None,
+                },
+                None,
+            ),
+        );
+
+        assert!(core.is_circular_moved_redirect(
+            Some(("connection-only:6379", 5000)),
+            "connection-only:6379"
+        ));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn reverse_lookup_matches_exact_ip_and_port() {
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(0, 8191, "node-a:6379".to_owned(), vec![]),
+                Slot::new(8192, 16383, "node-b:6380".to_owned(), vec![]),
+            ],
+            HashMap::from([
+                ("node-a:6379".to_owned(), "10.0.0.1".parse().unwrap()),
+                ("node-b:6380".to_owned(), "10.0.0.1".parse().unwrap()),
+            ]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let (tx, rx) =
+            mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
+        let core = Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
+            pending_requests_tx: tx,
+            pending_requests_rx: std::sync::Mutex::new(rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        });
+
+        assert_eq!(
+            core.normalize_current_address("10.0.0.1:6380"),
+            "node-b:6380"
+        );
+    }
+
+    #[test]
+    fn ready_redirect_is_not_resolved_again() {
+        let core = core_with_ip_mapping();
+        let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
+        core.cluster_params.write().address_resolver = Some(resolver.clone());
+
+        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "seed:6379"));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 1);
     }
 }
 
