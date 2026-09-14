@@ -68,8 +68,8 @@ where
         // Instead, we depend on managed Redis services to close the connection for refresh if the node has changed.
         match check_node_connections(&node, params, conn_type, addr.as_str()).await {
             None => Ok(node),
-            Some(conn_type) => connect_and_check(
-                addr.as_str(),
+            Some(conn_type) => connect_and_check_prepared(
+                addr,
                 params.clone(),
                 None,
                 conn_type,
@@ -80,8 +80,8 @@ where
             .get_node(),
         }
     } else {
-        connect_and_check(
-            addr.as_str(),
+        connect_and_check_prepared(
+            addr,
             params.clone(),
             None,
             conn_type,
@@ -290,7 +290,7 @@ where
     C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
 {
     let ready = ClusterAddress::Raw(addr.to_owned()).prepare(params.address_resolver.as_deref());
-    connect_and_check_with_resolution(
+    connect_and_check_prepared(
         &ready,
         params,
         socket_addr,
@@ -301,7 +301,7 @@ where
     .await
 }
 
-pub(crate) async fn connect_and_check_with_resolution<C>(
+pub(crate) async fn connect_and_check_prepared<C>(
     addr: &ReadyToDialAddress,
     params: ClusterParams,
     socket_addr: Option<SocketAddr>,

@@ -5687,7 +5687,7 @@ mod refresh_task_resolution_tests {
 
         let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            HashSet::from([ClusterAddress::Raw(address.clone())]),
             RefreshConnectionType::AllConnections,
             false,
         )
