@@ -1244,9 +1244,6 @@ def run_remote_command(
     )
     command_id = resp["Command"]["CommandId"]
 
-    # Brief initial wait for the invocation record to be created on AWS side
-    time.sleep(2)
-
     # Poll until done
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
@@ -1256,7 +1253,9 @@ def run_remote_command(
                 InstanceId=instance_id,
             )
         except ssm.exceptions.InvocationDoesNotExist:
-            time.sleep(5)
+            # Invocation record not yet visible (AWS SSM eventual consistency).
+            # Poll at 1s until it appears.
+            time.sleep(1)
             continue
         status = result["Status"]
         if status in ("Success", "Failed", "Cancelled", "TimedOut"):
@@ -1270,7 +1269,7 @@ def run_remote_command(
                 )
             logging.debug(f"[ec2] Remote command output: {output[:500]}")
             return output
-        time.sleep(5)
+        time.sleep(1)
 
     raise TimeoutError(
         f"[ec2] Remote command timed out after {timeout_seconds}s"
