@@ -7,6 +7,7 @@ use std::{
 
 use dashmap::DashMap;
 
+use crate::cluster::parse_cluster_address;
 use crate::cluster_routing::{Route, ShardAddrs, Slot, SlotAddr};
 use crate::ErrorKind;
 use crate::RedisError;
@@ -56,6 +57,7 @@ pub enum ReadFromReplicaStrategy {
 pub struct SlotMap {
     slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
+    exact_ip_port_index: DashMap<(IpAddr, u16), Option<Arc<String>>>,
     read_from_replica: ReadFromReplicaStrategy,
 }
 
@@ -112,6 +114,7 @@ impl SlotMap {
         SlotMap {
             slots: BTreeMap::new(),
             nodes_map: DashMap::new(),
+            exact_ip_port_index: DashMap::new(),
             read_from_replica,
         }
     }
@@ -163,6 +166,7 @@ impl SlotMap {
                 },
             );
         }
+        slot_map.rebuild_exact_ip_port_index();
         slot_map
     }
 
@@ -231,16 +235,30 @@ impl SlotMap {
         ip: IpAddr,
         port: u16,
     ) -> Option<Arc<String>> {
-        let mut matches = self.nodes_map.iter().filter_map(|entry| {
-            let (node_ip, _shard_addrs) = entry.value();
-            if *node_ip != Some(ip) {
-                return None;
+        self.exact_ip_port_index
+            .get(&(ip, port))
+            .and_then(|entry| entry.value().clone())
+    }
+
+    fn rebuild_exact_ip_port_index(&self) {
+        self.exact_ip_port_index.clear();
+        for entry in self.nodes_map.iter() {
+            let Some(ip) = entry.value().0 else { continue };
+            let Some((_, port)) = parse_cluster_address(entry.key()) else {
+                continue;
+            };
+            let key = (ip, port);
+            match self.exact_ip_port_index.entry(key) {
+                dashmap::mapref::entry::Entry::Vacant(v) => {
+                    v.insert(Some(entry.key().clone()));
+                }
+                dashmap::mapref::entry::Entry::Occupied(mut o) => {
+                    if o.get().as_ref() != Some(entry.key()) {
+                        o.insert(None);
+                    }
+                }
             }
-            let (_, node_port) = entry.key().rsplit_once(':')?;
-            (node_port.parse::<u16>().ok()? == port).then(|| entry.key().clone())
-        });
-        let node_address = matches.next()?;
-        matches.next().is_none().then_some(node_address)
+        }
     }
 
     /// Populates the IP→address reverse lookup table with freshly resolved IPs
@@ -251,6 +269,7 @@ impl SlotMap {
                 entry.0 = Some(ip);
             }
         }
+        self.rebuild_exact_ip_port_index();
     }
 
     /// Carries over IP mappings from the old slot map to the new one.
@@ -267,6 +286,7 @@ impl SlotMap {
                 }
             }
         }
+        self.rebuild_exact_ip_port_index();
     }
 
     /// Returns a set of all primary node addresses in the cluster.
@@ -367,7 +387,9 @@ impl SlotMap {
         let shard_addrs = Arc::new(ShardAddrs::new_with_primary(node_addr.clone()));
         self.nodes_map
             .insert(node_addr, (ip_addr, shard_addrs.clone()));
-        self.update_slot_range(slot, shard_addrs)
+        let result = self.update_slot_range(slot, shard_addrs);
+        self.rebuild_exact_ip_port_index();
+        result
     }
 
     fn shard_addrs_equal(shard1: &Arc<ShardAddrs>, shard2: &Arc<ShardAddrs>) -> bool {

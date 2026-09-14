@@ -6,11 +6,11 @@ use crate::cluster_slotmap::ReadFromReplicaStrategy;
 use crate::{
     aio::{ConnectionLike, DisconnectNotifier},
     client::GlideConnectionOptions,
-    cluster::get_connection_info_for_resolved_address,
+    cluster::{get_connection_info_for_resolved_address, parse_cluster_address},
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -521,15 +521,5 @@ where
 /// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
 /// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
-    let (host, port_str) = addr.rsplit_once(':')?;
-    let port = port_str.parse::<u16>().ok()?;
-    let host = if host.starts_with('[') && host.ends_with(']') {
-        let inner = host.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
-        inner.parse::<Ipv6Addr>().ok()?;
-        inner
-    } else {
-        host
-    };
-
-    Some((host, port))
+    parse_cluster_address(addr)
 }
