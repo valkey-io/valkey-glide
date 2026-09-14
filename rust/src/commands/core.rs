@@ -239,7 +239,8 @@ macro_rules! implement_glide_commands {
             )*
 
     // See the async trait: GLIDE-owned iterators on the owned-send path.
-    // `SyncScanIter` implements `Iterator`, so `for` loops work as before.
+    // `SyncScanIter` implements `Iterator` yielding `RedisResult<RV>`, so a
+    // `for` loop binds a `Result` per item.
 
     /// Cursor-driven `SCAN` over the whole keyspace.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
