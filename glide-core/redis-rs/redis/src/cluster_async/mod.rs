@@ -2148,6 +2148,9 @@ where
                     )
                     .await;
 
+                    #[cfg(test)]
+                    refresh_task_resolution_tests::park_after_connect_for_test();
+
                     match node_result {
                         Ok(_) => {
                             break;
@@ -5627,7 +5630,7 @@ mod refresh_task_resolution_tests {
     use crate::ConnectionAddr;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Mutex, MutexGuard};
+    use std::sync::{Barrier, Mutex, MutexGuard};
     use tokio::sync::{Notify, Semaphore};
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
@@ -5637,6 +5640,29 @@ mod refresh_task_resolution_tests {
     // context. Serialize the tests which exercise those gates and remove
     // permits left by a previous test before starting.
     static GATED_TEST_LOCK: Mutex<()> = Mutex::new(());
+    static POST_CONNECT_GATE: Mutex<Option<Arc<PostConnectGate>>> = Mutex::new(None);
+
+    struct PostConnectGate {
+        entered: Notify,
+        generation: AtomicUsize,
+        release_old: Barrier,
+        release_new: Barrier,
+    }
+
+    pub(super) fn park_after_connect_for_test() {
+        let gate = POST_CONNECT_GATE
+            .lock()
+            .expect("post-connect gate is healthy")
+            .clone();
+        let Some(gate) = gate else { return };
+        let generation = gate.generation.fetch_add(1, Ordering::SeqCst);
+        gate.entered.notify_one();
+        if generation == 0 {
+            gate.release_old.wait();
+        } else {
+            gate.release_new.wait();
+        }
+    }
 
     fn gated_test_guard() -> MutexGuard<'static, ()> {
         let guard = GATED_TEST_LOCK.lock().expect("gated test lock is healthy");
@@ -5899,11 +5925,20 @@ mod refresh_task_resolution_tests {
         assert_eq!(connected_port, 6381);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn refresh_generation_is_replaced_through_production_path() {
         let _guard = gated_test_guard();
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
+        let gate = Arc::new(PostConnectGate {
+            entered: Notify::new(),
+            generation: AtomicUsize::new(0),
+            release_old: Barrier::new(2),
+            release_new: Barrier::new(2),
+        });
+        *POST_CONNECT_GATE
+            .lock()
+            .expect("post-connect gate is healthy") = Some(gate.clone());
 
         let old = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
@@ -5915,6 +5950,10 @@ mod refresh_task_resolution_tests {
         tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
             .await
             .expect("old generation should enter connection creation");
+        RELEASE_POISON_CONNECT.add_permits(2);
+        tokio::time::timeout(Duration::from_secs(1), gate.entered.notified())
+            .await
+            .expect("old generation should park after connecting");
 
         core.conn_lock
             .write()
@@ -5935,6 +5974,29 @@ mod refresh_task_resolution_tests {
             .await
             .expect("new generation should enter connection creation");
         RELEASE_POISON_CONNECT.add_permits(2);
+        tokio::time::timeout(Duration::from_secs(1), gate.entered.notified())
+            .await
+            .expect("new generation should park after connecting");
+
+        gate.release_old.wait();
+        tokio::task::yield_now().await;
+        assert!(
+            core.conn_lock
+                .read()
+                .connection_for_address(&address)
+                .is_none(),
+            "old generation must not install its connection"
+        );
+        assert!(
+            core.conn_lock
+                .read()
+                .refresh_conn_state
+                .refresh_address_in_progress
+                .contains_key(&address),
+            "old generation must not remove new state"
+        );
+
+        gate.release_new.wait();
 
         tokio::time::timeout(Duration::from_secs(1), new[0].notified())
             .await
@@ -5957,6 +6019,9 @@ mod refresh_task_resolution_tests {
                 .is_none(),
             "completed generation should remove only itself"
         );
+        *POST_CONNECT_GATE
+            .lock()
+            .expect("post-connect gate is healthy") = None;
     }
 
     #[tokio::test]
