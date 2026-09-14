@@ -182,6 +182,80 @@ fn extract_multislot_mget_pipeline_response(value: Value) -> RedisResult<Option<
     }
 }
 
+#[async_trait::async_trait]
+trait ClusterCommandRouter {
+    async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value>;
+
+    async fn route_pipeline(
+        &mut self,
+        pipeline: &redis::Pipeline,
+        offset: usize,
+        count: usize,
+        route: Option<SingleNodeRoutingInfo>,
+        retry_strategy: Option<PipelineRetryStrategy>,
+    ) -> RedisResult<Vec<Value>>;
+}
+
+#[async_trait::async_trait]
+impl ClusterCommandRouter for ClusterConnection {
+    async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value> {
+        self.route_command(cmd, routing).await
+    }
+
+    async fn route_pipeline(
+        &mut self,
+        pipeline: &redis::Pipeline,
+        offset: usize,
+        count: usize,
+        route: Option<SingleNodeRoutingInfo>,
+        retry_strategy: Option<PipelineRetryStrategy>,
+    ) -> RedisResult<Vec<Value>> {
+        self.route_pipeline(pipeline, offset, count, route, retry_strategy)
+            .await
+    }
+}
+
+async fn execute_cluster_command_owned(
+    client: &mut impl ClusterCommandRouter,
+    cmd: &Arc<Cmd>,
+    final_routing: RoutingInfo,
+    has_explicit_routing: bool,
+    client_side_cache_enabled: bool,
+) -> RedisResult<Value> {
+    if !client_side_cache_enabled
+        && should_route_multislot_mget_as_pipeline(
+            cmd.as_ref(),
+            &final_routing,
+            has_explicit_routing,
+        )
+    {
+        let mut pipeline = redis::Pipeline::with_capacity(1);
+        pipeline.add_command(cmd.as_ref().clone());
+        let mut values = client
+            .route_pipeline(
+                &pipeline,
+                0,
+                1,
+                None,
+                Some(PipelineRetryStrategy::new(true, true)),
+            )
+            .await?;
+        if values.len() != 1 {
+            return Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "Unexpected number of responses from multi-slot MGET pipeline",
+            )));
+        }
+        let value = values.pop().expect("response count was checked");
+        match extract_multislot_mget_pipeline_response(value)? {
+            Some(value) => Ok(value),
+            None => client.route_command(cmd, final_routing).await,
+        }
+    } else {
+        client.route_command(cmd, final_routing).await
+    }
+}
+
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
 
@@ -1157,36 +1231,14 @@ impl Client {
                         .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
-                if should_route_multislot_mget_as_pipeline(
-                    cmd.as_ref(),
-                    &final_routing,
+                execute_cluster_command_owned(
+                    &mut client,
+                    &cmd,
+                    final_routing,
                     has_explicit_routing,
-                ) {
-                    let mut pipeline = redis::Pipeline::with_capacity(1);
-                    pipeline.add_command(cmd.as_ref().clone());
-                    let mut values = client
-                        .route_pipeline(
-                            &pipeline,
-                            0,
-                            1,
-                            None,
-                            Some(PipelineRetryStrategy::new(true, true)),
-                        )
-                        .await?;
-                    if values.len() != 1 {
-                        return Err(RedisError::from((
-                            ErrorKind::ResponseError,
-                            "Unexpected number of responses from multi-slot MGET pipeline",
-                        )));
-                    }
-                    let value = values.pop().expect("response count was checked");
-                    match extract_multislot_mget_pipeline_response(value)? {
-                        Some(value) => Ok(value),
-                        None => client.route_command(&cmd, final_routing).await,
-                    }
-                } else {
-                    client.route_command(&cmd, final_routing).await
-                }
+                    self_clone.client_side_cache.is_some(),
+                )
+                .await
             }
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }?;
@@ -3253,9 +3305,10 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Duration;
 
-    use redis::{Cmd, parse_redis_value};
+    use redis::{Cmd, PipelineRetryStrategy, RedisResult, Value, parse_redis_value};
 
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
@@ -3264,8 +3317,9 @@ mod tests {
     };
 
     use super::{
-        Client, ClientWrapper, ConnectionError, ErrorKind, LazyClient, MGET_PIPELINE_MAX_KEY_BYTES,
-        MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo,
+        Client, ClientWrapper, ClusterCommandRouter, ConnectionError, ErrorKind, LazyClient,
+        MGET_PIPELINE_MAX_KEY_BYTES, MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo,
+        ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo, execute_cluster_command_owned,
         extract_multislot_mget_pipeline_response, get_timeout_from_cmd_arg,
         should_route_multislot_mget_as_pipeline, validate_effective_lib_name,
         validate_effective_lib_ver,
@@ -3352,6 +3406,116 @@ mod tests {
         assert!(matches!(
             extract_multislot_mget_pipeline_response(readonly_error),
             Ok(None)
+        ));
+    }
+
+    enum MockClusterCall {
+        Pipeline(Vec<u8>),
+        Command(Vec<u8>, RoutingInfo),
+    }
+
+    struct ReadonlyPipelineMockCluster {
+        calls: Vec<MockClusterCall>,
+    }
+
+    #[async_trait::async_trait]
+    impl ClusterCommandRouter for ReadonlyPipelineMockCluster {
+        async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value> {
+            self.calls
+                .push(MockClusterCall::Command(cmd.get_packed_command(), routing));
+            Ok(Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]))
+        }
+
+        async fn route_pipeline(
+            &mut self,
+            pipeline: &redis::Pipeline,
+            offset: usize,
+            count: usize,
+            route: Option<SingleNodeRoutingInfo>,
+            retry_strategy: Option<PipelineRetryStrategy>,
+        ) -> RedisResult<Vec<Value>> {
+            assert_eq!(offset, 0);
+            assert_eq!(count, 1);
+            assert!(route.is_none());
+            let retry_strategy =
+                retry_strategy.expect("pipeline retry strategy must be configured");
+            assert!(retry_strategy.retry_server_error);
+            assert!(retry_strategy.retry_connection_error);
+            self.calls.push(MockClusterCall::Pipeline(
+                pipeline
+                    .cmd_iter()
+                    .next()
+                    .expect("pipeline must contain the MGET command")
+                    .get_packed_command(),
+            ));
+            Ok(vec![
+                parse_redis_value(b"-READONLY replica is read-only\r\n").unwrap(),
+            ])
+        }
+    }
+
+    #[tokio::test]
+    async fn eligible_multislot_mget_pipeline_retries_readonly_via_direct_route() {
+        let mut mget = redis::cmd("MGET");
+        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+            mget.arg(format!("key-{key_index}"));
+        }
+        let routing = RoutingInfo::for_routable(&mget)
+            .expect("MGET keys must produce multi-slot routing information");
+        assert!(should_route_multislot_mget_as_pipeline(
+            &mget, &routing, false
+        ));
+        let expected_command = mget.get_packed_command();
+        let expected_routing = routing.clone();
+        let mut client = ReadonlyPipelineMockCluster { calls: Vec::new() };
+
+        let result =
+            execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, false)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            result,
+            Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT])
+        );
+        assert_eq!(client.calls.len(), 2);
+        assert!(matches!(
+            &client.calls[0],
+            MockClusterCall::Pipeline(command) if command == &expected_command
+        ));
+        assert!(matches!(
+            &client.calls[1],
+            MockClusterCall::Command(command, routing)
+                if command == &expected_command && routing == &expected_routing
+        ));
+    }
+
+    #[tokio::test]
+    async fn eligible_multislot_mget_with_cache_uses_direct_route() {
+        let mut mget = redis::cmd("MGET");
+        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+            mget.arg(format!("key-{key_index}"));
+        }
+        let routing = RoutingInfo::for_routable(&mget)
+            .expect("MGET keys must produce multi-slot routing information");
+        let expected_command = mget.get_packed_command();
+        let expected_routing = routing.clone();
+        let mut client = ReadonlyPipelineMockCluster { calls: Vec::new() };
+
+        let result =
+            execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, true)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            result,
+            Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT])
+        );
+        assert_eq!(client.calls.len(), 1);
+        assert!(matches!(
+            &client.calls[0],
+            MockClusterCall::Command(command, routing)
+                if command == &expected_command && routing == &expected_routing
         ));
     }
 
