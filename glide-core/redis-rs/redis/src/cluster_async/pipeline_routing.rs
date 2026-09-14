@@ -942,9 +942,13 @@ where
     C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
 {
     // Extract unique addresses from the provided error entries.
-    let addresses: HashSet<String> = indices_addresses_and_error
+    let addresses: HashSet<crate::cluster::ClusterAddress> = indices_addresses_and_error
         .iter()
-        .map(|(_, address, _)| address.clone())
+        .map(|(_, address, _)| {
+            crate::cluster::ClusterAddress::ReadyToDial(
+                crate::cluster::ReadyToDialAddress::from_resolved(address.clone()),
+            )
+        })
         .collect();
 
     // If we're supposed to retry, refresh connections and retry commands.

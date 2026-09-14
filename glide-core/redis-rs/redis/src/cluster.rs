@@ -1030,6 +1030,9 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ReadyToDialAddress(String);
 impl ReadyToDialAddress {
+    pub(crate) fn from_resolved(address: String) -> Self {
+        Self(address)
+    }
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
@@ -1073,6 +1076,7 @@ pub(crate) fn format_cluster_address(host: &str, port: u16) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn get_connection_info(
     node: &str,
     cluster_params: ClusterParams,

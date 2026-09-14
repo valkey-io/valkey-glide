@@ -79,10 +79,9 @@ use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
-    cluster::slot_cmd,
+    cluster::{slot_cmd, ClusterAddress},
     cluster_async::connections_logic::{
-        get_host_and_port_from_addr, get_or_create_conn, get_or_create_conn_with_resolution,
-        ConnectionFuture, RefreshConnectionType,
+        get_host_and_port_from_addr, get_or_create_conn, ConnectionFuture, RefreshConnectionType,
     },
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
@@ -612,8 +611,26 @@ where
     }
 
     pub(crate) fn normalize_current_address(&self, address: &str) -> String {
-        self.reverse_lookup_address(address)
-            .unwrap_or_else(|| address.to_owned())
+        if let Some(address) = self.reverse_lookup_address(address) {
+            return address;
+        }
+
+        let current_address_is_canonical = {
+            let conn_lock = self.conn_lock.read();
+            conn_lock
+                .slot_map
+                .nodes_map()
+                .contains_key(&address.to_owned())
+        };
+        if current_address_is_canonical {
+            address.to_owned()
+        } else {
+            cluster::resolve_address(
+                address,
+                self.get_cluster_param(|params| params.address_resolver.clone())
+                    .as_deref(),
+            )
+        }
     }
 
     pub(crate) fn is_circular_moved_redirect(
@@ -1122,7 +1139,6 @@ mod inflight_tracker_tests {
 #[cfg(test)]
 mod iam_token_refresh_tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// Mock IAM token provider that returns a configurable token and tracks call count.
     struct MockTokenProvider {
@@ -1955,13 +1971,15 @@ where
         }
 
         // identify nodes with closed connection
-        let mut addrs_to_refresh = HashSet::new();
+        let mut addrs_to_refresh: HashSet<ClusterAddress> = HashSet::new();
         for (addr, con_fut) in &all_valid_conns {
             let con = con_fut.clone().await;
             // connection object might be present despite the transport being closed
             if con.is_closed() {
                 // transport is closed, need to refresh
-                addrs_to_refresh.insert(addr.clone());
+                addrs_to_refresh.insert(ClusterAddress::ReadyToDial(
+                    crate::cluster::ReadyToDialAddress::from_resolved(addr.clone()),
+                ));
             }
         }
 
@@ -1970,7 +1988,11 @@ where
             all_nodes_with_slots
                 .iter()
                 .filter(|addr| !all_valid_conns.contains_key(addr.as_str()))
-                .map(|addr| addr.to_string()),
+                .map(|addr| {
+                    ClusterAddress::ReadyToDial(crate::cluster::ReadyToDialAddress::from_resolved(
+                        addr.to_string(),
+                    ))
+                }),
         );
 
         if !addrs_to_refresh.is_empty() {
@@ -1989,7 +2011,7 @@ where
     // Awaiting on the notifier guaranties at least one reconnect attempt on each address.
     async fn refresh_and_update_connections(
         inner: Arc<InnerCore<C>>,
-        addresses: HashSet<String>,
+        addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
     ) {
@@ -2023,7 +2045,7 @@ where
     // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
-        addresses: HashSet<String>,
+        addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
@@ -2034,7 +2056,14 @@ where
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
+        let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
+        let mut prepared_addresses = HashSet::new();
         for address in addresses {
+            let ready_address = address.prepare(resolver.as_deref());
+            let address = ready_address.as_str().to_owned();
+            if !prepared_addresses.insert(address.clone()) {
+                continue;
+            }
             let mut conn_lock = inner.conn_lock.write();
             let existing_task = conn_lock
                 .refresh_conn_state
@@ -2048,11 +2077,11 @@ where
             if let Some(notifier) = existing_task {
                 if let Some(notifier) = notifier {
                     notifiers.push(notifier);
-                    log_debug_lazy!(
-                        "cluster",
-                        format!("Skipping refresh for {}: already in progress", address)
-                    );
                 }
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: already in progress", address)
+                );
                 continue;
             }
 
@@ -2099,7 +2128,9 @@ where
                     let cluster_params = inner_clone.get_cluster_param(|params| params.clone());
 
                     node_result = get_or_create_conn(
-                        &address_clone_for_task,
+                        &crate::cluster::ReadyToDialAddress::from_resolved(
+                            address_clone_for_task.clone(),
+                        ),
                         node_option.clone(),
                         &cluster_params,
                         conn_type,
@@ -2781,7 +2812,14 @@ where
                 );
                 Self::trigger_refresh_connection_tasks(
                     inner,
-                    failed,
+                    failed
+                        .into_iter()
+                        .map(|a| {
+                            ClusterAddress::ReadyToDial(
+                                crate::cluster::ReadyToDialAddress::from_resolved(a),
+                            )
+                        })
+                        .collect(),
                     RefreshConnectionType::OnlyManagementConnection,
                     true,
                 )
@@ -2886,12 +2924,11 @@ where
                         }
                     };
 
-                    get_or_create_conn_with_resolution(
-                        &addr,
+                    get_or_create_conn(
+                        &crate::cluster::ReadyToDialAddress::from_resolved(addr.clone()),
                         node,
                         &cluster_params,
                         RefreshConnectionType::AllConnections,
-                        false,
                         glide_connection_options,
                     )
                     .await
@@ -3579,7 +3616,9 @@ where
                 // Trigger refresh task and get the single notifier
                 let mut notifiers = Self::trigger_refresh_connection_tasks(
                     core.clone(),
-                    HashSet::from([address.clone()]),
+                    HashSet::from([ClusterAddress::ReadyToDial(
+                        crate::cluster::ReadyToDialAddress::from_resolved(address.clone()),
+                    )]),
                     RefreshConnectionType::AllConnections,
                     false,
                 )
@@ -4296,7 +4335,14 @@ where
                 let handle = tokio::spawn(async move {
                     ClusterConnInner::trigger_refresh_connection_tasks(
                         inner,
-                        addresses,
+                        addresses
+                            .into_iter()
+                            .map(|a| {
+                                ClusterAddress::ReadyToDial(
+                                    crate::cluster::ReadyToDialAddress::from_resolved(a),
+                                )
+                            })
+                            .collect(),
                         RefreshConnectionType::OnlyUserConnection,
                         true,
                     )
@@ -4342,7 +4388,7 @@ struct InitialNodeConnectionsResult<C> {
     #[allow(clippy::type_complexity)]
     connections: Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
     /// Addresses that need connection refresh (exists in slot map but not in connection map)
-    addresses_needing_refresh: HashSet<String>,
+    addresses_needing_refresh: HashSet<ClusterAddress>,
 }
 
 /// Returns connections found for randomly selected initial nodes, along with addresses
@@ -4425,9 +4471,14 @@ where
 
         let mut still_need_refresh = HashSet::new();
         for addr in addresses_needing_refresh.drain() {
-            if let ConnectionLookupResult::Found(conn) =
-                lookup_management_connection(inner, &addr, None)
-            {
+            if let ConnectionLookupResult::Found(conn) = lookup_management_connection(
+                inner,
+                match &addr {
+                    ClusterAddress::Raw(a) => a,
+                    ClusterAddress::ReadyToDial(a) => a.as_str(),
+                },
+                None,
+            ) {
                 connections.push(conn);
             } else {
                 still_need_refresh.insert(addr);
@@ -4448,7 +4499,7 @@ enum ConnectionLookupResult<C> {
     /// Connection found - returns the node address as stored in the connection map and the connection future
     Found((String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)),
     /// Connection not found - needs refresh for the given address
-    NeedsConnectionRefresh(String),
+    NeedsConnectionRefresh(ClusterAddress),
 }
 
 /// Finds a management connection for a node or indicates it needs refresh.
@@ -4507,9 +4558,10 @@ where
             .slot_map
             .nodes_map()
             .contains_key(&original_addr_key)
+            || conn_lock.connection_for_address(original_addr).is_some()
         {
             // Step 1: Direct match
-            original_addr.to_string()
+            Some(original_addr.to_string())
         } else {
             socket_addr
                 // Step 2: IP-based match
@@ -4519,20 +4571,23 @@ where
                         .node_address_for_ip(addr.ip())
                         .map(|a| (*a).clone())
                 })
-                // Step 3: Use socket_addr if available
-                .or_else(|| socket_addr.map(|addr| addr.to_string()))
-                // Step 4: Last resort - use original_addr
-                .unwrap_or_else(|| original_addr.to_string())
         };
 
         // Look up management connection, fall back to user connection if not available
-        let conn_opt = conn_lock.management_connection_for_address(&canonical_addr);
+        let conn_opt = canonical_addr
+            .as_deref()
+            .and_then(|addr| conn_lock.management_connection_for_address(addr));
         (canonical_addr, conn_opt)
     };
 
     match conn_opt {
         Some(conn) => ConnectionLookupResult::Found(conn),
-        None => ConnectionLookupResult::NeedsConnectionRefresh(canonical_addr),
+        None => ConnectionLookupResult::NeedsConnectionRefresh(match canonical_addr {
+            Some(addr) => {
+                ClusterAddress::ReadyToDial(crate::cluster::ReadyToDialAddress::from_resolved(addr))
+            }
+            None => ClusterAddress::Raw(original_addr.to_string()),
+        }),
     }
 }
 /// Result of querying random cluster nodes for topology calculation.
@@ -4641,7 +4696,9 @@ where
         topology_join_results
             .iter()
             .filter_map(|(address, res)| match res {
-                Err(err) if err.is_unrecoverable_error() => Some(address.clone()),
+                Err(err) if err.is_unrecoverable_error() => Some(ClusterAddress::ReadyToDial(
+                    crate::cluster::ReadyToDialAddress::from_resolved(address.clone()),
+                )),
                 _ => None,
             }),
     );
@@ -4656,7 +4713,15 @@ where
     }) {
         return TopologyQueryResult {
             topology_result: Err(noperm_err.clone_mostly("")),
-            failed_connections: Some(failed_addresses),
+            failed_connections: Some(
+                failed_addresses
+                    .into_iter()
+                    .map(|a| match a {
+                        ClusterAddress::Raw(s) => s,
+                        ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
+                    })
+                    .collect(),
+            ),
         };
     }
 
@@ -4674,7 +4739,15 @@ where
         }) {
             return TopologyQueryResult {
                 topology_result: Err(all_conn_err.clone_mostly("")),
-                failed_connections: Some(failed_addresses),
+                failed_connections: Some(
+                    failed_addresses
+                        .into_iter()
+                        .map(|a| match a {
+                            ClusterAddress::Raw(s) => s,
+                            ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
+                        })
+                        .collect(),
+                ),
             };
         }
     }
@@ -4697,7 +4770,15 @@ where
             read_from_replicas,
             address_resolver.as_ref().map(Arc::as_ref),
         ),
-        failed_connections: Some(failed_addresses),
+        failed_connections: Some(
+            failed_addresses
+                .into_iter()
+                .map(|a| match a {
+                    ClusterAddress::Raw(s) => s,
+                    ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
+                })
+                .collect(),
+        ),
     }
 }
 
@@ -5360,7 +5441,21 @@ mod circular_moved_address_normalization_tests {
     use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
+    use crate::types::AddressResolver;
     use std::collections::HashMap;
+
+    #[derive(Debug)]
+    struct CurrentAddressResolver;
+
+    impl AddressResolver for CurrentAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "seed" {
+                ("node1".to_owned(), port)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
 
     fn core_with_ip_mapping() -> Arc<InnerCore<crate::aio::MultiplexedConnection>> {
         let slot_map = SlotMap::new(
@@ -5395,21 +5490,32 @@ mod circular_moved_address_normalization_tests {
 
         assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "10.0.0.1:6379"));
     }
+
+    #[test]
+    fn raw_hostname_current_address_is_resolved_before_circular_comparison() {
+        let core = core_with_ip_mapping();
+        core.cluster_params.write().address_resolver = Some(Arc::new(CurrentAddressResolver));
+
+        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "seed:6379"));
+    }
 }
 
 #[cfg(test)]
 mod refresh_task_resolution_tests {
     use super::*;
+    use crate::cluster::{ClusterAddress, ReadyToDialAddress};
     use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
     use crate::types::AddressResolver;
     use crate::ConnectionAddr;
     use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::{Notify, Semaphore};
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
     static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
+    static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, Debug)]
     struct RecordingConnection {
@@ -5477,8 +5583,22 @@ mod refresh_task_resolution_tests {
 
     impl AddressResolver for NonIdempotentResolver {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            RESOLVER_CALLS.fetch_add(1, Ordering::SeqCst);
             if port == 6380 {
                 (host.to_owned(), 6381)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct SeedAddressResolver;
+
+    impl AddressResolver for SeedAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port == 6379 {
+                (host.to_owned(), 6382)
             } else {
                 (host.to_owned(), port)
             }
@@ -5515,6 +5635,87 @@ mod refresh_task_resolution_tests {
         })
     }
 
+    fn core_with_seed_resolver() -> Arc<InnerCore<RecordingConnection>> {
+        let address = "seed-node:6379".to_owned();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address, vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
+        let mut cluster_params = ClusterParams::default_for_test(None);
+        cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
+
+        Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                ConnectionsMap(DashMap::new()),
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(cluster_params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    #[tokio::test]
+    async fn initial_seed_connections_apply_address_resolution() {
+        let mut params = ClusterParams::default_for_test(None);
+        params.address_resolver = Some(Arc::new(SeedAddressResolver));
+
+        let node = connect_and_check::<RecordingConnection>(
+            "seed-node:6379",
+            params,
+            None,
+            RefreshConnectionType::AllConnections,
+            None,
+            GlideConnectionOptions::default(),
+        )
+        .await
+        .get_node()
+        .expect("initial seed connection should succeed");
+
+        assert_eq!(node.user_connection.conn.await.port, 6382);
+    }
+
+    #[tokio::test]
+    async fn raw_seed_refresh_tasks_apply_address_resolution() {
+        let core = core_with_seed_resolver();
+        let address = "seed-node:6379".to_owned();
+
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(
+                ReadyToDialAddress::from_resolved(address.clone()),
+            )]),
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+
+        tokio::time::timeout(Duration::from_secs(1), notifiers[0].notified())
+            .await
+            .expect("raw seed refresh should complete");
+
+        let connection = core
+            .conn_lock
+            .read()
+            .connection_for_address(&address)
+            .map(|(_, connection)| connection);
+        let connected_port = connection
+            .expect("raw seed refresh should install a connection")
+            .await
+            .port;
+        assert_eq!(connected_port, 6382);
+    }
+
     #[tokio::test]
     async fn concurrent_refresh_requests_share_one_task_and_both_complete() {
         let core = core_with_non_idempotent_resolver();
@@ -5522,7 +5723,9 @@ mod refresh_task_resolution_tests {
 
         let first = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([address.clone()]),
+            HashSet::from([ClusterAddress::ReadyToDial(
+                ReadyToDialAddress::from_resolved(address.clone()),
+            )]),
             RefreshConnectionType::AllConnections,
             false,
         )
@@ -5534,7 +5737,9 @@ mod refresh_task_resolution_tests {
 
         let second = ClusterConnInner::trigger_refresh_connection_tasks(
             core.clone(),
-            HashSet::from([address.clone()]),
+            HashSet::from([ClusterAddress::ReadyToDial(
+                ReadyToDialAddress::from_resolved(address.clone()),
+            )]),
             RefreshConnectionType::AllConnections,
             false,
         )
@@ -5570,5 +5775,44 @@ mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn mixed_raw_and_ready_refresh_prepares_once_and_deduplicates() {
+        RESOLVER_CALLS.store(0, Ordering::SeqCst);
+        let core = core_with_non_idempotent_resolver();
+        let addresses = HashSet::from([
+            ClusterAddress::Raw("resolved-node:6380".into()),
+            ClusterAddress::ReadyToDial(ReadyToDialAddress::from_resolved(
+                "resolved-node:6381".into(),
+            )),
+        ]);
+
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            addresses,
+            RefreshConnectionType::AllConnections,
+            false,
+        )
+        .await;
+        assert_eq!(
+            notifiers.len(),
+            1,
+            "equivalent raw/ready addresses share a task"
+        );
+        assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 1);
+        let done = notifiers[0].notified();
+        RELEASE_POISON_CONNECT.add_permits(2);
+        tokio::time::timeout(Duration::from_secs(1), done)
+            .await
+            .expect("refresh should complete");
+        let connection = core
+            .conn_lock
+            .read()
+            .connection_for_address("resolved-node:6381")
+            .expect("final ready address should be installed")
+            .1
+            .await;
+        assert_eq!(connection.port, 6381);
     }
 }
