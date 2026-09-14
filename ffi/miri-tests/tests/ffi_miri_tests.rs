@@ -51,6 +51,24 @@ unsafe extern "C-unwind" fn noop_address_resolver(
     0
 }
 
+/// No-op credential provider that signals failure (returns 0).
+/// Used in tests that do not exercise the credential provider path.
+unsafe extern "C-unwind" fn noop_credential_provider(
+    _client_id: usize,
+    _access_key_id_buf: *mut u8,
+    _access_key_id_buf_len: usize,
+    _access_key_id_len: *mut usize,
+    _secret_access_key_buf: *mut u8,
+    _secret_access_key_buf_len: usize,
+    _secret_access_key_len: *mut usize,
+    _session_token_buf: *mut u8,
+    _session_token_buf_len: usize,
+    _session_token_len: *mut usize,
+    _expires_at_epoch_millis: *mut i64,
+) -> u8 {
+    0 // 0 = failure/no credentials; Rust side treats this as "no custom provider"
+}
+
 fn get_logger_error_message(log_result: &LogResult) -> Option<String> {
     if log_result.log_error.is_null() {
         None
@@ -81,7 +99,7 @@ fn create_client_test() {
             client_type_ptr,
             pubsub_callback,
             noop_address_resolver,
-            std::mem::transmute(0usize),
+            noop_credential_provider,
             0usize,
         );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
