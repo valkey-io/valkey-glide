@@ -3419,16 +3419,18 @@ mod tests {
         Command(Vec<u8>, RoutingInfo),
     }
 
-    struct ReadonlyPipelineMockCluster {
+    struct PipelineMockCluster {
         calls: Vec<MockClusterCall>,
+        pipeline_values: Vec<Value>,
+        command_value: Value,
     }
 
     #[async_trait::async_trait]
-    impl ClusterCommandRouter for ReadonlyPipelineMockCluster {
+    impl ClusterCommandRouter for PipelineMockCluster {
         async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value> {
             self.calls
                 .push(MockClusterCall::Command(cmd.get_packed_command(), routing));
-            Ok(Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]))
+            Ok(self.command_value.clone())
         }
 
         async fn route_pipeline(
@@ -3453,9 +3455,7 @@ mod tests {
                     .expect("pipeline must contain the MGET command")
                     .get_packed_command(),
             ));
-            Ok(vec![
-                parse_redis_value(b"-READONLY replica is read-only\r\n").unwrap(),
-            ])
+            Ok(self.pipeline_values.clone())
         }
     }
 
@@ -3472,7 +3472,13 @@ mod tests {
         ));
         let expected_command = mget.get_packed_command();
         let expected_routing = routing.clone();
-        let mut client = ReadonlyPipelineMockCluster { calls: Vec::new() };
+        let mut client = PipelineMockCluster {
+            calls: Vec::new(),
+            pipeline_values: vec![
+                parse_redis_value(b"-READONLY replica is read-only\r\n").unwrap(),
+            ],
+            command_value: Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]),
+        };
 
         let result =
             execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, false)
@@ -3505,7 +3511,11 @@ mod tests {
             .expect("MGET keys must produce multi-slot routing information");
         let expected_command = mget.get_packed_command();
         let expected_routing = routing.clone();
-        let mut client = ReadonlyPipelineMockCluster { calls: Vec::new() };
+        let mut client = PipelineMockCluster {
+            calls: Vec::new(),
+            pipeline_values: Vec::new(),
+            command_value: Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]),
+        };
 
         let result =
             execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, true)
@@ -3522,6 +3532,70 @@ mod tests {
             MockClusterCall::Command(command, routing)
                 if command == &expected_command && routing == &expected_routing
         ));
+    }
+
+    #[tokio::test]
+    async fn eligible_multislot_mget_pipeline_returns_single_value_unchanged() {
+        let mut mget = redis::cmd("MGET");
+        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+            mget.arg(format!("key-{key_index}"));
+        }
+        let routing = RoutingInfo::for_routable(&mget)
+            .expect("MGET keys must produce multi-slot routing information");
+        let expected_command = mget.get_packed_command();
+        let expected_value = Value::Array(vec![
+            Value::BulkString(b"value".to_vec().into()),
+            Value::Nil,
+        ]);
+        let mut client = PipelineMockCluster {
+            calls: Vec::new(),
+            pipeline_values: vec![expected_value.clone()],
+            command_value: Value::Nil,
+        };
+
+        let result =
+            execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, false)
+                .await
+                .unwrap();
+
+        assert_eq!(result, expected_value);
+        assert!(matches!(
+            client.calls.as_slice(),
+            [MockClusterCall::Pipeline(command)] if command == &expected_command
+        ));
+    }
+
+    #[tokio::test]
+    async fn eligible_multislot_mget_pipeline_rejects_unexpected_response_counts() {
+        for pipeline_values in [Vec::new(), vec![Value::Nil, Value::Nil]] {
+            let mut mget = redis::cmd("MGET");
+            for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+                mget.arg(format!("key-{key_index}"));
+            }
+            let routing = RoutingInfo::for_routable(&mget)
+                .expect("MGET keys must produce multi-slot routing information");
+            let mut client = PipelineMockCluster {
+                calls: Vec::new(),
+                pipeline_values,
+                command_value: Value::Nil,
+            };
+
+            let error =
+                execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, false)
+                    .await
+                    .unwrap_err();
+
+            assert_eq!(error.kind(), ErrorKind::ResponseError);
+            assert!(
+                error
+                    .to_string()
+                    .contains("Unexpected number of responses from multi-slot MGET pipeline")
+            );
+            assert!(matches!(
+                client.calls.as_slice(),
+                [MockClusterCall::Pipeline(_)]
+            ));
+        }
     }
 
     #[test]
