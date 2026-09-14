@@ -73,7 +73,7 @@ mod cluster_async {
     #[derive(Debug)]
     struct TopologyRewriteResolver {
         resolved_name: &'static str,
-        topology_calls: Arc<atomic::AtomicUsize>,
+        raw_address_resolutions: Arc<atomic::AtomicUsize>,
         redirect_calls: Arc<atomic::AtomicUsize>,
         canonical_calls: Arc<atomic::AtomicUsize>,
     }
@@ -81,7 +81,7 @@ mod cluster_async {
     impl AddressResolver for TopologyRewriteResolver {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
             if host == self.resolved_name && port == 6379 {
-                self.topology_calls.fetch_add(1, Ordering::SeqCst);
+                self.raw_address_resolutions.fetch_add(1, Ordering::SeqCst);
                 (self.resolved_name.to_owned(), 6380)
             } else if host == "internal-node" && port == 6381 {
                 self.redirect_calls.fetch_add(1, Ordering::SeqCst);
@@ -2508,7 +2508,7 @@ mod cluster_async {
     #[serial_test::serial]
     fn test_async_cluster_moved_with_rewritten_topology() {
         let name = "test_async_cluster_moved_with_rewritten_topology";
-        let topology_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let raw_address_resolutions = Arc::new(atomic::AtomicUsize::new(0));
         let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
         let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
         let commands = Arc::new(atomic::AtomicUsize::new(0));
@@ -2524,7 +2524,7 @@ mod cluster_async {
             ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
                 TopologyRewriteResolver {
                     resolved_name: name,
-                    topology_calls,
+                    raw_address_resolutions,
                     redirect_calls: redirect_calls.clone(),
                     canonical_calls: canonical_calls.clone(),
                 },
@@ -2558,7 +2558,7 @@ mod cluster_async {
     #[serial_test::serial]
     fn test_async_cluster_circular_moved_with_rewritten_topology() {
         let name = "test_async_cluster_circular_moved_with_rewritten_topology";
-        let topology_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let raw_address_resolutions = Arc::new(atomic::AtomicUsize::new(0));
         let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
         let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
         let commands = Arc::new(atomic::AtomicUsize::new(0));
@@ -2583,7 +2583,7 @@ mod cluster_async {
             ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
                 TopologyRewriteResolver {
                     resolved_name: name,
-                    topology_calls: topology_calls.clone(),
+                    raw_address_resolutions: raw_address_resolutions.clone(),
                     redirect_calls: redirect_calls.clone(),
                     canonical_calls: canonical_calls.clone(),
                 },
@@ -2625,7 +2625,7 @@ mod cluster_async {
                 }
             },
         );
-        let topology_calls_before = topology_calls.load(Ordering::SeqCst);
+        let raw_address_resolutions_before = raw_address_resolutions.load(Ordering::SeqCst);
         let mut connections_before = 0;
         modify_mock_connection_behavior(name, |behavior| {
             connections_before = behavior.connection_id_provider.load(Ordering::SeqCst);
@@ -2641,10 +2641,11 @@ mod cluster_async {
         });
         assert_eq!(value, Ok(Some(123)));
         assert_eq!(
-            topology_calls.load(Ordering::SeqCst),
-            topology_calls_before + 1
+            raw_address_resolutions.load(Ordering::SeqCst),
+            raw_address_resolutions_before + 1
         );
         assert_eq!(redirect_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
         assert!(
             connections_after > connections_before,
             "expected circular MOVED to create a replacement connection, before={}, after={}",
