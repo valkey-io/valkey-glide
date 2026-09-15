@@ -1,18 +1,24 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Server-free tests for every command family (no Valkey server needed).
 //!
-//! Each command method builds a `redis::Cmd` and dispatches it through the
+//! Each command method builds a `Cmd` and dispatches it through the
 //! [`CommandExecutor`] seam. These tests install an in-process [`Mock`] executor
 //! that (a) captures the exact command tokens the wrapper produced — verifying
-//! request *encoding* — and (b) returns a preconfigured `redis::Value` so the
+//! request *encoding* — and (b) returns a preconfigured `Value` so the
 //! method's response *decoding* into its typed return can be asserted. No Valkey
 //! server is involved, so the whole suite is deterministic and fast.
+//!
+//! TODO #7024: these peek at the built command's bytes (`Cmd::args`), so they are
+//! really unit tests. Move them in-crate (`#[cfg(test)]` under `src/`) so they can
+//! use `pub(crate)` internals and `Cmd::args`'s `#[doc(hidden)] pub` accessor can
+//! be dropped. See rust/api-audit/phase-1-open-items.md.
 
 use async_trait::async_trait;
+use glide::Cmd;
 use glide::ValkeyResult;
 use glide::executor::CommandExecutor;
+use redis::Value;
 use redis::cluster_routing::RoutingInfo;
-use redis::{Arg, Cmd, Value};
 use std::sync::Mutex;
 
 /// A captured command: the raw argument tokens plus the routing it was sent with.
@@ -93,13 +99,7 @@ impl Mock {
 #[async_trait]
 impl CommandExecutor for Mock {
     async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> ValkeyResult<Value> {
-        let args: Vec<Vec<u8>> = cmd
-            .args_iter()
-            .map(|a| match a {
-                Arg::Simple(s) => s.to_vec(),
-                Arg::Cursor => b"0".to_vec(),
-            })
-            .collect();
+        let args: Vec<Vec<u8>> = cmd.args().into_iter().map(|s| s.to_vec()).collect();
         *self.captured.lock().unwrap() = Some((args, routing));
         Ok(self.response.lock().unwrap().clone())
     }

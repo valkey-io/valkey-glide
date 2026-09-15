@@ -2,10 +2,11 @@
 //! Bitmap commands. Mirrors Python's bitmap command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
-use redis::{Cmd, ToRedisArgs};
 
 /// Index unit for `BITCOUNT`/`BITPOS` range queries.
 ///
@@ -160,8 +161,11 @@ impl BitFieldSubcommand {
 /// Bitmap commands (`SETBIT`, `GETBIT`, `BITCOUNT`, `BITPOS`, `BITOP`).
 #[async_trait]
 pub trait BitmapCommands: CommandExecutor {
+    // TODO #7082: add a `bitcount` variant that takes the `BYTE`/`BIT` index unit
+    // (the `BitmapIndexType` type already exists), to match the other GLIDE clients.
+
     /// Find the position of the first bit set to `bit` (`BITPOS`).
-    async fn bitpos<K: ToRedisArgs + Send>(&self, key: K, bit: u8) -> ValkeyResult<i64> {
+    async fn bitpos<K: ToValkeyArgs + Send>(&self, key: K, bit: u8) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("BITPOS").arg(key).arg(bit);
         value::to_i64(self.execute_command(cmd, None).await?)
@@ -169,7 +173,7 @@ pub trait BitmapCommands: CommandExecutor {
 
     /// Find the position of the first bit set to `bit` within a range
     /// (`BITPOS key bit start end [BYTE|BIT]`).
-    async fn bitpos_range<K: ToRedisArgs + Send>(
+    async fn bitpos_range<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         bit: u8,
@@ -187,7 +191,7 @@ pub trait BitmapCommands: CommandExecutor {
 
     /// Perform arbitrary bit-field operations (`BITFIELD`). Returns one result
     /// per non-`OVERFLOW` subcommand; a `None` indicates a `FAIL` overflow.
-    async fn bitfield<K: ToRedisArgs + Send>(
+    async fn bitfield<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         subcommands: &[BitFieldSubcommand],
@@ -202,7 +206,7 @@ pub trait BitmapCommands: CommandExecutor {
 
     /// Read-only bit-field operations (`BITFIELD_RO`). Only `GET` subcommands are
     /// permitted by the server.
-    async fn bitfield_readonly<K: ToRedisArgs + Send>(
+    async fn bitfield_readonly<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         subcommands: &[BitFieldSubcommand],
@@ -238,7 +242,8 @@ mod tests {
     use super::*;
 
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,

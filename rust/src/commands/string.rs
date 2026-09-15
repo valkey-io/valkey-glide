@@ -2,16 +2,17 @@
 //! String commands. Mirrors Python's string command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// String commands (`GET`, `SET`, `APPEND`, `INCR`, ...).
 #[async_trait]
 pub trait StringCommands: CommandExecutor {
     /// Longest common subsequence length between two keys (`LCS ... LEN`).
-    async fn lcs_len<K1: ToRedisArgs + Send, K2: ToRedisArgs + Send>(
+    async fn lcs_len<K1: ToValkeyArgs + Send, K2: ToValkeyArgs + Send>(
         &self,
         key1: K1,
         key2: K2,
@@ -22,7 +23,7 @@ pub trait StringCommands: CommandExecutor {
     }
 
     /// Get the longest common subsequence of two keys (`LCS`).
-    async fn lcs<K1: ToRedisArgs + Send, K2: ToRedisArgs + Send>(
+    async fn lcs<K1: ToValkeyArgs + Send, K2: ToValkeyArgs + Send>(
         &self,
         key1: K1,
         key2: K2,
@@ -35,7 +36,7 @@ pub trait StringCommands: CommandExecutor {
     /// Get the LCS match positions between two keys (`LCS ... IDX`). Returns the
     /// raw structured reply (a map of `matches`/`len`). Pass `min_match_len` to
     /// filter short matches, and `with_match_len` to include per-match lengths.
-    async fn lcs_idx<K1: ToRedisArgs + Send, K2: ToRedisArgs + Send>(
+    async fn lcs_idx<K1: ToValkeyArgs + Send, K2: ToValkeyArgs + Send>(
         &self,
         key1: K1,
         key2: K2,

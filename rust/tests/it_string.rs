@@ -7,7 +7,7 @@ mod common;
 
 use glide::AsyncCommands;
 use glide::StringCommands; // surviving native extension: lcs, lcs_len, lcs_idx
-use redis::{ExistenceCheck, SetExpiry, SetOptions};
+use glide::{ExistenceCheck, SetExpiry, SetOptions};
 
 matrix_test!(set_and_get, c, {
     let k = common::key("str");
@@ -159,7 +159,7 @@ matrix_test!(getdel_returns_and_removes, c, {
 matrix_test!(getex_sets_expiry, c, {
     let k = common::key("gx");
     let _: () = c.set(&k, "v").await.unwrap();
-    let v: Option<String> = c.get_ex(&k, redis::Expiry::EX(100)).await.unwrap();
+    let v: Option<String> = c.get_ex(&k, glide::Expiry::EX(100)).await.unwrap();
     assert_eq!(v.as_deref(), Some("v"));
 
     let ttl: i64 = c.ttl(&k).await.unwrap();

@@ -70,11 +70,12 @@ matrix_test!(spop, c, {
     assert_eq!(popped, None);
 });
 
+// TODO #7082: replace the raw `SPOP` with a typed `spop` that accepts a count.
 matrix_test!(spop_count, c, {
     let k = common::key("s");
     let _: i64 = c.sadd(&k, &["a", "b", "c"][..]).await.unwrap();
     // spop with count: not in AsyncCommands, use cmd escape hatch.
-    let mut cmd = redis::Cmd::new();
+    let mut cmd = glide::Cmd::new();
     cmd.arg("SPOP").arg(&k).arg(2);
     let popped: HashSet<String> = c.glide_send(cmd).await.unwrap();
     assert_eq!(popped.len(), 2);

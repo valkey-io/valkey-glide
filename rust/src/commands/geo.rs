@@ -3,12 +3,13 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::{ConditionalChange, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// Distance unit for geo commands.
 ///
@@ -91,7 +92,7 @@ impl GeoSearchShape {
 #[async_trait]
 pub trait GeoCommands: CommandExecutor {
     /// Add geospatial members to `key` (`GEOADD`); returns members added.
-    async fn geoadd<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geoadd<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members_positions: &[(M, GeospatialData)],
@@ -105,7 +106,7 @@ pub trait GeoCommands: CommandExecutor {
     }
 
     /// Get the distance between two members (`GEODIST`).
-    async fn geodist<K: ToRedisArgs + Send, M1: ToRedisArgs + Send, M2: ToRedisArgs + Send>(
+    async fn geodist<K: ToValkeyArgs + Send, M1: ToValkeyArgs + Send, M2: ToValkeyArgs + Send>(
         &self,
         key: K,
         member1: M1,
@@ -121,7 +122,7 @@ pub trait GeoCommands: CommandExecutor {
     }
 
     /// Get the geohash strings of members (`GEOHASH`).
-    async fn geohash<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geohash<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members: &[M],
@@ -138,7 +139,7 @@ pub trait GeoCommands: CommandExecutor {
     }
 
     /// Get the positions (longitude, latitude) of members (`GEOPOS`).
-    async fn geopos<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geopos<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members: &[M],
@@ -169,7 +170,7 @@ pub trait GeoCommands: CommandExecutor {
     }
 
     /// Search a geospatial index by radius from a member (`GEOSEARCH ... FROMMEMBER ... BYRADIUS`).
-    async fn geosearch_by_radius_from_member<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn geosearch_by_radius_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -193,7 +194,7 @@ pub trait GeoCommands: CommandExecutor {
 
     /// Add geospatial members with options (`GEOADD` with `NX`/`XX`/`CH`).
     /// Returns the number of added (or, with `changed`, changed) members.
-    async fn geoadd_options<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geoadd_options<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members_positions: &[(M, GeospatialData)],
@@ -216,7 +217,7 @@ pub trait GeoCommands: CommandExecutor {
 
     /// Search a geospatial index from a member with a given shape (`GEOSEARCH
     /// ... FROMMEMBER ... BYRADIUS|BYBOX`). Returns matching member names.
-    async fn geosearch_from_member<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn geosearch_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -234,7 +235,7 @@ pub trait GeoCommands: CommandExecutor {
 
     /// Search a geospatial index from a coordinate with a given shape
     /// (`GEOSEARCH ... FROMLONLAT ... BYRADIUS|BYBOX`).
-    async fn geosearch_from_coord<K: ToRedisArgs + Send>(
+    async fn geosearch_from_coord<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         coord: GeospatialData,
@@ -257,9 +258,9 @@ pub trait GeoCommands: CommandExecutor {
     /// Search from a member and store the results into `destination`
     /// (`GEOSEARCHSTORE ... FROMMEMBER`). Returns the number stored.
     async fn geosearchstore_from_member<
-        D: ToRedisArgs + Send,
-        S: ToRedisArgs + Send,
-        M: ToRedisArgs + Send,
+        D: ToValkeyArgs + Send,
+        S: ToValkeyArgs + Send,
+        M: ToValkeyArgs + Send,
     >(
         &self,
         destination: D,
@@ -287,7 +288,7 @@ pub trait GeoCommands: CommandExecutor {
 
     /// Search from a coordinate and store the results into `destination`
     /// (`GEOSEARCHSTORE ... FROMLONLAT`).
-    async fn geosearchstore_from_coord<D: ToRedisArgs + Send, S: ToRedisArgs + Send>(
+    async fn geosearchstore_from_coord<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
@@ -342,7 +343,8 @@ mod tests {
     use super::*;
 
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,

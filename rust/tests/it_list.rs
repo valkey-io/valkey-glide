@@ -143,7 +143,7 @@ matrix_test!(lmove, c, {
     let dst = common::tkey("ls", "dst");
     let _: i64 = c.rpush(&src, &["a", "b", "c"]).await.unwrap();
     let moved: Option<String> = c
-        .lmove(&src, &dst, redis::Direction::Left, redis::Direction::Right)
+        .lmove(&src, &dst, glide::Direction::Left, glide::Direction::Right)
         .await
         .unwrap();
     assert_eq!(moved.as_deref(), Some("a"));
@@ -155,12 +155,12 @@ matrix_test!(lpos, c, {
     let k = common::key("l");
     let _: i64 = c.rpush(&k, &["a", "b", "c", "b"]).await.unwrap();
     let pos: Option<i64> = c
-        .lpos(&k, "b", redis::LposOptions::default())
+        .lpos(&k, "b", glide::LposOptions::default())
         .await
         .unwrap();
     assert_eq!(pos, Some(1));
     let pos: Option<i64> = c
-        .lpos(&k, "missing", redis::LposOptions::default())
+        .lpos(&k, "missing", glide::LposOptions::default())
         .await
         .unwrap();
     assert_eq!(pos, None);

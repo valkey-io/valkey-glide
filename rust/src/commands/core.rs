@@ -6,9 +6,9 @@
 //! vendored redis-rs fork (v0.25.2, predating the upstream license change):
 //! same method names, generic parameter order, and argument lists, so
 //! migrated call sites (including turbofish annotations) compile unchanged.
-//! Every table method delegates to the fork's `Cmd::<name>()` constructor, so
-//! the wire encoding is identical by construction; signature parity is
-//! enforced by `tests/it_parity_guard.rs`.
+//! Each entry carries the command body (mirroring the redis-rs's
+//! `implement_commands!`), so the wire encoding is identical by construction;
+//! signature parity is enforced by `tests/it_parity_guard.rs`.
 //!
 //! The built command is handed to glide-core **by value** through
 //! [`AsyncCommands::glide_send_owned`] — the same zero-extra-copy path as the
@@ -33,15 +33,9 @@
 //! divergence from the fork's table (see DEVELOPER.md).
 
 use crate::ValkeyFuture;
-
-// TODO #6872: should FromValkeyValue be public?
-use crate::value::{FromValkeyValue, ValkeyValue};
-
-// TODO #7024: replace the redis command-param types below (Direction, Expiry,
-// LposOptions, SetOptions) with glide-owned equivalents. Deferred from Phase 2:
-// these are macro-table params forwarded verbatim to `Cmd::$name`, so converting
-// them requires the Phase 3 macro-dispatch rework.
-use redis::{Cmd, Direction, Expiry, LposOptions, SetOptions, ToRedisArgs};
+use crate::cmd::Cmd;
+use crate::commands::options::{Direction, Expiry, LposOptions, SetOptions};
+use crate::value::{FromValkeyValue, ToValkeyArgs, ValkeyNumericBehavior, ValkeyValue};
 
 // Only exposed by sync commands.
 #[cfg(feature = "sync")]
@@ -50,19 +44,36 @@ use crate::ValkeyResult;
 /// Defines the unified [`AsyncCommands`] and [`Commands`] traits from one
 /// command table.
 ///
-/// Each `fn name<G: Bound>(args);` entry expands to an async method (generic
-/// `RV: FromValkeyValue` return, `&self` receiver, owned-send dispatch) and its
-/// blocking counterpart. The method body is always
-/// `Cmd::name(args) -> glide_send_owned`, delegating argument encoding to the
-/// fork's generated constructors.
+/// Each `fn name<G: Bound>(args) { body }` entry expands to an async method
+/// (generic `RV: FromValkeyValue` return, `&self` receiver, owned-send
+/// dispatch) and its blocking counterpart.
 macro_rules! implement_glide_commands {
     (
         $lifetime:lifetime;
         $(
             $(#[$attr:meta])*
-            fn $name:ident $(<$($g:ident: $b:ident),+>)? ($($arg:ident: $ty:ty),*);
+            fn $name:ident <$($g:ident: $b:ident),*> ($($arg:ident: $ty:ty),*) $body:block
         )*
     ) => {
+        /// Command constructors, one per table entry.
+        ///
+        /// For example, the `pttl` table entry expands to:
+        ///
+        /// ```ignore
+        /// impl Cmd {
+        ///     pub(crate) fn pttl<K: ToValkeyArgs>(key: K) -> Cmd {
+        ///         build_cmd!("PTTL", key)
+        ///     }
+        /// }
+        /// ```
+        impl Cmd {
+            $(
+                $(#[$attr])*
+                #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
+                pub(crate) fn $name<$lifetime, $($g: $b),*>($($arg: $ty),*) -> Self $body
+            )*
+        }
+
         /// **GLIDE's async command API.**
         ///
         /// Implemented by [`crate::GlideClient`] and
@@ -76,12 +87,18 @@ macro_rules! implement_glide_commands {
             /// the single required method; every typed command delegates to
             /// it. Also useful directly as a zero-extra-copy escape hatch for
             /// custom commands with large payloads.
+            ///
+            /// Prefer the typed commands.
+            /// Use this method only for commands GLIDE does not implement.
             fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`. This replaces
             /// `cmd(...).query_async(&mut con)` call sites — same decode, no
             /// connection-object machinery, no payload copy.
+            ///
+            /// Prefer the typed commands.
+            /// Use this method only for commands GLIDE does not implement.
             #[inline]
             fn glide_send<'a, RV: FromValkeyValue>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, RV> {
                 Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_owned(cmd).await?) })
@@ -92,7 +109,7 @@ macro_rules! implement_glide_commands {
                 #[inline]
                 #[allow(deprecated)]
                 #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
-                fn $name<$lifetime, $($($g: $b + Send + Sync + $lifetime,)+)? RV>(
+                fn $name<$lifetime, $($g: $b + Send + Sync + $lifetime,)* RV>(
                     &$lifetime self $(, $arg: $ty)*
                 ) -> ValkeyFuture<$lifetime, RV>
                 where
@@ -124,12 +141,12 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan_match<'s, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn scan_match<'s, P: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         pattern: P,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         Box::pin(crate::commands::scan::ScanIter::new(
             self,
             vec![b"SCAN".to_vec()],
@@ -139,76 +156,76 @@ macro_rules! implement_glide_commands {
 
     /// Cursor-driven `HSCAN` over a hash's fields and values.
     #[inline]
-    fn hscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn hscan<'s, K: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
     }
 
     /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
     #[inline]
-    fn hscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn hscan_match<'s, K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
     }
 
     /// Cursor-driven `SSCAN` over a set's members.
     #[inline]
-    fn sscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn sscan<'s, K: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
     }
 
     /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn sscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn sscan_match<'s, K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
     }
 
     /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
     #[inline]
-    fn zscan<'s, K: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn zscan<'s, K: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, Vec::new()))
     }
 
     /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn zscan_match<'s, K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue + Send + 's>(
+    fn zscan_match<'s, K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue + Send + 's>(
         &'s self,
         key: K,
         pattern: P,
     ) -> ValkeyFuture<'s, crate::commands::scan::ScanIter<'s, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         Box::pin(crate::commands::scan::ScanIter::new(self, prefix, suffix))
     }        }
 
@@ -227,11 +244,17 @@ macro_rules! implement_glide_commands {
         pub trait Commands: Sized {
             /// Send an already-built command **by value** (no clone). This is
             /// the single required method; every typed command delegates to it.
+            ///
+            /// It is recommended to use typed comnmands.
+            /// Use this only for commands GLIDE does implement.
             fn glide_send_owned_sync(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
 
             /// Typed escape hatch (blocking counterpart of the async
             /// `glide_send`): send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`.
+            ///
+            /// It is recommended to use typed comnmands.
+            /// Use this only for commands GLIDE does implement.
             #[inline]
             fn glide_send_sync<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
                 RV::from_owned_valkey_value(self.glide_send_owned_sync(cmd)?)
@@ -242,7 +265,7 @@ macro_rules! implement_glide_commands {
                 #[inline]
                 #[allow(deprecated)]
                 #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
-                fn $name<$lifetime, $($($g: $b,)+)? RV: FromValkeyValue>(
+                fn $name<$lifetime, $($g: $b,)* RV: FromValkeyValue>(
                     &self $(, $arg: $ty)*
                 ) -> ValkeyResult<RV> {
                     RV::from_owned_valkey_value(self.glide_send_owned_sync(Cmd::$name($($arg),*))?)
@@ -264,414 +287,896 @@ macro_rules! implement_glide_commands {
     /// Cursor-driven `SCAN` over the keyspace, filtered by a `MATCH` pattern.
     // TODO #6872: Use `GlideClusterClient::cluster_scan` for cluster iteration.
     #[inline]
-    fn scan_match<P: ToRedisArgs, RV: FromValkeyValue>(
+    fn scan_match<P: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         pattern: P,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         crate::commands::scan::SyncScanIter::new(self, vec![b"SCAN".to_vec()], suffix)
     }
 
     /// Cursor-driven `HSCAN` over a hash's fields and values.
     #[inline]
-    fn hscan<K: ToRedisArgs, RV: FromValkeyValue>(
+    fn hscan<K: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
     }
 
     /// Cursor-driven `HSCAN`, filtered by a field-name `MATCH` pattern.
     #[inline]
-    fn hscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
+    fn hscan_match<K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"HSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
     }
 
     /// Cursor-driven `SSCAN` over a set's members.
     #[inline]
-    fn sscan<K: ToRedisArgs, RV: FromValkeyValue>(
+    fn sscan<K: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
     }
 
     /// Cursor-driven `SSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn sscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
+    fn sscan_match<K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"SSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
     }
 
     /// Cursor-driven `ZSCAN` over a sorted set's members and scores.
     #[inline]
-    fn zscan<K: ToRedisArgs, RV: FromValkeyValue>(
+    fn zscan<K: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         crate::commands::scan::SyncScanIter::new(self, prefix, Vec::new())
     }
 
     /// Cursor-driven `ZSCAN`, filtered by a `MATCH` pattern.
     #[inline]
-    fn zscan_match<K: ToRedisArgs, P: ToRedisArgs, RV: FromValkeyValue>(
+    fn zscan_match<K: ToValkeyArgs, P: ToValkeyArgs, RV: FromValkeyValue>(
         &self,
         key: K,
         pattern: P,
     ) -> ValkeyResult<crate::commands::scan::SyncScanIter<'_, Self, RV>> {
         let mut prefix = vec![b"ZSCAN".to_vec()];
-        key.write_redis_args(&mut prefix);
+        key.write_valkey_args(&mut prefix);
         let mut suffix = vec![b"MATCH".to_vec()];
-        pattern.write_redis_args(&mut suffix);
+        pattern.write_valkey_args(&mut suffix);
         crate::commands::scan::SyncScanIter::new(self, prefix, suffix)
     }        }
     };
+}
+
+/// Split `&[(key, weight)]` into separate key and weight slices.
+fn unzip_weights<K, W>(items: &[(K, W)]) -> (Vec<&K>, Vec<&W>) {
+    items.iter().map(|(key, weight)| (key, weight)).unzip()
+}
+
+/// Build an owned [`Cmd`]: `build_cmd!(NAME, arg1, arg2, …)`.
+macro_rules! build_cmd {
+    ($name:expr $(, $arg:expr)* $(,)?) => {{
+        let mut command = $crate::cmd::cmd($name);
+        $( command.arg($arg); )*
+        command
+    }};
 }
 
 implement_glide_commands! {
     'a;
 
     // ==== Strings =======================================================
-    /// `GET` (`MGET` when `key` is a slice).
-    fn get<K: ToRedisArgs>(key: K);
+
+    /// `GET`.
+    fn get<K: ToValkeyArgs>(key: K) {
+        build_cmd!(if key.is_single_arg() { "GET" } else { "MGET" }, key)
+    }
+
     /// `MGET`.
-    fn mget<K: ToRedisArgs>(key: K);
+    fn mget<K: ToValkeyArgs>(key: K) {
+        build_cmd!("MGET", key)
+    }
+
     /// `SET`.
-    fn set<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn set<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("SET", key, value)
+    }
+
     /// `SET`.
-    fn set_options<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V, options: SetOptions);
+    fn set_options<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V, options: SetOptions) {
+        build_cmd!("SET", key, value, options)
+    }
+
+    // TODO #7042: Remove deprecated.
     /// `MSET`.
     #[allow(deprecated)]
     #[deprecated(since = "0.2.0", note = "use mset() (same command)")]
-    fn set_multiple<K: ToRedisArgs, V: ToRedisArgs>(items: &'a [(K, V)]);
+    fn set_multiple<K: ToValkeyArgs, V: ToValkeyArgs>(items: &'a [(K, V)]) {
+        build_cmd!("MSET", items)
+    }
+
     /// `MSET`.
-    fn mset<K: ToRedisArgs, V: ToRedisArgs>(items: &'a [(K, V)]);
+    fn mset<K: ToValkeyArgs, V: ToValkeyArgs>(items: &'a [(K, V)]) {
+        build_cmd!("MSET", items)
+    }
+
     /// `SETEX`.
-    fn set_ex<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V, seconds: u64);
+    fn set_ex<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V, seconds: u64) {
+        build_cmd!("SETEX", key, seconds, value)
+    }
+
     /// `PSETEX`.
-    fn pset_ex<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V, milliseconds: u64);
+    fn pset_ex<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V, milliseconds: u64) {
+        build_cmd!("PSETEX", key, milliseconds, value)
+    }
+
     /// `SETNX`.
-    fn set_nx<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn set_nx<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("SETNX", key, value)
+    }
+
     /// `MSETNX`.
-    fn mset_nx<K: ToRedisArgs, V: ToRedisArgs>(items: &'a [(K, V)]);
+    fn mset_nx<K: ToValkeyArgs, V: ToValkeyArgs>(items: &'a [(K, V)]) {
+        build_cmd!("MSETNX", items)
+    }
+
     /// `GETSET`.
-    fn getset<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn getset<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("GETSET", key, value)
+    }
+
     /// `GETRANGE`.
-    fn getrange<K: ToRedisArgs>(key: K, from: isize, to: isize);
+    fn getrange<K: ToValkeyArgs>(key: K, from: isize, to: isize) {
+        build_cmd!("GETRANGE", key, from, to)
+    }
+
     /// `SETRANGE`.
-    fn setrange<K: ToRedisArgs, V: ToRedisArgs>(key: K, offset: isize, value: V);
+    fn setrange<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, offset: isize, value: V) {
+        build_cmd!("SETRANGE", key, offset, value)
+    }
+
     /// `GETEX`.
-    fn get_ex<K: ToRedisArgs>(key: K, expire_at: Expiry);
+    fn get_ex<K: ToValkeyArgs>(key: K, expire_at: Expiry) {
+        build_cmd!("GETEX", key, expire_at)
+    }
+
     /// `GETDEL`.
-    fn get_del<K: ToRedisArgs>(key: K);
+    fn get_del<K: ToValkeyArgs>(key: K) {
+        build_cmd!("GETDEL", key)
+    }
+
     /// `APPEND`.
-    fn append<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
-    /// `INCRBY` (`INCRBYFLOAT` for float deltas).
-    fn incr<K: ToRedisArgs, V: ToRedisArgs>(key: K, delta: V);
+    fn append<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("APPEND", key, value)
+    }
+
+    /// `INCRBY`/`INCRBYFLOAT`
+    fn incr<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, delta: V) {
+        build_cmd!(if delta.describe_numeric_behavior() == ValkeyNumericBehavior::NumberIsFloat {
+            "INCRBYFLOAT"
+        } else {
+            "INCRBY"
+        }, key, delta)
+    }
+
     /// `DECRBY`.
-    fn decr<K: ToRedisArgs, V: ToRedisArgs>(key: K, delta: V);
+    fn decr<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, delta: V) {
+        build_cmd!("DECRBY", key, delta)
+    }
+
     /// `STRLEN`.
-    fn strlen<K: ToRedisArgs>(key: K);
+    fn strlen<K: ToValkeyArgs>(key: K) {
+        build_cmd!("STRLEN", key)
+    }
 
     // ==== Keys & expiry =================================================
+
     /// `KEYS`.
-    fn keys<K: ToRedisArgs>(key: K);
+    fn keys<K: ToValkeyArgs>(key: K) {
+        build_cmd!("KEYS", key)
+    }
+
     /// `DEL`.
-    fn del<K: ToRedisArgs>(key: K);
+    fn del<K: ToValkeyArgs>(key: K) {
+        build_cmd!("DEL", key)
+    }
+
     /// `EXISTS`.
-    fn exists<K: ToRedisArgs>(key: K);
+    fn exists<K: ToValkeyArgs>(key: K) {
+        build_cmd!("EXISTS", key)
+    }
+
     /// `TYPE`.
-    fn key_type<K: ToRedisArgs>(key: K);
+    fn key_type<K: ToValkeyArgs>(key: K) {
+        build_cmd!("TYPE", key)
+    }
+
     /// `EXPIRE`.
-    fn expire<K: ToRedisArgs>(key: K, seconds: i64);
+    fn expire<K: ToValkeyArgs>(key: K, seconds: i64) {
+        build_cmd!("EXPIRE", key, seconds)
+    }
+
     /// `EXPIREAT`.
-    fn expire_at<K: ToRedisArgs>(key: K, ts: i64);
+    fn expire_at<K: ToValkeyArgs>(key: K, ts: i64) {
+        build_cmd!("EXPIREAT", key, ts)
+    }
+
     /// `PEXPIRE`.
-    fn pexpire<K: ToRedisArgs>(key: K, ms: i64);
+    fn pexpire<K: ToValkeyArgs>(key: K, ms: i64) {
+        build_cmd!("PEXPIRE", key, ms)
+    }
+
     /// `PEXPIREAT`.
-    fn pexpire_at<K: ToRedisArgs>(key: K, ts: i64);
+    fn pexpire_at<K: ToValkeyArgs>(key: K, ts: i64) {
+        build_cmd!("PEXPIREAT", key, ts)
+    }
+
     /// `PERSIST`.
-    fn persist<K: ToRedisArgs>(key: K);
+    fn persist<K: ToValkeyArgs>(key: K) {
+        build_cmd!("PERSIST", key)
+    }
+
     /// `TTL`.
-    fn ttl<K: ToRedisArgs>(key: K);
+    fn ttl<K: ToValkeyArgs>(key: K) {
+        build_cmd!("TTL", key)
+    }
+
     /// `PTTL`.
-    fn pttl<K: ToRedisArgs>(key: K);
+    fn pttl<K: ToValkeyArgs>(key: K) {
+        build_cmd!("PTTL", key)
+    }
+
     /// `RENAME`.
-    fn rename<K: ToRedisArgs, N: ToRedisArgs>(key: K, new_key: N);
+    fn rename<K: ToValkeyArgs, N: ToValkeyArgs>(key: K, new_key: N) {
+        build_cmd!("RENAME", key, new_key)
+    }
+
     /// `RENAMENX`.
-    fn rename_nx<K: ToRedisArgs, N: ToRedisArgs>(key: K, new_key: N);
+    fn rename_nx<K: ToValkeyArgs, N: ToValkeyArgs>(key: K, new_key: N) {
+        build_cmd!("RENAMENX", key, new_key)
+    }
+
     /// `UNLINK`.
-    fn unlink<K: ToRedisArgs>(key: K);
+    fn unlink<K: ToValkeyArgs>(key: K) {
+        build_cmd!("UNLINK", key)
+    }
+
     /// `OBJECT ENCODING`.
-    fn object_encoding<K: ToRedisArgs>(key: K);
+    fn object_encoding<K: ToValkeyArgs>(key: K) {
+        build_cmd!("OBJECT", "ENCODING", key)
+    }
+
     /// `OBJECT IDLETIME`.
-    fn object_idletime<K: ToRedisArgs>(key: K);
+    fn object_idletime<K: ToValkeyArgs>(key: K) {
+        build_cmd!("OBJECT", "IDLETIME", key)
+    }
+
     /// `OBJECT FREQ`.
-    fn object_freq<K: ToRedisArgs>(key: K);
+    fn object_freq<K: ToValkeyArgs>(key: K) {
+        build_cmd!("OBJECT", "FREQ", key)
+    }
+
     /// `OBJECT REFCOUNT`.
-    fn object_refcount<K: ToRedisArgs>(key: K);
+    fn object_refcount<K: ToValkeyArgs>(key: K) {
+        build_cmd!("OBJECT", "REFCOUNT", key)
+    }
 
     // ==== Lists =========================================================
+
     /// `BLMOVE`.
-    fn blmove<S: ToRedisArgs, D: ToRedisArgs>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction, timeout: f64);
+    fn blmove<S: ToValkeyArgs, D: ToValkeyArgs>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction, timeout: f64) {
+        build_cmd!("BLMOVE", srckey, dstkey, src_dir, dst_dir, timeout)
+    }
+
     /// `BLMPOP`.
-    fn blmpop<K: ToRedisArgs>(timeout: f64, numkeys: usize, key: K, dir: Direction, count: usize);
+    fn blmpop<K: ToValkeyArgs>(timeout: f64, numkeys: usize, key: K, dir: Direction, count: usize) {
+        build_cmd!("BLMPOP", timeout, numkeys, key, dir, "COUNT", count)
+    }
+
     /// `BLPOP`.
-    fn blpop<K: ToRedisArgs>(key: K, timeout: f64);
+    fn blpop<K: ToValkeyArgs>(key: K, timeout: f64) {
+        build_cmd!("BLPOP", key, timeout)
+    }
+
     /// `BRPOP`.
-    fn brpop<K: ToRedisArgs>(key: K, timeout: f64);
+    fn brpop<K: ToValkeyArgs>(key: K, timeout: f64) {
+        build_cmd!("BRPOP", key, timeout)
+    }
+
     /// `BRPOPLPUSH`.
-    fn brpoplpush<S: ToRedisArgs, D: ToRedisArgs>(srckey: S, dstkey: D, timeout: f64);
+    fn brpoplpush<S: ToValkeyArgs, D: ToValkeyArgs>(srckey: S, dstkey: D, timeout: f64) {
+        build_cmd!("BRPOPLPUSH", srckey, dstkey, timeout)
+    }
+
     /// `LINDEX`.
-    fn lindex<K: ToRedisArgs>(key: K, index: isize);
+    fn lindex<K: ToValkeyArgs>(key: K, index: isize) {
+        build_cmd!("LINDEX", key, index)
+    }
+
     /// `LINSERT`.
-    fn linsert_before<K: ToRedisArgs, P: ToRedisArgs, V: ToRedisArgs>(key: K, pivot: P, value: V);
+    fn linsert_before<K: ToValkeyArgs, P: ToValkeyArgs, V: ToValkeyArgs>(key: K, pivot: P, value: V) {
+        build_cmd!("LINSERT", key, "BEFORE", pivot, value)
+    }
+
     /// `LINSERT`.
-    fn linsert_after<K: ToRedisArgs, P: ToRedisArgs, V: ToRedisArgs>(key: K, pivot: P, value: V);
+    fn linsert_after<K: ToValkeyArgs, P: ToValkeyArgs, V: ToValkeyArgs>(key: K, pivot: P, value: V) {
+        build_cmd!("LINSERT", key, "AFTER", pivot, value)
+    }
+
     /// `LLEN`.
-    fn llen<K: ToRedisArgs>(key: K);
+    fn llen<K: ToValkeyArgs>(key: K) {
+        build_cmd!("LLEN", key)
+    }
+
     /// `LMOVE`.
-    fn lmove<S: ToRedisArgs, D: ToRedisArgs>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction);
+    fn lmove<S: ToValkeyArgs, D: ToValkeyArgs>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction) {
+        build_cmd!("LMOVE", srckey, dstkey, src_dir, dst_dir)
+    }
+
     /// `LMPOP`.
-    fn lmpop<K: ToRedisArgs>(numkeys: usize, key: K, dir: Direction, count: usize);
+    fn lmpop<K: ToValkeyArgs>(numkeys: usize, key: K, dir: Direction, count: usize) {
+        build_cmd!("LMPOP", numkeys, key, dir, "COUNT", count)
+    }
+
     /// `LPOP`.
-    fn lpop<K: ToRedisArgs>(key: K, count: Option<core::num::NonZeroUsize>);
+    fn lpop<K: ToValkeyArgs>(key: K, count: Option<core::num::NonZeroUsize>) {
+        build_cmd!("LPOP", key, count)
+    }
+
     /// `LPOS`.
-    fn lpos<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V, options: LposOptions);
+    fn lpos<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V, options: LposOptions) {
+        build_cmd!("LPOS", key, value, options)
+    }
+
     /// `LPUSH`.
-    fn lpush<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn lpush<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("LPUSH", key, value)
+    }
+
     /// `LPUSHX`.
-    fn lpush_exists<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn lpush_exists<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("LPUSHX", key, value)
+    }
+
     /// `LRANGE`.
-    fn lrange<K: ToRedisArgs>(key: K, start: isize, stop: isize);
+    fn lrange<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("LRANGE", key, start, stop)
+    }
+
     /// `LREM`.
-    fn lrem<K: ToRedisArgs, V: ToRedisArgs>(key: K, count: isize, value: V);
+    fn lrem<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, count: isize, value: V) {
+        build_cmd!("LREM", key, count, value)
+    }
+
     /// `LTRIM`.
-    fn ltrim<K: ToRedisArgs>(key: K, start: isize, stop: isize);
+    fn ltrim<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("LTRIM", key, start, stop)
+    }
+
     /// `LSET`.
-    fn lset<K: ToRedisArgs, V: ToRedisArgs>(key: K, index: isize, value: V);
+    fn lset<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, index: isize, value: V) {
+        build_cmd!("LSET", key, index, value)
+    }
+
     /// `RPOP`.
-    fn rpop<K: ToRedisArgs>(key: K, count: Option<core::num::NonZeroUsize>);
+    fn rpop<K: ToValkeyArgs>(key: K, count: Option<core::num::NonZeroUsize>) {
+        build_cmd!("RPOP", key, count)
+    }
+
     /// `RPOPLPUSH`.
-    fn rpoplpush<K: ToRedisArgs, D: ToRedisArgs>(key: K, dstkey: D);
+    fn rpoplpush<K: ToValkeyArgs, D: ToValkeyArgs>(key: K, dstkey: D) {
+        build_cmd!("RPOPLPUSH", key, dstkey)
+    }
+
     /// `RPUSH`.
-    fn rpush<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn rpush<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("RPUSH", key, value)
+    }
+
     /// `RPUSHX`.
-    fn rpush_exists<K: ToRedisArgs, V: ToRedisArgs>(key: K, value: V);
+    fn rpush_exists<K: ToValkeyArgs, V: ToValkeyArgs>(key: K, value: V) {
+        build_cmd!("RPUSHX", key, value)
+    }
 
     // ==== Hashes ========================================================
-    /// `HGET` (`HMGET` when `field` is a slice).
-    fn hget<K: ToRedisArgs, F: ToRedisArgs>(key: K, field: F);
+
+    /// `HGET`/`HMGET`.
+    fn hget<K: ToValkeyArgs, F: ToValkeyArgs>(key: K, field: F) {
+        build_cmd!(if field.is_single_arg() { "HGET" } else { "HMGET" }, key, field)
+    }
+
     /// `HDEL`.
-    fn hdel<K: ToRedisArgs, F: ToRedisArgs>(key: K, field: F);
+    fn hdel<K: ToValkeyArgs, F: ToValkeyArgs>(key: K, field: F) {
+        build_cmd!("HDEL", key, field)
+    }
+
     /// `HSET`.
-    fn hset<K: ToRedisArgs, F: ToRedisArgs, V: ToRedisArgs>(key: K, field: F, value: V);
+    fn hset<K: ToValkeyArgs, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, field: F, value: V) {
+        build_cmd!("HSET", key, field, value)
+    }
+
     /// `HSETNX`.
-    fn hset_nx<K: ToRedisArgs, F: ToRedisArgs, V: ToRedisArgs>(key: K, field: F, value: V);
+    fn hset_nx<K: ToValkeyArgs, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, field: F, value: V) {
+        build_cmd!("HSETNX", key, field, value)
+    }
+
     /// `HMSET`.
-    fn hset_multiple<K: ToRedisArgs, F: ToRedisArgs, V: ToRedisArgs>(key: K, items: &'a [(F, V)]);
-    /// `HINCRBY` (`HINCRBYFLOAT` for float deltas).
-    fn hincr<K: ToRedisArgs, F: ToRedisArgs, D: ToRedisArgs>(key: K, field: F, delta: D);
+    fn hset_multiple<K: ToValkeyArgs, F: ToValkeyArgs, V: ToValkeyArgs>(key: K, items: &'a [(F, V)]) {
+        build_cmd!("HMSET", key, items)
+    }
+
+    /// `HINCRBY`/`HINCRBYFLOAT`.
+    fn hincr<K: ToValkeyArgs, F: ToValkeyArgs, D: ToValkeyArgs>(key: K, field: F, delta: D) {
+        build_cmd!(if delta.describe_numeric_behavior() == ValkeyNumericBehavior::NumberIsFloat {
+            "HINCRBYFLOAT"
+        } else {
+            "HINCRBY"
+        }, key, field, delta)
+    }
+
     /// `HEXISTS`.
-    fn hexists<K: ToRedisArgs, F: ToRedisArgs>(key: K, field: F);
+    fn hexists<K: ToValkeyArgs, F: ToValkeyArgs>(key: K, field: F) {
+        build_cmd!("HEXISTS", key, field)
+    }
+
     /// `HKEYS`.
-    fn hkeys<K: ToRedisArgs>(key: K);
+    fn hkeys<K: ToValkeyArgs>(key: K) {
+        build_cmd!("HKEYS", key)
+    }
+
     /// `HVALS`.
-    fn hvals<K: ToRedisArgs>(key: K);
+    fn hvals<K: ToValkeyArgs>(key: K) {
+        build_cmd!("HVALS", key)
+    }
+
     /// `HGETALL`.
-    fn hgetall<K: ToRedisArgs>(key: K);
+    fn hgetall<K: ToValkeyArgs>(key: K) {
+        build_cmd!("HGETALL", key)
+    }
+
     /// `HLEN`.
-    fn hlen<K: ToRedisArgs>(key: K);
+    fn hlen<K: ToValkeyArgs>(key: K) {
+        build_cmd!("HLEN", key)
+    }
 
     // ==== Sets ==========================================================
+
     /// `SADD`.
-    fn sadd<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn sadd<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("SADD", key, member)
+    }
+
     /// `SCARD`.
-    fn scard<K: ToRedisArgs>(key: K);
+    fn scard<K: ToValkeyArgs>(key: K) {
+        build_cmd!("SCARD", key)
+    }
+
     /// `SDIFF`.
-    fn sdiff<K: ToRedisArgs>(keys: K);
+    fn sdiff<K: ToValkeyArgs>(keys: K) {
+        build_cmd!("SDIFF", keys)
+    }
+
     /// `SDIFFSTORE`.
-    fn sdiffstore<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: K);
+    fn sdiffstore<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: K) {
+        build_cmd!("SDIFFSTORE", dstkey, keys)
+    }
+
     /// `SINTER`.
-    fn sinter<K: ToRedisArgs>(keys: K);
+    fn sinter<K: ToValkeyArgs>(keys: K) {
+        build_cmd!("SINTER", keys)
+    }
+
     /// `SINTERSTORE`.
-    fn sinterstore<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: K);
+    fn sinterstore<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: K) {
+        build_cmd!("SINTERSTORE", dstkey, keys)
+    }
+
     /// `SISMEMBER`.
-    fn sismember<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn sismember<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("SISMEMBER", key, member)
+    }
+
     /// `SMISMEMBER`.
-    fn smismember<K: ToRedisArgs, M: ToRedisArgs>(key: K, members: M);
+    fn smismember<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, members: M) {
+        build_cmd!("SMISMEMBER", key, members)
+    }
+
     /// `SMEMBERS`.
-    fn smembers<K: ToRedisArgs>(key: K);
+    fn smembers<K: ToValkeyArgs>(key: K) {
+        build_cmd!("SMEMBERS", key)
+    }
+
     /// `SMOVE`.
-    fn smove<S: ToRedisArgs, D: ToRedisArgs, M: ToRedisArgs>(srckey: S, dstkey: D, member: M);
+    fn smove<S: ToValkeyArgs, D: ToValkeyArgs, M: ToValkeyArgs>(srckey: S, dstkey: D, member: M) {
+        build_cmd!("SMOVE", srckey, dstkey, member)
+    }
+
     /// `SPOP`.
-    fn spop<K: ToRedisArgs>(key: K);
+    fn spop<K: ToValkeyArgs>(key: K) {
+        build_cmd!("SPOP", key)
+    }
+
     /// `SRANDMEMBER`.
-    fn srandmember<K: ToRedisArgs>(key: K);
+    fn srandmember<K: ToValkeyArgs>(key: K) {
+        build_cmd!("SRANDMEMBER", key)
+    }
+
     /// `SRANDMEMBER`.
-    fn srandmember_multiple<K: ToRedisArgs>(key: K, count: usize);
+    fn srandmember_multiple<K: ToValkeyArgs>(key: K, count: usize) {
+        build_cmd!("SRANDMEMBER", key, count)
+    }
+
     /// `SREM`.
-    fn srem<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn srem<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("SREM", key, member)
+    }
+
     /// `SUNION`.
-    fn sunion<K: ToRedisArgs>(keys: K);
+    fn sunion<K: ToValkeyArgs>(keys: K) {
+        build_cmd!("SUNION", keys)
+    }
+
     /// `SUNIONSTORE`.
-    fn sunionstore<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: K);
+    fn sunionstore<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: K) {
+        build_cmd!("SUNIONSTORE", dstkey, keys)
+    }
 
     // ==== Sorted sets ===================================================
+
     /// `ZADD`.
-    fn zadd<K: ToRedisArgs, S: ToRedisArgs, M: ToRedisArgs>(key: K, member: M, score: S);
+    fn zadd<K: ToValkeyArgs, S: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M, score: S) {
+        build_cmd!("ZADD", key, score, member)
+    }
+
     /// `ZADD`.
-    fn zadd_multiple<K: ToRedisArgs, S: ToRedisArgs, M: ToRedisArgs>(key: K, items: &'a [(S, M)]);
+    fn zadd_multiple<K: ToValkeyArgs, S: ToValkeyArgs, M: ToValkeyArgs>(key: K, items: &'a [(S, M)]) {
+        build_cmd!("ZADD", key, items)
+    }
+
     /// `ZCARD`.
-    fn zcard<K: ToRedisArgs>(key: K);
+    fn zcard<K: ToValkeyArgs>(key: K) {
+        build_cmd!("ZCARD", key)
+    }
+
     /// `ZCOUNT`.
-    fn zcount<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
+    fn zcount<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZCOUNT", key, min, max)
+    }
+
     /// `ZINCRBY`.
-    fn zincr<K: ToRedisArgs, M: ToRedisArgs, D: ToRedisArgs>(key: K, member: M, delta: D);
+    fn zincr<K: ToValkeyArgs, M: ToValkeyArgs, D: ToValkeyArgs>(key: K, member: M, delta: D) {
+        build_cmd!("ZINCRBY", key, delta, member)
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
+    fn zinterstore<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys)
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore_min<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
+    fn zinterstore_min<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MIN")
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore_max<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
+    fn zinterstore_max<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MAX")
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
+    fn zinterstore_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys, "WEIGHTS", weights)
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore_min_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
+    fn zinterstore_min_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MIN", "WEIGHTS", weights)
+    }
+
     /// `ZINTERSTORE`.
-    fn zinterstore_max_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
+    fn zinterstore_max_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZINTERSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MAX", "WEIGHTS", weights)
+    }
+
     /// `ZLEXCOUNT`.
-    fn zlexcount<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
+    fn zlexcount<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZLEXCOUNT", key, min, max)
+    }
+
     /// `BZPOPMAX`.
-    fn bzpopmax<K: ToRedisArgs>(key: K, timeout: f64);
+    fn bzpopmax<K: ToValkeyArgs>(key: K, timeout: f64) {
+        build_cmd!("BZPOPMAX", key, timeout)
+    }
+
     /// `ZPOPMAX`.
-    fn zpopmax<K: ToRedisArgs>(key: K, count: isize);
+    fn zpopmax<K: ToValkeyArgs>(key: K, count: isize) {
+        build_cmd!("ZPOPMAX", key, count)
+    }
+
     /// `BZPOPMIN`.
-    fn bzpopmin<K: ToRedisArgs>(key: K, timeout: f64);
+    fn bzpopmin<K: ToValkeyArgs>(key: K, timeout: f64) {
+        build_cmd!("BZPOPMIN", key, timeout)
+    }
+
     /// `ZPOPMIN`.
-    fn zpopmin<K: ToRedisArgs>(key: K, count: isize);
+    fn zpopmin<K: ToValkeyArgs>(key: K, count: isize) {
+        build_cmd!("ZPOPMIN", key, count)
+    }
+
     /// `BZMPOP`.
-    fn bzmpop_max<K: ToRedisArgs>(timeout: f64, keys: &'a [K], count: isize);
+    fn bzmpop_max<K: ToValkeyArgs>(timeout: f64, keys: &'a [K], count: isize) {
+        build_cmd!("BZMPOP", timeout, keys.len(), keys, "MAX", "COUNT", count)
+    }
+
     /// `ZMPOP`.
-    fn zmpop_max<K: ToRedisArgs>(keys: &'a [K], count: isize);
+    fn zmpop_max<K: ToValkeyArgs>(keys: &'a [K], count: isize) {
+        build_cmd!("ZMPOP", keys.len(), keys, "MAX", "COUNT", count)
+    }
+
     /// `BZMPOP`.
-    fn bzmpop_min<K: ToRedisArgs>(timeout: f64, keys: &'a [K], count: isize);
+    fn bzmpop_min<K: ToValkeyArgs>(timeout: f64, keys: &'a [K], count: isize) {
+        build_cmd!("BZMPOP", timeout, keys.len(), keys, "MIN", "COUNT", count)
+    }
+
     /// `ZMPOP`.
-    fn zmpop_min<K: ToRedisArgs>(keys: &'a [K], count: isize);
+    fn zmpop_min<K: ToValkeyArgs>(keys: &'a [K], count: isize) {
+        build_cmd!("ZMPOP", keys.len(), keys, "MIN", "COUNT", count)
+    }
+
     /// `ZRANDMEMBER`.
-    fn zrandmember<K: ToRedisArgs>(key: K, count: Option<isize>);
-    /// `ZRANDMEMBER`.
-    fn zrandmember_withscores<K: ToRedisArgs>(key: K, count: isize);
+    fn zrandmember<K: ToValkeyArgs>(key: K, count: Option<isize>) {
+        build_cmd!("ZRANDMEMBER", key, count)
+    }
+
+    /// `ZRANDMEMBER WITHSCORES`.
+    fn zrandmember_withscores<K: ToValkeyArgs>(key: K, count: isize) {
+        build_cmd!("ZRANDMEMBER", key, count, "WITHSCORES")
+    }
+
     /// `ZRANGE`.
-    fn zrange<K: ToRedisArgs>(key: K, start: isize, stop: isize);
-    /// `ZRANGE`.
-    fn zrange_withscores<K: ToRedisArgs>(key: K, start: isize, stop: isize);
+    fn zrange<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("ZRANGE", key, start, stop)
+    }
+
+    /// `ZRANGE WITHSCORES`.
+    fn zrange_withscores<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("ZRANGE", key, start, stop, "WITHSCORES")
+    }
+
     /// `ZRANGEBYLEX`.
-    fn zrangebylex<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
-    /// `ZRANGEBYLEX`.
-    fn zrangebylex_limit<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM, offset: isize, count: isize);
+    fn zrangebylex<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZRANGEBYLEX", key, min, max)
+    }
+
+    /// `ZRANGEBYLEX LIMIT`.
+    fn zrangebylex_limit<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM, offset: isize, count: isize) {
+        build_cmd!("ZRANGEBYLEX", key, min, max, "LIMIT", offset, count)
+    }
+
     /// `ZREVRANGEBYLEX`.
-    fn zrevrangebylex<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M);
-    /// `ZREVRANGEBYLEX`.
-    fn zrevrangebylex_limit<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M, offset: isize, count: isize);
+    fn zrevrangebylex<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M) {
+        build_cmd!("ZREVRANGEBYLEX", key, max, min)
+    }
+
+    /// `ZREVRANGEBYLEX LIMIT`.
+    fn zrevrangebylex_limit<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M, offset: isize, count: isize) {
+        build_cmd!("ZREVRANGEBYLEX", key, max, min, "LIMIT", offset, count)
+    }
+
     /// `ZRANGEBYSCORE`.
-    fn zrangebyscore<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
-    /// `ZRANGEBYSCORE`.
-    fn zrangebyscore_withscores<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
-    /// `ZRANGEBYSCORE`.
-    fn zrangebyscore_limit<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM, offset: isize, count: isize);
-    /// `ZRANGEBYSCORE`.
-    fn zrangebyscore_limit_withscores<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM, offset: isize, count: isize);
+    fn zrangebyscore<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZRANGEBYSCORE", key, min, max)
+    }
+
+    /// `ZRANGEBYSCORE WITHSCORES`.
+    fn zrangebyscore_withscores<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES")
+    }
+
+    /// `ZRANGEBYSCORE LIMIT`.
+    fn zrangebyscore_limit<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM, offset: isize, count: isize) {
+        build_cmd!("ZRANGEBYSCORE", key, min, max, "LIMIT", offset, count)
+    }
+
+    /// `ZRANGEBYSCORE WITHSCORES LIMIT`.
+    fn zrangebyscore_limit_withscores<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM, offset: isize, count: isize) {
+        build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count)
+    }
+
     /// `ZRANK`.
-    fn zrank<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn zrank<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("ZRANK", key, member)
+    }
+
     /// `ZREM`.
-    fn zrem<K: ToRedisArgs, M: ToRedisArgs>(key: K, members: M);
+    fn zrem<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, members: M) {
+        build_cmd!("ZREM", key, members)
+    }
+
     /// `ZREMRANGEBYLEX`.
-    fn zrembylex<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
+    fn zrembylex<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZREMRANGEBYLEX", key, min, max)
+    }
+
     /// `ZREMRANGEBYRANK`.
-    fn zremrangebyrank<K: ToRedisArgs>(key: K, start: isize, stop: isize);
+    fn zremrangebyrank<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("ZREMRANGEBYRANK", key, start, stop)
+    }
+
     /// `ZREMRANGEBYSCORE`.
-    fn zrembyscore<K: ToRedisArgs, M: ToRedisArgs, MM: ToRedisArgs>(key: K, min: M, max: MM);
+    fn zrembyscore<K: ToValkeyArgs, M: ToValkeyArgs, MM: ToValkeyArgs>(key: K, min: M, max: MM) {
+        build_cmd!("ZREMRANGEBYSCORE", key, min, max)
+    }
+
     /// `ZREVRANGE`.
-    fn zrevrange<K: ToRedisArgs>(key: K, start: isize, stop: isize);
-    /// `ZREVRANGE`.
-    fn zrevrange_withscores<K: ToRedisArgs>(key: K, start: isize, stop: isize);
+    fn zrevrange<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("ZREVRANGE", key, start, stop)
+    }
+
+    /// `ZREVRANGE WITHSCORES`.
+    fn zrevrange_withscores<K: ToValkeyArgs>(key: K, start: isize, stop: isize) {
+        build_cmd!("ZREVRANGE", key, start, stop, "WITHSCORES")
+    }
+
     /// `ZREVRANGEBYSCORE`.
-    fn zrevrangebyscore<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M);
-    /// `ZREVRANGEBYSCORE`.
-    fn zrevrangebyscore_withscores<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M);
-    /// `ZREVRANGEBYSCORE`.
-    fn zrevrangebyscore_limit<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M, offset: isize, count: isize);
-    /// `ZREVRANGEBYSCORE`.
-    fn zrevrangebyscore_limit_withscores<K: ToRedisArgs, MM: ToRedisArgs, M: ToRedisArgs>(key: K, max: MM, min: M, offset: isize, count: isize);
+    fn zrevrangebyscore<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M) {
+        build_cmd!("ZREVRANGEBYSCORE", key, max, min)
+    }
+
+    /// `ZREVRANGEBYSCORE WITHSCORES`.
+    fn zrevrangebyscore_withscores<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M) {
+        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES")
+    }
+
+    /// `ZREVRANGEBYSCORE LIMIT`.
+    fn zrevrangebyscore_limit<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M, offset: isize, count: isize) {
+        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "LIMIT", offset, count)
+    }
+
+    /// `ZREVRANGEBYSCORE WITHSCORES LIMIT`.
+    fn zrevrangebyscore_limit_withscores<K: ToValkeyArgs, MM: ToValkeyArgs, M: ToValkeyArgs>(key: K, max: MM, min: M, offset: isize, count: isize) {
+        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES", "LIMIT", offset, count)
+    }
+
     /// `ZREVRANK`.
-    fn zrevrank<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn zrevrank<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("ZREVRANK", key, member)
+    }
+
     /// `ZSCORE`.
-    fn zscore<K: ToRedisArgs, M: ToRedisArgs>(key: K, member: M);
+    fn zscore<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, member: M) {
+        build_cmd!("ZSCORE", key, member)
+    }
+
     /// `ZMSCORE`.
-    fn zscore_multiple<K: ToRedisArgs, M: ToRedisArgs>(key: K, members: &'a [M]);
+    fn zscore_multiple<K: ToValkeyArgs, M: ToValkeyArgs>(key: K, members: &'a [M]) {
+        build_cmd!("ZMSCORE", key, members)
+    }
+
     /// `ZUNIONSTORE`.
-    fn zunionstore<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
-    /// `ZUNIONSTORE`.
-    fn zunionstore_min<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
-    /// `ZUNIONSTORE`.
-    fn zunionstore_max<D: ToRedisArgs, K: ToRedisArgs>(dstkey: D, keys: &'a [K]);
-    /// `ZUNIONSTORE`.
-    fn zunionstore_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
-    /// `ZUNIONSTORE`.
-    fn zunionstore_min_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
-    /// `ZUNIONSTORE`.
-    fn zunionstore_max_weights<D: ToRedisArgs, K: ToRedisArgs, W: ToRedisArgs>(dstkey: D, keys: &'a [(K, W)]);
+    fn zunionstore<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys)
+    }
+
+    /// `ZUNIONSTORE AGGREGATE MIN`.
+    fn zunionstore_min<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MIN")
+    }
+
+    /// `ZUNIONSTORE AGGREGATE MAX`.
+    fn zunionstore_max<D: ToValkeyArgs, K: ToValkeyArgs>(dstkey: D, keys: &'a [K]) {
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MAX")
+    }
+
+    /// `ZUNIONSTORE WEIGHTS`.
+    fn zunionstore_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys, "WEIGHTS", weights)
+    }
+
+    /// `ZUNIONSTORE AGGREGATE MIN WEIGHTS`.
+    fn zunionstore_min_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MIN", "WEIGHTS", weights)
+    }
+
+    /// `ZUNIONSTORE AGGREGATE MAX WEIGHTS`.
+    fn zunionstore_max_weights<D: ToValkeyArgs, K: ToValkeyArgs, W: ToValkeyArgs>(dstkey: D, keys: &'a [(K, W)]) {
+        let (keys, weights) = unzip_weights(keys);
+        build_cmd!("ZUNIONSTORE", dstkey, keys.len(), keys, "AGGREGATE", "MAX", "WEIGHTS", weights)
+    }
 
     // ==== HyperLogLog ===================================================
+
     /// `PFADD`.
-    fn pfadd<K: ToRedisArgs, E: ToRedisArgs>(key: K, element: E);
+    fn pfadd<K: ToValkeyArgs, E: ToValkeyArgs>(key: K, element: E) {
+        build_cmd!("PFADD", key, element)
+    }
+
     /// `PFCOUNT`.
-    fn pfcount<K: ToRedisArgs>(key: K);
+    fn pfcount<K: ToValkeyArgs>(key: K) {
+        build_cmd!("PFCOUNT", key)
+    }
+
     /// `PFMERGE`.
-    fn pfmerge<D: ToRedisArgs, S: ToRedisArgs>(dstkey: D, srckeys: S);
+    fn pfmerge<D: ToValkeyArgs, S: ToValkeyArgs>(dstkey: D, srckeys: S) {
+        build_cmd!("PFMERGE", dstkey, srckeys)
+    }
 
     // ==== Bitmaps =======================================================
+
     /// `SETBIT`.
-    fn setbit<K: ToRedisArgs>(key: K, offset: usize, value: bool);
+    fn setbit<K: ToValkeyArgs>(key: K, offset: usize, value: bool) {
+        build_cmd!("SETBIT", key, offset, i32::from(value))
+    }
+
     /// `GETBIT`.
-    fn getbit<K: ToRedisArgs>(key: K, offset: usize);
+    fn getbit<K: ToValkeyArgs>(key: K, offset: usize) {
+        build_cmd!("GETBIT", key, offset)
+    }
+
     /// `BITCOUNT`.
-    fn bitcount<K: ToRedisArgs>(key: K);
+    fn bitcount<K: ToValkeyArgs>(key: K) {
+        build_cmd!("BITCOUNT", key)
+    }
+
     /// `BITCOUNT`.
-    fn bitcount_range<K: ToRedisArgs>(key: K, start: usize, end: usize);
-    /// `BITOP`.
-    fn bit_and<D: ToRedisArgs, S: ToRedisArgs>(dstkey: D, srckeys: S);
-    /// `BITOP`.
-    fn bit_or<D: ToRedisArgs, S: ToRedisArgs>(dstkey: D, srckeys: S);
-    /// `BITOP`.
-    fn bit_xor<D: ToRedisArgs, S: ToRedisArgs>(dstkey: D, srckeys: S);
-    /// `BITOP`.
-    fn bit_not<D: ToRedisArgs, S: ToRedisArgs>(dstkey: D, srckey: S);
+    fn bitcount_range<K: ToValkeyArgs>(key: K, start: usize, end: usize) {
+        build_cmd!("BITCOUNT", key, start, end)
+    }
+
+    /// `BITOP AND`.
+    fn bit_and<D: ToValkeyArgs, S: ToValkeyArgs>(dstkey: D, srckeys: S) {
+        build_cmd!("BITOP", "AND", dstkey, srckeys)
+    }
+
+    /// `BITOP OR`.
+    fn bit_or<D: ToValkeyArgs, S: ToValkeyArgs>(dstkey: D, srckeys: S) {
+        build_cmd!("BITOP", "OR", dstkey, srckeys)
+    }
+
+    /// `BITOP XOR`.
+    fn bit_xor<D: ToValkeyArgs, S: ToValkeyArgs>(dstkey: D, srckeys: S) {
+        build_cmd!("BITOP", "XOR", dstkey, srckeys)
+    }
+
+    /// `BITOP NOT`.
+    fn bit_not<D: ToValkeyArgs, S: ToValkeyArgs>(dstkey: D, srckey: S) {
+        build_cmd!("BITOP", "NOT", dstkey, srckey)
+    }
 
     // ==== Pub/Sub =======================================================
+
     /// `PUBLISH`.
-    fn publish<K: ToRedisArgs, E: ToRedisArgs>(channel: K, message: E);
+    fn publish<K: ToValkeyArgs, E: ToValkeyArgs>(channel: K, message: E) {
+        build_cmd!("PUBLISH", channel, message)
+    }
 }

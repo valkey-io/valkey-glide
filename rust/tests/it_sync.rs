@@ -57,10 +57,10 @@ fn sync_standalone_set_options() {
     let k = common::key("sync:opt");
 
     let _: () = c.set(&k, "first").unwrap();
-    // NX must not overwrite an existing key. Use redis::SetOptions.
-    let opts = glide::redis::SetOptions::default()
-        .conditional_set(glide::redis::ExistenceCheck::NX)
-        .with_expiration(glide::redis::SetExpiry::EX(50));
+    // NX must not overwrite an existing key. Use SetOptions.
+    let opts = glide::SetOptions::default()
+        .conditional_set(glide::ExistenceCheck::NX)
+        .with_expiration(glide::SetExpiry::EX(50));
     let _: () = c.set_options(&k, "second", opts).unwrap();
     let v: Option<String> = c.get(&k).unwrap();
     assert_eq!(v.as_deref(), Some("first"));

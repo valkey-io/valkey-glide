@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 
 pub mod client;
+pub mod cmd;
 pub mod commands;
 pub mod config;
 pub mod error;
@@ -22,6 +23,7 @@ pub mod sync;
 pub use client::{
     ClusterScanCursor, GlideClient, GlideClusterClient, PubSubMessage, PubSubMessageKind,
 };
+pub use cmd::{Cmd, cmd};
 pub use error::GlideError;
 pub use executor::{CommandExecutor, CustomCommand};
 pub use pipeline_options::PipelineOptions;
@@ -48,9 +50,9 @@ pub use commands::prelude::*;
 
 /// All shared option types.
 pub use commands::options::{
-    ClientPauseMode, ConditionalChange, ExpireOptions, FlushMode, FunctionRestorePolicy,
-    HashFieldConditionalChange, Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions,
-    SetExpiry,
+    ClientPauseMode, ConditionalChange, Direction, ExistenceCheck, ExpireOptions, Expiry,
+    FlushMode, FunctionRestorePolicy, HashFieldConditionalChange, Limit, LposOptions,
+    MigrateOptions, ObjectType, OrderBy, RestoreOptions, SetExpiry, SetOptions,
 };
 
 /// Family-specific option/type re-exports.
@@ -130,12 +132,8 @@ pub use commands::scan::SyncScanIter;
 pub use redis;
 
 // TODO #7024: Don't expose.
-/// Argument types appearing in command signatures (`lmpop`, `lpos`, …).
-pub use redis::{Direction, LposOptions};
-
-// TODO #7024: Don't expose.
 /// Error and conversion types (`RedisResult`, `FromRedisValue`, …).
-pub use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, ToRedisArgs, cmd};
+pub use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, ToRedisArgs};
 
 // TODO #7024: Don't expose.
 /// Pipeline / transaction builder (`pipe()`; run with

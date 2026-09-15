@@ -316,13 +316,14 @@ mod tests {
     // policy derived from the command keyword. No server is involved: the mock
     // implements the `CommandExecutor` seam and captures what it is handed.
     mod dispatch {
+        use crate::cmd::Cmd;
         use crate::executor::{CommandExecutor, CustomCommand};
         use crate::routes::{Route, SlotType};
         use async_trait::async_trait;
+        use redis::Value;
         use redis::cluster_routing::{
             MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         };
-        use redis::{Cmd, Value};
         use std::sync::Mutex;
 
         /// A deterministic, server-free `CommandExecutor` that records the last
@@ -341,6 +342,7 @@ mod tests {
                 routing: Option<RoutingInfo>,
             ) -> crate::ValkeyResult<Value> {
                 let args: Vec<Vec<u8>> = cmd
+                    .as_redis()
                     .args_iter()
                     .map(|a| match a {
                         redis::Arg::Simple(s) => s.to_vec(),

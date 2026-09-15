@@ -2,19 +2,21 @@
 //! Scripting & function commands. Mirrors Python's scripting surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::{FlushMode, FunctionRestorePolicy};
 use crate::executor::CommandExecutor;
 use crate::routes::Route;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs, Value};
+use redis::Value;
 
 /// Scripting and function commands (`EVAL`, `EVALSHA`, `SCRIPT ...`, `FCALL`, ...).
 #[async_trait]
 pub trait ScriptingCommands: CommandExecutor {
     /// Evaluate a Lua `script` (`EVAL`). Returns the raw reply.
-    async fn eval<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn eval<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         script: &str,
         keys: &[K],
@@ -32,7 +34,7 @@ pub trait ScriptingCommands: CommandExecutor {
     }
 
     /// Evaluate a cached script by its SHA1 hash (`EVALSHA`).
-    async fn evalsha<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn evalsha<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         sha1: &str,
         keys: &[K],
@@ -77,7 +79,7 @@ pub trait ScriptingCommands: CommandExecutor {
     }
 
     /// Invoke a function registered with `FUNCTION LOAD` (`FCALL`).
-    async fn fcall<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn fcall<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         function: &str,
         keys: &[K],
@@ -95,7 +97,7 @@ pub trait ScriptingCommands: CommandExecutor {
     }
 
     /// Read-only variant of [`ScriptingCommands::fcall`] (`FCALL_RO`).
-    async fn fcall_ro<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn fcall_ro<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         function: &str,
         keys: &[K],
@@ -115,7 +117,7 @@ pub trait ScriptingCommands: CommandExecutor {
     /// `FCALL` routed to specific cluster node(s) (`route`). Keyless function
     /// calls are commonly invoked with an explicit route (e.g. `AllPrimaries`);
     /// on a standalone client the route is ignored.
-    async fn fcall_route<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn fcall_route<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         function: &str,
         keys: &[K],
@@ -130,13 +132,13 @@ pub trait ScriptingCommands: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(&cmd));
+        let routing = route.to_routing_info(Some(cmd.as_redis()));
         self.execute_command(cmd, Some(routing)).await
     }
 
     /// Read-only `FCALL_RO` routed to specific cluster node(s) (`route`). On a
     /// standalone client the route is ignored.
-    async fn fcall_ro_route<K: ToRedisArgs + Send + Sync, A: ToRedisArgs + Send + Sync>(
+    async fn fcall_ro_route<K: ToValkeyArgs + Send + Sync, A: ToValkeyArgs + Send + Sync>(
         &self,
         function: &str,
         keys: &[K],
@@ -151,7 +153,7 @@ pub trait ScriptingCommands: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(&cmd));
+        let routing = route.to_routing_info(Some(cmd.as_redis()));
         self.execute_command(cmd, Some(routing)).await
     }
 
@@ -214,7 +216,7 @@ pub trait ScriptingCommands: CommandExecutor {
 
     /// Restore function libraries from a `FUNCTION DUMP` payload
     /// (`FUNCTION RESTORE`).
-    async fn function_restore<P: ToRedisArgs + Send>(
+    async fn function_restore<P: ToValkeyArgs + Send>(
         &self,
         payload: P,
         policy: FunctionRestorePolicy,

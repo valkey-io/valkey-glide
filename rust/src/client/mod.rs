@@ -5,6 +5,7 @@
 //! connects to a cluster. Both wrap the shared `glide_core::client::Client` and
 //! implement [`CommandExecutor`], so all command family traits apply to them.
 
+use crate::cmd::Cmd;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::error::GlideError;
 use crate::executor::CommandExecutor;
@@ -16,7 +17,7 @@ use bytes::Bytes;
 use glide_core::client::Client as CoreClient;
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use redis::cluster_routing::RoutingInfo;
-use redis::{ClusterScanArgs, Cmd, PushInfo, PushKind, ScanStateRC, Value};
+use redis::{ClusterScanArgs, PushInfo, PushKind, ScanStateRC, Value};
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -303,7 +304,7 @@ impl CommandExecutor for GlideClient {
         // so we operate on a cheap clone — exactly what every wrapper does.
         let mut client = self.inner.clone();
         client
-            .send_command(&mut cmd, routing)
+            .send_command(cmd.as_redis_mut(), routing)
             .await
             .map_err(GlideError::from_redis_error)
     }
@@ -349,10 +350,10 @@ impl GlideClusterClient {
 
     /// Execute a raw command with an explicit route.
     pub async fn route_command(&self, mut cmd: Cmd, route: Route) -> ValkeyResult<Value> {
-        let routing = route.to_routing_info(Some(&cmd));
+        let routing = route.to_routing_info(Some(cmd.as_redis()));
         let mut client = self.inner.clone();
         client
-            .send_command(&mut cmd, Some(routing))
+            .send_command(cmd.as_redis_mut(), Some(routing))
             .await
             .map_err(GlideError::from_redis_error)
     }
@@ -464,7 +465,7 @@ impl CommandExecutor for GlideClusterClient {
     ) -> ValkeyResult<Value> {
         let mut client = self.inner.clone();
         client
-            .send_command(&mut cmd, routing)
+            .send_command(cmd.as_redis_mut(), routing)
             .await
             .map_err(GlideError::from_redis_error)
     }
@@ -487,7 +488,7 @@ impl crate::commands::core::AsyncCommands for GlideClient {
         let mut client = self.inner.clone();
         Box::pin(async move {
             let value = client
-                .send_command(&mut cmd, None)
+                .send_command(cmd.as_redis_mut(), None)
                 .await
                 .map_err(GlideError::from_redis_error)?;
             Ok(ValkeyValue::from_redis(value))
@@ -501,7 +502,7 @@ impl crate::commands::core::AsyncCommands for GlideClusterClient {
         let mut client = self.inner.clone();
         Box::pin(async move {
             let value = client
-                .send_command(&mut cmd, None)
+                .send_command(cmd.as_redis_mut(), None)
                 .await
                 .map_err(GlideError::from_redis_error)?;
             Ok(ValkeyValue::from_redis(value))

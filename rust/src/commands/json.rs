@@ -5,11 +5,12 @@
 //! the JSONPath root (`$`) where the server does.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// JSON module commands (`JSON.SET`, `JSON.GET`, `JSON.ARRAPPEND`, ...).
 ///
@@ -17,7 +18,7 @@ use redis::{Cmd, ToRedisArgs};
 #[async_trait]
 pub trait JsonCommands: CommandExecutor {
     /// Set the JSON value at `path` in `key` (`JSON.SET`).
-    async fn json_set<K: ToRedisArgs + Send, P: ToRedisArgs + Send, V: ToRedisArgs + Send>(
+    async fn json_set<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -29,7 +30,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the JSON value(s) at `paths` in `key` (`JSON.GET`).
-    async fn json_get<K: ToRedisArgs + Send, P: ToRedisArgs + Send + Sync>(
+    async fn json_get<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         paths: &[P],
@@ -43,7 +44,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Delete the value(s) at `path` (`JSON.DEL`); returns the number deleted.
-    async fn json_del<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_del<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -54,7 +55,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Delete the value(s) at `path` (`JSON.FORGET`, an alias of `JSON.DEL`).
-    async fn json_forget<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_forget<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -65,7 +66,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the type of the value(s) at `path` (`JSON.TYPE`).
-    async fn json_type<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_type<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -77,7 +78,7 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Increment the number(s) at `path` by `value` (`JSON.NUMINCRBY`). Returns
     /// the resulting value(s) encoded as a JSON string.
-    async fn json_numincrby<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_numincrby<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -89,7 +90,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Multiply the number(s) at `path` by `value` (`JSON.NUMMULTBY`).
-    async fn json_nummultby<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_nummultby<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -102,7 +103,11 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Append `value` to the string(s) at `path` (`JSON.STRAPPEND`). Returns the
     /// new string length(s).
-    async fn json_strappend<K: ToRedisArgs + Send, P: ToRedisArgs + Send, V: ToRedisArgs + Send>(
+    async fn json_strappend<
+        K: ToValkeyArgs + Send,
+        P: ToValkeyArgs + Send,
+        V: ToValkeyArgs + Send,
+    >(
         &self,
         key: K,
         path: P,
@@ -114,7 +119,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the length of the string(s) at `path` (`JSON.STRLEN`).
-    async fn json_strlen<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_strlen<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -126,9 +131,9 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Append `values` to the array(s) at `path` (`JSON.ARRAPPEND`).
     async fn json_arrappend<
-        K: ToRedisArgs + Send,
-        P: ToRedisArgs + Send,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send,
+        P: ToValkeyArgs + Send,
+        V: ToValkeyArgs + Send + Sync,
     >(
         &self,
         key: K,
@@ -146,9 +151,9 @@ pub trait JsonCommands: CommandExecutor {
     /// Insert `values` into the array(s) at `path` starting at `index`
     /// (`JSON.ARRINSERT`).
     async fn json_arrinsert<
-        K: ToRedisArgs + Send,
-        P: ToRedisArgs + Send,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send,
+        P: ToValkeyArgs + Send,
+        V: ToValkeyArgs + Send + Sync,
     >(
         &self,
         key: K,
@@ -165,7 +170,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the length of the array(s) at `path` (`JSON.ARRLEN`).
-    async fn json_arrlen<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_arrlen<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -176,7 +181,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Pop an element from the array(s) at `path` at `index` (`JSON.ARRPOP`).
-    async fn json_arrpop<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_arrpop<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -192,7 +197,7 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Trim the array(s) at `path` to the inclusive range `[start, stop]`
     /// (`JSON.ARRTRIM`).
-    async fn json_arrtrim<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_arrtrim<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -209,7 +214,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the keys of the object(s) at `path` (`JSON.OBJKEYS`).
-    async fn json_objkeys<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_objkeys<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -220,7 +225,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the number of keys in the object(s) at `path` (`JSON.OBJLEN`).
-    async fn json_objlen<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_objlen<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -231,7 +236,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Toggle the boolean value(s) at `path` (`JSON.TOGGLE`).
-    async fn json_toggle<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_toggle<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -243,7 +248,7 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Clear container value(s) at `path` (`JSON.CLEAR`); returns the number of
     /// values cleared.
-    async fn json_clear<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_clear<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -255,7 +260,11 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Find the index of `value` in the array(s) at `path` (`JSON.ARRINDEX`).
     /// Optionally restrict the search to `[start, end)`.
-    async fn json_arrindex<K: ToRedisArgs + Send, P: ToRedisArgs + Send, V: ToRedisArgs + Send>(
+    async fn json_arrindex<
+        K: ToValkeyArgs + Send,
+        P: ToValkeyArgs + Send,
+        V: ToValkeyArgs + Send,
+    >(
         &self,
         key: K,
         path: P,
@@ -271,7 +280,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the value(s) at `path` from multiple keys (`JSON.MGET`).
-    async fn json_mget<K: ToRedisArgs + Send + Sync, P: ToRedisArgs + Send>(
+    async fn json_mget<K: ToValkeyArgs + Send + Sync, P: ToValkeyArgs + Send>(
         &self,
         keys: &[K],
         path: P,
@@ -290,7 +299,7 @@ pub trait JsonCommands: CommandExecutor {
     }
 
     /// Get the value(s) at `path` in RESP form (`JSON.RESP`).
-    async fn json_resp<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_resp<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -302,7 +311,7 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Report the memory usage of the value(s) at `path`
     /// (`JSON.DEBUG MEMORY`).
-    async fn json_debug_memory<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_debug_memory<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,
@@ -314,7 +323,7 @@ pub trait JsonCommands: CommandExecutor {
 
     /// Report the number of fields in the value(s) at `path`
     /// (`JSON.DEBUG FIELDS`).
-    async fn json_debug_fields<K: ToRedisArgs + Send, P: ToRedisArgs + Send>(
+    async fn json_debug_fields<K: ToValkeyArgs + Send, P: ToValkeyArgs + Send>(
         &self,
         key: K,
         path: P,

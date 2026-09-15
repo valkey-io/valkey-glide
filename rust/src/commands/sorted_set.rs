@@ -3,12 +3,13 @@
 #![allow(clippy::type_complexity)]
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::Limit;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// A score boundary for `ZRANGEBYSCORE`/`ZCOUNT` etc.
 ///
@@ -103,7 +104,7 @@ pub trait SortedSetCommands: CommandExecutor {
     /// forms of the command: combined with `NX`/`XX`/`GT`/`LT` (reachable via
     /// [`crate::CustomCommand::custom_command`]) the server replies nil when
     /// the condition suppresses the update.
-    async fn zadd_incr<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn zadd_incr<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -119,7 +120,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     /// Get the rank of `member` with its score, low to high (`ZRANK ... WITHSCORE`).
-    async fn zrank_withscore<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn zrank_withscore<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -131,7 +132,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Get the rank of `member` with its score, high to low
     /// (`ZREVRANK ... WITHSCORE`).
-    async fn zrevrank_withscore<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn zrevrank_withscore<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -142,7 +143,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     #[doc(hidden)]
-    async fn bzpop<K: ToRedisArgs + Send + Sync>(
+    async fn bzpop<K: ToValkeyArgs + Send + Sync>(
         &self,
         op: &'static str,
         keys: &[K],
@@ -170,7 +171,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Store a range of a sorted set into `destination` (`ZRANGESTORE` by index).
     /// Returns the number of elements stored.
-    async fn zrangestore_by_index<D: ToRedisArgs + Send, S: ToRedisArgs + Send>(
+    async fn zrangestore_by_index<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
@@ -197,7 +198,7 @@ pub trait SortedSetCommands: CommandExecutor {
     /// When `rev` is `true` the range is interpreted in reverse (highest scores
     /// first); the bounds are emitted in the order the server requires for `REV`.
     /// `limit` applies an optional `LIMIT offset count`.
-    async fn zrangestore_by_score<D: ToRedisArgs + Send, S: ToRedisArgs + Send>(
+    async fn zrangestore_by_score<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
@@ -231,7 +232,7 @@ pub trait SortedSetCommands: CommandExecutor {
     /// When `rev` is `true` the range is interpreted in reverse; the bounds are
     /// emitted in the order the server requires for `REV`. `limit` applies an
     /// optional `LIMIT offset count`.
-    async fn zrangestore_by_lex<D: ToRedisArgs + Send, S: ToRedisArgs + Send>(
+    async fn zrangestore_by_lex<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
@@ -258,7 +259,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     /// Compute the difference of the given sorted sets (`ZDIFF`).
-    async fn zdiff<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<Vec<Bytes>> {
+    async fn zdiff<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("ZDIFF").arg(keys.len());
         for k in keys {
@@ -269,7 +270,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Compute the difference of the given sorted sets with scores
     /// (`ZDIFF ... WITHSCORES`).
-    async fn zdiff_withscores<K: ToRedisArgs + Send + Sync>(
+    async fn zdiff_withscores<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
     ) -> ValkeyResult<Vec<(Bytes, f64)>> {
@@ -284,7 +285,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Store the difference of the given sorted sets into `destination`
     /// (`ZDIFFSTORE`).
-    async fn zdiffstore<D: ToRedisArgs + Send, K: ToRedisArgs + Send + Sync>(
+    async fn zdiffstore<D: ToValkeyArgs + Send, K: ToValkeyArgs + Send + Sync>(
         &self,
         destination: D,
         keys: &[K],
@@ -298,7 +299,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     /// Compute the union of the given sorted sets (`ZUNION`).
-    async fn zunion<K: ToRedisArgs + Send + Sync>(
+    async fn zunion<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
@@ -316,7 +317,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Compute the union of the given sorted sets with scores
     /// (`ZUNION ... WITHSCORES`).
-    async fn zunion_withscores<K: ToRedisArgs + Send + Sync>(
+    async fn zunion_withscores<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
@@ -334,7 +335,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     /// Compute the intersection of the given sorted sets (`ZINTER`).
-    async fn zinter<K: ToRedisArgs + Send + Sync>(
+    async fn zinter<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
@@ -352,7 +353,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Compute the intersection of the given sorted sets with scores
     /// (`ZINTER ... WITHSCORES`).
-    async fn zinter_withscores<K: ToRedisArgs + Send + Sync>(
+    async fn zinter_withscores<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         aggregate: Option<AggregationType>,
@@ -371,7 +372,7 @@ pub trait SortedSetCommands: CommandExecutor {
 
     /// Cardinality of the intersection of the given sorted sets (`ZINTERCARD`),
     /// with an optional `LIMIT`.
-    async fn zintercard<K: ToRedisArgs + Send + Sync>(
+    async fn zintercard<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         limit: Option<i64>,
@@ -388,7 +389,7 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 
     #[doc(hidden)]
-    async fn zsetop_store<D: ToRedisArgs + Send, K: ToRedisArgs + Send + Sync>(
+    async fn zsetop_store<D: ToValkeyArgs + Send, K: ToValkeyArgs + Send + Sync>(
         &self,
         op: &'static str,
         destination: D,

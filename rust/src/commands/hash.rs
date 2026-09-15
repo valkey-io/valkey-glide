@@ -2,20 +2,22 @@
 //! Hash commands. Mirrors Python's hash command surface.
 
 use crate::ValkeyResult;
-use crate::commands::options::{ExpireOptions, HashFieldConditionalChange, SetExpiry};
+use crate::cmd::Cmd;
+use crate::commands::options::{ExpireOptions, Expiry, HashFieldConditionalChange, SetExpiry};
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-// TODO #7024: replace `Expiry` (hgetex) with a glide-owned type; deferred because
-// `Expiry` is also a macro-table param (get_ex), handled in the Phase 3 rework.
-use redis::{Cmd, Expiry, ToRedisArgs};
 
 /// Hash commands (`HSET`, `HGET`, `HGETALL`, `HDEL`, ...).
 #[async_trait]
 pub trait HashCommands: CommandExecutor {
+    // TODO #7082: add a multi-field `hset` that returns the count of newly-added
+    // fields, to match the other GLIDE clients.
+
     /// Get the values of multiple fields (`HMGET`).
-    async fn hmget<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hmget<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -32,7 +34,7 @@ pub trait HashCommands: CommandExecutor {
     }
 
     /// Get the string length of a field's value (`HSTRLEN`).
-    async fn hstrlen<K: ToRedisArgs + Send, F: ToRedisArgs + Send>(
+    async fn hstrlen<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send>(
         &self,
         key: K,
         field: F,
@@ -43,14 +45,14 @@ pub trait HashCommands: CommandExecutor {
     }
 
     /// Get a random field from the hash (`HRANDFIELD`).
-    async fn hrandfield<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
+    async fn hrandfield<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("HRANDFIELD").arg(key);
         value::to_opt_bytes(self.execute_command(cmd, None).await?)
     }
 
     /// Get `count` random fields from the hash (`HRANDFIELD key count`).
-    async fn hrandfield_count<K: ToRedisArgs + Send>(
+    async fn hrandfield_count<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         count: i64,
@@ -62,7 +64,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Get `count` random fields with their values
     /// (`HRANDFIELD key count WITHVALUES`).
-    async fn hrandfield_withvalues<K: ToRedisArgs + Send>(
+    async fn hrandfield_withvalues<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         count: i64,
@@ -74,7 +76,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Incrementally iterate a hash returning only field names
     /// (`HSCAN ... NOVALUES`). Returns `(cursor, fields)`.
-    async fn hscan_novalues<K: ToRedisArgs + Send>(
+    async fn hscan_novalues<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         cursor: &str,
@@ -95,7 +97,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Set an expiry in seconds on one or more hash fields (`HEXPIRE`). Returns a
     /// per-field status code.
-    async fn hexpire<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hexpire<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         seconds: i64,
@@ -108,7 +110,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Set an expiry at an absolute Unix time (seconds) on hash fields
     /// (`HEXPIREAT`).
-    async fn hexpireat<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hexpireat<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         unix_seconds: i64,
@@ -121,7 +123,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Get the absolute expiry Unix time (seconds) of hash fields
     /// (`HEXPIRETIME`).
-    async fn hexpiretime<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hexpiretime<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -131,7 +133,7 @@ pub trait HashCommands: CommandExecutor {
     }
 
     /// Set an expiry in milliseconds on hash fields (`HPEXPIRE`).
-    async fn hpexpire<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hpexpire<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         milliseconds: i64,
@@ -144,7 +146,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Set an expiry at an absolute Unix time (milliseconds) on hash fields
     /// (`HPEXPIREAT`).
-    async fn hpexpireat<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hpexpireat<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         unix_milliseconds: i64,
@@ -157,7 +159,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Get the absolute expiry Unix time (milliseconds) of hash fields
     /// (`HPEXPIRETIME`).
-    async fn hpexpiretime<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hpexpiretime<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -167,7 +169,7 @@ pub trait HashCommands: CommandExecutor {
     }
 
     /// Get the remaining TTL in seconds of hash fields (`HTTL`).
-    async fn httl<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn httl<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -177,7 +179,7 @@ pub trait HashCommands: CommandExecutor {
     }
 
     /// Get the remaining TTL in milliseconds of hash fields (`HPTTL`).
-    async fn hpttl<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hpttl<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -188,7 +190,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Remove the expiry from hash fields (`HPERSIST`). Returns a per-field
     /// status code.
-    async fn hpersist<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hpersist<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -198,7 +200,7 @@ pub trait HashCommands: CommandExecutor {
     }
 
     #[doc(hidden)]
-    async fn hfield_expire<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hfield_expire<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         op: &'static str,
         key: K,
@@ -223,7 +225,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Get the values of hash fields, optionally changing their expiry
     /// (`HGETEX`).
-    async fn hgetex<K: ToRedisArgs + Send, F: ToRedisArgs + Send + Sync>(
+    async fn hgetex<K: ToValkeyArgs + Send, F: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         fields: &[F],
@@ -257,9 +259,9 @@ pub trait HashCommands: CommandExecutor {
         expiry: Option<SetExpiry>,
     ) -> ValkeyResult<i64>
     where
-        K: ToRedisArgs + Send + Sync,
-        F: ToRedisArgs + Send + Sync,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send + Sync,
+        F: ToValkeyArgs + Send + Sync,
+        V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
         cmd.arg("HSETEX").arg(key);
@@ -267,7 +269,7 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(c.as_arg());
         }
         if let Some(e) = expiry {
-            e.add_to(&mut cmd);
+            cmd.arg(e);
         }
         cmd.arg("FIELDS").arg(field_values.len());
         for (f, v) in field_values {

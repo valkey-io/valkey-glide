@@ -53,15 +53,15 @@ pub fn check() -> Result<String, ParityError> {
     let fork_mod_rs = resolve_fork_mod_rs(manifest_dir)?;
     let ours_core_rs = manifest_dir.join("src/commands/core.rs");
 
-    let fork_src = read(&fork_mod_rs)?;
-    let ours_src = read(&ours_core_rs)?;
+    let redis_src = read(&fork_mod_rs)?;
+    let glide_src = read(&ours_core_rs)?;
 
-    let fork = parse_fork(&fork_src);
-    let ours = parse_ours(&ours_src);
+    let redis_table = parse_redis_command_table(&redis_src);
+    let glide_table = convert_to_redis_command_table(parse_glide_command_table(&glide_src));
 
     let mut problems = Vec::new();
-    for (name, sig) in &fork {
-        match ours.get(name) {
+    for (name, sig) in &redis_table {
+        match glide_table.get(name) {
             None => problems.push(format!("MISSING in ours: {name}")),
             Some(our_sig) if our_sig != sig => problems.push(format!(
                 "SIGNATURE DIFF {name}:\n     fork: {sig:?}\n     ours: {our_sig:?}"
@@ -69,19 +69,19 @@ pub fn check() -> Result<String, ParityError> {
             _ => {}
         }
     }
-    for name in ours.keys() {
-        if !fork.contains_key(name) {
+    for name in glide_table.keys() {
+        if !redis_table.contains_key(name) {
             problems.push(format!("EXTRA in ours (not in fork table): {name}"));
         }
     }
 
-    check_scan_methods(&fork_mod_rs, &ours_src, &mut problems)?;
+    check_scan_methods(&fork_mod_rs, &glide_src, &mut problems)?;
 
     if problems.is_empty() {
         Ok(format!(
             "parity OK: {} methods match the fork table exactly; \
              scan iterators match the fork's macro definitions",
-            fork.len()
+            redis_table.len()
         ))
     } else {
         Err(ParityError::Violations(problems))
@@ -191,9 +191,8 @@ fn norm_sig(generics: &str, args: &str) -> NormSig {
     (gens, arglist)
 }
 
-/// Parse the fork's `implement_commands!` table: method name -> normalized sig.
-fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
-    let body = macro_body(src, "implement_commands! {");
+/// Parse the command table from the given source body.
+fn parse_table(body: &str) -> BTreeMap<String, NormSig> {
     let sig_re =
         Regex::new(r"^fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\((.*?)\)\s*\{").expect("valid regex");
 
@@ -223,7 +222,7 @@ fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
         let sig1 = sig.split_whitespace().collect::<Vec<_>>().join(" ");
         let caps = sig_re.captures(&sig1).unwrap_or_else(|| {
             panic!(
-                "unparseable fork table entry (did the fork's table style change on a rev \
+                "unparseable command table entry (did the table style change on a rev \
                  bump?):\n  {}",
                 &sig1[..sig1.len().min(160)]
             )
@@ -236,20 +235,28 @@ fn parse_fork(src: &str) -> BTreeMap<String, NormSig> {
     out
 }
 
-/// Parse our `implement_glide_commands!` table: method name -> normalized sig.
-fn parse_ours(src: &str) -> BTreeMap<String, NormSig> {
-    let body = macro_body(src, "implement_glide_commands! {");
-    let re = Regex::new(r"(?s)fn\s+([a-z_0-9]+)\s*(?:<([^>]*)>)?\s*\(([^;]*?)\)\s*;")
-        .expect("valid regex");
-    re.captures_iter(body)
-        .map(|caps| {
-            let args = caps[3].split_whitespace().collect::<Vec<_>>().join(" ");
-            (
-                caps[1].to_string(),
-                norm_sig(caps.get(2).map_or("", |m| m.as_str()), &args),
-            )
-        })
-        .collect()
+/// Parse `redis-rs`'s `implement_commands!` table.
+fn parse_redis_command_table(src: &str) -> BTreeMap<String, NormSig> {
+    parse_table(macro_body(src, "implement_commands! {"))
+}
+
+/// Parse GLIDE's `implement_glide_commands!` table.
+fn parse_glide_command_table(src: &str) -> BTreeMap<String, NormSig> {
+    parse_table(macro_body(src, "implement_glide_commands! {"))
+}
+
+/// Converts the given GLIDE command table so it can be compared to a `redis-rs` command table.
+fn convert_to_redis_command_table(table: BTreeMap<String, NormSig>) -> BTreeMap<String, NormSig> {
+    let mut converted = BTreeMap::new();
+    for (name, (mut generics, args)) in table {
+        for generic in &mut generics {
+            if let [_name, bound] = generic.as_mut_slice() {
+                *bound = bound_from_glide_to_redis(bound);
+            }
+        }
+        converted.insert(name, (generics, args));
+    }
+    converted
 }
 
 // ---- scan-iterator methods ------------------------------------------------------

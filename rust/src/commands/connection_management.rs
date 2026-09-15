@@ -2,11 +2,12 @@
 //! Connection-management commands. Mirrors Python's connection command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// Connection-management commands (`PING`, `ECHO`, `SELECT`, `CLIENT ...`).
 #[async_trait]
@@ -19,14 +20,14 @@ pub trait ConnectionManagementCommands: CommandExecutor {
     }
 
     /// Ping the server with a message (`PING message`). Echoes the message back.
-    async fn ping_message<M: ToRedisArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
+    async fn ping_message<M: ToValkeyArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("PING").arg(message);
         value::to_bytes(self.execute_command(cmd, None).await?)
     }
 
     /// Echo a message (`ECHO`).
-    async fn echo<M: ToRedisArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
+    async fn echo<M: ToValkeyArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("ECHO").arg(message);
         value::to_bytes(self.execute_command(cmd, None).await?)
@@ -54,7 +55,7 @@ pub trait ConnectionManagementCommands: CommandExecutor {
     }
 
     /// Set the current connection name (`CLIENT SETNAME`).
-    async fn client_setname<N: ToRedisArgs + Send>(&self, name: N) -> ValkeyResult<()> {
+    async fn client_setname<N: ToValkeyArgs + Send>(&self, name: N) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("CLIENT").arg("SETNAME").arg(name);
         value::to_unit(self.execute_command(cmd, None).await?)

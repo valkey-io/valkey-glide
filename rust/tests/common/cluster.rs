@@ -412,7 +412,7 @@ pub fn is_transient_cluster_error(e: &glide::GlideError) -> bool {
 /// on a non-transient error, leaving the test to surface any real problem).
 async fn warm_up_cluster(client: &GlideClusterClient) {
     for attempt in 0..20u32 {
-        let mut ping = redis::Cmd::new();
+        let mut ping = glide::Cmd::new();
         ping.arg("PING");
         match client.route_command(ping, Route::AllPrimaries).await {
             Ok(_) => return,

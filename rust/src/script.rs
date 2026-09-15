@@ -23,9 +23,9 @@
 //! implementor (the sync clients).
 
 use crate::ValkeyResult;
+use crate::cmd::{Cmd, cmd};
 use crate::commands::core::AsyncCommands;
-use crate::value::FromValkeyValue;
-use redis::{ToRedisArgs, cmd};
+use crate::value::{FromValkeyValue, ToValkeyArgs};
 
 /// A cached Lua script with its SHA-1 hash.
 ///
@@ -55,7 +55,7 @@ impl Script {
 
     /// Create an invocation and add a regular argument (`ARGV[…]`).
     #[must_use]
-    pub fn arg<'a, T: ToRedisArgs>(&'a self, arg: T) -> ScriptInvocation<'a> {
+    pub fn arg<'a, T: ToValkeyArgs>(&'a self, arg: T) -> ScriptInvocation<'a> {
         let mut invocation = self.prepare_invoke();
         invocation.arg(arg);
         invocation
@@ -63,7 +63,7 @@ impl Script {
 
     /// Create an invocation and add a key argument (`KEYS[…]`).
     #[must_use]
-    pub fn key<'a, T: ToRedisArgs>(&'a self, key: T) -> ScriptInvocation<'a> {
+    pub fn key<'a, T: ToValkeyArgs>(&'a self, key: T) -> ScriptInvocation<'a> {
         let mut invocation = self.prepare_invoke();
         invocation.key(key);
         invocation
@@ -125,19 +125,19 @@ pub struct ScriptInvocation<'a> {
 
 impl ScriptInvocation<'_> {
     /// Add a regular argument (`ARGV[…]`). Builder form.
-    pub fn arg<T: ToRedisArgs>(&mut self, arg: T) -> &mut Self {
-        arg.write_redis_args(&mut self.args);
+    pub fn arg<T: ToValkeyArgs>(&mut self, arg: T) -> &mut Self {
+        arg.write_valkey_args(&mut self.args);
         self
     }
 
     /// Add a key argument (`KEYS[…]`). Builder form.
-    pub fn key<T: ToRedisArgs>(&mut self, key: T) -> &mut Self {
-        key.write_redis_args(&mut self.keys);
+    pub fn key<T: ToValkeyArgs>(&mut self, key: T) -> &mut Self {
+        key.write_valkey_args(&mut self.keys);
         self
     }
 
     /// Build the `EVALSHA` command for this invocation.
-    fn evalsha_cmd(&self) -> redis::Cmd {
+    fn evalsha_cmd(&self) -> Cmd {
         let mut evalsha = cmd("EVALSHA");
         evalsha
             .arg(self.script.hash.as_bytes())
@@ -148,7 +148,7 @@ impl ScriptInvocation<'_> {
     }
 
     /// Build the `EVAL` fallback command (also loads the script server-side).
-    fn eval_cmd(&self) -> redis::Cmd {
+    fn eval_cmd(&self) -> Cmd {
         let mut eval = cmd("EVAL");
         eval.arg(self.script.code.as_bytes())
             .arg(self.keys.len())

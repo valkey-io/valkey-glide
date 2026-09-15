@@ -4,20 +4,22 @@
 mod common;
 
 use glide::AsyncCommands;
+use glide::Expiry;
 use glide::HashCommands;
 use glide::SetExpiry;
 use glide::commands::options::{ExpireOptions, HashFieldConditionalChange};
-use redis::Expiry; // TODO #7024: Extract
 
 /// Max seconds and milliseconds for future expiry.
 const FUTURE_EXPIRY_SECS: usize = (i64::MAX / 1_000_i64) as usize;
 const FUTURE_EXPIRY_MS: usize = i64::MAX as usize;
 
+// TODO #7082: replace the raw `HSET` with a typed `hset` that returns the count
+// of newly-added fields (`hset_multiple` maps to `HMSET`, which returns `OK`).
 matrix_test!(hset_hget, c, {
     let k = common::key("h");
     // HSET with multiple fields returns the count of NEW fields added.
     // compat hset_multiple uses HMSET (returns OK), so use glide_send for the count.
-    let mut cmd = redis::Cmd::new();
+    let mut cmd = glide::Cmd::new();
     cmd.arg("HSET")
         .arg(&k)
         .arg("f1")
@@ -42,11 +44,13 @@ matrix_test!(hget_missing_key, c, {
     assert_eq!(v, None);
 });
 
+// TODO #7082: replace the raw `HSET` with a typed `hset` that returns the count
+// of newly-added fields (`hset_multiple` maps to `HMSET`, which returns `OK`).
 matrix_test!(hset_updates_existing_returns_zero, c, {
     let k = common::key("h");
     let _: () = c.hset_multiple(&k, &[("f", "v1")]).await.unwrap();
     // Updating an existing field returns 0 new fields via HSET.
-    let mut cmd = redis::Cmd::new();
+    let mut cmd = glide::Cmd::new();
     cmd.arg("HSET").arg(&k).arg("f").arg("v2");
     let n: i64 = c.glide_send(cmd).await.unwrap();
     assert_eq!(n, 0);

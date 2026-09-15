@@ -3,11 +3,12 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// A single stream entry: its ID and its field/value pairs.
 pub type StreamEntry = (String, Vec<(Bytes, Bytes)>);
@@ -242,9 +243,9 @@ pub trait StreamCommands: CommandExecutor {
         fields: &[(F, V)],
     ) -> ValkeyResult<Option<String>>
     where
-        K: ToRedisArgs + Send + Sync,
-        F: ToRedisArgs + Send + Sync,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send + Sync,
+        F: ToValkeyArgs + Send + Sync,
+        V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
         cmd.arg("XADD").arg(key).arg(id);
@@ -255,14 +256,14 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Get the number of entries in the stream (`XLEN`).
-    async fn xlen<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
+    async fn xlen<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XLEN").arg(key);
         value::to_i64(self.execute_command(cmd, None).await?)
     }
 
     /// Delete entries by ID (`XDEL`); returns the number deleted.
-    async fn xdel<K: ToRedisArgs + Send>(&self, key: K, ids: &[&str]) -> ValkeyResult<i64> {
+    async fn xdel<K: ToValkeyArgs + Send>(&self, key: K, ids: &[&str]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XDEL").arg(key);
         for id in ids {
@@ -272,7 +273,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Trim the stream to (approximately) `maxlen` entries (`XTRIM ... MAXLEN`).
-    async fn xtrim_maxlen<K: ToRedisArgs + Send>(
+    async fn xtrim_maxlen<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         maxlen: i64,
@@ -288,7 +289,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Read a range of entries (`XRANGE key start end`).
-    async fn xrange<K: ToRedisArgs + Send>(
+    async fn xrange<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         start: &str,
@@ -300,7 +301,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Read a range of entries in reverse (`XREVRANGE key end start`).
-    async fn xrevrange<K: ToRedisArgs + Send>(
+    async fn xrevrange<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         end: &str,
@@ -313,7 +314,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Create a consumer group (`XGROUP CREATE`). Set `mkstream` to create the
     /// stream if it does not exist.
-    async fn xgroup_create<K: ToRedisArgs + Send>(
+    async fn xgroup_create<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -329,7 +330,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Destroy a consumer group (`XGROUP DESTROY`). Returns whether it existed.
-    async fn xgroup_destroy<K: ToRedisArgs + Send>(
+    async fn xgroup_destroy<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -340,7 +341,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Acknowledge processed entries in a consumer group (`XACK`).
-    async fn xack<K: ToRedisArgs + Send>(
+    async fn xack<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -365,9 +366,9 @@ pub trait StreamCommands: CommandExecutor {
         options: &StreamAddOptions,
     ) -> ValkeyResult<Option<String>>
     where
-        K: ToRedisArgs + Send + Sync,
-        F: ToRedisArgs + Send + Sync,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send + Sync,
+        F: ToValkeyArgs + Send + Sync,
+        V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
         cmd.arg("XADD").arg(key);
@@ -380,7 +381,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Trim the stream to a minimum ID (`XTRIM ... MINID`). Returns entries removed.
-    async fn xtrim_minid<K: ToRedisArgs + Send>(
+    async fn xtrim_minid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         minid: &str,
@@ -398,7 +399,7 @@ pub trait StreamCommands: CommandExecutor {
     /// Read from one or more streams (`XREAD`). `keys_ids` is a list of
     /// `(key, id)` pairs. Returns `(stream_key, entries)` per stream that
     /// produced data.
-    async fn xread<K: ToRedisArgs + Send + Sync>(
+    async fn xread<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys_ids: &[(K, &str)],
         options: Option<StreamReadOptions>,
@@ -419,7 +420,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Read from streams as part of a consumer group (`XREADGROUP`).
-    async fn xreadgroup<K: ToRedisArgs + Send + Sync>(
+    async fn xreadgroup<K: ToValkeyArgs + Send + Sync>(
         &self,
         group: &str,
         consumer: &str,
@@ -443,7 +444,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Claim ownership of pending messages (`XCLAIM`). Returns the claimed
     /// entries with their fields.
-    async fn xclaim<K: ToRedisArgs + Send>(
+    async fn xclaim<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -469,7 +470,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Claim ownership of pending messages, returning only their IDs
     /// (`XCLAIM ... JUSTID`).
-    async fn xclaim_justid<K: ToRedisArgs + Send>(
+    async fn xclaim_justid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -496,7 +497,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Automatically claim pending messages idle for at least `min_idle_time_ms`
     /// (`XAUTOCLAIM`). Returns `(next_cursor, claimed_entries, deleted_ids)`.
-    async fn xautoclaim<K: ToRedisArgs + Send>(
+    async fn xautoclaim<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -519,7 +520,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Automatically claim pending messages returning only their IDs
-    async fn xautoclaim_justid<K: ToRedisArgs + Send>(
+    async fn xautoclaim_justid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -543,7 +544,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Summary form of `XPENDING` (`XPENDING key group`).
-    async fn xpending<K: ToRedisArgs + Send>(
+    async fn xpending<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -555,7 +556,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Extended (range) form of `XPENDING`
     /// (`XPENDING key group [IDLE ms] start end count [consumer]`).
-    async fn xpending_range<K: ToRedisArgs + Send>(
+    async fn xpending_range<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -579,7 +580,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Get general information about a stream (`XINFO STREAM`). Returns the raw
     /// structured reply as a list of `(field, value)` pairs.
-    async fn xinfo_stream<K: ToRedisArgs + Send>(
+    async fn xinfo_stream<K: ToValkeyArgs + Send>(
         &self,
         key: K,
     ) -> ValkeyResult<Vec<(Bytes, redis::Value)>> {
@@ -591,7 +592,7 @@ pub trait StreamCommands: CommandExecutor {
     /// Get the full state of a stream including entries and PEL
     /// (`XINFO STREAM ... FULL`). Returns the raw structured reply as
     /// `(field, value)` pairs. Pass `count` to limit returned entries/PEL.
-    async fn xinfo_stream_full<K: ToRedisArgs + Send>(
+    async fn xinfo_stream_full<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         count: Option<i64>,
@@ -606,7 +607,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Get information about the consumer groups of a stream (`XINFO GROUPS`).
     /// Returns one `(field, value)` map per group.
-    async fn xinfo_groups<K: ToRedisArgs + Send>(
+    async fn xinfo_groups<K: ToValkeyArgs + Send>(
         &self,
         key: K,
     ) -> ValkeyResult<Vec<Vec<(Bytes, redis::Value)>>> {
@@ -616,7 +617,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Get information about the consumers in a group (`XINFO CONSUMERS`).
-    async fn xinfo_consumers<K: ToRedisArgs + Send>(
+    async fn xinfo_consumers<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -627,7 +628,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Set the last-delivered ID of a stream (`XSETID`).
-    async fn xsetid<K: ToRedisArgs + Send>(
+    async fn xsetid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         last_id: &str,
@@ -647,7 +648,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Create a consumer group with options (`XGROUP CREATE` with `MKSTREAM` /
     /// `ENTRIESREAD`).
-    async fn xgroup_create_options<K: ToRedisArgs + Send>(
+    async fn xgroup_create_options<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -662,7 +663,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Create a new consumer in a group (`XGROUP CREATECONSUMER`). Returns
     /// whether the consumer was created.
-    async fn xgroup_create_consumer<K: ToRedisArgs + Send>(
+    async fn xgroup_create_consumer<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -679,7 +680,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Delete a consumer from a group (`XGROUP DELCONSUMER`). Returns the number
     /// of pending messages the consumer had.
-    async fn xgroup_del_consumer<K: ToRedisArgs + Send>(
+    async fn xgroup_del_consumer<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -695,7 +696,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Set the last-delivered ID for a consumer group (`XGROUP SETID`).
-    async fn xgroup_set_id<K: ToRedisArgs + Send>(
+    async fn xgroup_set_id<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -974,7 +975,8 @@ mod tests {
     use super::*;
 
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,
