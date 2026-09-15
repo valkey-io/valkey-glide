@@ -614,6 +614,16 @@ where
         resolved_redirect_node: Option<(&str, u16)>,
         current_address: ReadyToDialAddress,
     ) -> bool {
+        let normalized_redirect = resolved_redirect_node.map(|(address, slot)| {
+            (
+                self.reverse_lookup_address(address)
+                    .unwrap_or_else(|| address.to_owned()),
+                slot,
+            )
+        });
+        let resolved_redirect_node = normalized_redirect
+            .as_ref()
+            .map(|(address, slot)| (address.as_str(), *slot));
         is_circular_moved_redirect(
             resolved_redirect_node,
             current_address.as_str(),
@@ -5618,6 +5628,19 @@ mod circular_moved_address_normalization_tests {
         ));
         assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
+
+    #[test]
+    fn prepared_ip_redirect_and_current_are_normalized_symmetrically() {
+        let core = core_with_ip_mapping();
+        let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
+        core.cluster_params.write().address_resolver = Some(resolver.clone());
+
+        assert!(core.is_circular_moved_redirect_prepared(
+            Some(("10.0.0.1:6379", 5000)),
+            ReadyToDialAddress::new("10.0.0.1:6379".into())
+        ));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[cfg(test)]
@@ -5766,7 +5789,9 @@ pub(super) mod refresh_task_resolution_tests {
 
     async fn gated_test_guard() -> tokio::sync::MutexGuard<'static, ()> {
         let guard = GATED_TEST_LOCK.lock().await;
-        while RELEASE_POISON_CONNECT.try_acquire().is_ok() {}
+        while let Ok(permit) = RELEASE_POISON_CONNECT.try_acquire() {
+            permit.forget();
+        }
         guard
     }
 
