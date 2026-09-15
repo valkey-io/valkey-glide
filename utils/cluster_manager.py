@@ -47,9 +47,17 @@ def _get_clusters_folder():
 # TLS and mTLS certificates.
 CLUSTERS_FOLDER = _get_clusters_folder()
 TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
-CA_CERTIFICATE = f"{TLS_FOLDER}/ca.crt"
-SERVER_CERTIFICATE = f"{TLS_FOLDER}/server.crt"
-SERVER_KEY = f"{TLS_FOLDER}/server.key"
+
+CA_CERTIFICATE_PATH = f"{TLS_FOLDER}/ca.crt"
+CA_KEY_PATH = f"{TLS_FOLDER}/ca.key"
+CA_SERIAL_PATH = f"{TLS_FOLDER}/ca.txt"
+OPENSSL_CONFIG_PATH = f"{TLS_FOLDER}/openssl.cnf"
+SERVER_CERTIFICATE_PATH = f"{TLS_FOLDER}/server.crt"
+SERVER_CSR_PATH = f"{TLS_FOLDER}/server.csr"
+SERVER_KEY_PATH = f"{TLS_FOLDER}/server.key"
+
+# Timeout for calls to `openssl`.
+OPENSSL_TIMEOUT_SECONDS = 30
 
 # Allowed hostname for TLS certificate.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
@@ -57,6 +65,14 @@ HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 # Default hosts (loopback addresses for IPv4 and IPv6)
 DEFAULT_HOST_IPV4: str = "127.0.0.1"
 DEFAULT_HOST_IPV6: str = "::1"
+
+# The `openssl` configuration for generating certificates. Defined after the
+# host constants above because it interpolates them.
+OPENSSL_CONFIG_CONTENTS = f"""\
+keyUsage = digitalSignature, keyEncipherment
+subjectAltName = IP:{DEFAULT_HOST_IPV4}, IP:{DEFAULT_HOST_IPV6}, DNS:localhost, DNS:{HOSTNAME_TLS}
+"""
+
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
@@ -104,14 +120,14 @@ def init_logger(logfile: str):
 
 def _verify_tls_certs() -> bool:
     """Whether a complete, valid TLS certificate set exists."""
-    for cert in [CA_CERTIFICATE, SERVER_CERTIFICATE, SERVER_KEY]:
+    for cert in [CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH, SERVER_KEY_PATH]:
         if not os.path.exists(cert):
             return False
 
     # Verify the server certificate parses, was signed by
     # the CA certificate, and is within its validity dates.
     verify_certs = subprocess.run(
-        ["openssl", "verify", "-CAfile", CA_CERTIFICATE, SERVER_CERTIFICATE],
+        ["openssl", "verify", "-CAfile", CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH],
         capture_output=True,
         text=True,
     )
@@ -121,7 +137,7 @@ def _verify_tls_certs() -> bool:
 
     # Verify that the private key parses.
     verify_key = subprocess.run(
-        ["openssl", "pkey", "-in", SERVER_KEY, "-noout"],
+        ["openssl", "pkey", "-in", SERVER_KEY_PATH, "-noout"],
         capture_output=True,
         text=True,
     )
@@ -130,6 +146,19 @@ def _verify_tls_certs() -> bool:
         return False
 
     return True
+
+
+def _run_openssl(args: List[str]) -> None:
+    """Run `openssl <args>`, raising on failure."""
+    result = subprocess.run(
+        ["openssl", *args],
+        capture_output=True,
+        text=True,
+        timeout=OPENSSL_TIMEOUT_SECONDS,
+    )
+
+    if result.returncode != 0:
+        raise Exception(f"openssl {' '.join(args)} failed:\n{result.stderr}")
 
 
 def generate_tls_certs():
@@ -147,132 +176,75 @@ def generate_tls_certs():
         # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
         logging.debug("## Generating TLS certificates")
         tic = time.perf_counter()
-        ca_key = f"{TLS_FOLDER}/ca.key"
-        ca_serial = f"{TLS_FOLDER}/ca.txt"
-        ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
-        f = open(ext_file, "w")
-        f.write(
-            f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{DEFAULT_HOST_IPV4},IP:{DEFAULT_HOST_IPV6},DNS:localhost,DNS:{HOSTNAME_TLS}"
-        )
-        f.close()
+        with open(OPENSSL_CONFIG_PATH, "w") as f:
+            f.write(OPENSSL_CONFIG_CONTENTS)
 
-        def make_key(name: str, size: int):
-            p = subprocess.Popen(
-                [
-                    "openssl",
-                    "genrsa",
-                    "-out",
-                    name,
-                    str(size),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            # openssl genrsa can stall on low-entropy aarch64 runners. Time out here
-            # (inside cluster.py's 80s budget) and kill the child so it stops
-            # writing to the shared ca.key.
-            try:
-                output, err = p.communicate(timeout=30)
-            except subprocess.TimeoutExpired:
-                p.kill()
-                p.communicate()
-                raise
-            if p.returncode != 0:
-                raise Exception(
-                    f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
-                )
+        # Build CA and server keys.
+        _run_openssl(["genrsa", "-out", CA_KEY_PATH, "2048"])
+        _run_openssl(["genrsa", "-out", SERVER_KEY_PATH, "2048"])
 
-        # Build CA key
-        # 2048-bit is enough for test certs and faster on low-entropy runners.
-        make_key(ca_key, 2048)
-
-        # Build server key
-        make_key(SERVER_KEY, 2048)
-
-        # Build CA Cert
-        p = subprocess.Popen(
+        # Build CA certificate.
+        _run_openssl(
             [
-                "openssl",
                 "req",
                 "-x509",
                 "-new",
                 "-nodes",
                 "-sha256",
                 "-key",
-                ca_key,
+                CA_KEY_PATH,
                 "-days",
                 "3650",
                 "-subj",
                 "/O=Valkey GLIDE Test/CN=Certificate Authority",
                 "-out",
-                CA_CERTIFICATE,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+                CA_CERTIFICATE_PATH,
+            ]
         )
-        output, err = p.communicate(timeout=10)
-        if p.returncode != 0:
-            raise Exception(
-                f"Failed to make create CA cert. Executed: {str(p.args)}:\n{err}"
-            )
 
-        # Read server key
-        p1 = subprocess.Popen(
+        # Build server certificate signing request (CSR).
+        _run_openssl(
             [
-                "openssl",
                 "req",
                 "-new",
                 "-sha256",
                 "-subj",
                 "/O=Valkey GLIDE Test/CN=Generic-cert",
                 "-key",
-                SERVER_KEY,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+                SERVER_KEY_PATH,
+                "-out",
+                SERVER_CSR_PATH,
+            ]
         )
-        _key_output, err = p.communicate(timeout=10)
-        if p.returncode != 0:
-            raise Exception(f"Failed to read server key. Executed: {str(p.args)}:\n{err}")
 
-        # Build server cert
-        p = subprocess.Popen(
+        # Sign the CSR with the CA to produce the server certificate.
+        _run_openssl(
             [
-                "openssl",
                 "x509",
                 "-req",
                 "-sha256",
+                "-in",
+                SERVER_CSR_PATH,
                 "-CA",
-                CA_CERTIFICATE,
+                CA_CERTIFICATE_PATH,
                 "-CAkey",
-                ca_key,
+                CA_KEY_PATH,
                 "-CAserial",
-                ca_serial,
+                CA_SERIAL_PATH,
                 "-CAcreateserial",
                 "-days",
                 "3650",
                 "-extfile",
-                ext_file,
+                OPENSSL_CONFIG_PATH,
                 "-out",
-                SERVER_CERTIFICATE,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=p1.stdout,
-            text=True,
+                SERVER_CERTIFICATE_PATH,
+            ]
         )
-        output, err = p.communicate(timeout=10)
-        if p.returncode != 0:
-            raise Exception(
-                f"Failed to create server cert. Executed: {str(p.args)}:\n{err}"
-            )
+
         toc = time.perf_counter()
         logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
-        logging.debug(f"TLS files= {SERVER_CERTIFICATE}, {SERVER_KEY}, {CA_CERTIFICATE}")
+        logging.debug(f"TLS files= {SERVER_CERTIFICATE_PATH}, {SERVER_KEY_PATH}, {CA_CERTIFICATE_PATH}")
 
 
 def get_cli_option_args(
@@ -285,11 +257,11 @@ def get_cli_option_args(
         [
             "--tls",
             "--cert",
-            tls_cert_file or SERVER_CERTIFICATE,
+            tls_cert_file or SERVER_CERTIFICATE_PATH,
             "--key",
-            tls_key_file or SERVER_KEY,
+            tls_key_file or SERVER_KEY_PATH,
             "--cacert",
-            tls_ca_cert_file or CA_CERTIFICATE,
+            tls_ca_cert_file or CA_CERTIFICATE_PATH,
         ]
         if use_tls
         else []
@@ -522,9 +494,9 @@ def create_servers(
     tls_args = []
     if tls is True:
         # Use custom TLS files if provided, otherwise use default ones
-        cert_file = tls_cert_file or SERVER_CERTIFICATE
-        key_file = tls_key_file or SERVER_KEY
-        ca_file = tls_ca_cert_file or CA_CERTIFICATE
+        cert_file = tls_cert_file or SERVER_CERTIFICATE_PATH
+        key_file = tls_key_file or SERVER_KEY_PATH
+        ca_file = tls_ca_cert_file or CA_CERTIFICATE_PATH
 
         # Only generate default certs if using default paths and they don't exist
         if not tls_cert_file:
