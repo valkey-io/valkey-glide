@@ -505,15 +505,26 @@ def create_servers(
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
-    if tls is True:
-        # Use custom TLS files if provided, otherwise use default ones
-        cert_file = tls_cert_file or SERVER_CERTIFICATE_PATH
-        key_file = tls_key_file or SERVER_KEY_PATH
-        ca_file = tls_ca_cert_file or CA_CERTIFICATE_PATH
 
-        # Only generate default certs if using default paths and they don't exist
-        if not tls_cert_file:
+    if tls is True:
+        custom_tls_files = (tls_cert_file, tls_key_file, tls_ca_cert_file)
+
+        # Generate default TLS files if not provided.
+        if not any(custom_tls_files):
             generate_tls_certs()
+            cert_file = SERVER_CERTIFICATE_PATH
+            key_file = SERVER_KEY_PATH
+            ca_file = CA_CERTIFICATE_PATH
+
+        # Verify that all of the TLS files are provided.
+        # We do not support mixing custom and default TLS files.
+        elif not all(custom_tls_files):
+            raise ValueError("TLS certificate, key, and CA certificate must be provided together")
+
+        else:
+            cert_file = tls_cert_file
+            key_file = tls_key_file
+            ca_file = tls_ca_cert_file
 
         tls_args = [
             "--tls-cluster",
