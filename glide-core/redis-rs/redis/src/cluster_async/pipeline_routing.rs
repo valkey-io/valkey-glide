@@ -1,4 +1,5 @@
 use crate::aio::ConnectionLike;
+use crate::cluster::ReadyToDialAddress;
 use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
 use crate::cluster_routing::RoutingInfo;
@@ -29,7 +30,20 @@ use super::PendingRequest;
 use super::PipelineRetryStrategy;
 use super::RedirectNode;
 use super::RequestInfo;
-use super::{Core, InternalSingleNodeRouting, OperationTarget, Response};
+use super::{
+    is_circular_moved_redirect, Core, InternalSingleNodeRouting, OperationTarget, Response,
+};
+
+fn is_pipeline_circular_moved_redirect(
+    resolved_redirect_node: Option<(&str, u16)>,
+    current_address: ReadyToDialAddress,
+) -> bool {
+    is_circular_moved_redirect(
+        resolved_redirect_node,
+        current_address.as_str(),
+        str::to_owned,
+    )
+}
 
 /// Represents a pipeline command execution context for a specific node
 #[derive(Default)]
@@ -1081,11 +1095,11 @@ where
 
         // Check for circular MOVED redirect
         if matches!(retry_method, RetryMethod::MovedRedirect)
-            && core.is_circular_moved_redirect(
+            && is_pipeline_circular_moved_redirect(
                 resolved_moved_redirect
                     .as_ref()
                     .map(|redirect| (redirect.address.as_str(), redirect.slot)),
-                &address,
+                ReadyToDialAddress::new(address.clone()),
             )
         {
             circular_moved_entries.push((indices, address, error));
@@ -1395,5 +1409,21 @@ pub(crate) fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Opti
     } else {
         // Pipeline is not atomic, so we can have commands with different slots.
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_pipeline_circular_moved_redirect;
+    use crate::cluster::ReadyToDialAddress;
+
+    #[test]
+    fn pipeline_prepared_address_classifies_circular_redirect_without_reresolving() {
+        let prepared = ReadyToDialAddress::new("node.example:6380".to_owned());
+
+        assert!(is_pipeline_circular_moved_redirect(
+            Some(("node.example:6380", 42)),
+            prepared,
+        ));
     }
 }
