@@ -354,41 +354,71 @@ current_rate = OpenTelemetry.get_sample_percentage()
 
 ### Trace Context Propagation
 
-Trace context propagation is disabled by default. To opt in, set `enable_trace_context_propagation=True` when configuring trace export:
+Trace context propagation is disabled by default. Set `enable_trace_context_propagation=True` to use the active application span as the parent of sampled GLIDE spans. GLIDE's default `sample_percentage=1` selects about 1% of commands even inside a sampled parent, set it to `100` when every command span should join the application trace. The active span is picked up through Python's `contextvars`, so no context argument is needed for sync, `asyncio` or `trio` commands.
 
-```python
-OpenTelemetry.init(OpenTelemetryConfig(
-    traces=OpenTelemetryTracesConfig(
-        endpoint="http://localhost:4318/v1/traces",
-        enable_trace_context_propagation=True,
-    )
-))
-```
+GLIDE only needs the optional `opentelemetry-api>=1.6.0` package to read the active span. The following example also uses your application's OpenTelemetry SDK and OTLP/HTTP exporter. With the API package alone, there is no recording provider and therefore no valid parent span.
 
-When propagation is enabled and your application creates its own OpenTelemetry spans, GLIDE creates its command, batch and script spans as children of whichever span is active, so a trace has no gap at the database boundary. You pass no context to GLIDE commands: because the OpenTelemetry Python API propagates the active span through `contextvars`, the parent is picked up implicitly in synchronous code and inside `asyncio`/`trio` tasks alike.
-
-GLIDE itself needs only the OpenTelemetry API package:
+Install the API through the `otel` extra for the client you use:
 
 ```bash
-pip install opentelemetry-api
+pip install "valkey-glide[otel]"       # async client
+pip install "valkey-glide-sync[otel]"  # sync client
 ```
 
-The example below additionally assumes your application configures a tracer provider with `opentelemetry-sdk`, as any OTel-instrumented application does. With `opentelemetry-api` alone there is no recording tracer provider, so `start_as_current_span` yields a non-recording span with no valid context and GLIDE has no parent to attach to.
+```bash
+pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http
+```
+
+With a Valkey server on `localhost:6379` and an OTLP/HTTP collector on `localhost:4318`, this example exports both sides of the trace to the same collector:
 
 ```python
+import asyncio
+
+from glide import (
+    GlideClient, GlideClientConfiguration, NodeAddress,
+    OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig,
+)
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-tracer = trace.get_tracer(__name__)
+traces_endpoint = "http://localhost:4318/v1/traces"
 
-async def checkout():                        # Sync client: drop the await/async
-    with tracer.start_as_current_span("checkout"):
-        await client.set("cart:42", "...")   # "Set" span, child of "checkout"
-        await client.get("cart:42")          # "Get" span, child of "checkout"
+# Application spans use the application's SDK exporter.
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=traces_endpoint)))
+trace.set_tracer_provider(provider)
+
+# GLIDE spans use GLIDE's separate exporter at the same OTLP/HTTP endpoint.
+OpenTelemetry.init(OpenTelemetryConfig(
+    traces=OpenTelemetryTracesConfig(
+        endpoint=traces_endpoint,
+        sample_percentage=100,
+        enable_trace_context_propagation=True,
+    ),
+    flush_interval_ms=1000,
+))
+
+async def main():
+    client = await GlideClient.create(GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+    ))
+    try:
+        with trace.get_tracer(__name__).start_as_current_span("checkout"):
+            await client.set("cart:42", "value")
+            await client.get("cart:42")
+    finally:
+        await client.close()
+        provider.force_flush()
+        await asyncio.sleep(2)  # Allow GLIDE's exporter to flush before exit.
+
+asyncio.run(main())
 ```
 
 #### Where GLIDE's Spans Are Exported
 
-GLIDE exports its spans itself, through the `endpoint` given to `OpenTelemetryTracesConfig` — **not** through your application's OpenTelemetry SDK exporter. The two halves of a trace share a trace ID but travel as two independent streams, so both endpoints must feed the same backend for the joined trace to appear. Point `OpenTelemetryTracesConfig(endpoint=...)` at the same collector your application exports to.
+GLIDE exports its spans through the `endpoint` given to `OpenTelemetryTracesConfig`. Your application exports the parent through its own SDK. They share a trace ID but travel as separate streams. If the endpoints feed different backends or either exporter drops a span, the backend can show a parent without its GLIDE child or a child with a dangling `parent_span_id`. GLIDE cannot detect this from the command response. Point both exporters at the same collector and check both pipelines when a joined trace is missing.
 
 #### Sampling and the Parent Span
 
@@ -397,7 +427,7 @@ GLIDE exports its spans itself, through the `endpoint` given to `OpenTelemetryTr
 
 #### Without `opentelemetry-api`
 
-The package is optional and only needed when `enable_trace_context_propagation=True`. Without it installed, propagation is off and GLIDE spans behave as they always have: independent trace roots governed by `sample_percentage` alone. If reading the active span context ever fails, it never fails your command — GLIDE logs each failure at debug level and continues as if no span were active, leaving `sample_percentage` to decide.
+The package is optional and only needed when `enable_trace_context_propagation=True`. Without it installed, propagation is off and GLIDE spans behave as they always have: independent trace roots governed by `sample_percentage` alone. If reading the active span context ever fails, it never fails your command. GLIDE logs each failure at debug level and continues as if no span were active, leaving `sample_percentage` to decide.
 
 ---
 
