@@ -125,6 +125,9 @@ pub(crate) enum ConnectionType {
     PreferManagement,
 }
 
+/// Keys are logical addresses that are ready to dial. Raw configured seeds
+/// must be prepared before insertion; OS socket keys are used only when no
+/// AddressResolver is configured.
 pub(crate) struct ConnectionsMap<Connection>(pub(crate) DashMap<String, ClusterNode<Connection>>);
 
 impl<Connection> std::fmt::Display for ConnectionsMap<Connection> {
