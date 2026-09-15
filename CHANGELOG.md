@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: A scope pool configured with `max_total = N` now permits N concurrent scopes instead of N-1. The pool reserved a slot against `max_total` and the caller then re-checked capacity after that reservation, so the last acquire was never given a connection and the borrower timed out ([#6795](https://github.com/valkey-io/valkey-glide/issues/6795))
 * Core: Resolve cluster redirect addresses exactly once, preserve canonical MOVED/ASK targets across retries and reconnects, match raw IPs by exact IP and port (including IPv6), and prevent stale refresh generations from installing connections or removing current refresh-task state ([#6788](https://github.com/valkey-io/valkey-glide/pull/6788))
 * Java: Map the Jedis compatibility layer's database selection onto GLIDE's `databaseId` instead of logging a warning and discarding it. A `JedisPool` configured for a non-zero database ran every command against database 0, silently writing to a database the caller did not ask for ([#6994](https://github.com/valkey-io/valkey-glide/issues/6994))
 * Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))

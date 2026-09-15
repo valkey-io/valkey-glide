@@ -1575,17 +1575,16 @@ pub(crate) mod shared_client_tests {
 
             let scope_id = {
                 let mut guard = pool.lock().await;
-                guard.try_acquire(glide_core::pool::get_scope_registry(), routing_slot)
+                match guard.try_acquire(glide_core::pool::get_scope_registry(), routing_slot) {
+                    glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
+                    other => panic!("failed to acquire scope (connection not seated): {other:?}"),
+                }
             };
-            assert!(
-                scope_id >= 0,
-                "failed to acquire scope (connection not seated): {scope_id}"
-            );
 
             ScopeHandle {
                 client,
                 client_id,
-                scope_id: scope_id as u64,
+                scope_id,
                 pool,
                 released: std::cell::Cell::new(false),
             }
@@ -1613,6 +1612,97 @@ pub(crate) mod shared_client_tests {
         fn drop(&mut self) {
             self.release();
         }
+    }
+
+    /// Polls `try_acquire_scope` the way the bindings do (see `GlideClient`'s
+    /// `scopedConnection` loop), returning `None` if the deadline passes.
+    #[cfg(feature = "proto")]
+    async fn acquire_scope_within(
+        client_id: u64,
+        bytes: &[u8],
+        timeout: std::time::Duration,
+    ) -> Option<u64> {
+        let runtime = tokio::runtime::Handle::current();
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            let result =
+                glide_core::scope::try_acquire_scope(client_id, bytes.to_vec(), &runtime, 0);
+            if result >= 0 {
+                return Some(result as u64);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        None
+    }
+
+    /// `max_total = N` must permit exactly N concurrent scopes, with N+1 the first
+    /// rejection. Exercises the whole borrow path against a real server — reserve,
+    /// create, reuse, and `in_use` accounting — which the reservation-layer unit
+    /// test in `pool.rs` cannot reach on its own.
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_scope_pool_permits_exactly_max_total_concurrent_scopes() {
+        const MAX_TOTAL: u32 = 3;
+
+        block_on_all(async {
+            let configuration = TestConfiguration {
+                shared_server: true,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics(false, configuration.clone()).await;
+            let bytes = scope_request_bytes(&test_basics.server, &configuration);
+
+            let client_id = 67_950_001_u64;
+            glide_core::scope::register_client(client_id, test_basics.client.clone());
+            glide_core::pool::get_client_scope_pools().insert(
+                client_id,
+                std::sync::Arc::new(tokio::sync::Mutex::new(glide_core::pool::ScopePool::new(
+                    glide_core::pool::ScopePoolConfig {
+                        max_total: MAX_TOTAL,
+                        ..Default::default()
+                    },
+                    bytes.clone(),
+                    client_id,
+                ))),
+            );
+
+            let mut held = Vec::new();
+            for i in 0..MAX_TOTAL {
+                let scope_id =
+                    acquire_scope_within(client_id, &bytes, std::time::Duration::from_secs(10))
+                        .await
+                        .unwrap_or_else(|| {
+                            panic!("scope {} of {MAX_TOTAL} must be acquirable", i + 1)
+                        });
+                held.push(scope_id);
+            }
+
+            let over_capacity =
+                acquire_scope_within(client_id, &bytes, std::time::Duration::from_millis(500))
+                    .await;
+
+            let runtime = tokio::runtime::Handle::current();
+            for scope_id in &held {
+                glide_core::scope::release_scope(*scope_id, client_id, &runtime);
+            }
+            glide_core::scope::unregister_client(client_id);
+            glide_core::pool::get_client_scope_pools().remove(&client_id);
+
+            let mut distinct = held.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            assert_eq!(
+                distinct.len(),
+                MAX_TOTAL as usize,
+                "each concurrent scope must get its own connection, got {held:?}"
+            );
+            assert!(
+                over_capacity.is_none(),
+                "scope {} must be rejected while {MAX_TOTAL} are held, got {over_capacity:?}",
+                MAX_TOTAL + 1
+            );
+        });
     }
 
     #[rstest]
