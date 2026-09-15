@@ -6,7 +6,7 @@ use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::commands::options::{ConditionalChange, OrderBy};
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -103,7 +103,7 @@ pub trait GeoCommands: CommandExecutor {
         for (m, pos) in members_positions {
             cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the distance between two members (`GEODIST`).
@@ -119,7 +119,7 @@ pub trait GeoCommands: CommandExecutor {
         if let Some(u) = unit {
             cmd.arg(u.as_arg());
         }
-        value::to_opt_f64(self.execute_command(cmd, None).await?)
+        Option::<f64>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the geohash strings of members (`GEOHASH`).
@@ -134,8 +134,11 @@ pub trait GeoCommands: CommandExecutor {
             cmd.arg(m);
         }
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
-            other => Ok(vec![value::to_opt_bytes(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Option::<Bytes>::from_owned_valkey_value)
+                .collect(),
+            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -157,8 +160,8 @@ pub trait GeoCommands: CommandExecutor {
                     match it {
                         ValkeyValue::Nil => out.push(None),
                         ValkeyValue::Array(mut pair) if pair.len() == 2 => {
-                            let lat = value::to_f64(pair.pop().unwrap())?;
-                            let lon = value::to_f64(pair.pop().unwrap())?;
+                            let lat = f64::from_owned_valkey_value(pair.pop().unwrap())?;
+                            let lon = f64::from_owned_valkey_value(pair.pop().unwrap())?;
                             out.push(Some((lon, lat)));
                         }
                         _ => out.push(None),
@@ -187,9 +190,12 @@ pub trait GeoCommands: CommandExecutor {
             .arg(radius)
             .arg(unit.as_arg());
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
             ValkeyValue::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_bytes(other)?]),
+            other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -213,7 +219,7 @@ pub trait GeoCommands: CommandExecutor {
         for (m, pos) in members_positions {
             cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Search a geospatial index from a member with a given shape (`GEOSEARCH
@@ -284,7 +290,7 @@ pub trait GeoCommands: CommandExecutor {
         if store_dist {
             cmd.arg("STOREDIST");
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Search from a coordinate and store the results into `destination`
@@ -312,7 +318,7 @@ pub trait GeoCommands: CommandExecutor {
         if store_dist {
             cmd.arg("STOREDIST");
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
@@ -331,9 +337,12 @@ fn add_search_tail(cmd: &mut Cmd, order: Option<OrderBy>, count: Option<i64>, an
 
 fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
         ValkeyValue::Nil => Ok(Vec::new()),
-        other => Ok(vec![value::to_bytes(other)?]),
+        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
     }
 }
 

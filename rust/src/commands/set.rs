@@ -4,7 +4,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -13,10 +13,16 @@ use std::collections::HashSet;
 
 fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        ValkeyValue::Set(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
+        ValkeyValue::Set(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
         ValkeyValue::Nil => Ok(Vec::new()),
-        other => Ok(vec![value::to_bytes(other)?]),
+        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
     }
 }
 
@@ -33,7 +39,7 @@ pub trait SetCommands: CommandExecutor {
         for k in keys {
             cmd.arg(k);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Cardinality of the intersection of the given sets with a `LIMIT`
@@ -50,7 +56,7 @@ pub trait SetCommands: CommandExecutor {
             cmd.arg(k);
         }
         cmd.arg("LIMIT").arg(limit);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     #[doc(hidden)]
@@ -81,7 +87,7 @@ pub trait SetCommands: CommandExecutor {
         for k in keys {
             cmd.arg(k);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 

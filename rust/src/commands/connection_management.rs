@@ -4,7 +4,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -16,49 +16,49 @@ pub trait ConnectionManagementCommands: CommandExecutor {
     async fn ping(&self) -> ValkeyResult<String> {
         let mut cmd = Cmd::new();
         cmd.arg("PING");
-        value::to_string(self.execute_command(cmd, None).await?)
+        String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Ping the server with a message (`PING message`). Echoes the message back.
     async fn ping_message<M: ToValkeyArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("PING").arg(message);
-        value::to_bytes(self.execute_command(cmd, None).await?)
+        Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Echo a message (`ECHO`).
     async fn echo<M: ToValkeyArgs + Send>(&self, message: M) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("ECHO").arg(message);
-        value::to_bytes(self.execute_command(cmd, None).await?)
+        Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Select the logical database with the given index (`SELECT`).
     async fn select(&self, index: i64) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("SELECT").arg(index);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the current connection id (`CLIENT ID`).
     async fn client_id(&self) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("CLIENT").arg("ID");
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the current connection name (`CLIENT GETNAME`).
     async fn client_getname(&self) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("CLIENT").arg("GETNAME");
-        value::to_opt_bytes(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Set the current connection name (`CLIENT SETNAME`).
     async fn client_setname<N: ToValkeyArgs + Send>(&self, name: N) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("CLIENT").arg("SETNAME").arg(name);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Enable or disable eviction for the current connection (`CLIENT NO-EVICT`).
@@ -67,7 +67,7 @@ pub trait ConnectionManagementCommands: CommandExecutor {
         cmd.arg("CLIENT")
             .arg("NO-EVICT")
             .arg(if on { "ON" } else { "OFF" });
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Enable or disable access-time updates for the current connection
@@ -77,14 +77,14 @@ pub trait ConnectionManagementCommands: CommandExecutor {
         cmd.arg("CLIENT")
             .arg("NO-TOUCH")
             .arg(if on { "ON" } else { "OFF" });
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Reset the connection to its initial state (`RESET`).
     async fn reset(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("RESET");
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 

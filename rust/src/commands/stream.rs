@@ -5,7 +5,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -253,14 +253,14 @@ pub trait StreamCommands: CommandExecutor {
         for (f, v) in fields {
             cmd.arg(f).arg(v);
         }
-        value::to_opt_string(self.execute_command(cmd, None).await?)
+        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the number of entries in the stream (`XLEN`).
     async fn xlen<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XLEN").arg(key);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete entries by ID (`XDEL`); returns the number deleted.
@@ -270,7 +270,7 @@ pub trait StreamCommands: CommandExecutor {
         for id in ids {
             cmd.arg(*id);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Trim the stream to (approximately) `maxlen` entries (`XTRIM ... MAXLEN`).
@@ -286,7 +286,7 @@ pub trait StreamCommands: CommandExecutor {
             cmd.arg("~");
         }
         cmd.arg(maxlen);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Read a range of entries (`XRANGE key start end`).
@@ -327,7 +327,7 @@ pub trait StreamCommands: CommandExecutor {
         if mkstream {
             cmd.arg("MKSTREAM");
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Destroy a consumer group (`XGROUP DESTROY`). Returns whether it existed.
@@ -338,7 +338,7 @@ pub trait StreamCommands: CommandExecutor {
     ) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("DESTROY").arg(key).arg(group);
-        value::to_bool(self.execute_command(cmd, None).await?)
+        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Acknowledge processed entries in a consumer group (`XACK`).
@@ -353,7 +353,7 @@ pub trait StreamCommands: CommandExecutor {
         for id in ids {
             cmd.arg(*id);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Append an entry to the stream with options (`XADD` with `NOMKSTREAM` /
@@ -378,7 +378,7 @@ pub trait StreamCommands: CommandExecutor {
         for (f, v) in fields {
             cmd.arg(f).arg(v);
         }
-        value::to_opt_string(self.execute_command(cmd, None).await?)
+        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Trim the stream to a minimum ID (`XTRIM ... MINID`). Returns entries removed.
@@ -394,7 +394,7 @@ pub trait StreamCommands: CommandExecutor {
             cmd.arg("~");
         }
         cmd.arg(minid);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Read from one or more streams (`XREAD`). `keys_ids` is a list of
@@ -644,7 +644,7 @@ pub trait StreamCommands: CommandExecutor {
         if let Some(m) = max_deleted_id {
             cmd.arg("MAXDELETEDID").arg(m);
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Create a consumer group with options (`XGROUP CREATE` with `MKSTREAM` /
@@ -659,7 +659,7 @@ pub trait StreamCommands: CommandExecutor {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("CREATE").arg(key).arg(group).arg(id);
         options.add_to(&mut cmd);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Create a new consumer in a group (`XGROUP CREATECONSUMER`). Returns
@@ -676,7 +676,7 @@ pub trait StreamCommands: CommandExecutor {
             .arg(key)
             .arg(group)
             .arg(consumer);
-        value::to_bool(self.execute_command(cmd, None).await?)
+        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete a consumer from a group (`XGROUP DELCONSUMER`). Returns the number
@@ -693,7 +693,7 @@ pub trait StreamCommands: CommandExecutor {
             .arg(key)
             .arg(group)
             .arg(consumer);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Set the last-delivered ID for a consumer group (`XGROUP SETID`).
@@ -709,7 +709,7 @@ pub trait StreamCommands: CommandExecutor {
         if let Some(e) = entries_read {
             cmd.arg("ENTRIESREAD").arg(e);
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
@@ -743,7 +743,7 @@ fn parse_entries(v: ValkeyValue) -> ValkeyResult<Vec<StreamEntry>> {
 
     let mut out = Vec::with_capacity(pairs.len());
     for (id_val, fields_val) in pairs {
-        let id = value::to_string(id_val)?;
+        let id = String::from_owned_valkey_value(id_val)?;
         let fv = parse_fields(fields_val)?;
         out.push((id, fv));
     }
@@ -756,7 +756,7 @@ fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     let items = match v {
         ValkeyValue::Array(items) => items,
         ValkeyValue::Nil => return Ok(Vec::new()),
-        other => return Ok(vec![(value::to_bytes(other)?, Bytes::new())]),
+        other => return Ok(vec![(Bytes::from_owned_valkey_value(other)?, Bytes::new())]),
     };
     // Nested pairs form.
     if items
@@ -766,8 +766,8 @@ fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
         let mut out = Vec::with_capacity(items.len());
         for it in items {
             if let ValkeyValue::Array(mut pair) = it {
-                let val = value::to_bytes(pair.pop().unwrap())?;
-                let field = value::to_bytes(pair.pop().unwrap())?;
+                let val = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
+                let field = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                 out.push((field, val));
             }
         }
@@ -777,7 +777,10 @@ fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     let mut out = Vec::with_capacity(items.len() / 2);
     let mut iter = items.into_iter();
     while let (Some(f), Some(val)) = (iter.next(), iter.next()) {
-        out.push((value::to_bytes(f)?, value::to_bytes(val)?));
+        out.push((
+            Bytes::from_owned_valkey_value(f)?,
+            Bytes::from_owned_valkey_value(val)?,
+        ));
     }
     Ok(out)
 }
@@ -788,8 +791,11 @@ impl<T: CommandExecutor + ?Sized> StreamCommands for T {}
 fn collect_strings(v: ValkeyValue) -> ValkeyResult<Vec<String>> {
     match v {
         ValkeyValue::Nil => Ok(Vec::new()),
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_string).collect(),
-        other => Ok(vec![value::to_string(other)?]),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(String::from_owned_valkey_value)
+            .collect(),
+        other => Ok(vec![String::from_owned_valkey_value(other)?]),
     }
 }
 
@@ -820,7 +826,7 @@ fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry
     };
     let mut out = Vec::with_capacity(pairs.len());
     for (key_val, entries_val) in pairs {
-        let key = value::to_bytes(key_val)?;
+        let key = Bytes::from_owned_valkey_value(key_val)?;
         let entries = parse_entries(entries_val)?;
         out.push((key, entries));
     }
@@ -837,7 +843,7 @@ fn parse_autoclaim(v: ValkeyValue) -> ValkeyResult<(String, Vec<StreamEntry>, Ve
                 Vec::new()
             };
             let entries = parse_entries(items.pop().unwrap())?;
-            let cursor = value::to_string(items.pop().unwrap())?;
+            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, entries, deleted))
         }
         other => Err(crate::error::GlideError::Request(format!(
@@ -856,7 +862,7 @@ fn parse_autoclaim_justid(v: ValkeyValue) -> ValkeyResult<(String, Vec<String>, 
                 Vec::new()
             };
             let ids = collect_strings(items.pop().unwrap())?;
-            let cursor = value::to_string(items.pop().unwrap())?;
+            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, ids, deleted))
         }
         other => Err(crate::error::GlideError::Request(format!(
@@ -879,7 +885,7 @@ fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
     let consumers_val = items.pop().unwrap();
     let max_val = items.pop().unwrap();
     let min_val = items.pop().unwrap();
-    let count = value::to_i64(items.pop().unwrap())?;
+    let count = i64::from_owned_valkey_value(items.pop().unwrap())?;
     let consumers = match consumers_val {
         ValkeyValue::Nil => Vec::new(),
         ValkeyValue::Array(list) => {
@@ -888,8 +894,8 @@ fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
                 if let ValkeyValue::Array(mut pair) = it
                     && pair.len() == 2
                 {
-                    let cnt = value::to_i64(pair.pop().unwrap())?;
-                    let name = value::to_bytes(pair.pop().unwrap())?;
+                    let cnt = i64::from_owned_valkey_value(pair.pop().unwrap())?;
+                    let name = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                     out.push((name, cnt));
                 }
             }
@@ -899,8 +905,8 @@ fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
     };
     Ok(XPendingSummary {
         count,
-        min_id: value::to_opt_bytes(min_val)?,
-        max_id: value::to_opt_bytes(max_val)?,
+        min_id: Option::<Bytes>::from_owned_valkey_value(min_val)?,
+        max_id: Option::<Bytes>::from_owned_valkey_value(max_val)?,
         consumers,
     })
 }
@@ -922,10 +928,10 @@ fn parse_xpending_range(v: ValkeyValue) -> ValkeyResult<Vec<XPendingEntry>> {
         if let ValkeyValue::Array(mut parts) = it
             && parts.len() == 4
         {
-            let delivery_count = value::to_i64(parts.pop().unwrap())?;
-            let idle_ms = value::to_i64(parts.pop().unwrap())?;
-            let consumer = value::to_bytes(parts.pop().unwrap())?;
-            let id = value::to_bytes(parts.pop().unwrap())?;
+            let delivery_count = i64::from_owned_valkey_value(parts.pop().unwrap())?;
+            let idle_ms = i64::from_owned_valkey_value(parts.pop().unwrap())?;
+            let consumer = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
+            let id = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
             out.push(XPendingEntry {
                 id,
                 consumer,
@@ -944,13 +950,13 @@ fn parse_field_value_map(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, ValkeyValue
         ValkeyValue::Nil => Ok(Vec::new()),
         ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(k, val)| Ok((value::to_bytes(k)?, val)))
+            .map(|(k, val)| Ok((Bytes::from_owned_valkey_value(k)?, val)))
             .collect(),
         ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(k), Some(val)) = (iter.next(), iter.next()) {
-                out.push((value::to_bytes(k)?, val));
+                out.push((Bytes::from_owned_valkey_value(k)?, val));
             }
             Ok(out)
         }

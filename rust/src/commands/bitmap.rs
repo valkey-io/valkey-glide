@@ -4,7 +4,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -169,7 +169,7 @@ pub trait BitmapCommands: CommandExecutor {
     async fn bitpos<K: ToValkeyArgs + Send>(&self, key: K, bit: u8) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("BITPOS").arg(key).arg(bit);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Find the position of the first bit set to `bit` within a range
@@ -187,7 +187,7 @@ pub trait BitmapCommands: CommandExecutor {
         if let Some(it) = index_type {
             cmd.arg(it.as_arg());
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Perform arbitrary bit-field operations (`BITFIELD`). Returns one result
@@ -231,10 +231,10 @@ fn parse_bitfield(v: ValkeyValue) -> ValkeyResult<Vec<Option<i64>>> {
             .into_iter()
             .map(|it| match it {
                 ValkeyValue::Nil => Ok(None),
-                other => Ok(Some(value::to_i64(other)?)),
+                other => Ok(Some(i64::from_owned_valkey_value(other)?)),
             })
             .collect(),
-        other => Ok(vec![Some(value::to_i64(other)?)]),
+        other => Ok(vec![Some(i64::from_owned_valkey_value(other)?)]),
     }
 }
 

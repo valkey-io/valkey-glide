@@ -6,7 +6,7 @@ use crate::cmd::Cmd;
 use crate::commands::options::{FlushMode, FunctionRestorePolicy};
 use crate::executor::CommandExecutor;
 use crate::routes::Route;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -55,7 +55,7 @@ pub trait ScriptingCommands: CommandExecutor {
     async fn script_load(&self, script: &str) -> ValkeyResult<String> {
         let mut cmd = Cmd::new();
         cmd.arg("SCRIPT").arg("LOAD").arg(script);
-        value::to_string(self.execute_command(cmd, None).await?)
+        String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Check whether scripts exist in the cache by SHA1 (`SCRIPT EXISTS`).
@@ -66,8 +66,11 @@ pub trait ScriptingCommands: CommandExecutor {
             cmd.arg(*s);
         }
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_bool).collect(),
-            other => Ok(vec![value::to_bool(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(bool::from_owned_valkey_value)
+                .collect(),
+            other => Ok(vec![bool::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -75,7 +78,7 @@ pub trait ScriptingCommands: CommandExecutor {
     async fn script_flush(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("SCRIPT").arg("FLUSH");
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Invoke a function registered with `FUNCTION LOAD` (`FCALL`).
@@ -165,28 +168,28 @@ pub trait ScriptingCommands: CommandExecutor {
             cmd.arg("REPLACE");
         }
         cmd.arg(code);
-        value::to_string(self.execute_command(cmd, None).await?)
+        String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete a function library (`FUNCTION DELETE`).
     async fn function_delete(&self, library_name: &str) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("DELETE").arg(library_name);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Flush all function libraries (`FUNCTION FLUSH`).
     async fn function_flush(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("FLUSH");
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Flush all function libraries with a flush mode (`FUNCTION FLUSH SYNC|ASYNC`).
     async fn function_flush_mode(&self, mode: FlushMode) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("FLUSH").arg(mode.as_arg());
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// List registered function libraries (`FUNCTION LIST`). Set `with_code` to
@@ -211,7 +214,7 @@ pub trait ScriptingCommands: CommandExecutor {
     async fn function_dump(&self) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("DUMP");
-        value::to_bytes(self.execute_command(cmd, None).await?)
+        Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Restore function libraries from a `FUNCTION DUMP` payload
@@ -226,7 +229,7 @@ pub trait ScriptingCommands: CommandExecutor {
             .arg("RESTORE")
             .arg(payload)
             .arg(policy.as_arg());
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get information about the function engine and running function
@@ -241,21 +244,21 @@ pub trait ScriptingCommands: CommandExecutor {
     async fn function_kill(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("KILL");
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Kill a running script that made no write commands (`SCRIPT KILL`).
     async fn script_kill(&self) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("SCRIPT").arg("KILL");
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Show the source of a cached script by its SHA1 (`SCRIPT SHOW`, Valkey 8+).
     async fn script_show(&self, sha1: &str) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("SCRIPT").arg("SHOW").arg(sha1);
-        value::to_bytes(self.execute_command(cmd, None).await?)
+        Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 

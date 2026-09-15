@@ -5,7 +5,7 @@ use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::commands::options::{ExpireOptions, Expiry, HashFieldConditionalChange, SetExpiry};
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -29,8 +29,11 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(f);
         }
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
-            other => Ok(vec![value::to_opt_bytes(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Option::<Bytes>::from_owned_valkey_value)
+                .collect(),
+            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -42,14 +45,14 @@ pub trait HashCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("HSTRLEN").arg(key).arg(field);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get a random field from the hash (`HRANDFIELD`).
     async fn hrandfield<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("HRANDFIELD").arg(key);
-        value::to_opt_bytes(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get `count` random fields from the hash (`HRANDFIELD key count`).
@@ -242,9 +245,12 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(f);
         }
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Option::<Bytes>::from_owned_valkey_value)
+                .collect(),
             ValkeyValue::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_opt_bytes(other)?]),
+            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -276,7 +282,7 @@ pub trait HashCommands: CommandExecutor {
         for (f, v) in field_values {
             cmd.arg(f).arg(v);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
@@ -284,8 +290,11 @@ pub trait HashCommands: CommandExecutor {
 fn collect_i64(v: ValkeyValue) -> ValkeyResult<Vec<i64>> {
     match v {
         ValkeyValue::Nil => Ok(Vec::new()),
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_i64).collect(),
-        other => Ok(vec![value::to_i64(other)?]),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(i64::from_owned_valkey_value)
+            .collect(),
+        other => Ok(vec![i64::from_owned_valkey_value(other)?]),
     }
 }
 
@@ -295,7 +304,12 @@ fn collect_pairs(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
         ValkeyValue::Nil => Ok(Vec::new()),
         ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(a, b)| Ok((value::to_bytes(a)?, value::to_bytes(b)?)))
+            .map(|(a, b)| {
+                Ok((
+                    Bytes::from_owned_valkey_value(a)?,
+                    Bytes::from_owned_valkey_value(b)?,
+                ))
+            })
             .collect(),
         ValkeyValue::Array(items) => {
             if items
@@ -305,8 +319,8 @@ fn collect_pairs(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
                     if let ValkeyValue::Array(mut pair) = it {
-                        let b = value::to_bytes(pair.pop().unwrap())?;
-                        let a = value::to_bytes(pair.pop().unwrap())?;
+                        let b = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
+                        let a = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                         out.push((a, b));
                     }
                 }
@@ -315,20 +329,26 @@ fn collect_pairs(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
                 let mut out = Vec::with_capacity(items.len() / 2);
                 let mut iter = items.into_iter();
                 while let (Some(a), Some(b)) = (iter.next(), iter.next()) {
-                    out.push((value::to_bytes(a)?, value::to_bytes(b)?));
+                    out.push((
+                        Bytes::from_owned_valkey_value(a)?,
+                        Bytes::from_owned_valkey_value(b)?,
+                    ));
                 }
                 Ok(out)
             }
         }
-        other => Ok(vec![(value::to_bytes(other)?, Bytes::new())]),
+        other => Ok(vec![(Bytes::from_owned_valkey_value(other)?, Bytes::new())]),
     }
 }
 
 fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
         ValkeyValue::Nil => Ok(Vec::new()),
-        other => Ok(vec![value::to_bytes(other)?]),
+        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
     }
 }
 

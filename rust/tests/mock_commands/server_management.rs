@@ -10,7 +10,7 @@ async fn info_and_sections() {
     let m = Mock::bulk("# Server\nredis_version:7.0\n");
     let info = m.info().await.unwrap();
     m.assert_args(&["INFO"]);
-    assert!(info.starts_with(b"# Server"));
+    assert!(info.starts_with("# Server"));
 
     let m = Mock::bulk("# CPU\n");
     m.info_sections(&["cpu", "memory"]).await.unwrap();

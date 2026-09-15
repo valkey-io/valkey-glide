@@ -10,7 +10,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ pub trait FtCommands: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Drop an index (`FT.DROPINDEX`). Set `delete_docs` to also delete the
@@ -48,7 +48,7 @@ pub trait FtCommands: CommandExecutor {
         if delete_docs {
             cmd.arg("DD");
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get information about an index (`FT.INFO`).
@@ -63,10 +63,16 @@ pub trait FtCommands: CommandExecutor {
         let mut cmd = Cmd::new();
         cmd.arg("FT._LIST");
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            ValkeyValue::Set(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
+            ValkeyValue::Set(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
             ValkeyValue::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_bytes(other)?]),
+            other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -117,7 +123,7 @@ pub trait FtCommands: CommandExecutor {
     ) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.EXPLAIN").arg(index).arg(query);
-        value::to_bytes(self.execute_command(cmd, None).await?)
+        Bytes::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Return the execution plan for a query in CLI form (`FT.EXPLAINCLI`).
@@ -139,14 +145,14 @@ pub trait FtCommands: CommandExecutor {
     ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASADD").arg(alias).arg(index);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Remove an index alias (`FT.ALIASDEL`).
     async fn ft_aliasdel<A: ToValkeyArgs + Send>(&self, alias: A) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASDEL").arg(alias);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Reassign an alias to a different index (`FT.ALIASUPDATE`).
@@ -157,7 +163,7 @@ pub trait FtCommands: CommandExecutor {
     ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASUPDATE").arg(alias).arg(index);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// List all index aliases (`FT._ALIASLIST`).
