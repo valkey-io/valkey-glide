@@ -50,17 +50,8 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
 
 NO_PARENT_SPAN_ID = "0" * 16
 
-_TRACE_ID_KEYS = ["trace_id", "traceId"]
-_PARENT_SPAN_ID_KEYS = ["parent_span_id", "parentSpanId", "parentId", "parent_id"]
-
-
-def get_span_field(span: Dict, keys: List[str]) -> Optional[str]:
-    """Return the first present, non-empty value among ``keys`` in an exported span."""
-    for key in keys:
-        value = span.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
+_TRACE_ID_KEY = "trace_id"
+_PARENT_SPAN_ID_KEY = "parent_span_id"
 
 
 def get_spans_by_name(span_objects: List[Dict], span_name: str) -> List[Dict]:
@@ -93,8 +84,8 @@ def assert_external_parent(
     )
 
     for span in spans:
-        trace_id = get_span_field(span, _TRACE_ID_KEYS)
-        parent_span_id = get_span_field(span, _PARENT_SPAN_ID_KEYS)
+        trace_id = span[_TRACE_ID_KEY]
+        parent_span_id = span[_PARENT_SPAN_ID_KEY]
         assert (
             trace_id == expected_trace_id
         ), f"{span_name} span should be in trace {expected_trace_id}, got {trace_id}"
@@ -114,10 +105,9 @@ def assert_root_spans(span_objects: List[Dict], span_name: str) -> None:
     assert spans, f"Expected at least one {span_name!r} span"
 
     for span in spans:
-        parent_span_id = get_span_field(span, _PARENT_SPAN_ID_KEYS)
-        assert parent_span_id in (
-            None,
-            NO_PARENT_SPAN_ID,
+        parent_span_id = span[_PARENT_SPAN_ID_KEY]
+        assert (
+            parent_span_id == NO_PARENT_SPAN_ID
         ), f"{span_name} span should be a trace root, got parent {parent_span_id}"
 
 
