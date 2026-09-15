@@ -512,19 +512,15 @@ def create_servers(
         # Generate default TLS files if not provided.
         if not any(custom_tls_files):
             generate_tls_certs()
-            cert_file = SERVER_CERTIFICATE_PATH
-            key_file = SERVER_KEY_PATH
-            ca_file = CA_CERTIFICATE_PATH
 
-        # Verify that all of the TLS files are provided.
+        # Otherwise, verify that all of the TLS files are provided.
         # We do not support mixing custom and default TLS files.
         elif not all(custom_tls_files):
             raise ValueError("TLS certificate, key, and CA certificate must be provided together")
 
-        else:
-            cert_file = tls_cert_file
-            key_file = tls_key_file
-            ca_file = tls_ca_cert_file
+        cert_file = tls_cert_file or SERVER_CERTIFICATE_PATH
+        key_file = tls_key_file or SERVER_KEY_PATH
+        ca_file = tls_ca_cert_file or CA_CERTIFICATE_PATH
 
         tls_args = [
             "--tls-cluster",
