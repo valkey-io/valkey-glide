@@ -51,10 +51,15 @@ fn read_cert(name: &str) -> Vec<u8> {
 pub struct ClusterHarness {
     /// The `--cluster-folder` used to stop the cluster on drop.
     folder: String,
+
     /// Primary node ports.
     pub primary_ports: Vec<u16>,
+
     /// Replica node ports.
     pub replica_ports: Vec<u16>,
+
+    /// Whether the cluster is TLS-enabled.
+    tls: bool,
 }
 
 impl ClusterHarness {
@@ -184,6 +189,7 @@ impl ClusterHarness {
             folder,
             primary_ports,
             replica_ports,
+            tls,
         }
     }
 
@@ -270,9 +276,16 @@ impl ClusterHarness {
 
 impl Drop for ClusterHarness {
     fn drop(&mut self) {
-        // Stop the cluster using `cluster_manager.py`.
+        // Build arguments.
+        let mut args: Vec<&str> = vec![CLUSTER_MANAGER];
+        if self.tls {
+            args.push("--tls");
+        }
+        args.extend(["stop", "--cluster-folder", &self.folder]);
+
+        // Run `cluster_manager.py`.
         let _ = Command::new("python3")
-            .args([CLUSTER_MANAGER, "stop", "--cluster-folder", &self.folder])
+            .args(&args)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
