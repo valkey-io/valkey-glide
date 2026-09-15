@@ -67,10 +67,6 @@ pub use commands::stream::{
     XPendingEntry, XPendingSummary,
 };
 
-// TODO #7024: remove this redis::Value re-export; ValkeyValue replaces it (Phase 4).
-/// Re-export the underlying `redis` value type for advanced use.
-pub use redis::Value;
-
 // ---- `redis` crate re-exports ----
 //
 // TODO #7024: remove these redis re-exports (`pub use redis` and the flat
@@ -131,9 +127,10 @@ pub use commands::scan::SyncScanIter;
 /// surface — changing the vendored fork's API is a breaking change.
 pub use redis;
 
-// TODO #7024: Don't expose.
-/// Error and conversion types (`RedisResult`, `FromRedisValue`, …).
-pub use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, ToRedisArgs};
+// TODO #7024: remove the remaining `FromRedisValue`/`RedisResult` re-exports once
+// `PipelineExt::query_glide` decodes via `FromValkeyValue` (Phase 4b).
+/// Conversion types still referenced by the pipeline typed-decode API.
+pub use redis::{FromRedisValue, RedisResult};
 
 // TODO #7024: Don't expose.
 /// Pipeline / transaction builder (`pipe()`; run with
