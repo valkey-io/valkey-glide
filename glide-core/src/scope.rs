@@ -344,52 +344,101 @@ pub async fn send_scope_command(
 // BACKGROUND CONNECTION CREATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Create a new scope connection in the background and add it to the pool.
-///
-/// This function resolves the target address from the explicit topology-aware target
-/// and opens a new `MultiplexedConnection`.
-///
-/// # Arguments
-/// - `pool`: Arc to the scope pool (locked async)
-/// - `client`: Optional reference to the parent Client (for cluster slot resolution)
-/// - `connection_request_bytes`: Serialized protobuf ConnectionRequest
-/// - `target`: Standalone server or concrete cluster slot destination
+/// Timeout for each network phase of scoped connection creation (TCP/TLS
+/// connect, and the post-connect init pipeline).
 #[cfg(feature = "proto")]
-pub async fn create_scope_connection(
-    pool: Arc<TokioMutex<ScopePool>>,
+const SCOPE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Why a scoped connection could not be created and seated in the pool.
+///
+/// Every variant releases the caller's `max_total` reservation exactly once, at the
+/// single failure exit in [`create_scope_connection`], and is logged there so a
+/// borrower's eventual "pool exhausted" timeout can be traced back to its cause.
+#[cfg(feature = "proto")]
+#[derive(Debug)]
+pub enum ScopeCreateError {
+    /// The stored `ConnectionRequest` bytes did not parse.
+    InvalidConnectionRequest(protobuf::Error),
+    /// The configured `lib_name` failed validation.
+    InvalidLibName,
+    /// Standalone target, but the request carries no seed address.
+    NoSeedAddress,
+    /// redis-rs rejected the URL built from the target.
+    InvalidUrl(RedisError),
+    /// The connect attempt failed.
+    ConnectFailed(RedisError),
+    /// The connect attempt did not complete within [`SCOPE_CONNECT_TIMEOUT`].
+    ConnectTimedOut,
+    /// IAM is configured on the parent but no token is currently available.
+    IamTokenUnavailable,
+    /// The AUTH/SELECT/CLIENT SETNAME init pipeline failed.
+    InitFailed(RedisError),
+    /// The init pipeline did not complete within [`SCOPE_CONNECT_TIMEOUT`].
+    InitTimedOut,
+    /// The pool stopped running while the connection was being created.
+    PoolClosed,
+}
+
+#[cfg(feature = "proto")]
+impl std::fmt::Display for ScopeCreateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidConnectionRequest(e) => write!(f, "invalid connection request: {e}"),
+            Self::InvalidLibName => f.write_str("invalid lib_name"),
+            Self::NoSeedAddress => f.write_str("connection request has no seed address"),
+            Self::InvalidUrl(e) => write!(f, "invalid target url: {e}"),
+            Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
+            Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
+            Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
+            Self::InitFailed(e) => write!(f, "init pipeline failed: {e}"),
+            Self::InitTimedOut => {
+                write!(f, "init pipeline timed out after {SCOPE_CONNECT_TIMEOUT:?}")
+            }
+            Self::PoolClosed => f.write_str("pool is no longer running"),
+        }
+    }
+}
+
+/// An authenticated, initialized connection that has not yet been seated in a pool.
+#[cfg(feature = "proto")]
+struct PreparedScopeConnection {
+    connection: redis::aio::MultiplexedConnection,
+    /// Database the connection was SELECTed into (parent runtime DB, else config).
+    database_id: u32,
+    /// IAM token generation the initial AUTH was built from (0 when IAM is not in use).
+    initial_iam_generation: u64,
+}
+
+/// Open and initialize a connection to `target`, without touching the pool.
+///
+/// Pure pipeline: parse request → validate lib name → build URL → connect →
+/// AUTH/SELECT/CLIENT SETNAME. Any step failing short-circuits with the reason;
+/// reservation accounting is the caller's job.
+#[cfg(feature = "proto")]
+async fn build_scope_connection(
     client: Option<&Client>,
     connection_request_bytes: &[u8],
-    target: ScopeTarget,
-) {
+    target: &ScopeTarget,
+) -> Result<PreparedScopeConnection, ScopeCreateError> {
     use protobuf::Message as _;
 
-    let proto = match crate::connection_request::ConnectionRequest::parse_from_bytes(
-        connection_request_bytes,
-    ) {
-        Ok(p) => p,
-        Err(_) => {
-            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-            return;
-        }
-    };
+    let proto =
+        crate::connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
+            .map_err(ScopeCreateError::InvalidConnectionRequest)?;
     if !proto.lib_name.is_empty()
         && crate::client::validate_effective_lib_name(proto.lib_name.as_ref()).is_err()
     {
-        pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-        return;
+        return Err(ScopeCreateError::InvalidLibName);
     }
+
     let use_tls = proto.tls_mode.value() != 0;
     let scheme = if use_tls { "rediss" } else { "redis" };
-
     let url = match target {
         ScopeTarget::Standalone => {
-            let addr = match proto.addresses.first() {
-                Some(a) => a,
-                None => {
-                    pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-                    return;
-                }
-            };
+            let addr = proto
+                .addresses
+                .first()
+                .ok_or(ScopeCreateError::NoSeedAddress)?;
             let port = if addr.port == 0 {
                 6379
             } else {
@@ -397,21 +446,15 @@ pub async fn create_scope_connection(
             };
             format!("{}://{}:{}", scheme, addr.host, port)
         }
-        ScopeTarget::ClusterPrimary(ref addr) => format!("{}://{}", scheme, addr),
+        ScopeTarget::ClusterPrimary(addr) => format!("{}://{}", scheme, addr),
     };
 
-    let redis_client = match redis::Client::open(url.as_str()) {
-        Ok(c) => c,
-        Err(_) => {
-            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-            return;
-        }
-    };
+    let redis_client = redis::Client::open(url.as_str()).map_err(ScopeCreateError::InvalidUrl)?;
     let opts = redis::GlideConnectionOptions {
         push_sender: None,
         disconnect_notifier: None,
         discover_az: false,
-        connection_timeout: Some(std::time::Duration::from_secs(5)),
+        connection_timeout: Some(SCOPE_CONNECT_TIMEOUT),
         connection_retry_strategy: None,
         tcp_nodelay: true,
         pubsub_synchronizer: None,
@@ -419,16 +462,14 @@ pub async fn create_scope_connection(
         cert_params_provider: None,
     };
     let mut conn = match tokio::time::timeout(
-        std::time::Duration::from_secs(5),
+        SCOPE_CONNECT_TIMEOUT,
         redis_client.get_multiplexed_async_connection(opts),
     )
     .await
     {
         Ok(Ok(c)) => c,
-        _ => {
-            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-            return;
-        }
+        Ok(Err(e)) => return Err(ScopeCreateError::ConnectFailed(e)),
+        Err(_) => return Err(ScopeCreateError::ConnectTimedOut),
     };
 
     // Post-connect initialization: AUTH + SELECT to match parent client config.
@@ -454,21 +495,15 @@ pub async fn create_scope_connection(
         // the old token, but the recorded generation already matches the new one.
         let generation_before_auth = manager.token_generation();
         let current_token = manager.get_token().await;
-        if !current_token.is_empty() {
-            initial_iam_generation = generation_before_auth;
-            init_pipe
-                .cmd("AUTH")
-                .arg(manager.username())
-                .arg(current_token.as_str());
-            init_count += 1;
-        } else {
-            logger_core::log_warn(
-                "create_scope_connection",
-                "IAM token unavailable; skipping AUTH for scoped connection",
-            );
-            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-            return;
+        if current_token.is_empty() {
+            return Err(ScopeCreateError::IamTokenUnavailable);
         }
+        initial_iam_generation = generation_before_auth;
+        init_pipe
+            .cmd("AUTH")
+            .arg(manager.username())
+            .arg(current_token.as_str());
+        init_count += 1;
     } else if let Some(ref auth_info) = proto.authentication_info.0 {
         let password = &auth_info.password;
         let username = &auth_info.username;
@@ -503,38 +538,86 @@ pub async fn create_scope_connection(
         init_count += 1;
     }
 
-    // Execute init pipeline if any commands are needed
     if init_count > 0 {
-        let init_result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
+        match tokio::time::timeout(
+            SCOPE_CONNECT_TIMEOUT,
             conn.send_packed_commands(&init_pipe, 0, init_count),
         )
-        .await;
-        if !matches!(init_result, Ok(Ok(_))) {
-            // Init failed — discard this connection
-            pool.lock().await.total_count.fetch_sub(1, Ordering::AcqRel);
-            return;
+        .await
+        {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => return Err(ScopeCreateError::InitFailed(e)),
+            Err(_) => return Err(ScopeCreateError::InitTimedOut),
         }
     }
 
-    let mut pool_guard = pool.lock().await;
-    if pool_guard.state.load(Ordering::Acquire) != POOL_RUNNING {
-        pool_guard.total_count.fetch_sub(1, Ordering::AcqRel);
-        return;
-    }
-    let scope_id = pool_guard.next_id();
-    let entry = ScopedConnection {
-        scope_id,
+    Ok(PreparedScopeConnection {
         connection: conn,
-        created_at: Instant::now(),
-        last_idle_at: Instant::now(),
-        borrowed_at: None,
-        state: ConnectionState::with_configured_db(database_id as u8),
-        pinned_slot: None,
-        target,
-        last_iam_generation: std::sync::atomic::AtomicU64::new(initial_iam_generation),
-    };
-    pool_guard.idle.push_back(entry);
+        database_id,
+        initial_iam_generation,
+    })
+}
+
+/// Create a new scope connection in the background and add it to the pool.
+///
+/// The caller holds a `max_total` reservation (see [`ScopeAcquire::Reserved`]).
+/// On success the reservation is consumed by the seated connection; on any
+/// failure it is released here, exactly once, with a single log line naming the
+/// target and the cause.
+///
+/// # Arguments
+/// - `pool`: Arc to the scope pool (locked async)
+/// - `client`: Optional reference to the parent Client (for IAM and runtime DB)
+/// - `connection_request_bytes`: Serialized protobuf ConnectionRequest
+/// - `target`: Standalone server or concrete cluster primary
+#[cfg(feature = "proto")]
+pub async fn create_scope_connection(
+    pool: Arc<TokioMutex<ScopePool>>,
+    client: Option<&Client>,
+    connection_request_bytes: &[u8],
+    target: ScopeTarget,
+) {
+    let connection = build_scope_connection(client, connection_request_bytes, &target).await;
+
+    let mut pool_guard = pool.lock().await;
+    let connection = connection.and_then(|prepared| {
+        if pool_guard.state.load(Ordering::Acquire) == POOL_RUNNING {
+            Ok(prepared)
+        } else {
+            Err(ScopeCreateError::PoolClosed)
+        }
+    });
+
+    match connection {
+        Ok(prepared) => {
+            let scope_id = pool_guard.next_id();
+            pool_guard.idle.push_back(ScopedConnection {
+                scope_id,
+                connection: prepared.connection,
+                created_at: Instant::now(),
+                last_idle_at: Instant::now(),
+                borrowed_at: None,
+                state: ConnectionState::with_configured_db(prepared.database_id as u8),
+                pinned_slot: None,
+                target,
+                last_iam_generation: std::sync::atomic::AtomicU64::new(
+                    prepared.initial_iam_generation,
+                ),
+            });
+        }
+        Err(err) => {
+            // Single release point for the reservation. A pool shutting down is
+            // expected, not a fault; everything else is worth a warning because
+            // the borrower only ever sees a generic "pool exhausted" timeout.
+            let message = format!("scoped connection to {target:?} not created: {err}");
+            if matches!(err, ScopeCreateError::PoolClosed) {
+                logger_core::log_debug("create_scope_connection", message);
+            } else {
+                logger_core::log_warn("create_scope_connection", message);
+            }
+            pool_guard.total_count.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -575,6 +658,15 @@ pub fn try_acquire_scope(
             let client = get_parent_client(pool.parent_client_id);
             let Some(target) = try_resolve_scope_target(&pool, client.as_ref(), routing_slot)
             else {
+                // Without this the borrower only ever sees "pool exhausted" while
+                // the slot stays uncovered (resharding, parent not registered).
+                logger_core::log_warn(
+                    "try_acquire_scope",
+                    format!(
+                        "client {client_id}: no primary currently resolved for slot \
+                         {routing_slot}; scope acquire will be retried"
+                    ),
+                );
                 return -1;
             };
             match pool.try_acquire(registry, target.clone()) {
