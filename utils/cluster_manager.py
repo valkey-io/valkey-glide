@@ -135,14 +135,27 @@ def _verify_tls_certs() -> bool:
     if verify_certs.returncode != 0:
         return False
 
-    # Verify that the private key parses.
-    verify_key = subprocess.run(
-        ["openssl", "pkey", "-in", SERVER_KEY_PATH, "-noout"],
+    # Verify the server key parses.
+    key_public_key = subprocess.run(
+        ["openssl", "pkey", "-in", SERVER_KEY_PATH, "-pubout"],
         capture_output=True,
         text=True,
     )
 
-    if verify_key.returncode != 0:
+    if key_public_key.returncode != 0:
+        return False
+
+    # Verify that the server key matches the server certificate.
+    cert_public_key = subprocess.run(
+        ["openssl", "x509", "-in", SERVER_CERTIFICATE_PATH, "-noout", "-pubkey"],
+        capture_output=True,
+        text=True,
+    )
+
+    if (
+        cert_public_key.returncode != 0
+        or cert_public_key.stdout != key_public_key.stdout
+    ):
         return False
 
     return True
