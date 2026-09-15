@@ -7,7 +7,7 @@ mod common;
 
 use glide::commands::pubsub::PubSubCommands;
 use glide::{
-    AsyncCommands, CustomCommand, FromRedisValue, FromValkeyValue, GlideClusterClient,
+    AsyncCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
     GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
     SortedSetCommands, pipe,
 };
@@ -51,8 +51,8 @@ timed_tokio_test!(
             .unwrap();
         assert_eq!(results.len(), 3);
         // results[0] = SET reply (OK), results[1] = INCR reply (2), results[2] = GET reply ("2")
-        assert_eq!(i64::from_redis_value(&results[1]).unwrap(), 2);
-        assert_eq!(String::from_redis_value(&results[2]).unwrap(), "2");
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+        assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
 
         // Atomic transaction with options routed to the key's slot.
         let k2 = common::tkey("cbo", "tx");
@@ -63,7 +63,7 @@ timed_tokio_test!(
             .await
             .unwrap();
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
-        assert_eq!(i64::from_redis_value(&res2[1]).unwrap(), 6);
+        assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
     }
 );
 

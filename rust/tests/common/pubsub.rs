@@ -18,7 +18,7 @@ fn numsub_count(v: &glide::ValkeyValue, channel: &str) -> Option<i64> {
             let mut it = items.iter();
             while let (Some(k), Some(val)) = (it.next(), it.next()) {
                 if is_chan(k) {
-                    return i64::from_owned_valkey_value(val.clone()).ok();
+                    return i64::from_valkey_value(val).ok();
                 }
             }
             None
@@ -26,7 +26,7 @@ fn numsub_count(v: &glide::ValkeyValue, channel: &str) -> Option<i64> {
         ValkeyValue::Map(pairs) => pairs
             .iter()
             .find(|(k, _)| is_chan(k))
-            .and_then(|(_, val)| i64::from_owned_valkey_value(val.clone()).ok()),
+            .and_then(|(_, val)| i64::from_valkey_value(val).ok()),
         _ => None,
     }
 }

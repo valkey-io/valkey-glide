@@ -11,8 +11,8 @@ mod common;
 use glide::pipeline_options::PipelineOptions;
 use glide::sync::{SyncGlideClient, SyncGlideClusterClient};
 use glide::{
-    CustomCommand, FromRedisValue, FromValkeyValue, GlideClientConfiguration,
-    GlideClusterClientConfiguration, Route,
+    CustomCommand, FromValkeyValue, GlideClientConfiguration, GlideClusterClientConfiguration,
+    Route,
 };
 // Bring the unified command traits into scope.
 use glide::Commands;
@@ -91,8 +91,8 @@ fn sync_standalone_custom_command_and_pipeline() {
         .execute_pipeline(&pipe, true, &PipelineOptions::default())
         .unwrap();
     assert_eq!(results.len(), 4);
-    assert_eq!(i64::from_redis_value(&results[2]).unwrap(), 12);
-    assert_eq!(String::from_redis_value(&results[3]).unwrap(), "12");
+    assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
+    assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
 }
 
 #[test]

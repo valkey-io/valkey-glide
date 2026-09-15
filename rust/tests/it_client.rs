@@ -248,9 +248,7 @@ timed_tokio_test!(
         let echoed = match &r {
             glide::ValkeyValue::Map(pairs) => pairs
                 .iter()
-                .filter(|(_, v)| {
-                    String::from_owned_valkey_value(v.clone()).ok().as_deref() == Some(msg)
-                })
+                .filter(|(_, v)| String::from_valkey_value(v).ok().as_deref() == Some(msg))
                 .count(),
             _ => 0,
         };
