@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the generic (key) command family.
 use super::Mock;
+use glide::ValkeyValue;
 use glide::commands::generic::GenericCommands;
 use glide::commands::options::{Limit, OrderBy, RestoreOptions};
-use redis::Value;
 
 #[tokio::test]
 async fn copy_variants() {
@@ -24,7 +24,7 @@ async fn copy_variants() {
 
 #[tokio::test]
 async fn sort_and_sort_store_and_ro() {
-    let m = Mock::array(vec![Value::BulkString(b"1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"1".to_vec().into())]);
     m.sort(
         "k",
         Some(OrderBy::Desc),
@@ -42,7 +42,7 @@ async fn sort_and_sort_store_and_ro() {
     m.sort_store("k", "dst", None, None, false).await.unwrap();
     m.assert_args(&["SORT", "k", "STORE", "dst"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"1".to_vec().into())]);
     m.sort_ro("k", Some(OrderBy::Asc), None, false)
         .await
         .unwrap();

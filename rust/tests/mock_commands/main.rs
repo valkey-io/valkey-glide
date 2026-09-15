@@ -15,9 +15,8 @@
 
 use async_trait::async_trait;
 use glide::Cmd;
-use glide::ValkeyResult;
 use glide::executor::CommandExecutor;
-use redis::Value;
+use glide::{ValkeyResult, ValkeyValue};
 use redis::cluster_routing::RoutingInfo;
 use std::sync::Mutex;
 
@@ -26,13 +25,13 @@ type CapturedCommand = (Vec<Vec<u8>>, Option<RoutingInfo>);
 
 /// A deterministic, server-free `CommandExecutor` used by the family tests.
 pub(crate) struct Mock {
-    response: Mutex<Value>,
+    response: Mutex<ValkeyValue>,
     captured: Mutex<Option<CapturedCommand>>,
 }
 
 impl Mock {
     /// Build a mock that replies with `response`.
-    pub(crate) fn new(response: Value) -> Self {
+    pub(crate) fn new(response: ValkeyValue) -> Self {
         Mock {
             response: Mutex::new(response),
             captured: Mutex::new(None),
@@ -41,27 +40,27 @@ impl Mock {
 
     /// Reply with `+OK`.
     pub(crate) fn ok() -> Self {
-        Mock::new(Value::Okay)
+        Mock::new(ValkeyValue::Okay)
     }
     /// Reply with an integer.
     pub(crate) fn int(n: i64) -> Self {
-        Mock::new(Value::Int(n))
+        Mock::new(ValkeyValue::Int(n))
     }
     /// Reply with a bulk string.
     pub(crate) fn bulk(s: impl AsRef<[u8]>) -> Self {
-        Mock::new(Value::BulkString(s.as_ref().to_vec().into()))
+        Mock::new(ValkeyValue::BulkString(s.as_ref().to_vec().into()))
     }
     /// Reply with a simple string.
     pub(crate) fn simple(s: &str) -> Self {
-        Mock::new(Value::SimpleString(s.to_string()))
+        Mock::new(ValkeyValue::SimpleString(s.to_string()))
     }
     /// Reply with nil.
     pub(crate) fn nil() -> Self {
-        Mock::new(Value::Nil)
+        Mock::new(ValkeyValue::Nil)
     }
     /// Reply with an array.
-    pub(crate) fn array(items: Vec<Value>) -> Self {
-        Mock::new(Value::Array(items))
+    pub(crate) fn array(items: Vec<ValkeyValue>) -> Self {
+        Mock::new(ValkeyValue::Array(items))
     }
 
     /// The captured command tokens, decoded lossily to UTF-8 strings.
@@ -98,7 +97,11 @@ impl Mock {
 
 #[async_trait]
 impl CommandExecutor for Mock {
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> ValkeyResult<Value> {
+    async fn execute_command(
+        &self,
+        cmd: Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> ValkeyResult<ValkeyValue> {
         let args: Vec<Vec<u8>> = cmd.args().into_iter().map(|s| s.to_vec()).collect();
         *self.captured.lock().unwrap() = Some((args, routing));
         Ok(self.response.lock().unwrap().clone())

@@ -94,7 +94,7 @@ impl SyncGlideClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
@@ -147,7 +147,7 @@ impl SyncGlideClusterClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
@@ -156,7 +156,7 @@ impl SyncGlideClusterClient {
         &self,
         args: &[A],
         route: Route,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         runtime().block_on(self.inner.custom_command_with_route(args, route))
     }
 

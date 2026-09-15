@@ -1,15 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the scripting & function command family.
 use super::Mock;
+use glide::ValkeyValue;
 use glide::commands::scripting::ScriptingCommands;
-use redis::Value;
 
 #[tokio::test]
 async fn eval_encodes_numkeys() {
     let m = Mock::int(1);
     let v = m.eval("return 1", &["k1"], &["a1"]).await.unwrap();
     m.assert_args(&["EVAL", "return 1", "1", "k1", "a1"]);
-    assert_eq!(v, Value::Int(1));
+    assert_eq!(v, ValkeyValue::Int(1));
 }
 
 #[tokio::test]
@@ -37,7 +37,7 @@ async fn script_load_returns_sha() {
 
 #[tokio::test]
 async fn script_exists_returns_bools() {
-    let m = Mock::array(vec![Value::Int(1), Value::Int(0)]);
+    let m = Mock::array(vec![ValkeyValue::Int(1), ValkeyValue::Int(0)]);
     assert_eq!(
         m.script_exists(&["sha_a", "sha_b"]).await.unwrap(),
         vec![true, false]

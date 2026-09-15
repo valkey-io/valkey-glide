@@ -7,6 +7,7 @@ use crate::commands::options::{Limit, MigrateOptions, ObjectType, OrderBy, Resto
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -116,8 +117,8 @@ pub trait GenericCommands: CommandExecutor {
             cmd.arg("ALPHA");
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_bytes(other)?]),
         }
     }
@@ -209,8 +210,8 @@ pub trait GenericCommands: CommandExecutor {
             cmd.arg("ALPHA");
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_bytes(other)?]),
         }
     }
@@ -272,18 +273,18 @@ pub trait GenericCommands: CommandExecutor {
     }
 }
 
-pub(crate) fn parse_scan_reply(reply: redis::Value) -> ValkeyResult<(String, Vec<Bytes>)> {
+pub(crate) fn parse_scan_reply(reply: ValkeyValue) -> ValkeyResult<(String, Vec<Bytes>)> {
     match reply {
-        redis::Value::Array(mut items) if items.len() == 2 => {
+        ValkeyValue::Array(mut items) if items.len() == 2 => {
             let keys_val = items.pop().unwrap();
             let cursor_val = items.pop().unwrap();
             let cursor = value::to_string(cursor_val)?;
             let keys = match keys_val {
-                redis::Value::Array(elems) => elems
+                ValkeyValue::Array(elems) => elems
                     .into_iter()
                     .map(value::to_bytes)
                     .collect::<ValkeyResult<Vec<_>>>()?,
-                redis::Value::Nil => Vec::new(),
+                ValkeyValue::Nil => Vec::new(),
                 other => {
                     return Err(crate::error::GlideError::Request(format!(
                         "unexpected SCAN keys shape: {other:?}"

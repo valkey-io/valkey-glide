@@ -5,16 +5,16 @@
 //! and `FT.PROFILE` have a very large option surface; these methods accept the
 //! trailing arguments as a raw slice so the full command grammar is expressible
 //! while keeping a typed entry point per command. Replies are returned as the raw
-//! structured [`redis::Value`].
+//! structured [`ValkeyValue`](crate::value::ValkeyValue).
 
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::Value;
 
 /// Search (RediSearch/valkey-search) module commands (`FT.CREATE`, `FT.SEARCH`,
 /// `FT.AGGREGATE`, ...).
@@ -52,7 +52,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Get information about an index (`FT.INFO`).
-    async fn ft_info<I: ToValkeyArgs + Send>(&self, index: I) -> ValkeyResult<Value> {
+    async fn ft_info<I: ToValkeyArgs + Send>(&self, index: I) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.INFO").arg(index);
         self.execute_command(cmd, None).await
@@ -63,9 +63,9 @@ pub trait FtCommands: CommandExecutor {
         let mut cmd = Cmd::new();
         cmd.arg("FT._LIST");
         match self.execute_command(cmd, None).await? {
-            Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            Value::Set(items) => items.into_iter().map(value::to_bytes).collect(),
-            Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Set(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_bytes(other)?]),
         }
     }
@@ -81,7 +81,7 @@ pub trait FtCommands: CommandExecutor {
         index: I,
         query: Q,
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.SEARCH").arg(index).arg(query);
         for a in args {
@@ -100,7 +100,7 @@ pub trait FtCommands: CommandExecutor {
         index: I,
         query: Q,
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.AGGREGATE").arg(index).arg(query);
         for a in args {
@@ -125,7 +125,7 @@ pub trait FtCommands: CommandExecutor {
         &self,
         index: I,
         query: Q,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.EXPLAINCLI").arg(index).arg(query);
         self.execute_command(cmd, None).await
@@ -161,7 +161,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// List all index aliases (`FT._ALIASLIST`).
-    async fn ft_aliaslist(&self) -> ValkeyResult<Value> {
+    async fn ft_aliaslist(&self) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT._ALIASLIST");
         self.execute_command(cmd, None).await
@@ -176,7 +176,7 @@ pub trait FtCommands: CommandExecutor {
         query_type: &str,
         limited: bool,
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.PROFILE").arg(index).arg(query_type);
         if limited {

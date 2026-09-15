@@ -2,8 +2,8 @@
 //! Mock-executor unit tests for the search (`FT.*`) command family.
 use super::Mock;
 use bytes::Bytes;
+use glide::ValkeyValue;
 use glide::commands::ft::FtCommands;
-use redis::Value;
 
 #[tokio::test]
 async fn ft_create_encoding() {
@@ -27,7 +27,7 @@ async fn ft_dropindex_with_dd() {
 
 #[tokio::test]
 async fn ft_list_returns_names() {
-    let m = Mock::array(vec![Value::BulkString(b"idx1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"idx1".to_vec().into())]);
     let names = m.ft_list().await.unwrap();
     m.assert_args(&["FT._LIST"]);
     assert_eq!(names, vec![Bytes::from_static(b"idx1")]);
@@ -35,7 +35,7 @@ async fn ft_list_returns_names() {
 
 #[tokio::test]
 async fn ft_search_encoding() {
-    let m = Mock::array(vec![Value::Int(0)]);
+    let m = Mock::array(vec![ValkeyValue::Int(0)]);
     let _ = m
         .ft_search("idx", "*", &["LIMIT", "0", "10"])
         .await

@@ -7,6 +7,7 @@ use crate::commands::options::{ExpireOptions, Expiry, HashFieldConditionalChange
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -28,7 +29,7 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(f);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
             other => Ok(vec![value::to_opt_bytes(other)?]),
         }
     }
@@ -241,8 +242,8 @@ pub trait HashCommands: CommandExecutor {
             cmd.arg(f);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_opt_bytes(other)?]),
         }
     }
@@ -280,30 +281,30 @@ pub trait HashCommands: CommandExecutor {
 }
 
 /// Collect an array reply into `Vec<i64>`.
-fn collect_i64(v: redis::Value) -> ValkeyResult<Vec<i64>> {
+fn collect_i64(v: ValkeyValue) -> ValkeyResult<Vec<i64>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items.into_iter().map(value::to_i64).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_i64).collect(),
         other => Ok(vec![value::to_i64(other)?]),
     }
 }
 
 /// Parse a flat `[a, b, a, b, ...]` reply into `(a, b)` pairs.
-fn collect_pairs(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
+fn collect_pairs(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
             .map(|(a, b)| Ok((value::to_bytes(a)?, value::to_bytes(b)?)))
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             if items
                 .iter()
-                .all(|it| matches!(it, redis::Value::Array(inner) if inner.len() == 2))
+                .all(|it| matches!(it, ValkeyValue::Array(inner) if inner.len() == 2))
             {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
-                    if let redis::Value::Array(mut pair) = it {
+                    if let ValkeyValue::Array(mut pair) = it {
                         let b = value::to_bytes(pair.pop().unwrap())?;
                         let a = value::to_bytes(pair.pop().unwrap())?;
                         out.push((a, b));
@@ -323,10 +324,10 @@ fn collect_pairs(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     }
 }
 
-fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
+fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
         other => Ok(vec![value::to_bytes(other)?]),
     }
 }

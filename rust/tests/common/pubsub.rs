@@ -1,31 +1,32 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Pub/Sub subscription-state polling helpers.
 
+use glide::FromValkeyValue;
 use std::time::{Duration, Instant};
 
 /// Extract the subscriber count for `channel` from a `PUBSUB NUMSUB` reply
 /// (`[chan, count, ...]` in RESP2, or a map in RESP3).
-fn numsub_count(v: &glide::Value, channel: &str) -> Option<i64> {
-    use glide::Value;
-    let is_chan = |k: &Value| match k {
-        Value::BulkString(b) => b.as_ref() == channel.as_bytes(),
-        Value::SimpleString(s) => s == channel,
+fn numsub_count(v: &glide::ValkeyValue, channel: &str) -> Option<i64> {
+    use glide::ValkeyValue;
+    let is_chan = |k: &ValkeyValue| match k {
+        ValkeyValue::BulkString(b) => b.as_ref() == channel.as_bytes(),
+        ValkeyValue::SimpleString(s) => s == channel,
         _ => false,
     };
     match v {
-        Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             let mut it = items.iter();
             while let (Some(k), Some(val)) = (it.next(), it.next()) {
                 if is_chan(k) {
-                    return glide::value::to_i64(val.clone()).ok();
+                    return i64::from_owned_valkey_value(val.clone()).ok();
                 }
             }
             None
         }
-        Value::Map(pairs) => pairs
+        ValkeyValue::Map(pairs) => pairs
             .iter()
             .find(|(k, _)| is_chan(k))
-            .and_then(|(_, val)| glide::value::to_i64(val.clone()).ok()),
+            .and_then(|(_, val)| i64::from_owned_valkey_value(val.clone()).ok()),
         _ => None,
     }
 }
@@ -65,7 +66,7 @@ where
     let deadline = Instant::now() + timeout;
     loop {
         if let Ok(v) = c.custom_command(&["PUBSUB", "NUMPAT"]).await
-            && let Ok(n) = glide::value::to_i64(v)
+            && let Ok(n) = i64::from_owned_valkey_value(v)
             && pred(n)
         {
             return true;

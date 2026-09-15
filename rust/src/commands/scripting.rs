@@ -8,9 +8,9 @@ use crate::executor::CommandExecutor;
 use crate::routes::Route;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::Value;
 
 /// Scripting and function commands (`EVAL`, `EVALSHA`, `SCRIPT ...`, `FCALL`, ...).
 #[async_trait]
@@ -21,7 +21,7 @@ pub trait ScriptingCommands: CommandExecutor {
         script: &str,
         keys: &[K],
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("EVAL").arg(script).arg(keys.len());
         for k in keys {
@@ -39,7 +39,7 @@ pub trait ScriptingCommands: CommandExecutor {
         sha1: &str,
         keys: &[K],
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("EVALSHA").arg(sha1).arg(keys.len());
         for k in keys {
@@ -66,7 +66,7 @@ pub trait ScriptingCommands: CommandExecutor {
             cmd.arg(*s);
         }
         match self.execute_command(cmd, None).await? {
-            Value::Array(items) => items.into_iter().map(value::to_bool).collect(),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bool).collect(),
             other => Ok(vec![value::to_bool(other)?]),
         }
     }
@@ -84,7 +84,7 @@ pub trait ScriptingCommands: CommandExecutor {
         function: &str,
         keys: &[K],
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FCALL").arg(function).arg(keys.len());
         for k in keys {
@@ -102,7 +102,7 @@ pub trait ScriptingCommands: CommandExecutor {
         function: &str,
         keys: &[K],
         args: &[A],
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FCALL_RO").arg(function).arg(keys.len());
         for k in keys {
@@ -123,7 +123,7 @@ pub trait ScriptingCommands: CommandExecutor {
         keys: &[K],
         args: &[A],
         route: Route,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FCALL").arg(function).arg(keys.len());
         for k in keys {
@@ -144,7 +144,7 @@ pub trait ScriptingCommands: CommandExecutor {
         keys: &[K],
         args: &[A],
         route: Route,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FCALL_RO").arg(function).arg(keys.len());
         for k in keys {
@@ -195,7 +195,7 @@ pub trait ScriptingCommands: CommandExecutor {
         &self,
         library_name: Option<&str>,
         with_code: bool,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("LIST");
         if let Some(n) = library_name {
@@ -231,7 +231,7 @@ pub trait ScriptingCommands: CommandExecutor {
 
     /// Get information about the function engine and running function
     /// (`FUNCTION STATS`). Returns the raw structured reply.
-    async fn function_stats(&self) -> ValkeyResult<Value> {
+    async fn function_stats(&self) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("STATS");
         self.execute_command(cmd, None).await

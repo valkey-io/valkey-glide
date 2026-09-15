@@ -299,14 +299,15 @@ impl CommandExecutor for GlideClient {
         &self,
         mut cmd: Cmd,
         routing: Option<RoutingInfo>,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         // `Client` is Clone (Arc inside) and `send_command` needs `&mut self`,
         // so we operate on a cheap clone — exactly what every wrapper does.
         let mut client = self.inner.clone();
-        client
+        let value = client
             .send_command(cmd.as_redis_mut(), routing)
             .await
-            .map_err(GlideError::from_redis_error)
+            .map_err(GlideError::from_redis_error)?;
+        Ok(ValkeyValue::from_redis(value))
     }
 }
 
@@ -349,13 +350,14 @@ impl GlideClusterClient {
     }
 
     /// Execute a raw command with an explicit route.
-    pub async fn route_command(&self, mut cmd: Cmd, route: Route) -> ValkeyResult<Value> {
+    pub async fn route_command(&self, mut cmd: Cmd, route: Route) -> ValkeyResult<ValkeyValue> {
         let routing = route.to_routing_info(Some(cmd.as_redis()));
         let mut client = self.inner.clone();
-        client
+        let value = client
             .send_command(cmd.as_redis_mut(), Some(routing))
             .await
-            .map_err(GlideError::from_redis_error)
+            .map_err(GlideError::from_redis_error)?;
+        Ok(ValkeyValue::from_redis(value))
     }
 
     /// Execute a [`redis::Pipeline`] with GLIDE execution options,
@@ -432,24 +434,24 @@ impl GlideClusterClient {
             .map_err(GlideError::from_redis_error)?;
 
         // Reply shape: [cursor_id_or_"finished", [keys...]].
-        let items = match reply {
-            Value::Array(items) => items,
+        let items = match ValkeyValue::from_redis(reply) {
+            ValkeyValue::Array(items) => items,
             other => {
                 return Err(GlideError::Request(format!(
                     "unexpected cluster scan reply: {other:?}"
                 )));
             }
         };
-        let [cursor_val, keys_val] = <[Value; 2]>::try_from(items).map_err(|items| {
+        let [cursor_val, keys_val] = <[ValkeyValue; 2]>::try_from(items).map_err(|items| {
             GlideError::Request(format!("unexpected cluster scan reply arity: {items:?}"))
         })?;
         let next = ClusterScanCursor(crate::value::to_string(cursor_val)?);
         let keys = match keys_val {
-            Value::Array(elems) => elems
+            ValkeyValue::Array(elems) => elems
                 .into_iter()
                 .map(crate::value::to_bytes)
                 .collect::<ValkeyResult<Vec<_>>>()?,
-            Value::Nil => Vec::new(),
+            ValkeyValue::Nil => Vec::new(),
             other => vec![crate::value::to_bytes(other)?],
         };
         Ok((next, keys))
@@ -462,12 +464,13 @@ impl CommandExecutor for GlideClusterClient {
         &self,
         mut cmd: Cmd,
         routing: Option<RoutingInfo>,
-    ) -> ValkeyResult<Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut client = self.inner.clone();
-        client
+        let value = client
             .send_command(cmd.as_redis_mut(), routing)
             .await
-            .map_err(GlideError::from_redis_error)
+            .map_err(GlideError::from_redis_error)?;
+        Ok(ValkeyValue::from_redis(value))
     }
 }
 

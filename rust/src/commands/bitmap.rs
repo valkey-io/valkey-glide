@@ -6,6 +6,7 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 
 /// Index unit for `BITCOUNT`/`BITPOS` range queries.
@@ -223,13 +224,13 @@ pub trait BitmapCommands: CommandExecutor {
 impl<T: CommandExecutor + ?Sized> BitmapCommands for T {}
 
 /// Parse a `BITFIELD` reply (array of ints, with `Nil` for `FAIL` overflow).
-fn parse_bitfield(v: redis::Value) -> ValkeyResult<Vec<Option<i64>>> {
+fn parse_bitfield(v: ValkeyValue) -> ValkeyResult<Vec<Option<i64>>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items
             .into_iter()
             .map(|it| match it {
-                redis::Value::Nil => Ok(None),
+                ValkeyValue::Nil => Ok(None),
                 other => Ok(Some(value::to_i64(other)?)),
             })
             .collect(),
@@ -294,7 +295,7 @@ mod tests {
 
     #[test]
     fn parse_bitfield_handles_nil() {
-        let v = redis::Value::Array(vec![redis::Value::Int(1), redis::Value::Nil]);
+        let v = ValkeyValue::Array(vec![ValkeyValue::Int(1), ValkeyValue::Nil]);
         assert_eq!(parse_bitfield(v).unwrap(), vec![Some(1), None]);
     }
 }

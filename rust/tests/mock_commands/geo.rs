@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the geospatial command family.
 use super::Mock;
+use glide::ValkeyValue;
 use glide::commands::geo::{GeoCommands, GeoSearchShape, GeoUnit, GeospatialData};
 use glide::commands::options::{ConditionalChange, OrderBy};
-use redis::Value;
 
 fn coord(lon: f64, lat: f64) -> GeospatialData {
     GeospatialData {
@@ -51,8 +51,8 @@ async fn geodist_encoding() {
 #[tokio::test]
 async fn geohash_encoding() {
     let m = Mock::array(vec![
-        Value::BulkString(b"sqc8b49rny0".to_vec().into()),
-        Value::Nil,
+        ValkeyValue::BulkString(b"sqc8b49rny0".to_vec().into()),
+        ValkeyValue::Nil,
     ]);
     let v = m
         .geohash("Sicily", &["Palermo", "NonExisting"])
@@ -66,9 +66,9 @@ async fn geohash_encoding() {
 
 #[tokio::test]
 async fn geopos_encoding() {
-    let m = Mock::array(vec![Value::Array(vec![
-        Value::BulkString(b"13.5".to_vec().into()),
-        Value::BulkString(b"38.5".to_vec().into()),
+    let m = Mock::array(vec![ValkeyValue::Array(vec![
+        ValkeyValue::BulkString(b"13.5".to_vec().into()),
+        ValkeyValue::BulkString(b"38.5".to_vec().into()),
     ])]);
     let v = m.geopos("Sicily", &["Palermo"]).await.unwrap();
     m.assert_args(&["GEOPOS", "Sicily", "Palermo"]);
@@ -77,7 +77,7 @@ async fn geopos_encoding() {
 
 #[tokio::test]
 async fn geosearch_by_radius_from_member() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_by_radius_from_member("Sicily", "Palermo", 5.5, GeoUnit::Kilometers)
         .await
         .unwrap();
@@ -94,7 +94,7 @@ async fn geosearch_by_radius_from_member() {
 
 #[tokio::test]
 async fn geosearch_from_member_with_tail() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_from_member(
         "Sicily",
         "Palermo",
@@ -125,7 +125,7 @@ async fn geosearch_from_member_with_tail() {
 
 #[tokio::test]
 async fn geosearch_from_coord_bybox() {
-    let m = Mock::array(vec![Value::BulkString(b"Palermo".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_from_coord(
         "Sicily",
         coord(15.5, 37.5),

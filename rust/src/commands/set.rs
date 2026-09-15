@@ -6,15 +6,16 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::collections::HashSet;
 
-fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
+fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Set(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Set(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
         other => Ok(vec![value::to_bytes(other)?]),
     }
 }

@@ -10,20 +10,23 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::routes::Route;
-use crate::value::ToValkeyArgs;
+use crate::value::{ToValkeyArgs, ValkeyValue};
 use async_trait::async_trait;
-use redis::Value;
 use redis::cluster_routing::RoutingInfo;
 
 /// The low-level command execution interface.
 ///
-/// Implementors forward a fully-built [`Cmd`] to `glide-core` and return the raw
-/// [`Value`] reply (already normalized by core's value-conversion layer).
+/// Implementors forward a fully-built [`Cmd`] to `glide-core` and return the
+/// decoded [`ValkeyValue`] reply.
 #[async_trait]
 pub trait CommandExecutor: Send + Sync {
     /// Execute `cmd`, optionally routed to a specific node/set of nodes (cluster).
     /// Standalone implementations ignore `routing`.
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> ValkeyResult<Value>;
+    async fn execute_command(
+        &self,
+        cmd: Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> ValkeyResult<ValkeyValue>;
 }
 
 /// Convenience helpers layered on top of [`CommandExecutor`], available on every
@@ -35,7 +38,7 @@ pub trait CustomCommand: CommandExecutor {
     /// `client.custom_command(&["SET", "key", "value"]).await`.
     ///
     /// The first argument is the command keyword; the rest are its arguments.
-    async fn custom_command<A>(&self, args: &[A]) -> ValkeyResult<Value>
+    async fn custom_command<A>(&self, args: &[A]) -> ValkeyResult<ValkeyValue>
     where
         A: ToValkeyArgs + Sync,
     {
@@ -48,7 +51,11 @@ pub trait CustomCommand: CommandExecutor {
 
     /// Like [`CustomCommand::custom_command`] but routed (cluster). Ignored for
     /// standalone clients.
-    async fn custom_command_with_route<A>(&self, args: &[A], route: Route) -> ValkeyResult<Value>
+    async fn custom_command_with_route<A>(
+        &self,
+        args: &[A],
+        route: Route,
+    ) -> ValkeyResult<ValkeyValue>
     where
         A: ToValkeyArgs + Sync,
     {

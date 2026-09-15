@@ -8,6 +8,7 @@ use crate::commands::options::Limit;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -156,8 +157,8 @@ pub trait SortedSetCommands: CommandExecutor {
         }
         cmd.arg(timeout);
         match self.execute_command(cmd, None).await? {
-            redis::Value::Nil => Ok(None),
-            redis::Value::Array(mut items) if items.len() == 3 => {
+            ValkeyValue::Nil => Ok(None),
+            ValkeyValue::Array(mut items) if items.len() == 3 => {
                 let score = value::to_f64(items.pop().unwrap())?;
                 let member = value::to_bytes(items.pop().unwrap())?;
                 let key = value::to_bytes(items.pop().unwrap())?;
@@ -408,33 +409,33 @@ pub trait SortedSetCommands: CommandExecutor {
     }
 }
 
-fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
+fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
         other => Ok(vec![value::to_bytes(other)?]),
     }
 }
 
 /// Parse a `WITHSCORES`/`ZPOPMIN`-style reply into `(member, score)` pairs,
 /// handling both RESP2 flat arrays and RESP3 nested pairs.
-fn collect_member_scores(v: redis::Value) -> ValkeyResult<Vec<(Bytes, f64)>> {
+fn collect_member_scores(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, f64)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
+        ValkeyValue::Nil => Ok(Vec::new()),
         // RESP3 returns a map of member -> score.
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
             .map(|(m, s)| Ok((value::to_bytes(m)?, value::to_f64(s)?)))
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             // RESP3: array of [member, score] pairs.
             if items
                 .iter()
-                .all(|it| matches!(it, redis::Value::Array(inner) if inner.len() == 2))
+                .all(|it| matches!(it, ValkeyValue::Array(inner) if inner.len() == 2))
             {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
-                    if let redis::Value::Array(mut pair) = it {
+                    if let ValkeyValue::Array(mut pair) = it {
                         let score = value::to_f64(pair.pop().unwrap())?;
                         let member = value::to_bytes(pair.pop().unwrap())?;
                         out.push((member, score));
@@ -460,10 +461,10 @@ fn collect_member_scores(v: redis::Value) -> ValkeyResult<Vec<(Bytes, f64)>> {
 impl<T: CommandExecutor + ?Sized> SortedSetCommands for T {}
 
 /// Parse a `ZRANK ... WITHSCORE` reply (`[rank, score]` or nil).
-fn parse_rank_withscore(v: redis::Value) -> ValkeyResult<Option<(i64, f64)>> {
+fn parse_rank_withscore(v: ValkeyValue) -> ValkeyResult<Option<(i64, f64)>> {
     match v {
-        redis::Value::Nil => Ok(None),
-        redis::Value::Array(mut items) if items.len() == 2 => {
+        ValkeyValue::Nil => Ok(None),
+        ValkeyValue::Array(mut items) if items.len() == 2 => {
             let score = value::to_f64(items.pop().unwrap())?;
             let rank = value::to_i64(items.pop().unwrap())?;
             Ok(Some((rank, score)))
