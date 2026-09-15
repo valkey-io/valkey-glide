@@ -609,49 +609,6 @@ where
             .map(|node_address| (*node_address).clone())
     }
 
-    pub(crate) fn normalize_current_address(&self, address: &str) -> String {
-        // Classify the address from one snapshot. ConnectionsMap keys are
-        // already ready-to-dial, so they must not be sent through the
-        // (possibly non-idempotent) user resolver.
-        let address_kind = {
-            let conn_lock = self.conn_lock.read();
-            let reverse_match = parse_cluster_address(address).and_then(|(host, port)| {
-                let ip = host.parse::<IpAddr>().ok()?;
-                conn_lock
-                    .slot_map
-                    .node_address_for_ip_and_port(ip, port)
-                    .map(|canonical| (*canonical).clone())
-            });
-            if let Some(canonical) = reverse_match {
-                ClusterAddress::ReadyToDial(canonical)
-            } else if conn_lock
-                .slot_map
-                .nodes_map()
-                .contains_key(&address.to_owned())
-                || conn_lock.connection_map().contains_key(address)
-            {
-                ClusterAddress::ReadyToDial(address.to_owned())
-            } else {
-                ClusterAddress::Raw(address.to_owned())
-            }
-        };
-        let resolver = self.get_cluster_param(|params| params.address_resolver.clone());
-        address_kind
-            .prepare(resolver.as_deref())
-            .as_str()
-            .to_owned()
-    }
-
-    pub(crate) fn is_circular_moved_redirect(
-        &self,
-        resolved_redirect_node: Option<(&str, u16)>,
-        current_address: &str,
-    ) -> bool {
-        is_circular_moved_redirect(resolved_redirect_node, current_address, |address| {
-            self.normalize_current_address(address)
-        })
-    }
-
     pub(crate) fn is_circular_moved_redirect_prepared(
         &self,
         resolved_redirect_node: Option<(&str, u16)>,
@@ -660,7 +617,10 @@ where
         is_circular_moved_redirect(
             resolved_redirect_node,
             current_address.as_str(),
-            |address| address.to_owned(),
+            |address| {
+                self.reverse_lookup_address(address)
+                    .unwrap_or_else(|| address.to_owned())
+            },
         )
     }
 
@@ -5549,7 +5509,10 @@ mod circular_moved_address_normalization_tests {
     fn raw_current_address_is_normalized_before_circular_comparison() {
         let core = core_with_ip_mapping();
 
-        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "10.0.0.1:6379"));
+        assert!(core.is_circular_moved_redirect_prepared(
+            Some(("node1:6379", 5000)),
+            ReadyToDialAddress::new("10.0.0.1:6379".into())
+        ));
     }
 
     #[test]
@@ -5557,7 +5520,10 @@ mod circular_moved_address_normalization_tests {
         let core = core_with_ip_mapping();
         core.cluster_params.write().address_resolver = Some(Arc::new(CurrentAddressResolver));
 
-        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "seed:6379"));
+        assert!(!core.is_circular_moved_redirect_prepared(
+            Some(("node1:6379", 5000)),
+            ReadyToDialAddress::new("seed:6379".into())
+        ));
     }
 
     #[test]
@@ -5566,7 +5532,10 @@ mod circular_moved_address_normalization_tests {
         let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
         core.cluster_params.write().address_resolver = Some(resolver.clone());
 
-        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "node1:6379"));
+        assert!(core.is_circular_moved_redirect_prepared(
+            Some(("node1:6379", 5000)),
+            ReadyToDialAddress::new("node1:6379".into())
+        ));
         assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
 
@@ -5591,9 +5560,9 @@ mod circular_moved_address_normalization_tests {
             ),
         );
 
-        assert!(core.is_circular_moved_redirect(
+        assert!(core.is_circular_moved_redirect_prepared(
             Some(("connection-only:6379", 5000)),
-            "connection-only:6379"
+            ReadyToDialAddress::new("connection-only:6379".into())
         ));
         assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
@@ -5632,7 +5601,7 @@ mod circular_moved_address_normalization_tests {
         });
 
         assert_eq!(
-            core.normalize_current_address("10.0.0.1:6380"),
+            core.reverse_lookup_address("10.0.0.1:6380").unwrap(),
             "node-b:6380"
         );
     }
@@ -5643,8 +5612,11 @@ mod circular_moved_address_normalization_tests {
         let resolver = Arc::new(CountingResolver(AtomicUsize::new(0)));
         core.cluster_params.write().address_resolver = Some(resolver.clone());
 
-        assert!(core.is_circular_moved_redirect(Some(("node1:6379", 5000)), "seed:6379"));
-        assert_eq!(resolver.0.load(Ordering::SeqCst), 1);
+        assert!(!core.is_circular_moved_redirect_prepared(
+            Some(("node1:6379", 5000)),
+            ReadyToDialAddress::new("seed:6379".into())
+        ));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
 }
 
@@ -5850,8 +5822,11 @@ mod refresh_task_resolution_tests {
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
         });
-        assert!(core.is_circular_moved_redirect(Some(("127.0.0.1:6382", 5000)), &current_address));
-        assert_eq!(resolver.0.load(Ordering::SeqCst), 1);
+        assert!(core.is_circular_moved_redirect_prepared(
+            Some(("127.0.0.1:6382", 5000)),
+            ReadyToDialAddress::new(current_address.clone())
+        ));
+        assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
 
     impl ConnectionLike for RecordingConnection {

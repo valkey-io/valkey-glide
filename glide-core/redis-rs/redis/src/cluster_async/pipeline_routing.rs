@@ -30,19 +30,17 @@ use super::PendingRequest;
 use super::PipelineRetryStrategy;
 use super::RedirectNode;
 use super::RequestInfo;
-use super::{
-    is_circular_moved_redirect, Core, InternalSingleNodeRouting, OperationTarget, Response,
-};
+use super::{Core, InternalSingleNodeRouting, OperationTarget, Response};
 
-fn is_pipeline_circular_moved_redirect(
+fn is_pipeline_circular_moved_redirect<C>(
+    core: &Arc<super::InnerCore<C>>,
     resolved_redirect_node: Option<(&str, u16)>,
     current_address: ReadyToDialAddress,
-) -> bool {
-    is_circular_moved_redirect(
-        resolved_redirect_node,
-        current_address.as_str(),
-        str::to_owned,
-    )
+) -> bool
+where
+    C: ConnectionLike + super::Connect + Clone + Send + Sync + 'static,
+{
+    core.is_circular_moved_redirect_prepared(resolved_redirect_node, current_address)
 }
 
 /// Represents a pipeline command execution context for a specific node
@@ -1096,6 +1094,7 @@ where
         // Check for circular MOVED redirect
         if matches!(retry_method, RetryMethod::MovedRedirect)
             && is_pipeline_circular_moved_redirect(
+                &core,
                 resolved_moved_redirect
                     .as_ref()
                     .map(|redirect| (redirect.address.as_str(), redirect.slot)),
@@ -1409,21 +1408,5 @@ pub(crate) fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Opti
     } else {
         // Pipeline is not atomic, so we can have commands with different slots.
         Ok(None)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_pipeline_circular_moved_redirect;
-    use crate::cluster::ReadyToDialAddress;
-
-    #[test]
-    fn pipeline_prepared_address_classifies_circular_redirect_without_reresolving() {
-        let prepared = ReadyToDialAddress::new("node.example:6380".to_owned());
-
-        assert!(is_pipeline_circular_moved_redirect(
-            Some(("node.example:6380", 42)),
-            prepared,
-        ));
     }
 }
