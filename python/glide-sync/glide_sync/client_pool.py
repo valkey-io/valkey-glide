@@ -172,7 +172,7 @@ class ClientPool:
             self._conn_req_bytes,
             len(self._conn_req_bytes),
             client_type,
-            self._ffi.NULL,  # credential_provider: not supported in sync pool
+            self._ffi.NULL,  # credential_provider: not supported in sync pool (cast not needed for NULL)
             0,  # credential_client_id: not used in Python (direct CFFI callback)
         )
 
