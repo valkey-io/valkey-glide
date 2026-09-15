@@ -1050,7 +1050,7 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 			if clientType == StandaloneClient {
 				// Create standalone client with configured reconciliation interval
 				sConfig := config.NewStandaloneSubscriptionConfig()
-				advancedConfig := config.NewAdvancedClientConfiguration().
+				advancedConfig := advancedClientConfig().
 					WithPubSubReconciliationIntervalMs(intervalMs)
 				clientConfig := suite.defaultClientConfig().
 					WithSubscriptionConfig(sConfig).
@@ -1063,7 +1063,7 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 			} else {
 				// Create cluster client with configured reconciliation interval
 				cConfig := config.NewClusterSubscriptionConfig()
-				advancedConfig := config.NewAdvancedClusterClientConfiguration().
+				advancedConfig := advancedClusterClientConfig().
 					WithPubSubReconciliationIntervalMs(intervalMs)
 				clientConfig := suite.defaultClusterClientConfig().
 					WithSubscriptionConfig(cConfig).

@@ -22,11 +22,13 @@ import (
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func standaloneConfig() *config.ClientConfiguration {
-	host := "localhost"
-	port := 6379
-	if standaloneHosts != nil && *standaloneHosts != "" {
-		parts := strings.SplitN(*standaloneHosts, ",", 2)
+// firstEndpoint returns the first address in an endpoints flag, or the given fallback when the flag is
+// empty. skipMode skips every pool and scope test when the flag is empty, so the fallback just records
+// the conventional port.
+func firstEndpoint(endpoints *string, fallbackHost string, fallbackPort int) config.NodeAddress {
+	host, port := fallbackHost, fallbackPort
+	if endpoints != nil && *endpoints != "" {
+		parts := strings.SplitN(*endpoints, ",", 2)
 		hostPort := strings.SplitN(parts[0], ":", 2)
 		if len(hostPort) == 2 {
 			host = hostPort[0]
@@ -35,30 +37,18 @@ func standaloneConfig() *config.ClientConfiguration {
 			}
 		}
 	}
-	return config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port}).
-		WithRequestTimeout(5000 * time.Millisecond)
+	return config.NodeAddress{Host: host, Port: port}
+}
+
+func standaloneConfig() *config.ClientConfiguration {
+	return clientConfigFor(firstEndpoint(standaloneHosts, "localhost", 6379))
 }
 
 // standaloneConfigForClusterNode returns a standalone ClientConfiguration
 // pointed at the first cluster node. This allows using ScopedConnection against
 // a cluster node for single-slot operations with hash-tagged keys.
 func standaloneConfigForClusterNode() *config.ClientConfiguration {
-	host := "localhost"
-	port := 7000
-	if clusterHosts != nil && *clusterHosts != "" {
-		parts := strings.SplitN(*clusterHosts, ",", 2)
-		hostPort := strings.SplitN(parts[0], ":", 2)
-		if len(hostPort) == 2 {
-			host = hostPort[0]
-			if p, err := strconv.Atoi(hostPort[1]); err == nil {
-				port = p
-			}
-		}
-	}
-	return config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port}).
-		WithRequestTimeout(5000 * time.Millisecond)
+	return clientConfigFor(firstEndpoint(clusterHosts, "localhost", 7000))
 }
 
 func compressedStandaloneConfig() *config.ClientConfiguration {
@@ -78,21 +68,7 @@ func compressedClusterNodeConfig() *config.ClientConfiguration {
 }
 
 func clusterConfig() *config.ClusterClientConfiguration {
-	host := "localhost"
-	port := 7000
-	if clusterHosts != nil && *clusterHosts != "" {
-		parts := strings.SplitN(*clusterHosts, ",", 2)
-		hostPort := strings.SplitN(parts[0], ":", 2)
-		if len(hostPort) == 2 {
-			host = hostPort[0]
-			if p, err := strconv.Atoi(hostPort[1]); err == nil {
-				port = p
-			}
-		}
-	}
-	return config.NewClusterClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: host, Port: port}).
-		WithRequestTimeout(5000 * time.Millisecond)
+	return clusterClientConfigFor(firstEndpoint(clusterHosts, "localhost", 7000))
 }
 
 func clusterAvailable() bool {
