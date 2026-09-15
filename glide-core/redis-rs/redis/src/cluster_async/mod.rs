@@ -2834,10 +2834,7 @@ where
                 );
                 Self::trigger_refresh_connection_tasks(
                     inner,
-                    failed
-                        .into_iter()
-                        .map(ClusterAddress::ReadyToDial)
-                        .collect(),
+                    failed,
                     RefreshConnectionType::OnlyManagementConnection,
                     true,
                 )
@@ -4622,7 +4619,7 @@ struct TopologyQueryResult {
     /// The calculated topology (slot map and hash), or an error if calculation failed
     topology_result: RedisResult<(SlotMap, TopologyHash)>,
     /// Optionally addresses of connections that failed during the query and need refresh
-    failed_connections: Option<HashSet<String>>,
+    failed_connections: Option<HashSet<ClusterAddress>>,
 }
 
 /// Queries random cluster nodes to calculate the current topology.
@@ -4740,15 +4737,7 @@ where
     }) {
         return TopologyQueryResult {
             topology_result: Err(noperm_err.clone_mostly("")),
-            failed_connections: Some(
-                failed_addresses
-                    .into_iter()
-                    .map(|a| match a {
-                        ClusterAddress::Raw(s) => s,
-                        ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
-                    })
-                    .collect(),
-            ),
+            failed_connections: Some(failed_addresses),
         };
     }
 
@@ -4766,15 +4755,7 @@ where
         }) {
             return TopologyQueryResult {
                 topology_result: Err(all_conn_err.clone_mostly("")),
-                failed_connections: Some(
-                    failed_addresses
-                        .into_iter()
-                        .map(|a| match a {
-                            ClusterAddress::Raw(s) => s,
-                            ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
-                        })
-                        .collect(),
-                ),
+                failed_connections: Some(failed_addresses),
             };
         }
     }
@@ -4797,15 +4778,7 @@ where
             read_from_replicas,
             address_resolver.as_ref().map(Arc::as_ref),
         ),
-        failed_connections: Some(
-            failed_addresses
-                .into_iter()
-                .map(|a| match a {
-                    ClusterAddress::Raw(s) => s,
-                    ClusterAddress::ReadyToDial(a) => a.as_str().to_owned(),
-                })
-                .collect(),
-        ),
+        failed_connections: Some(failed_addresses),
     }
 }
 
@@ -5632,7 +5605,9 @@ mod circular_moved_address_normalization_tests {
 mod refresh_task_resolution_tests {
     use super::*;
     use crate::cluster::ClusterAddress;
-    use crate::cluster_async::connections_container::{ConnectionsContainer, ConnectionsMap};
+    use crate::cluster_async::connections_container::{
+        ClusterNode, ConnectionDetails, ConnectionsContainer, ConnectionsMap,
+    };
     use crate::cluster_routing::Slot;
     use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
     use crate::types::AddressResolver;
@@ -5887,6 +5862,77 @@ mod refresh_task_resolution_tests {
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
         })
+    }
+
+    fn recording_node(port: u16) -> ClusterNode<ConnectionFuture<RecordingConnection>> {
+        let connection = ConnectionDetails {
+            conn: async move { RecordingConnection { port } }.boxed().shared(),
+            ip: None,
+            az: None,
+        };
+        ClusterNode::new(connection.clone(), Some(connection))
+    }
+
+    fn core_with_mixed_initial_recovery() -> Arc<InnerCore<RecordingConnection>> {
+        let canonical = "127.0.0.1:6382".to_owned();
+        let slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, canonical.clone(), vec![])],
+            HashMap::from([(canonical.clone(), "127.0.0.1".parse().unwrap())]),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let connections = ConnectionsMap(DashMap::new());
+        connections.0.insert(canonical, recording_node(6382));
+        for (address, port) in [
+            ("dummy-1:7001", 7001),
+            ("dummy-2:7002", 7002),
+            ("dummy-3:7003", 7003),
+        ] {
+            connections.0.insert(address.to_owned(), recording_node(port));
+        }
+        let mut params = ClusterParams::default_for_test(None);
+        params.refresh_topology_from_initial_nodes = true;
+        params.address_resolver = Some(Arc::new(SeedAddressResolver));
+        let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
+        Arc::new(InnerCore {
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+                slot_map,
+                connections,
+                ReadFromReplicaStrategy::AlwaysFromPrimary,
+                0,
+            )),
+            cluster_params: ParkingLotRwLock::new(params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: vec![
+                "redis://127.0.0.1:6379".into_connection_info().unwrap(),
+                "redis://127.0.0.2:6379".into_connection_info().unwrap(),
+            ],
+            glide_connection_options: GlideConnectionOptions::default(),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    #[tokio::test]
+    async fn mixed_initial_node_recovery_resolves_raw_failure_before_installing() {
+        let core = core_with_mixed_initial_recovery();
+        assert!(!ClusterConnInner::check_for_topology_diff(core.clone()).await);
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let (raw_exists, ready_exists) = {
+                    let connections = core.conn_lock.read();
+                    (
+                        connections.connection_for_address("127.0.0.2:6379").is_some(),
+                        connections.connection_for_address("127.0.0.2:6382").is_some(),
+                    )
+                };
+                assert!(!raw_exists, "raw initial seed was installed without resolution");
+                if ready_exists { break; }
+                tokio::task::yield_now().await;
+            }
+        }).await.expect("resolved recovery connection should be installed");
     }
 
     #[tokio::test]
