@@ -60,12 +60,12 @@ use crate::{
 use rand::seq::IteratorRandom;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
+use tracing::warn;
 
 use crate::tls::TlsConnParams;
 
@@ -356,7 +356,7 @@ where
                     }
                 }
 
-                if let Ok(mut conn) = self.connect(&addr) {
+                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                     if conn.check_connection() {
                         return Some((addr.to_string(), conn));
                     }
@@ -418,7 +418,20 @@ where
     }
 
     fn connect(&self, node: &str) -> RedisResult<C> {
-        let info = get_connection_info(node, self.cluster_params.clone())?;
+        self.connect_with_resolver(node, self.cluster_params.address_resolver.as_deref())
+    }
+
+    fn connect_to_resolved_address(&self, node: &str) -> RedisResult<C> {
+        self.connect_with_resolver(node, None)
+    }
+
+    fn connect_with_resolver(
+        &self,
+        node: &str,
+        address_resolver: Option<&dyn AddressResolver>,
+    ) -> RedisResult<C> {
+        let info =
+            get_connection_info_with_resolver(node, self.cluster_params.clone(), address_resolver)?;
 
         let mut conn = C::connect(info, Some(self.cluster_params.connection_timeout))?;
         if self.cluster_params.read_from_replicas
@@ -441,7 +454,7 @@ where
         if let Some(addr) = slots.slot_addr_for_route(route) {
             Ok((
                 addr.to_string(),
-                self.get_connection_by_addr(connections, &addr)?,
+                self.get_connection_by_canonical_addr(connections, &addr)?,
             ))
         } else {
             // try a random node next.  This is safe if slots are involved
@@ -450,7 +463,7 @@ where
         }
     }
 
-    fn get_connection_by_addr<'a>(
+    fn get_connection_by_canonical_addr<'a>(
         &self,
         connections: &'a mut HashMap<String, C>,
         addr: &str,
@@ -460,7 +473,7 @@ where
         } else {
             // Create new connection.
             // TODO: error handling
-            let conn = self.connect(addr)?;
+            let conn = self.connect_to_resolved_address(addr)?;
             Ok(connections.entry(addr.to_string()).or_insert(conn))
         }
     }
@@ -515,7 +528,7 @@ where
         addresses
             .into_iter()
             .map(|addr| {
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 match input {
                     Input::Slice { cmd, routable: _ } => connection.req_packed_command(cmd),
                     Input::Cmd(cmd) => connection.req_command(cmd),
@@ -571,7 +584,7 @@ where
                     ErrorKind::IoError,
                     "Couldn't find connection",
                 )))?;
-                let connection = self.get_connection_by_addr(connections, &addr)?;
+                let connection = self.get_connection_by_canonical_addr(connections, &addr)?;
                 let (_, indices) = routes.get(index).unwrap();
                 let cmd =
                     crate::cluster_routing::command_for_multi_slot_indices(&input, indices.iter());
@@ -730,17 +743,23 @@ where
 
         let mut retries = 0;
         let mut redirected = None::<Redirect>;
+        let by_address = resolve_by_address(
+            &single_node_routing,
+            self.cluster_params.address_resolver.as_deref(),
+        );
 
         loop {
             // Get target address and response.
             let (addr, rv) = {
                 let mut connections = self.connections.borrow_mut();
-                let (addr, conn) = if let Some(redirected) = redirected.take() {
+                let (addr, conn) = if let Some(redirected) = redirected.as_ref() {
                     let (addr, is_asking) = match redirected {
-                        Redirect::Moved(addr) => (addr, false),
-                        Redirect::Ask(addr, should_exec_asking) => (addr, should_exec_asking),
+                        Redirect::Moved(addr) => (addr.clone(), false),
+                        Redirect::Ask(addr, should_exec_asking) => {
+                            (addr.clone(), *should_exec_asking)
+                        }
                     };
-                    let conn = self.get_connection_by_addr(&mut connections, &addr)?;
+                    let conn = self.get_connection_by_canonical_addr(&mut connections, &addr)?;
                     if is_asking {
                         // if we are in asking mode we want to feed a single
                         // ASKING command into the connection before what we
@@ -757,10 +776,13 @@ where
                         SingleNodeRoutingInfo::RandomPrimary => {
                             self.get_connection(&mut connections, &Route::new_random_primary())?
                         }
-                        SingleNodeRoutingInfo::ByAddress { host, port } => {
-                            let address = format!("{host}:{port}");
-                            let conn = self.get_connection_by_addr(&mut connections, &address)?;
-                            (address, conn)
+                        SingleNodeRoutingInfo::ByAddress { .. } => {
+                            let address = by_address
+                                .as_ref()
+                                .expect("ByAddress must have a resolved address");
+                            let conn =
+                                self.get_connection_by_canonical_addr(&mut connections, address)?;
+                            (address.clone(), conn)
                         }
                     }
                 };
@@ -777,17 +799,26 @@ where
 
                     match err.retry_method() {
                         RetryMethod::AskRedirect => {
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Ask(node.to_string(), true));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Ask(
+                                    resolve_address(
+                                        node,
+                                        self.cluster_params.address_resolver.as_deref(),
+                                    ),
+                                    true,
+                                )
+                            });
                         }
                         RetryMethod::MovedRedirect => {
                             // Refresh slots.
                             self.refresh_slots()?;
                             // Request again.
-                            redirected = err
-                                .redirect_node()
-                                .map(|(node, _slot)| Redirect::Moved(node.to_string()));
+                            redirected = err.redirect_node().map(|(node, _slot)| {
+                                Redirect::Moved(resolve_address(
+                                    node,
+                                    self.cluster_params.address_resolver.as_deref(),
+                                ))
+                            });
                         }
                         RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica
                         | RetryMethod::WaitAndRetry => {
@@ -800,7 +831,7 @@ where
                         }
                         RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                             if *self.auto_reconnect.borrow() {
-                                if let Ok(mut conn) = self.connect(&addr) {
+                                if let Ok(mut conn) = self.connect_to_resolved_address(&addr) {
                                     if conn.check_connection() {
                                         self.connections.borrow_mut().insert(addr, conn);
                                     }
@@ -853,7 +884,7 @@ where
 
         let node_cmds = self.map_cmds_to_nodes(cmds)?;
         for nc in &node_cmds {
-            self.get_connection_by_addr(&mut connections, &nc.addr)?
+            self.get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                 .send_packed_command(&nc.pipe)?;
         }
         Ok(node_cmds)
@@ -872,7 +903,7 @@ where
         for nc in node_cmds {
             for cmd_idx in &nc.indexes {
                 match self
-                    .get_connection_by_addr(&mut connections, &nc.addr)?
+                    .get_connection_by_canonical_addr(&mut connections, &nc.addr)?
                     .recv_response()
                 {
                     Ok(item) => results[*cmd_idx] = item,
@@ -999,20 +1030,90 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 // The node string passed to this function will always be in the format host:port as it is either:
 // - Created by calling ConnectionAddr::to_string (unix connections are not supported in cluster mode)
 // - Returned from redis via the ASK/MOVED response
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ReadyToDialAddress(String);
+impl ReadyToDialAddress {
+    pub(crate) fn new(address: String) -> Self {
+        Self(address)
+    }
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum ClusterAddress {
+    Raw(String),
+    ReadyToDial(String),
+}
+impl ClusterAddress {
+    pub(crate) fn prepare(self, resolver: Option<&dyn AddressResolver>) -> ReadyToDialAddress {
+        match self {
+            Self::Raw(a) => ReadyToDialAddress(resolve_address(&a, resolver)),
+            Self::ReadyToDial(a) => ReadyToDialAddress(a),
+        }
+    }
+}
+pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
+    let (host, port) = address.rsplit_once(':')?;
+    let bracketed = host.starts_with('[') && host.ends_with(']');
+    if host.starts_with('[') != host.ends_with(']') {
+        return None;
+    }
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    if host.contains('[') || host.contains(']') {
+        return None;
+    }
+    if host.is_empty() || host.chars().any(char::is_whitespace) {
+        return None;
+    }
+    if bracketed || host.contains(':') {
+        let (ipv6, scope) = host.split_once('%').unwrap_or((host, ""));
+        if (scope.is_empty() || scope.contains('%')) && host.contains('%') {
+            return None;
+        }
+        ipv6.parse::<std::net::Ipv6Addr>().ok()?;
+    }
+    Some((host, port.parse().ok()?))
+}
+pub(crate) fn format_cluster_address(host: &str, port: u16) -> String {
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn get_connection_info(
     node: &str,
     cluster_params: ClusterParams,
 ) -> RedisResult<ConnectionInfo> {
+    let address_resolver = cluster_params.address_resolver.clone();
+    get_connection_info_with_resolver(node, cluster_params, address_resolver.as_deref())
+}
+
+pub(crate) fn get_connection_info_for_resolved_address(
+    node: &str,
+    cluster_params: ClusterParams,
+) -> RedisResult<ConnectionInfo> {
+    get_connection_info_with_resolver(node, cluster_params, None)
+}
+
+fn get_connection_info_with_resolver(
+    node: &str,
+    cluster_params: ClusterParams,
+    address_resolver: Option<&dyn AddressResolver>,
+) -> RedisResult<ConnectionInfo> {
     let invalid_error = || (ErrorKind::InvalidClientConfig, "Invalid node string");
 
-    let (host, port) = node
-        .rsplit_once(':')
-        .and_then(|(host, port)| {
-            Some(host.trim_start_matches('[').trim_end_matches(']'))
-                .filter(|h| !h.is_empty())
-                .zip(u16::from_str(port).ok())
-        })
-        .ok_or_else(invalid_error)?;
+    let (host, port) = parse_cluster_address(node).ok_or_else(invalid_error)?;
 
     Ok(ConnectionInfo {
         addr: get_connection_addr(
@@ -1020,7 +1121,7 @@ pub(crate) fn get_connection_info(
             port,
             cluster_params.tls,
             cluster_params.tls_params.clone(),
-            cluster_params.address_resolver.as_ref().map(Arc::as_ref),
+            address_resolver,
         ),
         redis: RedisConnectionInfo {
             password: cluster_params.password,
@@ -1034,6 +1135,34 @@ pub(crate) fn get_connection_info(
             server_assisted_cache: cluster_params.server_assisted_cache,
         },
     })
+}
+
+/// Resolves a raw `"host:port"` address string through the given address resolver.
+/// If no resolver is provided, or the address cannot be parsed, returns the original
+/// address unchanged.
+pub(crate) fn resolve_address(address: &str, resolver: Option<&dyn AddressResolver>) -> String {
+    let resolver = match resolver {
+        Some(resolver) => resolver,
+        None => return address.to_string(),
+    };
+    let Some((host, port)) = parse_cluster_address(address) else {
+        warn!(address, "Unable to parse cluster address for resolution");
+        return address.to_string();
+    };
+    let (resolved_host, resolved_port) = resolver.resolve(host, port);
+    format_cluster_address(&resolved_host, resolved_port)
+}
+
+fn resolve_by_address(
+    routing: &SingleNodeRoutingInfo,
+    resolver: Option<&dyn AddressResolver>,
+) -> Option<String> {
+    match routing {
+        SingleNodeRoutingInfo::ByAddress { host, port } => {
+            Some(resolve_address(&format!("{host}:{port}"), resolver))
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn get_connection_addr(
@@ -1076,6 +1205,89 @@ pub(crate) fn slot_cmd() -> Cmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct NonIdempotentResolver(std::sync::atomic::AtomicU32);
+    impl AddressResolver for NonIdempotentResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            (format!("{host}-{n}"), port)
+        }
+    }
+
+    #[test]
+    fn cluster_address_prepares_once_and_ready_bypasses_resolver() {
+        let resolver = NonIdempotentResolver(std::sync::atomic::AtomicU32::new(0));
+        let ready = ClusterAddress::Raw("node:6379".into()).prepare(Some(&resolver));
+        assert_eq!(ready.as_str(), "node-1:6379");
+        let ready = ClusterAddress::ReadyToDial(ready.as_str().to_owned()).prepare(Some(&resolver));
+        assert_eq!(ready.as_str(), "node-1:6379");
+        assert_eq!(resolver.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn cluster_address_parser_and_formatter_handle_ipv6_without_broad_trimming() {
+        assert_eq!(
+            parse_cluster_address("[2001:db8::1]:6379"),
+            Some(("2001:db8::1", 6379))
+        );
+        assert_eq!(parse_cluster_address("[not-an-ip]:6379"), None);
+        assert_eq!(
+            parse_cluster_address("[fe80::cafe:beef%en1]:30001"),
+            Some(("fe80::cafe:beef%en1", 30001))
+        );
+        assert_eq!(parse_cluster_address("[fe80::1%]:6379"), None);
+        assert_eq!(parse_cluster_address("[fe80::1%a%b]:6379"), None);
+        assert_eq!(
+            format_cluster_address("2001:db8::1", 6379),
+            "[2001:db8::1]:6379"
+        );
+        assert_eq!(
+            format_cluster_address("[2001:db8::1]", 6379),
+            "[2001:db8::1]:6379"
+        );
+        assert_eq!(parse_cluster_address("[node:6379"), None);
+        assert_eq!(parse_cluster_address("node]:6379"), None);
+        assert_eq!(parse_cluster_address("[[2001:db8::1]]:6379"), None);
+        assert_eq!(parse_cluster_address("2001:db8::1]:6379"), None);
+        assert_eq!(parse_cluster_address(" node:6379 "), None);
+        let resolver = BracketlessIpv6Resolver;
+        assert_eq!(
+            ClusterAddress::Raw("[node:6379".into())
+                .prepare(Some(&resolver))
+                .as_str(),
+            "[node:6379"
+        );
+    }
+
+    #[test]
+    fn cluster_address_parser_rejects_leading_whitespace_in_host() {
+        assert_eq!(parse_cluster_address(" node:6379"), None);
+    }
+
+    #[test]
+    fn cluster_address_parser_rejects_embedded_whitespace_in_host() {
+        assert_eq!(parse_cluster_address("no de:6379"), None);
+    }
+
+    #[derive(Debug)]
+    struct BracketlessIpv6Resolver;
+
+    impl AddressResolver for BracketlessIpv6Resolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            assert_eq!(host, "2001:db8::1");
+            ("canonical-node".to_owned(), port + 1)
+        }
+    }
+
+    #[test]
+    fn resolve_address_strips_ipv6_brackets_before_custom_resolution() {
+        assert_eq!(
+            resolve_address("[2001:db8::1]:6379", Some(&BracketlessIpv6Resolver)),
+            "canonical-node:6380"
+        );
+    }
 
     #[test]
     fn parse_cluster_node_host_port() {
@@ -1114,5 +1326,125 @@ mod tests {
                 ))),
             );
         }
+    }
+
+    #[derive(Debug)]
+    struct ByAddressResolver {
+        calls: AtomicUsize,
+    }
+
+    impl AddressResolver for ByAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            (format!("{host}-1"), port)
+        }
+    }
+
+    #[derive(Debug)]
+    struct ByAddressConnection {
+        sends: Arc<AtomicUsize>,
+    }
+
+    impl ConnectionLike for ByAddressConnection {
+        fn req_packed_command(&mut self, _cmd: &[u8]) -> RedisResult<Value> {
+            unreachable!("the ByAddress pipeline test uses req_packed_commands")
+        }
+
+        fn req_packed_commands(
+            &mut self,
+            _cmd: &[u8],
+            _offset: usize,
+            _count: usize,
+        ) -> RedisResult<Vec<Value>> {
+            let attempt = self.sends.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                Err(RedisError::from((ErrorKind::TryAgain, "retry")))
+            } else {
+                Ok(vec![Value::SimpleString("OK".to_owned())])
+            }
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn check_connection(&mut self) -> bool {
+            true
+        }
+
+        fn is_open(&self) -> bool {
+            true
+        }
+    }
+
+    impl Connect for ByAddressConnection {
+        fn connect<T>(_info: T, _timeout: Option<Duration>) -> RedisResult<Self>
+        where
+            T: IntoConnectionInfo,
+        {
+            unreachable!("the canonical test connection is inserted before request")
+        }
+
+        fn send_packed_command(&mut self, _cmd: &[u8]) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn set_write_timeout(&self, _dur: Option<Duration>) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn set_read_timeout(&self, _dur: Option<Duration>) -> RedisResult<()> {
+            Ok(())
+        }
+
+        fn recv_response(&mut self) -> RedisResult<Value> {
+            Ok(Value::SimpleString("OK".to_owned()))
+        }
+    }
+
+    #[test]
+    fn by_address_resolves_once_across_tryagain_retry() {
+        let resolver = Arc::new(ByAddressResolver {
+            calls: AtomicUsize::new(0),
+        });
+        let sends = Arc::new(AtomicUsize::new(0));
+        let mut connections = HashMap::new();
+        connections.insert(
+            "node-1:6379".to_owned(),
+            ByAddressConnection {
+                sends: sends.clone(),
+            },
+        );
+        let mut params = ClusterParams::default_for_test(None);
+        params.address_resolver = Some(resolver.clone());
+        params.retry_params.number_of_retries = 1;
+        let cluster = ClusterConnection {
+            initial_nodes: vec![],
+            connections: RefCell::new(connections),
+            slots: RefCell::new(SlotMap::new(
+                vec![],
+                HashMap::new(),
+                params.read_from_replicas.clone(),
+            )),
+            auto_reconnect: RefCell::new(true),
+            read_timeout: RefCell::new(None),
+            write_timeout: RefCell::new(None),
+            cluster_params: params,
+        };
+        let cmd = b"*1\r\n$4\r\nPING\r\n";
+        let result = cluster.request(Input::Commands {
+            cmd,
+            route: SingleNodeRoutingInfo::ByAddress {
+                host: "node".to_owned(),
+                port: 6379,
+            },
+            offset: 0,
+            count: 1,
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(sends.load(Ordering::SeqCst), 2);
+        assert_eq!(resolver.calls.load(Ordering::SeqCst), 1);
+        assert!(cluster.connections.borrow().contains_key("node-1:6379"));
     }
 }
