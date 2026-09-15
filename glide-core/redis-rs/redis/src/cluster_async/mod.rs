@@ -4577,7 +4577,9 @@ enum ConnectionLookupResult<C> {
 ///    socket port is intentionally ignored because topology resolution may rewrite it.
 /// 3. **Default address selection**: If no canonical address is found in the slot map,
 ///    select an address to use for a potential new connection:
-///    - Prefer `socket_addr` if available
+///    - With an address resolver, preserve `original_addr` so hostname-sensitive
+///      resolution sees the configured seed and deduplicates socket candidates
+///    - Without a resolver, prefer `socket_addr` if available
 ///    - Otherwise, use `original_addr` as-is
 ///
 /// # Connection Lookup
@@ -4633,11 +4635,16 @@ where
         Some(conn) => ConnectionLookupResult::Found(conn),
         None => ConnectionLookupResult::NeedsConnectionRefresh(match canonical_addr {
             Some(addr) => ClusterAddress::ReadyToDial(addr),
-            None => ClusterAddress::Raw(
-                socket_addr
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| original_addr.to_owned()),
-            ),
+            None => {
+                let resolver_configured = inner.get_cluster_param(|p| p.address_resolver.is_some());
+                ClusterAddress::Raw(if resolver_configured {
+                    original_addr.to_owned()
+                } else {
+                    socket_addr
+                        .map(|addr| addr.to_string())
+                        .unwrap_or_else(|| original_addr.to_owned())
+                })
+            }
         }),
     }
 }
@@ -5975,6 +5982,21 @@ mod refresh_task_resolution_tests {
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
         })
+    }
+
+    #[test]
+    fn resolver_recovery_preserves_original_hostname_when_socket_is_unmatched() {
+        let core = core_with_seed_resolver();
+        let result = lookup_management_connection(
+            &core,
+            "seed.example:6379",
+            Some("192.0.2.10:6379".parse().unwrap()),
+        );
+        assert!(matches!(
+            result,
+            ConnectionLookupResult::NeedsConnectionRefresh(ClusterAddress::Raw(address))
+                if address == "seed.example:6379"
+        ));
     }
 
     fn recording_node(port: u16) -> ClusterNode<ConnectionFuture<RecordingConnection>> {
