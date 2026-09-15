@@ -432,7 +432,8 @@ class _GlideFFI:
                 const uint8_t* connection_request_ptr,
                 size_t connection_request_len,
                 const ClientType* client_type,
-                void* credential_provider
+                void* credential_provider,
+                uintptr_t credential_client_id
             );
             int64_t glide_pool_try_acquire(uint64_t pool_id);
             int64_t glide_pool_acquire_blocking(uint64_t pool_id, uint64_t timeout_ms);

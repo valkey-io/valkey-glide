@@ -204,6 +204,7 @@ class AsyncClientPool:
             len(self._conn_req_bytes),
             client_type,
             credential_provider_callback,
+            0,  # credential_client_id: not used in Python (direct CFFI callback)
         )
         if pool_id < 0:
             raise RuntimeError(f"Failed to create pool: error code {pool_id}")

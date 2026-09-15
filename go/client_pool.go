@@ -164,6 +164,7 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
 		credProviderCallbackPtr,
+		C.uintptr_t(credClientID), // Go-registered credential provider ID
 	)
 	if poolID < 0 {
 		if credClientID != 0 {
@@ -401,6 +402,7 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
 		credProviderCallbackPtr,
+		C.uintptr_t(credClientID), // Go-registered credential provider ID
 	)
 	if poolID < 0 {
 		if credClientID != 0 {

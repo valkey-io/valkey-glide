@@ -173,6 +173,7 @@ class ClientPool:
             len(self._conn_req_bytes),
             client_type,
             self._ffi.NULL,  # credential_provider: not supported in sync pool
+            0,  # credential_client_id: not used in Python (direct CFFI callback)
         )
 
         if pool_id == -1:
