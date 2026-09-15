@@ -130,6 +130,14 @@ def test_is_tracing_enabled(monkeypatch):
     traces = OpenTelemetryTracesConfig(
         endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=0
     )
+    assert not traces.enable_trace_context_propagation
+
+    propagation_traces = OpenTelemetryTracesConfig(
+        endpoint=VALID_FILE_ENDPOINT_TRACES,
+        enable_trace_context_propagation=True,
+    )
+    assert propagation_traces.enable_trace_context_propagation
+
     monkeypatch.setattr(OpenTelemetry, "_instance", None)
     monkeypatch.setattr(OpenTelemetry, "_config", OpenTelemetryConfig(traces=traces))
     assert not OpenTelemetry.is_tracing_enabled()
@@ -291,7 +299,9 @@ class TestOpenTelemetryGlide:
         # Initialize OpenTelemetry with 100% sampling for tests
         opentelemetry_config = OpenTelemetryConfig(
             OpenTelemetryTracesConfig(
-                endpoint=VALID_FILE_ENDPOINT_TRACES, sample_percentage=100
+                endpoint=VALID_FILE_ENDPOINT_TRACES,
+                sample_percentage=100,
+                enable_trace_context_propagation=True,
             ),
             metrics=OpenTelemetryMetricsConfig(endpoint=VALID_ENDPOINT_METRICS),
             flush_interval_ms=100,
@@ -810,6 +820,28 @@ class TestOpenTelemetryGlide:
         # closed-client call. Any pre-existing spans from other tests are fine;
         # we just assert we didn't crash and no leak surfaced.
         await anyio.sleep(0.2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_trace_context_propagation_disabled_by_default(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """An active application span is ignored unless propagation is enabled."""
+        client = await create_client(request, cluster_mode=cluster_mode)
+        traces = OpenTelemetry._config.traces if OpenTelemetry._config else None
+        assert traces is not None
+        monkeypatch.setattr(traces, "enable_trace_context_propagation", False)
+
+        remove_span_file()
+        with use_parent_span(sampled=True):
+            await client.get("GlideClient_test_propagation_disabled")
+
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+
+        await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

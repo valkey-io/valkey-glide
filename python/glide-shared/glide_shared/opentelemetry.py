@@ -18,6 +18,8 @@ OpenTelemetryConfig: Main configuration object for OpenTelemetry exporters and o
     http://, https:// for HTTP/HTTPS, grpc:// for gRPC, file:// for local file export
   * sample_percentage: (optional) The percentage of requests to sample (0-100). Defaults to 1.
     Note: Higher sampling percentages impact performance. Recommended: 1-5% in production.
+  * enable_trace_context_propagation: (optional) Whether sampled GLIDE spans use the
+    active OpenTelemetry span as their parent. Defaults to False.
 
 * metrics: (optional) Configure metrics exporting using OpenTelemetryMetricsConfig.
 
@@ -47,12 +49,12 @@ Validation Rules
 Trace Context Propagation
 -------------------------
 
-When sampling selects a GLIDE command, batch or script span and the application has
-an active OpenTelemetry span, GLIDE creates the selected span as its child. The parent
-is read from the OpenTelemetry Python API, which propagates the active span through
-``contextvars``, so nothing is passed to GLIDE. It requires the
-optional ``opentelemetry-api`` package. Without it, propagation is off and spans are
-created as independent trace roots.
+When ``enable_trace_context_propagation`` is enabled, sampling selects a GLIDE
+command, batch or script span, and the application has an active OpenTelemetry span,
+GLIDE creates the selected span as its child. The parent is read from the OpenTelemetry
+Python API, which propagates the active span through ``contextvars``, so nothing is
+passed to GLIDE. Propagation requires the optional ``opentelemetry-api`` package and
+is disabled by default. Without it, spans are created as independent trace roots.
 
 See the "Trace Context Propagation" section of the Python README for the user-facing
 description, including how ``sample_percentage`` interacts with the parent span and
@@ -161,11 +163,17 @@ def _create_batch_span(ffi: Any, lib: Any, parent: Optional[_ParentSpanContext])
 class OpenTelemetryTracesConfig:
     """Configuration for exporting OpenTelemetry traces."""
 
-    def __init__(self, endpoint: str, sample_percentage: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        sample_percentage: Optional[int] = None,
+        enable_trace_context_propagation: bool = False,
+    ) -> None:
         self.endpoint = endpoint
         self.sample_percentage = (
             sample_percentage if sample_percentage is not None else 1
         )
+        self.enable_trace_context_propagation = enable_trace_context_propagation
 
     def get_endpoint(self) -> str:
         return self.endpoint
@@ -372,9 +380,16 @@ class OpenTelemetry:
 
         Returns:
             Optional[_ParentSpanContext]: The active span context, or None if
-                ``opentelemetry-api`` is not installed, no valid span is active,
-                or the context could not be read.
+                propagation is disabled, ``opentelemetry-api`` is not installed,
+                no valid span is active, or the context could not be read.
         """
+        if (
+            cls._config is None
+            or cls._config.traces is None
+            or not cls._config.traces.enable_trace_context_propagation
+        ):
+            return None
+
         if _otel_trace is None:
             return None
 
