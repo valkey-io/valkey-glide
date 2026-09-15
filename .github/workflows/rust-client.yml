@@ -75,10 +75,6 @@ jobs:
                       }
                 engine:
                     - { type: valkey, version: "9.0" }
-                    - { type: valkey, version: "8.1" }
-                    - { type: valkey, version: "8.0" }
-                    - { type: valkey, version: "7.2" }
-                    - { type: redis, version: "7.0" }
                     - { type: redis, version: "6.2" }
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

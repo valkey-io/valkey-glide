@@ -582,6 +582,7 @@ impl Client {
     /// Returns the parent client's IAM token manager, if IAM authentication is configured.
     /// Used by scoped connections to authenticate as the IAM identity instead of
     /// running unauthenticated.
+    #[cfg(feature = "proto")]
     pub(crate) fn iam_token_manager(&self) -> Option<&Arc<crate::iam::IAMTokenManager>> {
         self.iam_token_manager.as_ref()
     }
@@ -4097,6 +4098,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "proto")]
     async fn test_client_iam_token_manager_accessor() {
         setup_test_credentials();
 
