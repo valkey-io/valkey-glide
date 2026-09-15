@@ -1999,7 +1999,8 @@ int64_t glide_pool_create(uint32_t max_size,
                           const uint8_t *connection_request_ptr,
                           uintptr_t connection_request_len,
                           const struct ClientType *client_type,
-                          void *credential_provider);
+                          void *credential_provider,
+                          uintptr_t credential_client_id);
 #endif
 
 #if defined(GLIDE_POOL_SUPPORT)

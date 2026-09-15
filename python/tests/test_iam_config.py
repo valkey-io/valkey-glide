@@ -203,7 +203,11 @@ class TestGlideCredentialProvider:
             )
 
     def test_async_provider_rejected_by_sync_client(self):
-        """The sync glide client raises ValueError when an async provider is configured."""
+        """The sync glide client raises ValueError at connection time for async providers."""
+        from unittest.mock import MagicMock
+
+        from glide_shared.config import GlideClientConfiguration, NodeAddress
+        from glide_sync.glide_client import BaseClient
 
         async def async_provider() -> AwsCredentials:
             return AwsCredentials(access_key_id="key", secret_access_key="secret")
@@ -214,13 +218,34 @@ class TestGlideCredentialProvider:
             region="us-east-1",
             credential_provider=async_provider,
         )
-        ServerCredentials(username="user", iam_config=iam_config)
-        # We cannot easily instantiate GlideClient without a server, but we can
-        # verify that the _credential_provider_is_async flag is set correctly
-        # and that the sync client will raise ValueError at connection time.
-        assert (
-            iam_config._credential_provider_is_async is True
-        ), "Expected _credential_provider_is_async to be True for async provider"
+        credentials = ServerCredentials(username="user", iam_config=iam_config)
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            credentials=credentials,
+        )
+
+        # Construct a BaseClient without calling the full create() path
+        # (which would attempt a real server connection).
+        client = BaseClient.__new__(BaseClient)
+        client._config = config
+        client._is_closed = False
+        # Provide a minimal FFI mock so _create_core_client reaches the
+        # async-provider check before attempting any real FFI calls.
+        mock_ffi = MagicMock()
+        mock_ffi.NULL = None
+        mock_ffi.new.return_value = MagicMock()
+        mock_ffi.callback.return_value = MagicMock()
+        client._ffi = mock_ffi
+        client._lib = MagicMock()
+        client._pubsub_callback_ref = None
+        client._address_resolver_callback_ref = None
+        client._credential_provider_callback_ref = None
+
+        # _create_core_client must raise ValueError before reaching the FFI
+        # create_client call because the async-provider check happens first.
+        with pytest.raises(ValueError, match="async"):
+            client._create_core_client()
 
     def test_callable_object_with_async_call_detected_as_async(self):
         """_is_async_callable detects callable objects with async __call__."""
@@ -244,17 +269,66 @@ class TestGlideCredentialProvider:
         assert config._credential_provider_is_async is True
 
     def test_sync_provider_passes_create_credential_callback(self):
-        """A sync provider results in a non-NULL CFFI callback."""
-        from glide_shared.ffi_helpers import create_credential_provider_callback
+        """Sync client passes non-NULL credential callback to native create_client."""
+        from unittest.mock import MagicMock, call
+
         from glide_shared._glide_ffi import GlideFFI
+        from glide_shared.config import GlideClientConfiguration, NodeAddress
+        from glide_shared.ffi_helpers import create_credential_provider_callback
+        from glide_sync.glide_client import BaseClient
 
         ffi = GlideFFI.ffi
 
         def my_provider() -> AwsCredentials:
             return AwsCredentials(access_key_id="AKID", secret_access_key="SECRET")
 
+        iam_config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=my_provider,
+        )
+        credentials = ServerCredentials(username="user", iam_config=iam_config)
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            credentials=credentials,
+        )
+
+        # Verify create_credential_provider_callback produces a non-NULL CFFI pointer
         callback = create_credential_provider_callback(ffi, my_provider)
         assert callback != ffi.NULL, "Expected non-NULL CFFI callback for sync provider"
+
+        # Verify the callback is forwarded to self._lib.create_client.
+        # Construct a BaseClient without calling the full create() path.
+        client = BaseClient.__new__(BaseClient)
+        client._config = config
+        client._is_closed = False
+        client._ffi = ffi
+        mock_lib = MagicMock()
+        # Return a non-NULL ConnectionResponse so _create_core_client proceeds
+        mock_response = ffi.new(
+            "ConnectionResponse*",
+            {"conn_ptr": ffi.NULL, "connection_error_message": ffi.NULL},
+        )
+        mock_lib.create_client.return_value = mock_response
+        client._lib = mock_lib
+        client._pubsub_callback_ref = None
+        client._address_resolver_callback_ref = None
+        client._credential_provider_callback_ref = None
+
+        try:
+            client._create_core_client()
+        except Exception:
+            # Connection will fail (no real server), but create_client was called
+            pass
+
+        assert mock_lib.create_client.called, "create_client was not called"
+        # The 6th positional argument (index 5) is credential_provider
+        call_args = mock_lib.create_client.call_args
+        cred_arg = call_args[0][5]  # positional arg at index 5
+        assert (
+            cred_arg != ffi.NULL
+        ), "Expected non-NULL credential_provider passed to create_client"
 
     def test_none_provider_returns_null_callback(self):
         """No provider results in a NULL CFFI callback."""
