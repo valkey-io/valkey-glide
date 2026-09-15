@@ -11,7 +11,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -100,7 +100,7 @@ pub trait PubSubCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SPUBLISH").arg(channel).arg(message);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// List active channels, optionally matching `pattern` (`PUBSUB CHANNELS`).
@@ -118,7 +118,7 @@ pub trait PubSubCommands: CommandExecutor {
     async fn pubsub_numpat(&self) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("PUBSUB").arg("NUMPAT");
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the number of subscribers per channel (`PUBSUB NUMSUB`).
@@ -149,9 +149,12 @@ pub trait PubSubCommands: CommandExecutor {
             cmd.arg(p);
         }
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
             ValkeyValue::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_bytes(other)?]),
+            other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
         }
     }
 
@@ -176,13 +179,21 @@ fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
         ValkeyValue::Nil => Ok(Vec::new()),
         ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(c, n)| Ok((value::to_bytes(c)?, value::to_i64(n)?)))
+            .map(|(c, n)| {
+                Ok((
+                    Bytes::from_owned_valkey_value(c)?,
+                    i64::from_owned_valkey_value(n)?,
+                ))
+            })
             .collect(),
         ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(c), Some(n)) = (iter.next(), iter.next()) {
-                out.push((value::to_bytes(c)?, value::to_i64(n)?));
+                out.push((
+                    Bytes::from_owned_valkey_value(c)?,
+                    i64::from_owned_valkey_value(n)?,
+                ));
             }
             Ok(out)
         }

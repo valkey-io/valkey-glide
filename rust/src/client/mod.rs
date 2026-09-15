@@ -11,6 +11,7 @@ use crate::error::GlideError;
 use crate::executor::CommandExecutor;
 use crate::pipeline_options::{PipelineOptions, run_pipeline};
 use crate::routes::Route;
+use crate::value::FromValkeyValue;
 use crate::{ValkeyFuture, ValkeyResult, ValkeyValue};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -445,14 +446,14 @@ impl GlideClusterClient {
         let [cursor_val, keys_val] = <[ValkeyValue; 2]>::try_from(items).map_err(|items| {
             GlideError::Request(format!("unexpected cluster scan reply arity: {items:?}"))
         })?;
-        let next = ClusterScanCursor(crate::value::to_string(cursor_val)?);
+        let next = ClusterScanCursor(String::from_owned_valkey_value(cursor_val)?);
         let keys = match keys_val {
             ValkeyValue::Array(elems) => elems
                 .into_iter()
-                .map(crate::value::to_bytes)
+                .map(Bytes::from_owned_valkey_value)
                 .collect::<ValkeyResult<Vec<_>>>()?,
             ValkeyValue::Nil => Vec::new(),
-            other => vec![crate::value::to_bytes(other)?],
+            other => vec![Bytes::from_owned_valkey_value(other)?],
         };
         Ok((next, keys))
     }

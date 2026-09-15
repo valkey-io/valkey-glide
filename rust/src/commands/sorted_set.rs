@@ -6,7 +6,7 @@ use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::commands::options::Limit;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -117,7 +117,7 @@ pub trait SortedSetCommands: CommandExecutor {
             .arg("INCR")
             .arg(increment)
             .arg(member);
-        value::to_opt_f64(self.execute_command(cmd, None).await?)
+        Option::<f64>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the rank of `member` with its score, low to high (`ZRANK ... WITHSCORE`).
@@ -159,9 +159,9 @@ pub trait SortedSetCommands: CommandExecutor {
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Nil => Ok(None),
             ValkeyValue::Array(mut items) if items.len() == 3 => {
-                let score = value::to_f64(items.pop().unwrap())?;
-                let member = value::to_bytes(items.pop().unwrap())?;
-                let key = value::to_bytes(items.pop().unwrap())?;
+                let score = f64::from_owned_valkey_value(items.pop().unwrap())?;
+                let member = Bytes::from_owned_valkey_value(items.pop().unwrap())?;
+                let key = Bytes::from_owned_valkey_value(items.pop().unwrap())?;
                 Ok(Some((key, member, score)))
             }
             other => Err(crate::error::GlideError::Request(format!(
@@ -189,7 +189,7 @@ pub trait SortedSetCommands: CommandExecutor {
         if rev {
             cmd.arg("REV");
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Store into `destination` the members of the sorted set `source` whose
@@ -223,7 +223,7 @@ pub trait SortedSetCommands: CommandExecutor {
         if let Some(limit) = limit {
             cmd.arg("LIMIT").arg(limit.offset).arg(limit.count);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Store into `destination` the members of the sorted set `source` whose
@@ -256,7 +256,7 @@ pub trait SortedSetCommands: CommandExecutor {
         if let Some(limit) = limit {
             cmd.arg("LIMIT").arg(limit.offset).arg(limit.count);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Compute the difference of the given sorted sets (`ZDIFF`).
@@ -296,7 +296,7 @@ pub trait SortedSetCommands: CommandExecutor {
         for k in keys {
             cmd.arg(k);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Compute the union of the given sorted sets (`ZUNION`).
@@ -386,7 +386,7 @@ pub trait SortedSetCommands: CommandExecutor {
         if let Some(l) = limit {
             cmd.arg("LIMIT").arg(l);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     #[doc(hidden)]
@@ -405,15 +405,18 @@ pub trait SortedSetCommands: CommandExecutor {
         if let Some(agg) = aggregate {
             cmd.arg("AGGREGATE").arg(agg.as_arg());
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
 fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
         ValkeyValue::Nil => Ok(Vec::new()),
-        other => Ok(vec![value::to_bytes(other)?]),
+        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
     }
 }
 
@@ -425,7 +428,12 @@ fn collect_member_scores(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, f64)>> {
         // RESP3 returns a map of member -> score.
         ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(m, s)| Ok((value::to_bytes(m)?, value::to_f64(s)?)))
+            .map(|(m, s)| {
+                Ok((
+                    Bytes::from_owned_valkey_value(m)?,
+                    f64::from_owned_valkey_value(s)?,
+                ))
+            })
             .collect(),
         ValkeyValue::Array(items) => {
             // RESP3: array of [member, score] pairs.
@@ -436,8 +444,8 @@ fn collect_member_scores(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, f64)>> {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
                     if let ValkeyValue::Array(mut pair) = it {
-                        let score = value::to_f64(pair.pop().unwrap())?;
-                        let member = value::to_bytes(pair.pop().unwrap())?;
+                        let score = f64::from_owned_valkey_value(pair.pop().unwrap())?;
+                        let member = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                         out.push((member, score));
                     }
                 }
@@ -447,7 +455,10 @@ fn collect_member_scores(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, f64)>> {
                 let mut out = Vec::with_capacity(items.len() / 2);
                 let mut iter = items.into_iter();
                 while let (Some(m), Some(s)) = (iter.next(), iter.next()) {
-                    out.push((value::to_bytes(m)?, value::to_f64(s)?));
+                    out.push((
+                        Bytes::from_owned_valkey_value(m)?,
+                        f64::from_owned_valkey_value(s)?,
+                    ));
                 }
                 Ok(out)
             }
@@ -465,8 +476,8 @@ fn parse_rank_withscore(v: ValkeyValue) -> ValkeyResult<Option<(i64, f64)>> {
     match v {
         ValkeyValue::Nil => Ok(None),
         ValkeyValue::Array(mut items) if items.len() == 2 => {
-            let score = value::to_f64(items.pop().unwrap())?;
-            let rank = value::to_i64(items.pop().unwrap())?;
+            let score = f64::from_owned_valkey_value(items.pop().unwrap())?;
+            let rank = i64::from_owned_valkey_value(items.pop().unwrap())?;
             Ok(Some((rank, score)))
         }
         other => Err(crate::error::GlideError::Request(format!(

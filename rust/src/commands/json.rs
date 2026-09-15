@@ -7,7 +7,7 @@
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
 use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
 use async_trait::async_trait;
@@ -27,7 +27,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.SET").arg(key).arg(path).arg(value);
-        crate::value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the JSON value(s) at `paths` in `key` (`JSON.GET`).
@@ -41,7 +41,7 @@ pub trait JsonCommands: CommandExecutor {
         for p in paths {
             cmd.arg(p);
         }
-        value::to_opt_bytes(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete the value(s) at `path` (`JSON.DEL`); returns the number deleted.
@@ -52,7 +52,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.DEL").arg(key).arg(path);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete the value(s) at `path` (`JSON.FORGET`, an alias of `JSON.DEL`).
@@ -63,7 +63,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.FORGET").arg(key).arg(path);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the type of the value(s) at `path` (`JSON.TYPE`).
@@ -87,7 +87,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.NUMINCRBY").arg(key).arg(path).arg(value);
-        crate::value::to_opt_bytes(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Multiply the number(s) at `path` by `value` (`JSON.NUMMULTBY`).
@@ -99,7 +99,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.NUMMULTBY").arg(key).arg(path).arg(value);
-        crate::value::to_opt_bytes(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Append `value` to the string(s) at `path` (`JSON.STRAPPEND`). Returns the
@@ -256,7 +256,7 @@ pub trait JsonCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.CLEAR").arg(key).arg(path);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Find the index of `value` in the array(s) at `path` (`JSON.ARRINDEX`).
@@ -293,9 +293,12 @@ pub trait JsonCommands: CommandExecutor {
         }
         cmd.arg(path);
         match self.execute_command(cmd, None).await? {
-            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Option::<Bytes>::from_owned_valkey_value)
+                .collect(),
             ValkeyValue::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_opt_bytes(other)?]),
+            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
         }
     }
 

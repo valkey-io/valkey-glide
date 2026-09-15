@@ -7,87 +7,6 @@ use bytes::Bytes;
 use num_bigint::BigInt;
 use redis::{Value, VerbatimFormat};
 
-/// Decode a [`ValkeyValue`] into any [`FromValkeyValue`] type.
-pub(crate) fn from_value<T: FromValkeyValue>(value: ValkeyValue) -> ValkeyResult<T> {
-    T::from_owned_valkey_value(value)
-}
-
-/// Convert a [`ValkeyValue`] into `Option<Bytes>` (Nil → `None`).
-pub(crate) fn to_opt_bytes(value: ValkeyValue) -> ValkeyResult<Option<Bytes>> {
-    match value {
-        ValkeyValue::Nil => Ok(None),
-        other => Ok(Some(to_bytes(other)?)),
-    }
-}
-
-/// Convert a [`ValkeyValue`] into `Bytes`, accepting the various string-shaped
-/// RESP2/RESP3 replies (bulk, simple, verbatim, OK) as well as numbers.
-pub(crate) fn to_bytes(value: ValkeyValue) -> ValkeyResult<Bytes> {
-    match value {
-        ValkeyValue::BulkString(b) => Ok(b),
-        ValkeyValue::SimpleString(s) => Ok(Bytes::from(s.into_bytes())),
-        ValkeyValue::VerbatimString { text, .. } => Ok(Bytes::from(text.into_bytes())),
-        ValkeyValue::Okay => Ok(Bytes::from_static(b"OK")),
-        ValkeyValue::Int(i) => Ok(Bytes::from(i.to_string().into_bytes())),
-        ValkeyValue::Double(f) => Ok(Bytes::from(f.to_string().into_bytes())),
-        ValkeyValue::Boolean(b) => Ok(Bytes::from(if b { "1" } else { "0" })),
-        other => Vec::<u8>::from_owned_valkey_value(other).map(Bytes::from),
-    }
-}
-
-/// Convert a [`ValkeyValue`] into a UTF-8 `String`.
-pub(crate) fn to_string(value: ValkeyValue) -> ValkeyResult<String> {
-    match value {
-        ValkeyValue::SimpleString(s) => Ok(s),
-        ValkeyValue::VerbatimString { text, .. } => Ok(text),
-        ValkeyValue::Okay => Ok("OK".to_string()),
-        ValkeyValue::Int(i) => Ok(i.to_string()),
-        ValkeyValue::Double(f) => Ok(f.to_string()),
-        other => from_value(other),
-    }
-}
-
-/// Convert a [`ValkeyValue`] into an `Option<String>` (Nil → `None`).
-pub(crate) fn to_opt_string(value: ValkeyValue) -> ValkeyResult<Option<String>> {
-    match value {
-        ValkeyValue::Nil => Ok(None),
-        other => Ok(Some(to_string(other)?)),
-    }
-}
-
-/// Convert a [`ValkeyValue`] into an `i64`.
-pub(crate) fn to_i64(value: ValkeyValue) -> ValkeyResult<i64> {
-    from_value(value)
-}
-
-/// Convert a [`ValkeyValue`] into an `f64`.
-pub(crate) fn to_f64(value: ValkeyValue) -> ValkeyResult<f64> {
-    from_value(value)
-}
-
-/// Convert a [`ValkeyValue`] into an `Option<f64>` (Nil → `None`).
-pub(crate) fn to_opt_f64(value: ValkeyValue) -> ValkeyResult<Option<f64>> {
-    match value {
-        ValkeyValue::Nil => Ok(None),
-        other => Ok(Some(from_value(other)?)),
-    }
-}
-
-/// Convert an integer reply into `bool` (`1` → true, `0` → false). Also accepts
-/// RESP3 boolean replies.
-pub(crate) fn to_bool(value: ValkeyValue) -> ValkeyResult<bool> {
-    match value {
-        ValkeyValue::Boolean(b) => Ok(b),
-        ValkeyValue::Int(i) => Ok(i != 0),
-        other => Ok(from_value::<i64>(other)? != 0),
-    }
-}
-
-/// Convert an "OK"/simple-string reply into `()`.
-pub(crate) fn to_unit(_value: ValkeyValue) -> ValkeyResult<()> {
-    Ok(())
-}
-
 /// A value returned by the server.
 ///
 /// Mirrors redis-rs's `Value` type.
@@ -795,39 +714,6 @@ mod to_valkey_args_tests {
 mod tests {
     use super::*;
     use redis::{ErrorKind, RedisError};
-
-    #[test]
-    fn opt_bytes_nil_is_none() {
-        assert_eq!(to_opt_bytes(ValkeyValue::Nil).unwrap(), None);
-    }
-
-    #[test]
-    fn opt_bytes_bulkstring() {
-        let v = ValkeyValue::BulkString(b"hello".to_vec().into());
-        assert_eq!(to_opt_bytes(v).unwrap(), Some(Bytes::from_static(b"hello")));
-    }
-
-    #[test]
-    fn int_and_bool() {
-        assert_eq!(to_i64(ValkeyValue::Int(42)).unwrap(), 42);
-        assert!(to_bool(ValkeyValue::Int(1)).unwrap());
-        assert!(!to_bool(ValkeyValue::Int(0)).unwrap());
-        assert!(to_bool(ValkeyValue::Boolean(true)).unwrap());
-    }
-
-    #[test]
-    fn opt_f64_nil_and_value() {
-        assert_eq!(to_opt_f64(ValkeyValue::Nil).unwrap(), None);
-        assert_eq!(to_opt_f64(ValkeyValue::Double(1.5)).unwrap(), Some(1.5));
-    }
-
-    #[test]
-    fn string_from_simple() {
-        assert_eq!(
-            to_string(ValkeyValue::SimpleString("PONG".into())).unwrap(),
-            "PONG"
-        );
-    }
 
     // ---- ValkeyValue::from_redis ----------------------------------------
 
