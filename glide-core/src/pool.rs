@@ -758,6 +758,28 @@ impl Default for ScopePoolConfig {
     }
 }
 
+/// Topology-aware destination for a scoped connection.
+///
+/// Cluster targets are keyed on the primary's canonical `host:port` (the same key
+/// redis-rs uses for its connection map), not on the hash slot. Every slot owned by
+/// one primary therefore shares idle connections, and a slot whose owner changed
+/// (failover, migration) stops matching sockets to the former owner because the
+/// address is re-resolved against the live slot map on each acquire.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScopeTarget {
+    /// The configured server for a standalone client.
+    Standalone,
+    /// The cluster primary at this canonical `host:port`.
+    ClusterPrimary(Arc<String>),
+}
+
+impl ScopeTarget {
+    /// Build a cluster target from a resolved primary address.
+    pub fn cluster_primary(address: impl Into<String>) -> Self {
+        ScopeTarget::ClusterPrimary(Arc::new(address.into()))
+    }
+}
+
 /// A dedicated connection for isolated execution.
 ///
 /// Cluster mode support:
@@ -780,9 +802,8 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
-    /// The target slot this connection was created for (cluster routing).
-    /// Used to match idle connections to acquire requests for the same slot range.
-    pub target_slot: u16,
+    /// The topology-aware destination this connection was created for.
+    pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
     /// `IAMTokenManager::token_generation`). Per-connection rather than on the
     /// shared `Client` since scoped connections are reused independently.
@@ -802,6 +823,8 @@ pub struct ScopePool {
     pub parent_client_id: u64,
     /// The database_id from the connection config (for reset on release).
     pub configured_database_id: u32,
+    /// Whether this pool belongs to a cluster client.
+    pub cluster_mode_enabled: bool,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -815,7 +838,8 @@ pub enum ScopeAcquire {
     /// A slot was reserved against `max_total`; the caller must create a
     /// connection to fill it.
     Reserved,
-    /// No idle connection and the pool is at `max_total`.
+    /// Nothing idle at all and the pool is at `max_total` (an idle connection to a
+    /// different target is evicted to make room, so it never causes exhaustion).
     Exhausted,
 }
 
@@ -825,19 +849,19 @@ impl ScopePool {
         connection_request_bytes: Vec<u8>,
         parent_client_id: u64,
     ) -> Self {
-        // Parse configured_database_id from the connection request
+        // Parse topology and configured database from the existing request schema.
         #[cfg(feature = "proto")]
-        let configured_database_id = {
+        let (configured_database_id, cluster_mode_enabled) = {
             use protobuf::Message as _;
             crate::connection_request::ConnectionRequest::parse_from_bytes(
                 &connection_request_bytes,
             )
             .ok()
-            .map(|req| req.database_id)
-            .unwrap_or(0)
+            .map(|req| (req.database_id, req.cluster_mode_enabled))
+            .unwrap_or((0, false))
         };
         #[cfg(not(feature = "proto"))]
-        let configured_database_id = 0u32;
+        let (configured_database_id, cluster_mode_enabled) = (0u32, false);
 
         Self {
             config,
@@ -848,6 +872,21 @@ impl ScopePool {
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
+            cluster_mode_enabled,
+        }
+    }
+
+    /// Normalize a resolved primary address into an explicit target.
+    ///
+    /// Standalone pools ignore the address (every routing slot maps to the one
+    /// configured server). Cluster pools require it and return `None` when the
+    /// owner of the requested slot could not be resolved, so the caller fails
+    /// closed instead of falling back to a seed node.
+    pub fn target_for_primary(&self, primary: Option<&str>) -> Option<ScopeTarget> {
+        if self.cluster_mode_enabled {
+            primary.map(ScopeTarget::cluster_primary)
+        } else {
+            Some(ScopeTarget::Standalone)
         }
     }
 
@@ -859,14 +898,14 @@ impl ScopePool {
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
-        routing_slot: u16,
+        target: ScopeTarget,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
         }
 
-        // Scan idle connections for one matching the requested routing slot.
-        // Connections targeting a different slot are kept aside and pushed back.
+        // Scan idle connections for one matching the requested target.
+        // Connections to a different target are kept aside and pushed back.
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut found: Option<ScopedConnection> = None;
 
@@ -877,9 +916,8 @@ impl ScopePool {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
-            // Slot 0 is the default/standalone wildcard — always matches.
-            // Otherwise, only reuse if target_slot matches.
-            if conn.target_slot == routing_slot || routing_slot == 0 || conn.target_slot == 0 {
+            // Scoped connections are reusable only for the same physical target.
+            if conn.target == target {
                 found = Some(conn);
                 break;
             }
@@ -905,12 +943,27 @@ impl ScopePool {
             return ScopeAcquire::Reused(scope_id);
         }
 
-        if self.total_count.load(Ordering::Acquire) < self.config.max_total {
-            self.total_count.fetch_add(1, Ordering::AcqRel);
-            ScopeAcquire::Reserved
-        } else {
-            ScopeAcquire::Exhausted
+        if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
+            // Full, and every idle connection points at a different target. Evict
+            // the oldest idle one (front of the LIFO deque) to make room rather
+            // than reporting exhaustion while capacity sits idle on other primaries.
+            // Only when nothing is idle at all is the pool truly exhausted.
+            let Some(evicted) = self.idle.pop_front() else {
+                return ScopeAcquire::Exhausted;
+            };
+            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            logger_core::log_debug(
+                "pool",
+                format!(
+                    "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                    evicted.scope_id, evicted.target, target
+                ),
+            );
+            drop(evicted);
         }
+
+        self.total_count.fetch_add(1, Ordering::AcqRel);
+        ScopeAcquire::Reserved
     }
 
     /// Release a scope. Zero-cost if state is clean.
@@ -947,7 +1000,7 @@ impl ScopePool {
                         borrowed_at: None,
                         state: ConnectionState::default(),
                         pinned_slot: None,
-                        target_slot: conn.target_slot,
+                        target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
                         ),
@@ -1068,7 +1121,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
-                                    target_slot: guard.target_slot,
+                                    target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
                                     ),
@@ -1288,7 +1341,9 @@ mod connection_state_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+    use super::{
+        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+    };
 
     /// `max_total = N` must grant exactly N reservations before reporting
     /// exhaustion. The slot is counted as the reservation is granted, so the Nth is
@@ -1305,13 +1360,13 @@ mod scope_pool_tests {
 
             for slot in 0..max_total {
                 assert_eq!(
-                    pool.try_acquire(&registry, 0),
+                    pool.try_acquire(&registry, ScopeTarget::Standalone),
                     ScopeAcquire::Reserved,
                     "max_total={max_total}: reservation {slot} must be granted"
                 );
             }
             assert_eq!(
-                pool.try_acquire(&registry, 0),
+                pool.try_acquire(&registry, ScopeTarget::Standalone),
                 ScopeAcquire::Exhausted,
                 "max_total={max_total}: only N reservations fit"
             );
