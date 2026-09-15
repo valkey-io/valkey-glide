@@ -82,6 +82,39 @@ fn get_pool_client_types() -> &'static dashmap::DashMap<u64, ClientType> {
     POOL_CLIENT_TYPES.get_or_init(dashmap::DashMap::new)
 }
 
+/// Maps pool_id → CredentialProviderCallback (stored as usize) for background client creation.
+/// A zero value means no credential provider.
+static POOL_CREDENTIAL_PROVIDERS: std::sync::OnceLock<dashmap::DashMap<u64, usize>> =
+    std::sync::OnceLock::new();
+
+fn get_pool_credential_providers() -> &'static dashmap::DashMap<u64, usize> {
+    POOL_CREDENTIAL_PROVIDERS.get_or_init(dashmap::DashMap::new)
+}
+
+/// Maps pool_id → credential_client_id for background client creation.
+/// This is the language-side registry key (e.g. Go's credClientID) passed to
+/// glide_pool_create so that background-created FFICredentialsProvider instances
+/// use the same lookup key as the one registered on the language side.
+/// A zero value means use the internal client_id (no Go-side registry).
+static POOL_CREDENTIAL_CLIENT_IDS: std::sync::OnceLock<dashmap::DashMap<u64, usize>> =
+    std::sync::OnceLock::new();
+
+fn get_pool_credential_client_ids() -> &'static dashmap::DashMap<u64, usize> {
+    POOL_CREDENTIAL_CLIENT_IDS.get_or_init(dashmap::DashMap::new)
+}
+
+/// Retrieve a stored credential provider for a pool.
+fn get_pool_credential_provider(pool_id: u64) -> Option<CredentialProviderCallback> {
+    get_pool_credential_providers().get(&pool_id).and_then(|v| {
+        if *v == 0 {
+            None
+        } else {
+            // SAFETY: The function pointer was stored from a valid C function pointer.
+            Some(unsafe { std::mem::transmute::<usize, CredentialProviderCallback>(*v) })
+        }
+    })
+}
+
 /// Create a GlideClient + ClientAdapter for the pool.
 /// Runs on a dedicated thread (not inside an existing runtime) to avoid nesting.
 /// Create a pool client using the standard create_client_internal path.
@@ -89,17 +122,32 @@ fn get_pool_client_types() -> &'static dashmap::DashMap<u64, ClientType> {
 ///
 /// For sync pools: creates a SyncClient adapter.
 /// For async pools: creates an AsyncClient adapter with callbacks.
+///
+/// `credential_client_id` is the language-side registry key passed by the caller
+/// (e.g. Go's `credClientID`).  It is forwarded to `FFICredentialsProvider` so
+/// that credential callbacks use the correct lookup key.  `internal_client_id`
+/// is only used for pool bookkeeping (POOL_CLIENTS / POOL_ADAPTER_MAP).
 fn create_pool_client(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-    client_id: usize,
+    credential_provider: Option<CredentialProviderCallback>,
+    internal_client_id: usize,
+    credential_client_id: usize,
 ) -> Result<(usize, glide_core::client::Client), String> {
+    // Use credential_client_id so that the FFI callback fires with the same key
+    // under which the language binding registered the provider.
+    let ffi_client_id = if credential_provider.is_some() {
+        credential_client_id
+    } else {
+        internal_client_id
+    };
     let adapter_ptr = create_client_internal(
         connection_request_bytes,
         client_type,
         None, // no pubsub callback for pooled clients (managed at pool level)
         None, // no address resolver (uses the one in ConnectionRequest if any)
-        client_id,
+        credential_provider,
+        ffi_client_id,
     )?;
 
     // Extract the Client from the adapter for pool bookkeeping
@@ -118,7 +166,7 @@ fn create_pool_client(
 /// Create a new client-instance pool.
 ///
 /// Creates pooled clients of the specified type. All languages use this single
-/// entry point — pass the appropriate ClientType:
+/// entry point — pass the appropriate ClientType:\
 /// - Python sync/Ruby: `ClientType { tag: SyncClient }`
 /// - Go/Java: `ClientType { tag: AsyncClient, success_callback, failure_callback }`
 /// - Python async: `ClientType { tag: AsyncClient }` with pipe (no callbacks needed)
@@ -128,6 +176,13 @@ fn create_pool_client(
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
 /// `client_type` must be a valid pointer to a `ClientType`.
+/// `credential_provider` is nullable (NULL = no custom provider). When non-null,
+/// it must be a valid `CredentialProviderCallback` function pointer that lives
+/// while the pool is alive.
+/// `credential_client_id` is the language-side registry key under which the
+/// credential provider was registered (e.g. Go's `credClientID`).  Pass 0
+/// when `credential_provider` is NULL or when the callback is a direct
+/// function pointer (Python CFFI).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn glide_pool_create(
     max_size: u32,
@@ -138,6 +193,8 @@ pub unsafe extern "C" fn glide_pool_create(
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
+    credential_provider: *const (), // nullable; non-null = CredentialProviderCallback
+    credential_client_id: usize,    // Go-side registry key; 0 if no provider or direct callback
 ) -> i64 {
     let connection_request = if connection_request_ptr.is_null() || connection_request_len == 0 {
         Vec::new()
@@ -153,6 +210,17 @@ pub unsafe extern "C" fn glide_pool_create(
     };
 
     let is_async = !matches!(ct, ClientType::SyncClient);
+
+    // Convert nullable raw pointer to Option<CredentialProviderCallback>.
+    // SAFETY: caller guarantees that a non-null pointer is a valid CredentialProviderCallback.
+    let credential_provider_opt: Option<CredentialProviderCallback> =
+        if credential_provider.is_null() {
+            None
+        } else {
+            Some(unsafe {
+                std::mem::transmute::<*const (), CredentialProviderCallback>(credential_provider)
+            })
+        };
 
     // Parse database_id from connection request for state reset on release
     let configured_database_id = {
@@ -207,6 +275,17 @@ pub unsafe extern "C" fn glide_pool_create(
     // Store the ClientType for background creation
     get_pool_client_types().insert(pool_id, ct.clone());
 
+    // Store the credential provider for background creation (as usize; 0 = none)
+    get_pool_credential_providers().insert(
+        pool_id,
+        credential_provider_opt.map(|cp| cp as usize).unwrap_or(0),
+    );
+
+    // Store the language-side credential_client_id for background creation.
+    // Background threads use this to construct FFICredentialsProvider with the
+    // correct lookup key (the one registered on the language side).
+    get_pool_credential_client_ids().insert(pool_id, credential_client_id);
+
     // Spawn min_idle background client creation
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
@@ -214,9 +293,11 @@ pub unsafe extern "C" fn glide_pool_create(
             let pool_clone = pool_arc.clone();
             let bytes = connection_request.clone();
             let ct_clone = ct.clone();
+            let cp_opt = credential_provider_opt;
+            let cred_cid = credential_client_id;
             std::thread::spawn(move || {
                 let pre_cid = glide_core::pool::allocate_client_id() as usize;
-                match create_pool_client(&bytes, ct_clone, pre_cid) {
+                match create_pool_client(&bytes, ct_clone, cp_opt, pre_cid, cred_cid) {
                     Ok((adapter_ptr, client)) => {
                         // Use block_on for warmup — this runs during pool creation
                         // (initialization), not during acquire/release contention,
@@ -311,7 +392,12 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                         .get(&pool_id)
                         .map(|e| e.value().clone())
                         .unwrap_or(ClientType::SyncClient);
-                    match create_pool_client(&bytes, bg_ct, pre_cid) {
+                    let bg_cp = get_pool_credential_provider(pool_id);
+                    let bg_cred_cid = get_pool_credential_client_ids()
+                        .get(&pool_id)
+                        .map(|v| *v)
+                        .unwrap_or(0);
+                    match create_pool_client(&bytes, bg_ct, bg_cp, pre_cid, bg_cred_cid) {
                         Ok((adapter_ptr, client)) => {
                             let rt = get_pool_runtime();
                             rt.spawn(async move {
@@ -422,7 +508,12 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
                             .get(&pool_id)
                             .map(|e| e.value().clone())
                             .unwrap_or(ClientType::SyncClient);
-                        match create_pool_client(&bytes, bg_ct, pre_cid) {
+                        let bg_cp = get_pool_credential_provider(pool_id);
+                        let bg_cred_cid = get_pool_credential_client_ids()
+                            .get(&pool_id)
+                            .map(|v| *v)
+                            .unwrap_or(0);
+                        match create_pool_client(&bytes, bg_ct, bg_cp, pre_cid, bg_cred_cid) {
                             Ok((adapter_ptr, client)) => {
                                 // Spawn pool insertion as an async task instead of
                                 // block_on to avoid starving the pool runtime and
@@ -564,8 +655,10 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
             });
         }
     }
-    // Clean up stored ClientType for this pool
+    // Clean up stored ClientType and CredentialProvider for this pool
     get_pool_client_types().remove(&pool_id);
+    get_pool_credential_providers().remove(&pool_id);
+    get_pool_credential_client_ids().remove(&pool_id);
     0
 }
 

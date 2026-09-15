@@ -330,6 +330,27 @@ pub fn create_pool(
     let min_idle = pool_config.min_idle;
     let conn_bytes = conn_req_bytes;
     get_pool_runtime().spawn(async move {
+        // Resolve credential provider once before the loop to avoid consuming the
+        // registry entry on the first iteration (registry::remove is destructive).
+        let pool_credential_provider = {
+            let connection_request = match ProtobufConnectionRequest::parse_from_bytes(&conn_bytes)
+            {
+                Ok(req) => req,
+                Err(_) => {
+                    logger_core::log_warn(
+                        "pool",
+                        "Background warmup: failed to parse connection request",
+                    );
+                    return;
+                }
+            };
+            connection_request
+                .credential_provider_key
+                .as_ref()
+                .filter(|key| !key.is_empty())
+                .and_then(|key| glide_core::credential_provider_registry::remove(key))
+        };
+
         for _ in 0..min_idle {
             let connection_request = match ProtobufConnectionRequest::parse_from_bytes(&conn_bytes)
             {
@@ -338,6 +359,13 @@ pub fn create_pool(
             };
             let mut internal_req: ConnectionRequest = connection_request.into();
             internal_req.address_resolver = None;
+            if let Some(ref provider) = pool_credential_provider {
+                if let Some(auth_info) = internal_req.authentication_info.as_mut()
+                    && let Some(iam_config) = auth_info.iam_config.as_mut()
+                {
+                    iam_config.credentials_provider = Some(provider.clone());
+                }
+            }
 
             match Client::new(internal_req, None).await {
                 Ok(client) => {
