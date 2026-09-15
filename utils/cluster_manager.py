@@ -103,17 +103,29 @@ def init_logger(logfile: str):
 def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
-        if os.path.exists(tls_file):
-            return True
-        else:
-            time.sleep(0.005)
+        # openssl creates each file before it writes the contents, so an empty file
+        # means a concurrent generation is still running. Keep waiting for it within
+        # the budget rather than starting a second generation over the same paths.
+        try:
+            if os.path.getsize(tls_file) > 0:
+                return True
+        except OSError:
+            pass
+        time.sleep(0.005)
     logging.warn(f"Timed out waiting for certificate file {tls_file}")
     return False
 
 
 def check_if_tls_cert_is_valid(tls_file: str):
-    file_creation_unix_time = os.path.getmtime(tls_file)
-    file_creation_utc = datetime.fromtimestamp(file_creation_unix_time)
+    try:
+        stats = os.stat(tls_file)
+    except OSError:
+        # A file that disappeared or cannot be read is not something to reuse.
+        return False
+    if stats.st_size == 0:
+        # An interrupted openssl run leaves a truncated file with a fresh mtime.
+        return False
+    file_creation_utc = datetime.fromtimestamp(stats.st_mtime)
     current_time_utc = datetime.utcnow()
     time_since_created = current_time_utc - file_creation_utc
     return time_since_created.days < 3650
@@ -125,9 +137,16 @@ def should_generate_new_tls_certs() -> bool:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
+        if all(
+            check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)
+            for file in files_list
+        ):
+            return False
+        # Servers need all three files, so reuse takes the whole set. A partial one
+        # would otherwise be cached until someone deletes the folder by hand.
+        logging.warning(
+            f"Incomplete or expired TLS certificates in {TLS_FOLDER}, regenerating"
+        )
     return True
 
 
@@ -139,6 +158,10 @@ def generate_tls_certs():
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
+
+    # The CA below is new, so an old serial does not apply to it. openssl also
+    # aborts on a serial it cannot parse, which leaves an empty server.crt behind.
+    Path(ca_serial).unlink(missing_ok=True)
 
     f = open(ext_file, "w")
     f.write(
