@@ -4084,6 +4084,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "proto")]
     async fn test_client_iam_token_manager_accessor() {
         setup_test_credentials();
 
