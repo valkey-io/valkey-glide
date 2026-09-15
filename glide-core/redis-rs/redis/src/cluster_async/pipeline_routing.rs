@@ -47,23 +47,19 @@ where
 mod tests {
     use super::*;
     use crate::cluster::ReadyToDialAddress;
-    use crate::cluster_async::refresh_task_resolution_tests::core_with_non_idempotent_resolver;
+    use crate::cluster_async::refresh_task_resolution_tests::core_with_counting_non_idempotent_resolver;
     use std::sync::atomic::Ordering;
 
     #[test]
     fn circular_moved_redirect_uses_prepared_address_without_resolving() {
         // The shared test core has empty slot and connection maps and a counting resolver.
-        let core = core_with_non_idempotent_resolver();
-        super::super::refresh_task_resolution_tests::RESOLVER_CALLS.store(0, Ordering::SeqCst);
+        let (core, calls) = core_with_counting_non_idempotent_resolver();
         assert!(is_pipeline_circular_moved_redirect(
             &core,
             Some(("resolved-node:6381", 5000)),
             ReadyToDialAddress::new("resolved-node:6381".to_owned()),
         ));
-        assert_eq!(
-            super::super::refresh_task_resolution_tests::RESOLVER_CALLS.load(Ordering::SeqCst),
-            0
-        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
 

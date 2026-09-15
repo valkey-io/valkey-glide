@@ -5516,7 +5516,7 @@ mod circular_moved_address_normalization_tests {
     }
 
     #[test]
-    fn raw_hostname_current_address_is_resolved_before_circular_comparison() {
+    fn raw_hostname_current_address_is_not_resolved_before_circular_comparison() {
         let core = core_with_ip_mapping();
         core.cluster_params.write().address_resolver = Some(Arc::new(CurrentAddressResolver));
 
@@ -5822,6 +5822,7 @@ pub(super) mod refresh_task_resolution_tests {
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
         });
+        resolver.0.store(0, Ordering::SeqCst);
         assert!(core.is_circular_moved_redirect_prepared(
             Some(("127.0.0.1:6382", 5000)),
             ReadyToDialAddress::new(current_address.clone())
@@ -5900,6 +5901,19 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[derive(Debug)]
+    pub(super) struct CountingNonIdempotentResolver(pub(super) Arc<AtomicUsize>);
+    impl AddressResolver for CountingNonIdempotentResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            if port == 6380 {
+                (host.into(), 6381)
+            } else {
+                (host.into(), port)
+            }
+        }
+    }
+
+    #[derive(Debug)]
     struct SeedAddressResolver;
 
     impl AddressResolver for SeedAddressResolver {
@@ -5926,7 +5940,9 @@ pub(super) mod refresh_task_resolution_tests {
         }
     }
 
-    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+    pub(super) fn core_with_resolver(
+        resolver: Arc<dyn AddressResolver>,
+    ) -> Arc<InnerCore<RecordingConnection>> {
         let slot_map = SlotMap::new(
             vec![],
             HashMap::new(),
@@ -5934,7 +5950,7 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let mut cluster_params = ClusterParams::default_for_test(None);
-        cluster_params.address_resolver = Some(Arc::new(NonIdempotentResolver));
+        cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
             conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
@@ -5955,15 +5971,27 @@ pub(super) mod refresh_task_resolution_tests {
         })
     }
 
+    pub(super) fn core_with_counting_non_idempotent_resolver(
+    ) -> (Arc<InnerCore<RecordingConnection>>, Arc<AtomicUsize>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        (
+            core_with_resolver(Arc::new(CountingNonIdempotentResolver(calls.clone()))),
+            calls,
+        )
+    }
+
+    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+        core_with_resolver(Arc::new(NonIdempotentResolver))
+    }
+
     #[test]
     fn prepared_current_address_stays_prepared_after_map_removal() {
-        RESOLVER_CALLS.store(0, Ordering::SeqCst);
-        let core = core_with_non_idempotent_resolver();
+        let (core, calls) = core_with_counting_non_idempotent_resolver();
         assert!(core.is_circular_moved_redirect_prepared(
             Some(("resolved-node:6381", 5000)),
             ReadyToDialAddress::new("resolved-node:6381".to_owned()),
         ));
-        assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 
     fn core_with_seed_resolver() -> Arc<InnerCore<RecordingConnection>> {
@@ -6065,7 +6093,10 @@ pub(super) mod refresh_task_resolution_tests {
                 _ => unreachable!(),
             })
             .collect::<HashSet<_>>();
-        assert_eq!(socket_addresses.len(), 2);
+        assert_eq!(
+            socket_addresses,
+            HashSet::from(["192.0.2.10:6379".to_owned(), "192.0.2.11:6379".to_owned(),])
+        );
     }
 
     fn recording_node(port: u16) -> ClusterNode<ConnectionFuture<RecordingConnection>> {
