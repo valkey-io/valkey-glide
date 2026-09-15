@@ -193,6 +193,14 @@ class AsyncClientPool:
             # Keep a reference so the CFFI callback is not garbage-collected
             self._credential_provider_callback_ref = credential_provider_callback
 
+        # Cast to void* for CFFI backward compat: pre-1.8.3 CFFI does not
+        # auto-convert typed function pointers to void* parameters.
+        credential_provider_ptr = (
+            self._ffi.cast("void *", credential_provider_callback)
+            if credential_provider_callback != self._ffi.NULL
+            else self._ffi.NULL
+        )
+
         buf = self._ffi.from_buffer(self._conn_req_bytes)
         pool_id = self._lib.glide_pool_create(
             self._pool_config.max_size,
@@ -203,7 +211,7 @@ class AsyncClientPool:
             self._ffi.cast("const uint8_t*", buf),
             len(self._conn_req_bytes),
             client_type,
-            credential_provider_callback,
+            credential_provider_ptr,
             0,  # credential_client_id: not used in Python (direct CFFI callback)
         )
         if pool_id < 0:
