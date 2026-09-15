@@ -395,9 +395,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.7"
+version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d73dbfbaa8e4bc57b9045137680b958d274823509a360abfd8e1d514d40c95c"
+checksum = "8f94d16e797ec62cd999fc9d5942b48fa7050c3093ddadff48e4d7528d16fcb9"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -1011,6 +1011,7 @@ dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sigv4",
+ "aws-smithy-types",
  "bytes",
  "dashmap",
  "futures",
@@ -1033,7 +1034,7 @@ dependencies = [
  "sha1_smol",
  "sha2",
  "strum",
- "strum_macros 0.26.4",
+ "strum_macros",
  "telemetrylib",
  "thiserror 2.0.18",
  "tokio",
@@ -2172,7 +2173,7 @@ dependencies = [
  "ryu",
  "socket2",
  "strum",
- "strum_macros 0.28.0",
+ "strum_macros",
  "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
@@ -2657,19 +2658,6 @@ name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "strum_macros"
