@@ -1066,7 +1066,7 @@ pub(crate) fn parse_cluster_address(address: &str) -> Option<(&str, u16)> {
     if host.contains('[') || host.contains(']') {
         return None;
     }
-    if host.is_empty() {
+    if host.is_empty() || host.chars().any(char::is_whitespace) {
         return None;
     }
     if bracketed || host.contains(':') {
@@ -1259,6 +1259,16 @@ mod tests {
                 .as_str(),
             "[node:6379"
         );
+    }
+
+    #[test]
+    fn cluster_address_parser_rejects_leading_whitespace_in_host() {
+        assert_eq!(parse_cluster_address(" node:6379"), None);
+    }
+
+    #[test]
+    fn cluster_address_parser_rejects_embedded_whitespace_in_host() {
+        assert_eq!(parse_cluster_address("no de:6379"), None);
     }
 
     #[derive(Debug)]
