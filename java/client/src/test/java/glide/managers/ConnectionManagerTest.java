@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import connection_request.ConnectionRequestOuterClass;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -108,11 +110,30 @@ public class ConnectionManagerTest {
         }
     }
 
-    /** A legitimate AZ with incidental surrounding whitespace is accepted and left unnormalized. */
+    /**
+     * A padded AZ is accepted and <em>normalized</em>. Forwarding it raw would satisfy validation and
+     * then match no node, because the core compares AZs with exact equality — the same
+     * silent-fallback outcome as a blank value, and easily produced by {@code getenv} returning
+     * {@code "us-east-1a\n"}.
+     */
     @ParameterizedTest
     @MethodSource("azStrategies")
-    void validateClientAz_acceptsClientAzWithSurroundingWhitespace(ReadFrom readFrom) {
-        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, " " + AZ + " ")));
+    void validateClientAz_normalizesSurroundingWhitespace(ReadFrom readFrom) {
+        GlideClientConfiguration padded = config(readFrom, " " + AZ + "\n");
+
+        assertDoesNotThrow(() -> ConnectionManager.validateClientAz(padded));
+        assertEquals(AZ, ConnectionManager.resolveClientAz(padded), "forwarded value must be trimmed");
+    }
+
+    /** Blank values resolve to absent, which is what makes the validation above reject them. */
+    @Test
+    void resolveClientAz_treatsBlankAsAbsent() {
+        for (String blank : new String[] {"", " ", "   ", "\t", "\n", " \t\n "}) {
+            assertNull(
+                    ConnectionManager.resolveClientAz(config(ReadFrom.AZ_AFFINITY_ALL_NODES, blank)),
+                    "blank clientAZ must resolve to null: " + blank.replace("\n", "\\n"));
+        }
+        assertNull(ConnectionManager.resolveClientAz(config(ReadFrom.AZ_AFFINITY_ALL_NODES, null)));
     }
 
     /**
@@ -151,6 +172,38 @@ public class ConnectionManagerTest {
     @MethodSource("nonAzStrategies")
     void validateClientAz_ignoresNonAzStrategies(ReadFrom readFrom) {
         assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, null)));
+    }
+
+    /**
+     * Reflects {@code ClientPool.serializeConnectionRequest} and asserts on the parsed protobuf, so
+     * the pooled path is pinned on the wire rather than through the switch it happens to call today.
+     *
+     * <p>Without this, dropping the {@code setClientAz} block or reverting to a local string match in
+     * {@code ClientPool} both leave the suite green while pooled clients silently read from the
+     * primary — the bug this PR fixed. Enum-driven so a strategy added later is covered
+     * automatically.
+     */
+    @ParameterizedTest
+    @EnumSource(ReadFrom.class)
+    void clientPoolSerialization_carriesReadFromAndClientAzForEveryStrategy(ReadFrom readFrom)
+            throws Exception {
+        // Padded on purpose: this pins the mapping and the trimming on the pooled path at once.
+        GlideClientConfiguration clientConfig =
+                GlideClientConfiguration.builder().readFrom(readFrom).clientAZ(" " + AZ + " ").build();
+
+        Method serialize =
+                ClientPool.class.getDeclaredMethod(
+                        "serializeConnectionRequest", BaseClientConfiguration.class);
+        serialize.setAccessible(true);
+        ConnectionRequestOuterClass.ConnectionRequest request =
+                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(
+                        (byte[]) serialize.invoke(null, clientConfig));
+
+        assertEquals(
+                ConnectionManager.mapReadFrom(readFrom),
+                request.getReadFrom(),
+                "pooled read_from for " + readFrom);
+        assertEquals(AZ, request.getClientAz(), "pooled client_az for " + readFrom);
     }
 
     @Test

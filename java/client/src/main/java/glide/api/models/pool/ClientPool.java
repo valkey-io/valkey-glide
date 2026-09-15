@@ -81,7 +81,10 @@ public class ClientPool implements AutoCloseable {
         }
 
         // Ahead of the connectivity probe below, so a static-config mistake surfaces as a
-        // ConfigurationError naming the real reason instead of a probe failure.
+        // ConfigurationError naming the real reason instead of a probe failure. Note that readFrom,
+        // clientAz and the pubsub guard are handled here, but circuit-breaker and lazyConnect config
+        // are still dropped by serializeConnectionRequest — see
+        // https://github.com/valkey-io/valkey-glide/issues/6897
         ConnectionManager.validateClientAz(config.getClientConfig());
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
@@ -284,8 +287,9 @@ public class ClientPool implements AutoCloseable {
         if (config.getReadFrom() != null) {
             b.setReadFrom(ConnectionManager.mapReadFrom(config.getReadFrom()));
         }
-        if (config.getClientAZ() != null) {
-            b.setClientAz(config.getClientAZ());
+        String clientAz = ConnectionManager.resolveClientAz(config);
+        if (clientAz != null) {
+            b.setClientAz(clientAz);
         }
 
         if (config.getClientName() != null) b.setClientName(config.getClientName());

@@ -339,8 +339,9 @@ public class ConnectionManager {
                         requestBuilder.setReadFrom(mapReadFrom(configuration.getReadFrom()));
 
                         // Set client metadata
-                        if (configuration.getClientAZ() != null) {
-                            requestBuilder.setClientAz(configuration.getClientAZ());
+                        String clientAz = resolveClientAz(configuration);
+                        if (clientAz != null) {
+                            requestBuilder.setClientAz(clientAz);
                         }
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
@@ -768,10 +769,8 @@ public class ConnectionManager {
      * reads would land on arbitrary nodes while the configuration suggested otherwise.
      *
      * <p>Called synchronously from {@code BaseClient.createClient}, alongside the PubSub/RESP2 check,
-     * so callers see a direct throw rather than an {@code ExecutionException} on the returned future.
-     * Note that pool-borrowed clients build their request in {@code ClientPool} and never reach
-     * {@code createClient}, so they remain unvalidated — see <a
-     * href="https://github.com/valkey-io/valkey-glide/issues/6897">#6897</a>.
+     * and from {@code ClientPool.create} ahead of its connectivity probe, so callers on either path
+     * see a direct throw rather than an {@code ExecutionException} or a probe failure.
      *
      * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
      */
@@ -780,12 +779,29 @@ public class ConnectionManager {
         if (!readFrom.requiresClientAz()) {
             return;
         }
-        String clientAz = configuration.getClientAZ();
-        // Trim for the emptiness check only. The core compares the AZ exactly and never trims, so a
-        // whitespace-only value would engage the strategy, match no node, and silently fall back to
-        // routing across all nodes. The value itself is forwarded unnormalized.
-        if (clientAz == null || clientAz.trim().isEmpty()) {
+        if (resolveClientAz(configuration) == null) {
             throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
         }
+    }
+
+    /**
+     * The {@code clientAZ} as it should reach the core: trimmed, or null when absent or blank.
+     *
+     * <p>The core compares availability zones with exact equality and never trims ({@code
+     * standalone_client.rs}, {@code connections_container.rs}), so a padded value such as {@code "
+     * us-east-1a "} — easily produced by {@code getenv} or a file read — would satisfy validation,
+     * engage the strategy, match no node, and silently spread reads cluster-wide. No real
+     * availability-zone name carries surrounding whitespace, so trimming cannot break a value that
+     * works today.
+     *
+     * <p>Both request builders normalize through here so a third one cannot forward a raw value.
+     */
+    public static String resolveClientAz(BaseClientConfiguration configuration) {
+        String clientAz = configuration.getClientAZ();
+        if (clientAz == null) {
+            return null;
+        }
+        String trimmed = clientAz.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
