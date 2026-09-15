@@ -32,7 +32,7 @@ use super::RedirectNode;
 use super::RequestInfo;
 use super::{Core, InternalSingleNodeRouting, OperationTarget, Response};
 
-fn is_pipeline_circular_moved_redirect<C>(
+pub(super) fn is_pipeline_circular_moved_redirect<C>(
     core: &Arc<super::InnerCore<C>>,
     resolved_redirect_node: Option<(&str, u16)>,
     current_address: ReadyToDialAddress,
@@ -41,6 +41,30 @@ where
     C: ConnectionLike + super::Connect + Clone + Send + Sync + 'static,
 {
     core.is_circular_moved_redirect_prepared(resolved_redirect_node, current_address)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cluster::ReadyToDialAddress;
+    use crate::cluster_async::refresh_task_resolution_tests::core_with_non_idempotent_resolver;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn circular_moved_redirect_uses_prepared_address_without_resolving() {
+        // The shared test core has empty slot and connection maps and a counting resolver.
+        let core = core_with_non_idempotent_resolver();
+        super::super::refresh_task_resolution_tests::RESOLVER_CALLS.store(0, Ordering::SeqCst);
+        assert!(is_pipeline_circular_moved_redirect(
+            &core,
+            Some(("resolved-node:6381", 5000)),
+            ReadyToDialAddress::new("resolved-node:6381".to_owned()),
+        ));
+        assert_eq!(
+            super::super::refresh_task_resolution_tests::RESOLVER_CALLS.load(Ordering::SeqCst),
+            0
+        );
+    }
 }
 
 /// Represents a pipeline command execution context for a specific node

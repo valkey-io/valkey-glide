@@ -5621,7 +5621,7 @@ mod circular_moved_address_normalization_tests {
 }
 
 #[cfg(test)]
-mod refresh_task_resolution_tests {
+pub(super) mod refresh_task_resolution_tests {
     use super::*;
     use crate::cluster::ClusterAddress;
     use crate::cluster_async::connections_container::{
@@ -5639,7 +5639,7 @@ mod refresh_task_resolution_tests {
 
     static POISON_CONNECT_STARTED: Notify = Notify::const_new();
     static RELEASE_POISON_CONNECT: Semaphore = Semaphore::const_new(0);
-    static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
+    pub(super) static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Debug)]
     struct CountingSeedResolver(AtomicUsize);
@@ -5771,7 +5771,7 @@ mod refresh_task_resolution_tests {
     }
 
     #[derive(Clone, Debug)]
-    struct RecordingConnection {
+    pub(super) struct RecordingConnection {
         port: u16,
     }
 
@@ -5912,8 +5912,21 @@ mod refresh_task_resolution_tests {
         }
     }
 
-    fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
-        let address = "resolved-node:6381".to_owned();
+    #[derive(Debug)]
+    struct CountingHostnameResolver(Arc<AtomicUsize>);
+
+    impl AddressResolver for CountingHostnameResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            if host == "seed.example" && port == 6379 {
+                ("reachable.example".into(), 6382)
+            } else {
+                (host.into(), port)
+            }
+        }
+    }
+
+    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         let slot_map = SlotMap::new(
             vec![],
             HashMap::new(),
@@ -5983,9 +5996,18 @@ mod refresh_task_resolution_tests {
         })
     }
 
+    fn core_with_counting_hostname_resolver(
+    ) -> (Arc<InnerCore<RecordingConnection>>, Arc<AtomicUsize>) {
+        let core = core_with_seed_resolver();
+        let calls = Arc::new(AtomicUsize::new(0));
+        core.cluster_params.write().address_resolver =
+            Some(Arc::new(CountingHostnameResolver(calls.clone())));
+        (core, calls)
+    }
+
     #[test]
     fn resolver_recovery_deduplicates_multi_socket_hostname_fallback() {
-        let core = core_with_seed_resolver();
+        let (core, resolver_calls) = core_with_counting_hostname_resolver();
         let first = lookup_management_connection(
             &core,
             "seed.example:6379",
@@ -6018,8 +6040,9 @@ mod refresh_task_resolution_tests {
         assert_eq!(prepared.len(), 1);
         assert_eq!(
             prepared.into_iter().next().unwrap().as_str(),
-            "seed.example:6382"
+            "reachable.example:6382"
         );
+        assert_eq!(resolver_calls.load(Ordering::SeqCst), 1);
 
         let no_resolver = core_with_seed_resolver();
         no_resolver.cluster_params.write().address_resolver = None;
