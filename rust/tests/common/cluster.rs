@@ -1,7 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Cluster harness using `cluster_manager.py`.
 
-use glide::{GlideClusterClient, GlideClusterClientConfiguration, ProtocolVersion, Route};
+use glide::{
+    GlideClusterClient, GlideClusterClientConfiguration, ProtocolVersion, Route, TlsConfig,
+};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -20,6 +23,29 @@ fn field_u64(fragment: &str, field: &str) -> Option<u64> {
 }
 
 const CLUSTER_MANAGER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/cluster_manager.py");
+const TLS_CERTIFICATES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/tls_crts");
+
+/// Returns the CA certificate bytes (`ca.crt`).
+fn ca_pem() -> Vec<u8> {
+    read_cert("ca.crt")
+}
+
+/// Returns the server certificate bytes (`server.crt`).
+fn server_cert_pem() -> Vec<u8> {
+    read_cert("server.crt")
+}
+
+/// Returns the server private key bytes (`server.key`).
+fn server_key_pem() -> Vec<u8> {
+    read_cert("server.key")
+}
+
+/// Returns the bytes for the given certificate.
+fn read_cert(name: &str) -> Vec<u8> {
+    let path = PathBuf::from(TLS_CERTIFICATES_DIR).join(name);
+    std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("could not read TLS certificate {}: {e}", path.display()))
+}
 
 /// A cluster created with `cluster_manager.py`.
 pub struct ClusterHarness {
@@ -32,27 +58,61 @@ pub struct ClusterHarness {
 }
 
 impl ClusterHarness {
-    /// Start a 3-primary cluster (one replica each) using `cluster_manager.py`.
+    /// Start a 3-primary cluster using `cluster_manager.py`.
     /// Panics if the cluster cannot be created.
     pub fn start() -> ClusterHarness {
-        Self::start_via_cluster_manager(3, 1)
+        Self::start_via_cluster_manager(3, 1, false, false)
     }
 
-    /// Starts a cluster with the specified number of shards and replicas using
-    /// `cluster_manager.py`. Panics if the script fails.
-    fn start_via_cluster_manager(shards: usize, replicas: usize) -> ClusterHarness {
+    /// Start a 3-primary TLS cluster using `cluster_manager.py`.
+    /// Panics if the cluster cannot be created.
+    pub fn start_tls() -> ClusterHarness {
+        Self::start_via_cluster_manager(3, 1, true, false)
+    }
+
+    /// Start a 3-primary TLS cluster with mTLS using `cluster_manager.py`.
+    /// Panics if the cluster cannot be created.
+    pub fn start_tls_mtls() -> ClusterHarness {
+        Self::start_via_cluster_manager(3, 1, true, true)
+    }
+
+    /// Starts a cluster with:
+    /// - the specified number of shards
+    /// - the specified number of replicas per shard
+    /// - TLS enabled if specified
+    /// - mTLS enabled if specified
+    ///
+    /// Panics if the script fails.
+    fn start_via_cluster_manager(
+        shards: usize,
+        replicas: usize,
+        tls: bool,
+        mtls: bool,
+    ) -> ClusterHarness {
+        let shards = shards.to_string();
+        let replicas = replicas.to_string();
+
         // [1] Run `cluster_manager.py`.
-        let result = Command::new("python3")
-            .args([
-                CLUSTER_MANAGER,
-                "start",
-                "--cluster-mode",
-                "-n",
-                &shards.to_string(),
-                "-r",
-                &replicas.to_string(),
-            ])
-            .output();
+        let mut args: Vec<&str> = vec![CLUSTER_MANAGER];
+
+        if tls {
+            args.push("--tls");
+        }
+
+        args.extend([
+            "start",
+            "--cluster-mode",
+            "-n",
+            shards.as_str(),
+            "-r",
+            replicas.as_str(),
+        ]);
+
+        if mtls {
+            args.push("--tls-auth-clients");
+        }
+
+        let result = Command::new("python3").args(&args).output();
 
         let out = match result {
             Ok(out) => out,
@@ -132,16 +192,55 @@ impl ClusterHarness {
         self.primary_ports[0]
     }
 
+    /// Connect a cluster client.
+    pub async fn client(&self) -> GlideClusterClient {
+        self.client_with_protocol(ProtocolVersion::RESP3).await
+    }
+
     /// Connect a cluster client to this cluster with the given protocol.
     pub async fn client_with_protocol(&self, protocol: ProtocolVersion) -> GlideClusterClient {
-        let config = GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
-            .protocol(protocol)
-            .request_timeout(Duration::from_secs(5));
-        // Bounded connect-retry: under load a freshly-formed cluster can briefly
-        // refuse or time out the initial connection; a single attempt shouldn't
-        // fail the whole test.
-        let mut client = None;
+        self.connect(self.config().protocol(protocol)).await
+    }
 
+    /// Connect a secure-TLS client.
+    pub async fn client_with_tls(&self) -> GlideClusterClient {
+        self.connect(self.config_with_tls()).await
+    }
+
+    /// Connect a mutual-TLS client.
+    pub async fn client_with_mtls(&self) -> GlideClusterClient {
+        let config = self
+            .config_with_tls()
+            .client_identity(server_cert_pem(), server_key_pem());
+        self.connect(config).await
+    }
+
+    /// Connect an insecure-TLS client.
+    pub async fn client_with_insecure_tls(&self) -> GlideClusterClient {
+        self.connect(self.config().tls(TlsConfig::InsecureTls))
+            .await
+    }
+
+    /// A base client configuration.
+    pub fn config(&self) -> GlideClusterClientConfiguration {
+        GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
+            .connection_timeout(Duration::from_secs(10))
+            .request_timeout(Duration::from_secs(10))
+    }
+
+    /// A base client configuration with secure TLS enabled and the shared CA trusted.
+    pub fn config_with_tls(&self) -> GlideClusterClientConfiguration {
+        self.config()
+            .tls(TlsConfig::SecureTls)
+            .tls_ca_cert(ca_pem())
+    }
+
+    /// Connect with bounded retry, then warm up the topology. Under load a
+    /// freshly-formed cluster can briefly refuse or time out the initial
+    /// connection; a single attempt shouldn't fail the whole test. Panics if the
+    /// connection cannot be established — use for the positive path.
+    async fn connect(&self, config: GlideClusterClientConfiguration) -> GlideClusterClient {
+        let mut client = None;
         let mut last_err = None;
         for attempt in 0..10u32 {
             match GlideClusterClient::connect(config.clone()).await {
@@ -166,11 +265,6 @@ impl ClusterHarness {
         // client to connect to every primary, eliminating that startup race.
         warm_up_cluster(&client).await;
         client
-    }
-
-    /// Connect a cluster client with the default protocol (RESP3).
-    pub async fn client(&self) -> GlideClusterClient {
-        self.client_with_protocol(ProtocolVersion::RESP3).await
     }
 }
 
