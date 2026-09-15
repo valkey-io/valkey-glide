@@ -25,6 +25,7 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
+from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
     AllNodes,
@@ -499,9 +500,6 @@ class BaseClient(CoreCommands):
         span_name_cstr = None
         if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            from glide_shared.opentelemetry import _create_command_span
-            from glide_shared.protobuf.command_request_pb2 import RequestType
-
             command_name = RequestType.Name(request_type)
             span_name_cstr = self._ffi.new("char[]", command_name.encode())
             span = _create_command_span(
@@ -652,8 +650,6 @@ class BaseClient(CoreCommands):
         span = 0
         if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            from glide_shared.opentelemetry import _create_batch_span
-
             span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
         try:
@@ -884,8 +880,6 @@ class BaseClient(CoreCommands):
         span = 0
         if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
             parent_ctx = OpenTelemetry._get_parent_span_context()
-            from glide_shared.opentelemetry import _create_command_span
-
             span = _create_command_span(
                 self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
             )
