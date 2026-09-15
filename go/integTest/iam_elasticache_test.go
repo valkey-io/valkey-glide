@@ -5,9 +5,12 @@ package integTest
 import (
 	"context"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
@@ -33,6 +36,17 @@ func TestIamElastiCache(t *testing.T) {
 		t.Skip("IAM_ELASTICACHE_ENDPOINT not set; skipping IAM ElastiCache integration test")
 	}
 
+	// Parse host and optional port from endpoint (format: "host" or "host:port")
+	host := endpoint
+	port := 6379
+	if strings.Contains(endpoint, ":") {
+		parts := strings.SplitN(endpoint, ":", 2)
+		host = parts[0]
+		if p, err := strconv.Atoi(parts[1]); err == nil {
+			port = p
+		}
+	}
+
 	// IAM configuration
 	iamConfig := config.NewIamAuthConfig(
 		clusterName,
@@ -47,8 +61,8 @@ func TestIamElastiCache(t *testing.T) {
 	// Client configuration with TLS and IAM auth
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: endpoint,
-			Port: 6379,
+			Host: host,
+			Port: port,
 		}).
 		WithCredentials(credentials).
 		WithUseTLS(true).
@@ -56,7 +70,7 @@ func TestIamElastiCache(t *testing.T) {
 
 	// Create client and test connection
 	client, err := glide.NewClient(clientConfig)
-	assert.NoError(t, err, "Failed to create client")
+	require.NoError(t, err, "Failed to create client")
 	defer client.Close()
 
 	ctx := context.Background()

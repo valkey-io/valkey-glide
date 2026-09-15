@@ -296,13 +296,19 @@ def create_address_resolver_callback(ffi, resolver_fn):
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)
 
 
-def _invoke_async_credential_provider(credential_provider_fn, event_loop):
+def _invoke_async_credential_provider(
+    credential_provider_fn, event_loop, trio_token=None
+):
     """
     Invoke an async credential provider from a non-async (Rust callback) thread.
 
     Tries the asyncio path first (if *event_loop* is set and open), then falls
-    back to trio's ``from_thread.run`` if trio is installed and the caller is
-    running inside a trio worker thread.
+    back to trio's ``from_thread.run`` if trio is installed and a *trio_token*
+    was captured at callback-creation time.
+
+    Rust enforces a ~10-second callback deadline, which acts as the backstop
+    timeout. The asyncio path additionally enforces a 9-second Python-level
+    timeout to surface a clean ``TimeoutError`` before Rust fires.
     """
     if event_loop is not None and not event_loop.is_closed():
         # asyncio path: schedule coroutine on the asyncio event loop
@@ -317,7 +323,19 @@ def _invoke_async_credential_provider(credential_provider_fn, event_loop):
     try:
         import trio
 
-        return trio.from_thread.run(credential_provider_fn)
+        if trio_token is None:
+            raise RuntimeError(
+                "No trio token available. Capture trio.lowlevel.current_trio_token() "
+                "at provider registration time (i.e. when create_credential_provider_callback "
+                "is called from within a trio task)."
+            )
+        # trio.from_thread.run schedules credential_provider_fn() on the trio
+        # event loop identified by trio_token and blocks this thread until done.
+        # Rust's 10-second callback deadline acts as the backstop timeout.
+        return trio.from_thread.run(
+            credential_provider_fn,
+            trio_token=trio_token,
+        )
     except ImportError:
         import logging
 
@@ -329,7 +347,8 @@ def _invoke_async_credential_provider(credential_provider_fn, event_loop):
         logging.getLogger(__name__).error(msg)
         raise RuntimeError(msg)
     except RuntimeError as e:
-        # trio.from_thread.run raises RuntimeError if not called from a trio worker.
+        # trio.from_thread.run raises RuntimeError if the token is invalid or
+        # the trio event loop has shut down.
         import logging
 
         logging.getLogger(
@@ -348,16 +367,31 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
     Returns ``ffi.NULL`` if ``credential_provider_fn`` is None.
 
     Both synchronous and async (coroutine function) providers are supported.
-    For async providers, either ``event_loop`` (asyncio) must be provided,
-    or the callback must be called from a trio worker thread (trio.from_thread
-    is used automatically in that case).
+    For async providers:
+    - asyncio: provide the running event loop via ``event_loop``.
+    - trio: the trio token is captured automatically at call time (must be called
+      from inside a running trio task so ``trio.lowlevel.current_trio_token()``
+      succeeds); the captured token is passed to ``trio.from_thread.run`` later.
     """
     if credential_provider_fn is None:
         return ffi.NULL
 
-    import inspect
+    from glide_shared.config import _is_async_callable
 
-    is_async = inspect.iscoroutinefunction(credential_provider_fn)
+    is_async = _is_async_callable(credential_provider_fn)
+
+    # Capture trio token at callback-creation time (if running inside trio).
+    # This must happen synchronously here — the Rust callback fires from a
+    # background thread where current_trio_token() is unavailable.
+    trio_token = None
+    if is_async and event_loop is None:
+        try:
+            import trio
+
+            trio_token = trio.lowlevel.current_trio_token()
+        except (ImportError, RuntimeError):
+            # Not in a trio context; will fail at invocation time with a clear error
+            pass
 
     def _credential_provider_callback(
         client_id,  # provided by Rust; unused on the Python side
@@ -375,7 +409,7 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
         try:
             if is_async:
                 creds = _invoke_async_credential_provider(
-                    credential_provider_fn, event_loop
+                    credential_provider_fn, event_loop, trio_token=trio_token
                 )
             else:
                 creds = credential_provider_fn()

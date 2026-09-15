@@ -441,6 +441,24 @@ GlideCredentialProvider = Union[
 ]
 
 
+def _is_async_callable(fn) -> bool:
+    """Return True if fn is an async function or a callable object with async __call__.
+
+    ``inspect.iscoroutinefunction`` only detects bare ``async def`` functions.
+    Callable objects whose ``__call__`` method is ``async def`` are also async
+    but are missed by a bare ``iscoroutinefunction(fn)`` check. This helper
+    covers both cases.
+    """
+    import inspect
+
+    if inspect.iscoroutinefunction(fn):
+        return True
+    call_method = getattr(fn, "__call__", None)
+    if call_method is not None and inspect.iscoroutinefunction(call_method):
+        return True
+    return False
+
+
 class IamAuthConfig:
     """
     Configuration settings for IAM authentication.
@@ -469,21 +487,17 @@ class IamAuthConfig:
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
         if credential_provider is not None:
-            import inspect
-
             if not callable(credential_provider):
                 raise ValueError(
                     "credential_provider must be a callable, got: "
                     f"{type(credential_provider).__name__}"
                 )
-            # Note: async (coroutine) callables are accepted and supported
-            # in the async glide client via asyncio.run_coroutine_threadsafe.
-            # In the sync glide client, only synchronous providers are supported.
+            # Both sync and async providers accepted; the async detection handles
+            # both bare async functions and callable objects with async __call__.
         self.credential_provider = credential_provider
         # Track whether the provider is async so bindings can validate at connection time.
         self._credential_provider_is_async = (
-            credential_provider is not None
-            and inspect.iscoroutinefunction(credential_provider)
+            credential_provider is not None and _is_async_callable(credential_provider)
         )
 
 

@@ -158,12 +158,12 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 	}
 
 	// Register credential provider if set
-	var credProviderCallback C.CredentialProviderCallback
+	var credProviderCallbackPtr unsafe.Pointer
 	var credClientID uintptr
 	if provider := clientConfig.GetCredentialProvider(); provider != nil {
 		credClientID = uintptr(clientIDCounter.Add(1))
 		registerCredentialProvider(credClientID, provider)
-		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
+		credProviderCallbackPtr = unsafe.Pointer(C.credentialProviderCallback)
 	}
 
 	poolID := C.glide_pool_create(
@@ -175,7 +175,7 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
-		credProviderCallback,
+		credProviderCallbackPtr,
 	)
 	if poolID < 0 {
 		if credClientID != 0 {
@@ -407,12 +407,12 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 	}
 
 	// Register credential provider if set
-	var credProviderCallback C.CredentialProviderCallback
+	var credProviderCallbackPtr unsafe.Pointer
 	var credClientID uintptr
 	if provider := clientConfig.GetCredentialProvider(); provider != nil {
 		credClientID = uintptr(clientIDCounter.Add(1))
 		registerCredentialProvider(credClientID, provider)
-		credProviderCallback = C.CredentialProviderCallback(unsafe.Pointer(C.credentialProviderCallback))
+		credProviderCallbackPtr = unsafe.Pointer(C.credentialProviderCallback)
 	}
 
 	poolID := C.glide_pool_create(
@@ -424,7 +424,7 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		(*C.uint8_t)(unsafe.Pointer(&connReqBytes[0])),
 		C.uintptr_t(len(connReqBytes)),
 		&clientType,
-		credProviderCallback,
+		credProviderCallbackPtr,
 	)
 	if poolID < 0 {
 		if credClientID != 0 {
