@@ -151,7 +151,8 @@ fn create_pool_client(
 /// # Safety
 /// `connection_request_ptr` must point to `connection_request_len` valid bytes.
 /// `client_type` must be a valid pointer to a `ClientType`.
-/// If `credential_provider` is non-zero, it must be a valid function pointer that lives
+/// `credential_provider` is nullable (NULL = no custom provider). When non-null,
+/// it must be a valid `CredentialProviderCallback` function pointer that lives
 /// while the pool is alive.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn glide_pool_create(
@@ -163,7 +164,7 @@ pub unsafe extern "C" fn glide_pool_create(
     connection_request_ptr: *const u8,
     connection_request_len: usize,
     client_type: *const ClientType,
-    credential_provider: CredentialProviderCallback,
+    credential_provider: *const (), // nullable; non-null = CredentialProviderCallback
 ) -> i64 {
     let connection_request = if connection_request_ptr.is_null() || connection_request_len == 0 {
         Vec::new()
@@ -180,12 +181,16 @@ pub unsafe extern "C" fn glide_pool_create(
 
     let is_async = !matches!(ct, ClientType::SyncClient);
 
-    // Convert credential provider pointer to Option — 0 means no provider
-    let credential_provider_opt = if credential_provider as usize == 0 {
-        None
-    } else {
-        Some(credential_provider)
-    };
+    // Convert nullable raw pointer to Option<CredentialProviderCallback>.
+    // SAFETY: caller guarantees that a non-null pointer is a valid CredentialProviderCallback.
+    let credential_provider_opt: Option<CredentialProviderCallback> =
+        if credential_provider.is_null() {
+            None
+        } else {
+            Some(unsafe {
+                std::mem::transmute::<*const (), CredentialProviderCallback>(credential_provider)
+            })
+        };
 
     // Parse database_id from connection request for state reset on release
     let configured_database_id = {
@@ -241,7 +246,10 @@ pub unsafe extern "C" fn glide_pool_create(
     get_pool_client_types().insert(pool_id, ct.clone());
 
     // Store the credential provider for background creation (as usize; 0 = none)
-    get_pool_credential_providers().insert(pool_id, credential_provider as usize);
+    get_pool_credential_providers().insert(
+        pool_id,
+        credential_provider_opt.map(|cp| cp as usize).unwrap_or(0),
+    );
 
     // Spawn min_idle background client creation
     if min_idle > 0 {

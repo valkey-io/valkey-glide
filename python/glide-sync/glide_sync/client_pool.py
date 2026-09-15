@@ -130,6 +130,20 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # Reject custom IAM credential providers — the sync pool passes NULL for
+        # the credential_provider FFI parameter. Users must use AsyncClientPool or
+        # a direct GlideClient for custom IAM credential providers.
+        credentials = getattr(client_config, "credentials", None)
+        iam_config = getattr(credentials, "iam_config", None) if credentials else None
+        if (
+            iam_config is not None
+            and getattr(iam_config, "credential_provider", None) is not None
+        ):
+            raise ValueError(
+                "IamAuthConfig.credential_provider is not supported by the sync ClientPool. "
+                "Use AsyncClientPool or a direct GlideClient for custom IAM credential providers."
+            )
+
         ffi_instance = _GlideFFI()
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib
