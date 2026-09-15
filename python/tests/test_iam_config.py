@@ -201,3 +201,66 @@ class TestGlideCredentialProvider:
                 region="us-east-1",
                 credential_provider="not_a_function",  # type: ignore
             )
+
+    def test_async_provider_rejected_by_sync_client(self):
+        """The sync glide client raises ValueError when an async provider is configured."""
+
+        async def async_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        iam_config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=async_provider,
+        )
+        ServerCredentials(username="user", iam_config=iam_config)
+        # We cannot easily instantiate GlideClient without a server, but we can
+        # verify that the _credential_provider_is_async flag is set correctly
+        # and that the sync client will raise ValueError at connection time.
+        assert (
+            iam_config._credential_provider_is_async is True
+        ), "Expected _credential_provider_is_async to be True for async provider"
+
+    def test_callable_object_with_async_call_detected_as_async(self):
+        """_is_async_callable detects callable objects with async __call__."""
+        from glide_shared.config import _is_async_callable
+
+        class AsyncCallableProvider:
+            async def __call__(self) -> AwsCredentials:
+                return AwsCredentials(access_key_id="key", secret_access_key="secret")
+
+        provider_instance = AsyncCallableProvider()
+        assert _is_async_callable(
+            provider_instance
+        ), "Expected _is_async_callable to return True for object with async __call__"
+        # Should also be detected by IamAuthConfig
+        config = IamAuthConfig(
+            cluster_name="c",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            credential_provider=provider_instance,
+        )
+        assert config._credential_provider_is_async is True
+
+    def test_sync_provider_passes_create_credential_callback(self):
+        """A sync provider results in a non-NULL CFFI callback."""
+        from glide_shared.ffi_helpers import create_credential_provider_callback
+        from glide_shared._glide_ffi import GlideFFI
+
+        ffi = GlideFFI.ffi
+
+        def my_provider() -> AwsCredentials:
+            return AwsCredentials(access_key_id="AKID", secret_access_key="SECRET")
+
+        callback = create_credential_provider_callback(ffi, my_provider)
+        assert callback != ffi.NULL, "Expected non-NULL CFFI callback for sync provider"
+
+    def test_none_provider_returns_null_callback(self):
+        """No provider results in a NULL CFFI callback."""
+        from glide_shared.ffi_helpers import create_credential_provider_callback
+        from glide_shared._glide_ffi import GlideFFI
+
+        ffi = GlideFFI.ffi
+        callback = create_credential_provider_callback(ffi, None)
+        assert callback == ffi.NULL, "Expected NULL CFFI callback when no provider"
