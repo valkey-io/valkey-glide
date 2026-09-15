@@ -7,6 +7,7 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -583,7 +584,7 @@ pub trait StreamCommands: CommandExecutor {
     async fn xinfo_stream<K: ToValkeyArgs + Send>(
         &self,
         key: K,
-    ) -> ValkeyResult<Vec<(Bytes, redis::Value)>> {
+    ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("STREAM").arg(key);
         parse_field_value_map(self.execute_command(cmd, None).await?)
@@ -596,7 +597,7 @@ pub trait StreamCommands: CommandExecutor {
         &self,
         key: K,
         count: Option<i64>,
-    ) -> ValkeyResult<Vec<(Bytes, redis::Value)>> {
+    ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("STREAM").arg(key).arg("FULL");
         if let Some(c) = count {
@@ -610,7 +611,7 @@ pub trait StreamCommands: CommandExecutor {
     async fn xinfo_groups<K: ToValkeyArgs + Send>(
         &self,
         key: K,
-    ) -> ValkeyResult<Vec<Vec<(Bytes, redis::Value)>>> {
+    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("GROUPS").arg(key);
         parse_list_of_maps(self.execute_command(cmd, None).await?)
@@ -621,7 +622,7 @@ pub trait StreamCommands: CommandExecutor {
         &self,
         key: K,
         group: &str,
-    ) -> ValkeyResult<Vec<Vec<(Bytes, redis::Value)>>> {
+    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("CONSUMERS").arg(key).arg(group);
         parse_list_of_maps(self.execute_command(cmd, None).await?)
@@ -715,15 +716,15 @@ pub trait StreamCommands: CommandExecutor {
 /// Parse an `XRANGE`/`XREVRANGE` reply into `(id, [(field, value), ...])` entries,
 /// handling both RESP2 (array of `[id, [f, v, ...]]`) and RESP3 (map of
 /// `id -> [[f, v], ...]`).
-fn parse_entries(v: redis::Value) -> ValkeyResult<Vec<StreamEntry>> {
-    let pairs: Vec<(redis::Value, redis::Value)> = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs,
-        redis::Value::Array(items) => {
+fn parse_entries(v: ValkeyValue) -> ValkeyResult<Vec<StreamEntry>> {
+    let pairs: Vec<(ValkeyValue, ValkeyValue)> = match v {
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs,
+        ValkeyValue::Array(items) => {
             // RESP2: each item is [id, fields]. Normalize to (id, fields) pairs.
             let mut out = Vec::with_capacity(items.len());
             for entry in items {
-                if let redis::Value::Array(mut parts) = entry
+                if let ValkeyValue::Array(mut parts) = entry
                     && parts.len() == 2
                 {
                     let fields = parts.pop().unwrap();
@@ -751,20 +752,20 @@ fn parse_entries(v: redis::Value) -> ValkeyResult<Vec<StreamEntry>> {
 
 /// Parse a field/value collection that may be flat (`[f, v, f, v]`) or nested
 /// pairs (`[[f, v], [f, v]]`).
-fn parse_fields(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
+fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     let items = match v {
-        redis::Value::Array(items) => items,
-        redis::Value::Nil => return Ok(Vec::new()),
+        ValkeyValue::Array(items) => items,
+        ValkeyValue::Nil => return Ok(Vec::new()),
         other => return Ok(vec![(value::to_bytes(other)?, Bytes::new())]),
     };
     // Nested pairs form.
     if items
         .iter()
-        .all(|it| matches!(it, redis::Value::Array(inner) if inner.len() == 2))
+        .all(|it| matches!(it, ValkeyValue::Array(inner) if inner.len() == 2))
     {
         let mut out = Vec::with_capacity(items.len());
         for it in items {
-            if let redis::Value::Array(mut pair) = it {
+            if let ValkeyValue::Array(mut pair) = it {
                 let val = value::to_bytes(pair.pop().unwrap())?;
                 let field = value::to_bytes(pair.pop().unwrap())?;
                 out.push((field, val));
@@ -784,24 +785,24 @@ fn parse_fields(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
 impl<T: CommandExecutor + ?Sized> StreamCommands for T {}
 
 /// Collect an array reply into a `Vec<String>` (used by `JUSTID` variants).
-fn collect_strings(v: redis::Value) -> ValkeyResult<Vec<String>> {
+fn collect_strings(v: ValkeyValue) -> ValkeyResult<Vec<String>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items.into_iter().map(value::to_string).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_string).collect(),
         other => Ok(vec![value::to_string(other)?]),
     }
 }
 
 /// Parse an `XREAD`/`XREADGROUP` reply (map or array of `[key, entries]`) into
 /// `(stream_key, entries)` pairs.
-fn parse_stream_read(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
-    let pairs: Vec<(redis::Value, redis::Value)> = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs,
-        redis::Value::Array(items) => {
+fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
+    let pairs: Vec<(ValkeyValue, ValkeyValue)> = match v {
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs,
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len());
             for entry in items {
-                if let redis::Value::Array(mut parts) = entry
+                if let ValkeyValue::Array(mut parts) = entry
                     && parts.len() == 2
                 {
                     let entries = parts.pop().unwrap();
@@ -827,9 +828,9 @@ fn parse_stream_read(v: redis::Value) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntr
 }
 
 /// Parse an `XAUTOCLAIM` reply `[cursor, entries, deleted]`.
-fn parse_autoclaim(v: redis::Value) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
+fn parse_autoclaim(v: ValkeyValue) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
     match v {
-        redis::Value::Array(mut items) if items.len() == 2 || items.len() == 3 => {
+        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
             let deleted = if items.len() == 3 {
                 collect_strings(items.pop().unwrap())?
             } else {
@@ -846,9 +847,9 @@ fn parse_autoclaim(v: redis::Value) -> ValkeyResult<(String, Vec<StreamEntry>, V
 }
 
 /// Parse an `XAUTOCLAIM ... JUSTID` reply `[cursor, ids, deleted]`.
-fn parse_autoclaim_justid(v: redis::Value) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
+fn parse_autoclaim_justid(v: ValkeyValue) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
     match v {
-        redis::Value::Array(mut items) if items.len() == 2 || items.len() == 3 => {
+        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
             let deleted = if items.len() == 3 {
                 collect_strings(items.pop().unwrap())?
             } else {
@@ -865,10 +866,10 @@ fn parse_autoclaim_justid(v: redis::Value) -> ValkeyResult<(String, Vec<String>,
 }
 
 /// Parse the summary form of `XPENDING`: `[count, min, max, [[consumer, count], ...]]`.
-fn parse_xpending_summary(v: redis::Value) -> ValkeyResult<XPendingSummary> {
+fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
     let mut items = match v {
-        redis::Value::Array(items) if items.len() == 4 => items,
-        redis::Value::Nil => return Ok(XPendingSummary::default()),
+        ValkeyValue::Array(items) if items.len() == 4 => items,
+        ValkeyValue::Nil => return Ok(XPendingSummary::default()),
         other => {
             return Err(crate::error::GlideError::Request(format!(
                 "unexpected XPENDING summary reply: {other:?}"
@@ -880,11 +881,11 @@ fn parse_xpending_summary(v: redis::Value) -> ValkeyResult<XPendingSummary> {
     let min_val = items.pop().unwrap();
     let count = value::to_i64(items.pop().unwrap())?;
     let consumers = match consumers_val {
-        redis::Value::Nil => Vec::new(),
-        redis::Value::Array(list) => {
+        ValkeyValue::Nil => Vec::new(),
+        ValkeyValue::Array(list) => {
             let mut out = Vec::with_capacity(list.len());
             for it in list {
-                if let redis::Value::Array(mut pair) = it
+                if let ValkeyValue::Array(mut pair) = it
                     && pair.len() == 2
                 {
                     let cnt = value::to_i64(pair.pop().unwrap())?;
@@ -906,10 +907,10 @@ fn parse_xpending_summary(v: redis::Value) -> ValkeyResult<XPendingSummary> {
 
 /// Parse the extended (range) form of `XPENDING`: array of
 /// `[id, consumer, idle, delivery_count]`.
-fn parse_xpending_range(v: redis::Value) -> ValkeyResult<Vec<XPendingEntry>> {
+fn parse_xpending_range(v: ValkeyValue) -> ValkeyResult<Vec<XPendingEntry>> {
     let items = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Array(items) => items,
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Array(items) => items,
         other => {
             return Err(crate::error::GlideError::Request(format!(
                 "unexpected XPENDING range reply: {other:?}"
@@ -918,7 +919,7 @@ fn parse_xpending_range(v: redis::Value) -> ValkeyResult<Vec<XPendingEntry>> {
     };
     let mut out = Vec::with_capacity(items.len());
     for it in items {
-        if let redis::Value::Array(mut parts) = it
+        if let ValkeyValue::Array(mut parts) = it
             && parts.len() == 4
         {
             let delivery_count = value::to_i64(parts.pop().unwrap())?;
@@ -938,14 +939,14 @@ fn parse_xpending_range(v: redis::Value) -> ValkeyResult<Vec<XPendingEntry>> {
 
 /// Parse a structured reply (RESP3 map or RESP2 flat array of alternating
 /// field/value) into `(field, value)` pairs.
-fn parse_field_value_map(v: redis::Value) -> ValkeyResult<Vec<(Bytes, redis::Value)>> {
+fn parse_field_value_map(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
             .map(|(k, val)| Ok((value::to_bytes(k)?, val)))
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(k), Some(val)) = (iter.next(), iter.next()) {
@@ -960,10 +961,10 @@ fn parse_field_value_map(v: redis::Value) -> ValkeyResult<Vec<(Bytes, redis::Val
 }
 
 /// Parse a list of structured maps (e.g. `XINFO GROUPS`/`CONSUMERS`).
-fn parse_list_of_maps(v: redis::Value) -> ValkeyResult<Vec<Vec<(Bytes, redis::Value)>>> {
+fn parse_list_of_maps(v: ValkeyValue) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
         other => Err(crate::error::GlideError::Request(format!(
             "unexpected XINFO list reply: {other:?}"
         ))),

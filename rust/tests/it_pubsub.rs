@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::CustomCommand;
+use glide::{CustomCommand, FromValkeyValue};
 
 resp_test!(publish_no_subscribers_returns_zero, c, {
     let chan = common::key("chan");
@@ -16,7 +16,7 @@ resp_test!(publish_no_subscribers_returns_zero, c, {
         .custom_command(&["PUBLISH", &chan, "hello"])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_i64(received).unwrap(), 0);
+    assert_eq!(i64::from_owned_valkey_value(received).unwrap(), 0);
 });
 
 // Compile-lock for the "names never collide — import both freely" contract:
@@ -43,22 +43,22 @@ resp_test!(pubsub_channels_empty, c, {
     let reply = c.custom_command(&["PUBSUB", "CHANNELS"]).await.unwrap();
     // No active subscriptions on a fresh server.
     match reply {
-        glide::Value::Array(items) => assert!(items.is_empty()),
-        glide::Value::Nil => {}
+        glide::ValkeyValue::Array(items) => assert!(items.is_empty()),
+        glide::ValkeyValue::Nil => {}
         other => panic!("unexpected PUBSUB CHANNELS reply: {other:?}"),
     }
 });
 
 resp_test!(pubsub_numpat_zero, c, {
     let reply = c.custom_command(&["PUBSUB", "NUMPAT"]).await.unwrap();
-    assert_eq!(glide::value::to_i64(reply).unwrap(), 0);
+    assert_eq!(i64::from_owned_valkey_value(reply).unwrap(), 0);
 });
 
 resp_test!(spublish_no_subscribers, c, {
     // Sharded publish (SPUBLISH) on a standalone server also returns 0.
     let chan = common::key("schan");
     match c.custom_command(&["SPUBLISH", &chan, "msg"]).await {
-        Ok(v) => assert_eq!(glide::value::to_i64(v).unwrap(), 0),
+        Ok(v) => assert_eq!(i64::from_owned_valkey_value(v).unwrap(), 0),
         // Older servers may not support SPUBLISH in standalone mode.
         Err(glide::GlideError::Request(_)) => {}
         Err(other) => panic!("unexpected: {other:?}"),

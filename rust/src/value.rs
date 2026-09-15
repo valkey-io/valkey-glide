@@ -5,107 +5,86 @@ use crate::ValkeyResult;
 use crate::error::GlideError;
 use bytes::Bytes;
 use num_bigint::BigInt;
-use redis::{FromRedisValue, Value, VerbatimFormat};
+use redis::{Value, VerbatimFormat};
 
-/// Convert a raw [`Value`] into any type implementing [`FromRedisValue`].
-// TODO #7024: do not expose.
-pub fn from_value<T: FromRedisValue>(value: Value) -> ValkeyResult<T> {
-    redis::from_owned_redis_value(value).map_err(GlideError::from_redis_error)
+/// Decode a [`ValkeyValue`] into any [`FromValkeyValue`] type.
+pub(crate) fn from_value<T: FromValkeyValue>(value: ValkeyValue) -> ValkeyResult<T> {
+    T::from_owned_valkey_value(value)
 }
 
-/// Convert a [`Value`] into `Option<Bytes>` (Nil → `None`).
-// TODO #7024: do not expose.
-pub fn to_opt_bytes(value: Value) -> ValkeyResult<Option<Bytes>> {
+/// Convert a [`ValkeyValue`] into `Option<Bytes>` (Nil → `None`).
+pub(crate) fn to_opt_bytes(value: ValkeyValue) -> ValkeyResult<Option<Bytes>> {
     match value {
-        Value::Nil => Ok(None),
-        other => Ok(Some(bytes_from_value(other)?)),
+        ValkeyValue::Nil => Ok(None),
+        other => Ok(Some(to_bytes(other)?)),
     }
 }
 
-/// Convert a [`Value`] into `Bytes`, accepting the various string-shaped RESP2/RESP3
-/// replies (bulk, simple, verbatim, OK) as well as numbers.
-// TODO #7024: do not expose.
-pub fn to_bytes(value: Value) -> ValkeyResult<Bytes> {
-    bytes_from_value(value)
-}
-
-// TODO #7024: do not expose.
-fn bytes_from_value(value: Value) -> ValkeyResult<Bytes> {
+/// Convert a [`ValkeyValue`] into `Bytes`, accepting the various string-shaped
+/// RESP2/RESP3 replies (bulk, simple, verbatim, OK) as well as numbers.
+pub(crate) fn to_bytes(value: ValkeyValue) -> ValkeyResult<Bytes> {
     match value {
-        Value::BulkString(b) => Ok(b),
-        Value::SimpleString(s) => Ok(Bytes::from(s.into_bytes())),
-        Value::VerbatimString { text, .. } => Ok(Bytes::from(text.into_bytes())),
-        Value::Okay => Ok(Bytes::from_static(b"OK")),
-        Value::Int(i) => Ok(Bytes::from(i.to_string().into_bytes())),
-        Value::Double(f) => Ok(Bytes::from(f.to_string().into_bytes())),
-        Value::Boolean(b) => Ok(Bytes::from(if b { "1" } else { "0" })),
-        other => {
-            let v: Vec<u8> = from_value(other)?;
-            Ok(Bytes::from(v))
-        }
+        ValkeyValue::BulkString(b) => Ok(b),
+        ValkeyValue::SimpleString(s) => Ok(Bytes::from(s.into_bytes())),
+        ValkeyValue::VerbatimString { text, .. } => Ok(Bytes::from(text.into_bytes())),
+        ValkeyValue::Okay => Ok(Bytes::from_static(b"OK")),
+        ValkeyValue::Int(i) => Ok(Bytes::from(i.to_string().into_bytes())),
+        ValkeyValue::Double(f) => Ok(Bytes::from(f.to_string().into_bytes())),
+        ValkeyValue::Boolean(b) => Ok(Bytes::from(if b { "1" } else { "0" })),
+        other => Vec::<u8>::from_owned_valkey_value(other).map(Bytes::from),
     }
 }
 
-/// Convert a [`Value`] into a UTF-8 `String`.
-// TODO #7024: do not expose.
-pub fn to_string(value: Value) -> ValkeyResult<String> {
+/// Convert a [`ValkeyValue`] into a UTF-8 `String`.
+pub(crate) fn to_string(value: ValkeyValue) -> ValkeyResult<String> {
     match value {
-        Value::SimpleString(s) => Ok(s),
-        Value::VerbatimString { text, .. } => Ok(text),
-        Value::Okay => Ok("OK".to_string()),
-        Value::Int(i) => Ok(i.to_string()),
-        Value::Double(f) => Ok(f.to_string()),
+        ValkeyValue::SimpleString(s) => Ok(s),
+        ValkeyValue::VerbatimString { text, .. } => Ok(text),
+        ValkeyValue::Okay => Ok("OK".to_string()),
+        ValkeyValue::Int(i) => Ok(i.to_string()),
+        ValkeyValue::Double(f) => Ok(f.to_string()),
         other => from_value(other),
     }
 }
 
-/// Convert a [`Value`] into an `Option<String>` (Nil → `None`).
-// TODO #7024: do not expose.
-pub fn to_opt_string(value: Value) -> ValkeyResult<Option<String>> {
+/// Convert a [`ValkeyValue`] into an `Option<String>` (Nil → `None`).
+pub(crate) fn to_opt_string(value: ValkeyValue) -> ValkeyResult<Option<String>> {
     match value {
-        Value::Nil => Ok(None),
+        ValkeyValue::Nil => Ok(None),
         other => Ok(Some(to_string(other)?)),
     }
 }
 
-/// Convert a [`Value`] into an `i64`.
-// TODO #7024: do not expose.
-pub fn to_i64(value: Value) -> ValkeyResult<i64> {
+/// Convert a [`ValkeyValue`] into an `i64`.
+pub(crate) fn to_i64(value: ValkeyValue) -> ValkeyResult<i64> {
     from_value(value)
 }
 
-/// Convert a [`Value`] into an `f64`.
-// TODO #7024: do not expose.
-pub fn to_f64(value: Value) -> ValkeyResult<f64> {
+/// Convert a [`ValkeyValue`] into an `f64`.
+pub(crate) fn to_f64(value: ValkeyValue) -> ValkeyResult<f64> {
     from_value(value)
 }
 
-/// Convert a [`Value`] into an `Option<f64>` (Nil → `None`).
-// TODO #7024: do not expose.
-pub fn to_opt_f64(value: Value) -> ValkeyResult<Option<f64>> {
+/// Convert a [`ValkeyValue`] into an `Option<f64>` (Nil → `None`).
+pub(crate) fn to_opt_f64(value: ValkeyValue) -> ValkeyResult<Option<f64>> {
     match value {
-        Value::Nil => Ok(None),
+        ValkeyValue::Nil => Ok(None),
         other => Ok(Some(from_value(other)?)),
     }
 }
 
 /// Convert an integer reply into `bool` (`1` → true, `0` → false). Also accepts
 /// RESP3 boolean replies.
-// TODO #7024: do not expose.
-pub fn to_bool(value: Value) -> ValkeyResult<bool> {
+pub(crate) fn to_bool(value: ValkeyValue) -> ValkeyResult<bool> {
     match value {
-        Value::Boolean(b) => Ok(b),
-        Value::Int(i) => Ok(i != 0),
-        other => {
-            let i: i64 = from_value(other)?;
-            Ok(i != 0)
-        }
+        ValkeyValue::Boolean(b) => Ok(b),
+        ValkeyValue::Int(i) => Ok(i != 0),
+        other => Ok(from_value::<i64>(other)? != 0),
     }
 }
 
 /// Convert an "OK"/simple-string reply into `()`.
-// TODO #7024: do not expose.
-pub fn to_unit(_value: Value) -> ValkeyResult<()> {
+pub(crate) fn to_unit(_value: ValkeyValue) -> ValkeyResult<()> {
     Ok(())
 }
 
@@ -819,33 +798,33 @@ mod tests {
 
     #[test]
     fn opt_bytes_nil_is_none() {
-        assert_eq!(to_opt_bytes(Value::Nil).unwrap(), None);
+        assert_eq!(to_opt_bytes(ValkeyValue::Nil).unwrap(), None);
     }
 
     #[test]
     fn opt_bytes_bulkstring() {
-        let v = Value::BulkString(b"hello".to_vec().into());
+        let v = ValkeyValue::BulkString(b"hello".to_vec().into());
         assert_eq!(to_opt_bytes(v).unwrap(), Some(Bytes::from_static(b"hello")));
     }
 
     #[test]
     fn int_and_bool() {
-        assert_eq!(to_i64(Value::Int(42)).unwrap(), 42);
-        assert!(to_bool(Value::Int(1)).unwrap());
-        assert!(!to_bool(Value::Int(0)).unwrap());
-        assert!(to_bool(Value::Boolean(true)).unwrap());
+        assert_eq!(to_i64(ValkeyValue::Int(42)).unwrap(), 42);
+        assert!(to_bool(ValkeyValue::Int(1)).unwrap());
+        assert!(!to_bool(ValkeyValue::Int(0)).unwrap());
+        assert!(to_bool(ValkeyValue::Boolean(true)).unwrap());
     }
 
     #[test]
     fn opt_f64_nil_and_value() {
-        assert_eq!(to_opt_f64(Value::Nil).unwrap(), None);
-        assert_eq!(to_opt_f64(Value::Double(1.5)).unwrap(), Some(1.5));
+        assert_eq!(to_opt_f64(ValkeyValue::Nil).unwrap(), None);
+        assert_eq!(to_opt_f64(ValkeyValue::Double(1.5)).unwrap(), Some(1.5));
     }
 
     #[test]
     fn string_from_simple() {
         assert_eq!(
-            to_string(Value::SimpleString("PONG".into())).unwrap(),
+            to_string(ValkeyValue::SimpleString("PONG".into())).unwrap(),
             "PONG"
         );
     }

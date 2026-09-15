@@ -2,8 +2,8 @@
 //! Mock-executor unit tests for the Pub/Sub command family.
 use super::Mock;
 use bytes::Bytes;
+use glide::ValkeyValue;
 use glide::commands::pubsub::PubSubCommands;
-use redis::Value;
 
 // NOTE: no `publish` test here — `PUBLISH` moved to the unified command table
 // (`glide::AsyncCommands`), whose encoding delegates to the fork's own
@@ -18,7 +18,7 @@ async fn spublish_encoding() {
 
 #[tokio::test]
 async fn pubsub_channels_with_and_without_pattern() {
-    let m = Mock::array(vec![Value::BulkString(b"news".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"news".to_vec().into())]);
     let chans = m.pubsub_channels(Some(b"n*")).await.unwrap();
     m.assert_args(&["PUBSUB", "CHANNELS", "n*"]);
     assert_eq!(chans, vec![Bytes::from_static(b"news")]);
@@ -38,10 +38,10 @@ async fn pubsub_numpat_int() {
 #[tokio::test]
 async fn pubsub_numsub_pairs() {
     let m = Mock::array(vec![
-        Value::BulkString(b"a".to_vec().into()),
-        Value::Int(2),
-        Value::BulkString(b"b".to_vec().into()),
-        Value::Int(0),
+        ValkeyValue::BulkString(b"a".to_vec().into()),
+        ValkeyValue::Int(2),
+        ValkeyValue::BulkString(b"b".to_vec().into()),
+        ValkeyValue::Int(0),
     ]);
     let subs = m.pubsub_numsub(&["a", "b"]).await.unwrap();
     m.assert_args(&["PUBSUB", "NUMSUB", "a", "b"]);
@@ -53,11 +53,14 @@ async fn pubsub_numsub_pairs() {
 
 #[tokio::test]
 async fn pubsub_shard_variants() {
-    let m = Mock::array(vec![Value::BulkString(b"s".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"s".to_vec().into())]);
     let _ = m.pubsub_shardchannels(None).await.unwrap();
     m.assert_args(&["PUBSUB", "SHARDCHANNELS"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"s".to_vec().into()), Value::Int(1)]);
+    let m = Mock::array(vec![
+        ValkeyValue::BulkString(b"s".to_vec().into()),
+        ValkeyValue::Int(1),
+    ]);
     let subs = m.pubsub_shardnumsub(&["s"]).await.unwrap();
     m.assert_args(&["PUBSUB", "SHARDNUMSUB", "s"]);
     assert_eq!(subs, vec![(Bytes::from_static(b"s"), 1)]);

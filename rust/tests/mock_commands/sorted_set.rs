@@ -1,29 +1,29 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the sorted-set command family.
 use super::Mock;
+use glide::ValkeyValue;
 use glide::commands::sorted_set::{AggregationType, LexBound, ScoreBound, SortedSetCommands};
-use redis::Value;
 
 #[tokio::test]
 async fn zdiff_zunion_zinter() {
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"m1".to_vec().into())]);
     m.zdiff(&["z1", "z2"]).await.unwrap();
     m.assert_args(&["ZDIFF", "2", "z1", "z2"]);
 
     let m = Mock::array(vec![
-        Value::BulkString(b"m1".to_vec().into()),
-        Value::BulkString(b"1.5".to_vec().into()),
+        ValkeyValue::BulkString(b"m1".to_vec().into()),
+        ValkeyValue::BulkString(b"1.5".to_vec().into()),
     ]);
     m.zdiff_withscores(&["z1", "z2"]).await.unwrap();
     m.assert_args(&["ZDIFF", "2", "z1", "z2", "WITHSCORES"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"m1".to_vec().into())]);
     m.zunion(&["z1", "z2"], Some(AggregationType::Sum))
         .await
         .unwrap();
     m.assert_args(&["ZUNION", "2", "z1", "z2", "AGGREGATE", "SUM"]);
 
-    let m = Mock::array(vec![Value::BulkString(b"m1".to_vec().into())]);
+    let m = Mock::array(vec![ValkeyValue::BulkString(b"m1".to_vec().into())]);
     m.zinter(&["z1", "z2"], None).await.unwrap();
     m.assert_args(&["ZINTER", "2", "z1", "z2"]);
 }

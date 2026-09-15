@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, Route};
+use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, FromValkeyValue, Route};
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
@@ -45,7 +45,7 @@ async fn cluster_ping_all_primaries() {
         .await
         .unwrap();
     // Multi-node replies aggregate; just assert it succeeded (non-nil).
-    assert!(!matches!(reply, glide::Value::Nil));
+    assert!(!matches!(reply, glide::ValkeyValue::Nil));
 }
 
 #[tokio::test]
@@ -65,7 +65,7 @@ async fn cluster_info_reports_ok() {
             .custom_command_with_route(&["CLUSTER", "INFO"], Route::RandomNode)
             .await
             .unwrap();
-        info = glide::value::to_string(reply).unwrap_or_default();
+        info = String::from_owned_valkey_value(reply).unwrap_or_default();
         if info.contains("cluster_state:ok") {
             break;
         }

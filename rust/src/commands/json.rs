@@ -9,6 +9,7 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -70,7 +71,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.TYPE").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -112,7 +113,7 @@ pub trait JsonCommands: CommandExecutor {
         key: K,
         path: P,
         value: V,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.STRAPPEND").arg(key).arg(path).arg(value);
         self.execute_command(cmd, None).await
@@ -123,7 +124,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.STRLEN").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -139,7 +140,7 @@ pub trait JsonCommands: CommandExecutor {
         key: K,
         path: P,
         values: &[V],
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRAPPEND").arg(key).arg(path);
         for v in values {
@@ -160,7 +161,7 @@ pub trait JsonCommands: CommandExecutor {
         path: P,
         index: i64,
         values: &[V],
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRINSERT").arg(key).arg(path).arg(index);
         for v in values {
@@ -174,7 +175,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRLEN").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -186,7 +187,7 @@ pub trait JsonCommands: CommandExecutor {
         key: K,
         path: P,
         index: Option<i64>,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRPOP").arg(key).arg(path);
         if let Some(i) = index {
@@ -203,7 +204,7 @@ pub trait JsonCommands: CommandExecutor {
         path: P,
         start: i64,
         stop: i64,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRTRIM")
             .arg(key)
@@ -218,7 +219,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.OBJKEYS").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -229,7 +230,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.OBJLEN").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -240,7 +241,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.TOGGLE").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -270,7 +271,7 @@ pub trait JsonCommands: CommandExecutor {
         path: P,
         value: V,
         range: Option<(i64, i64)>,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.ARRINDEX").arg(key).arg(path).arg(value);
         if let Some((start, end)) = range {
@@ -292,8 +293,8 @@ pub trait JsonCommands: CommandExecutor {
         }
         cmd.arg(path);
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_opt_bytes(other)?]),
         }
     }
@@ -303,7 +304,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.RESP").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -315,7 +316,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.DEBUG").arg("MEMORY").arg(key).arg(path);
         self.execute_command(cmd, None).await
@@ -327,7 +328,7 @@ pub trait JsonCommands: CommandExecutor {
         &self,
         key: K,
         path: P,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("JSON.DEBUG").arg("FIELDS").arg(key).arg(path);
         self.execute_command(cmd, None).await

@@ -5,6 +5,7 @@ use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -42,7 +43,7 @@ pub trait StringCommands: CommandExecutor {
         key2: K2,
         min_match_len: Option<i64>,
         with_match_len: bool,
-    ) -> ValkeyResult<redis::Value> {
+    ) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("LCS").arg(key1).arg(key2).arg("IDX");
         if let Some(m) = min_match_len {

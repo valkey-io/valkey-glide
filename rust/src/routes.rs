@@ -319,8 +319,8 @@ mod tests {
         use crate::cmd::Cmd;
         use crate::executor::{CommandExecutor, CustomCommand};
         use crate::routes::{Route, SlotType};
+        use crate::value::ValkeyValue;
         use async_trait::async_trait;
-        use redis::Value;
         use redis::cluster_routing::{
             MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         };
@@ -340,7 +340,7 @@ mod tests {
                 &self,
                 cmd: Cmd,
                 routing: Option<RoutingInfo>,
-            ) -> crate::ValkeyResult<Value> {
+            ) -> crate::ValkeyResult<ValkeyValue> {
                 let args: Vec<Vec<u8>> = cmd
                     .as_redis()
                     .args_iter()
@@ -351,7 +351,7 @@ mod tests {
                     .collect();
                 *self.last_args.lock().unwrap() = args;
                 *self.last_routing.lock().unwrap() = routing;
-                Ok(Value::Okay)
+                Ok(ValkeyValue::Okay)
             }
         }
 

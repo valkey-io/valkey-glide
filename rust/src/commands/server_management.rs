@@ -7,6 +7,7 @@ use crate::commands::options::{ClientPauseMode, FlushMode};
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::collections::HashMap;
@@ -96,7 +97,7 @@ pub trait ServerManagementCommands: CommandExecutor {
         let mut cmd = Cmd::new();
         cmd.arg("TIME");
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(mut parts) if parts.len() == 2 => {
+            ValkeyValue::Array(mut parts) if parts.len() == 2 => {
                 let micros = value::to_string(parts.pop().unwrap())?;
                 let secs = value::to_string(parts.pop().unwrap())?;
                 Ok((
@@ -226,17 +227,14 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Get latency time series for an event (`LATENCY HISTORY`).
-    async fn latency_history<E: ToValkeyArgs + Send>(
-        &self,
-        event: E,
-    ) -> ValkeyResult<redis::Value> {
+    async fn latency_history<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("LATENCY").arg("HISTORY").arg(event);
         self.execute_command(cmd, None).await
     }
 
     /// Get the latest latency samples for all events (`LATENCY LATEST`).
-    async fn latency_latest(&self) -> ValkeyResult<redis::Value> {
+    async fn latency_latest(&self) -> ValkeyResult<ValkeyValue> {
         let mut cmd = Cmd::new();
         cmd.arg("LATENCY").arg("LATEST");
         self.execute_command(cmd, None).await

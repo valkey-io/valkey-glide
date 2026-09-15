@@ -3,14 +3,14 @@
 
 mod common;
 
-use glide::{AsyncCommands, CustomCommand, Route, ScriptingCommands};
+use glide::{AsyncCommands, CustomCommand, FromValkeyValue, Route, ScriptingCommands};
 
 resp_test!(eval_returns_argv, c, {
     let result = c
         .eval::<&str, &str>("return ARGV[1]", &[], &["hello"])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_string(result).unwrap(), "hello");
+    assert_eq!(String::from_owned_valkey_value(result).unwrap(), "hello");
 });
 
 resp_test!(eval_integer, c, {
@@ -18,7 +18,7 @@ resp_test!(eval_integer, c, {
         .eval::<&str, &str>("return 1 + 2", &[], &[])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_i64(result).unwrap(), 3);
+    assert_eq!(i64::from_owned_valkey_value(result).unwrap(), 3);
 });
 
 resp_test!(eval_with_keys, c, {
@@ -28,7 +28,7 @@ resp_test!(eval_with_keys, c, {
         .eval::<&str, &str>("return redis.call('GET', KEYS[1])", &[k.as_str()], &[])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_string(result).unwrap(), "stored");
+    assert_eq!(String::from_owned_valkey_value(result).unwrap(), "stored");
 });
 
 resp_test!(script_load_and_evalsha, c, {
@@ -38,7 +38,7 @@ resp_test!(script_load_and_evalsha, c, {
         .evalsha::<&str, &str>(&sha, &[], &["world"])
         .await
         .unwrap();
-    assert_eq!(glide::value::to_string(result).unwrap(), "world");
+    assert_eq!(String::from_owned_valkey_value(result).unwrap(), "world");
 });
 
 resp_test!(script_exists, c, {
@@ -96,19 +96,19 @@ async fn fcall_and_fcall_route_live() {
 
     // Plain FCALL.
     let r = c.fcall("gt_echo", &[] as &[&str], &["hi"]).await.unwrap();
-    assert_eq!(glide::value::to_string(r).unwrap(), "hi");
+    assert_eq!(String::from_owned_valkey_value(r).unwrap(), "hi");
 
     // Routed FCALL (route ignored on standalone, but the typed path must work).
     let r = c
         .fcall_route("gt_echo", &[] as &[&str], &["routed"], Route::RandomNode)
         .await
         .unwrap();
-    assert_eq!(glide::value::to_string(r).unwrap(), "routed");
+    assert_eq!(String::from_owned_valkey_value(r).unwrap(), "routed");
 
     // Read-only routed FCALL_RO.
     let r = c
         .fcall_ro_route("gt_echo", &[] as &[&str], &["ro"], Route::RandomNode)
         .await
         .unwrap();
-    assert_eq!(glide::value::to_string(r).unwrap(), "ro");
+    assert_eq!(String::from_owned_valkey_value(r).unwrap(), "ro");
 }

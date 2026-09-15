@@ -13,6 +13,7 @@ use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -148,8 +149,8 @@ pub trait PubSubCommands: CommandExecutor {
             cmd.arg(p);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_bytes(other)?]),
         }
     }
@@ -170,14 +171,14 @@ pub trait PubSubCommands: CommandExecutor {
 }
 
 /// Parse a `PUBSUB NUMSUB` reply (flat `[channel, count, ...]` or RESP3 map).
-fn parse_numsub(v: redis::Value) -> ValkeyResult<Vec<(Bytes, i64)>> {
+fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
             .map(|(c, n)| Ok((value::to_bytes(c)?, value::to_i64(n)?)))
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(c), Some(n)) = (iter.next(), iter.next()) {

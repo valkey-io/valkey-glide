@@ -10,7 +10,10 @@ mod common;
 
 use glide::pipeline_options::PipelineOptions;
 use glide::sync::{SyncGlideClient, SyncGlideClusterClient};
-use glide::{CustomCommand, GlideClientConfiguration, GlideClusterClientConfiguration, Route};
+use glide::{
+    CustomCommand, FromRedisValue, FromValkeyValue, GlideClientConfiguration,
+    GlideClusterClientConfiguration, Route,
+};
 // Bring the unified command traits into scope.
 use glide::Commands;
 // Bring async command traits into scope for the `run` combinator closures.
@@ -74,7 +77,7 @@ fn sync_standalone_custom_command_and_pipeline() {
 
     c.custom_command(&["SET", &k, "42"]).unwrap();
     let v = c.custom_command(&["GET", &k]).unwrap();
-    assert_eq!(glide::value::to_string(v).unwrap(), "42");
+    assert_eq!(String::from_owned_valkey_value(v).unwrap(), "42");
 
     // Atomic transaction via redis::Pipeline
     let bk = common::key("sync:batch");
@@ -88,8 +91,8 @@ fn sync_standalone_custom_command_and_pipeline() {
         .execute_pipeline(&pipe, true, &PipelineOptions::default())
         .unwrap();
     assert_eq!(results.len(), 4);
-    assert_eq!(glide::value::to_i64(results[2].clone()).unwrap(), 12);
-    assert_eq!(glide::value::to_string(results[3].clone()).unwrap(), "12");
+    assert_eq!(i64::from_redis_value(&results[2]).unwrap(), 12);
+    assert_eq!(String::from_redis_value(&results[3]).unwrap(), "12");
 }
 
 #[test]
@@ -147,7 +150,7 @@ fn sync_cluster_commands() {
     let k = common::key("sync:cluster:k");
     client.custom_command(&["SET", &k, "v"]).unwrap();
     let v = client.custom_command(&["GET", &k]).unwrap();
-    assert_eq!(glide::value::to_string(v).unwrap(), "v");
+    assert_eq!(String::from_owned_valkey_value(v).unwrap(), "v");
 
     // Routed command to all primaries.
     client
@@ -159,5 +162,5 @@ fn sync_cluster_commands() {
         let k = k.clone();
         async move { c.custom_command(&["GET", &k]).await.unwrap() }
     });
-    assert_eq!(glide::value::to_string(got).unwrap(), "v");
+    assert_eq!(String::from_owned_valkey_value(got).unwrap(), "v");
 }

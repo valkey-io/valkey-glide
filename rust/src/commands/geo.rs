@@ -8,6 +8,7 @@ use crate::commands::options::{ConditionalChange, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value;
 use crate::value::ToValkeyArgs;
+use crate::value::ValkeyValue;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -133,7 +134,7 @@ pub trait GeoCommands: CommandExecutor {
             cmd.arg(m);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
             other => Ok(vec![value::to_opt_bytes(other)?]),
         }
     }
@@ -150,12 +151,12 @@ pub trait GeoCommands: CommandExecutor {
             cmd.arg(m);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => {
+            ValkeyValue::Array(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
                     match it {
-                        redis::Value::Nil => out.push(None),
-                        redis::Value::Array(mut pair) if pair.len() == 2 => {
+                        ValkeyValue::Nil => out.push(None),
+                        ValkeyValue::Array(mut pair) if pair.len() == 2 => {
                             let lat = value::to_f64(pair.pop().unwrap())?;
                             let lon = value::to_f64(pair.pop().unwrap())?;
                             out.push(Some((lon, lat)));
@@ -186,8 +187,8 @@ pub trait GeoCommands: CommandExecutor {
             .arg(radius)
             .arg(unit.as_arg());
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
+            ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
             other => Ok(vec![value::to_bytes(other)?]),
         }
     }
@@ -328,10 +329,10 @@ fn add_search_tail(cmd: &mut Cmd, order: Option<OrderBy>, count: Option<i64>, an
     }
 }
 
-fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
+fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(value::to_bytes).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
         other => Ok(vec![value::to_bytes(other)?]),
     }
 }
