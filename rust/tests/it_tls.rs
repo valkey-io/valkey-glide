@@ -9,38 +9,29 @@ use common::ClusterHarness;
 use glide::{ConnectionManagementCommands, GlideClusterClient, TlsConfig};
 
 timed_tokio_test!(
-    async fn tls_cluster_connects() {
+    async fn tls_cluster() {
         let h = ClusterHarness::start_tls();
+
+        // Verify connected succeeds with TLS and insecure TLS.
         assert_connected(h.client_with_tls().await).await;
-    }
-);
-
-timed_tokio_test!(
-    async fn tls_cluster_untrusted_rejected() {
-        let h = ClusterHarness::start_tls();
-        let untrusted = h.config().tls(TlsConfig::SecureTls);
-        assert_not_connected(GlideClusterClient::connect(untrusted).await).await;
-    }
-);
-
-timed_tokio_test!(
-    async fn insecure_tls_cluster_connects() {
-        let h = ClusterHarness::start_tls();
         assert_connected(h.client_with_insecure_tls().await).await;
+
+        // Verify connection fails without client certificate.
+        let untrusted_config = h.config().tls(TlsConfig::SecureTls);
+        assert_not_connected(GlideClusterClient::connect(untrusted_config).await).await;
     }
 );
 
 timed_tokio_test!(
-    async fn mtls_cluster_connects() {
+    async fn mtls_cluster() {
         let h = ClusterHarness::start_tls_mtls();
+
+        // Verify connection succeeds with mTLS.
         assert_connected(h.client_with_mtls().await).await;
-    }
-);
 
-timed_tokio_test!(
-    async fn mtls_cluster_missing_client_cert_rejected() {
-        let h = ClusterHarness::start_tls_mtls();
-        assert_not_connected(GlideClusterClient::connect(h.config_with_tls()).await).await;
+        // Verify connection fails without server certificate and key.
+        let untrusted_config = h.config_with_tls();
+        assert_not_connected(GlideClusterClient::connect(untrusted_config).await).await;
     }
 );
 
