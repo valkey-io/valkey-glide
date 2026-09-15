@@ -5915,7 +5915,7 @@ mod refresh_task_resolution_tests {
     fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         let address = "resolved-node:6381".to_owned();
         let slot_map = SlotMap::new(
-            vec![Slot::new(0, 16383, address, vec![])],
+            vec![],
             HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
@@ -5984,18 +5984,65 @@ mod refresh_task_resolution_tests {
     }
 
     #[test]
-    fn resolver_recovery_preserves_original_hostname_when_socket_is_unmatched() {
+    fn resolver_recovery_deduplicates_multi_socket_hostname_fallback() {
         let core = core_with_seed_resolver();
-        let result = lookup_management_connection(
+        let first = lookup_management_connection(
             &core,
             "seed.example:6379",
             Some("192.0.2.10:6379".parse().unwrap()),
         );
-        assert!(matches!(
-            result,
-            ConnectionLookupResult::NeedsConnectionRefresh(ClusterAddress::Raw(address))
-                if address == "seed.example:6379"
-        ));
+        let second = lookup_management_connection(
+            &core,
+            "seed.example:6379",
+            Some("192.0.2.11:6379".parse().unwrap()),
+        );
+        let values = [first, second]
+            .into_iter()
+            .map(|result| match result {
+                ConnectionLookupResult::NeedsConnectionRefresh(address) => address,
+                _ => unreachable!(),
+            })
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            values,
+            HashSet::from([ClusterAddress::Raw("seed.example:6379".into())])
+        );
+        let resolver = core
+            .get_cluster_param(|p| p.address_resolver.clone())
+            .unwrap();
+        let prepared = values
+            .iter()
+            .cloned()
+            .map(|address| address.prepare(Some(resolver.as_ref())))
+            .collect::<HashSet<_>>();
+        assert_eq!(prepared.len(), 1);
+        assert_eq!(
+            prepared.into_iter().next().unwrap().as_str(),
+            "seed.example:6382"
+        );
+
+        let no_resolver = core_with_seed_resolver();
+        no_resolver.cluster_params.write().address_resolver = None;
+        let a = lookup_management_connection(
+            &no_resolver,
+            "seed.example:6379",
+            Some("192.0.2.10:6379".parse().unwrap()),
+        );
+        let b = lookup_management_connection(
+            &no_resolver,
+            "seed.example:6379",
+            Some("192.0.2.11:6379".parse().unwrap()),
+        );
+        let socket_addresses = [a, b]
+            .into_iter()
+            .map(|result| match result {
+                ConnectionLookupResult::NeedsConnectionRefresh(ClusterAddress::Raw(address)) => {
+                    address
+                }
+                _ => unreachable!(),
+            })
+            .collect::<HashSet<_>>();
+        assert_eq!(socket_addresses.len(), 2);
     }
 
     fn recording_node(port: u16) -> ClusterNode<ConnectionFuture<RecordingConnection>> {
