@@ -1531,10 +1531,10 @@ public class PubSubTests {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs(repeat("1", 512 * 1024 * 1024)); // 512MB
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1578,10 +1578,10 @@ public class PubSubTests {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs(repeat("1", 512 * 1024 * 1024)); // 512MB
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1620,13 +1620,13 @@ public class PubSubTests {
         final GlideString errorMsg = gs("errorMsg");
         final GlideString message3 = gs("message3");
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
                     if (pubSubMessage.getMessage().equals(errorMsg)) {
                         throw new RuntimeException("Test callback error message");
                     }
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
@@ -1681,10 +1681,10 @@ public class PubSubTests {
         PubSubMessage message =
                 new PubSubMessage(gs(new byte[] {(byte) 0xF0, 0x28, (byte) 0x8C, (byte) 0xBC}), channel);
 
-        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        List<PubSubMessage> callbackMessages = Collections.synchronizedList(new ArrayList<>());
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    List<PubSubMessage> receivedMessages = (List<PubSubMessage>) context;
                     receivedMessages.add(pubSubMessage);
                 };
 
