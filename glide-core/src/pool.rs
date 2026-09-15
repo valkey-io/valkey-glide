@@ -1427,7 +1427,10 @@ mod scope_pool_tests {
     impl TestServer {
         fn start() -> Self {
             let port = get_available_port();
-            let child = Command::new("valkey-server")
+            // Use `redis-server` to match the integration harness
+            // (tests/utilities/mod.rs): it's present on every CI engine version,
+            // whereas `valkey-server` is absent on pre-rename legs (6.2).
+            let child = Command::new("redis-server")
                 .args([
                     "--port",
                     &port.to_string(),
@@ -1443,7 +1446,7 @@ mod scope_pool_tests {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
-                .expect("spawn valkey-server for regression test");
+                .expect("spawn redis-server for regression test");
             Self { child, port }
         }
     }
