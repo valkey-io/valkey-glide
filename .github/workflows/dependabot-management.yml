@@ -42,6 +42,8 @@ jobs:
               with:
                   node-version: "18"
 
+            # This read-only checkout supports an API dispatcher; npm ci only prepares
+            # its isolated dependencies, so a clean-tree assertion would be redundant.
             - name: Install dependencies
               run: |
                   cd .github/dependabot-deps

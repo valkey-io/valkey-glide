@@ -28,3 +28,8 @@ jobs:
 
             - name: Install dependencies and build docs
               run: ./docs/build-docs.sh gh-deploy --force
+
+            - name: Ensure documentation generation leaves tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: MkDocs Node and Python documentation generation
