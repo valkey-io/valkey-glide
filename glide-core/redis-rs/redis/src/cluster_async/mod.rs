@@ -33,6 +33,7 @@ pub mod testing {
 use crate::{
     client::GlideConnectionOptions,
     cluster,
+    cluster::ReadyToDialAddress,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
     cluster_slotmap::SlotMap,
     cluster_topology::{
@@ -649,6 +650,18 @@ where
         is_circular_moved_redirect(resolved_redirect_node, current_address, |address| {
             self.normalize_current_address(address)
         })
+    }
+
+    pub(crate) fn is_circular_moved_redirect_prepared(
+        &self,
+        resolved_redirect_node: Option<(&str, u16)>,
+        current_address: ReadyToDialAddress,
+    ) -> bool {
+        is_circular_moved_redirect(
+            resolved_redirect_node,
+            current_address.as_str(),
+            |address| address.to_owned(),
+        )
     }
 
     // return epoch of node
@@ -1510,11 +1523,11 @@ where
 
                         // Check for circular MOVED and trigger reconnect if detected.
                         // The redirect is already resolved; normalize only the current address.
-                        if core.is_circular_moved_redirect(
+                        if core.is_circular_moved_redirect_prepared(
                             resolved_redirect_node
                                 .as_ref()
                                 .map(|redirect| (redirect.address.as_str(), redirect.slot)),
-                            &address,
+                            ReadyToDialAddress::new(address.clone()),
                         ) {
                             // Reset routing and reconnect with retry
                             request.info.reset_routing();
@@ -5952,6 +5965,17 @@ mod refresh_task_resolution_tests {
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
         })
+    }
+
+    #[test]
+    fn prepared_current_address_stays_prepared_after_map_removal() {
+        RESOLVER_CALLS.store(0, Ordering::SeqCst);
+        let core = core_with_non_idempotent_resolver();
+        assert!(core.is_circular_moved_redirect_prepared(
+            Some(("resolved-node:6381", 5000)),
+            ReadyToDialAddress::new("resolved-node:6381".to_owned()),
+        ));
+        assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 0);
     }
 
     fn core_with_seed_resolver() -> Arc<InnerCore<RecordingConnection>> {

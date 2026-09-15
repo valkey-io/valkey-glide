@@ -1033,6 +1033,9 @@ fn get_random_connection<C: ConnectionLike + Connect + Sized>(
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ReadyToDialAddress(String);
 impl ReadyToDialAddress {
+    pub(crate) fn new(address: String) -> Self {
+        Self(address)
+    }
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
