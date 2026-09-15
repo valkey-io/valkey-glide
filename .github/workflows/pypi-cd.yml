@@ -156,8 +156,9 @@ jobs:
                   # are added to the matrix for CD pipelines, update this step to conditionally use:
                   #     brew install python@3.14 && brew link python@3.14
                   if ! command -v python3.14 &> /dev/null; then
-                      sudo apt update
-                      sudo apt install -y python3.14 python3.14-dev
+                      # Wait up to 60s for any running apt/dpkg lock to be released
+                      sudo apt-get -o DPkg::Lock::Timeout=60 update
+                      sudo apt-get -o DPkg::Lock::Timeout=60 install -y python3.14 python3.14-dev
                       python3.14 -m ensurepip --upgrade
                       python3.14 -m pip install --upgrade pip
                   fi
@@ -314,8 +315,9 @@ jobs:
                       if [[ $(`which apt`) != '' ]]
                       then
                         echo "installing unzip and curl"
-                        apt-get update
-                        apt install unzip curl python3.14 pypy3 -y
+                        # Wait up to 60s for any running apt/dpkg lock to be released
+                        apt-get -o DPkg::Lock::Timeout=60 update
+                        apt-get -o DPkg::Lock::Timeout=60 install -y unzip curl python3.14 pypy3
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -716,8 +718,9 @@ jobs:
             - name: Install engine build dependencies (ephemeral runners)
               if: ${{ contains(matrix.build.RUNNER, 'ephemeral') }}
               run: |
-                  sudo apt update -y
-                  sudo apt install -y pkg-config libssl-dev
+                  # Wait up to 60s for any running apt/dpkg lock to be released
+                  sudo apt-get -o DPkg::Lock::Timeout=60 update -y
+                  sudo apt-get -o DPkg::Lock::Timeout=60 install -y pkg-config libssl-dev
 
             - name: Install engine
               uses: ./.github/actions/install-engine
