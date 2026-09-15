@@ -20,7 +20,6 @@ use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
 use crate::value::ToValkeyArgs;
 use crate::{ValkeyResult, ValkeyValue};
-use redis::Value;
 use std::future::Future;
 use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
@@ -106,7 +105,7 @@ impl SyncGlideClient {
         pipeline: &redis::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<Value>> {
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
         runtime().block_on(
             self.inner
                 .execute_pipeline(pipeline, raise_on_error, options),
@@ -182,7 +181,7 @@ impl SyncGlideClusterClient {
         raise_on_error: bool,
         route: Option<crate::Route>,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<Value>> {
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
         runtime().block_on(
             self.inner
                 .execute_pipeline(pipeline, raise_on_error, route, options),

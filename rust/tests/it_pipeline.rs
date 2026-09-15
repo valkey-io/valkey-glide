@@ -12,8 +12,7 @@
 mod common;
 
 use glide::{
-    AsyncCommands, Bytes, CustomCommand, FromRedisValue, FromValkeyValue, PipelineExt,
-    PipelineOptions, pipe,
+    AsyncCommands, Bytes, CustomCommand, FromValkeyValue, PipelineExt, PipelineOptions, pipe,
 };
 
 #[tokio::test]
@@ -29,9 +28,9 @@ async fn atomic_transaction_ordered_results() {
         .await
         .unwrap();
     assert_eq!(results.len(), 4);
-    assert_eq!(i64::from_redis_value(&results[1]).unwrap(), 11);
-    assert_eq!(i64::from_redis_value(&results[2]).unwrap(), 12);
-    assert_eq!(String::from_redis_value(&results[3]).unwrap(), "12");
+    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 11);
+    assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
+    assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
 }
 
 #[tokio::test]
@@ -65,7 +64,7 @@ async fn non_atomic_pipeline_depth() {
         .unwrap();
     // 1 SET + 100 INCR + 1 GET.
     assert_eq!(results.len(), 102);
-    assert_eq!(String::from_redis_value(&results[101]).unwrap(), "100");
+    assert_eq!(String::from_valkey_value(&results[101]).unwrap(), "100");
 }
 
 #[tokio::test]
@@ -100,7 +99,7 @@ async fn raise_on_error_false_returns_inline() {
     // All three positions are present even though one errored.
     assert_eq!(results.len(), 3);
     // The good INCR still produced 2.
-    assert_eq!(i64::from_redis_value(&results[1]).unwrap(), 2);
+    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
 }
 
 #[tokio::test]
@@ -144,7 +143,7 @@ async fn raw_commands_in_pipeline() {
         .await
         .unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(String::from_redis_value(&results[2]).unwrap(), "10");
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "10");
 }
 
 #[tokio::test]
@@ -166,7 +165,7 @@ async fn watch_multi_semantics() {
         .await
         .unwrap();
     assert_eq!(results.len(), 1);
-    assert_eq!(i64::from_redis_value(&results[0]).unwrap(), 2);
+    assert_eq!(i64::from_valkey_value(&results[0]).unwrap(), 2);
 
     let unwatch = c.custom_command(&["UNWATCH"]).await.unwrap();
     assert_eq!(String::from_owned_valkey_value(unwatch).unwrap(), "OK");
@@ -210,9 +209,9 @@ async fn pipeline_spans_multiple_data_types() {
         .await
         .unwrap();
     assert_eq!(r.len(), 7);
-    assert_eq!(i64::from_redis_value(&r[4]).unwrap(), 3); // LLEN
-    assert_eq!(String::from_redis_value(&r[5]).unwrap(), "1"); // HGET
-    assert_eq!(i64::from_redis_value(&r[6]).unwrap(), 1); // ZCARD
+    assert_eq!(i64::from_valkey_value(&r[4]).unwrap(), 3); // LLEN
+    assert_eq!(String::from_valkey_value(&r[5]).unwrap(), "1"); // HGET
+    assert_eq!(i64::from_valkey_value(&r[6]).unwrap(), 1); // ZCARD
 }
 
 #[tokio::test]
@@ -228,7 +227,7 @@ async fn pipeline_preserves_binary_values() {
         .await
         .unwrap();
     assert_eq!(
-        Bytes::from_redis_value(&r[1]).unwrap().as_ref(),
+        Bytes::from_valkey_value(&r[1]).unwrap().as_ref(),
         &payload[..]
     );
 }
@@ -245,11 +244,11 @@ async fn non_atomic_mixed_reads_writes_ordered() {
         .await
         .unwrap();
     assert_eq!(r.len(), 6);
-    assert_eq!(String::from_redis_value(&r[1]).unwrap(), "1");
-    assert_eq!(i64::from_redis_value(&r[2]).unwrap(), 2);
-    assert_eq!(String::from_redis_value(&r[3]).unwrap(), "2");
+    assert_eq!(String::from_valkey_value(&r[1]).unwrap(), "1");
+    assert_eq!(i64::from_valkey_value(&r[2]).unwrap(), 2);
+    assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "2");
     // After DEL, GET is null.
-    assert!(matches!(r[5], glide::Value::Nil));
+    assert!(matches!(r[5], glide::ValkeyValue::Nil));
 }
 
 #[tokio::test]
@@ -301,9 +300,9 @@ timed_tokio_test!(
             .await
             .unwrap();
         assert_eq!(r.len(), 5);
-        assert_eq!(i64::from_redis_value(&r[1]).unwrap(), 11);
-        assert_eq!(String::from_redis_value(&r[3]).unwrap(), "11");
-        assert_eq!(String::from_redis_value(&r[4]).unwrap(), "x");
+        assert_eq!(i64::from_valkey_value(&r[1]).unwrap(), 11);
+        assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "11");
+        assert_eq!(String::from_valkey_value(&r[4]).unwrap(), "x");
     }
 );
 
@@ -333,8 +332,8 @@ timed_tokio_test!(
             .await
             .unwrap();
         assert_eq!(r.len(), 4);
-        assert_eq!(String::from_redis_value(&r[2]).unwrap(), "1");
-        assert_eq!(String::from_redis_value(&r[3]).unwrap(), "2");
+        assert_eq!(String::from_valkey_value(&r[2]).unwrap(), "1");
+        assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "2");
     }
 );
 
@@ -354,8 +353,8 @@ async fn pipeline_with_options_timeout_and_retry() {
 
     let results = c.execute_pipeline(&p, true, &opts).await.unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(i64::from_redis_value(&results[1]).unwrap(), 2);
-    assert_eq!(String::from_redis_value(&results[2]).unwrap(), "2");
+    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
 }
 
 #[tokio::test]
@@ -370,5 +369,5 @@ async fn transaction_with_options_timeout() {
     let opts = PipelineOptions::new().with_timeout(std::time::Duration::from_secs(5));
     let results = c.execute_pipeline(&p, true, &opts).await.unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(String::from_redis_value(&results[2]).unwrap(), "6");
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "6");
 }

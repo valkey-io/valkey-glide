@@ -254,15 +254,14 @@ impl GlideClient {
     /// [`PipelineExt::query_glide`]. When `raise_on_error` is `true`, the
     /// first errored command aborts with an error; otherwise error replies are
     /// returned inline.
-    // TODO #7024: replace `&redis::Pipeline` and the `Value` return with glide-owned
-    // types once the pipeline/decode rework lands (Phase 3). Applies to the cluster
-    // `execute_pipeline` and `PipelineExt` too.
+    // TODO #7024: replace the `&redis::Pipeline` builder with a glide-owned type
+    // (Phase 4). Applies to the cluster `execute_pipeline` and `PipelineExt` too.
     pub async fn execute_pipeline(
         &self,
         pipeline: &redis::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<Value>> {
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
         run_pipeline(&self.inner, pipeline, None, raise_on_error, options).await
     }
 
@@ -369,7 +368,7 @@ impl GlideClusterClient {
         raise_on_error: bool,
         route: Option<Route>,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<Value>> {
+    ) -> ValkeyResult<Vec<ValkeyValue>> {
         let routing = route.map(|r| r.to_routing_info(None));
         run_pipeline(&self.inner, pipeline, routing, raise_on_error, options).await
     }

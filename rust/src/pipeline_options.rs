@@ -9,8 +9,8 @@
 //! routing), use [`crate::GlideClient::execute_pipeline`] /
 //! [`crate::GlideClusterClient::execute_pipeline`] with [`PipelineOptions`].
 
-use crate::ValkeyResult;
 use crate::error::GlideError;
+use crate::{ValkeyResult, ValkeyValue};
 use glide_core::client::Client as CoreClient;
 use redis::cluster_routing::RoutingInfo;
 use redis::{Pipeline, PipelineRetryStrategy, Value};
@@ -81,7 +81,7 @@ pub(crate) async fn run_pipeline(
     routing: Option<RoutingInfo>,
     raise_on_error: bool,
     options: &PipelineOptions,
-) -> ValkeyResult<Vec<Value>> {
+) -> ValkeyResult<Vec<ValkeyValue>> {
     if pipeline.is_empty() {
         return Ok(Vec::new());
     }
@@ -108,8 +108,8 @@ pub(crate) async fn run_pipeline(
             .map_err(GlideError::from_redis_error)?
     };
     match value {
-        Value::Array(items) => Ok(items),
+        Value::Array(items) => Ok(items.into_iter().map(ValkeyValue::from_redis).collect()),
         Value::Nil => Ok(Vec::new()),
-        other => Ok(vec![other]),
+        other => Ok(vec![ValkeyValue::from_redis(other)]),
     }
 }

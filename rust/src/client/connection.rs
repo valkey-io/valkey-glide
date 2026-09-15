@@ -151,6 +151,11 @@ impl GlidePipelineTarget for GlideClusterClient {
 /// # let _ = (a, b); Ok(()) }
 /// ```
 pub trait PipelineExt {
+    // TODO #7024: roll the `T: FromRedisValue` bound to `FromValkeyValue`. Blocked:
+    // the `.ignore()` filtering + transaction unwrapping live inside redis-rs's
+    // `Pipeline::query_async`, and `Pipeline::ignored_commands` is private, so the
+    // decode can't be reproduced over `ValkeyValue` from this crate without a fork
+    // change (or a fully glide-owned `Pipeline`). Deferred to Phase 4.
     /// Execute this pipeline on a GLIDE client and decode the replies into
     /// `T`, with the same `.ignore()`/transaction semantics as the `redis`
     /// crate's typed pipeline execution.
