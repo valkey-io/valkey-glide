@@ -86,3 +86,5 @@ copilot-instructions.md
 **/performance*
 *.pyc
 __pycache__/
+test-report*.html
+node/test-report*.html
