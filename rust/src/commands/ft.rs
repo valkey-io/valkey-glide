@@ -8,11 +8,13 @@
 //! structured [`redis::Value`].
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs, Value};
+use redis::Value;
 
 /// Search (RediSearch/valkey-search) module commands (`FT.CREATE`, `FT.SEARCH`,
 /// `FT.AGGREGATE`, ...).
@@ -21,7 +23,7 @@ pub trait FtCommands: CommandExecutor {
     /// Create an index (`FT.CREATE`). `args` are the full definition following the
     /// index name, e.g. `["ON", "HASH", "PREFIX", "1", "doc:", "SCHEMA", "title",
     /// "TEXT"]`.
-    async fn ft_create<I: ToRedisArgs + Send, A: ToRedisArgs + Send + Sync>(
+    async fn ft_create<I: ToValkeyArgs + Send, A: ToValkeyArgs + Send + Sync>(
         &self,
         index: I,
         args: &[A],
@@ -36,7 +38,7 @@ pub trait FtCommands: CommandExecutor {
 
     /// Drop an index (`FT.DROPINDEX`). Set `delete_docs` to also delete the
     /// indexed documents.
-    async fn ft_dropindex<I: ToRedisArgs + Send>(
+    async fn ft_dropindex<I: ToValkeyArgs + Send>(
         &self,
         index: I,
         delete_docs: bool,
@@ -50,7 +52,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Get information about an index (`FT.INFO`).
-    async fn ft_info<I: ToRedisArgs + Send>(&self, index: I) -> ValkeyResult<Value> {
+    async fn ft_info<I: ToValkeyArgs + Send>(&self, index: I) -> ValkeyResult<Value> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.INFO").arg(index);
         self.execute_command(cmd, None).await
@@ -71,9 +73,9 @@ pub trait FtCommands: CommandExecutor {
     /// Search an index (`FT.SEARCH`). `args` are the options following the query,
     /// e.g. `["LIMIT", "0", "10", "RETURN", "1", "title"]`.
     async fn ft_search<
-        I: ToRedisArgs + Send,
-        Q: ToRedisArgs + Send,
-        A: ToRedisArgs + Send + Sync,
+        I: ToValkeyArgs + Send,
+        Q: ToValkeyArgs + Send,
+        A: ToValkeyArgs + Send + Sync,
     >(
         &self,
         index: I,
@@ -90,9 +92,9 @@ pub trait FtCommands: CommandExecutor {
 
     /// Run an aggregation pipeline over an index (`FT.AGGREGATE`).
     async fn ft_aggregate<
-        I: ToRedisArgs + Send,
-        Q: ToRedisArgs + Send,
-        A: ToRedisArgs + Send + Sync,
+        I: ToValkeyArgs + Send,
+        Q: ToValkeyArgs + Send,
+        A: ToValkeyArgs + Send + Sync,
     >(
         &self,
         index: I,
@@ -108,7 +110,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Return the execution plan for a query (`FT.EXPLAIN`).
-    async fn ft_explain<I: ToRedisArgs + Send, Q: ToRedisArgs + Send>(
+    async fn ft_explain<I: ToValkeyArgs + Send, Q: ToValkeyArgs + Send>(
         &self,
         index: I,
         query: Q,
@@ -119,7 +121,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Return the execution plan for a query in CLI form (`FT.EXPLAINCLI`).
-    async fn ft_explaincli<I: ToRedisArgs + Send, Q: ToRedisArgs + Send>(
+    async fn ft_explaincli<I: ToValkeyArgs + Send, Q: ToValkeyArgs + Send>(
         &self,
         index: I,
         query: Q,
@@ -130,7 +132,7 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Add an alias for an index (`FT.ALIASADD`).
-    async fn ft_aliasadd<A: ToRedisArgs + Send, I: ToRedisArgs + Send>(
+    async fn ft_aliasadd<A: ToValkeyArgs + Send, I: ToValkeyArgs + Send>(
         &self,
         alias: A,
         index: I,
@@ -141,14 +143,14 @@ pub trait FtCommands: CommandExecutor {
     }
 
     /// Remove an index alias (`FT.ALIASDEL`).
-    async fn ft_aliasdel<A: ToRedisArgs + Send>(&self, alias: A) -> ValkeyResult<()> {
+    async fn ft_aliasdel<A: ToValkeyArgs + Send>(&self, alias: A) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("FT.ALIASDEL").arg(alias);
         value::to_unit(self.execute_command(cmd, None).await?)
     }
 
     /// Reassign an alias to a different index (`FT.ALIASUPDATE`).
-    async fn ft_aliasupdate<A: ToRedisArgs + Send, I: ToRedisArgs + Send>(
+    async fn ft_aliasupdate<A: ToValkeyArgs + Send, I: ToValkeyArgs + Send>(
         &self,
         alias: A,
         index: I,
@@ -168,7 +170,7 @@ pub trait FtCommands: CommandExecutor {
     /// Profile the execution of a `SEARCH` or `AGGREGATE` query (`FT.PROFILE`).
     /// `query_type` is `"SEARCH"` or `"AGGREGATE"`; `args` are the query and its
     /// options (typically prefixed with `QUERY`).
-    async fn ft_profile<I: ToRedisArgs + Send, A: ToRedisArgs + Send + Sync>(
+    async fn ft_profile<I: ToValkeyArgs + Send, A: ToValkeyArgs + Send + Sync>(
         &self,
         index: I,
         query_type: &str,

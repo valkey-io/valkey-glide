@@ -22,9 +22,9 @@
 //! fetching a later page ends the iteration.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::core::AsyncCommands;
 use crate::value::FromValkeyValue;
-use redis::Cmd;
 
 /// Argument layout of one scan page: `prefix… <cursor> suffix…`
 /// (e.g. `HSCAN key <cursor> MATCH pattern`).

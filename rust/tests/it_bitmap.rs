@@ -58,6 +58,8 @@ matrix_test!(bitcount_range_byte, c, {
     assert_eq!(count, 0);
 });
 
+// TODO #7082: replace the raw `BITCOUNT` with a typed `bitcount_range` that
+// accepts the BYTE/BIT index unit.
 matrix_test!(bitcount_range_bit, c, {
     let k = common::key("bit");
     let _: i64 = c.setbit(&k, 5, true).await.unwrap();
@@ -66,7 +68,7 @@ matrix_test!(bitcount_range_bit, c, {
     // Use cmd for BITCOUNT with BIT index type
     let count: i64 = c
         .glide_send(
-            redis::cmd("BITCOUNT")
+            glide::cmd("BITCOUNT")
                 .arg(&k)
                 .arg(0i64)
                 .arg(7i64)

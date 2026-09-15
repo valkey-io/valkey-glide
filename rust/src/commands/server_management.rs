@@ -2,12 +2,13 @@
 //! Server-management commands. Mirrors Python's server-management surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::{ClientPauseMode, FlushMode};
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 use std::collections::HashMap;
 
 /// Server-management commands (`INFO`, `DBSIZE`, `FLUSHALL`, `CONFIG ...`, `TIME`).
@@ -21,7 +22,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Get server information for specific sections (`INFO section...`).
-    async fn info_sections<S: ToRedisArgs + Send + Sync>(
+    async fn info_sections<S: ToValkeyArgs + Send + Sync>(
         &self,
         sections: &[S],
     ) -> ValkeyResult<Bytes> {
@@ -61,7 +62,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Get configuration parameters matching `parameter` (`CONFIG GET`).
-    async fn config_get<P: ToRedisArgs + Send>(
+    async fn config_get<P: ToValkeyArgs + Send>(
         &self,
         parameter: P,
     ) -> ValkeyResult<HashMap<String, Bytes>> {
@@ -73,7 +74,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Set a configuration parameter (`CONFIG SET`).
-    async fn config_set<P: ToRedisArgs + Send, V: ToRedisArgs + Send>(
+    async fn config_set<P: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
         &self,
         parameter: P,
         value: V,
@@ -161,7 +162,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Make the server a replica of another instance (`REPLICAOF host port`).
-    async fn replicaof<H: ToRedisArgs + Send>(&self, host: H, port: i64) -> ValkeyResult<()> {
+    async fn replicaof<H: ToValkeyArgs + Send>(&self, host: H, port: i64) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("REPLICAOF").arg(host).arg(port);
         value::to_unit(self.execute_command(cmd, None).await?)
@@ -176,7 +177,7 @@ pub trait ServerManagementCommands: CommandExecutor {
 
     /// Start a coordinated failover between the primary and a replica
     /// (`FAILOVER`).
-    async fn failover<H: ToRedisArgs + Send>(
+    async fn failover<H: ToValkeyArgs + Send>(
         &self,
         to: Option<(H, i64)>,
         force: bool,
@@ -225,7 +226,10 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Get latency time series for an event (`LATENCY HISTORY`).
-    async fn latency_history<E: ToRedisArgs + Send>(&self, event: E) -> ValkeyResult<redis::Value> {
+    async fn latency_history<E: ToValkeyArgs + Send>(
+        &self,
+        event: E,
+    ) -> ValkeyResult<redis::Value> {
         let mut cmd = Cmd::new();
         cmd.arg("LATENCY").arg("HISTORY").arg(event);
         self.execute_command(cmd, None).await
@@ -240,7 +244,10 @@ pub trait ServerManagementCommands: CommandExecutor {
 
     /// Reset latency data, returning the number of event time series reset
     /// (`LATENCY RESET`).
-    async fn latency_reset<E: ToRedisArgs + Send + Sync>(&self, events: &[E]) -> ValkeyResult<i64> {
+    async fn latency_reset<E: ToValkeyArgs + Send + Sync>(
+        &self,
+        events: &[E],
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("LATENCY").arg("RESET");
         for e in events {
@@ -257,7 +264,7 @@ pub trait ServerManagementCommands: CommandExecutor {
     }
 
     /// Get a latency graph for an event (`LATENCY GRAPH`).
-    async fn latency_graph<E: ToRedisArgs + Send>(&self, event: E) -> ValkeyResult<Bytes> {
+    async fn latency_graph<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<Bytes> {
         let mut cmd = Cmd::new();
         cmd.arg("LATENCY").arg("GRAPH").arg(event);
         value::to_bytes(self.execute_command(cmd, None).await?)

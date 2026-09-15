@@ -2,11 +2,12 @@
 //! Set commands. Mirrors Python's set command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 use std::collections::HashSet;
 
 fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
@@ -21,8 +22,11 @@ fn collect_bytes(v: redis::Value) -> ValkeyResult<Vec<Bytes>> {
 /// Set commands (`SADD`, `SREM`, `SMEMBERS`, `SINTER`, ...).
 #[async_trait]
 pub trait SetCommands: CommandExecutor {
+    // TODO #7082: add a `spop` variant that takes a `count` (cf. `srandmember_multiple`),
+    // to match the other GLIDE clients.
+
     /// Cardinality of the intersection of the given sets (`SINTERCARD`).
-    async fn sintercard<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
+    async fn sintercard<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SINTERCARD").arg(keys.len());
         for k in keys {
@@ -34,7 +38,7 @@ pub trait SetCommands: CommandExecutor {
     /// Cardinality of the intersection of the given sets with a `LIMIT`
     /// (`SINTERCARD numkeys key [key ...] LIMIT limit`). A `limit` of `0` means
     /// no limit.
-    async fn sintercard_limit<K: ToRedisArgs + Send + Sync>(
+    async fn sintercard_limit<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys: &[K],
         limit: i64,
@@ -49,7 +53,7 @@ pub trait SetCommands: CommandExecutor {
     }
 
     #[doc(hidden)]
-    async fn set_op<K: ToRedisArgs + Send + Sync>(
+    async fn set_op<K: ToValkeyArgs + Send + Sync>(
         &self,
         op: &'static str,
         keys: &[K],
@@ -65,7 +69,7 @@ pub trait SetCommands: CommandExecutor {
     }
 
     #[doc(hidden)]
-    async fn set_op_store<D: ToRedisArgs + Send, K: ToRedisArgs + Send + Sync>(
+    async fn set_op_store<D: ToValkeyArgs + Send, K: ToValkeyArgs + Send + Sync>(
         &self,
         op: &'static str,
         destination: D,

@@ -8,10 +8,12 @@
 //! command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::routes::Route;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
+use redis::Value;
 use redis::cluster_routing::RoutingInfo;
-use redis::{Cmd, Value};
 
 /// The low-level command execution interface.
 ///
@@ -35,7 +37,7 @@ pub trait CustomCommand: CommandExecutor {
     /// The first argument is the command keyword; the rest are its arguments.
     async fn custom_command<A>(&self, args: &[A]) -> ValkeyResult<Value>
     where
-        A: redis::ToRedisArgs + Sync,
+        A: ToValkeyArgs + Sync,
     {
         let mut cmd = Cmd::new();
         for a in args {
@@ -48,13 +50,13 @@ pub trait CustomCommand: CommandExecutor {
     /// standalone clients.
     async fn custom_command_with_route<A>(&self, args: &[A], route: Route) -> ValkeyResult<Value>
     where
-        A: redis::ToRedisArgs + Sync,
+        A: ToValkeyArgs + Sync,
     {
         let mut cmd = Cmd::new();
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(&cmd));
+        let routing = route.to_routing_info(Some(cmd.as_redis()));
         self.execute_command(cmd, Some(routing)).await
     }
 }

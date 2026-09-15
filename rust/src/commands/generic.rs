@@ -2,16 +2,20 @@
 //! Generic (key) commands. Mirrors Python's generic command surface.
 
 use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::{Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions};
 use crate::executor::CommandExecutor;
 use crate::value;
+use crate::value::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// Generic key-space commands (`DEL`, `EXISTS`, `EXPIRE`, `TTL`, `RENAME`, ...).
 #[async_trait]
 pub trait GenericCommands: CommandExecutor {
+    // TODO #7082: add `expire`/`pexpire`/`expire_at`/`pexpire_at` variants that take
+    // the NX/XX/GT/LT condition options (the `ExpireOptions` type already exists).
+
     /// Iterate the keyspace with `SCAN`, with `MATCH`/`COUNT`/`TYPE` options
     /// (cursor-style). Returns `(cursor, keys)`; a returned cursor of `"0"`
     /// indicates iteration is complete. For simple iteration prefer the
@@ -39,14 +43,14 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Get the absolute expiry Unix time in seconds (`EXPIRETIME`).
-    async fn expiretime<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
+    async fn expiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("EXPIRETIME").arg(key);
         value::to_i64(self.execute_command(cmd, None).await?)
     }
 
     /// Get the absolute expiry Unix time in milliseconds (`PEXPIRETIME`).
-    async fn pexpiretime<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
+    async fn pexpiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("PEXPIRETIME").arg(key);
         value::to_i64(self.execute_command(cmd, None).await?)
@@ -60,14 +64,14 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Serialize `key` (`DUMP`). Returns `None` if the key does not exist.
-    async fn dump<K: ToRedisArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
+    async fn dump<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("DUMP").arg(key);
         value::to_opt_bytes(self.execute_command(cmd, None).await?)
     }
 
     /// Touch the given keys, returning how many were touched (`TOUCH`).
-    async fn touch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
+    async fn touch<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("TOUCH");
         for k in keys {
@@ -77,7 +81,7 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Copy `source` to `destination` (`COPY`). Set `replace` to overwrite.
-    async fn copy<S: ToRedisArgs + Send, D: ToRedisArgs + Send>(
+    async fn copy<S: ToValkeyArgs + Send, D: ToValkeyArgs + Send>(
         &self,
         source: S,
         destination: D,
@@ -93,7 +97,7 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Sort the elements at `key` (`SORT`), optionally by order and with an
     /// optional `LIMIT offset count`.
-    async fn sort<K: ToRedisArgs + Send>(
+    async fn sort<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         order: Option<OrderBy>,
@@ -120,7 +124,7 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Copy `source` to `destination`, optionally into a different logical
     /// database (`COPY ... DB destination_db`). Set `replace` to overwrite.
-    async fn copy_with_options<S: ToRedisArgs + Send, D: ToRedisArgs + Send>(
+    async fn copy_with_options<S: ToValkeyArgs + Send, D: ToValkeyArgs + Send>(
         &self,
         source: S,
         destination: D,
@@ -139,7 +143,7 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Create a key from a serialized payload produced by `DUMP` (`RESTORE`).
-    async fn restore<K: ToRedisArgs + Send, V: ToRedisArgs + Send>(
+    async fn restore<K: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
         &self,
         key: K,
         ttl_ms: i64,
@@ -162,7 +166,7 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Sort the elements at `key` and store the result into `destination`
     /// (`SORT ... STORE destination`). Returns the number of elements stored.
-    async fn sort_store<K: ToRedisArgs + Send, D: ToRedisArgs + Send>(
+    async fn sort_store<K: ToValkeyArgs + Send, D: ToValkeyArgs + Send>(
         &self,
         key: K,
         destination: D,
@@ -186,7 +190,7 @@ pub trait GenericCommands: CommandExecutor {
     }
 
     /// Read-only variant of `SORT` (`SORT_RO`); returns the sorted elements.
-    async fn sort_ro<K: ToRedisArgs + Send>(
+    async fn sort_ro<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         order: Option<OrderBy>,
@@ -213,14 +217,14 @@ pub trait GenericCommands: CommandExecutor {
 
     /// Move `key` to another logical database (`MOVE`). Returns whether the key
     /// was moved.
-    async fn move_key<K: ToRedisArgs + Send>(&self, key: K, db: i64) -> ValkeyResult<bool> {
+    async fn move_key<K: ToValkeyArgs + Send>(&self, key: K, db: i64) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("MOVE").arg(key).arg(db);
         value::to_bool(self.execute_command(cmd, None).await?)
     }
 
     /// Atomically transfer a key to another instance (`MIGRATE`).
-    async fn migrate<H: ToRedisArgs + Send, K: ToRedisArgs + Send>(
+    async fn migrate<H: ToValkeyArgs + Send, K: ToValkeyArgs + Send>(
         &self,
         host: H,
         port: i64,
@@ -248,7 +252,7 @@ pub trait GenericCommands: CommandExecutor {
     /// Dedicated scoped connections are tracked in [#6917].
     ///
     /// [#6917]: https://github.com/valkey-io/valkey-glide/issues/6917
-    async fn watch<K: ToRedisArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<()> {
+    async fn watch<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("WATCH");
         for k in keys {

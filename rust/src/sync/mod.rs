@@ -18,8 +18,9 @@ use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
+use crate::value::ToValkeyArgs;
 use crate::{ValkeyResult, ValkeyValue};
-use redis::{ToRedisArgs, Value};
+use redis::Value;
 use std::future::Future;
 use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
@@ -93,7 +94,7 @@ impl SyncGlideClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
@@ -146,12 +147,12 @@ impl SyncGlideClusterClient {
     }
 
     /// Run an arbitrary command (blocking escape hatch).
-    pub fn custom_command<A: ToRedisArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
+    pub fn custom_command<A: ToValkeyArgs + Sync>(&self, args: &[A]) -> ValkeyResult<Value> {
         runtime().block_on(self.inner.custom_command(args))
     }
 
     /// Run an arbitrary command with an explicit route (blocking).
-    pub fn custom_command_with_route<A: ToRedisArgs + Sync>(
+    pub fn custom_command_with_route<A: ToValkeyArgs + Sync>(
         &self,
         args: &[A],
         route: Route,
@@ -201,7 +202,7 @@ impl SyncGlideClusterClient {
 macro_rules! impl_sync_owned_send {
     ($sync_ty:ty) => {
         impl crate::commands::core::Commands for $sync_ty {
-            fn glide_send_owned_sync(&self, cmd: redis::Cmd) -> ValkeyResult<ValkeyValue> {
+            fn glide_send_owned_sync(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
                 runtime().block_on(crate::commands::core::AsyncCommands::glide_send_owned(
                     &self.inner,
                     cmd,

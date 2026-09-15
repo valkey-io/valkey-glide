@@ -5,10 +5,10 @@
 
 mod common;
 
+use glide::Cmd;
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
 use glide::{AsyncCommands, CustomCommand, GlideClient, GlideClientConfiguration, Route};
-use redis::Cmd;
 use std::collections::HashSet;
 use std::time::Duration;
 

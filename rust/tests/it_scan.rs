@@ -12,6 +12,8 @@ use std::collections::HashSet;
 
 /// Drive SCAN to completion using raw commands (cursor + MATCH + COUNT + TYPE)
 /// through the typed owned-send escape hatch, collecting every returned key.
+// TODO #7082: the typed `scan`/`scan_match` iterators expose only MATCH; add
+// COUNT/TYPE support (as the other GLIDE clients have) so this can use them.
 async fn scan_all<C>(
     c: &C,
     pattern: Option<&str>,
@@ -24,7 +26,7 @@ where
     let mut cursor: u64 = 0;
     let mut seen = HashSet::new();
     loop {
-        let mut cmd = redis::cmd("SCAN");
+        let mut cmd = glide::cmd("SCAN");
         cmd.arg(cursor);
         if let Some(p) = pattern {
             cmd.arg("MATCH").arg(p);
