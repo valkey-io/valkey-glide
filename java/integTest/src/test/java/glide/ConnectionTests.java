@@ -607,6 +607,37 @@ public class ConnectionTests {
                         new RequestRoutingConfiguration.SlotIdRoute(12182, REPLICA))
                 .get();
 
+        // Read the AZs back, so a fixture that failed to apply is distinguishable from a routing
+        // regression - both would otherwise surface as "0 nodes handled the GET calls".
+        // The primary is addressable deterministically; a REPLICA slot route is not (it may pick a
+        // different replica than the one just tagged), so the replica is confirmed by counting how
+        // many nodes cluster-wide report the AZ.
+        ClusterValue<Map<String, String>> primaryAzResult =
+                configSetClient
+                        .configGet(
+                                new String[] {"availability-zone"},
+                                new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
+                        .get();
+        assertEquals(
+                az,
+                primaryAzResult.getSingleValue().get("availability-zone"),
+                "Primary for slot 12182 is not in the expected AZ " + az);
+
+        ClusterValue<Map<String, String>> allAzResult =
+                configSetClient.configGet(new String[] {"availability-zone"}, ALL_NODES).get();
+        long nodesTaggedWithAz =
+                allAzResult.getMultiValue().values().stream()
+                        .filter(nodeConfig -> az.equals(nodeConfig.get("availability-zone")))
+                        .count();
+        assertEquals(
+                nodesInSameAz,
+                nodesTaggedWithAz,
+                "Expected exactly "
+                        + nodesInSameAz
+                        + " nodes (one primary + one replica) in AZ "
+                        + az
+                        + " after fixture setup");
+
         configSetClient.close();
 
         // Create test client AFTER configuration so it picks up the AZs on connect

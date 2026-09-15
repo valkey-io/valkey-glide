@@ -33,19 +33,19 @@ public enum ReadFrom {
      * possible. Unlike {@link #ALL_NODES}, which is AZ-agnostic, this strategy is scoped to the
      * client's AZ.
      *
+     * <p>Choose this over {@link #AZ_AFFINITY_REPLICAS_AND_PRIMARY} when the in-AZ primary should
+     * take a share of the reads. That strategy sends every read to an in-AZ replica whenever one is
+     * connected, so the primary serves reads only as a fallback.
+     *
      * <p>Requires {@code clientAZ} to be set on the client configuration.
      */
     AZ_AFFINITY_ALL_NODES;
 
-    /**
-     * Whether this strategy needs {@code clientAZ} to be set on the client configuration to route
-     * reads as described.
-     *
-     * <p>A new AZ-scoped strategy must be added here as well as to the enum, or it will not be
-     * validated. {@code ConnectionManagerTest.requiresClientAz_isSetForExactlyTheAzStrategies} pins
-     * the expected answer for every constant to catch that omission.
-     */
+    /** Whether this strategy needs {@code clientAZ} set on the client configuration. */
     public boolean requiresClientAz() {
+        // A new AZ-scoped strategy has to be listed here too.
+        // ConnectionManagerTest.requiresClientAz_isSetForExactlyTheAzStrategies fails until every
+        // constant has an explicit answer.
         return this == AZ_AFFINITY
                 || this == AZ_AFFINITY_REPLICAS_AND_PRIMARY
                 || this == AZ_AFFINITY_ALL_NODES;

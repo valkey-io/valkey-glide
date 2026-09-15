@@ -737,10 +737,13 @@ public class ConnectionManager {
      * <p>Note that within this class the unqualified name {@code ReadFrom} refers to the protobuf
      * enum, hence the fully-qualified parameter type.
      *
-     * @throws IllegalArgumentException if the strategy has no protobuf mapping. This makes a newly
-     *     added strategy fail loudly rather than silently defaulting to {@code Primary}.
+     * @throws ConfigurationError if the strategy has no protobuf mapping. This makes a newly added
+     *     strategy fail loudly rather than silently defaulting to {@code Primary}. A {@code
+     *     GlideException} subtype is required here: this runs inside {@code connectToValkey}'s async
+     *     body, whose handler rethrows {@code GlideException} unchanged but relabels anything else as
+     *     a {@code ClosingException}, which would report a config mistake as a connection failure.
      */
-    static ReadFrom mapReadFrom(glide.api.models.configuration.ReadFrom readFrom) {
+    public static ReadFrom mapReadFrom(glide.api.models.configuration.ReadFrom readFrom) {
         switch (readFrom) {
             case PRIMARY:
                 return ReadFrom.Primary;
@@ -755,11 +758,11 @@ public class ConnectionManager {
             case AZ_AFFINITY_ALL_NODES:
                 return ReadFrom.AZAffinityAllNodes;
         }
-        throw new IllegalArgumentException("Unsupported ReadFrom strategy: " + readFrom);
+        throw new ConfigurationError("Unsupported ReadFrom strategy: " + readFrom);
     }
 
     /**
-     * Rejects an AZ-affinity read strategy that has no {@code clientAZ} to affinitize to.
+     * Rejects an AZ-affinity read strategy that has no {@code clientAZ} to target.
      *
      * <p>Without this check the core silently downgrades the strategy to {@code PreferReplica}, so
      * reads would land on arbitrary nodes while the configuration suggested otherwise.

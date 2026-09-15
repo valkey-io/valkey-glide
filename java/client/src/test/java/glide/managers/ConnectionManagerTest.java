@@ -10,6 +10,8 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ConfigurationError;
+import glide.api.models.pool.ClientPool;
+import glide.api.models.pool.ClientPoolConfig;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -149,6 +151,22 @@ public class ConnectionManagerTest {
     @MethodSource("nonAzStrategies")
     void validateClientAz_ignoresNonAzStrategies(ReadFrom readFrom) {
         assertDoesNotThrow(() -> ConnectionManager.validateClientAz(config(readFrom, null)));
+    }
+
+    @Test
+    void clientPoolCreate_throwsConfigurationErrorWhenAzStrategyHasNoClientAz() {
+        // ClientPool.create validates before its connectivity probe, so a static-config mistake
+        // surfaces as ConfigurationError naming the real reason. Without that ordering the throw lands
+        // in the probe's catch (Exception) and is relabelled "Pool connectivity probe failed".
+        ClientPoolConfig poolConfig =
+                ClientPoolConfig.builder()
+                        .clientConfig(
+                                GlideClientConfiguration.builder().readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES).build())
+                        .build();
+
+        ConfigurationError error =
+                assertThrows(ConfigurationError.class, () -> ClientPool.create(poolConfig));
+        assertTrue(error.getMessage().contains("clientAZ must be set"));
     }
 
     /**
