@@ -58,7 +58,7 @@ futures = { version = "0.3", optional = true }
 
 # Only needed for cluster
 crc16 = { version = "0.4", optional = true }
-rand = { version = "0.9", optional = true }
+rand = { version = "0.10", optional = true }
 
 # Only needed for async cluster
 dashmap = { version = "~6.2.1", optional = true }
@@ -123,7 +123,7 @@ sentinel = ["rand"]
 async-trait = "0.1"
 bytes = "1.9"
 tokio-util = { version = "0.7", features = ["codec"] }
-rand = "0.9"
+rand = "0.10"
 socket2 = "0.6"
 fnv = "1"
 futures = "0.3"
