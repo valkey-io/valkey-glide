@@ -4,13 +4,13 @@ package glide.pool;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.exceptions.RequestException;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
 import glide.api.models.pool.PooledGlideClient;
@@ -144,9 +144,17 @@ public class PooledClientScopeIntegrationTest {
         }
 
         assertNotNull(failure, "a scope must stop executing once its parent pool is closed");
-        assertInstanceOf(
-                IllegalStateException.class,
-                failure,
+        // The parent teardown races the scope command: if the scope registry entry is swept before
+        // resolve_scope_parent runs, the synchronous jni path returns -1 -> IllegalStateException;
+        // if the parent is still resolvable and the sweep lands during the runtime.spawn hop,
+        // execute_scope_command's own registry lookup fails -> RequestException("Invalid scope_id").
+        // Both prove the scope stopped executing with no post-close write; only the error shape
+        // differs. Collapsing them into one deterministic exception is tracked as a follow-up.
+        assertTrue(
+                failure instanceof IllegalStateException
+                        || (failure instanceof RequestException
+                                && failure.getMessage() != null
+                                && failure.getMessage().contains("Invalid scope_id")),
                 "an invalidated scope should fail with an invalid-scope error, not hang or fail"
                         + " otherwise; got: "
                         + failure);
