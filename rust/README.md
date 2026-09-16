@@ -190,15 +190,13 @@ let config = GlideClientConfiguration::from_url("redis://user:pass@localhost:637
 client.set::<_, _, ()>("key", 42).await?;
 let value: i64 = client.get("key").await?;
 
-// Pipelines and transactions (zero extra payload copies):
-// TODO #7024: Pipeline replies currently decode through the fork's result type; unwrap here so this example keeps a single `ValkeyResult` return.
+// Pipelines and transactions:
 let (a, b): (i64, i64) = pipe()
     .atomic()
     .incr("counter", 1)
     .incr("counter", 1)
     .query_async(&client)
-    .await
-    .unwrap();
+    .await?;
 
 // Lua scripts with EVALSHA caching:
 let script = Script::new("return tonumber(ARGV[1]) + 1");
