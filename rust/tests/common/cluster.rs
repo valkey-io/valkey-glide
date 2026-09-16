@@ -215,6 +215,9 @@ impl ClusterHarness {
 
     /// Connect a mutual-TLS client.
     pub async fn client_with_mtls(&self) -> GlideClusterClient {
+        // TODO #7103: this presents the server certificate/key as the client
+        // identity, which passes only because the cert has no extendedKeyUsage.
+        // Switch to a dedicated CA-signed client certificate.
         let config = self
             .config_with_tls()
             .client_identity(server_cert_pem(), server_key_pem());

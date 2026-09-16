@@ -32,6 +32,8 @@ timed_tokio_test!(
     }
 );
 
+// TODO #7103: client_with_mtls presents the server cert/key as the client
+// identity; switch to a dedicated CA-signed client certificate.
 timed_tokio_test!(
     async fn mtls_cluster() {
         let server = ClusterHarness::start_tls_mtls();
