@@ -116,36 +116,6 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     }
 }
 
-/// Multi-slot MGET has one legal command per slot. Routing it through the pipeline executor
-/// batches those commands per physical node while preserving the existing slot split and response
-/// aggregation behavior.
-///
-/// Adding the command to a pipeline clones it once before the existing slot split. Bound that
-/// extra copy so small MGETs and unusually large aggregate key payloads keep the lower-copy
-/// direct path.
-///
-/// These are benchmark-selected crossover points, not protocol or routing limits: the pipeline
-/// path starts above 25 keys and avoids cloning more than 16 KiB of aggregate key data. Recalibrate
-/// them only with the loopback MGET benchmark.
-const MGET_PIPELINE_MIN_KEY_COUNT: usize = 26;
-const MGET_PIPELINE_MAX_KEY_BYTES: usize = 16 * 1024;
-
-fn mget_keys_fit_pipeline_path(cmd: &Cmd) -> bool {
-    let mut key_count = 0;
-    let key_bytes = cmd.args_iter().skip(1).try_fold(0usize, |total, arg| {
-        key_count += 1;
-        let arg_len = match arg {
-            redis::Arg::Simple(bytes) => bytes.len(),
-            redis::Arg::Cursor => 0,
-        };
-        total
-            .checked_add(arg_len)
-            .filter(|total| *total <= MGET_PIPELINE_MAX_KEY_BYTES)
-    });
-
-    key_count >= MGET_PIPELINE_MIN_KEY_COUNT && key_bytes.is_some()
-}
-
 fn should_route_multislot_mget_as_pipeline(
     cmd: &Cmd,
     routing: &RoutingInfo,
@@ -162,7 +132,6 @@ fn should_route_multislot_mget_as_pipeline(
                 Some(ResponsePolicy::CombineArrays)
             ))
         )
-        && mget_keys_fit_pipeline_path(cmd)
 }
 
 /// Pipeline retry handling does not yet refresh slots for READONLY. Fall back to the direct
@@ -186,6 +155,8 @@ fn extract_multislot_mget_pipeline_response(value: Value) -> RedisResult<Option<
 trait ClusterCommandRouter {
     async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value>;
 
+    fn multislot_routes_share_primary_connection(&self, routing: &RoutingInfo) -> bool;
+
     async fn route_pipeline(
         &mut self,
         pipeline: &redis::Pipeline,
@@ -200,6 +171,14 @@ trait ClusterCommandRouter {
 impl ClusterCommandRouter for ClusterConnection {
     async fn route_command(&mut self, cmd: &Cmd, routing: RoutingInfo) -> RedisResult<Value> {
         self.route_command(cmd, routing).await
+    }
+
+    fn multislot_routes_share_primary_connection(&self, routing: &RoutingInfo) -> bool {
+        let RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _)) = routing
+        else {
+            return false;
+        };
+        self.routes_share_primary_connection(routes.iter().map(|(route, _)| route))
     }
 
     async fn route_pipeline(
@@ -228,9 +207,10 @@ async fn execute_cluster_command_owned(
             &final_routing,
             has_explicit_routing,
         )
+        && client.multislot_routes_share_primary_connection(&final_routing)
     {
         let mut pipeline = redis::Pipeline::with_capacity(1);
-        pipeline.add_command(cmd.as_ref().clone());
+        pipeline.add_shared_command(Arc::clone(cmd));
         let mut values = client
             .route_pipeline(
                 &pipeline,
@@ -3323,20 +3303,21 @@ mod tests {
 
     use super::{
         Client, ClientWrapper, ClusterCommandRouter, ConnectionError, ErrorKind, LazyClient,
-        MGET_PIPELINE_MAX_KEY_BYTES, MGET_PIPELINE_MIN_KEY_COUNT, MultipleNodeRoutingInfo,
-        ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo, execute_cluster_command_owned,
-        extract_multislot_mget_pipeline_response, get_timeout_from_cmd_arg,
-        should_route_multislot_mget_as_pipeline, validate_effective_lib_name,
-        validate_effective_lib_ver,
+        MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo,
+        execute_cluster_command_owned, extract_multislot_mget_pipeline_response,
+        get_timeout_from_cmd_arg, should_route_multislot_mget_as_pipeline,
+        validate_effective_lib_name, validate_effective_lib_ver,
     };
     use std::sync::Weak;
+
+    const MULTISLOT_MGET_TEST_KEY_COUNT: usize = 3;
 
     #[test]
     fn multi_slot_mget_pipeline_path_requires_implicit_combine_arrays_routing() {
         use redis::cluster_routing::MultiSlotArgPattern;
 
         let mut mget = redis::cmd("MGET");
-        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+        for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
             mget.arg(format!("key-{key_index}"));
         }
         let routing = RoutingInfo::MultiNode((
@@ -3355,43 +3336,6 @@ mod tests {
         get.arg("key-1");
         assert!(!should_route_multislot_mget_as_pipeline(
             &get, &routing, false
-        ));
-
-        let mut too_few_keys = redis::cmd("MGET");
-        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
-            too_few_keys.arg(format!("key-{key_index}"));
-        }
-        assert!(!should_route_multislot_mget_as_pipeline(
-            &too_few_keys,
-            &routing,
-            false
-        ));
-
-        let mut boundary = redis::cmd("MGET");
-        for _ in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
-            boundary.arg("k");
-        }
-        boundary.arg(vec![
-            b'k';
-            MGET_PIPELINE_MAX_KEY_BYTES
-                - (MGET_PIPELINE_MIN_KEY_COUNT - 1)
-        ]);
-        assert!(should_route_multislot_mget_as_pipeline(
-            &boundary, &routing, false
-        ));
-
-        let mut oversized = redis::cmd("MGET");
-        for _ in 0..MGET_PIPELINE_MIN_KEY_COUNT - 1 {
-            oversized.arg("k");
-        }
-        oversized.arg(vec![
-            b'k';
-            MGET_PIPELINE_MAX_KEY_BYTES
-                - (MGET_PIPELINE_MIN_KEY_COUNT - 1)
-                + 1
-        ]);
-        assert!(!should_route_multislot_mget_as_pipeline(
-            &oversized, &routing, false
         ));
     }
 
@@ -3423,6 +3367,7 @@ mod tests {
         calls: Vec<MockClusterCall>,
         pipeline_values: Vec<Value>,
         command_value: Value,
+        routes_share_primary_connection: bool,
     }
 
     #[async_trait::async_trait]
@@ -3431,6 +3376,10 @@ mod tests {
             self.calls
                 .push(MockClusterCall::Command(cmd.get_packed_command(), routing));
             Ok(self.command_value.clone())
+        }
+
+        fn multislot_routes_share_primary_connection(&self, _: &RoutingInfo) -> bool {
+            self.routes_share_primary_connection
         }
 
         async fn route_pipeline(
@@ -3462,7 +3411,7 @@ mod tests {
     #[tokio::test]
     async fn eligible_multislot_mget_pipeline_retries_readonly_via_direct_route() {
         let mut mget = redis::cmd("MGET");
-        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+        for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
             mget.arg(format!("key-{key_index}"));
         }
         let routing = RoutingInfo::for_routable(&mget)
@@ -3477,7 +3426,8 @@ mod tests {
             pipeline_values: vec![
                 parse_redis_value(b"-READONLY replica is read-only\r\n").unwrap(),
             ],
-            command_value: Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]),
+            command_value: Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT]),
+            routes_share_primary_connection: true,
         };
 
         let result =
@@ -3487,7 +3437,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT])
+            Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT])
         );
         assert_eq!(client.calls.len(), 2);
         assert!(matches!(
@@ -3504,7 +3454,7 @@ mod tests {
     #[tokio::test]
     async fn eligible_multislot_mget_with_cache_uses_direct_route() {
         let mut mget = redis::cmd("MGET");
-        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+        for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
             mget.arg(format!("key-{key_index}"));
         }
         let routing = RoutingInfo::for_routable(&mget)
@@ -3514,7 +3464,8 @@ mod tests {
         let mut client = PipelineMockCluster {
             calls: Vec::new(),
             pipeline_values: Vec::new(),
-            command_value: Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT]),
+            command_value: Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT]),
+            routes_share_primary_connection: false,
         };
 
         let result =
@@ -3524,7 +3475,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Value::Array(vec![Value::Nil; MGET_PIPELINE_MIN_KEY_COUNT])
+            Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT])
         );
         assert_eq!(client.calls.len(), 1);
         assert!(matches!(
@@ -3535,9 +3486,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn multislot_mget_with_multiple_primary_connections_uses_direct_route() {
+        let mut mget = redis::cmd("MGET");
+        for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
+            mget.arg(format!("key-{key_index}"));
+        }
+        let routing = RoutingInfo::for_routable(&mget)
+            .expect("MGET keys must produce multi-slot routing information");
+        assert!(should_route_multislot_mget_as_pipeline(
+            &mget, &routing, false
+        ));
+        let expected_command = mget.get_packed_command();
+        let expected_routing = routing.clone();
+        let mut client = PipelineMockCluster {
+            calls: Vec::new(),
+            pipeline_values: Vec::new(),
+            command_value: Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT]),
+            routes_share_primary_connection: false,
+        };
+
+        let result =
+            execute_cluster_command_owned(&mut client, &Arc::new(mget), routing, false, false)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            result,
+            Value::Array(vec![Value::Nil; MULTISLOT_MGET_TEST_KEY_COUNT])
+        );
+        assert!(matches!(
+            client.calls.as_slice(),
+            [MockClusterCall::Command(command, routing)]
+                if command == &expected_command && routing == &expected_routing
+        ));
+    }
+
+    #[tokio::test]
     async fn eligible_multislot_mget_pipeline_returns_single_value_unchanged() {
         let mut mget = redis::cmd("MGET");
-        for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+        for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
             mget.arg(format!("key-{key_index}"));
         }
         let routing = RoutingInfo::for_routable(&mget)
@@ -3551,6 +3538,7 @@ mod tests {
             calls: Vec::new(),
             pipeline_values: vec![expected_value.clone()],
             command_value: Value::Nil,
+            routes_share_primary_connection: true,
         };
 
         let result =
@@ -3569,7 +3557,7 @@ mod tests {
     async fn eligible_multislot_mget_pipeline_rejects_unexpected_response_counts() {
         for pipeline_values in [Vec::new(), vec![Value::Nil, Value::Nil]] {
             let mut mget = redis::cmd("MGET");
-            for key_index in 0..MGET_PIPELINE_MIN_KEY_COUNT {
+            for key_index in 0..MULTISLOT_MGET_TEST_KEY_COUNT {
                 mget.arg(format!("key-{key_index}"));
             }
             let routing = RoutingInfo::for_routable(&mget)
@@ -3578,6 +3566,7 @@ mod tests {
                 calls: Vec::new(),
                 pipeline_values,
                 command_value: Value::Nil,
+                routes_share_primary_connection: true,
             };
 
             let error =
