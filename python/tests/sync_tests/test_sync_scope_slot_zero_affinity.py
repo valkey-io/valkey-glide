@@ -16,6 +16,16 @@ CLUSTER_SLOT_COUNT = 16_384
 MAX_OTHER_PRIMARY_CANDIDATES = 512
 
 
+def _skip_cluster_if_unavailable():
+    """Skip test if no cluster endpoints are configured."""
+    try:
+        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        if cluster is None or len(cluster.nodes_addr) == 0:
+            pytest.skip("No cluster endpoints available")
+    except AttributeError:
+        pytest.skip("No cluster endpoints available (pytest.valkey_cluster not set)")
+
+
 def _slot_for_tag(tag: str) -> int:
     """Compute the cluster slot for a hash tag."""
     return binascii.crc_hqx(tag.encode(), 0) % CLUSTER_SLOT_COUNT
@@ -49,6 +59,11 @@ def _keys_on_slot_zero_and_another_primary(
 @pytest.mark.parametrize("slot_zero_first", [True, False])
 def test_sync_scope_slot_zero_affinity_cluster(slot_zero_first):
     """Slot zero never reuses a scope targeting another cluster primary."""
+    # get_cluster_addresses() falls back to localhost:7000, so without this guard a
+    # standalone-only run fails on a refused connection instead of skipping. The
+    # collection hook cannot rescue it: this test parameterizes on slot_zero_first
+    # rather than cluster_mode.
+    _skip_cluster_if_unavailable()
     addresses = get_cluster_addresses()
 
     client = GlideClusterClient.create(
