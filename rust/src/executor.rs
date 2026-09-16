@@ -12,7 +12,6 @@ use crate::cmd::Cmd;
 use crate::routes::Route;
 use crate::value::{ToValkeyArgs, ValkeyValue};
 use async_trait::async_trait;
-use redis::cluster_routing::RoutingInfo;
 
 /// The low-level command execution interface.
 ///
@@ -21,12 +20,8 @@ use redis::cluster_routing::RoutingInfo;
 #[async_trait]
 pub trait CommandExecutor: Send + Sync {
     /// Execute `cmd`, optionally routed to a specific node/set of nodes (cluster).
-    /// Standalone implementations ignore `routing`.
-    async fn execute_command(
-        &self,
-        cmd: Cmd,
-        routing: Option<RoutingInfo>,
-    ) -> ValkeyResult<ValkeyValue>;
+    /// Standalone implementations ignore `route`.
+    async fn execute_command(&self, cmd: Cmd, route: Option<Route>) -> ValkeyResult<ValkeyValue>;
 }
 
 /// Convenience helpers layered on top of [`CommandExecutor`], available on every
@@ -63,8 +58,7 @@ pub trait CustomCommand: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(cmd.as_redis()));
-        self.execute_command(cmd, Some(routing)).await
+        self.execute_command(cmd, Some(route)).await
     }
 }
 

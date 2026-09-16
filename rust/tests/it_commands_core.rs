@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, PipelineExt, ValkeyResult, pipe};
+use glide::{AsyncCommands, PipelineExt, ValkeyResult, cmd, pipe};
 use std::collections::{HashMap, HashSet};
 
 // ---- typed AsyncCommands methods -----------------------------------------------
@@ -36,6 +36,14 @@ matrix_test!(incr_decr_typed, c, {
     assert_eq!(v, 5);
     let v: i64 = c.decr(&k, 2).await.unwrap();
     assert_eq!(v, 3);
+});
+
+matrix_test!(cmd_query_async, c, {
+    let c = c;
+    let k = common::key("cmd_query_async");
+    let _: () = cmd("SET").arg(&k).arg(7).query_async(&c).await.unwrap();
+    let v: i64 = cmd("GET").arg(&k).query_async(&c).await.unwrap();
+    assert_eq!(v, 7);
 });
 
 matrix_test!(migrated_method_names_work, c, {

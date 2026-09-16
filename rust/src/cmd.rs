@@ -3,7 +3,12 @@
 //!
 //! [`Cmd`] represents a command keyword and arguments.
 
-use crate::value::ToValkeyArgs;
+use crate::ValkeyFuture;
+use crate::commands::core::AsyncCommands;
+use crate::value::{FromValkeyValue, ToValkeyArgs};
+
+#[cfg(feature = "sync")]
+use crate::{ValkeyResult, commands::core::Commands};
 
 /// Create a new command with the given keyword.
 ///
@@ -77,6 +82,41 @@ impl Cmd {
                 redis::Arg::Cursor => None,
             })
             .collect()
+    }
+
+    /// Execute this command on an async GLIDE client.
+    ///
+    /// ```no_run
+    /// use glide::cmd;
+    /// # async fn demo(client: &glide::GlideClient) -> glide::ValkeyResult<()> {
+    /// let v: i64 = cmd("GET").arg("k").query_async(client).await?;
+    /// # let _ = v; Ok(()) }
+    /// ```
+    ///
+    /// Mirrors `redis-rs`'s `query_async`.
+    #[inline]
+    pub fn query_async<'a, C: AsyncCommands, RV: FromValkeyValue>(
+        &self,
+        con: &'a C,
+    ) -> ValkeyFuture<'a, RV> {
+        con.glide_send(self.clone())
+    }
+
+    /// Execute this command on a blocking GLIDE client.
+    ///
+    /// ```no_run
+    /// use glide::cmd;
+    /// use glide::sync::SyncGlideClient;
+    /// # fn demo(client: &SyncGlideClient) -> glide::ValkeyResult<()> {
+    /// let v: i64 = cmd("GET").arg("k").query(client)?;
+    /// # let _ = v; Ok(()) }
+    /// ```
+    ///
+    /// Mirrors `redis-rs`'s `query`.
+    #[cfg(feature = "sync")]
+    #[inline]
+    pub fn query<C: Commands, RV: FromValkeyValue>(&self, con: &C) -> ValkeyResult<RV> {
+        con.glide_send_sync(self.clone())
     }
 
     /// Borrow the underlying `redis::Cmd`.

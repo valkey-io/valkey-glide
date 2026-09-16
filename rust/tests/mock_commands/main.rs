@@ -15,13 +15,13 @@
 
 use async_trait::async_trait;
 use glide::Cmd;
+use glide::Route;
 use glide::executor::CommandExecutor;
 use glide::{ValkeyResult, ValkeyValue};
-use redis::cluster_routing::RoutingInfo;
 use std::sync::Mutex;
 
-/// A captured command: the raw argument tokens plus the routing it was sent with.
-type CapturedCommand = (Vec<Vec<u8>>, Option<RoutingInfo>);
+/// A captured command: the raw argument tokens plus the route it was sent with.
+type CapturedCommand = (Vec<Vec<u8>>, Option<Route>);
 
 /// A deterministic, server-free `CommandExecutor` used by the family tests.
 pub(crate) struct Mock {
@@ -83,8 +83,8 @@ impl Mock {
         assert_eq!(got, exp, "command encoding mismatch");
     }
 
-    /// The routing the executor was handed (cluster paths). Consumes it.
-    pub(crate) fn routing(&self) -> Option<RoutingInfo> {
+    /// The route the executor was handed (cluster paths). Consumes it.
+    pub(crate) fn routing(&self) -> Option<Route> {
         self.captured
             .lock()
             .unwrap()
@@ -97,13 +97,9 @@ impl Mock {
 
 #[async_trait]
 impl CommandExecutor for Mock {
-    async fn execute_command(
-        &self,
-        cmd: Cmd,
-        routing: Option<RoutingInfo>,
-    ) -> ValkeyResult<ValkeyValue> {
+    async fn execute_command(&self, cmd: Cmd, route: Option<Route>) -> ValkeyResult<ValkeyValue> {
         let args: Vec<Vec<u8>> = cmd.args().into_iter().map(|s| s.to_vec()).collect();
-        *self.captured.lock().unwrap() = Some((args, routing));
+        *self.captured.lock().unwrap() = Some((args, route));
         Ok(self.response.lock().unwrap().clone())
     }
 }

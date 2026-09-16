@@ -301,8 +301,9 @@ impl CommandExecutor for GlideClient {
     async fn execute_command(
         &self,
         mut cmd: Cmd,
-        routing: Option<RoutingInfo>,
+        route: Option<Route>,
     ) -> ValkeyResult<ValkeyValue> {
+        let routing = route.map(|r| r.to_routing_info(Some(cmd.as_redis())));
         // `Client` is Clone (Arc inside) and `send_command` needs `&mut self`,
         // so we operate on a cheap clone — exactly what every wrapper does.
         let mut client = self.inner.clone();
@@ -466,8 +467,9 @@ impl CommandExecutor for GlideClusterClient {
     async fn execute_command(
         &self,
         mut cmd: Cmd,
-        routing: Option<RoutingInfo>,
+        route: Option<Route>,
     ) -> ValkeyResult<ValkeyValue> {
+        let routing = route.map(|r| r.to_routing_info(Some(cmd.as_redis())));
         let mut client = self.inner.clone();
         let value = client
             .send_command(cmd.as_redis_mut(), routing)
