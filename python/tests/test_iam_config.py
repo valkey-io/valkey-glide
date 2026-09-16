@@ -332,8 +332,8 @@ class TestGlideCredentialProvider:
 
     def test_none_provider_returns_null_callback(self):
         """No provider results in a NULL CFFI callback."""
-        from glide_shared.ffi_helpers import create_credential_provider_callback
         from glide_shared._glide_ffi import GlideFFI
+        from glide_shared.ffi_helpers import create_credential_provider_callback
 
         ffi = GlideFFI.ffi
         callback = create_credential_provider_callback(ffi, None)
