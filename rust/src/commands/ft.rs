@@ -5,7 +5,7 @@
 //! and `FT.PROFILE` have a very large option surface; these methods accept the
 //! trailing arguments as a raw slice so the full command grammar is expressible
 //! while keeping a typed entry point per command. Replies are returned as the raw
-//! structured [`ValkeyValue`](crate::value::ValkeyValue).
+//! structured [`ValkeyValue`].
 
 use crate::ValkeyResult;
 use crate::cmd::Cmd;
