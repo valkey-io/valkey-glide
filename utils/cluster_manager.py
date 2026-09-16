@@ -1331,40 +1331,54 @@ def main():
             else args.logfile
         )
         init_logger(logfile)
-        servers = create_servers(
-            args.host,
-            args.shard_count,
-            args.replica_count,
-            args.ports,
-            cluster_folder,
-            args.tls,
-            args.cluster_mode,
-            args.load_module,
-            False,
-            getattr(args, 'tls_cert_file', None),
-            getattr(args, 'tls_key_file', None),
-            getattr(args, 'tls_ca_cert_file', None),
-            getattr(args, 'tls_auth_clients', False),
-        )
-        if args.cluster_mode:
-            # Create a cluster
-            create_cluster(
-                servers,
+        try:
+            servers = create_servers(
+                args.host,
                 args.shard_count,
                 args.replica_count,
+                args.ports,
                 cluster_folder,
                 args.tls,
+                args.cluster_mode,
+                args.load_module,
+                False,
                 getattr(args, 'tls_cert_file', None),
                 getattr(args, 'tls_key_file', None),
                 getattr(args, 'tls_ca_cert_file', None),
+                getattr(args, 'tls_auth_clients', False),
             )
-        elif args.replica_count > 0:
-            # Create a standalone replication group
-            create_standalone_replication(
-                servers,
+            if args.cluster_mode:
+                # Create a cluster
+                create_cluster(
+                    servers,
+                    args.shard_count,
+                    args.replica_count,
+                    cluster_folder,
+                    args.tls,
+                    getattr(args, 'tls_cert_file', None),
+                    getattr(args, 'tls_key_file', None),
+                    getattr(args, 'tls_ca_cert_file', None),
+                )
+            elif args.replica_count > 0:
+                # Create a standalone replication group
+                create_standalone_replication(
+                    servers,
+                    cluster_folder,
+                    args.tls,
+                )
+        except BaseException:
+            # Cleanup on failure.
+            stop_cluster(
+                args.host,
                 cluster_folder,
                 args.tls,
+                args.auth,
+                args.logfile,
+                keep_folder=True,
             )
+            logging.exception("Cluster creation failed.")
+            raise
+
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
         logging.info(
