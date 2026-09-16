@@ -43,6 +43,7 @@
 * Go: Convert FFI string payloads with `GoStringN` (one copy, interior NULs preserved) instead of `GoBytes`+`string` in GET/MGET response parsing, pubsub callbacks, MONITOR client/command strings, and script hashes ([#6751](https://github.com/valkey-io/valkey-glide/issues/6751))
 * Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * feat(go): add AzAffinityAllNodes read strategy ([#6927](https://github.com/valkey-io/valkey-glide/pull/6927))
+* Java: Add `AZ_AFFINITY_ALL_NODES` read strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
@@ -56,6 +57,10 @@
 * Go: add mTLS client certificates with automatic reloading ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
 * Node: add mTLS client certificate/key support with automatic certificate reloading ([#6383](https://github.com/valkey-io/valkey-glide/pull/6383))
 * Python: add automatic mTLS client certificate/key reload ([#6596](https://github.com/valkey-io/valkey-glide/pull/6596))
+
+### Breaking Changes
+
+* Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 
 ## 2.5
 
