@@ -1,7 +1,19 @@
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
+
 plugins {
     id 'java-library'
     id "com.google.osdetector" version "1.7.3"
 }
+
+// Gradle 9 removed Project.exec(); ExecOperations is the replacement and must be
+// obtained via dependency injection.
+abstract class IntegTestExecOpsHolder {
+    @Inject
+    abstract ExecOperations getExecOperations()
+}
+
+def execOps = objects.newInstance(IntegTestExecOpsHolder).execOperations
 
 // Platform-specific Python executable
 project.ext.isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
@@ -77,12 +89,12 @@ ext {
 
 tasks.register('stopAllAfterTests') {
     doLast {
-        exec {
+        execOps.exec {
             workingDir "${project.rootDir}/../utils"
             commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'])
             ignoreExitValue true // ignore fail if servers are stopped before
         }
-        exec {
+        execOps.exec {
             workingDir "${project.rootDir}/../utils"
             commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'cluster', '--keep-folder'])
             ignoreExitValue true
@@ -95,12 +107,12 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
-        exec {
+        execOps.exec {
             workingDir "${project.rootDir}/../utils"
             commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'])
             ignoreExitValue true // ignore fail if servers are stopped before
         }
-        exec {
+        execOps.exec {
             workingDir "${project.rootDir}/../utils"
             commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'cluster'])
             ignoreExitValue true
@@ -117,7 +129,7 @@ tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
-                exec {
+                execOps.exec {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
@@ -141,7 +153,7 @@ tasks.register('startClusterForAz') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
-                exec {
+                execOps.exec {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
                     // Use different replica counts based on environment
@@ -168,7 +180,7 @@ tasks.register('startStandalone') {
     doLast {
         if (System.getProperty("standalone-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
-                exec {
+                execOps.exec {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
@@ -186,7 +198,7 @@ tasks.register('startStandalone') {
 tasks.register('startStandaloneTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
-            exec {
+            execOps.exec {
                 workingDir "${project.rootDir}/../utils"
                 commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'])
                 standardOutput = os
@@ -199,7 +211,7 @@ tasks.register('startStandaloneTls') {
 tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
-            exec {
+            execOps.exec {
                 workingDir "${project.rootDir}/../utils"
                 def args = ['python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode']
                 // Use no replicas for Windows to avoid replica sync issues in CI
@@ -237,7 +249,7 @@ gradle.buildFinished {
     
     // Find and kill all Valkey processes
     try {
-        exec {
+        execOps.exec {
             if (isWindowsRuntime) {
                 commandLine 'wsl', 'pkill', '-f', 'valkey-server'
             } else {
@@ -251,7 +263,7 @@ gradle.buildFinished {
     
     // Also try redis-server processes
     try {
-        exec {
+        execOps.exec {
             if (isWindowsRuntime) {
                 commandLine 'wsl', 'pkill', '-f', 'redis-server'
             } else {
@@ -265,7 +277,7 @@ gradle.buildFinished {
     
     // Clean up cluster folders
     try {
-        exec {
+        execOps.exec {
             workingDir "${project.rootDir}/../utils"
             def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder']
             if (isWindowsRuntime) {
