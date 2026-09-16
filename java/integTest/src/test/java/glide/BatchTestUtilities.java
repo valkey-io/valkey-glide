@@ -90,8 +90,16 @@ public class BatchTestUtilities {
      */
     public static String generateKey(String keySlot, boolean isAtomic) {
         if (isAtomic && keySlot != null && !keySlot.isEmpty()) {
-            // Use keySlot to force the same hash slot with a random suffix.
-            return "{" + keySlot + "}-" + generateRandomNumericSuffix();
+            // Use keySlot to force the same hash slot. Include a UUID segment (outside the hash
+            // tag, so it doesn't affect slot routing) in addition to the random numeric suffix to
+            // avoid flaky test collisions when multiple keys share the same hash tag (e.g. when a
+            // single test generates several same-slot keys for an atomic batch).
+            return "{"
+                    + keySlot
+                    + "}-"
+                    + UUID.randomUUID().toString().substring(0, 8)
+                    + "-"
+                    + generateRandomNumericSuffix();
         }
         // Generate a random key with UUID for better uniqueness to avoid flaky test collisions
         return keySlot
