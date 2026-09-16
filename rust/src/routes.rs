@@ -339,7 +339,7 @@ mod tests {
             async fn execute_command(
                 &self,
                 cmd: Cmd,
-                routing: Option<RoutingInfo>,
+                route: Option<Route>,
             ) -> crate::ValkeyResult<ValkeyValue> {
                 let args: Vec<Vec<u8>> = cmd
                     .as_redis()
@@ -350,7 +350,8 @@ mod tests {
                     })
                     .collect();
                 *self.last_args.lock().unwrap() = args;
-                *self.last_routing.lock().unwrap() = routing;
+                *self.last_routing.lock().unwrap() =
+                    route.map(|r| r.to_routing_info(Some(cmd.as_redis())));
                 Ok(ValkeyValue::Okay)
             }
         }

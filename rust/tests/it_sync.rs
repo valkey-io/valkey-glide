@@ -12,7 +12,7 @@ use glide::pipeline_options::PipelineOptions;
 use glide::sync::{SyncGlideClient, SyncGlideClusterClient};
 use glide::{
     CustomCommand, FromValkeyValue, GlideClientConfiguration, GlideClusterClientConfiguration,
-    Route,
+    Route, cmd,
 };
 // Bring the unified command traits into scope.
 use glide::Commands;
@@ -22,6 +22,15 @@ use glide::AsyncCommands;
 fn sync_client(port: u16) -> SyncGlideClient {
     SyncGlideClient::connect(GlideClientConfiguration::with_address("127.0.0.1", port))
         .expect("connect sync client")
+}
+#[test]
+fn sync_cmd_query() {
+    let srv = server_or_skip!();
+    let c = sync_client(srv.port);
+    let k = common::key("sync:cmd_query");
+    let _: () = cmd("SET").arg(&k).arg(9).query(&c).unwrap();
+    let v: i64 = cmd("GET").arg(&k).query(&c).unwrap();
+    assert_eq!(v, 9);
 }
 
 #[test]

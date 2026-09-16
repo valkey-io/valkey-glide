@@ -135,8 +135,7 @@ pub trait ScriptingCommands: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(cmd.as_redis()));
-        self.execute_command(cmd, Some(routing)).await
+        self.execute_command(cmd, Some(route)).await
     }
 
     /// Read-only `FCALL_RO` routed to specific cluster node(s) (`route`). On a
@@ -156,8 +155,7 @@ pub trait ScriptingCommands: CommandExecutor {
         for a in args {
             cmd.arg(a);
         }
-        let routing = route.to_routing_info(Some(cmd.as_redis()));
-        self.execute_command(cmd, Some(routing)).await
+        self.execute_command(cmd, Some(route)).await
     }
 
     /// Load a function library (`FUNCTION LOAD`); returns the library name.
