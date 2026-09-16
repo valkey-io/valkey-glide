@@ -121,6 +121,28 @@ public class ReadOnlyModeTests {
 
     @SneakyThrows
     @Test
+    public void test_read_only_rejects_az_affinity_all_nodes() {
+        // Test that read-only mode with AZAffinityAllNodes strategy fails during client creation.
+        // Note: The specific error message from the Rust core may not be propagated through
+        // the JNI layer, so we just verify that client creation fails.
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                GlideClient.createClient(
+                                                commonClientConfig()
+                                                        .readOnly(true)
+                                                        .readFrom(ReadFrom.AZ_AFFINITY_ALL_NODES)
+                                                        .clientAZ("us-east-1a")
+                                                        .build())
+                                        .get());
+
+        // Verify that an exception was thrown (client creation failed)
+        assertInstanceOf(ClosingException.class, exception.getCause());
+    }
+
+    @SneakyThrows
+    @Test
     public void test_read_only_accepts_prefer_replica() {
         // Test that read-only mode accepts PreferReplica strategy
         GlideClient client =
