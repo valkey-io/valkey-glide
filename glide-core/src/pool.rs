@@ -836,8 +836,6 @@ pub struct ScopePool {
     pub parent_client_id: u64,
     /// The database_id from the connection config (for reset on release).
     pub configured_database_id: u32,
-    /// Whether this pool belongs to a cluster client.
-    pub cluster_mode_enabled: bool,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -862,19 +860,23 @@ impl ScopePool {
         connection_request_bytes: Vec<u8>,
         parent_client_id: u64,
     ) -> Self {
-        // Parse topology and configured database from the existing request schema.
+        // Parse the configured database from the existing request schema; it is only
+        // a reset baseline on release, so an unparseable request falling back to 0
+        // costs a redundant SELECT rather than misrouting anything. Topology is not
+        // read here: scope targets come from the parent `Client` at acquire time
+        // (see `scope::try_resolve_scope_target`), keeping one source of truth.
         #[cfg(feature = "proto")]
-        let (configured_database_id, cluster_mode_enabled) = {
+        let configured_database_id = {
             use protobuf::Message as _;
             crate::connection_request::ConnectionRequest::parse_from_bytes(
                 &connection_request_bytes,
             )
             .ok()
-            .map(|req| (req.database_id, req.cluster_mode_enabled))
-            .unwrap_or((0, false))
+            .map(|req| req.database_id)
+            .unwrap_or(0)
         };
         #[cfg(not(feature = "proto"))]
-        let (configured_database_id, cluster_mode_enabled) = (0u32, false);
+        let configured_database_id = 0u32;
 
         Self {
             config,
@@ -885,21 +887,6 @@ impl ScopePool {
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
-            cluster_mode_enabled,
-        }
-    }
-
-    /// Normalize a resolved primary address into an explicit target.
-    ///
-    /// Standalone pools ignore the address (every routing slot maps to the one
-    /// configured server). Cluster pools require it and return `None` when the
-    /// owner of the requested slot could not be resolved, so the caller fails
-    /// closed instead of falling back to a seed node.
-    pub fn target_for_primary(&self, primary: Option<&str>) -> Option<ScopeTarget> {
-        if self.cluster_mode_enabled {
-            primary.map(ScopeTarget::cluster_primary)
-        } else {
-            Some(ScopeTarget::Standalone)
         }
     }
 
