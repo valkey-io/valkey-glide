@@ -723,6 +723,10 @@ pub fn try_acquire_scope(
                     });
                     -1
                 }
+                ScopeAcquire::CreationPending => {
+                    // Creation already in flight for this target; retry, don't spawn.
+                    -1
+                }
                 ScopeAcquire::Exhausted => -1,
             }
         }
@@ -1048,6 +1052,73 @@ mod tests {
             ErrorKind::WouldBlock,
             "{lib_name}"
         );
+    }
+
+    /// The defect's layer: `create_scope_connection` runs in a detached task and
+    /// can be cancelled mid-connect. Reserve through the real `try_acquire` (so the
+    /// guard also carries the pending marker), spawn creation against an endpoint
+    /// that accepts TCP but never completes the handshake — so the task parks —
+    /// then abort it. The guard's `Drop` must reclaim the slot AND clear the marker;
+    /// pre-guard code left both leaked because no give-back path ran on cancel.
+    #[tokio::test]
+    async fn cancelled_create_scope_connection_reclaims_slot_and_marker() {
+        // Accept-only listener: the client's TCP connect succeeds at the kernel,
+        // but the redis handshake never gets a response, so build_scope_connection
+        // parks on its connect/init await (well within SCOPE_CONNECT_TIMEOUT).
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let request_bytes = request_bytes("", port);
+
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            1,
+        )));
+        let registry = crate::pool::get_scope_registry();
+
+        let reservation = {
+            let mut guard = pool.lock().await;
+            match guard.try_acquire(registry, ScopeTarget::Standalone) {
+                ScopeAcquire::Reserved(r) => r,
+                other => panic!("expected a reservation, got {other:?}"),
+            }
+        };
+        assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 1);
+        assert!(
+            pool.lock()
+                .await
+                .pending
+                .lock()
+                .unwrap()
+                .contains(&ScopeTarget::Standalone)
+        );
+
+        let pool_clone = pool.clone();
+        let handle = tokio::spawn(async move {
+            create_scope_connection(
+                pool_clone,
+                None,
+                &request_bytes,
+                ScopeTarget::Standalone,
+                reservation,
+            )
+            .await;
+        });
+        tokio::task::yield_now().await;
+        handle.abort();
+        let _ = handle.await;
+
+        let pool = pool.lock().await;
+        assert_eq!(
+            pool.total_count.load(Ordering::Acquire),
+            0,
+            "a cancelled create must give the reserved slot back, not leak it"
+        );
+        assert!(
+            pool.pending.lock().unwrap().is_empty(),
+            "a cancelled create must clear its pending marker"
+        );
+        assert!(pool.idle.is_empty());
     }
 
     fn responsive_endpoint() -> (u16, Sender<()>, JoinHandle<()>) {
@@ -1647,6 +1718,74 @@ mod tests {
         shutdown_b.send(()).expect("stop mock server b");
         server_a.join().expect("mock server a exits cleanly");
         server_b.join().expect("mock server b exits cleanly");
+    }
+
+    /// A retry for an in-flight target must dedupe BEFORE the full-pool eviction:
+    /// it must return `CreationPending` and NOT destroy a healthy idle connection
+    /// to another primary for a slot it will never use. This is the churn a
+    /// dedupe-after-evict order would cause under the exact #6966 retry storm.
+    #[tokio::test]
+    async fn creation_pending_retry_does_not_evict_idle() {
+        let (port, shutdown, server) = responsive_endpoint();
+        let config = ScopePoolConfig {
+            max_total: 2,
+            ..ScopePoolConfig::default()
+        };
+        let pool = ScopePool::new(config, request_bytes("", port), 1);
+        // Pre-count the slot the seated idle connection occupies (reservation_for
+        // binds a for_test guard to the counter without incrementing it, matching
+        // full_pool_evicts).
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(TokioMutex::new(pool));
+
+        let registry = crate::pool::get_scope_registry();
+        let in_flight = ScopeTarget::cluster_primary(PRIMARY_A);
+
+        // Seat one real idle connection to a DIFFERENT primary.
+        let reservation_b = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes("", port),
+            ScopeTarget::Standalone,
+            reservation_b,
+        )
+        .await;
+
+        // Reserve the in-flight target (increments to 2, marks it pending, holds
+        // the slot as its creation task would). This fills the pool.
+        let held = {
+            let mut pool = pool.lock().await;
+            match pool.try_acquire(registry, in_flight.clone()) {
+                ScopeAcquire::Reserved(r) => r,
+                other => panic!("expected a reservation, got {other:?}"),
+            }
+        };
+        {
+            let mut pool = pool.lock().await;
+            assert_eq!(pool.idle.len(), 1);
+            pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 2, "pool is full");
+
+            // Retry the in-flight target: full pool + mismatched idle. A
+            // dedupe-after-evict order would evict the idle B connection here.
+            assert!(
+                matches!(
+                    pool.try_acquire(registry, in_flight),
+                    ScopeAcquire::CreationPending
+                ),
+                "retry for an in-flight target must be CreationPending"
+            );
+            assert_eq!(
+                pool.idle.len(),
+                1,
+                "a CreationPending retry must NOT evict the idle connection"
+            );
+        }
+
+        held.commit();
+        shutdown.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
     }
 
     /// Holding the pool lock reproduces the contention that made the old
