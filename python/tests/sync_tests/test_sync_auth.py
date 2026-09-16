@@ -740,3 +740,33 @@ class TestSyncAuthCommands:
         client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
         value = client.get("iam_auto_refresh_key")
         assert value == b"iam_auto_refresh_value"
+
+    def test_iam_sync_pool_rejects_credential_provider(self, request):
+        """Sync pool raises ValueError when IamAuthConfig.credential_provider is set."""
+        import os
+
+        from glide_shared.config import AwsCredentials
+        from glide_sync.client_pool import ClientPool, PoolConfig
+
+        from tests.utils.utils import create_sync_client_config
+
+        def provider():
+            return AwsCredentials(
+                access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "key"),
+                secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "secret"),
+            )
+
+        iam_config = IamAuthConfig(
+            cluster_name=IAM_TEST_CLUSTER_NAME,
+            service=ServiceType.ELASTICACHE,
+            region=IAM_TEST_REGION_US_EAST_1,
+            credential_provider=provider,
+        )
+        credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
+        client_config = create_sync_client_config(
+            request,
+            cluster_mode=False,
+            credentials=credentials,
+        )
+        with pytest.raises(ValueError, match="credential_provider"):
+            ClientPool(client_config, PoolConfig())
