@@ -18,12 +18,11 @@ mod standalone;
 
 pub use cluster::GlideClusterClientConfiguration;
 pub use common::{
-    BackoffStrategy, ClientIdentity, IamAuthConfig, NodeAddress, PeriodicChecks, ProtocolVersion,
-    PubSubChannelMode, PubSubSubscriptions, ReadFrom, ServerCredentials, ServiceType, TlsConfig,
+    BackoffStrategy, ClientIdentity, IamAuthConfig, NodeAddress, NodeDiscoveryMode, PeriodicChecks,
+    ProtocolVersion, PubSubChannelMode, PubSubSubscriptions, ReadFrom, ServerCredentials,
+    ServiceType, TlsConfig,
 };
 pub use standalone::GlideClientConfiguration;
-
-pub use glide_core::client::NodeDiscoveryMode; // TODO #7024: Extract/hide.
 
 #[cfg(test)]
 mod tests;

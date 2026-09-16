@@ -1,12 +1,17 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Configuration types shared by the standalone and cluster configurations.
 
-use glide_core::client::{
-    AuthenticationInfo, ConnectionRetryStrategy, IamAuthenticationConfig,
-    NodeAddress as CoreNodeAddress, PeriodicCheck, ReadFrom as CoreReadFrom, TlsMode,
-};
+use glide_core::client::AuthenticationInfo;
+use glide_core::client::ConnectionRetryStrategy;
+use glide_core::client::IamAuthenticationConfig;
+use glide_core::client::NodeAddress as CoreNodeAddress;
+use glide_core::client::NodeDiscoveryMode as CoreNodeDiscoveryMode;
+use glide_core::client::PeriodicCheck;
+use glide_core::client::ReadFrom as CoreReadFrom;
+use glide_core::client::TlsMode;
 use glide_core::iam::ServiceType as CoreServiceType;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 /// Library name reported to the server.
@@ -130,6 +135,31 @@ impl ReadFrom {
             }
             ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az.clone()),
             ReadFrom::AllNodes => CoreReadFrom::AllNodes,
+        }
+    }
+}
+
+/// Controls how the standalone client discovers node roles and topology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NodeDiscoveryMode {
+    /// Verify node roles via `INFO REPLICATION`, using only the provided addresses.
+    #[default]
+    Standard,
+
+    /// Skip role detection and trust the provided addresses as-is.
+    /// For proxies (e.g. Envoy) or known-static topologies.
+    Static,
+
+    /// Discover the full topology from any starting node.
+    DiscoverAll,
+}
+
+impl NodeDiscoveryMode {
+    pub(crate) fn to_core(self) -> CoreNodeDiscoveryMode {
+        match self {
+            NodeDiscoveryMode::Standard => CoreNodeDiscoveryMode::Standard,
+            NodeDiscoveryMode::Static => CoreNodeDiscoveryMode::Static,
+            NodeDiscoveryMode::DiscoverAll => CoreNodeDiscoveryMode::DiscoverAll,
         }
     }
 }
