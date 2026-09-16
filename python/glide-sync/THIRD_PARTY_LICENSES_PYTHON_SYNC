@@ -34036,7 +34036,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.44
+Package: rustls:0.23.45
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -40053,7 +40053,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: synstructure:0.13.2
+Package: synstructure:0.14.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -53204,7 +53204,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: yoke-derive:0.8.2
+Package: yoke-derive:0.8.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -53784,7 +53784,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerofrom-derive:0.1.7
+Package: zerofrom-derive:0.1.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -54165,7 +54165,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zlib-rs:0.6.7
+Package: zlib-rs:0.6.8
 
 The following copyrights and licenses were found in the source code of this package:
 
