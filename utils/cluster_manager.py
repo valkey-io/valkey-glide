@@ -27,7 +27,7 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
 }
 
-GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
+UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Use /tmp/clusters for Windows WSL, otherwise use the default path
 def _get_clusters_folder():
@@ -42,11 +42,11 @@ def _get_clusters_folder():
     except (FileNotFoundError, PermissionError):
         pass
 
-    return os.path.abspath(f"{GLIDE_HOME_DIR}/clusters")
+    return os.path.join(UTILS_DIR, "clusters")
 
 # TLS and mTLS certificates.
 CLUSTERS_FOLDER = _get_clusters_folder()
-TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
+TLS_FOLDER = os.path.join(UTILS_DIR, "tls_crts")
 
 CA_CERTIFICATE_PATH = f"{TLS_FOLDER}/ca.crt"
 CA_KEY_PATH = f"{TLS_FOLDER}/ca.key"

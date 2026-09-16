@@ -21,12 +21,11 @@ const CLUSTER_CREATION_TIMEOUT = 120000;
 const TLS_REQUEST_TIMEOUT = 10000;
 
 /**
- * Load a PEM file from utils/tls_crts, resolving GLIDE_HOME_DIR the same way
+ * Load a PEM file from utils/tls_crts, resolving the path the same way
  * getCaCertificateData does. Kept local since it is only used by these tests.
  */
 function readTlsFile(name: string): Buffer {
-    const glideHomeDir = process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
-    return fs.readFileSync(`${glideHomeDir}/utils/tls_crts/${name}`);
+    return fs.readFileSync(`${process.cwd()}/../utils/tls_crts/${name}`);
 }
 
 /**
