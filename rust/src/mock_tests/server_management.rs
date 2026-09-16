@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the server-management command family.
 use super::Mock;
-use glide::ValkeyValue;
-use glide::commands::options::FlushMode;
-use glide::commands::server_management::ServerManagementCommands;
+use crate::ValkeyValue;
+use crate::commands::options::FlushMode;
+use crate::commands::server_management::ServerManagementCommands;
 
 #[tokio::test]
 async fn info_and_sections() {
@@ -166,7 +166,7 @@ async fn client_pause_variants() {
     m.assert_args(&["CLIENT", "PAUSE", "1000"]);
 
     let m = Mock::ok();
-    m.client_pause(1000, Some(glide::commands::options::ClientPauseMode::Write))
+    m.client_pause(1000, Some(crate::commands::options::ClientPauseMode::Write))
         .await
         .unwrap();
     m.assert_args(&["CLIENT", "PAUSE", "1000", "WRITE"]);

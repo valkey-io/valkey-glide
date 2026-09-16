@@ -22,6 +22,9 @@ pub mod value;
 #[cfg(feature = "sync")]
 pub mod sync;
 
+#[cfg(test)]
+mod mock_tests;
+
 // Aliases
 // -------
 

@@ -84,19 +84,13 @@ the arg-side / `Cmd` roll: replace the blanket with explicit per-standard-type
 impls (leaving the trait open), driven by a glide-owned `Cmd` whose constructors
 take `ToValkeyArgs`.
 
-## Move the request-encoding tests in-crate
+## Move the request-encoding tests in-crate — DONE
 
-`tests/mock_commands/` verifies request *encoding* (the exact wire tokens each
-command produces) via an in-process `Mock` executor that inspects the built
-command's bytes. Because `tests/` is a separate crate, it can only see the public
-API, so `Cmd::args()` had to be exposed as `#[doc(hidden)] pub` purely for these
-tests. These tests peek at an internal (the built command's bytes), so they are
-really unit tests — moving them in-crate (`#[cfg(test)]` under `src/`, imports
-`glide::` → `crate::`) lets them use `pub(crate)` internals and lets `Cmd::args()`
-drop to `pub(crate)` (or be deleted, reading args via `as_redis().args_iter()`).
-Mechanical (~15 files); the live `it_*.rs` suites + the parity guard already cover
-the public API from outside. Inline `TODO #7024` at `Cmd::args` and
-`tests/mock_commands/main.rs`.
+The request-encoding tests moved from `tests/mock_commands/` to `src/mock_tests/`
+(`#[cfg(test)] mod mock_tests;`), so the in-process `Mock` executor now reads the
+built command's bytes through the crate-internal `Cmd::as_redis().args_iter()`.
+`Cmd::args()` (previously `#[doc(hidden)] pub` purely for the out-of-crate tests)
+is **deleted**, so the public API no longer carries it.
 
 ## Phase 4 (separate, breaking)
 

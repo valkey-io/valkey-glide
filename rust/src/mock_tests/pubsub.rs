@@ -1,12 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the Pub/Sub command family.
 use super::Mock;
+use crate::ValkeyValue;
+use crate::commands::pubsub::PubSubCommands;
 use bytes::Bytes;
-use glide::ValkeyValue;
-use glide::commands::pubsub::PubSubCommands;
 
 // NOTE: no `publish` test here — `PUBLISH` moved to the unified command table
-// (`glide::AsyncCommands`), whose encoding delegates to the fork's own
+// (`crate::AsyncCommands`), whose encoding delegates to the fork's own
 // `Cmd::publish` constructor (covered by the signature-parity guard).
 
 #[tokio::test]

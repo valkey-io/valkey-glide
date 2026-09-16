@@ -70,20 +70,6 @@ impl Cmd {
         self
     }
 
-    /// The command's keyword and arguments in order.
-    // TODO #7024: convert the request-encoding tests to in-crate unit tests, then
-    // drop this to `pub(crate)`. See rust/api-audit/phase-1-open-items.md.
-    #[doc(hidden)]
-    pub fn args(&self) -> Vec<&[u8]> {
-        self.inner
-            .args_iter()
-            .filter_map(|a| match a {
-                redis::Arg::Simple(bytes) => Some(bytes),
-                redis::Arg::Cursor => None,
-            })
-            .collect()
-    }
-
     /// Execute this command on an async GLIDE client.
     ///
     /// ```no_run
