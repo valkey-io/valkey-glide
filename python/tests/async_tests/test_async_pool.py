@@ -564,6 +564,7 @@ class TestPoolCredentialProviderWiring:
         provider is set, and passes it (cast to void*) to glide_pool_create."""
         from unittest.mock import MagicMock, patch
 
+        from glide.client_pool import AsyncClientPool, PoolConfig
         from glide_shared._glide_ffi import GlideFFI
         from glide_shared.config import (
             GlideClientConfiguration,
@@ -573,8 +574,6 @@ class TestPoolCredentialProviderWiring:
             ServiceType,
         )
         from glide_shared.ffi_helpers import create_credential_provider_callback
-
-        from glide.client_pool import AsyncClientPool, PoolConfig
 
         ffi = GlideFFI.ffi
 
