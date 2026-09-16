@@ -66,14 +66,17 @@ Remaining, still actionable once the above lands:
   `send_transaction` (`exec`). Not a small owned type; lands with the
   decode rework.
 
-## `ValkeyServerError` representation
+## `ValkeyServerError` representation — RESOLVED (match redis-rs's public surface)
 
-Currently a flat `{ code: String, detail: Option<String> }`, populated via redis's
-public accessors. redis's own `ServerError` (`ExtensionError`/`KnownError` +
-`ServerErrorKind`) is **not re-exported** by the fork, so it's unnameable from this
-crate — we can't mirror the variant split today. Revisit whether the flat struct is
-the intended final shape (it captures the full observable wire content: code +
-detail) or whether the fork should re-export the richer types.
+Aligned with redis-rs's `ServerError` *public* interface rather than its internal
+shape. redis-rs exposes only the accessors `err_code() -> &str` / `details() ->
+Option<&str>`, keeps its representation private (the `ExtensionError`/`KnownError`
++ `ServerErrorKind` split lives in a private module), and does **not** re-export
+the type. So `ValkeyServerError` now: has **private fields** + `err_code()` /
+`details()` accessors (same names/signatures), and is **not** re-exported at the
+crate root (reachable only as `glide::value::ValkeyServerError`, the payload of
+`ValkeyValue::ServerError`). No fork change; mirroring the internal variant split
+would need one and exposes no additional wire information.
 
 ## `ToValkeyArgs` blanket impl
 

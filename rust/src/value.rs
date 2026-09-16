@@ -78,18 +78,25 @@ pub enum ValkeyVerbatimFormat {
     Text,
 }
 
-// TODO #7024: revisit — flat struct vs mirroring redis's ServerError variants
-// (ExtensionError/KnownError + ServerErrorKind, unnameable from this crate today).
-/// An error reply carried in-band as a [`ValkeyValue::ServerError`].
+/// An error reply.
 ///
-/// Mirrors redis-rs's `ServerError` type.
+/// Mirrors redis-rs's `ServerError`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValkeyServerError {
-    /// The error code (the first word of the reply, e.g. `WRONGTYPE`, `MOVED`).
-    pub code: String,
+    code: String,
+    detail: Option<String>,
+}
 
-    /// The human-readable detail, if any.
-    pub detail: Option<String>,
+impl ValkeyServerError {
+    /// The error code (e.g. `WRONGTYPE`, `MOVED`).
+    pub fn err_code(&self) -> &str {
+        &self.code
+    }
+
+    /// The human-readable detail.
+    pub fn details(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
 }
 
 impl ValkeyVerbatimFormat {
@@ -763,8 +770,8 @@ mod tests {
         let v = Value::ServerError(error.into());
         match ValkeyValue::from_redis(v) {
             ValkeyValue::ServerError(e) => {
-                assert_eq!(e.code, "ERR");
-                assert_eq!(e.detail.as_deref(), Some("boom detail"));
+                assert_eq!(e.err_code(), "ERR");
+                assert_eq!(e.details(), Some("boom detail"));
             }
             other => panic!("expected ServerError, got {other:?}"),
         }

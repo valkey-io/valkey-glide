@@ -41,7 +41,6 @@ pub type ValkeyFuture<'a, T> = futures::future::BoxFuture<'a, ValkeyResult<T>>;
 pub use value::FromValkeyValue;
 pub use value::ToValkeyArgs;
 pub use value::ValkeyNumericBehavior;
-pub use value::ValkeyServerError;
 pub use value::ValkeyValue;
 pub use value::ValkeyVerbatimFormat;
 
