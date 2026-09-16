@@ -56,7 +56,7 @@ runs:
           env:
               RUSTDOCFLAGS: -Dwarnings
 
-        - name: Ensure Rust lint leaves tracked files clean
+        - name: Ensure Rust lint leaves the worktree clean
           uses: ./.github/actions/ensure-clean-tree
           with:
               context: Rust lint for ${{ inputs.cargo-toml-folder }}

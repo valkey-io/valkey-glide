@@ -198,7 +198,7 @@ jobs:
                   language-version: ${{ matrix.node }}
                   base-language-version: ${{ env.BASE_NODE_VERSION }}
 
-            - name: Ensure tests leave tracked files unchanged
+            - name: Ensure tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node build and test
@@ -314,7 +314,7 @@ jobs:
                   pnpm run test
               working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
 
-            - name: Ensure extra tests leave tracked files unchanged
+            - name: Ensure extra tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node package-manager compatibility tests
@@ -340,11 +340,6 @@ jobs:
               with:
                   cargo-toml-folder: ./node/rust-client
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Ensure Rust lint leaves tracked files unchanged
-              uses: ./.github/actions/ensure-clean-tree
-              with:
-                  context: Node Rust lint
 
     get-containers:
         runs-on: ubuntu-24.04
@@ -456,7 +451,7 @@ jobs:
                   npm run build
                   npm run test
 
-            - name: Ensure container tests leave tracked files unchanged
+            - name: Ensure container tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node container build and test

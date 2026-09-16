@@ -92,7 +92,7 @@ jobs:
             - name: Run actionlint
               run: make action-lint
 
-            - name: Ensure YAML utility checks leave tracked files unchanged
+            - name: Ensure YAML utility checks leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: YAML npm install, formatting, configuration validation, and actionlint
