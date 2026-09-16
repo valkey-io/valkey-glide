@@ -23,7 +23,7 @@
 
 ### Changes
 
-* Java: Add `AZ_AFFINITY_ALL_NODES` read strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
+* Java: Add `AZ_AFFINITY_ALL_NODES` read strategy, and harden `clientAZ` validation for all AZ-affinity strategies. A strategy configured without `clientAZ` — including a blank or whitespace-only value — now fails at client creation with a `ConfigurationError` instead of being silently downgraded to `PreferReplica`, and a padded value such as `" us-east-1a "` is trimmed before it reaches the core rather than forwarded raw. Previously the misconfiguration was ignored: reads went to arbitrary nodes with no error, and a padded value matched no node under the core's exact comparison and spread reads cluster-wide with no warning at all. Clients that relied on the old silent downgrade will now fail at creation. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
@@ -60,10 +60,6 @@
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
 * Core: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
 * FFI: Add `client_side_cache` configuration to the URI-based client creation API (`create_client_from_uri`) — supports `max_cache_kb`, `entry_ttl_ms`, `eviction_policy` (LRU/LFU), and `enable_metrics` via JSON options; `cache_id` is auto-generated internally ([#5860](https://github.com/valkey-io/valkey-glide/pull/5860))
-
-### Breaking Changes
-
-* Java: An AZ-affinity read strategy configured without `clientAZ` — including a blank or whitespace-only value — now fails at client creation with a `ConfigurationError`, and a padded value such as `" us-east-1a "` is trimmed before it reaches the core rather than forwarded raw. Previously the core logged a warning and silently downgraded the strategy to `PreferReplica`, so reads went to arbitrary nodes with no error; a padded value engaged the strategy, matched no node under the core's exact comparison, and spread reads cluster-wide with no warning at all. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 
 ## 2.4
 
