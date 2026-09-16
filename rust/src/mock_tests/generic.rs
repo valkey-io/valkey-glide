@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the generic (key) command family.
 use super::Mock;
-use glide::ValkeyValue;
-use glide::commands::generic::GenericCommands;
-use glide::commands::options::{Limit, OrderBy, RestoreOptions};
+use crate::ValkeyValue;
+use crate::commands::generic::GenericCommands;
+use crate::commands::options::{Limit, OrderBy, RestoreOptions};
 
 #[tokio::test]
 async fn copy_variants() {

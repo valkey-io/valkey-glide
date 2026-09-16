@@ -2,12 +2,12 @@
 //! Mock-executor unit tests for the hash command family.
 
 use super::Mock;
+use crate::ExpireOptions;
+use crate::Expiry;
+use crate::SetExpiry;
+use crate::ValkeyValue;
+use crate::commands::hash::HashCommands;
 use bytes::Bytes;
-use glide::ExpireOptions;
-use glide::Expiry;
-use glide::SetExpiry;
-use glide::ValkeyValue;
-use glide::commands::hash::HashCommands;
 
 #[tokio::test]
 async fn hmget_vec() {
@@ -107,7 +107,7 @@ async fn hexpire_with_condition() {
         "h",
         100,
         &["f1"],
-        Some(glide::commands::options::ExpireOptions::HasNoExpiry),
+        Some(crate::commands::options::ExpireOptions::HasNoExpiry),
     )
     .await
     .unwrap();
@@ -181,7 +181,7 @@ async fn hsetex_encoding() {
     m.hsetex(
         "h",
         &[("f1", "v1")],
-        Some(glide::commands::options::HashFieldConditionalChange::OnlyIfNoneExist),
+        Some(crate::commands::options::HashFieldConditionalChange::OnlyIfNoneExist),
         Some(SetExpiry::EX(60)),
     )
     .await

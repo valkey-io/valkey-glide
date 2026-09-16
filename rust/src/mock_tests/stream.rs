@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the stream command family.
 use super::Mock;
-use glide::ValkeyValue;
-use glide::commands::stream::{
+use crate::ValkeyValue;
+use crate::commands::stream::{
     StreamAddOptions, StreamCommands, StreamGroupCreateOptions, StreamReadGroupOptions,
     StreamReadOptions, StreamTrimOptions,
 };

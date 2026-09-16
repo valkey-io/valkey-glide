@@ -1,9 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the search (`FT.*`) command family.
 use super::Mock;
+use crate::ValkeyValue;
+use crate::commands::ft::FtCommands;
 use bytes::Bytes;
-use glide::ValkeyValue;
-use glide::commands::ft::FtCommands;
 
 #[tokio::test]
 async fn ft_create_encoding() {

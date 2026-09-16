@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the sorted-set command family.
 use super::Mock;
-use glide::ValkeyValue;
-use glide::commands::sorted_set::{AggregationType, LexBound, ScoreBound, SortedSetCommands};
+use crate::ValkeyValue;
+use crate::commands::sorted_set::{AggregationType, LexBound, ScoreBound, SortedSetCommands};
 
 #[tokio::test]
 async fn zdiff_zunion_zinter() {
@@ -72,7 +72,7 @@ async fn zrangestore_by_score_rev_swaps_bounds_and_limit() {
         ScoreBound::Inclusive(1.0),
         ScoreBound::Inclusive(5.0),
         true,
-        Some(glide::commands::options::Limit {
+        Some(crate::commands::options::Limit {
             offset: 0,
             count: 10,
         }),

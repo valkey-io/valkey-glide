@@ -8,16 +8,14 @@
 //! method's response *decoding* into its typed return can be asserted. No Valkey
 //! server is involved, so the whole suite is deterministic and fast.
 //!
-//! TODO #7024: these peek at the built command's bytes (`Cmd::args`), so they are
-//! really unit tests. Move them in-crate (`#[cfg(test)]` under `src/`) so they can
-//! use `pub(crate)` internals and `Cmd::args`'s `#[doc(hidden)] pub` accessor can
-//! be dropped. See rust/api-audit/phase-1-open-items.md.
+//! In-crate (`#[cfg(test)]`) so they can read the built command's bytes through
+//! the crate-internal `Cmd::as_redis()` rather than a public accessor.
 
+use crate::Cmd;
+use crate::Route;
+use crate::executor::CommandExecutor;
+use crate::{ValkeyResult, ValkeyValue};
 use async_trait::async_trait;
-use glide::Cmd;
-use glide::Route;
-use glide::executor::CommandExecutor;
-use glide::{ValkeyResult, ValkeyValue};
 use std::sync::Mutex;
 
 /// A captured command: the raw argument tokens plus the route it was sent with.
@@ -98,7 +96,14 @@ impl Mock {
 #[async_trait]
 impl CommandExecutor for Mock {
     async fn execute_command(&self, cmd: Cmd, route: Option<Route>) -> ValkeyResult<ValkeyValue> {
-        let args: Vec<Vec<u8>> = cmd.args().into_iter().map(|s| s.to_vec()).collect();
+        let args: Vec<Vec<u8>> = cmd
+            .as_redis()
+            .args_iter()
+            .filter_map(|a| match a {
+                redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
+                redis::Arg::Cursor => None,
+            })
+            .collect();
         *self.captured.lock().unwrap() = Some((args, route));
         Ok(self.response.lock().unwrap().clone())
     }

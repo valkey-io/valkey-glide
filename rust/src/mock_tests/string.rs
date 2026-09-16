@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor mock-executor tests for the string command family.
 use super::Mock;
-use glide::commands::string::StringCommands;
+use crate::commands::string::StringCommands;
 
 #[tokio::test]
 async fn lcs_len_encoding() {
