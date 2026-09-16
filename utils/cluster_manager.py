@@ -126,32 +126,25 @@ def _verify_tls_certs() -> bool:
 
     # Verify the server certificate parses, was signed by
     # the CA certificate, and is within its validity dates.
-    verify_certs = subprocess.run(
-        ["openssl", "verify", "-CAfile", CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH],
-        capture_output=True,
-        text=True,
+    verify_certs = _run_openssl(
+        ["verify", "-CAfile", CA_CERTIFICATE_PATH, SERVER_CERTIFICATE_PATH],
+        raise_on_error=False,
     )
-
     if verify_certs.returncode != 0:
         return False
 
     # Verify the server key parses.
-    key_public_key = subprocess.run(
-        ["openssl", "pkey", "-in", SERVER_KEY_PATH, "-pubout"],
-        capture_output=True,
-        text=True,
+    key_public_key = _run_openssl(
+        ["pkey", "-in", SERVER_KEY_PATH, "-pubout"], raise_on_error=False
     )
-
     if key_public_key.returncode != 0:
         return False
 
     # Verify that the server key matches the server certificate.
-    cert_public_key = subprocess.run(
-        ["openssl", "x509", "-in", SERVER_CERTIFICATE_PATH, "-noout", "-pubkey"],
-        capture_output=True,
-        text=True,
+    cert_public_key = _run_openssl(
+        ["x509", "-in", SERVER_CERTIFICATE_PATH, "-noout", "-pubkey"],
+        raise_on_error=False,
     )
-
     if (
         cert_public_key.returncode != 0
         or cert_public_key.stdout != key_public_key.stdout
@@ -161,8 +154,13 @@ def _verify_tls_certs() -> bool:
     return True
 
 
-def _run_openssl(args: List[str]) -> None:
-    """Run `openssl <args>`, raising on failure."""
+def _run_openssl(
+    args: List[str], raise_on_error: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """
+    Runs `openssl <args>` and returns the completed process.
+    If `raise_on_error` is true, raises an exception on nonzero exit.
+    """
     result = subprocess.run(
         ["openssl", *args],
         capture_output=True,
@@ -170,8 +168,10 @@ def _run_openssl(args: List[str]) -> None:
         timeout=OPENSSL_TIMEOUT_SECONDS,
     )
 
-    if result.returncode != 0:
+    if raise_on_error and result.returncode != 0:
         raise Exception(f"openssl {' '.join(args)} failed:\n{result.stderr}")
+
+    return result
 
 
 def generate_tls_certs():
