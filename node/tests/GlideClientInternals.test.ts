@@ -14,6 +14,7 @@ import {
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
+    ReadFrom,
     applyTlsAdvancedConfiguration,
     loadClientCertificateAndKeyFromFile,
     loadRootCertificatesFromFile,
@@ -220,6 +221,64 @@ describe("Client library identification requests", () => {
 
             expect(new TestBaseClient().buildRequest(config).libName).toBe(
                 expected,
+            );
+        },
+    );
+});
+
+describe("ReadFrom strategy configuration", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: BaseClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    it.each([
+        ["primary", connection_request.ReadFrom.Primary],
+        ["preferReplica", connection_request.ReadFrom.PreferReplica],
+        ["AZAffinity", connection_request.ReadFrom.AZAffinity],
+        [
+            "AZAffinityReplicasAndPrimary",
+            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        ],
+        ["allNodes", connection_request.ReadFrom.AllNodes],
+        ["AZAffinityAllNodes", connection_request.ReadFrom.AZAffinityAllNodes],
+    ])(
+        "maps readFrom=%p to the correct protobuf ReadFrom value",
+        (readFrom, expected) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+                // clientAz is required for the AZ affinity strategies
+                clientAz: "us-east-1a",
+            };
+
+            expect(new TestBaseClient().buildRequest(config).readFrom).toBe(
+                expected,
+            );
+        },
+    );
+
+    it.each([
+        "AZAffinity",
+        "AZAffinityReplicasAndPrimary",
+        "AZAffinityAllNodes",
+    ])(
+        "throws ConfigurationError when clientAz is unset for readFrom=%p",
+        (readFrom) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+            };
+
+            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+                ConfigurationError,
             );
         },
     );
