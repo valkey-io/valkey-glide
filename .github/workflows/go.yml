@@ -162,7 +162,7 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Ensure tracked tree is clean before RC changes
+            - name: Ensure worktree is clean before RC changes
               if: ${{ github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -298,7 +298,7 @@ jobs:
                     exit 1
                   fi
 
-            - name: Ensure build and tests leave tracked files unchanged
+            - name: Ensure build and tests leave the worktree clean
               if: ${{ !github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -353,7 +353,7 @@ jobs:
               run: |
                   make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
 
-            - name: Ensure lint and generation leave tracked files unchanged
+            - name: Ensure lint and generation leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go cbindgen, protobuf generation, and lint
@@ -443,7 +443,7 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-go
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Ensure tracked tree is clean before RC changes
+            - name: Ensure worktree is clean before RC changes
               if: ${{ github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -558,7 +558,7 @@ jobs:
                     exit 1
                   fi
 
-            - name: Ensure container build and tests leave tracked files unchanged
+            - name: Ensure container build and tests leave the worktree clean
               if: ${{ !github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -619,7 +619,7 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Ensure tracked tree is clean before RC changes
+            - name: Ensure worktree is clean before RC changes
               if: ${{ github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -726,7 +726,7 @@ jobs:
                     exit 1
                   fi
 
-            - name: Ensure long-timeout tests leave tracked files unchanged
+            - name: Ensure long-timeout tests leave the worktree clean
               if: ${{ !github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:

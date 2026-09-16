@@ -127,7 +127,7 @@ jobs:
                   cargo bench --locked | tee bench-results.xml
               working-directory: ./glide-core/redis-rs/redis
 
-            - name: Ensure benchmarks leave tracked files clean
+            - name: Ensure benchmarks leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: redis-rs benchmarks
@@ -145,7 +145,7 @@ jobs:
                   cargo test --locked --doc
               working-directory: ./glide-core/redis-rs/redis/src
 
-            - name: Ensure docs leave tracked files clean
+            - name: Ensure docs leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: redis-rs documentation tests
@@ -163,7 +163,7 @@ jobs:
                   fi
               working-directory: ./glide-core/redis-rs/redis
 
-            - name: Ensure security audit leaves tracked files clean
+            - name: Ensure security audit leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: redis-rs security audit
@@ -191,7 +191,7 @@ jobs:
                   fi
               working-directory: ./glide-core/redis-rs/redis
 
-            - name: Ensure cargo machete leaves tracked files clean
+            - name: Ensure cargo machete leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: redis-rs cargo machete

@@ -201,7 +201,7 @@ jobs:
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
 
-            - name: Ensure Rust tests leave tracked files clean
+            - name: Ensure Rust tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Rust core tests and benchmarks

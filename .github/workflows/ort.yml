@@ -250,7 +250,7 @@ jobs:
                     echo "No unapproved packages found."
                   fi
 
-            - name: Ensure ORT analysis leaves tracked files unchanged
+            - name: Ensure ORT analysis leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: ORT analysis, package builds, and source generation
