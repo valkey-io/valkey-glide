@@ -24,9 +24,9 @@ GLIDE binding.
   routing) even where a typed wrapper is not provided, guaranteeing 100%
   functional coverage.
 - **Batching** — `pipe()` pipelines and `MULTI`/`EXEC` transactions, executed
-  typed via `query_glide` (zero extra payload copies) or with GLIDE execution
+  typed via `query_async` (zero extra payload copies) or with GLIDE execution
   controls (`PipelineOptions`: per-call timeout and pipeline retry strategy)
-  via `execute_pipeline`.
+  via `exec`.
 - **Dynamic authentication** — rotate the connection password at runtime with
   `update_connection_password`, or use **AWS IAM** auth (ElastiCache / MemoryDB)
   via `ServerCredentials::iam`.
@@ -172,8 +172,8 @@ command. The migrations that follow from this are mechanical:
 
 | redis-rs call site            | GLIDE call site                          |
 |-------------------------------|------------------------------------------|
-| `pipe()….query_async(&mut c)` | `pipe()….query_glide(&c)` (`PipelineExt`) |
-| sync `pipe()….query(&mut c)`  | `pipe()….query_glide(&c)` (`sync::PipelineExt`) |
+| `pipe()….query_async(&mut c)` | `pipe()….query_async(&c)` (`PipelineExt`) |
+| sync `pipe()….query(&mut c)`  | `pipe()….query(&c)` (`sync::PipelineExt`) |
 | `cmd("X")….query_async(&mut c)` | `c.glide_send(cmd)` (typed, by value)  |
 | `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator, same `next_item()` / `Iterator` shape |
 
@@ -196,7 +196,7 @@ let (a, b): (i64, i64) = pipe()
     .atomic()
     .incr("counter", 1)
     .incr("counter", 1)
-    .query_glide(&client)
+    .query_async(&client)
     .await
     .unwrap();
 

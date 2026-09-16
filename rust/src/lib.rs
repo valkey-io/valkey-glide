@@ -9,6 +9,7 @@ pub mod commands;
 pub mod config;
 pub mod error;
 pub mod executor;
+pub mod pipeline;
 pub mod pipeline_options;
 pub mod routes;
 pub mod script;
@@ -91,7 +92,7 @@ pub use commands::stream::{
 // ```
 
 /// Typed [`Pipeline`] execution on the async clients with zero extra payload
-/// copies (`pipe()...query_glide(&client)`); the blocking counterpart lives
+/// copies (`pipe()...query_async(&client)`); the blocking counterpart lives
 /// at `sync::PipelineExt`.
 pub use client::{GlidePipelineTarget, PipelineExt};
 /// GLIDE's async command API (source-compatible with the redis-rs fork,
@@ -120,22 +121,16 @@ pub use commands::scan::SyncScanIter;
 ///
 /// Note: the GLIDE clients are deliberately **not** `redis` connection
 /// objects (no `ConnectionLike`) — that interop layer cost a payload copy
-/// per command. Use the unified traits, [`PipelineExt::query_glide`], or
+/// per command. Use the unified traits, [`PipelineExt::query_async`], or
 /// [`CustomCommand::custom_command`] instead.
 ///
 /// **Semver note:** this makes the fork's API part of this crate's public
 /// surface — changing the vendored fork's API is a breaking change.
 pub use redis;
 
-// TODO #7024: remove the remaining `FromRedisValue`/`RedisResult` re-exports once
-// `PipelineExt::query_glide` decodes via `FromValkeyValue` (Phase 4b).
-/// Conversion types still referenced by the pipeline typed-decode API.
-pub use redis::{FromRedisValue, RedisResult};
-
-// TODO #7024: Don't expose.
 /// Pipeline / transaction builder (`pipe()`; run with
-/// [`PipelineExt::query_glide`] or `execute_pipeline`).
-pub use redis::{Pipeline, pipe};
+/// [`PipelineExt::query_async`] or `exec`).
+pub use pipeline::{Pipeline, pipe};
 
 /// Lua script helper (`Script` — SHA-caching `EVALSHA` with `EVAL` fallback).
 pub use script::{Script, ScriptInvocation};

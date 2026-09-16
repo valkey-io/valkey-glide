@@ -88,6 +88,11 @@ impl Cmd {
     pub(crate) fn as_redis_mut(&mut self) -> &mut redis::Cmd {
         &mut self.inner
     }
+
+    /// Consume into the underlying `redis::Cmd`.
+    pub(crate) fn into_redis(self) -> redis::Cmd {
+        self.inner
+    }
 }
 
 #[cfg(test)]

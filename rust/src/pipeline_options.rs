@@ -1,22 +1,17 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! GLIDE execution options for [`Pipeline`]s.
+//! GLIDE execution options for [`crate::Pipeline`]s.
 //!
 //! Pipelines are used directly: build with
 //! [`crate::pipe()`] (add `.atomic()` for a `MULTI`/`EXEC` transaction) and
-//! run with [`crate::PipelineExt::query_glide`] (async) / the sync
-//! [`crate::sync::PipelineExt::query_glide`]. When GLIDE-specific execution
+//! run with [`crate::PipelineExt::query_async`] (async) / the sync
+//! [`crate::sync::PipelineExt::query`]. When GLIDE-specific execution
 //! controls are needed (per-call timeout, pipeline retry policy, cluster
-//! routing), use [`crate::GlideClient::execute_pipeline`] /
-//! [`crate::GlideClusterClient::execute_pipeline`] with [`PipelineOptions`].
+//! routing), use [`crate::GlideClient::exec`] /
+//! [`crate::GlideClusterClient::exec`] with [`PipelineOptions`].
 
-use crate::error::GlideError;
-use crate::{ValkeyResult, ValkeyValue};
-use glide_core::client::Client as CoreClient;
-use redis::cluster_routing::RoutingInfo;
-use redis::{Pipeline, PipelineRetryStrategy, Value};
 use std::time::Duration;
 
-/// Execution options for [`crate::GlideClient::execute_pipeline`].
+/// Execution options for pipelines.
 ///
 /// The `retry_*` flags apply only to **non-atomic pipelines**; they are
 /// ignored for atomic transactions (a `MULTI`/`EXEC` is never partially
@@ -66,50 +61,8 @@ impl PipelineOptions {
 
     /// Timeout as whole milliseconds, saturating at `u32::MAX` (~49.7 days)
     /// instead of narrowing/overflowing.
-    fn timeout_millis(&self) -> Option<u32> {
+    pub(crate) fn timeout_millis(&self) -> Option<u32> {
         self.timeout
             .map(|d| u32::try_from(d.as_millis()).unwrap_or(u32::MAX))
-    }
-}
-
-/// Execute a [`Pipeline`] against a core client with GLIDE options
-/// and normalize the reply to a `Vec` of per-command values (atomic
-/// transactions: the unwrapped `EXEC` reply).
-pub(crate) async fn run_pipeline(
-    core: &CoreClient,
-    pipeline: &Pipeline,
-    routing: Option<RoutingInfo>,
-    raise_on_error: bool,
-    options: &PipelineOptions,
-) -> ValkeyResult<Vec<ValkeyValue>> {
-    if pipeline.is_empty() {
-        return Ok(Vec::new());
-    }
-    let timeout = options.timeout_millis();
-    let mut client = core.clone();
-    let value = if pipeline.is_atomic() {
-        client
-            .send_transaction(pipeline, routing, timeout, raise_on_error)
-            .await
-            .map_err(GlideError::from_redis_error)?
-    } else {
-        client
-            .send_pipeline(
-                pipeline,
-                routing,
-                raise_on_error,
-                timeout,
-                PipelineRetryStrategy {
-                    retry_server_error: options.retry_server_error,
-                    retry_connection_error: options.retry_connection_error,
-                },
-            )
-            .await
-            .map_err(GlideError::from_redis_error)?
-    };
-    match value {
-        Value::Array(items) => Ok(items.into_iter().map(ValkeyValue::from_redis).collect()),
-        Value::Nil => Ok(Vec::new()),
-        other => Ok(vec![ValkeyValue::from_redis(other)]),
     }
 }

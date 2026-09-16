@@ -35,6 +35,7 @@
 use crate::ValkeyFuture;
 use crate::cmd::Cmd;
 use crate::commands::options::{Direction, Expiry, LposOptions, SetOptions};
+use crate::pipeline::Pipeline;
 use crate::value::{FromValkeyValue, ToValkeyArgs, ValkeyNumericBehavior, ValkeyValue};
 
 // Only exposed by sync commands.
@@ -55,7 +56,7 @@ macro_rules! implement_glide_commands {
             fn $name:ident <$($g:ident: $b:ident),*> ($($arg:ident: $ty:ty),*) $body:block
         )*
     ) => {
-        /// Command constructors, one per table entry.
+        /// Command methods, one per table entry.
         ///
         /// For example, the `pttl` table entry expands to:
         ///
@@ -71,6 +72,30 @@ macro_rules! implement_glide_commands {
                 $(#[$attr])*
                 #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
                 pub(crate) fn $name<$lifetime, $($g: $b),*>($($arg: $ty),*) -> Self $body
+            )*
+        }
+
+        /// Pipeline builder methods, one per table entry.
+        ///
+        /// For example, the `pttl` table entry expands to:
+        ///
+        /// ```ignore
+        /// impl Pipeline {
+        ///     pub fn pttl<K: ToValkeyArgs>(&mut self, key: K) -> &mut Self {
+        ///         self.add_command(Cmd::pttl(key));
+        ///         self
+        ///     }
+        /// }
+        /// ```
+        impl Pipeline {
+            $(
+                $(#[$attr])*
+                #[inline]
+                #[allow(clippy::extra_unused_lifetimes, clippy::needless_lifetimes)]
+                pub fn $name<$lifetime, $($g: $b),*>(&mut self $(, $arg: $ty)*) -> &mut Self {
+                    self.add_command(Cmd::$name($($arg),*));
+                    self
+                }
             )*
         }
 

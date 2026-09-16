@@ -8,7 +8,7 @@
 
 mod common;
 
-use glide::{AsyncCommands, PipelineExt, RedisResult, ValkeyResult, pipe};
+use glide::{AsyncCommands, PipelineExt, ValkeyResult, pipe};
 use std::collections::{HashMap, HashSet};
 
 // ---- typed AsyncCommands methods -----------------------------------------------
@@ -133,7 +133,7 @@ matrix_test!(zrange_withscores_decodes, c, {
 
 // ---- pipelines & transactions ------------------------------------------------
 
-matrix_test!(pipeline_query_glide, c, {
+matrix_test!(pipeline_query_async, c, {
     let c = c;
     let k1 = common::tkey("cmd_pipe", "k1");
     let k2 = common::tkey("cmd_pipe", "k2");
@@ -144,21 +144,21 @@ matrix_test!(pipeline_query_glide, c, {
         .ignore()
         .get(&k1)
         .get(&k2)
-        .query_glide(&c)
+        .query_async(&c)
         .await
         .unwrap();
     assert_eq!(v1, "hello");
     assert_eq!(v2, 7);
 });
 
-matrix_test!(atomic_transaction_query_glide, c, {
+matrix_test!(atomic_transaction_query_async, c, {
     let c = c;
     let k = common::tkey("cmd_tx", "ctr");
     let (a, b): (i64, i64) = pipe()
         .atomic()
         .incr(&k, 1)
         .incr(&k, 1)
-        .query_glide(&c)
+        .query_async(&c)
         .await
         .unwrap();
     assert_eq!((a, b), (1, 2));
@@ -183,14 +183,14 @@ matrix_test!(error_inside_pipeline_surfaces_as_err, c, {
     let c = c;
     let k = common::tkey("cmd_pipe_err", "k");
     c.set::<_, _, ()>(&k, "text").await.unwrap();
-    let res: RedisResult<(String, Vec<String>, String)> = pipe()
+    let res: ValkeyResult<(String, Vec<String>, String)> = pipe()
         .get(&k)
         .lrange(&k, 0, -1) // WRONGTYPE in the middle
         .get(&k)
-        .query_glide(&c)
+        .query_async(&c)
         .await;
     let err = res.unwrap_err();
-    assert_eq!(err.code(), Some("WRONGTYPE"), "got: {err}");
+    assert!(err.message().contains("WRONGTYPE"), "got: {err}");
 });
 
 matrix_test!(error_inside_transaction_surfaces_as_err, c, {
@@ -198,14 +198,14 @@ matrix_test!(error_inside_transaction_surfaces_as_err, c, {
     let c = c;
     let k = common::tkey("cmd_tx_err", "k");
     c.set::<_, _, ()>(&k, "text").await.unwrap();
-    let res: RedisResult<(String, Vec<String>)> = pipe()
+    let res: ValkeyResult<(String, Vec<String>)> = pipe()
         .atomic()
         .get(&k)
         .lrange(&k, 0, -1) // WRONGTYPE inside MULTI/EXEC
-        .query_glide(&c)
+        .query_async(&c)
         .await;
     let err = res.unwrap_err();
-    assert_eq!(err.code(), Some("WRONGTYPE"), "got: {err}");
+    assert!(err.message().contains("WRONGTYPE"), "got: {err}");
 });
 
 // ---- scan iterators (standalone only: cursor iteration is per-node) -----------

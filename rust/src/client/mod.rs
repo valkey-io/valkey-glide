@@ -9,7 +9,8 @@ use crate::cmd::Cmd;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::error::GlideError;
 use crate::executor::CommandExecutor;
-use crate::pipeline_options::{PipelineOptions, run_pipeline};
+use crate::pipeline::dispatch_pipeline;
+use crate::pipeline_options::PipelineOptions;
 use crate::routes::Route;
 use crate::value::FromValkeyValue;
 use crate::{ValkeyFuture, ValkeyResult, ValkeyValue};
@@ -152,6 +153,22 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
     message
 }
 
+/// Executes a [`crate::Pipeline`] and returns command responses.
+async fn run_pipeline(
+    core: &CoreClient,
+    pipeline: &crate::pipeline::Pipeline,
+    routing: Option<RoutingInfo>,
+    raise_on_error: bool,
+    options: &PipelineOptions,
+) -> ValkeyResult<Vec<ValkeyValue>> {
+    let reply = dispatch_pipeline(core, pipeline, routing, raise_on_error, options).await?;
+    match reply {
+        ValkeyValue::Array(items) => Ok(items),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        other => unreachable!("unexpected pipeline reply from Valkey: {other:?}"),
+    }
+}
+
 /// A cursor for an in-progress cluster `SCAN`.
 ///
 /// Start a new scan with [`ClusterScanCursor::new`]. After each
@@ -194,7 +211,7 @@ impl Default for ClusterScanCursor {
     }
 }
 
-/// An async client for a **standalone** Valkey/Redis deployment.
+/// An async client for a **standalone** Valkey deployment.
 ///
 /// Mirrors Python `GlideClient`. Cheaply cloneable — clones share the same
 /// underlying connection pool.
@@ -202,13 +219,11 @@ impl Default for ClusterScanCursor {
 pub struct GlideClient {
     inner: CoreClient,
     pubsub_rx: Option<PushRx>,
-    db: i64,
 }
 
 impl GlideClient {
     /// Connect using the given standalone configuration.
     pub async fn connect(config: GlideClientConfiguration) -> ValkeyResult<Self> {
-        let db = config.database_id;
         let request = config.to_request();
         let has_subs = config
             .pubsub_subscriptions
@@ -218,17 +233,7 @@ impl GlideClient {
         let inner = CoreClient::new(request, sender)
             .await
             .map_err(GlideError::from_connection_error)?;
-        Ok(GlideClient {
-            inner,
-            pubsub_rx,
-            db,
-        })
-    }
-
-    /// The configured logical database index (crate-internal; reported to
-    /// the pipeline adapter in `client/connection.rs`).
-    pub(crate) fn db(&self) -> i64 {
-        self.db
+        Ok(GlideClient { inner, pubsub_rx })
     }
 
     /// Wait for the next Pub/Sub message on this client's configured
@@ -251,14 +256,12 @@ impl GlideClient {
     /// (per-call timeout, pipeline retry policy) and return the raw per-command
     /// replies. Build with [`crate::pipe()`]; `.atomic()` pipelines run as a
     /// `MULTI`/`EXEC` transaction. For plain typed execution prefer
-    /// [`PipelineExt::query_glide`]. When `raise_on_error` is `true`, the
+    /// [`PipelineExt::query_async`]. When `raise_on_error` is `true`, the
     /// first errored command aborts with an error; otherwise error replies are
     /// returned inline.
-    // TODO #7024: replace the `&redis::Pipeline` builder with a glide-owned type
-    // (Phase 4). Applies to the cluster `execute_pipeline` and `PipelineExt` too.
-    pub async fn execute_pipeline(
+    pub async fn exec(
         &self,
-        pipeline: &redis::Pipeline,
+        pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
@@ -360,11 +363,11 @@ impl GlideClusterClient {
         Ok(ValkeyValue::from_redis(value))
     }
 
-    /// Execute a [`redis::Pipeline`] with GLIDE execution options,
-    /// optionally routed. See [`crate::GlideClient::execute_pipeline`].
-    pub async fn execute_pipeline(
+    /// Execute a [`crate::Pipeline`] with GLIDE execution options,
+    /// optionally routed. See [`crate::GlideClient::exec`].
+    pub async fn exec(
         &self,
-        pipeline: &redis::Pipeline,
+        pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         route: Option<Route>,
         options: &PipelineOptions,

@@ -62,8 +62,8 @@ Remaining, still actionable once the above lands:
 - **`Cmd`** — glide-owned command builder; replace at the executor seam
   (`execute_command` / `glide_send_owned`) together with the arg-bound roll.
 - **`Pipeline`** — glide-owned pipeline; tied to redis's typed pipeline decoding
-  (`query_glide`, still `RedisResult`) and glide-core `send_pipeline`/
-  `send_transaction` (`execute_pipeline`). Not a small owned type; lands with the
+  (`query_async`, still `RedisResult`) and glide-core `send_pipeline`/
+  `send_transaction` (`exec`). Not a small owned type; lands with the
   decode rework.
 
 ## `ValkeyServerError` representation
