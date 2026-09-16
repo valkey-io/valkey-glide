@@ -4,6 +4,8 @@
 
 ### Fixes
 
+* Core: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them. Affects the existing `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` strategies as well as the new `AZ_AFFINITY_ALL_NODES`. ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
+* Core/FFI: Accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Python: Fix trio pub/sub BusyResourceError from duplicate shared-pipe reader ([#6605](https://github.com/valkey-io/valkey-glide/pull/6605))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Release response payload buffers when parking a `ResponseArena` in the thread-local reuse pool. `free_response_arena` (reached via `free_command_response` from all language bindings) parked arenas with their `strings` payload buffers still populated, but the pool is only drained on the Rust worker threads that build responses — arenas freed on consumer threads (e.g. Go OS threads) were never reused and never cleared, pinning up to 16 full response payloads per thread and leaking roughly one payload per command. Large-value workloads could OOM within minutes. Fixed on `main` as part of [#6559](https://github.com/valkey-io/valkey-glide/pull/6559); this backports the arena-release fix. ([#6740](https://github.com/valkey-io/valkey-glide/issues/6740))
@@ -21,6 +23,7 @@
 
 ### Changes
 
+* Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
