@@ -855,7 +855,15 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 	case WaitForMessageMethod:
 		for clientId, queue := range queues {
 			receivedMessages := make(map[string]string)
-			for expectedKey := range expectedMessages {
+			// Keep draining messages until all distinct expected keys are collected.
+			// The subscriber may receive more physical messages than there are distinct
+			// expected keys (e.g. combined exact+pattern subscriptions, where multiple
+			// pattern matches collapse to a single pattern key). Reading exactly
+			// len(expectedMessages) times can therefore consume duplicate pattern
+			// messages and miss the exact-channel message, causing a flaky mismatch.
+			// Duplicate keys harmlessly overwrite the same map entry. This mirrors the
+			// SignalChannel/SyncLoop cases.
+			for len(receivedMessages) < len(expectedMessages) {
 				select {
 				case msg := <-queue.WaitForMessage():
 					// For pattern subscriptions, use the pattern value as the key
@@ -866,7 +874,8 @@ func (suite *GlideTestSuite) verifyPubsubMessages(
 					}
 					receivedMessages[messageKey] = msg.Message
 				case <-time.After(MESSAGE_TIMEOUT * time.Second):
-					assert.Fail(t, "Timed out waiting for message for key %s for client %d", expectedKey, clientId)
+					assert.Fail(t, fmt.Sprintf("Timed out waiting for messages for client %d", clientId))
+					suite.T().Logf("Received messages: %+v", receivedMessages)
 					t.FailNow()
 				}
 			}
