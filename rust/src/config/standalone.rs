@@ -2,10 +2,10 @@
 //! Configuration for the **standalone** (non-cluster) client.
 
 use super::common::{
-    BackoffStrategy, ClientIdentity, NodeAddress, ProtocolVersion, PubSubSubscriptions, ReadFrom,
-    ServerCredentials, TlsConfig, credentials_from_info, duration_as_millis_u32,
-    from_redis_protocol, impl_common_config_builders, split_connection_addr,
-    to_redis_connection_info,
+    BackoffStrategy, ClientIdentity, NodeAddress, NodeDiscoveryMode, ProtocolVersion,
+    PubSubSubscriptions, ReadFrom, ServerCredentials, TlsConfig, credentials_from_info,
+    duration_as_millis_u32, from_redis_protocol, impl_common_config_builders,
+    split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
 use std::time::Duration;
@@ -24,6 +24,8 @@ pub struct GlideClientConfiguration {
     pub credentials: Option<ServerCredentials>,
     /// Read strategy.
     pub read_from: ReadFrom,
+    /// How the client discovers node roles and topology.
+    pub node_discovery_mode: NodeDiscoveryMode,
     /// Overall request timeout.
     pub request_timeout: Option<Duration>,
     /// Connection establishment timeout.
@@ -66,6 +68,7 @@ impl GlideClientConfiguration {
             tls: TlsConfig::NoTls,
             credentials: None,
             read_from: ReadFrom::Primary,
+            node_discovery_mode: NodeDiscoveryMode::Standard,
             request_timeout: None,
             connection_timeout: None,
             reconnect_strategy: None,
@@ -117,10 +120,17 @@ impl GlideClientConfiguration {
         self
     }
 
+    /// Set how the client discovers node roles and topology.
+    pub fn node_discovery_mode(mut self, mode: NodeDiscoveryMode) -> Self {
+        self.node_discovery_mode = mode;
+        self
+    }
+
     pub(crate) fn to_request(&self) -> ConnectionRequest {
         let mut req = self.common_request();
         req.cluster_mode_enabled = false;
         req.database_id = self.database_id;
+        req.node_discovery_mode = self.node_discovery_mode.to_core();
         req
     }
 }

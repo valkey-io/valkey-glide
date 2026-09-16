@@ -6,7 +6,8 @@
 //! the standalone `From` conversions for each config enum.
 use super::*;
 use glide_core::client::{
-    ConnectionRetryStrategy, PeriodicCheck, ReadFrom as CoreReadFrom, TlsMode,
+    ConnectionRetryStrategy, NodeDiscoveryMode as CoreNodeDiscoveryMode, PeriodicCheck,
+    ReadFrom as CoreReadFrom, TlsMode,
 };
 use glide_core::iam::ServiceType as CoreServiceType;
 use std::time::Duration;
@@ -493,6 +494,22 @@ fn cluster_never_sets_database_id() {
     // Cluster config has no database_id setter; request keeps the default 0.
     let req = GlideClusterClientConfiguration::with_address("h", 1).to_request();
     assert_eq!(req.database_id, 0);
+}
+
+// ---- node_discovery_mode ---------------------------------------------
+
+#[test]
+fn node_discovery_mode() {
+    let req = GlideClientConfiguration::with_address("h", 1)
+        .node_discovery_mode(NodeDiscoveryMode::Static)
+        .to_request();
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Static);
+}
+
+#[test]
+fn node_discovery_mode_default() {
+    let req = GlideClientConfiguration::with_address("h", 1).to_request();
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Standard);
 }
 
 // ---- client_name -----------------------------------------------------
