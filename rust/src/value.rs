@@ -1,5 +1,9 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! TODO #7024: Add module description.
+//! Valkey reply and argument value types.
+//!
+//! [`ValkeyValue`] represents a value returned by the Valkey server.
+//! [`FromValkeyValue`] decodes it into concrete Rust types, and
+//! [`ToValkeyArgs`] encodes Rust values into command arguments.
 
 use crate::ValkeyResult;
 use crate::error::GlideError;
@@ -7,13 +11,11 @@ use bytes::Bytes;
 use num_bigint::BigInt;
 use redis::{Value, VerbatimFormat};
 
-/// A value returned by the server.
+/// A value returned by the Valkey server.
+/// Covers all RESP2/RESP3 value types.
+/// Decode into concrete Rust types via [`FromValkeyValue`].
 ///
-/// Mirrors redis-rs's `Value` type.
-///
-/// TODO #7024: Revisit this documentation.
-/// Mirrors every RESP2/RESP3 reply shape. Decode into concrete Rust types with
-/// the `to_*`/`from_*` helpers in this module or via [`FromValkeyValue`].
+/// Mirrors redis-rs's `Value`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ValkeyValue {
     /// A nil reply.
@@ -61,10 +63,9 @@ pub enum ValkeyValue {
     ServerError(ValkeyServerError),
 }
 
-/// The declared text format of a [`ValkeyValue::VerbatimString`].
+/// The text format of a [`ValkeyValue::VerbatimString`].
 ///
 /// Mirrors redis-rs's `VerbatimFormat` type.
-/// TODO #7024: Revisit this documentation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValkeyVerbatimFormat {
     /// A format string other than the ones below.
@@ -82,7 +83,6 @@ pub enum ValkeyVerbatimFormat {
 /// An error reply carried in-band as a [`ValkeyValue::ServerError`].
 ///
 /// Mirrors redis-rs's `ServerError` type.
-/// TODO #7024: Revisit this documentation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValkeyServerError {
     /// The error code (the first word of the reply, e.g. `WRONGTYPE`, `MOVED`).

@@ -1,11 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the hash command family.
+
 use super::Mock;
 use bytes::Bytes;
+use glide::ExpireOptions;
 use glide::Expiry;
+use glide::SetExpiry;
 use glide::ValkeyValue;
 use glide::commands::hash::HashCommands;
-use glide::commands::options::{ExpireOptions, SetExpiry}; // TODO #7024: Extract
 
 #[tokio::test]
 async fn hmget_vec() {
