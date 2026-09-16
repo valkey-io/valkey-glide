@@ -142,7 +142,7 @@ jobs:
             - name: Smoke test binary
               run: |
                   file ffi/target/release/libglide_ffi.a | grep -q "archive"
-            - name: Ensure binary generation leaves tracked files unchanged
+            - name: Ensure binary generation leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go release binary, cbindgen, and protobuf generation
@@ -267,7 +267,7 @@ jobs:
                   git config user.name github-actions
                   git config user.email github-actions@github.com
                   git commit -m "Automated commit from GitHub Actions"
-            - name: Ensure release commit leaves tracked tree clean
+            - name: Ensure release commit leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go generated release commit
@@ -326,7 +326,7 @@ jobs:
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
-            - name: Ensure tracked tree is clean before benchmark module edits
+            - name: Ensure worktree is clean before benchmark module edits
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go benchmark pre-tidy baseline
