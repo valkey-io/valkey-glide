@@ -9910,12 +9910,23 @@ export class BaseClient {
         const protocol = options.protocol as
             connection_request.ProtocolVersion | undefined;
 
+        // Normalize clientAz: trim surrounding whitespace and treat a blank value as
+        // absent. The core compares availability zones with exact equality and never
+        // trims, so an untrimmed or whitespace-only value (e.g. " us-east-1a " or
+        // "   ") would match no node and silently fall through to the AZ-affinity
+        // all-nodes fallback. This mirrors Java's ConnectionManager.resolveClientAz.
+        const trimmedClientAz = options.clientAz?.trim();
+        const clientAz =
+            trimmedClientAz === undefined || trimmedClientAz === ""
+                ? undefined
+                : trimmedClientAz;
+
         // Validate that clientAz is set when using AZ affinity strategies
         if (
             (options.readFrom === "AZAffinity" ||
                 options.readFrom === "AZAffinityReplicasAndPrimary" ||
                 options.readFrom === "AZAffinityAllNodes") &&
-            !options.clientAz
+            !clientAz
         ) {
             throw new ConfigurationError(
                 `clientAz must be set when readFrom is set to ${options.readFrom}`,
@@ -9954,7 +9965,7 @@ export class BaseClient {
             authenticationInfo,
             databaseId: options.databaseId,
             inflightRequestsLimit: options.inflightRequestsLimit,
-            clientAz: options.clientAz ?? null,
+            clientAz: clientAz ?? null,
             connectionRetryStrategy: options.connectionBackoff,
             lazyConnect: options.lazyConnect ?? false,
             clientSideCache,

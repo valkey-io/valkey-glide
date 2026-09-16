@@ -282,6 +282,40 @@ describe("ReadFrom strategy configuration", () => {
             );
         },
     );
+
+    it.each([
+        ["", "AZAffinity"],
+        [" ", "AZAffinityReplicasAndPrimary"],
+        ["   ", "AZAffinityAllNodes"],
+        ["\t", "AZAffinityAllNodes"],
+        ["\n", "AZAffinityAllNodes"],
+        [" \t\n ", "AZAffinityAllNodes"],
+    ])(
+        "throws ConfigurationError for whitespace-only clientAz=%j with readFrom=%p",
+        (clientAz, readFrom) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+                clientAz,
+            };
+
+            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+                ConfigurationError,
+            );
+        },
+    );
+
+    it("trims surrounding whitespace from clientAz before forwarding", () => {
+        const config: BaseClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            readFrom: "AZAffinityAllNodes",
+            clientAz: "  us-east-1a  ",
+        };
+
+        expect(new TestBaseClient().buildRequest(config).clientAz).toBe(
+            "us-east-1a",
+        );
+    });
 });
 
 describe("BaseClient response handling", () => {
