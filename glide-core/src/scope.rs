@@ -757,20 +757,26 @@ pub fn try_resolve_scope_target(client: Option<&Client>, routing_slot: u16) -> O
 }
 
 /// Async counterpart of [`try_resolve_scope_target`] for callers already on the
-/// runtime (prewarm, tests). Waits for the client wrapper lock instead of bailing.
+/// runtime (prewarm, tests).
+///
+/// Same rules and same source of truth: topology comes from the registered parent
+/// client, and a missing parent fails closed. The difference is that this variant
+/// waits for the client wrapper lock rather than treating a held lock (e.g.
+/// mid-reconnect) as unresolved.
 #[cfg(feature = "proto")]
 pub async fn resolve_scope_target(
-    pool: &Arc<TokioMutex<ScopePool>>,
     client: Option<&Client>,
     routing_slot: u16,
 ) -> Option<ScopeTarget> {
-    let cluster_mode_enabled = pool.lock().await.cluster_mode_enabled;
-    let primary = if cluster_mode_enabled {
-        Some(client?.address_for_slot(routing_slot).await?)
+    let client = client?;
+    if client.is_cluster_mode() {
+        client
+            .address_for_slot(routing_slot)
+            .await
+            .map(ScopeTarget::cluster_primary)
     } else {
-        None
-    };
-    pool.lock().await.target_for_primary(primary.as_deref())
+        Some(ScopeTarget::Standalone)
+    }
 }
 
 /// Global client registry: client_id → Client.

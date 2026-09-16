@@ -1568,10 +1568,9 @@ pub(crate) mod shared_client_tests {
                 .await
                 .total_count
                 .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-            let target =
-                glide_core::scope::resolve_scope_target(&pool, Some(&client), routing_slot)
-                    .await
-                    .expect("slot owner resolvable against live topology");
+            let target = glide_core::scope::resolve_scope_target(Some(&client), routing_slot)
+                .await
+                .expect("slot owner resolvable against live topology");
             glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
