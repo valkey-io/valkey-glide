@@ -222,7 +222,7 @@ jobs:
                     fi
                   fi
 
-            - name: Ensure Java publication builds leave tracked files unchanged
+            - name: Ensure Java publication builds leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java native and compatibility publication builds
@@ -453,7 +453,7 @@ jobs:
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
-            - name: Ensure Java uber JAR builds leave tracked files unchanged
+            - name: Ensure Java uber JAR builds leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java uber JAR and compatibility publication builds
@@ -720,7 +720,7 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }}"
 
-            - name: Ensure Java deployment test leaves tracked files unchanged
+            - name: Ensure Java deployment test leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java Maven deployment smoke test

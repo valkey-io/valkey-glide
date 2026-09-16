@@ -108,7 +108,7 @@ jobs:
                     --html=pytest_report.html \
                     --self-contained-html
 
-            - name: Ensure Python module build and tests leave tracked files unchanged
+            - name: Ensure Python module build and tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Python module wrapper build and tests
@@ -159,7 +159,7 @@ jobs:
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
 
-            - name: Ensure Python module build and tests leave tracked files unchanged
+            - name: Ensure Python module build and tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Python module wrapper build and tests

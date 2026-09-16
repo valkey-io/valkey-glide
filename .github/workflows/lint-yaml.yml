@@ -80,7 +80,7 @@ jobs:
                   print(f"OK: all {len(paths)} .yarnrc.yml files have npmMinimalAgeGate == '7d'")
                   EOF
 
-            - name: Ensure YAML utility checks leave tracked files unchanged
+            - name: Ensure YAML utility checks leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: YAML npm install, formatting, and configuration validation

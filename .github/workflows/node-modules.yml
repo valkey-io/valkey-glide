@@ -99,7 +99,7 @@ jobs:
                     --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
-            - name: Ensure module tests leave tracked files unchanged
+            - name: Ensure module tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node module tests on Linux
@@ -151,7 +151,7 @@ jobs:
               run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
               working-directory: ./node
 
-            - name: Ensure module tests leave tracked files unchanged
+            - name: Ensure module tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node module tests on persistent ARM64 runner

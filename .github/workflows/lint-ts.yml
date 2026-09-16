@@ -51,7 +51,7 @@ jobs:
                     npx prettier --check ${{ github.workspace }}/$folder
                   done
 
-            - name: Ensure lint leaves tracked files unchanged
+            - name: Ensure lint leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: TypeScript lint and formatting checks

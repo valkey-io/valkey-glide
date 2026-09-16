@@ -273,7 +273,7 @@ jobs:
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
 
-            - name: Ensure native build leaves tracked files unchanged
+            - name: Ensure native build leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node native module build for ${{ matrix.TARGET }}
@@ -352,7 +352,7 @@ jobs:
               run: |
                   npm ci
 
-            - name: Ensure clean tree before package assembly
+            - name: Ensure worktree is clean before package assembly
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: npm release package assembly baseline
@@ -584,7 +584,7 @@ jobs:
                       echo "::error::Neither Valkey nor Redis server found"; exit 1
                   fi
 
-            - name: Ensure clean tree before release-candidate smoke tests
+            - name: Ensure worktree is clean before release-candidate smoke tests
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: npm release-candidate smoke-test baseline for ${{ matrix.TARGET }}

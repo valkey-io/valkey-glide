@@ -243,7 +243,7 @@ jobs:
               with:
                   language-flag: -java
 
-            - name: Ensure Java build and tests leave tracked files unchanged
+            - name: Ensure Java build and tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java build, test, lint, and benchmark operations
@@ -349,7 +349,7 @@ jobs:
                       fi
                   fi
 
-            - name: Ensure Java PubSub tests leave tracked files unchanged
+            - name: Ensure Java PubSub tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java PubSub tests
@@ -420,7 +420,7 @@ jobs:
                       exit 1
                   fi
 
-            - name: Ensure Java Lambda test leaves tracked files unchanged
+            - name: Ensure Java Lambda test leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java Lambda build and Docker test
@@ -461,7 +461,7 @@ jobs:
               working-directory: java/e2e/dns-failover-test
               run: ./run-test.sh
 
-            - name: Ensure Java DNS failover test leaves tracked files unchanged
+            - name: Ensure Java DNS failover test leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java DNS failover build and Docker test
@@ -611,7 +611,7 @@ jobs:
                   fi
                   ./gradlew --stacktrace --build-cache --continue build -x javadoc
 
-            - name: Ensure Java container build leaves tracked files unchanged
+            - name: Ensure Java container build leaves the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java container build and tests

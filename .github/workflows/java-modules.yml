@@ -114,7 +114,7 @@ jobs:
                     -Dstandalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     -Dcluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
-            - name: Ensure Java module tests leave tracked files unchanged
+            - name: Ensure Java module tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java module tests with Docker
@@ -169,7 +169,7 @@ jobs:
               working-directory: java
               run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
 
-            - name: Ensure Java module tests leave tracked files unchanged
+            - name: Ensure Java module tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Java module tests with MemoryDB

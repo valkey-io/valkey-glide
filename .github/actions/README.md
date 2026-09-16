@@ -355,14 +355,15 @@ jobs:
 Example failure output:
 
 ```
-Tracked repository changes were detected after a mutation-prone operation.
+::error::Dirty worktree detected after a mutation-prone operation.
 Context: Cargo release build
-::group::Tracked status (first 200 entries)
+::group::Worktree status, including untracked files (first 200 entries)
  M Cargo.lock
 ?? generated/foo.rs
 ::endgroup::
-Reproduce the operation locally and update generated files or lockfiles intentionally.
-If the changes are unintended, fix the operation so it leaves tracked files unchanged.
+Modified or deleted tracked files: reproduce the operation locally and commit the regenerated files or lockfiles intentionally.
+Untracked files (?? entries): add them to .gitignore if they are build byproducts, or write them outside the repository (e.g. $RUNNER_TEMP).
+If the changes are unintended, fix the operation so it leaves the worktree clean.
 ```
 
 ---

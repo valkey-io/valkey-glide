@@ -106,7 +106,7 @@ jobs:
                     standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
-            - name: Ensure module build and tests leave tracked files unchanged
+            - name: Ensure module build and tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go module build and tests on Linux
@@ -151,7 +151,7 @@ jobs:
             - name: Install zig
               uses: ./.github/actions/install-zig
 
-            - name: Ensure tracked tree is clean before RC changes
+            - name: Ensure worktree is clean before RC changes
               if: ${{ github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -255,7 +255,7 @@ jobs:
                     exit 1
                   fi
 
-            - name: Ensure module build and tests leave tracked files unchanged
+            - name: Ensure module build and tests leave the worktree clean
               if: ${{ !github.event.inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:

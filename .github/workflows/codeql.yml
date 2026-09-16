@@ -69,7 +69,7 @@ jobs:
                   cd glide-core
                   cargo build --release --locked
 
-            - name: Ensure C++ CodeQL build leaves tracked files unchanged
+            - name: Ensure C++ CodeQL build leaves the worktree clean
               if: matrix.language == 'c-cpp'
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -129,7 +129,7 @@ jobs:
                   echo "Attempting Go build for CodeQL analysis..."
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
 
-            - name: Ensure Go CodeQL build leaves tracked files unchanged
+            - name: Ensure Go CodeQL build leaves the worktree clean
               if: matrix.language == 'go'
               uses: ./.github/actions/ensure-clean-tree
               with:
@@ -159,7 +159,7 @@ jobs:
                   cd java
                   ./gradlew --build-cache assemble --exclude-task :client:buildRust
 
-            - name: Ensure Java/Kotlin CodeQL build leaves tracked files unchanged
+            - name: Ensure Java/Kotlin CodeQL build leaves the worktree clean
               if: matrix.language == 'java-kotlin'
               uses: ./.github/actions/ensure-clean-tree
               with:

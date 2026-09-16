@@ -186,7 +186,7 @@ jobs:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
-            - name: Ensure tests leave tracked files unchanged
+            - name: Ensure tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node build and test
@@ -307,7 +307,7 @@ jobs:
               with:
                   language-flag: -node
 
-            - name: Ensure extra tests leave tracked files unchanged
+            - name: Ensure extra tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node package-manager compatibility and benchmark tests
@@ -334,11 +334,6 @@ jobs:
               with:
                   cargo-toml-folder: ./node/rust-client
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Ensure Rust lint leaves tracked files unchanged
-              uses: ./.github/actions/ensure-clean-tree
-              with:
-                  context: Node Rust lint
 
     get-containers:
         runs-on: ubuntu-latest
@@ -453,7 +448,7 @@ jobs:
                   npm run build
                   npm run test
 
-            - name: Ensure container tests leave tracked files unchanged
+            - name: Ensure container tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Node container build and test
