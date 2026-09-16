@@ -51,13 +51,18 @@ def use_parent_span(
     sampled: bool,
     span_id: int = PARENT_SPAN_ID,
     trace_state: Optional[TraceState] = None,
+    trace_flags: Optional[int] = None,
 ) -> Iterator[None]:
     """Make a fixed span context the active OTel span for the duration of the block."""
     span_context = SpanContext(
         trace_id=PARENT_TRACE_ID,
         span_id=span_id,
         is_remote=True,
-        trace_flags=TraceFlags(TraceFlags.SAMPLED if sampled else TraceFlags.DEFAULT),
+        trace_flags=TraceFlags(
+            trace_flags
+            if trace_flags is not None
+            else (TraceFlags.SAMPLED if sampled else TraceFlags.DEFAULT)
+        ),
         trace_state=trace_state,
     )
     with trace.use_span(NonRecordingSpan(span_context), end_on_exit=False):
@@ -1090,6 +1095,61 @@ class TestOpenTelemetryGlideSync:
                 )
             ]
             * 2
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("trace_flags", [-1, 256])
+    def test_sync_out_of_range_parent_trace_flags_fall_back(
+        self, request, cluster_mode, trace_flags, monkeypatch
+    ):
+        """An invalid parent flag falls back to a root without failing the command."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        logged_failures = []
+        monkeypatch.setattr(
+            Logger,
+            "log",
+            lambda level, identifier, message: logged_failures.append(
+                (level, identifier, message)
+            ),
+        )
+        remove_span_file()
+
+        with use_parent_span(sampled=True, trace_flags=trace_flags):
+            client.get(f"GlideSync_test_invalid_parent_flags_{trace_flags}")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_root_spans(span_objects, "Get")
+        assert logged_failures == [
+            (
+                Level.DEBUG,
+                "GlideOpenTelemetry",
+                f"Failed to read the active span context: trace_flags {trace_flags} "
+                "out of range 0-255. Continuing as if no span were active.",
+            )
+        ]
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_max_parent_trace_flags_propagate(self, request, cluster_mode):
+        """The upper byte boundary remains a valid remote parent."""
+        client = create_sync_client(request, cluster_mode=cluster_mode)
+        remove_span_file()
+
+        with use_parent_span(sampled=True, trace_flags=255):
+            client.get("GlideSync_test_max_parent_flags")
+
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+        )
+        _, span_objects, _ = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+        assert_external_parent(
+            span_objects, "Get", PARENT_TRACE_ID_HEX, PARENT_SPAN_ID_HEX
         )
 
         client.close()

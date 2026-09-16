@@ -36,27 +36,21 @@ fn trace_context_test_exporter() -> &'static InMemorySpanExporter {
         .exporter
 }
 
-fn assert_exported_remote_parent(expected_trace_id: &str, expected_parent_span_id: &str) {
+fn assert_exported_remote_parent(
+    child_span_id: &str,
+    expected_trace_id: &str,
+    expected_parent_span_id: &str,
+) {
     let spans = trace_context_test_exporter()
         .get_finished_spans()
         .expect("test exporter should return its finished spans");
-    let observed_contexts = spans
+    let child = spans
         .iter()
-        .map(|span| {
-            (
-                span.span_context.trace_id().to_string(),
-                span.parent_span_id.to_string(),
-            )
-        })
-        .collect::<Vec<_>>();
+        .find(|span| span.span_context.span_id().to_string() == child_span_id)
+        .unwrap_or_else(|| panic!("expected exported child with span ID {child_span_id}"));
 
-    assert!(
-        observed_contexts.iter().any(|(trace_id, parent_span_id)| {
-            trace_id == expected_trace_id && parent_span_id == expected_parent_span_id
-        }),
-        "expected exported child with trace ID {expected_trace_id} and parent span ID \
-         {expected_parent_span_id}, observed {observed_contexts:?}"
-    );
+    assert_eq!(child.span_context.trace_id().to_string(), expected_trace_id);
+    assert_eq!(child.parent_span_id.to_string(), expected_parent_span_id);
 }
 
 /// Take a co-owning [`Arc<GlideSpan>`] for a span pointer returned by one of the
@@ -158,11 +152,16 @@ fn test_create_otel_span_with_trace_context_valid_inputs() {
 
     assert_ne!(span_ptr, 0, "valid remote context should create a span");
     assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
 
     unsafe {
         drop_otel_span(span_ptr);
     }
-    assert_exported_remote_parent("0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331");
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319c",
+        "b7ad6b7169203331",
+    );
 }
 
 #[test]
@@ -243,11 +242,16 @@ fn test_create_batch_otel_span_with_trace_context() {
         "valid remote context should create a batch span"
     );
     assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
 
     unsafe {
         drop_otel_span(span_ptr);
     }
-    assert_exported_remote_parent("0af7651916cd43dd8448eb211c80319d", "b7ad6b7169203332");
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319d",
+        "b7ad6b7169203332",
+    );
 }
 
 #[test]
@@ -272,6 +276,7 @@ fn test_create_named_otel_span_with_trace_context_valid_inputs() {
 
     assert_ne!(span_ptr, 0, "valid remote context should create a span");
     assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+    let child_span_id = unsafe { co_owner(span_ptr) }.id();
 
     // A null trace_state is the common case (an empty W3C tracestate) and must also work.
     let no_state_ptr = unsafe {
@@ -293,7 +298,11 @@ fn test_create_named_otel_span_with_trace_context_valid_inputs() {
         drop_otel_span(span_ptr);
         drop_otel_span(no_state_ptr);
     }
-    assert_exported_remote_parent("0af7651916cd43dd8448eb211c80319e", "b7ad6b7169203333");
+    assert_exported_remote_parent(
+        &child_span_id,
+        "0af7651916cd43dd8448eb211c80319e",
+        "b7ad6b7169203333",
+    );
 }
 
 #[test]

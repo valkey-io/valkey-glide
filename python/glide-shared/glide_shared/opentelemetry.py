@@ -397,7 +397,9 @@ class OpenTelemetry:
             span_context = _otel_trace.get_current_span().get_span_context()
             if not span_context.is_valid:
                 return None
-            trace_flags = span_context.trace_flags
+            trace_flags = int(span_context.trace_flags)
+            if not 0 <= trace_flags <= 255:
+                raise ValueError(f"trace_flags {trace_flags} out of range 0-255")
 
             # to_header() is the W3C `tracestate` serialization
             trace_state = span_context.trace_state
@@ -405,7 +407,7 @@ class OpenTelemetry:
             return _ParentSpanContext(
                 trace_id=format(span_context.trace_id, "032x").encode(),
                 span_id=format(span_context.span_id, "016x").encode(),
-                trace_flags=int(trace_flags),
+                trace_flags=trace_flags,
                 trace_state=trace_state_header.encode() or None,
             )
         except Exception as e:
