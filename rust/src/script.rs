@@ -27,6 +27,9 @@ use crate::cmd::{Cmd, cmd};
 use crate::commands::core::AsyncCommands;
 use crate::value::{FromValkeyValue, ToValkeyArgs};
 
+/// Error code for an uncached script.
+const NOSCRIPT: &str = "NOSCRIPT";
+
 /// A cached Lua script with its SHA-1 hash.
 ///
 /// Create once (computes the SHA-1), then [`Self::arg`]/[`Self::key`] to build
@@ -164,7 +167,7 @@ impl ScriptInvocation<'_> {
         con: &C,
     ) -> ValkeyResult<T> {
         match con.glide_send_owned(self.evalsha_cmd()).await {
-            Err(err) if err.is_no_script_error() => {
+            Err(err) if err.message().contains(NOSCRIPT) => {
                 // Not cached on the server yet — EVAL both runs and caches it.
                 T::from_owned_valkey_value(con.glide_send_owned(self.eval_cmd()).await?)
             }
@@ -181,7 +184,7 @@ impl ScriptInvocation<'_> {
         con: &C,
     ) -> ValkeyResult<T> {
         match con.glide_send_owned_sync(self.evalsha_cmd()) {
-            Err(err) if err.is_no_script_error() => {
+            Err(err) if err.message().contains(NOSCRIPT) => {
                 T::from_owned_valkey_value(con.glide_send_owned_sync(self.eval_cmd())?)
             }
             other => T::from_owned_valkey_value(other?),

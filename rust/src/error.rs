@@ -66,15 +66,6 @@ impl GlideError {
         }
     }
 
-    // TODO #7024: detect this from a preserved server error code rather than
-    // matching the stringified message. `from_redis_error` collapses the fork's
-    // `ErrorKind::NoScriptError` into `Request(msg)`, dropping the `NOSCRIPT`
-    // code; `Script`'s EVALSHA→EVAL fallback still needs to recognize it.
-    /// Whether this is a server `NOSCRIPT` reply (script not cached).
-    pub(crate) fn is_no_script_error(&self) -> bool {
-        matches!(self, GlideError::Request(m) if m.contains("NoScriptError") || m.contains("NOSCRIPT"))
-    }
-
     pub(crate) fn from_redis_error(err: RedisError) -> Self {
         let msg = err.to_string();
         // Mirror glide-core's `error_type` classifier (glide-core/src/errors.rs).
