@@ -656,8 +656,7 @@ pub fn try_acquire_scope(
             // stale or unmapped slot never matches (or creates) a connection to the
             // wrong node. Unresolved means "retry", not "use the seed".
             let client = get_parent_client(pool.parent_client_id);
-            let Some(target) = try_resolve_scope_target(&pool, client.as_ref(), routing_slot)
-            else {
+            let Some(target) = try_resolve_scope_target(client.as_ref(), routing_slot) else {
                 // Without this the borrower only ever sees "pool exhausted" while
                 // the slot stays uncovered (resharding, parent not registered).
                 logger_core::log_warn(
@@ -740,23 +739,21 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
     registry.get(&client_id).map(|e| e.value().clone())
 }
 
-/// Resolve the routing slot to a pool target without awaiting (acquire path).
+/// Resolves only when the parent client is registered.
 ///
-/// Standalone pools always resolve. Cluster pools resolve only when the parent
-/// client is registered and its live slot map currently knows the slot's primary;
-/// anything else yields `None` so the caller fails closed.
+/// Standalone parents always resolve; cluster parents resolve only when the live
+/// slot map knows the slot's primary. Anything else yields None so the caller fails
+/// closed.
 #[cfg(feature = "proto")]
-pub fn try_resolve_scope_target(
-    pool: &ScopePool,
-    client: Option<&Client>,
-    routing_slot: u16,
-) -> Option<ScopeTarget> {
-    let primary = if pool.cluster_mode_enabled {
-        Some(client?.try_address_for_slot(routing_slot)?)
+pub fn try_resolve_scope_target(client: Option<&Client>, routing_slot: u16) -> Option<ScopeTarget> {
+    let client = client?;
+    if client.is_cluster_mode() {
+        client
+            .try_address_for_slot(routing_slot)
+            .map(ScopeTarget::cluster_primary)
     } else {
-        None
-    };
-    pool.target_for_primary(primary.as_deref())
+        Some(ScopeTarget::Standalone)
+    }
 }
 
 /// Async counterpart of [`try_resolve_scope_target`] for callers already on the
@@ -810,10 +807,15 @@ mod tests {
     use tokio::sync::Mutex as TokioMutex;
 
     use super::{create_scope_connection, try_acquire_scope, try_resolve_scope_target};
+
+    use super::Client;
+    use crate::client::{ConnectionRequest as ClientRequest, NodeAddress as ClientAddress};
+
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
         ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, get_client_scope_pools,
     };
+    use crate::scope::{register_client, unregister_client};
 
     const DEFAULT_ROUTING_SLOT: u16 = 0;
     const MAX_CLUSTER_SLOT: u16 = 16_383;
@@ -847,6 +849,22 @@ mod tests {
         let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes, 1);
         pool.total_count.store(1, Ordering::Release);
         Arc::new(TokioMutex::new(pool))
+    }
+
+    async fn lazy_parent(cluster: bool) -> Client {
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            cluster_mode_enabled: cluster,
+            lazy_connect: true,
+            ..Default::default()
+        };
+
+        Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network")
     }
 
     fn listening_endpoint() -> TcpListener {
@@ -932,8 +950,17 @@ mod tests {
         }
     }
 
-    /// A cluster acquire whose slot owner cannot be resolved (here: no parent client
-    /// registered) must neither reserve capacity nor open a connection to the seed.
+    /// A cluster acquire whose slot owner cannot be resolved must neither reserve
+    /// capacity nor open a connection to the seed address.
+    ///
+    /// The parent here is a registered cluster client whose slot map does not know
+    /// slot 42, so resolution fails on the slot rather than on a missing parent
+    /// (covered by `resolves_scope_targets_from_parent_client`).
+    ///
+    /// Boundary: a lazily connected client has no slot map at all, which is a real
+    /// unresolvable state but not the same as a connected cluster whose slot is
+    /// temporarily unmapped mid-resharding. That case needs a live cluster and is
+    /// covered by the scope tests in `tests/test_client.rs`.
     #[tokio::test]
     async fn unresolved_cluster_target_does_not_use_seed_and_does_not_reserve() {
         let listener = listening_endpoint();
@@ -948,10 +975,11 @@ mod tests {
         )));
         get_client_scope_pools().insert(client_id, pool.clone());
 
-        assert_eq!(
-            try_resolve_scope_target(&*pool.lock().await, None, 42),
-            None
-        );
+        let parent = lazy_parent(true).await;
+        register_client(client_id, parent.clone());
+
+        assert!(parent.is_cluster_mode());
+        assert_eq!(try_resolve_scope_target(Some(&parent), 42), None);
         let acquired = try_acquire_scope(
             client_id,
             request_bytes.clone(),
@@ -959,6 +987,8 @@ mod tests {
             42,
         );
         get_client_scope_pools().remove(&client_id);
+
+        unregister_client(client_id);
 
         assert_eq!(acquired, -1);
         {
@@ -1018,12 +1048,17 @@ mod tests {
             ))),
         );
 
+        register_client(client_id, lazy_parent(false).await);
+
         let acquired = try_acquire_scope(
             client_id,
             request_bytes.clone(),
             &tokio::runtime::Handle::current(),
             0,
         );
+
+        unregister_client(client_id);
+
         get_client_scope_pools().remove(&client_id);
 
         assert_eq!(
@@ -1036,43 +1071,30 @@ mod tests {
         );
     }
 
-    #[test]
-    fn normalizes_scope_targets_from_pool_topology() {
-        let standalone = ScopePool::new(
-            ScopePoolConfig::default(),
-            request_bytes_with_mode("", 6379, false),
-            1,
-        );
-        // Standalone ignores whatever (if anything) was resolved.
+    /// Scope target resolution derives topology exclusively from the registered parent Client,
+    /// keeping it as the single source of truth rather than duplicating state in the pool.
+    /// A missing parent fails closed; standalone parents ignore the slot, while cluster parents
+    /// require a mapped primary and otherwise remain unresolved.
+    #[tokio::test]
+    async fn resolves_scope_targets_from_parent_client() {
+        let standalone = lazy_parent(false).await;
+
+        assert_eq!(try_resolve_scope_target(None, DEFAULT_ROUTING_SLOT), None);
+
         assert_eq!(
-            standalone.target_for_primary(None),
+            try_resolve_scope_target(Some(&standalone), DEFAULT_ROUTING_SLOT),
             Some(ScopeTarget::Standalone)
         );
         assert_eq!(
-            standalone.target_for_primary(Some(PRIMARY_A)),
-            Some(ScopeTarget::Standalone)
-        );
-        assert_eq!(
-            try_resolve_scope_target(&standalone, None, DEFAULT_ROUTING_SLOT),
-            Some(ScopeTarget::Standalone)
-        );
-        assert_eq!(
-            try_resolve_scope_target(&standalone, None, MAX_CLUSTER_SLOT),
+            try_resolve_scope_target(Some(&standalone), MAX_CLUSTER_SLOT),
             Some(ScopeTarget::Standalone)
         );
 
-        let cluster = ScopePool::new(
-            ScopePoolConfig::default(),
-            request_bytes_with_mode("", 6379, true),
-            1,
-        );
-        // Cluster keys on the resolved primary and fails closed without one.
-        assert_eq!(cluster.target_for_primary(None), None);
+        let cluster = lazy_parent(true).await;
         assert_eq!(
-            cluster.target_for_primary(Some(PRIMARY_A)),
-            Some(ScopeTarget::cluster_primary(PRIMARY_A))
+            try_resolve_scope_target(Some(&cluster), DEFAULT_ROUTING_SLOT),
+            None
         );
-        assert_eq!(try_resolve_scope_target(&cluster, None, 0), None);
     }
 
     #[tokio::test]
@@ -1087,9 +1109,9 @@ mod tests {
         pool.total_count.store(1, Ordering::Release);
         let pool = Arc::new(TokioMutex::new(pool));
 
-        let initial_target =
-            try_resolve_scope_target(&*pool.lock().await, None, DEFAULT_ROUTING_SLOT)
-                .expect("standalone always resolves");
+        let parent = lazy_parent(false).await;
+        let initial_target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
+            .expect("standalone always resolves");
         assert_eq!(initial_target, ScopeTarget::Standalone);
         create_scope_connection(pool.clone(), None, &request_bytes, initial_target).await;
 
@@ -1097,7 +1119,7 @@ mod tests {
         let first_scope_id = {
             let mut pool = pool.lock().await;
             assert_eq!(pool.idle.len(), 1);
-            let target = try_resolve_scope_target(&pool, None, DEFAULT_ROUTING_SLOT)
+            let target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
                 .expect("standalone always resolves");
             reused_scope_id(pool.try_acquire(registry, target))
         };
@@ -1111,7 +1133,7 @@ mod tests {
 
         let second_scope_id = {
             let mut pool = pool.lock().await;
-            let alternate_target = try_resolve_scope_target(&pool, None, MAX_CLUSTER_SLOT)
+            let alternate_target = try_resolve_scope_target(Some(&parent), MAX_CLUSTER_SLOT)
                 .expect("standalone always resolves");
             assert_eq!(alternate_target, ScopeTarget::Standalone);
             reused_scope_id(pool.try_acquire(registry, alternate_target))
@@ -1130,11 +1152,19 @@ mod tests {
         server.join().expect("mock server exits cleanly");
     }
 
-    /// Two different slots owned by the same primary resolve to the same target, so
-    /// one idle socket serves both — the same-primary fragmentation the slot-keyed
-    /// model could not avoid.
+    /// Two different slots owned by the same primary produce equal targets, so one
+    /// idle socket serves both, the same-primary fragmentation the slot-keyed model
+    /// could not avoid.
+    ///
+    /// This covers target matching and reuse only. The pool and its connection are
+    /// standalone against a mock endpoint, and the cluster target is written onto
+    /// `idle[0].target` directly, since a connection genuinely created for `PRIMARY_A`
+    /// would have to reach that address.
+    ///
+    /// Boundary: resolving a slot to a real primary and connecting to it needs a live
+    /// cluster, and is covered by the scope tests in `tests/test_client.rs`.
     #[tokio::test]
-    async fn cluster_reuses_released_connection_for_same_primary() {
+    async fn same_primary_target_reuses_released_connection() {
         let (port, shutdown_sender, server) = responsive_endpoint();
         let request_bytes = request_bytes("", port);
         let pool = reserved_pool(request_bytes.clone());
