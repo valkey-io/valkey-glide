@@ -12,6 +12,7 @@ This directory contains composite actions shared across valkey-glide language re
   - [install-rust](#install-rust)
   - [install-protoc](#install-protoc)
   - [install-zig](#install-zig)
+  - [ensure-clean-tree](#ensure-clean-tree)
 - [Platform Support Matrix](#platform-support-matrix)
 - [Submodule Configuration](#submodule-configuration)
 - [Reusable Workflows](#reusable-workflows)
@@ -297,6 +298,75 @@ jobs:
 
 ---
 
+### ensure-clean-tree
+
+Fails the job if the git worktree is not clean. Place it immediately after any step that could mutate the repository as a side effect (dependency resolution, code generation, lockfile refresh, formatters, test runs) to catch drift that would otherwise go unnoticed.
+
+**Location:** `.github/actions/ensure-clean-tree/action.yml`
+
+#### Inputs
+
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `context` | No | `''` | Human-readable description of the preceding operation, printed in the failure message to make the log easier to triage |
+
+#### Behavior
+
+- Runs `git status --porcelain=v1 --untracked-files=all` from the workspace root
+- Passes silently if the output is empty
+- Otherwise prints the `context` (if provided), the first 200 lines of `git status --short`, and remediation hints, then exits `1`
+- **Untracked files count as dirty.** Any file created by the preceding steps must either be gitignored or live outside the repository (e.g. `$RUNNER_TEMP`), or the check will fail. Modified, deleted, and staged tracked files also fail the check.
+- Read-only: never modifies the worktree or index
+
+#### When to Use
+
+Good fits:
+
+- After `cargo build --locked`, `npm ci`, `go mod tidy`, `pip install`, or similar, to prove the committed lockfiles are current
+- After `protoc`, `cbindgen`, or other generators, to prove generated sources are checked in
+- After lint/format steps run in `--check` mode
+- After a test suite, to catch tests that write into the source tree
+
+Poor fits:
+
+- Steps that intentionally modify tracked files as part of a release (version bumps, generated manifests). For those, use a scoped allowlist check (`git diff --name-only HEAD` against expected paths) instead of this action.
+- Jobs where `actions/download-artifact` or similar writes into the repository without a matching `.gitignore` entry. Either ignore the path or download outside the workspace.
+
+#### Example Usage
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Ensure build leaves the worktree clean
+        uses: ./valkey-glide/.github/actions/ensure-clean-tree
+        with:
+          context: Cargo release build
+```
+
+Example failure output:
+
+```
+Tracked repository changes were detected after a mutation-prone operation.
+Context: Cargo release build
+::group::Tracked status (first 200 entries)
+ M Cargo.lock
+?? generated/foo.rs
+::endgroup::
+Reproduce the operation locally and update generated files or lockfiles intentionally.
+If the changes are unintended, fix the operation so it leaves tracked files unchanged.
+```
+
+---
+
 ## Platform Support Matrix
 
 | Action | Ubuntu | macOS | Windows | Amazon Linux | Alpine/MUSL |
@@ -307,6 +377,7 @@ jobs:
 | install-rust | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-protoc | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-zig | ✓ | ✓ | ✓ | ✓ | ✓ |
+| ensure-clean-tree | ✓ | ✓ | ✓ (bash) | ✓ | ✓ |
 
 **Notes:**
 - **Windows:** Uses WSL (Windows Subsystem for Linux) for Valkey server operations
