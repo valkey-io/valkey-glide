@@ -42,13 +42,12 @@ timed_tokio_test!(
         let k = common::tkey("cbo", "k");
         let mut pipeline = pipe();
         pipeline.set(&k, "1").incr(&k, 1i64).get(&k);
+
         let opts = PipelineOptions::new()
             .with_timeout(Duration::from_secs(5))
             .with_retry_server_error(true);
-        let results = c
-            .execute_pipeline(&pipeline, true, None, &opts)
-            .await
-            .unwrap();
+        let results = c.exec(&pipeline, true, None, &opts).await.unwrap();
+
         assert_eq!(results.len(), 3);
         // results[0] = SET reply (OK), results[1] = INCR reply (2), results[2] = GET reply ("2")
         assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
@@ -58,10 +57,12 @@ timed_tokio_test!(
         let k2 = common::tkey("cbo", "tx");
         let mut tx = pipe();
         tx.atomic().set(&k2, "5").incr(&k2, 1i64);
+
         let res2 = c
-            .execute_pipeline(&tx, true, None, &PipelineOptions::new())
+            .exec(&tx, true, None, &PipelineOptions::new())
             .await
             .unwrap();
+
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
         assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
     }

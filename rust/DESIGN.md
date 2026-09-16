@@ -111,11 +111,11 @@ expose the same methods with `block_on`. Mirrors Python `glide-sync`.
 
 ## Pipelines / Transactions
 `redis::Pipeline` is used directly: build with `glide::pipe()` (add
-`.atomic()` for `MULTI`/`EXEC`), execute typed via `PipelineExt::query_glide`
+`.atomic()` for `MULTI`/`EXEC`), execute typed via `PipelineExt::query_async`
 (async and, mirrored in `sync::PipelineExt`, blocking), or via
-`execute_pipeline(&Pipeline, raise_on_error, &PipelineOptions)` when GLIDE
+`exec(&Pipeline, raise_on_error, &PipelineOptions)` when GLIDE
 execution controls (per-call timeout, pipeline retry policy, cluster routing)
-are needed. `query_glide` hands the built `&Pipeline` to glide-core by
+are needed. `query_async` hands the built `&Pipeline` to glide-core by
 reference (zero payload copies) and reuses the `redis` crate's typed decoding
 (`.ignore()` markers, transaction unwrapping) through a crate-private adapter.
 The client dispatches to glide-core's `send_transaction` (atomic) or

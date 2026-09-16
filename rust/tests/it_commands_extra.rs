@@ -118,7 +118,7 @@ fn sync_pipeline_and_transaction() {
         .ignore()
         .get(&k1)
         .get(&k2)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((v1.as_str(), v2), ("x", 9));
 
@@ -127,11 +127,11 @@ fn sync_pipeline_and_transaction() {
         .atomic()
         .incr(&ctr, 1)
         .incr(&ctr, 1)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((a, b), (1, 2));
 
-    // Native-copy path: PipelineExt::query_glide (borrows &client, sends the
+    // Native-copy path: PipelineExt::query (borrows &client, sends the
     // built Pipeline directly — no packed-byte round-trip) must honor
     // .ignore() handling and atomic transactions.
     let k3 = common::tkey("cmd_sp", "k3");
@@ -140,7 +140,7 @@ fn sync_pipeline_and_transaction() {
         .ignore()
         .get(&k3)
         .incr(&ctr, 5)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((v3.as_str(), cnt), ("y", 7));
 
@@ -149,7 +149,7 @@ fn sync_pipeline_and_transaction() {
         .atomic()
         .incr(&ctr2, 3)
         .incr(&ctr2, 4)
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!((x, y), (3, 7));
 }
@@ -174,7 +174,7 @@ fn sync_pipeline_with_literal_multi_exec_is_not_atomic() {
         .cmd("INCR")
         .arg(&ctr)
         .cmd("EXEC")
-        .query_glide(&c)
+        .query(&c)
         .unwrap();
     assert_eq!(multi_ok, "OK");
     assert_eq!(queued, "QUEUED");

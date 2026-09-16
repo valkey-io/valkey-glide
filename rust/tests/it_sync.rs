@@ -79,17 +79,25 @@ fn sync_standalone_custom_command_and_pipeline() {
     let v = c.custom_command(&["GET", &k]).unwrap();
     assert_eq!(String::from_owned_valkey_value(v).unwrap(), "42");
 
-    // Atomic transaction via redis::Pipeline
+    // Atomic transaction via pipeline
     let bk = common::key("sync:batch");
-    let mut pipe = redis::Pipeline::new();
-    pipe.atomic();
-    pipe.cmd("SET").arg(&bk).arg("10");
-    pipe.cmd("INCRBY").arg(&bk).arg(1);
-    pipe.cmd("INCRBY").arg(&bk).arg(1);
-    pipe.cmd("GET").arg(&bk);
-    let results = c
-        .execute_pipeline(&pipe, true, &PipelineOptions::default())
-        .unwrap();
+
+    let mut pipe = glide::pipe();
+    pipe.atomic()
+        .cmd("SET")
+        .arg(&bk)
+        .arg("10")
+        .cmd("INCRBY")
+        .arg(&bk)
+        .arg(1)
+        .cmd("INCRBY")
+        .arg(&bk)
+        .arg(1)
+        .cmd("GET")
+        .arg(&bk);
+
+    let results = c.exec(&pipe, true, &PipelineOptions::default()).unwrap();
+
     assert_eq!(results.len(), 4);
     assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
     assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
