@@ -233,8 +233,7 @@ impl ClusterHarness {
     /// A base client configuration.
     pub fn config(&self) -> GlideClusterClientConfiguration {
         GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
-            .connection_timeout(Duration::from_secs(10))
-            .request_timeout(Duration::from_secs(10))
+            .request_timeout(Duration::from_secs(5))
     }
 
     /// A base client configuration with secure TLS enabled and the shared CA trusted.
