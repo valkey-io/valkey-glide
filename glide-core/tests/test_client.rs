@@ -1561,21 +1561,25 @@ pub(crate) mod shared_client_tests {
             glide_core::scope::register_client(client_id, client.clone());
             let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone());
 
-            // Reserve capacity, then synchronously seat one idle connection. This
-            // mirrors the reserve-before-create contract that `try_acquire_scope`
-            // relies on: `create_scope_connection` only decrements on failure.
-            pool.lock()
-                .await
-                .total_count
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            // Resolve the target, then reserve via try_acquire (the
+            // reserve-before-create contract) to get the guard; seating the
+            // connection commits it.
             let target = glide_core::scope::resolve_scope_target(Some(&client), routing_slot)
                 .await
                 .expect("slot owner resolvable against live topology");
+            let reservation = {
+                let mut guard = pool.lock().await;
+                match guard.try_acquire(glide_core::pool::get_scope_registry(), target.clone()) {
+                    glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
+                }
+            };
             glide_core::scope::create_scope_connection(
                 pool.clone(),
                 Some(&client),
                 &bytes,
                 target.clone(),
+                reservation,
             )
             .await;
 

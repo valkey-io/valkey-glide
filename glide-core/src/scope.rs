@@ -580,9 +580,10 @@ async fn build_scope_connection(
 
 /// Create a new scope connection in the background and add it to the pool.
 ///
-/// The caller holds a `max_total` reservation (see [`ScopeAcquire::Reserved`]).
-/// On success the reservation is consumed by the seated connection; on any
-/// failure it is released here, exactly once, with a single log line naming the
+/// The caller hands over the `max_total` reservation (see
+/// [`ScopeAcquire::Reserved`]). On success it is committed as the seated
+/// connection; on any failure — including a cancel or panic mid-await — the
+/// guard's `Drop` gives the slot back. Failures are logged once, naming the
 /// target and the cause.
 ///
 /// # Arguments
@@ -590,12 +591,14 @@ async fn build_scope_connection(
 /// - `client`: Optional reference to the parent Client (for IAM and runtime DB)
 /// - `connection_request_bytes`: Serialized protobuf ConnectionRequest
 /// - `target`: Standalone server or concrete cluster primary
+/// - `reservation`: the reservation guard for the slot being filled
 #[cfg(feature = "proto")]
 pub async fn create_scope_connection(
     pool: Arc<TokioMutex<ScopePool>>,
     client: Option<&Client>,
     connection_request_bytes: &[u8],
     target: ScopeTarget,
+    reservation: crate::pool::ScopeReservation,
 ) {
     let connection = build_scope_connection(client, connection_request_bytes, &target).await;
 
@@ -624,18 +627,19 @@ pub async fn create_scope_connection(
                     prepared.initial_iam_generation,
                 ),
             });
+            reservation.commit();
         }
         Err(err) => {
-            // Single release point for the reservation. A pool shutting down is
-            // expected, not a fault; everything else is worth a warning because
-            // the borrower only ever sees a generic "pool exhausted" timeout.
+            // The uncommitted `reservation` gives the slot back on drop. A pool
+            // shutting down is expected, not a fault; everything else is worth a
+            // warning because the borrower only ever sees a generic "pool
+            // exhausted" timeout.
             let message = format!("scoped connection to {target:?} not created: {err}");
             if matches!(err, ScopeCreateError::PoolClosed) {
                 logger_core::log_debug("create_scope_connection", message);
             } else {
                 logger_core::log_warn("create_scope_connection", message);
             }
-            pool_guard.total_count.fetch_sub(1, Ordering::AcqRel);
         }
     }
 }
@@ -700,14 +704,22 @@ pub fn try_acquire_scope(
                     let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
                     scope_id as i64
                 }
-                ScopeAcquire::Reserved => {
-                    // Spawn background connection creation with the same normalized target
-                    // used for idle matching.
+                ScopeAcquire::Reserved(reservation) => {
+                    // Fill the slot with the same normalized target used for idle
+                    // matching; the caller retries and picks the connection up once
+                    // it lands in idle. The guard moves into the creation task, so
+                    // an early return, cancel, or panic there gives the slot back.
                     let pool_clone = scope_pool.clone();
                     let conn_bytes = pool.connection_request_bytes.clone();
                     runtime.spawn(async move {
-                        create_scope_connection(pool_clone, client.as_ref(), &conn_bytes, target)
-                            .await;
+                        create_scope_connection(
+                            pool_clone,
+                            client.as_ref(),
+                            &conn_bytes,
+                            target,
+                            reservation,
+                        )
+                        .await;
                     });
                     -1
                 }
@@ -939,8 +951,8 @@ mod tests {
 
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
-        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, ScopeTargetUnresolved,
-        get_client_scope_pools, get_scope_registry,
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeReservation, ScopeTarget,
+        ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
 
@@ -994,6 +1006,12 @@ mod tests {
             .expect("lazy client construction does not touch the network")
     }
 
+    /// The reservation guard `try_acquire` would hand the creation task, bound to
+    /// `pool`'s pre-incremented counter (see `reserved_pool`).
+    async fn reservation_for(pool: &Arc<TokioMutex<ScopePool>>) -> ScopeReservation {
+        ScopeReservation::for_test(pool.lock().await.total_count.clone())
+    }
+
     fn listening_endpoint() -> TcpListener {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
         listener
@@ -1008,7 +1026,15 @@ mod tests {
         let request_bytes = request_bytes(lib_name, port);
         let pool = reserved_pool(request_bytes.clone());
 
-        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
 
         let pool = pool.lock().await;
         assert_eq!(pool.total_count.load(Ordering::Acquire), 0, "{lib_name}");
@@ -1061,8 +1087,15 @@ mod tests {
             let request_bytes = request_bytes(lib_name, port);
             let pool = reserved_pool(request_bytes.clone());
 
-            create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone)
-                .await;
+            let reservation = reservation_for(&pool).await;
+            create_scope_connection(
+                pool.clone(),
+                None,
+                &request_bytes,
+                ScopeTarget::Standalone,
+                reservation,
+            )
+            .await;
 
             {
                 let pool = pool.lock().await;
@@ -1346,7 +1379,15 @@ mod tests {
         let initial_target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
             .expect("standalone always resolves");
         assert_eq!(initial_target, ScopeTarget::Standalone);
-        create_scope_connection(pool.clone(), None, &request_bytes, initial_target).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            initial_target,
+            reservation,
+        )
+        .await;
 
         let registry = crate::pool::get_scope_registry();
         let first_scope_id = {
@@ -1401,7 +1442,15 @@ mod tests {
         let (port, shutdown_sender, server) = responsive_endpoint();
         let request_bytes = request_bytes("", port);
         let pool = reserved_pool(request_bytes.clone());
-        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
 
         let registry = crate::pool::get_scope_registry();
         let target = ScopeTarget::cluster_primary(PRIMARY_A);
@@ -1444,7 +1493,15 @@ mod tests {
         let (port, shutdown_sender, server) = responsive_endpoint();
         let request_bytes = request_bytes("", port);
         let pool = reserved_pool(request_bytes.clone());
-        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
 
         let registry = crate::pool::get_scope_registry();
         let scope_id = {
@@ -1454,18 +1511,22 @@ mod tests {
             // against max_total, so the running total is asserted alongside it.
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_A);
-            assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B)),
-                ScopeAcquire::Reserved
-            );
+            // Hold each reserved guard: in production the creation task holds it
+            // and commits on seat. Dropping it here would reclaim the slot.
+            let reservation_b =
+                match pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B)) {
+                    ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a reservation, got {other:?}"),
+                };
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
-            assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)),
-                ScopeAcquire::Reserved
-            );
+            let reservation_a =
+                match pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)) {
+                    ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a reservation, got {other:?}"),
+                };
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
 
@@ -1473,6 +1534,10 @@ mod tests {
             pool.idle[0].target = ScopeTarget::Standalone;
             let reused = reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone));
             assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
+            // Keep the two held reservations counted, as their in-flight creations
+            // would; they are the two slots the running total above accounts for.
+            reservation_a.commit();
+            reservation_b.commit();
             reused
         };
 
@@ -1508,18 +1573,22 @@ mod tests {
         let pool = Arc::new(TokioMutex::new(pool));
 
         // Seat two idle connections; the first seated is the oldest (front).
+        let reservation_a = reservation_for(&pool).await;
         create_scope_connection(
             pool.clone(),
             None,
             &request_bytes("", port_a),
             ScopeTarget::Standalone,
+            reservation_a,
         )
         .await;
+        let reservation_b = reservation_for(&pool).await;
         create_scope_connection(
             pool.clone(),
             None,
             &request_bytes("", port_b),
             ScopeTarget::Standalone,
+            reservation_b,
         )
         .await;
 
@@ -1534,10 +1603,13 @@ mod tests {
             let newest_id = pool.idle[1].scope_id;
 
             // Full + all mismatched: evict the oldest, reserve for the new target.
-            assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary("10.0.0.3:6379")),
-                ScopeAcquire::Reserved
-            );
+            // Hold the guard as the in-flight creation would; dropping it here
+            // would reclaim the slot the eviction just freed for it.
+            let reservation =
+                match pool.try_acquire(registry, ScopeTarget::cluster_primary("10.0.0.3:6379")) {
+                    ScopeAcquire::Reserved(reservation) => reservation,
+                    other => panic!("expected a reservation, got {other:?}"),
+                };
             assert_eq!(pool.idle.len(), 1, "exactly one idle connection evicted");
             assert_eq!(
                 pool.idle[0].scope_id, newest_id,
@@ -1560,12 +1632,14 @@ mod tests {
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
             // Full with nothing idle: genuinely exhausted, and no reservation leaks.
-            assert_eq!(
+            assert!(matches!(
                 pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)),
                 ScopeAcquire::Exhausted
-            );
+            ));
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
+            // The held reservation's creation would commit; keep the slot counted.
+            reservation.commit();
             assert!(pool.release(reused, registry));
         }
 
@@ -1597,7 +1671,15 @@ mod tests {
             .expect("lazy parent client creation should succeed");
         register_client(parent_client_id, parent);
 
-        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
         let acquired = {
             let mut pool = pool.lock().await;
             pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone)
@@ -1649,7 +1731,15 @@ mod tests {
             .expect("lazy parent client creation should succeed");
         register_client(parent_client_id, parent);
 
-        create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
         let acquired = {
             let mut pool = pool.lock().await;
             pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone)

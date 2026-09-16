@@ -853,21 +853,28 @@ pub unsafe extern "C" fn glide_scope_prewarm(
     // Create the scope pool (registers it if not exists)
     let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone());
 
-    // Spawn min_idle background connection creation tasks on the scope runtime.
-    // Resolve slot 0 through the parent client's current topology so cluster
-    // prewarming targets slot 0's primary while standalone prewarming targets its
-    // server. An unresolvable target skips the prewarm connection: this is
-    // expected for a lazily connected cluster client, which has no slot map until
-    // its first command, so it is logged at debug rather than warn.
+    // Spawn min_idle background creation tasks. Each reserves a slot (skipping if
+    // full or closed) then resolves slot 0 through the parent client's current
+    // topology, so cluster prewarming targets slot 0's primary and standalone
+    // prewarming targets its server. An unresolvable target skips the connection
+    // and drops its reservation — expected for a lazily connected cluster client
+    // (no slot map until its first command), so logged at debug rather than warn.
+    // The guard means a failed or cancelled prewarm always gives its slot back.
     for _ in 0..min_idle {
         let pool_clone = pool.clone();
         let bytes = conn_bytes.clone();
         let cid = client_id;
         runtime.spawn(async move {
+            // Reserve respecting max_total; skip if full or closed.
+            let reservation = match pool_clone.lock().await.reserve_slot() {
+                Some(reservation) => reservation,
+                None => return,
+            };
             let client = scope::get_parent_client(cid);
             let target = match scope::resolve_scope_target(client.as_ref(), 0).await {
                 Ok(target) => target,
                 Err(cause) => {
+                    // Drop the reservation (guard reclaims the slot).
                     logger_core::log_debug(
                         "glide_scope_prewarm",
                         format!("client {cid}: prewarm skipped, target unresolved: {cause}"),
@@ -875,7 +882,14 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            scope::create_scope_connection(pool_clone, client.as_ref(), &bytes, target).await;
+            scope::create_scope_connection(
+                pool_clone,
+                client.as_ref(),
+                &bytes,
+                target,
+                reservation,
+            )
+            .await;
         });
     }
 }
