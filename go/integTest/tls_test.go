@@ -260,17 +260,17 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
 	tlsDir := filepath.Join("..", "..", "utils", "tls_crts")
 
-    certPath, err = filepath.Abs(filepath.Join(tlsDir, "client.crt"))
+	certPath, err = filepath.Abs(filepath.Join(tlsDir, "client.crt"))
 	if err != nil {
 		return "", "", err
 	}
 
-    keyPath, err = filepath.Abs(filepath.Join(tlsDir, "client.key"))
+	keyPath, err = filepath.Abs(filepath.Join(tlsDir, "client.key"))
 	if err != nil {
 		return "", "", err
 	}
 
-    return certPath, keyPath, nil
+	return certPath, keyPath, nil
 }
 
 // TestTlsMutualTLS_Standalone runs byte-based mTLS end-to-end against a real
@@ -515,7 +515,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 func getCaCertificate() ([]byte, error) {
 	caCertPath := filepath.Join("..", "..", "utils", "tls_crts", "ca.crt")
 
-    absPath, err := filepath.Abs(caCertPath)
+	absPath, err := filepath.Abs(caCertPath)
 	if err != nil {
 		return nil, err
 	}
