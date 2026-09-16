@@ -359,12 +359,11 @@ pub fn create_pool(
             };
             let mut internal_req: ConnectionRequest = connection_request.into();
             internal_req.address_resolver = None;
-            if let Some(ref provider) = pool_credential_provider {
-                if let Some(auth_info) = internal_req.authentication_info.as_mut()
-                    && let Some(iam_config) = auth_info.iam_config.as_mut()
-                {
-                    iam_config.credentials_provider = Some(provider.clone());
-                }
+            if let Some(ref provider) = pool_credential_provider
+                && let Some(auth_info) = internal_req.authentication_info.as_mut()
+                && let Some(iam_config) = auth_info.iam_config.as_mut()
+            {
+                iam_config.credentials_provider = Some(provider.clone());
             }
 
             match Client::new(internal_req, None).await {
