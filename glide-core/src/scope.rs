@@ -1257,13 +1257,16 @@ mod tests {
         let scope_id = {
             let mut pool = pool.lock().await;
             // Below max_total, a mismatched idle connection is kept and a new
-            // slot is reserved for the other primary.
+            // slot is reserved for the other primary. Each reservation is counted
+            // against max_total, so the running total is asserted alongside it.
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_A);
             assert_eq!(
                 pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B)),
                 ScopeAcquire::Reserved
             );
             assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
             assert_eq!(
@@ -1271,9 +1274,13 @@ mod tests {
                 ScopeAcquire::Reserved
             );
             assert_eq!(pool.idle.len(), 1);
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
 
+            // Reuse consumes no additional capacity.
             pool.idle[0].target = ScopeTarget::Standalone;
-            reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone))
+            let reused = reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone));
+            assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
+            reused
         };
 
         {
