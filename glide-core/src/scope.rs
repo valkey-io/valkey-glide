@@ -559,13 +559,31 @@ async fn build_scope_connection(
     }
 
     if init_count > 0 {
-        match tokio::time::timeout(
+        let init_result = tokio::time::timeout(
             SCOPE_CONNECT_TIMEOUT,
             conn.send_packed_commands(&init_pipe, 0, init_count),
         )
-        .await
-        {
-            Ok(Ok(_)) => {}
+        .await;
+        let replies_ok = crate::pool::pipeline_replies_ok(&init_result);
+        match init_result {
+            Ok(Ok(_)) if replies_ok => {}
+            Ok(Ok(replies)) => {
+                // Init rejected by the server (see pipeline_replies_ok) — surface the
+                // embedded error rather than recording a db we never selected.
+                let err = replies
+                    .into_iter()
+                    .find_map(|v| match v {
+                        redis::Value::ServerError(e) => Some(redis::RedisError::from(e)),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ResponseError,
+                            "scope connection initialization failed",
+                        ))
+                    });
+                return Err(ScopeCreateError::InitFailed(err));
+            }
             Ok(Err(e)) => return Err(ScopeCreateError::InitFailed(e)),
             Err(_) => return Err(ScopeCreateError::InitTimedOut),
         }
@@ -768,11 +786,8 @@ pub(crate) async fn resync_idle_connection_database(
     .await;
 
     let mut guard = pool.lock().await;
-    // A SELECT that the server rejects (e.g. DB index out of range) comes back as a
-    // ServerError *inside* the reply, not an outer Err — so a successful resync requires
-    // both the round-trip to succeed AND no reply to be a server error.
-    let resync_ok = matches!(&result, Ok(Ok(replies))
-        if !replies.iter().any(|v| matches!(v, redis::Value::ServerError(_))));
+    // A rejected SELECT surfaces inside the reply, not as an outer Err — see pipeline_replies_ok.
+    let resync_ok = crate::pool::pipeline_replies_ok(&result);
     if resync_ok {
         // Record the connection's new actual database and return it to idle.
         conn.state = ConnectionState::with_configured_db(runtime_db as u8);

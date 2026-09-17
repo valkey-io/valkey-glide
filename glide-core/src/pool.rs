@@ -718,6 +718,20 @@ impl ConnectionState {
     }
 }
 
+/// Whether a direct `send_packed_commands` round-trip fully succeeded.
+///
+/// These sends use `offset = 0`, so a command the server rejects (e.g. `SELECT`
+/// with a bad DB index) surfaces as a `ServerError` *inside* the reply, not an
+/// outer `Err`. Success therefore requires both no transport error and no reply
+/// being a server error — otherwise a rejected `SELECT` would leave a connection
+/// recorded on the wrong database. Used by the scope init, cleanup, and resync `SELECT`s.
+pub(crate) fn pipeline_replies_ok(
+    result: &Result<redis::RedisResult<Vec<redis::Value>>, tokio::time::error::Elapsed>,
+) -> bool {
+    matches!(result, Ok(Ok(replies))
+        if !replies.iter().any(|v| matches!(v, redis::Value::ServerError(_))))
+}
+
 pub enum ScopeSubscription {
     Channel(Vec<u8>),
     Pattern(Vec<u8>),
@@ -1267,9 +1281,9 @@ impl ScopePool {
                             Ok(Ok(vec![]))
                         };
 
-                        // If cleanup succeeded, return connection to idle.
-                        // If any error (timeout, command failure), discard the connection.
-                        let success = matches!(cleanup_result, Ok(Ok(_)));
+                        // Succeeded → re-idle; any error, including a rejected SELECT
+                        // (see pipeline_replies_ok) → discard rather than re-idle on the wrong db.
+                        let success = pipeline_replies_ok(&cleanup_result);
 
                         if success {
                             if let Some(pool_arc) = pool_arc {
@@ -2720,6 +2734,168 @@ mod scope_pool_tests {
                 0,
                 "a failed resync must reclaim the connection's slot"
             );
+        }
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// A rejected init `SELECT` (embedded `ServerError`, not an outer `Err`) must fail the
+    /// create — releasing the reservation and seating nothing — not seat a connection
+    /// recorded on a database it never selected.
+    ///
+    /// A-B: the pre-fix `Ok(Ok(_)) => {}` arm swallowed the error and seated it (idle == 1).
+    #[tokio::test]
+    async fn failed_initialization_select_seats_no_connection_and_reclaims_the_slot() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        // database_id 200 is out of range on a default-16-db server, so the init SELECT
+        // is rejected by the server.
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 200;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_006_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        {
+            let pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                0,
+                "a rejected init SELECT must not seat a connection in idle"
+            );
+            assert_eq!(
+                pool.total_count.load(Ordering::Acquire),
+                0,
+                "a failed init must release the reservation, not leak the slot"
+            );
+        }
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// A rejected cleanup `SELECT` (embedded `ServerError`) must discard the connection, not
+    /// record `baseline_db` and re-idle one sitting on the wrong database. The borrow baseline
+    /// is forced out of range (200) so the cleanup `SELECT 200` fails.
+    ///
+    /// A-B: the pre-fix `matches!(cleanup_result, Ok(Ok(_)))` check re-idled it (idle == 1).
+    #[tokio::test]
+    async fn failed_cleanup_select_discards_the_connection_and_reclaims_the_slot() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 0;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_007_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 0) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected a clean reuse on db 0: {other:?}"),
+            }
+        };
+
+        // Dirty the connection (forces the cleanup pipeline, not the clean path) and force
+        // the baseline out of range so the cleanup SELECT 200 is rejected.
+        crate::scope::execute_scope_command(scope_id, "SELECT", &[b"1".to_vec()], None)
+            .await
+            .expect("SELECT 1 must succeed");
+        {
+            let entry = registry.get(&scope_id).expect("scope entry present");
+            let mut conn = entry.connection.lock().await;
+            conn.state.baseline_db = 200;
+        }
+
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(pool.release(scope_id, registry));
+        }
+
+        // Cleanup runs in a spawned task — wait for it, then assert discard + slot reclaim.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let pool = pool_arc.lock().await;
+            if pool.total_count.load(Ordering::Acquire) == 0 {
+                assert_eq!(
+                    pool.idle.len(),
+                    0,
+                    "a failed cleanup SELECT must not re-idle the connection"
+                );
+                break;
+            }
+            drop(pool);
+            if std::time::Instant::now() > deadline {
+                panic!("cleanup did not discard the connection and reclaim the slot in time");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
 
         crate::pool::get_client_scope_pools().remove(&client_id);
