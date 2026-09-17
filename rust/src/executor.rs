@@ -1,5 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! The command dispatch seam.
+//! The command dispatch trait.
 //!
 //! [`CommandExecutor`] is the single trait every command family builds on. Both
 //! [`crate::GlideClient`] and [`crate::GlideClusterClient`] implement it. All the

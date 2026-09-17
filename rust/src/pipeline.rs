@@ -124,9 +124,7 @@ pub(crate) async fn dispatch_pipeline(
             .await
     };
 
-    reply
-        .map(ValkeyValue::from_redis)
-        .map_err(GlideError::from_redis_error)
+    ValkeyValue::from_redis(reply.map_err(GlideError::from_redis_error)?)
 }
 
 #[cfg(test)]

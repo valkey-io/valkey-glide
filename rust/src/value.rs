@@ -110,25 +110,31 @@ impl ValkeyVerbatimFormat {
 }
 
 impl ValkeyValue {
-    pub(crate) fn from_redis(value: Value) -> Self {
-        let pairs = |ps: Vec<(Value, Value)>| {
+    pub(crate) fn from_redis(value: Value) -> ValkeyResult<Self> {
+        let pairs = |ps: Vec<(Value, Value)>| -> ValkeyResult<Vec<(ValkeyValue, ValkeyValue)>> {
             ps.into_iter()
-                .map(|(k, v)| (ValkeyValue::from_redis(k), ValkeyValue::from_redis(v)))
+                .map(|(k, v)| Ok((ValkeyValue::from_redis(k)?, ValkeyValue::from_redis(v)?)))
                 .collect()
         };
-        match value {
+        Ok(match value {
             Value::Nil => ValkeyValue::Nil,
             Value::Int(i) => ValkeyValue::Int(i),
             Value::BulkString(b) => ValkeyValue::BulkString(b),
-            Value::Array(items) => {
-                ValkeyValue::Array(items.into_iter().map(ValkeyValue::from_redis).collect())
-            }
+            Value::Array(items) => ValkeyValue::Array(
+                items
+                    .into_iter()
+                    .map(ValkeyValue::from_redis)
+                    .collect::<ValkeyResult<_>>()?,
+            ),
             Value::SimpleString(s) => ValkeyValue::SimpleString(s),
             Value::Okay => ValkeyValue::Okay,
-            Value::Map(ps) => ValkeyValue::Map(pairs(ps)),
-            Value::Set(items) => {
-                ValkeyValue::Set(items.into_iter().map(ValkeyValue::from_redis).collect())
-            }
+            Value::Map(ps) => ValkeyValue::Map(pairs(ps)?),
+            Value::Set(items) => ValkeyValue::Set(
+                items
+                    .into_iter()
+                    .map(ValkeyValue::from_redis)
+                    .collect::<ValkeyResult<_>>()?,
+            ),
             Value::Double(d) => ValkeyValue::Double(d),
             Value::Boolean(b) => ValkeyValue::Boolean(b),
             Value::VerbatimString { format, text } => ValkeyValue::VerbatimString {
@@ -141,9 +147,19 @@ impl ValkeyValue {
                 detail: e.details().map(str::to_string),
             }),
 
-            Value::Attribute { .. } => unreachable!("Attributes are not supported."),
-            Value::Push { .. } => unreachable!("Commands should not return Push values."),
-        }
+            // There a currently no known cases where a response would include
+            // an attribute value, so we match redis-rs's behavior: return the
+            // attribute data and drop the corresponding metadata.
+            Value::Attribute { data, .. } => ValkeyValue::from_redis(*data)?,
+
+            // Push values should never occur in command replies (they should be handled
+            // by glide-core), so raise an error if we encounter one.
+            Value::Push { .. } => {
+                return Err(GlideError::Request(
+                    "unexpected Push value in command reply".into(),
+                ));
+            }
+        })
     }
 }
 
@@ -741,8 +757,12 @@ mod tests {
             },
             Value::Map(vec![(Value::Int(1), Value::Int(2))]),
             Value::Set(vec![Value::Int(9)]),
+            Value::Attribute {
+                data: Box::new(Value::Int(42)),
+                attributes: vec![(Value::SimpleString("k".into()), Value::Int(1))],
+            },
         ]);
-        let vv = ValkeyValue::from_redis(rv);
+        let vv = ValkeyValue::from_redis(rv).unwrap();
         assert_eq!(
             vv,
             ValkeyValue::Array(vec![
@@ -760,6 +780,7 @@ mod tests {
                 },
                 ValkeyValue::Map(vec![(ValkeyValue::Int(1), ValkeyValue::Int(2))]),
                 ValkeyValue::Set(vec![ValkeyValue::Int(9)]),
+                ValkeyValue::Int(42),
             ])
         );
     }
@@ -768,13 +789,22 @@ mod tests {
     fn from_redis_reads_server_error_code_and_detail() {
         let error = RedisError::from((ErrorKind::ResponseError, "boom", "detail".to_string()));
         let v = Value::ServerError(error.into());
-        match ValkeyValue::from_redis(v) {
+        match ValkeyValue::from_redis(v).unwrap() {
             ValkeyValue::ServerError(e) => {
                 assert_eq!(e.err_code(), "ERR");
                 assert_eq!(e.details(), Some("boom detail"));
             }
             other => panic!("expected ServerError, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn from_redis_push_value_error() {
+        let v = Value::Push {
+            kind: redis::PushKind::Message,
+            data: vec![Value::Int(1)],
+        };
+        assert!(ValkeyValue::from_redis(v).is_err());
     }
 }
 
@@ -929,7 +959,9 @@ impl FromValkeyValue for Bytes {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Bytes> {
         match value {
             ValkeyValue::BulkString(bytes) => Ok(bytes),
-            other => Err(to_glide_error(other, "Not a bulk string")),
+            ValkeyValue::SimpleString(s) => Ok(Bytes::from(s.into_bytes())),
+            ValkeyValue::VerbatimString { text, .. } => Ok(Bytes::from(text.into_bytes())),
+            other => Err(to_glide_error(other, "Response type not byte compatible.")),
         }
     }
 }
@@ -1052,23 +1084,32 @@ macro_rules! impl_from_valkey_tuple {
             fn from_owned_valkey_values(items: Vec<ValkeyValue>) -> ValkeyResult<Vec<($($name,)*)>> {
                 let mut n = 0;
                 $(let $name = (); n += 1;)*
+
                 if items.is_empty() {
                     return Ok(Vec::new());
                 }
+
+                let mut items = items;
+
                 // First try array-of-arrays: each element is itself an N-array.
-                let mut rv = Vec::with_capacity(items.len());
-                for item in &items {
-                    if let ValkeyValue::Array(ch) = item {
-                        if let [$($name),*] = &ch[..] {
-                            rv.push(($($name::from_valkey_value($name)?,)*));
+                if items
+                    .iter()
+                    .all(|it| matches!(it, ValkeyValue::Array(ch) if ch.len() == n))
+                {
+                    let mut rv = Vec::with_capacity(items.len());
+                    for item in &mut items {
+                        if let ValkeyValue::Array(ch) = item {
+                            if let [$($name),*] = &mut ch[..] {
+                                rv.push(($($name::from_owned_valkey_value(
+                                    std::mem::replace($name, ValkeyValue::Nil))?,)*));
+                            }
                         }
                     }
-                }
-                if !rv.is_empty() {
+
                     return Ok(rv);
                 }
+
                 // Otherwise treat the flat sequence as chunks of N.
-                let mut items = items;
                 let mut rv = Vec::with_capacity(items.len() / n);
                 for chunk in items.chunks_mut(n) {
                     if let [$($name),*] = chunk {
@@ -1076,6 +1117,7 @@ macro_rules! impl_from_valkey_tuple {
                             std::mem::replace($name, ValkeyValue::Nil))?,)*));
                     }
                 }
+
                 Ok(rv)
             }
         }
@@ -1172,6 +1214,8 @@ mod from_valkey_value_tests {
     #[test]
     fn from_owned_valkey_value_bytes() {
         assert_eq!(decode::<Bytes>(BULK), Bytes::from_static(b"hi"));
+        assert_eq!(decode::<Bytes>(simple()), Bytes::from_static(b"s"));
+        assert_eq!(decode::<Bytes>(verbatim()), Bytes::from_static(b"vt"));
     }
 
     #[test]

@@ -158,10 +158,19 @@ build, test, and benchmark.
 
 ## Migrating from redis-rs
 
-GLIDE's command API is **source-compatible with the redis-rs fork
-(v0.25.2, predating the upstream license change)**: method names, signatures,
-and wire encoding match, so existing typed call sites compile unchanged with
-`RedisResult` errors. Everything you need is re-exported from `glide`.
+GLIDE's command API **mirrors the redis-rs fork (v0.25.2, before the upstream
+license change)**. Method names, signatures, and wire encoding match, with
+GLIDE-specific equivalents to redis-rs types:
+
+| redis-rs         | GLIDE              |
+|------------------|--------------------|
+| `RedisResult`    | `ValkeyResult`     |
+| `RedisError`     | `GlideError`       |
+| `Value`          | `ValkeyValue`      |
+| `ToRedisArgs`    | `ToValkeyArgs`     |
+| `FromRedisValue` | `FromValkeyValue`  |
+
+To migrate a typed call site, you only rename the type.
 
 Every command is executed by glide-core (multiplexing, cluster routing,
 reconnection, IAM auth), handed over **by value** on GLIDE's zero-extra-copy
@@ -212,9 +221,9 @@ Notes:
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
   seed-node URLs; commands are routed automatically.
 - Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
-- Raw commands: build a `redis::Cmd` and send it typed with
-  `client.glide_send(cmd)` (or untyped with `glide_send_owned` /
-  `custom_command`) — this replaces `cmd().query_async()`, without the
+- Raw commands: build a `glide::Cmd` with `glide::cmd("X")`. Send it typed with
+  `client.glide_send(cmd)`, or untyped with `glide_send_owned` /
+  `custom_command`. This replaces `cmd().query_async()` without the
   connection-object copy.
 - Accepted gaps: no Sentinel / unix sockets / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code

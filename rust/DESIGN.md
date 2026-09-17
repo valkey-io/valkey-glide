@@ -5,14 +5,8 @@
 The crate lives in the `valkey-io/valkey-glide` monorepo under `rust/` and
 declares in-repo **path dependencies** on both `glide-core` and its *vendored*
 `redis` (the redis-rs fork, v0.25.2 — predating the upstream license change),
-which sit alongside it in the same tree:
-
-```toml
-glide-core = { path = "../glide-core" }
-redis      = { path = "../glide-core/redis-rs/redis", package = "redis", features = [
-    "aio", "tokio-comp", "cluster", "cluster-async",
-] }
-```
+which sit alongside it in the same tree (see the path dependencies in
+[`Cargo.toml`](Cargo.toml)).
 
 Because both resolve to the **same in-repo source**, Cargo unifies our
 `redis::Cmd` / `redis::Value` with the exact types `glide-core` expects — no type
@@ -20,14 +14,11 @@ mismatch, no re-wrapping. Building the crate therefore requires a checkout of th
 monorepo, and the path deps mean it is not yet publishable to crates.io (see the
 README's *Status & publishing* section).
 
-## Dispatch seam — `CommandExecutor`
+## Command dispatch — `CommandExecutor`
 
-```rust
-#[async_trait]
-pub trait CommandExecutor: Send + Sync {
-    async fn execute_command(&self, cmd: Cmd, routing: Option<RoutingInfo>) -> Result<Value>;
-}
-```
+Every command goes into glide-core through the
+[`CommandExecutor`](src/executor.rs) trait. It has one async method,
+`execute_command(cmd, route)`, that returns `ValkeyResult<ValkeyValue>`.
 
 `glide_core::client::Client` is `Clone` (internally `Arc<RwLock<..>>`), and
 `send_command` needs `&mut self`. So `execute_command` clones the inner client
@@ -65,17 +56,18 @@ Deliberate deviations, all performance-motivated:
   same `next_item()` / `Iterator` call shape as redis-rs), each page
   dispatched by value.
 
-```rust
-pub trait AsyncCommands: Send + Sync + Sized {
-    fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> RedisFuture<'a, Value>;
-    // typed escape hatch (replaces `cmd().query_async()`):
-    fn glide_send<'a, RV: FromRedisValue>(&'a self, cmd: Cmd) -> RedisFuture<'a, RV> { /* provided */ }
-    // + 151 table-defined methods with fork-exact signatures:
-    fn get<'a, K: ToRedisArgs + Send + Sync + 'a, RV: FromRedisValue>(
-        &'a self, key: K) -> RedisFuture<'a, RV> { /* Cmd::get -> glide_send_owned */ }
-    // ...
-}
-```
+Almost every method on [`AsyncCommands`](src/commands/core.rs) and
+[`Commands`](src/commands/core.rs) stands for one Valkey command — `get`, `set`,
+`incr`, and so on. The command table generates them all automatically.
+
+Each client writes just one method of its own: `glide_send_owned` (or
+`glide_send_owned_sync` on the blocking trait). It takes a finished command and
+sends it to glide-core, and every generated method goes through it.
+
+For a command the table does not cover, build the command yourself and run it
+with `glide_send`, which returns the reply already decoded into the type you ask
+for. `Cmd::query_async` does the same in redis-rs's calling style, so code moving
+over from that crate keeps working.
 
 Commands **beyond** that table live in GLIDE **extension traits**
 (`src/commands/`): streams, geo, Search (`FT.*`), JSON, Pub/Sub, scripting/
@@ -84,18 +76,22 @@ field-TTL, `LCS`, `SINTERCARD`, `ZRANGESTORE`, `BITFIELD`, `SORT`,
 `DUMP`/`RESTORE`, …). These keep rich concrete return types and never collide
 with unified-trait names, so both can be imported together.
 
-- **Arguments**: generic over `redis::ToRedisArgs` — accepts `&str`, `String`,
-  `&[u8]`, `Vec<u8>`, integers, floats, slices, etc.
-- **Returns**: unified traits are generic over `redis::FromRedisValue`
-  (`let v: Option<String> = c.get(k).await?`); extension traits return
+- **Arguments**: generic over `glide::ToValkeyArgs` — accepts `&str`, `String`,
+  `&[u8]`, `Vec<u8>`, `Bytes`, integers, floats, slices, etc.
+- **Returns**: the unified traits are generic over `glide::FromValkeyValue`
+  (`let v: Option<String> = c.get(k).await?`). The extension traits return
   concrete typed results.
 
 ## Value conversion
 
-`value` module provides helpers: `Value -> Option<Bytes>`, `-> String`, `-> i64`,
-`-> f64`, `-> bool`, `-> Vec<T>`, `-> HashMap<..>`. Built on `FromRedisValue`
-where possible, with Glide-specific handling for `Value::Nil`, `Value::Okay`,
-and RESP3 maps/doubles/booleans (glide-core already converts many types).
+The `value` module owns the reply and argument types. `ValkeyValue`
+(`src/value.rs`) mirrors redis-rs's `Value` and covers all RESP2/RESP3 shapes.
+Command dispatch converts the raw fork `redis::Value` to a `ValkeyValue` once,
+through `ValkeyValue::from_redis`. `FromValkeyValue` then decodes a `ValkeyValue`
+into concrete Rust types: numerics, `bool`, `String`, `Bytes`, `Option`, `Vec`,
+tuples, maps, and sets. Its explicit per-type impls match redis-rs's
+`FromRedisValue` semantics. `ToValkeyArgs` encodes Rust values into command
+arguments. Downstream users can implement both traits for their own types.
 
 ## Routing (cluster)
 
