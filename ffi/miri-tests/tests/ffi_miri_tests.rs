@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::request_type::RequestType;
 use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::request_type::RequestType;
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
     free_connection_response,
@@ -98,12 +98,8 @@ fn create_client_from_uri_test() {
     let client_type_ptr = Box::into_raw(client_type);
 
     unsafe {
-        let connection_response_ptr = create_client_from_uri(
-            uri.as_ptr(),
-            ptr::null(),
-            client_type_ptr,
-            pubsub_callback,
-        );
+        let connection_response_ptr =
+            create_client_from_uri(uri.as_ptr(), ptr::null(), client_type_ptr, pubsub_callback);
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);
