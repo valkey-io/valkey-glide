@@ -435,3 +435,122 @@ class TestSyncAZAffinity:
                 client_for_testing_az.close()
             if client_for_config_set:
                 client_for_config_set.close()
+
+    @pytest.mark.skip_if_version_below("8.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_az_affinity_all_nodes_requires_client_az(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Test that setting read_from to AZ_AFFINITY_ALL_NODES without client_az raises an error."""
+        with pytest.raises(ValueError):
+            create_sync_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                read_from=ReadFrom.AZ_AFFINITY_ALL_NODES,
+                request_timeout=2000,
+            )
+
+    @pytest.mark.skip_if_version_below("8.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_az_affinity_all_nodes_splits_between_primary_and_replica(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """Test that the client with AZ_AFFINITY_ALL_NODES splits reads equally between the
+        primary and replica in the same AZ"""
+        az = "us-east-1a"
+        other_az = "us-east-1b"
+        GET_CALLS = 4
+        nodes_in_same_az = 2  # one primary + one replica
+
+        client_for_config_set = None
+        client_for_testing_az = None
+
+        try:
+            client_for_config_set = create_sync_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                request_timeout=2000,
+            )
+
+            assert type(client_for_config_set) is GlideClusterClient
+
+            # Reset stats and set all nodes to other_az
+            client_for_config_set.config_resetstat()
+            client_for_config_set.custom_command(
+                ["CONFIG", "SET", "availability-zone", other_az],
+                AllNodes(),
+            )
+
+            # Set the primary and one replica for slot 12182 to az
+            client_for_config_set.custom_command(
+                ["CONFIG", "SET", "availability-zone", az],
+                route=SlotIdRoute(SlotType.PRIMARY, 12182),
+            )
+            client_for_config_set.custom_command(
+                ["CONFIG", "SET", "availability-zone", az],
+                route=SlotIdRoute(SlotType.REPLICA, 12182),
+            )
+
+            # Create test client AFTER configuration
+            client_for_testing_az = create_sync_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                read_from=ReadFrom.AZ_AFFINITY_ALL_NODES,
+                client_az=az,
+                request_timeout=2000,
+            )
+
+            # Perform GET operations
+            for _ in range(GET_CALLS):
+                client_for_testing_az.get("foo")
+
+            assert type(client_for_testing_az) is GlideClusterClient
+            # Collect info from all nodes
+            result = client_for_testing_az.info(
+                [
+                    InfoSection.SERVER,
+                    InfoSection.REPLICATION,
+                    InfoSection.COMMAND_STATS,
+                ],
+                AllNodes(),
+            )
+            info_result = cast(dict[bytes, bytes], result)
+
+            matching_entries_count = 0
+            total_get_calls = 0
+
+            for node_info in info_result.values():
+                info_str = node_info.decode()
+                az_match = re.search(r"availability_zone:(\S+)", info_str)
+                node_az = az_match.group(1) if az_match else ""
+                get_calls_match = re.search(r"cmdstat_get:calls=(\d+)", info_str)
+                get_calls = int(get_calls_match.group(1)) if get_calls_match else 0
+
+                total_get_calls += get_calls
+
+                if node_az == az and get_calls == GET_CALLS // nodes_in_same_az:
+                    matching_entries_count += 1
+                elif node_az != az and get_calls > 0:
+                    pytest.fail(f"GET calls found on node not in AZ {az}")
+
+            assert matching_entries_count == nodes_in_same_az, (
+                "The in-AZ primary and replica should split the calls equally. "
+                f"Matching entries: {matching_entries_count}, Total GET calls: {total_get_calls}"
+            )
+            assert (
+                total_get_calls == GET_CALLS
+            ), f"Total GET calls mismatch, expected {GET_CALLS}, got {total_get_calls}"
+
+        finally:
+            if client_for_testing_az:
+                client_for_testing_az.close()
+            if client_for_config_set:
+                client_for_config_set.close()

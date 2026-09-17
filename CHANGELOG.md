@@ -4,6 +4,8 @@
 
 ### Fixes
 
+* Core: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them. Affects the existing `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` strategies as well as the new `AZ_AFFINITY_ALL_NODES`. ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
+* Core/FFI: Accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Python: Fix trio pub/sub BusyResourceError from duplicate shared-pipe reader ([#6605](https://github.com/valkey-io/valkey-glide/pull/6605))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Core/FFI: Release response payload buffers when parking a `ResponseArena` in the thread-local reuse pool. `free_response_arena` (reached via `free_command_response` from all language bindings) parked arenas with their `strings` payload buffers still populated, but the pool is only drained on the Rust worker threads that build responses — arenas freed on consumer threads (e.g. Go OS threads) were never reused and never cleared, pinning up to 16 full response payloads per thread and leaking roughly one payload per command. Large-value workloads could OOM within minutes. Fixed on `main` as part of [#6559](https://github.com/valkey-io/valkey-glide/pull/6559); this backports the arena-release fix. ([#6740](https://github.com/valkey-io/valkey-glide/issues/6740))
@@ -21,6 +23,8 @@
 
 ### Changes
 
+* Java: Add `AZ_AFFINITY_ALL_NODES` read strategy, and harden `clientAZ` validation for all AZ-affinity strategies. A strategy configured without `clientAZ` — including a blank or whitespace-only value — now fails at client creation with a `ConfigurationError` instead of being silently downgraded to `PreferReplica`, and a padded value such as `" us-east-1a "` is trimmed before it reaches the core rather than forwarded raw. Previously the misconfiguration was ignored: reads went to arbitrary nodes with no error, and a padded value matched no node under the core's exact comparison and spread reads cluster-wide with no warning at all. Clients that relied on the old silent downgrade will now fail at creation. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
+* Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
 * CI: Publish the Python `valkey-glide` and `valkey-glide-sync` packages to PyPI via Trusted Publishing (OIDC) with PEP 740 attestations, replacing API-token uploads ([#6478](https://github.com/valkey-io/valkey-glide/pull/6478))
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
