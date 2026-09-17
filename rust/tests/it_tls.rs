@@ -12,21 +12,21 @@ use glide::{
 
 timed_tokio_test!(
     async fn tls_cluster() {
-        let server = ClusterHarness::start_tls();
+        let server = ClusterHarness::start_with_tls().await;
         assert_connected(server.client_with_tls().await).await;
     }
 );
 
 timed_tokio_test!(
     async fn insecure_tls_cluster() {
-        let server = ClusterHarness::start_tls();
+        let server = ClusterHarness::start_with_tls().await;
         assert_connected(server.client_with_insecure_tls().await).await;
     }
 );
 
 timed_tokio_test!(
     async fn tls_cluster_untrusted() {
-        let server = ClusterHarness::start_tls();
+        let server = ClusterHarness::start_with_tls().await;
         let untrusted_config = server.config().tls(TlsConfig::SecureTls);
         assert_does_not_connect(untrusted_config).await;
     }
@@ -36,14 +36,14 @@ timed_tokio_test!(
 // identity; switch to a dedicated CA-signed client certificate.
 timed_tokio_test!(
     async fn mtls_cluster() {
-        let server = ClusterHarness::start_tls_mtls();
+        let server = ClusterHarness::start_with_mtls().await;
         assert_connected(server.client_with_mtls().await).await;
     }
 );
 
 timed_tokio_test!(
     async fn mtls_cluster_missing_client_cert() {
-        let server = ClusterHarness::start_tls_mtls();
+        let server = ClusterHarness::start_with_mtls().await;
         let missing_client_cert_config = server.config_with_tls();
         assert_does_not_connect(missing_client_cert_config).await;
     }

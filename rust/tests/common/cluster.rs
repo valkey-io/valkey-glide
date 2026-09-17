@@ -25,6 +25,9 @@ fn field_u64(fragment: &str, field: &str) -> Option<u64> {
 const CLUSTER_MANAGER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/cluster_manager.py");
 const TLS_CERTIFICATES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/tls_crts");
 
+/// Timeout for `cluster_manager.py start`.
+const CLUSTER_START_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Returns the CA certificate bytes (`ca.crt`).
 fn ca_pem() -> Vec<u8> {
     read_cert("ca.crt")
@@ -65,20 +68,29 @@ pub struct ClusterHarness {
 impl ClusterHarness {
     /// Start a 3-primary cluster using `cluster_manager.py`.
     /// Panics if the cluster cannot be created.
-    pub fn start() -> ClusterHarness {
-        Self::start_via_cluster_manager(3, 1, false, false)
+    pub async fn start() -> ClusterHarness {
+        Self::start_via_cluster_manager(3, 1, false, false).await
     }
 
     /// Start a 3-primary TLS cluster using `cluster_manager.py`.
     /// Panics if the cluster cannot be created.
-    pub fn start_tls() -> ClusterHarness {
-        Self::start_via_cluster_manager(3, 1, true, false)
+    pub async fn start_with_tls() -> ClusterHarness {
+        Self::start_via_cluster_manager(3, 1, true, false).await
     }
 
     /// Start a 3-primary TLS cluster with mTLS using `cluster_manager.py`.
     /// Panics if the cluster cannot be created.
-    pub fn start_tls_mtls() -> ClusterHarness {
-        Self::start_via_cluster_manager(3, 1, true, true)
+    pub async fn start_with_mtls() -> ClusterHarness {
+        Self::start_via_cluster_manager(3, 1, true, true).await
+    }
+
+    /// Blocking variant of [`start`](Self::start) for synchronous tests.
+    pub fn start_blocking() -> ClusterHarness {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build current-thread runtime")
+            .block_on(Self::start())
     }
 
     /// Starts a cluster with:
@@ -88,7 +100,7 @@ impl ClusterHarness {
     /// - mTLS enabled if specified
     ///
     /// Panics if the script fails.
-    fn start_via_cluster_manager(
+    async fn start_via_cluster_manager(
         shards: usize,
         replicas: usize,
         tls: bool,
@@ -117,11 +129,15 @@ impl ClusterHarness {
             args.push("--tls-auth-clients");
         }
 
-        let result = Command::new("python3").args(&args).output();
+        let output = tokio::process::Command::new("python3")
+            .args(&args)
+            .kill_on_drop(true)
+            .output();
 
-        let out = match result {
-            Ok(out) => out,
-            Err(e) => panic!("could not run cluster_manager.py: {e}"),
+        let out = match tokio::time::timeout(CLUSTER_START_TIMEOUT, output).await {
+            Ok(Ok(out)) => out,
+            Ok(Err(e)) => panic!("could not run cluster_manager.py: {e}"),
+            Err(_) => panic!("cluster_manager.py start exceeded {CLUSTER_START_TIMEOUT:?}"),
         };
 
         assert!(
