@@ -21,29 +21,17 @@ from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
 from glide_sync.glide_client import GlideClient, GlideClusterClient
 
-from tests.utils.utils import get_cluster_addresses as _get_cluster_addresses
 from tests.utils.utils import get_standalone_address as _get_standalone_address
-from tests.utils.utils import sync_check_if_server_version_lt
+from tests.utils.utils import require_cluster_addresses, sync_check_if_server_version_lt
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _skip_cluster_if_unavailable():
-    """Skip test if no cluster endpoints are configured."""
-    try:
-        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
-        if cluster is None or len(cluster.nodes_addr) == 0:
-            pytest.skip("No cluster endpoints available")
-    except AttributeError:
-        pytest.skip("No cluster endpoints available (pytest.valkey_cluster not set)")
 
 
 def _get_pool_client_config(cluster_mode: bool):
     """Build a client configuration for standalone or cluster mode."""
     if cluster_mode:
-        _skip_cluster_if_unavailable()
         return GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(),
+            addresses=require_cluster_addresses(),
             request_timeout=5000,
         )
     else:
@@ -61,9 +49,8 @@ def _get_lib_name_config(cluster_mode: bool, lib_name, client_info_tag, client_n
     if client_info_tag is not None:
         kwargs["client_info_tag"] = client_info_tag
     if cluster_mode:
-        _skip_cluster_if_unavailable()
         return GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(), **kwargs
+            addresses=require_cluster_addresses(), **kwargs
         )
     return GlideClientConfiguration(addresses=[_get_standalone_address()], **kwargs)
 
@@ -410,7 +397,7 @@ class TestSyncPoolLibName:
         """Inspect CLIENT LIST across all nodes for the pooled connection."""
         observer = GlideClusterClient.create(
             GlideClusterClientConfiguration(
-                addresses=_get_cluster_addresses(), request_timeout=5000
+                addresses=require_cluster_addresses(), request_timeout=5000
             )
         )
         try:
@@ -488,9 +475,8 @@ class TestPoolPubsubRejection:
 
     def test_pool_rejects_cluster_pubsub_config(self):
         """Pool creation with cluster pubsub subscriptions raises ValueError."""
-        _skip_cluster_if_unavailable()
         config = GlideClusterClientConfiguration(
-            addresses=_get_cluster_addresses(),
+            addresses=require_cluster_addresses(),
             request_timeout=5000,
             pubsub_subscriptions=GlideClusterClientConfiguration.PubSubSubscriptions(
                 callback=None,
