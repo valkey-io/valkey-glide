@@ -14,6 +14,7 @@ import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
 import glide.internal.ClientLibraryNameResolver;
 import glide.internal.GlideNativeBridge;
+import glide.managers.ConnectionManager;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -78,6 +79,13 @@ public class ClientPool implements AutoCloseable {
                     "Pool clients cannot have pubsub subscriptions configured. "
                             + "Use the main client's pubsub API instead.");
         }
+
+        // Ahead of the connectivity probe below, so a static-config mistake surfaces as a
+        // ConfigurationError naming the real reason instead of a probe failure. Note that readFrom,
+        // clientAz and the pubsub guard are handled here, but circuit-breaker and lazyConnect config
+        // are still dropped by serializeConnectionRequest — see
+        // https://github.com/valkey-io/valkey-glide/issues/6897
+        ConnectionManager.validateClientAz(config.getClientConfig());
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
 
@@ -277,9 +285,11 @@ public class ClientPool implements AutoCloseable {
         }
 
         if (config.getReadFrom() != null) {
-            String rf = config.getReadFrom().name();
-            if ("PRIMARY".equals(rf)) b.setReadFrom(ReadFrom.Primary);
-            else if ("PREFER_REPLICA".equals(rf)) b.setReadFrom(ReadFrom.PreferReplica);
+            b.setReadFrom(ConnectionManager.mapReadFrom(config.getReadFrom()));
+        }
+        String clientAz = ConnectionManager.resolveClientAz(config);
+        if (clientAz != null) {
+            b.setClientAz(clientAz);
         }
 
         if (config.getClientName() != null) b.setClientName(config.getClientName());

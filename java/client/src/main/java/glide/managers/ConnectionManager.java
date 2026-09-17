@@ -25,6 +25,7 @@ import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.ClientLibraryNameResolver;
@@ -333,23 +334,14 @@ public class ConnectionManager {
                                             .build());
                         }
 
-                        // Set read from strategy
-                        String readFromName = configuration.getReadFrom().name();
-                        if ("PRIMARY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.Primary);
-                        } else if ("PREFER_REPLICA".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.PreferReplica);
-                        } else if ("AZ_AFFINITY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AZAffinity);
-                        } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
-                        } else if ("ALL_NODES".equals(readFromName)) {
-                            requestBuilder.setReadFrom(ReadFrom.AllNodes);
-                        }
+                        // Set read from strategy. The clientAZ requirement is validated synchronously
+                        // in BaseClient.createClient, before this async body runs.
+                        requestBuilder.setReadFrom(mapReadFrom(configuration.getReadFrom()));
 
                         // Set client metadata
-                        if (configuration.getClientAZ() != null) {
-                            requestBuilder.setClientAz(configuration.getClientAZ());
+                        String clientAz = resolveClientAz(configuration);
+                        if (clientAz != null) {
+                            requestBuilder.setClientAz(clientAz);
                         }
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
@@ -546,12 +538,28 @@ public class ConnectionManager {
                         // to prevent garbage collection while the client is alive
                         AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
 
+                        // Build the IAM credentials provider when a custom credentials provider is
+                        // set. The lambda is passed to native code as a global reference so that
+                        // Rust can invoke it from any thread when it needs to sign a fresh IAM
+                        // token.
+                        glide.api.models.configuration.GlideCredentialProvider iamCredentialsProvider = null;
+                        if (credentials != null && credentials.getIamConfig() != null) {
+                            glide.api.models.configuration.GlideCredentialProvider configuredProvider =
+                                    credentials.getIamConfig().getCredentialsProvider();
+                            if (configuredProvider != null) {
+                                iamCredentialsProvider = configuredProvider;
+                            }
+                        }
+
                         // Create native client with protobuf bytes
-                        // Native code will store the resolver as a global reference if provided
-                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);
+                        // Native code will store the resolver and IAM provider as global references
+                        // if provided
+                        this.nativeClientHandle =
+                                GlideNativeBridge.createClient(
+                                        requestBytes, addressResolver, iamCredentialsProvider);
 
                         if (nativeClientHandle == 0) {
-                            throw new ClosingException("Failed to create client - Connection refused");
+                            throw new ClosingException("Failed to create client");
                         }
 
                         return null; // Success
@@ -721,5 +729,79 @@ public class ConnectionManager {
     private static ClientCertReloadConfig buildCertReloadConfig(
             BaseClientConfiguration configuration) {
         return TlsConfigHelper.buildCertReloadConfig(configuration);
+    }
+
+    /**
+     * Maps a client {@link glide.api.models.configuration.ReadFrom} strategy onto its protobuf
+     * counterpart.
+     *
+     * <p>Note that within this class the unqualified name {@code ReadFrom} refers to the protobuf
+     * enum, hence the fully-qualified parameter type.
+     *
+     * @throws ConfigurationError if the strategy has no protobuf mapping. This makes a newly added
+     *     strategy fail loudly rather than silently defaulting to {@code Primary}. A {@code
+     *     GlideException} subtype is required here: this runs inside {@code connectToValkey}'s async
+     *     body, whose handler rethrows {@code GlideException} unchanged but relabels anything else as
+     *     a {@code ClosingException}, which would report a config mistake as a connection failure.
+     */
+    public static ReadFrom mapReadFrom(glide.api.models.configuration.ReadFrom readFrom) {
+        switch (readFrom) {
+            case PRIMARY:
+                return ReadFrom.Primary;
+            case PREFER_REPLICA:
+                return ReadFrom.PreferReplica;
+            case AZ_AFFINITY:
+                return ReadFrom.AZAffinity;
+            case AZ_AFFINITY_REPLICAS_AND_PRIMARY:
+                return ReadFrom.AZAffinityReplicasAndPrimary;
+            case ALL_NODES:
+                return ReadFrom.AllNodes;
+            case AZ_AFFINITY_ALL_NODES:
+                return ReadFrom.AZAffinityAllNodes;
+        }
+        throw new ConfigurationError("Unsupported ReadFrom strategy: " + readFrom);
+    }
+
+    /**
+     * Rejects an AZ-affinity read strategy that has no {@code clientAZ} to target.
+     *
+     * <p>Without this check the core silently downgrades the strategy to {@code PreferReplica}, so
+     * reads would land on arbitrary nodes while the configuration suggested otherwise.
+     *
+     * <p>Called synchronously from {@code BaseClient.createClient}, alongside the PubSub/RESP2 check,
+     * and from {@code ClientPool.create} ahead of its connectivity probe, so callers on either path
+     * see a direct throw rather than an {@code ExecutionException} or a probe failure.
+     *
+     * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
+     */
+    public static void validateClientAz(BaseClientConfiguration configuration) {
+        glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
+        if (!readFrom.requiresClientAz()) {
+            return;
+        }
+        if (resolveClientAz(configuration) == null) {
+            throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
+        }
+    }
+
+    /**
+     * The {@code clientAZ} as it should reach the core: trimmed, or null when absent or blank.
+     *
+     * <p>The core compares availability zones with exact equality and never trims ({@code
+     * standalone_client.rs}, {@code connections_container.rs}), so a padded value such as {@code "
+     * us-east-1a "} — easily produced by {@code getenv} or a file read — would satisfy validation,
+     * engage the strategy, match no node, and silently spread reads cluster-wide. No real
+     * availability-zone name carries surrounding whitespace, so trimming cannot break a value that
+     * works today.
+     *
+     * <p>Both request builders normalize through here so a third one cannot forward a raw value.
+     */
+    public static String resolveClientAz(BaseClientConfiguration configuration) {
+        String clientAz = configuration.getClientAZ();
+        if (clientAz == null) {
+            return null;
+        }
+        String trimmed = clientAz.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

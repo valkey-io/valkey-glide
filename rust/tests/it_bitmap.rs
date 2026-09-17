@@ -40,6 +40,8 @@ matrix_test!(bitcount_missing_zero, c, {
 });
 
 matrix_test!(bitcount_range_byte, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("bit");
     // Two bytes: first byte has 8 set bits, second has 0.
     for i in 0..8usize {
@@ -61,6 +63,8 @@ matrix_test!(bitcount_range_byte, c, {
 // TODO #7082: replace the raw `BITCOUNT` with a typed `bitcount_range` that
 // accepts the BYTE/BIT index unit.
 matrix_test!(bitcount_range_bit, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("bit");
     let _: i64 = c.setbit(&k, 5, true).await.unwrap();
     let _: i64 = c.setbit(&k, 6, true).await.unwrap();

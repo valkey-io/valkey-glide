@@ -257,20 +257,9 @@ async fn typed_pipeline_query_async_still_works() {
 
 timed_tokio_test!(
     async fn cluster_atomic_transaction_same_slot() {
-        let h = match common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible");
-                return;
-            }
-        };
-        let c = match h.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster connect failed");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
         // All keys share a hash tag → same slot → a cluster MULTI/EXEC is valid.
         let k1 = common::tkey("btx", "k1");
         let k2 = common::tkey("btx", "k2");
@@ -282,8 +271,7 @@ timed_tokio_test!(
             .set(&k2, "x")
             .get(&k1)
             .get(&k2);
-
-        let r = c
+        let r = client
             .exec(&p, true, None, &PipelineOptions::default())
             .await
             .unwrap();
@@ -297,28 +285,16 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_non_atomic_pipeline() {
-        let h = match common::ClusterHarness::start() {
-            Some(h) => h,
-            None => {
-                eprintln!("SKIP: cluster harness not feasible");
-                return;
-            }
-        };
-        let c = match h.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster connect failed");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
         // A non-atomic pipeline may span slots; GLIDE routes each command.
         let a = common::key("bp_a");
         let b = common::key("bp_b");
 
         let mut p = pipe();
         p.set(&a, "1").set(&b, "2").get(&a).get(&b);
-
-        let r = c
+        let r = client
             .exec(&p, true, None, &PipelineOptions::default())
             .await
             .unwrap();

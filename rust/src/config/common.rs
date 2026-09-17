@@ -381,6 +381,9 @@ impl IamAuthConfig {
             region: self.region.clone(),
             service_type: self.service_type.to_core(),
             refresh_interval_seconds: self.refresh_interval_seconds,
+            // The Rust public API wrapper does not expose a custom credentials provider;
+            // the field is always None on this path.
+            credentials_provider: None,
         }
     }
 }

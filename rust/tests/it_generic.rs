@@ -70,6 +70,8 @@ matrix_test!(ttl_missing_and_no_expiry, c, {
 // TODO #7082: replace the raw `EXPIRE` commands here with a typed `expire` that
 // accepts the NX/XX condition options.
 matrix_test!(expire_nx_xx, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
     // NX sets only when no expiry exists — use raw cmd for EXPIRE with options.
@@ -95,6 +97,8 @@ matrix_test!(expire_nx_xx, c, {
 // TODO #7082: replace the raw `EXPIRE` commands here with a typed `expire` that
 // accepts the GT/LT condition options.
 matrix_test!(expire_gt_lt, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
     let _: bool = c.expire(&k, 100).await.unwrap();
@@ -127,6 +131,8 @@ matrix_test!(pexpire_and_pttl, c, {
 });
 
 matrix_test!(expireat_pexpireat, c, {
+    skip_if_version_below!(c, 7, 0, 0);
+
     let k = common::key("k");
     let _: () = c.set(&k, "v").await.unwrap();
     let future = 4_102_444_800i64; // year 2100 in seconds

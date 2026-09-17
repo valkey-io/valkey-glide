@@ -120,6 +120,8 @@ fn start_tls_server() -> Option<TlsServer> {
 // that trusts the generated CA — so cert validation is exercised.
 #[tokio::test]
 async fn tls_insecure_roundtrip() {
+    // TODO #6996: TLS coverage silently skips when openssl or server TLS support is unavailable.
+    // Route TLS through cluster_manager.py so it runs instead of skipping.
     let server = match start_tls_server() {
         Some(s) => s,
         None => {

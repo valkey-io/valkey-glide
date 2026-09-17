@@ -9,21 +9,14 @@
 
 mod common;
 
-use common::TestServer;
 use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand};
 
 const NEW_PASS: &str = "rotated-p4ss";
 
 #[tokio::test]
 async fn update_password_immediate_auth_succeeds() {
-    let srv = match TestServer::start() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let client = srv.client().await;
+    let server = server_or_skip!();
+    let client = server.client().await;
     assert_eq!(client.ping().await.unwrap(), "PONG");
 
     // Turn on auth at runtime; the live connection stays authenticated.
@@ -56,14 +49,9 @@ async fn update_password_immediate_auth_succeeds() {
 
 #[tokio::test]
 async fn update_password_immediate_auth_wrong_password_errors() {
-    let srv = match TestServer::start() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let client = srv.client().await;
+    let server = server_or_skip!();
+    let client = server.client().await;
+
     client
         .custom_command(&["CONFIG", "SET", "requirepass", NEW_PASS])
         .await
@@ -91,14 +79,9 @@ async fn update_password_immediate_auth_wrong_password_errors() {
 
 #[tokio::test]
 async fn update_password_store_only_is_ok_without_auth() {
-    let srv = match TestServer::start() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let client = srv.client().await;
+    let server = server_or_skip!();
+    let client = server.client().await;
+
     // Storing a password without immediate auth is a no-op on the wire and must
     // succeed even against an unprotected server.
     client
@@ -119,15 +102,10 @@ fn sync_update_password_store_only() {
     use glide::GlideClientConfiguration;
     use glide::sync::SyncGlideClient;
 
-    let srv = match TestServer::start() {
-        Some(s) => s,
-        None => {
-            eprintln!("SKIP: no valkey-server binary available");
-            return;
-        }
-    };
-    let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port);
+    let server = server_or_skip!();
+    let config = GlideClientConfiguration::with_address("127.0.0.1", server.port);
     let client = SyncGlideClient::connect(config).expect("connect");
+
     client
         .update_connection_password(Some("staged".to_string()), false)
         .expect("store-only password update should succeed");
@@ -139,20 +117,9 @@ fn sync_update_password_store_only() {
 
 #[tokio::test]
 async fn cluster_update_password_store_only() {
-    let cluster = match common::ClusterHarness::start() {
-        Some(cl) => cl,
-        None => {
-            eprintln!("SKIP: cluster harness unavailable");
-            return;
-        }
-    };
-    let client = match cluster.client().await {
-        Some(c) => c,
-        None => {
-            eprintln!("SKIP: cluster client connect failed");
-            return;
-        }
-    };
+    let cluster = common::ClusterHarness::start();
+    let client = cluster.client().await;
+
     // Store-then-clear on the cluster client (no server-side requirepass dance):
     // exercises the cluster update_connection_password path end to end.
     client
