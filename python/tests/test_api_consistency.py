@@ -131,6 +131,8 @@ EXCLUDED_TESTS = {
         "acl_glide_sync_client",
         "glide_sync_client",
         "management_sync_client",
+        # Sync-only pool test: sync client rejects async credential providers
+        "test_iam_sync_pool_rejects_credential_provider",
     ],
 }
 

@@ -262,7 +262,11 @@ def pytest_collection_modifyitems(config, items):
                 continue
 
             if "cluster_mode" in item.fixturenames:
-                cluster_mode_value = item.callspec.params.get("cluster_mode", None)
+                cluster_mode_value = (
+                    item.callspec.params.get("cluster_mode", None)
+                    if hasattr(item, "callspec")
+                    else None
+                )
                 if cluster_mode_value is True and not config.getoption(
                     "--cluster-endpoints"
                 ):

@@ -562,14 +562,9 @@ class TestPoolCredentialProviderWiring:
     def test_credential_provider_callback_created_when_iam_configured(self):
         """AsyncClientPool creates a non-NULL callback when IAM credential
         provider is set, and passes it (cast to void*) to glide_pool_create."""
-        from unittest.mock import MagicMock, patch
-
-        from glide.client_pool import AsyncClientPool, PoolConfig
         from glide_shared._glide_ffi import GlideFFI
         from glide_shared.config import (
-            GlideClientConfiguration,
             IamAuthConfig,
-            NodeAddress,
             ServerCredentials,
             ServiceType,
         )
@@ -588,11 +583,7 @@ class TestPoolCredentialProviderWiring:
             region="us-east-1",
             credential_provider=my_provider,
         )
-        credentials = ServerCredentials(username="user", iam_config=iam_config)
-        config = GlideClientConfiguration(
-            addresses=[NodeAddress("localhost", 6379)],
-            credentials=credentials,
-        )
+        ServerCredentials(username="user", iam_config=iam_config)
 
         # Verify that create_credential_provider_callback produces a non-NULL
         # pointer for this provider — this is what the pool uses before casting.
@@ -640,7 +631,8 @@ class TestPoolCredentialProviderWiring:
         def my_provider():
             return AwsCredentials(access_key_id="AKID", secret_access_key="SECRET")
 
-        iam_config = IamAuthConfig(
+        # Register provider with IamAuthConfig to validate it is accepted
+        IamAuthConfig(
             cluster_name="cluster",
             service=ServiceType.ELASTICACHE,
             region="us-east-1",

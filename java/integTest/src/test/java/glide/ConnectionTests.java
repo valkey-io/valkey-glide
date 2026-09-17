@@ -48,13 +48,13 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.pool.ClientPool;
+import glide.api.models.pool.ClientPoolConfig;
+import glide.api.models.pool.PooledGlideClient;
 import glide.cluster.ValkeyCluster;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import glide.api.models.pool.ClientPool;
-import glide.api.models.pool.ClientPoolConfig;
-import glide.api.models.pool.PooledGlideClient;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -1603,16 +1603,13 @@ public class ConnectionTests {
                 TestUtilities.assertConnected(client.unwrap());
                 assertEquals(
                         "OK",
-                        client.set("iam_pool_custom_provider_key", "iam_pool_custom_provider_value")
-                                .get());
+                        client.set("iam_pool_custom_provider_key", "iam_pool_custom_provider_value").get());
                 assertEquals(
-                        "iam_pool_custom_provider_value",
-                        client.get("iam_pool_custom_provider_key").get());
+                        "iam_pool_custom_provider_value", client.get("iam_pool_custom_provider_key").get());
             }
         }
         assertTrue(
-                invocations.get() > 0,
-                "Custom credentials provider was never invoked for pool client");
+                invocations.get() > 0, "Custom credentials provider was never invoked for pool client");
     }
 
     @SneakyThrows

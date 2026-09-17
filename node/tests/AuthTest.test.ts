@@ -960,7 +960,9 @@ describe("IAM Auth: Mock Credentials", () => {
                     const client = await pool.acquire();
 
                     try {
-                        await assertConnected(client);
+                        await assertConnected(
+                            client as GlideClient | GlideClusterClient,
+                        );
                         expect(
                             await client.set(
                                 "iam_pool_custom_provider_key",

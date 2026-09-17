@@ -270,7 +270,7 @@ class TestGlideCredentialProvider:
 
     def test_sync_provider_passes_create_credential_callback(self):
         """Sync client passes non-NULL credential callback to native create_client."""
-        from unittest.mock import MagicMock, call
+        from unittest.mock import MagicMock
 
         from glide_shared._glide_ffi import GlideFFI
         from glide_shared.config import GlideClientConfiguration, NodeAddress
