@@ -5,9 +5,8 @@ use crate::ValkeyValue;
 use crate::commands::pubsub::PubSubCommands;
 use bytes::Bytes;
 
-// NOTE: no `publish` test here — `PUBLISH` moved to the unified command table
-// (`crate::AsyncCommands`), whose encoding delegates to the fork's own
-// `Cmd::publish` constructor (covered by the signature-parity guard).
+// `PUBLISH` is declared in (`crate::AsyncCommands`).
+// and covered by the parity guard (`it_parity_guard.rs`).
 
 #[tokio::test]
 async fn spublish_encoding() {

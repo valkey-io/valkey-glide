@@ -91,10 +91,10 @@ async fn raise_on_error_false_returns_inline() {
         .await
         .unwrap();
 
-    // All three positions are present even though one errored.
     assert_eq!(results.len(), 3);
-    // The good INCR still produced 2.
-    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+    assert_eq!(results[0], glide::ValkeyValue::Okay);
+    assert_eq!(results[1], glide::ValkeyValue::Int(2));
+    assert!(matches!(results[2], glide::ValkeyValue::ServerError(_)));
 }
 
 #[tokio::test]

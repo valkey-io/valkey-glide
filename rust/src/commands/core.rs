@@ -113,16 +113,16 @@ macro_rules! implement_glide_commands {
             /// it. Also useful directly as a zero-extra-copy escape hatch for
             /// custom commands with large payloads.
             ///
-            /// Prefer the typed commands.
+            /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
             fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
-            /// decode the reply into `RV`. This replaces
-            /// `cmd(...).query_async(&mut con)` call sites — same decode, no
-            /// connection-object machinery, no payload copy.
+            /// decode the reply into `RV`. An alternative to
+            /// `cmd(...).query_async(con)` ([`Cmd::query_async`] delegates here)
+            /// — same decode, no connection-object machinery, no payload copy.
             ///
-            /// Prefer the typed commands.
+            /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
             #[inline]
             fn glide_send<'a, RV: FromValkeyValue>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, RV> {
@@ -270,16 +270,16 @@ macro_rules! implement_glide_commands {
             /// Send an already-built command **by value** (no clone). This is
             /// the single required method; every typed command delegates to it.
             ///
-            /// It is recommended to use typed comnmands.
-            /// Use this only for commands GLIDE does implement.
+            /// Prefer the typed commands (e.g. [`get`](Self::get)).
+            /// Use this method only for commands GLIDE does not implement.
             fn glide_send_owned_sync(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
 
             /// Typed escape hatch (blocking counterpart of the async
             /// `glide_send`): send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`.
             ///
-            /// It is recommended to use typed comnmands.
-            /// Use this only for commands GLIDE does implement.
+            /// Prefer the typed commands (e.g. [`get`](Self::get)).
+            /// Use this method only for commands GLIDE does not implement..
             #[inline]
             fn glide_send_sync<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
                 RV::from_owned_valkey_value(self.glide_send_owned_sync(cmd)?)

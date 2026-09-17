@@ -2,7 +2,7 @@
 //! Server-free tests for every command family (no Valkey server needed).
 //!
 //! Each command method builds a `Cmd` and dispatches it through the
-//! [`CommandExecutor`] seam. These tests install an in-process [`Mock`] executor
+//! [`CommandExecutor`] trait. These tests install an in-process [`Mock`] executor
 //! that (a) captures the exact command tokens the wrapper produced — verifying
 //! request *encoding* — and (b) returns a preconfigured `Value` so the
 //! method's response *decoding* into its typed return can be asserted. No Valkey

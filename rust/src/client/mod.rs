@@ -286,7 +286,7 @@ impl GlideClient {
         immediate_auth: bool,
     ) -> ValkeyResult<()> {
         // `Client` is Clone (Arc inside) and the core method needs `&mut self`,
-        // so we operate on a cheap clone — same seam as `execute_command`.
+        // so we operate on a cheap clone — same pattern as `execute_command`.
         let mut client = self.inner.clone();
         client
             .update_connection_password(password, immediate_auth)
@@ -311,7 +311,7 @@ impl CommandExecutor for GlideClient {
             .send_command(cmd.as_redis_mut(), routing)
             .await
             .map_err(GlideError::from_redis_error)?;
-        Ok(ValkeyValue::from_redis(value))
+        ValkeyValue::from_redis(value)
     }
 }
 
@@ -361,7 +361,7 @@ impl GlideClusterClient {
             .send_command(cmd.as_redis_mut(), Some(routing))
             .await
             .map_err(GlideError::from_redis_error)?;
-        Ok(ValkeyValue::from_redis(value))
+        ValkeyValue::from_redis(value)
     }
 
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
@@ -438,7 +438,7 @@ impl GlideClusterClient {
             .map_err(GlideError::from_redis_error)?;
 
         // Reply shape: [cursor_id_or_"finished", [keys...]].
-        let items = match ValkeyValue::from_redis(reply) {
+        let items = match ValkeyValue::from_redis(reply)? {
             ValkeyValue::Array(items) => items,
             other => {
                 return Err(GlideError::Request(format!(
@@ -475,7 +475,7 @@ impl CommandExecutor for GlideClusterClient {
             .send_command(cmd.as_redis_mut(), routing)
             .await
             .map_err(GlideError::from_redis_error)?;
-        Ok(ValkeyValue::from_redis(value))
+        ValkeyValue::from_redis(value)
     }
 }
 
@@ -499,7 +499,7 @@ impl crate::commands::core::AsyncCommands for GlideClient {
                 .send_command(cmd.as_redis_mut(), None)
                 .await
                 .map_err(GlideError::from_redis_error)?;
-            Ok(ValkeyValue::from_redis(value))
+            ValkeyValue::from_redis(value)
         })
     }
 }
@@ -513,7 +513,7 @@ impl crate::commands::core::AsyncCommands for GlideClusterClient {
                 .send_command(cmd.as_redis_mut(), None)
                 .await
                 .map_err(GlideError::from_redis_error)?;
-            Ok(ValkeyValue::from_redis(value))
+            ValkeyValue::from_redis(value)
         })
     }
 }

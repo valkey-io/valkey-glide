@@ -314,7 +314,7 @@ mod tests {
     // executor when dispatched through the public
     // `CustomCommand::custom_command_with_route` path — including the response
     // policy derived from the command keyword. No server is involved: the mock
-    // implements the `CommandExecutor` seam and captures what it is handed.
+    // implements `CommandExecutor` and captures what it is handed.
     mod dispatch {
         use crate::cmd::Cmd;
         use crate::executor::{CommandExecutor, CustomCommand};
