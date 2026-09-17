@@ -864,7 +864,7 @@ impl ScopePool {
         parent_client_id: u64,
     ) -> Self {
         // Parse configured_database_id and configured_client_name from the
-        // connection request in a single parse; it is only
+        // connection request in a single parse; database_id is only
         // a reset baseline on release, so an unparseable request falling back to 0
         // costs a redundant SELECT rather than misrouting anything. Topology is not
         // read here: scope targets come from the parent `Client` at acquire time
@@ -1419,7 +1419,9 @@ mod connection_state_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+    use super::{
+        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+    };
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
     use std::sync::Arc;
@@ -1608,14 +1610,19 @@ mod scope_pool_tests {
             .await
             .total_count
             .fetch_add(1, Ordering::Release);
-        crate::scope::create_scope_connection(pool_arc.clone(), None, &connection_request_bytes, 0)
-            .await;
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
 
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1656,7 +1663,7 @@ mod scope_pool_tests {
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -1725,14 +1732,19 @@ mod scope_pool_tests {
             .await
             .total_count
             .fetch_add(1, Ordering::Release);
-        crate::scope::create_scope_connection(pool_arc.clone(), None, &connection_request_bytes, 0)
-            .await;
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
 
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1792,7 +1804,7 @@ mod scope_pool_tests {
         // borrower's override, and not empty.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
