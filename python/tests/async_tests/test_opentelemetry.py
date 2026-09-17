@@ -28,11 +28,16 @@ from opentelemetry.trace.span import TraceState
 
 from tests.async_tests.conftest import create_client
 from tests.otel_test_utils import (
+    NO_SPAN_POLL_INTERVAL,
+    NO_SPAN_WINDOW,
+    SPAN_FLUSH_GRACE,
     assert_external_parent,
     assert_root_spans,
     build_timeout_error,
+    build_unexpected_span_error,
     check_spans_ready,
     read_and_parse_span_file,
+    span_file_exists,
 )
 
 # Constants
@@ -129,6 +134,20 @@ async def wait_for_spans_to_be_flushed(
 
     # Timeout reached
     raise build_timeout_error(span_file_path, expected_span_names, expected_span_counts)
+
+
+async def assert_no_spans_exported(span_file_path: str = VALID_ENDPOINT_TRACES) -> None:
+    """Assert no span reaches the span file within ``NO_SPAN_WINDOW``.
+
+    A negative cannot be polled to an early success, so the window is spent in full.
+    """
+    deadline = time.time() + NO_SPAN_WINDOW
+    while True:
+        if span_file_exists(span_file_path):
+            raise build_unexpected_span_error(span_file_path)
+        if time.time() >= deadline:
+            return
+        await anyio.sleep(NO_SPAN_POLL_INTERVAL)
 
 
 def test_is_tracing_enabled(monkeypatch):
@@ -372,8 +391,12 @@ class TestOpenTelemetryGlide:
         # Force garbage collection again
         gc.collect()
 
-        # Wait for spans to be flushed
-        await anyio.sleep(1)
+        # Wait for every span this test produced to be flushed
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Set", "Get"],
+            expected_span_counts={"Set": 3, "Get": 3},
+        )
 
         # Get final memory usage
         final_memory = process.memory_info().rss
@@ -438,8 +461,12 @@ class TestOpenTelemetryGlide:
         # Force garbage collection again
         gc.collect()
 
-        # Wait for spans to be flushed
-        await anyio.sleep(1)
+        # Wait for every batch span this test produced to be flushed
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Batch"],
+            expected_span_counts={"Batch": 3},
+        )
 
         # Get final memory usage
         final_memory = process.memory_info().rss
@@ -510,8 +537,9 @@ class TestOpenTelemetryGlide:
         OpenTelemetry.set_sample_percentage(0)
         assert OpenTelemetry.get_sample_percentage() == 0
 
-        # Wait for any pending spans to be flushed
-        await anyio.sleep(0.5)
+        # Let spans still in flight land before the delete, so a late write cannot
+        # recreate the file and break the "no spans were exported" check below.
+        await anyio.sleep(SPAN_FLUSH_GRACE)
 
         # Clean up any existing files
         if os.path.exists(VALID_ENDPOINT_TRACES):
@@ -523,11 +551,8 @@ class TestOpenTelemetryGlide:
                 "GlideClusterClient_test_percentage_requests_config", "value"
             )
 
-        # Wait for any spans to be flushed (though none should be created)
-        await anyio.sleep(0.5)
-
         # Check that no spans file was created
-        assert not os.path.exists(VALID_ENDPOINT_TRACES)
+        await assert_no_spans_exported()
 
         # Set sample percentage to 100%
         OpenTelemetry.set_sample_percentage(100)
@@ -580,7 +605,9 @@ class TestOpenTelemetryGlide:
         await client.set("GlideClusterClient_test_otel_global_config", "value")
 
         # Wait for spans to be flushed
-        await anyio.sleep(0.5)
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Set"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -860,7 +887,9 @@ class TestOpenTelemetryGlide:
 
         with restore_sample_percentage():
             OpenTelemetry.set_sample_percentage(0)
-            await anyio.sleep(0.5)
+            # Let spans still in flight land before the delete, so a late write cannot
+            # recreate the file and break the "no spans were exported" check below.
+            await anyio.sleep(SPAN_FLUSH_GRACE)
             remove_span_file()
 
             def unexpected_parent(cls):
@@ -888,7 +917,7 @@ class TestOpenTelemetryGlide:
                         await client.invoke_script(Script("return 'Hello'")) == b"Hello"
                     )
 
-            assert not os.path.exists(VALID_ENDPOINT_TRACES)
+            await assert_no_spans_exported()
 
             OpenTelemetry.set_sample_percentage(100)
             with use_parent_span(sampled=True):
@@ -929,7 +958,9 @@ class TestOpenTelemetryGlide:
 
         with restore_sample_percentage():
             OpenTelemetry.set_sample_percentage(0)
-            await anyio.sleep(0.5)
+            # Let spans still in flight land before the delete, so a late write cannot
+            # recreate the file and break the "no spans were exported" check below.
+            await anyio.sleep(SPAN_FLUSH_GRACE)
             remove_span_file()
 
             with use_parent_span(sampled=False):
@@ -940,9 +971,8 @@ class TestOpenTelemetryGlide:
             with use_parent_span(sampled=False):
                 await client.get("GlideClient_test_unsampled_parent")
 
-            await anyio.sleep(0.5)
             assert parented_spans == 1
-            assert not os.path.exists(VALID_ENDPOINT_TRACES)
+            await assert_no_spans_exported()
 
         await client.close()
 

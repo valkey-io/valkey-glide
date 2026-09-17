@@ -40,6 +40,7 @@ fn assert_exported_remote_parent(
     child_span_id: &str,
     expected_trace_id: &str,
     expected_parent_span_id: &str,
+    expected_trace_state: &str,
 ) {
     let spans = trace_context_test_exporter()
         .get_finished_spans()
@@ -51,6 +52,11 @@ fn assert_exported_remote_parent(
 
     assert_eq!(child.span_context.trace_id().to_string(), expected_trace_id);
     assert_eq!(child.parent_span_id.to_string(), expected_parent_span_id);
+    assert_eq!(
+        child.span_context.trace_state().header(),
+        expected_trace_state,
+        "child span should inherit the remote parent's tracestate"
+    );
 }
 
 /// Take a co-owning [`Arc<GlideSpan>`] for a span pointer returned by one of the
@@ -161,6 +167,7 @@ fn test_create_otel_span_with_trace_context_valid_inputs() {
         &child_span_id,
         "0af7651916cd43dd8448eb211c80319c",
         "b7ad6b7169203331",
+        "vendor=value",
     );
 }
 
@@ -251,6 +258,7 @@ fn test_create_batch_otel_span_with_trace_context() {
         &child_span_id,
         "0af7651916cd43dd8448eb211c80319d",
         "b7ad6b7169203332",
+        "",
     );
 }
 
@@ -302,6 +310,7 @@ fn test_create_named_otel_span_with_trace_context_valid_inputs() {
         &child_span_id,
         "0af7651916cd43dd8448eb211c80319e",
         "b7ad6b7169203333",
+        "vendor=value",
     );
 }
 

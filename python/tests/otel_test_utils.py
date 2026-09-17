@@ -53,6 +53,27 @@ NO_PARENT_SPAN_ID = "0" * 16
 _TRACE_ID_KEY = "trace_id"
 _PARENT_SPAN_ID_KEY = "parent_span_id"
 
+SPAN_FLUSH_GRACE = 0.3
+NO_SPAN_WINDOW = 0.5
+NO_SPAN_POLL_INTERVAL = 0.05
+
+
+def span_file_exists(path: str) -> bool:
+    """Return whether the exporter has written a span file at ``path``."""
+    return os.path.exists(path)
+
+
+def build_unexpected_span_error(path: str) -> Exception:
+    """Build the failure raised when a span is exported that should not have been."""
+    try:
+        _, _, span_names = read_and_parse_span_file(path)
+    except Exception:
+        span_names = []
+    return AssertionError(
+        f"Expected no spans to be exported, but {path} was created "
+        f"with spans {span_names}"
+    )
+
 
 def get_spans_by_name(span_objects: List[Dict], span_name: str) -> List[Dict]:
     """Return every exported span with the given name."""
