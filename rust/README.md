@@ -184,7 +184,7 @@ command. The migrations that follow from this are mechanical:
 | `pipe()….query_async(&mut c)` | `pipe()….query_async(&c)` (`PipelineExt`) |
 | sync `pipe()….query(&mut c)`  | `pipe()….query(&c)` (`sync::PipelineExt`) |
 | `cmd("X")….query_async(&mut c)` | `c.glide_send(cmd)` (typed, by value)  |
-| `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator, same `next_item()` / `Iterator` shape |
+| `con.scan_match(pat)` iterators | same call — GLIDE-owned iterator; `next_item()` / `Iterator` yield `RedisResult<RV>` (a `Result` per item) |
 
 ```rust,no_run
 use glide::{AsyncCommands, GlideClient, GlideClientConfiguration, PipelineExt, Script, pipe};

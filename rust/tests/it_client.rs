@@ -108,8 +108,10 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn client_info_reports_lib_name_and_ver() {
-        let srv = server_or_skip!();
-        let client = srv.client().await;
+        let server = server_or_skip!();
+        let client = server.client().await;
+
+        skip_if_version_below!(client, 7, 2, 0);
 
         let reply = client.custom_command(&["CLIENT", "INFO"]).await.unwrap();
         let info = String::from_owned_valkey_value(reply).unwrap();
@@ -124,11 +126,10 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_client_info_reports_lib_name_and_ver() {
-        let cluster = common::ClusterHarness::start().expect("cluster harness should start");
-        let client = cluster
-            .client()
-            .await
-            .expect("cluster client should connect");
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
+        skip_if_version_below!(client, 7, 2, 0);
 
         let reply = client
             .custom_command_with_route(&["CLIENT", "INFO"], Route::RandomNode)
@@ -150,14 +151,8 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_iterates_all_keys() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => {
-                eprintln!("SKIP: cluster client connect failed");
-                return;
-            }
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
 
         // Insert a known set of keys (routed automatically across shards).
         let prefix = common::key("cscan");
@@ -170,35 +165,45 @@ timed_tokio_test!(
 
         // Iterate the whole keyspace via the cluster-scan cursor.
         let mut found: HashSet<Vec<u8>> = HashSet::new();
+        let mut ids: Vec<String> = Vec::new();
+
         let mut cursor = ClusterScanCursor::new();
-        let mut guard = 0;
         loop {
             let (next, keys) =
-                retry_transient!(client.cluster_scan(&cursor, None, Some(100), None)).unwrap();
+                retry_transient!(client.cluster_scan(&cursor, None, Some(10), None)).unwrap();
+
             for k in keys {
                 found.insert(k.to_vec());
             }
+
             cursor = next;
-            guard += 1;
-            if cursor.is_finished() || guard > 100 {
+
+            if !cursor.is_finished() {
+                ids.push(cursor.id().to_owned());
+            } else {
                 break;
             }
         }
-        assert!(cursor.is_finished(), "scan did not finish");
-        // Every inserted key must have been observed.
-        for k in &expected {
-            assert!(found.contains(k), "cluster_scan missed a key");
+
+        // Verify that all inserted keys were found.
+        for key in &expected {
+            assert!(found.contains(key), "cluster_scan missed a key");
+        }
+
+        // Verify that all intermediate cursors were cleaned up.
+        for id in ids {
+            assert!(
+                glide_core::cluster_scan_container::get_cluster_scan_cursor(id.clone()).is_err()
+            );
         }
     }
 );
 
 timed_tokio_test!(
     async fn cluster_scan_with_match_pattern() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => return,
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
+
         let uniq = common::key("m");
         let matching = format!("{uniq}:match:1");
         let _: () = client.set(&matching, "v").await.unwrap();
@@ -230,11 +235,8 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn route_command_ping_variants() {
-        let cluster = cluster_or_skip!();
-        let client = match cluster.client().await {
-            Some(c) => c,
-            None => return,
-        };
+        let cluster = common::ClusterHarness::start();
+        let client = cluster.client().await;
 
         // ECHO to all primaries returns reply per primary node.
         let msg = "glide-route-probe";

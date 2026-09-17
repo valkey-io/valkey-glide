@@ -26,7 +26,7 @@ use redis::{
 use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
@@ -579,6 +579,14 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Returns the parent client's IAM token manager, if IAM authentication is configured.
+    /// Used by scoped connections to authenticate as the IAM identity instead of
+    /// running unauthenticated.
+    #[cfg(feature = "proto")]
+    pub(crate) fn iam_token_manager(&self) -> Option<&Arc<crate::iam::IAMTokenManager>> {
+        self.iam_token_manager.as_ref()
+    }
+
     /// Checks if the given command is a SELECT command.
     /// Returns true if the command is "SELECT", false otherwise.
     /// Handles cases where command() returns None gracefully.
@@ -1448,6 +1456,9 @@ impl Client {
     /// logic as `send_command`, but routes the command to the given
     /// `MultiplexedConnection` instead of the client's internal managed connection.
     ///
+    /// IAM change-detection here uses `last_seen_generation` (owned by the caller)
+    /// instead of the shared `token_changed` flag — see `IAMTokenManager::token_generation`.
+    ///
     /// Note: OTel spans and inflight tracking are not applied here because scoped
     /// connections operate outside the multiplexer's pipeline. OTel support for
     /// scopes is tracked as a follow-up enhancement.
@@ -1455,16 +1466,54 @@ impl Client {
         &self,
         cmd: &Cmd,
         connection: &mut redis::aio::MultiplexedConnection,
+        last_seen_generation: &AtomicU64,
+        defer_reauth: bool,
     ) -> RedisResult<Value> {
-        // IAM token refresh: if token rotated, re-authenticate this connection
-        if let Some(iam_manager) = &self.iam_token_manager
-            && iam_manager.token_changed()
-        {
-            let current_token = iam_manager.get_token().await;
-            if !current_token.is_empty() {
-                iam_manager.clear_token_changed();
-                let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
-                connection.send_packed_command(&auth_cmd).await?;
+        // IAM token refresh: re-authenticate when the token rotated (generation
+        // advanced since this connection last applied one). `defer_reauth` skips it
+        // where AUTH can't run — an open transaction (queued, corrupting the EXEC
+        // reply) or RESP2 subscribed mode (rejected outright). The bookmark stays
+        // unadvanced, so it retries after EXEC/DISCARD, or on the next borrow for
+        // subscribed mode (subscriptions clear only on release).
+        if !defer_reauth && let Some(iam_manager) = &self.iam_token_manager {
+            let current_generation = iam_manager.token_generation();
+            if current_generation != last_seen_generation.load(Ordering::Acquire) {
+                let current_token = iam_manager.get_token().await;
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
+                }
+                let auth_cmd = redis::cmd("AUTH")
+                    .arg(iam_manager.username())
+                    .arg(current_token.as_str())
+                    .to_owned();
+                // Signals both failure modes as AuthenticationFailed so the caller
+                // discards the connection. The server never produces this kind
+                // itself, so it can't be confused with a command's own auth error.
+                match tokio::time::timeout(
+                    self.request_timeout,
+                    connection.send_packed_command(&auth_cmd),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication failed",
+                            e.to_string(),
+                        )));
+                    }
+                    Err(_) => {
+                        return Err(RedisError::from((
+                            ErrorKind::AuthenticationFailed,
+                            "IAM re-authentication timed out",
+                        )));
+                    }
+                }
+                last_seen_generation.store(current_generation, Ordering::Release);
             }
         }
 
@@ -2066,7 +2115,7 @@ impl Client {
     /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-    ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
+    ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
@@ -2075,24 +2124,23 @@ impl Client {
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
+                    iam_config.credentials_provider.clone(),
                 )
                 .await
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
-                        Some(std::sync::Arc::new(token_manager))
+                        Ok(Some(std::sync::Arc::new(token_manager)))
                     }
-                    Err(e) => {
-                        log_error("IAM", format!("Failed to create IAM token manager: {e}"));
-                        None
-                    }
+                    Err(e) => Err(ConnectionError::IAMError(e.to_string())),
                 }
             } else {
-                log_error("IAM", "IAM authentication requires a username");
-                None
+                Err(ConnectionError::IAMError(
+                    "IAM authentication requires a username".to_string(),
+                ))
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -2539,6 +2587,7 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    IAMError(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -2549,6 +2598,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
         }
     }
 }
@@ -2561,6 +2611,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
         }
     }
 }
@@ -2876,7 +2927,7 @@ impl Client {
 
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await
+                Self::create_iam_token_manager(auth_info).await?
             } else {
                 None
             };
@@ -2986,6 +3037,11 @@ impl Client {
     /// SELECT is always sent to guarantee the connection is on the correct database.
     ///
     /// This ensures the next borrower gets a connection in a known-good state.
+    ///
+    /// Does not send UNSUBSCRIBE, so a borrower that subscribed leaves the
+    /// connection in push-message mode for whoever gets it next. Callers must not
+    /// subscribe on a pooled client; use the parent client's pub/sub API, which
+    /// keeps its own dedicated connections.
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
         // Send DISCARD — ignore ERR if no MULTI is active
         let _ = self.send_command(&mut redis::cmd("DISCARD"), None).await;
@@ -3997,5 +4053,88 @@ mod tests {
                 "is_blocking_command_name mismatch for {name} {args:?}: got {via_name}, expected {expected}"
             );
         }
+    }
+
+    /// Sets fake AWS credentials so `IAMTokenManager::new` can locally sign a SigV4
+    /// token without reaching real AWS (same approach as `iam::tests::setup_test_credentials`).
+    fn setup_test_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_username_accessor_returns_configured_username() {
+        setup_test_credentials();
+
+        let manager = crate::iam::IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "iam-test-user".to_string(),
+            "us-east-1".to_string(),
+            crate::iam::ServiceType::ElastiCache,
+            None,
+            None,
+        )
+        .await
+        .expect("IAMTokenManager creation should succeed with fake credentials");
+
+        assert_eq!(manager.username(), "iam-test-user");
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_client_iam_token_manager_accessor() {
+        setup_test_credentials();
+
+        // With IAM configured, Client::new should populate the IAM token manager,
+        // and the new accessor should expose it (used by scoped connections to
+        // authenticate as the IAM identity instead of running unauthenticated).
+        let iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            authentication_info: Some(crate::client::types::AuthenticationInfo {
+                username: Some("iam-test-user".to_string()),
+                password: None,
+                iam_config: Some(crate::client::types::IamAuthenticationConfig {
+                    cluster_name: "test-cluster".to_string(),
+                    region: "us-east-1".to_string(),
+                    service_type: crate::iam::ServiceType::ElastiCache,
+                    refresh_interval_seconds: None,
+                    credentials_provider: None,
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let client = Client::new(iam_request, None)
+            .await
+            .expect("lazy client creation with IAM config should succeed");
+
+        let manager = client
+            .iam_token_manager()
+            .expect("iam_token_manager() should return Some when IAM is configured");
+        assert_eq!(manager.username(), "iam-test-user");
+
+        // Without IAM configured, the accessor should return None.
+        let non_iam_request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+        let non_iam_client = Client::new(non_iam_request, None)
+            .await
+            .expect("lazy client creation without IAM config should succeed");
+        assert!(
+            non_iam_client.iam_token_manager().is_none(),
+            "iam_token_manager() should return None when IAM is not configured"
+        );
     }
 }

@@ -4,9 +4,14 @@
 
 ### Fixes
 
+* Core: Closing a client or a `ClientPool` invalidates the scopes its clients own — the scope pool and its outstanding scopes are removed from the registries, so a scope can no longer read or mutate keyspace after its parent is gone ([#6889](https://github.com/valkey-io/valkey-glide/issues/6889))
+* Core: A scope pool configured with `max_total = N` now permits N concurrent scopes instead of N-1. The pool reserved a slot against `max_total` and the caller then re-checked capacity after that reservation, so the last acquire was never given a connection and the borrower timed out ([#6795](https://github.com/valkey-io/valkey-glide/issues/6795))
+* Core/FFI: Scoped commands resolve their parent client from the scope registry without taking a pool lock, and fail if it cannot be resolved, so a scoped command always gets the parent's request timeout, circuit breaker, inflight limit, compression, IAM re-authentication and latency tracking ([#6796](https://github.com/valkey-io/valkey-glide/issues/6796))
+* Core: Reset `CLIENT SETNAME` on scope release so a connection name set during a scope does not leak to the next borrower of the same connection ([#6898](https://github.com/valkey-io/valkey-glide/issues/6898))
 * Java: Map the Jedis compatibility layer's database selection onto GLIDE's `databaseId` instead of logging a warning and discarding it. A `JedisPool` configured for a non-zero database ran every command against database 0, silently writing to a database the caller did not ask for ([#6994](https://github.com/valkey-io/valkey-glide/issues/6994))
 * Core: Mark `PSUBSCRIBE` and `PUNSUBSCRIBE` as readonly commands so cluster routing treats them consistently with `SUBSCRIBE`/`UNSUBSCRIBE` ([#6756](https://github.com/valkey-io/valkey-glide/pull/6756))
 * Core/FFI: Scoped connections honor blocking-command timeouts (e.g. `BLPOP key 0` blocks instead of timing out at the request timeout), and a scoped connection whose blocking command timed out or was cancelled is discarded on release instead of being reused with a stale server-side waiter ([#6780](https://github.com/valkey-io/valkey-glide/issues/6780), [#6794](https://github.com/valkey-io/valkey-glide/issues/6794))
+* Core: Scoped connections authenticate as the configured IAM identity, re-authenticate on IAM token rotation, and are discarded rather than reused when re-authentication fails ([#7001](https://github.com/valkey-io/valkey-glide/issues/7001))
 * Java: Fix scoped connection truncating values larger than 16 KB ([#6893](https://github.com/valkey-io/valkey-glide/issues/6893))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
@@ -35,10 +40,12 @@
 * Core: Add client-side caching support for MGET. Fully cached requests return locally; partially cached requests fetch only misses and preserve duplicate-key and NIL response semantics. ([#6793](https://github.com/valkey-io/valkey-glide/issues/6793))
 * Rust: Add an initial native Rust client (preview) built directly on `glide-core` ([#6864](https://github.com/valkey-io/valkey-glide/pull/6864))
 * Java, Node, Python, Go: Add optional client information tags across standalone, cluster, pooled, async/sync, and standalone monitor clients, plus configurable library-name overrides in Node, Python, and Go. Tags are composed with the default or custom library name reported in server client metadata, with runtime library names preferred during connection setup and existing fallbacks retained. Non-empty library-name overrides and tags must contain only printable ASCII characters from ! (U+0021) through ~ (U+007E). ([#6755](https://github.com/valkey-io/valkey-glide/pull/6755))
+* Java: Add `GlideCredentialProvider` support to `IamAuthConfig`. When set, the Rust core calls back into Java to retrieve AWS credentials (via the new `AwsCredentials` builder, which supports optional expiry) for each IAM token signing operation. When not set, the default AWS credential chain is used — fully backwards compatible. ([#6825](https://github.com/valkey-io/valkey-glide/pull/6825))
 * Java: Add `GlideString.asReadOnlyByteBuffer()` for zero-copy, read-only access to binary payloads ([#6600](https://github.com/valkey-io/valkey-glide/issues/6600))
 * Go: Convert FFI string payloads with `GoStringN` (one copy, interior NULs preserved) instead of `GoBytes`+`string` in GET/MGET response parsing, pubsub callbacks, MONITOR client/command strings, and script hashes ([#6751](https://github.com/valkey-io/valkey-glide/issues/6751))
 * Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * feat(go): add AzAffinityAllNodes read strategy ([#6927](https://github.com/valkey-io/valkey-glide/pull/6927))
+* Java: Add `AZ_AFFINITY_ALL_NODES` read strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
@@ -52,6 +59,10 @@
 * Go: add mTLS client certificates with automatic reloading ([#6384](https://github.com/valkey-io/valkey-glide/pull/6384))
 * Node: add mTLS client certificate/key support with automatic certificate reloading ([#6383](https://github.com/valkey-io/valkey-glide/pull/6383))
 * Python: add automatic mTLS client certificate/key reload ([#6596](https://github.com/valkey-io/valkey-glide/pull/6596))
+
+### Breaking Changes
+
+* Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 
 ## 2.5
 

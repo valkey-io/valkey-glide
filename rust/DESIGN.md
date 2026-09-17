@@ -52,8 +52,9 @@ Deliberate deviations, all performance-motivated:
   which forced a full payload copy per command to bridge into glide-core's
   owned dispatch. Raw commands go through the typed `glide_send` escape
   hatch instead;
-- the `scan*` methods return GLIDE-owned iterators (`src/commands/scan.rs`,
-  same `next_item()` / `Iterator` call shape as redis-rs), each page
+- the `scan*` methods return GLIDE-owned iterators (`src/commands/scan.rs`)
+  that yield `RedisResult<RV>` via `next_item()` / `Iterator` (unlike redis-rs,
+  which yields the bare value and swallows mid-scan errors), each page
   dispatched by value.
 
 Almost every method on [`AsyncCommands`](src/commands/core.rs) and
