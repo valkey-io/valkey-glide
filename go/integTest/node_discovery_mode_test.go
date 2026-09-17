@@ -13,9 +13,7 @@ import (
 )
 
 func (suite *GlideTestSuite) TestStaticConnects() {
-	cfg := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
+	cfg := suite.defaultClientConfig().
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeStatic)
 	client, err := suite.client(cfg)
 	require.NoError(suite.T(), err)
@@ -26,9 +24,7 @@ func (suite *GlideTestSuite) TestStaticConnects() {
 }
 
 func (suite *GlideTestSuite) TestStaticAllowsWrites() {
-	cfg := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
+	cfg := suite.defaultClientConfig().
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeStatic)
 	client, err := suite.client(cfg)
 	require.NoError(suite.T(), err)
@@ -46,9 +42,7 @@ func (suite *GlideTestSuite) TestStaticAllowsWrites() {
 }
 
 func (suite *GlideTestSuite) TestReadOnlyRejectsDiscoverAll() {
-	cfg := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithUseTLS(suite.tls).
+	cfg := suite.defaultClientConfig().
 		WithReadOnly(true).
 		WithNodeDiscoveryMode(config.NodeDiscoveryModeDiscoverAll)
 	_, err := glide.NewClient(cfg)
@@ -71,17 +65,14 @@ func (suite *GlideTestSuite) TestDiscoverAll() {
 
 	suite.Run("from_primary", func() {
 		uniqueName := fmt.Sprintf("discovery_t4_%s", uuid.New().String())
-		cfg := config.NewClientConfiguration().
-			WithAddress(&primary).
+		cfg := plaintextClientConfigFor(primary).
 			WithClientName(uniqueName).
 			WithNodeDiscoveryMode(config.NodeDiscoveryModeDiscoverAll)
 		discoveryClient, err := glide.NewClient(cfg)
 		require.NoError(suite.T(), err)
 		defer discoveryClient.Close()
 
-		probeCfg := config.NewClientConfiguration().
-			WithAddress(&replica0).
-			WithReadOnly(true)
+		probeCfg := plaintextClientConfigFor(replica0).WithReadOnly(true)
 		probe, err := glide.NewClient(probeCfg)
 		require.NoError(suite.T(), err)
 		defer probe.Close()
@@ -93,8 +84,7 @@ func (suite *GlideTestSuite) TestDiscoverAll() {
 
 	suite.Run("from_replica", func() {
 		uniqueName := fmt.Sprintf("discovery_t5_%s", uuid.New().String())
-		cfg := config.NewClientConfiguration().
-			WithAddress(&replica0).
+		cfg := plaintextClientConfigFor(replica0).
 			WithClientName(uniqueName).
 			WithNodeDiscoveryMode(config.NodeDiscoveryModeDiscoverAll)
 		discoveryClient, err := glide.NewClient(cfg)
@@ -107,9 +97,7 @@ func (suite *GlideTestSuite) TestDiscoverAll() {
 		require.Equal(suite.T(), "OK", setResult)
 		discoveryClient.Del(context.Background(), []string{key})
 
-		probeCfg := config.NewClientConfiguration().
-			WithAddress(&replica0).
-			WithReadOnly(true)
+		probeCfg := plaintextClientConfigFor(replica0).WithReadOnly(true)
 		probe, err := glide.NewClient(probeCfg)
 		require.NoError(suite.T(), err)
 		defer probe.Close()
@@ -121,20 +109,15 @@ func (suite *GlideTestSuite) TestDiscoverAll() {
 
 	suite.Run("partial_addresses", func() {
 		uniqueName := fmt.Sprintf("discovery_t6_%s", uuid.New().String())
-		cfg := config.NewClientConfiguration().
-			WithAddress(&primary).
-			WithAddress(&replica0).
+		cfg := plaintextClientConfigFor(primary, replica0).
 			WithClientName(uniqueName).
 			WithNodeDiscoveryMode(config.NodeDiscoveryModeDiscoverAll)
 		discoveryClient, err := glide.NewClient(cfg)
 		require.NoError(suite.T(), err)
 		defer discoveryClient.Close()
 
-		for _, replicaAddr := range []config.NodeAddress{replica1, replica2} {
-			addr := replicaAddr
-			probeCfg := config.NewClientConfiguration().
-				WithAddress(&addr).
-				WithReadOnly(true)
+		for _, addr := range []config.NodeAddress{replica1, replica2} {
+			probeCfg := plaintextClientConfigFor(addr).WithReadOnly(true)
 			probe, err := glide.NewClient(probeCfg)
 			require.NoError(suite.T(), err)
 

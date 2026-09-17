@@ -28,8 +28,7 @@ func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Standalone() {
 
 	// Configure client with fake address - connection should succeed because
 	// resolver translates it to the real address
-	clientConfig := defaultClientConfig().
-		WithAddress(&config.NodeAddress{Host: fakeHost, Port: fakePort}).
+	clientConfig := clientConfigFor(config.NodeAddress{Host: fakeHost, Port: fakePort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClient(clientConfig)
@@ -70,8 +69,7 @@ func (suite *GlideTestSuite) TestAddressResolverWithFakeAddress_Cluster() {
 
 	// Configure client with fake address - connection should succeed because
 	// resolver translates it to the real address
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&config.NodeAddress{Host: fakeHost, Port: fakePort}).
+	clientConfig := clusterClientConfigFor(config.NodeAddress{Host: fakeHost, Port: fakePort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClusterClient(clientConfig)
@@ -105,8 +103,7 @@ func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Sta
 
 	// Configure client with real address - connection should still succeed
 	// because the fallback uses the original address when resolver panics
-	clientConfig := defaultClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClient(clientConfig)
@@ -131,8 +128,7 @@ func (suite *GlideTestSuite) TestAddressResolverExceptionFallsBackToOriginal_Clu
 
 	// Configure client with real address - connection should still succeed
 	// because the fallback uses the original address when resolver panics
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clusterClientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClusterClient(clientConfig)
@@ -157,8 +153,7 @@ func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_
 
 	// Configure client with real address - connection should still succeed
 	// because returning empty/zero signals fallback to original address
-	clientConfig := defaultClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClient(clientConfig)
@@ -183,8 +178,7 @@ func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_
 
 	// Configure client with real address - connection should still succeed
 	// because returning empty/zero signals fallback to original address
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clusterClientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(resolver)
 
 	client, err := glide.NewClusterClient(clientConfig)
@@ -203,8 +197,7 @@ func (suite *GlideTestSuite) TestAddressResolverNil_Standalone() {
 	actualPort := suite.standaloneHosts[0].Port
 
 	// Configure client with nil resolver - should work normally
-	clientConfig := defaultClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(nil)
 
 	client, err := glide.NewClient(clientConfig)
@@ -223,8 +216,7 @@ func (suite *GlideTestSuite) TestAddressResolverNil_Cluster() {
 	actualPort := suite.clusterHosts[0].Port
 
 	// Configure client with nil resolver - should work normally
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+	clientConfig := clusterClientConfigFor(config.NodeAddress{Host: actualHost, Port: actualPort}).
 		WithAddressResolver(nil)
 
 	client, err := glide.NewClusterClient(clientConfig)
