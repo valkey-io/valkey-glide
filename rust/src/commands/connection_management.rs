@@ -5,7 +5,7 @@ use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
-use crate::value::ToValkeyArgs;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
 

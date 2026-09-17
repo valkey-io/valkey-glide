@@ -8,7 +8,8 @@
 // for these Python-mirrored option types, to mirror redis-rs instead. (`SetExpiry`
 // already mirrors redis-rs and is exempt.)
 use crate::cmd::Cmd;
-use crate::value::ToValkeyArgs;
+use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 
 /// Condition under which a `SET` (or similar) should be applied.
 ///
@@ -78,17 +79,17 @@ pub enum SetExpiry {
 }
 
 impl ToValkeyArgs for SetExpiry {
-    fn write_valkey_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         let mut kw = |k: &[u8], v: usize| {
-            out.push(k.to_vec());
-            out.push(v.to_string().into_bytes());
+            out.write_arg(k);
+            out.write_arg_fmt(v);
         };
         match self {
             SetExpiry::EX(secs) => kw(b"EX", *secs),
             SetExpiry::PX(millis) => kw(b"PX", *millis),
             SetExpiry::EXAT(ts) => kw(b"EXAT", *ts),
             SetExpiry::PXAT(ts) => kw(b"PXAT", *ts),
-            SetExpiry::KEEPTTL => out.push(b"KEEPTTL".to_vec()),
+            SetExpiry::KEEPTTL => out.write_arg(b"KEEPTTL"),
         }
     }
 
@@ -139,15 +140,15 @@ impl SetOptions {
 }
 
 impl ToValkeyArgs for SetOptions {
-    fn write_valkey_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if let Some(ref existence_check) = self.conditional_set {
             match existence_check {
-                ExistenceCheck::NX => out.push(b"NX".to_vec()),
-                ExistenceCheck::XX => out.push(b"XX".to_vec()),
+                ExistenceCheck::NX => out.write_arg(b"NX"),
+                ExistenceCheck::XX => out.write_arg(b"XX"),
             }
         }
         if self.get {
-            out.push(b"GET".to_vec());
+            out.write_arg(b"GET");
         }
         if let Some(ref expiration) = self.expiration {
             expiration.write_valkey_args(out);
@@ -167,14 +168,11 @@ pub enum Direction {
 }
 
 impl ToValkeyArgs for Direction {
-    fn write_valkey_args(&self, out: &mut Vec<Vec<u8>>) {
-        out.push(
-            match self {
-                Direction::Left => b"LEFT".as_slice(),
-                Direction::Right => b"RIGHT".as_slice(),
-            }
-            .to_vec(),
-        );
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            Direction::Left => b"LEFT".as_slice(),
+            Direction::Right => b"RIGHT".as_slice(),
+        });
     }
 }
 
@@ -196,17 +194,17 @@ pub enum Expiry {
 }
 
 impl ToValkeyArgs for Expiry {
-    fn write_valkey_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         let mut kw = |k: &[u8], v: usize| {
-            out.push(k.to_vec());
-            out.push(v.to_string().into_bytes());
+            out.write_arg(k);
+            out.write_arg_fmt(v);
         };
         match self {
             Expiry::EX(sec) => kw(b"EX", *sec),
             Expiry::PX(ms) => kw(b"PX", *ms),
             Expiry::EXAT(ts) => kw(b"EXAT", *ts),
             Expiry::PXAT(ts) => kw(b"PXAT", *ts),
-            Expiry::PERSIST => out.push(b"PERSIST".to_vec()),
+            Expiry::PERSIST => out.write_arg(b"PERSIST"),
         }
     }
 
@@ -246,18 +244,18 @@ impl LposOptions {
 }
 
 impl ToValkeyArgs for LposOptions {
-    fn write_valkey_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
         if let Some(n) = self.count {
-            out.push(b"COUNT".to_vec());
-            out.push(n.to_string().into_bytes());
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(n);
         }
         if let Some(n) = self.rank {
-            out.push(b"RANK".to_vec());
-            out.push(n.to_string().into_bytes());
+            out.write_arg(b"RANK");
+            out.write_arg_fmt(n);
         }
         if let Some(n) = self.maxlen {
-            out.push(b"MAXLEN".to_vec());
-            out.push(n.to_string().into_bytes());
+            out.write_arg(b"MAXLEN");
+            out.write_arg_fmt(n);
         }
     }
 

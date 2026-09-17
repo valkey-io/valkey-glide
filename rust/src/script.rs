@@ -25,7 +25,8 @@
 use crate::ValkeyResult;
 use crate::cmd::{Cmd, cmd};
 use crate::commands::core::AsyncCommands;
-use crate::value::{FromValkeyValue, ToValkeyArgs};
+use crate::value::FromValkeyValue;
+use crate::write::ToValkeyArgs;
 
 /// Error code for an uncached script.
 const NOSCRIPT: &str = "NOSCRIPT";

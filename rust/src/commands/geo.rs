@@ -7,8 +7,8 @@ use crate::cmd::Cmd;
 use crate::commands::options::{ConditionalChange, OrderBy};
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
-use crate::value::ToValkeyArgs;
 use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
 

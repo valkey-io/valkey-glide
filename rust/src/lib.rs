@@ -18,6 +18,7 @@ pub mod routes;
 pub mod script;
 pub mod telemetry;
 pub mod value;
+pub mod write;
 
 #[cfg(feature = "sync")]
 pub mod sync;
@@ -39,10 +40,11 @@ pub type ValkeyFuture<'a, T> = futures::future::BoxFuture<'a, ValkeyResult<T>>;
 
 // Values
 pub use value::FromValkeyValue;
-pub use value::ToValkeyArgs;
-pub use value::ValkeyNumericBehavior;
 pub use value::ValkeyValue;
 pub use value::ValkeyVerbatimFormat;
+pub use write::ToValkeyArgs;
+pub use write::ValkeyNumericBehavior;
+pub use write::ValkeyWrite;
 
 // Core types
 pub use error::GlideError;

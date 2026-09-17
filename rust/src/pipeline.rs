@@ -3,11 +3,12 @@
 //!
 //! A [`Pipeline`] batches commands into a single round-trip.
 
+use crate::ValkeyResult;
 use crate::cmd::Cmd;
 use crate::error::GlideError;
 use crate::pipeline_options::PipelineOptions;
-use crate::value::ToValkeyArgs;
-use crate::{ValkeyResult, ValkeyValue};
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use glide_core::client::Client as CoreClient;
 use redis::PipelineRetryStrategy;
 use redis::cluster_routing::RoutingInfo;
