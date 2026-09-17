@@ -47,6 +47,7 @@
 * Core, Python: Add `AZ_AFFINITY_ALL_NODES` read policy ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * feat(go): add AzAffinityAllNodes read strategy ([#6927](https://github.com/valkey-io/valkey-glide/pull/6927))
 * Java: Add `AZ_AFFINITY_ALL_NODES` read strategy ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
+* Node: Add `AZAffinityAllNodes` read strategy ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 * Core: Zero-copy receive path for GET/MGET ([#6559](https://github.com/valkey-io/valkey-glide/pull/6559))
 * Go: Expose `inflightRequestsLimit` configuration via `WithInflightRequestsLimit`, bringing the Go client to parity with Java, Python, and Node ([#6385](https://github.com/valkey-io/valkey-glide/issues/6385))
 * Core, Java, Python, Node, Go: Add client-instance pooling and isolated execution scopes. Pools eliminate multiplexer contention under high concurrency; scopes provide dedicated connections for WATCH/MULTI/EXEC and CLIENT TRACKING. All languages share a unified Rust implementation via `send_scope_command()` and `release_client_async()`. Pool release resets state (DISCARD + SELECT). Scopes inherit parent's current database, credentials, and compression. Circuit breaker and inflight limits enforced. Abandon detection reclaims leaked borrows after configurable timeout (default 5 min, skips blocking commands, 0 to disable). ([#6338](https://github.com/valkey-io/valkey-glide/pull/6338))
@@ -64,6 +65,7 @@
 ### Breaking Changes
 
 * Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
+* Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 
 ## 2.5
 
