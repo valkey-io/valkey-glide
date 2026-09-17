@@ -1591,8 +1591,7 @@ pub(crate) mod shared_client_tests {
         }
 
         async fn send(&self, cmd_name: &str, args: &mut [Vec<u8>]) -> redis::RedisResult<Value> {
-            glide_core::scope::send_scope_command(self.scope_id, cmd_name, args, Some(&self.client))
-                .await
+            glide_core::scope::send_scope_command(self.scope_id, cmd_name, args, &self.client).await
         }
 
         fn release(&self) {
@@ -4529,10 +4528,10 @@ pub(crate) mod shared_client_tests {
     /// (`create_scope_connection`), isolated from the command-time rotation
     /// re-authentication that otherwise masks it.
     ///
-    /// The command is sent with `client: None`, which routes through the raw
-    /// `send_packed_command` fallback in `execute_scope_command`. That fallback
-    /// cannot re-authenticate, so the identity observed here is whatever
-    /// `create_scope_connection`'s init pipeline established and nothing else.
+    /// The command is sent through `execute_scope_command` with `client: None`,
+    /// the raw path that cannot re-authenticate, so the identity observed here is
+    /// whatever `create_scope_connection`'s init pipeline established and nothing
+    /// else. (`send_scope_command` requires a parent and would re-auth.)
     #[cfg(feature = "proto")]
     #[rstest]
     #[serial_test::serial]
@@ -4567,8 +4566,8 @@ pub(crate) mod shared_client_tests {
             })
             .await;
 
-            let mut args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
-            let response = scope::send_scope_command(scope_id as u64, "ACL", &mut args, None).await;
+            let args: Vec<Vec<u8>> = vec![b"WHOAMI".to_vec()];
+            let response = scope::execute_scope_command(scope_id as u64, "ACL", &args, None).await;
 
             let value = response.expect("ACL WHOAMI through the scope should succeed");
             let whoami = match value {

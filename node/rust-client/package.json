@@ -18,6 +18,9 @@
         "prettier": "3",
         "shx": "0.3"
     },
+    "overrides": {
+        "js-yaml@<4.3.2": "^4.3.2"
+    },
     "napi": {
         "binaryName": "valkey-glide"
     }
