@@ -674,7 +674,8 @@ pub fn try_acquire_scope(
         Ok(mut pool) => {
             // Resolve the slot's current primary before touching the pool so a
             // stale or unmapped slot never matches (or creates) a connection to the
-            // wrong node. Unresolved means "retry", not "use the seed".
+            // wrong node. Unresolved never means "use the seed"; whether it means
+            // "retry" depends on the cause (see `ScopeTargetUnresolved`).
             let client = get_parent_client(pool.parent_client_id);
             let target = match try_resolve_scope_target(client.as_ref(), routing_slot) {
                 Ok(target) => {
