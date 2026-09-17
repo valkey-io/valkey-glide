@@ -5855,6 +5855,31 @@ pub(super) mod refresh_task_resolution_tests {
         assert_eq!(resolver.0.load(Ordering::SeqCst), 0);
     }
 
+    #[tokio::test]
+    async fn initial_connection_map_key_uses_resolved_hostname_when_resolver_is_configured() {
+        let resolver_calls = Arc::new(AtomicUsize::new(0));
+        let resolver = Arc::new(CountingHostnameResolver(resolver_calls.clone()));
+        let mut params = ClusterParams::default_for_test(None);
+        params.address_resolver = Some(resolver);
+        let initial = "redis://localhost:6379".into_connection_info().unwrap();
+
+        let connection_map = ClusterConnInner::<RecordingConnection>::create_initial_connections(
+            &[initial],
+            &params,
+            GlideConnectionOptions::default(),
+        )
+        .await
+        .expect("initial connection should succeed");
+
+        let keys: Vec<_> = connection_map
+            .0
+            .iter()
+            .map(|node| node.key().clone())
+            .collect();
+        assert_eq!(keys, vec!["localhost:6379"]);
+        assert_eq!(resolver_calls.load(Ordering::SeqCst), 1);
+    }
+
     impl ConnectionLike for RecordingConnection {
         fn req_packed_command<'a>(&'a mut self, _cmd: &'a Cmd) -> RedisFuture<'a, Value> {
             Box::pin(async { Ok(Value::Okay) })
