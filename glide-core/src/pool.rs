@@ -771,6 +771,71 @@ impl Default for ScopePoolConfig {
     }
 }
 
+/// Topology-aware destination for a scoped connection.
+///
+/// Cluster targets are keyed on the primary's canonical `host:port` (the same key
+/// redis-rs uses for its connection map), not on the hash slot. Every slot owned by
+/// one primary therefore shares idle connections, and a slot whose owner changed
+/// (failover, migration) stops matching sockets to the former owner once the parent
+/// client's slot map reflects the change, because the address is re-resolved
+/// against that map on each acquire. The map refreshes on the parent's own MOVED
+/// handling and its periodic topology check, not on a MOVED seen by a scoped
+/// connection, so a scope-only workload can keep matching the former owner until
+/// the next refresh.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScopeTarget {
+    /// The configured server for a standalone client.
+    Standalone,
+    /// The cluster primary at this canonical `host:port`.
+    ClusterPrimary(Arc<String>),
+}
+
+impl ScopeTarget {
+    /// Build a cluster target from a resolved primary address.
+    pub fn cluster_primary(address: impl Into<String>) -> Self {
+        ScopeTarget::ClusterPrimary(Arc::new(address.into()))
+    }
+}
+
+/// Why a routing slot could not be turned into a [`ScopeTarget`].
+///
+/// The variants differ in whether retrying can help, which is what the acquire
+/// path needs to decide how loudly to report them. Holding a value proves only
+/// that resolution failed for that reason at that instant; the slot map and the
+/// registry can change before the next attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScopeTargetUnresolved {
+    /// No `Client` is registered under the pool's `parent_client_id`. Not
+    /// transient: the binding never registered it, or has already closed it.
+    ParentUnregistered,
+    /// Cluster parent whose slot map has no primary for this slot (initial
+    /// topology not yet fetched, or mid-resharding). Transient.
+    SlotUnmapped(u16),
+    /// Cluster parent whose wrapper lock was held (e.g. mid-reconnect) when the
+    /// non-blocking lookup ran. Transient on the order of the lock hold.
+    TopologyLocked,
+}
+
+impl ScopeTargetUnresolved {
+    /// Whether two causes call for the same remedy, ignoring the slot carried by
+    /// `SlotUnmapped`. Every unmapped slot is fixed by the same topology refresh,
+    /// so interleaved acquires for different unmapped slots are one episode, not
+    /// a fresh cause on every flip.
+    pub fn same_kind(self, other: Self) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    }
+}
+
+impl std::fmt::Display for ScopeTargetUnresolved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParentUnregistered => f.write_str("parent client is not registered"),
+            Self::SlotUnmapped(slot) => write!(f, "no primary mapped for slot {slot}"),
+            Self::TopologyLocked => f.write_str("cluster topology lock is held"),
+        }
+    }
+}
+
 /// A dedicated connection for isolated execution.
 ///
 /// Cluster mode support:
@@ -793,9 +858,8 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
-    /// The target slot this connection was created for (cluster routing).
-    /// Used to match idle connections to acquire requests for the same slot range.
-    pub target_slot: u16,
+    /// The topology-aware destination this connection was created for.
+    pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
     /// `IAMTokenManager::token_generation`). Per-connection rather than on the
     /// shared `Client` since scoped connections are reused independently.
@@ -818,6 +882,13 @@ pub struct ScopePool {
     /// The client_name from the connection config (for reset on release), empty
     /// if unconfigured.
     pub configured_client_name: String,
+    /// The most recent reason an acquire could not resolve its target, or `None`
+    /// once resolution succeeds again. Bindings retry acquire every few
+    /// milliseconds, so the acquire path warns only when the kind of cause
+    /// changes (see [`ScopeTargetUnresolved::same_kind`]) rather than on every
+    /// attempt. The value is still the latest one, so the slot in the message is
+    /// current.
+    pub last_unresolved_target: Option<ScopeTargetUnresolved>,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -831,7 +902,8 @@ pub enum ScopeAcquire {
     /// A slot was reserved against `max_total`; the caller must create a
     /// connection to fill it.
     Reserved,
-    /// No idle connection and the pool is at `max_total`.
+    /// Nothing idle at all and the pool is at `max_total` (an idle connection to a
+    /// different target is evicted to make room, so it never causes exhaustion).
     Exhausted,
 }
 
@@ -842,7 +914,11 @@ impl ScopePool {
         parent_client_id: u64,
     ) -> Self {
         // Parse configured_database_id and configured_client_name from the
-        // connection request in a single parse.
+        // connection request in a single parse; database_id is only
+        // a reset baseline on release, so an unparseable request falling back to 0
+        // costs a redundant SELECT rather than misrouting anything. Topology is not
+        // read here: scope targets come from the parent `Client` at acquire time
+        // (see `scope::try_resolve_scope_target`), keeping one source of truth.
         #[cfg(feature = "proto")]
         let (configured_database_id, configured_client_name) = {
             use protobuf::Message as _;
@@ -866,6 +942,7 @@ impl ScopePool {
             parent_client_id,
             configured_database_id,
             configured_client_name,
+            last_unresolved_target: None,
         }
     }
 
@@ -877,14 +954,14 @@ impl ScopePool {
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
-        routing_slot: u16,
+        target: ScopeTarget,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
         }
 
-        // Scan idle connections for one matching the requested routing slot.
-        // Connections targeting a different slot are kept aside and pushed back.
+        // Scan idle connections for one matching the requested target.
+        // Connections to a different target are kept aside and pushed back.
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut found: Option<ScopedConnection> = None;
 
@@ -895,9 +972,8 @@ impl ScopePool {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
-            // Slot 0 is the default/standalone wildcard — always matches.
-            // Otherwise, only reuse if target_slot matches.
-            if conn.target_slot == routing_slot || routing_slot == 0 || conn.target_slot == 0 {
+            // Scoped connections are reusable only for the same physical target.
+            if conn.target == target {
                 found = Some(conn);
                 break;
             }
@@ -924,12 +1000,27 @@ impl ScopePool {
             return ScopeAcquire::Reused(scope_id);
         }
 
-        if self.total_count.load(Ordering::Acquire) < self.config.max_total {
-            self.total_count.fetch_add(1, Ordering::AcqRel);
-            ScopeAcquire::Reserved
-        } else {
-            ScopeAcquire::Exhausted
+        if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
+            // Full, and every idle connection points at a different target. Evict
+            // the oldest idle one (front of the LIFO deque) to make room rather
+            // than reporting exhaustion while capacity sits idle on other primaries.
+            // Only when nothing is idle at all is the pool truly exhausted.
+            let Some(evicted) = self.idle.pop_front() else {
+                return ScopeAcquire::Exhausted;
+            };
+            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            logger_core::log_debug(
+                "pool",
+                format!(
+                    "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                    evicted.scope_id, evicted.target, target
+                ),
+            );
+            drop(evicted);
         }
+
+        self.total_count.fetch_add(1, Ordering::AcqRel);
+        ScopeAcquire::Reserved
     }
 
     /// Release a scope. Zero-cost if state is clean.
@@ -967,7 +1058,7 @@ impl ScopePool {
                         borrowed_at: None,
                         state: ConnectionState::default(),
                         pinned_slot: None,
-                        target_slot: conn.target_slot,
+                        target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
                         ),
@@ -1098,7 +1189,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
-                                    target_slot: guard.target_slot,
+                                    target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
                                     ),
@@ -1379,7 +1470,9 @@ mod connection_state_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+    use super::{
+        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+    };
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
     use std::sync::Arc;
@@ -1400,13 +1493,13 @@ mod scope_pool_tests {
 
             for slot in 0..max_total {
                 assert_eq!(
-                    pool.try_acquire(&registry, 0),
+                    pool.try_acquire(&registry, ScopeTarget::Standalone),
                     ScopeAcquire::Reserved,
                     "max_total={max_total}: reservation {slot} must be granted"
                 );
             }
             assert_eq!(
-                pool.try_acquire(&registry, 0),
+                pool.try_acquire(&registry, ScopeTarget::Standalone),
                 ScopeAcquire::Exhausted,
                 "max_total={max_total}: only N reservations fit"
             );
@@ -1568,14 +1661,19 @@ mod scope_pool_tests {
             .await
             .total_count
             .fetch_add(1, Ordering::Release);
-        crate::scope::create_scope_connection(pool_arc.clone(), None, &connection_request_bytes, 0)
-            .await;
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
 
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1616,7 +1714,7 @@ mod scope_pool_tests {
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -1685,14 +1783,19 @@ mod scope_pool_tests {
             .await
             .total_count
             .fetch_add(1, Ordering::Release);
-        crate::scope::create_scope_connection(pool_arc.clone(), None, &connection_request_bytes, 0)
-            .await;
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
 
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1752,7 +1855,7 @@ mod scope_pool_tests {
         // borrower's override, and not empty.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, 0) {
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
