@@ -793,6 +793,35 @@ impl ScopeTarget {
     }
 }
 
+/// Why a routing slot could not be turned into a [`ScopeTarget`].
+///
+/// The variants differ in whether retrying can help, which is what the acquire
+/// path needs to decide how loudly to report them. Holding a value proves only
+/// that resolution failed for that reason at that instant; the slot map and the
+/// registry can change before the next attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScopeTargetUnresolved {
+    /// No `Client` is registered under the pool's `parent_client_id`. Not
+    /// transient: the binding never registered it, or has already closed it.
+    ParentUnregistered,
+    /// Cluster parent whose slot map has no primary for this slot (initial
+    /// topology not yet fetched, or mid-resharding). Transient.
+    SlotUnmapped(u16),
+    /// Cluster parent whose wrapper lock was held (e.g. mid-reconnect) when the
+    /// non-blocking lookup ran. Transient on the order of the lock hold.
+    TopologyLocked,
+}
+
+impl std::fmt::Display for ScopeTargetUnresolved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParentUnregistered => f.write_str("parent client is not registered"),
+            Self::SlotUnmapped(slot) => write!(f, "no primary mapped for slot {slot}"),
+            Self::TopologyLocked => f.write_str("cluster topology lock is held"),
+        }
+    }
+}
+
 /// A dedicated connection for isolated execution.
 ///
 /// Cluster mode support:
@@ -839,6 +868,11 @@ pub struct ScopePool {
     /// The client_name from the connection config (for reset on release), empty
     /// if unconfigured.
     pub configured_client_name: String,
+    /// The most recent reason an acquire could not resolve its target, or `None`
+    /// once resolution succeeds again. Bindings retry acquire every few
+    /// milliseconds, so the acquire path logs only when this changes rather than
+    /// on every attempt.
+    pub last_unresolved_target: Option<ScopeTargetUnresolved>,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -892,6 +926,7 @@ impl ScopePool {
             parent_client_id,
             configured_database_id,
             configured_client_name,
+            last_unresolved_target: None,
         }
     }
 

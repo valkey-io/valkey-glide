@@ -29,7 +29,11 @@ use crate::pool::{
 use redis::{Cmd, RedisError, RedisResult, Value};
 
 #[cfg(feature = "proto")]
-use crate::pool::{ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopeTarget};
+use crate::client::SlotAddressError;
+#[cfg(feature = "proto")]
+use crate::pool::{
+    ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopeTarget, ScopeTargetUnresolved,
+};
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
@@ -667,17 +671,23 @@ pub fn try_acquire_scope(
             // stale or unmapped slot never matches (or creates) a connection to the
             // wrong node. Unresolved means "retry", not "use the seed".
             let client = get_parent_client(pool.parent_client_id);
-            let Some(target) = try_resolve_scope_target(client.as_ref(), routing_slot) else {
-                // Without this the borrower only ever sees "pool exhausted" while
-                // the slot stays uncovered (resharding, parent not registered).
-                logger_core::log_warn(
-                    "try_acquire_scope",
-                    format!(
-                        "client {client_id}: no primary currently resolved for slot \
-                         {routing_slot}; scope acquire will be retried"
-                    ),
-                );
-                return -1;
+            let target = match try_resolve_scope_target(client.as_ref(), routing_slot) {
+                Ok(target) => {
+                    if let Some(cleared) = pool.last_unresolved_target.take() {
+                        logger_core::log_debug(
+                            "try_acquire_scope",
+                            format!(
+                                "client {client_id}: scope target resolves again \
+                                 (was: {cleared})"
+                            ),
+                        );
+                    }
+                    target
+                }
+                Err(cause) => {
+                    log_unresolved_target(&mut pool, client_id, routing_slot, cause);
+                    return -1;
+                }
             };
             match pool.try_acquire(registry, target.clone()) {
                 ScopeAcquire::Reused(scope_id) => {
@@ -750,43 +760,109 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
     registry.get(&client_id).map(|e| e.value().clone())
 }
 
-/// Resolves only when the parent client is registered.
+/// Report an unresolved scope target without flooding the log.
 ///
-/// Standalone parents always resolve; cluster parents resolve only when the live
-/// slot map knows the slot's primary. Anything else yields None so the caller fails
-/// closed.
+/// Bindings retry `try_acquire_scope` on a 1-50 ms backoff until their acquire
+/// timeout, so an outage of a few seconds would otherwise produce hundreds of
+/// identical warnings per caller. The pool remembers the last cause it reported:
+/// a new or changed cause is a warning, a repeat is a debug line, and the acquire
+/// path clears the memory (with one debug line) once resolution succeeds again.
+/// Without any of this the borrower only ever sees "pool exhausted" while the
+/// slot stays uncovered.
 #[cfg(feature = "proto")]
-pub fn try_resolve_scope_target(client: Option<&Client>, routing_slot: u16) -> Option<ScopeTarget> {
-    let client = client?;
-    if client.is_cluster_mode() {
-        client
-            .try_address_for_slot(routing_slot)
-            .map(ScopeTarget::cluster_primary)
-    } else {
-        Some(ScopeTarget::Standalone)
+fn log_unresolved_target(
+    pool: &mut ScopePool,
+    client_id: u64,
+    routing_slot: u16,
+    cause: ScopeTargetUnresolved,
+) {
+    let repeated = pool.last_unresolved_target == Some(cause);
+    pool.last_unresolved_target = Some(cause);
+    if repeated {
+        logger_core::log_debug(
+            "try_acquire_scope",
+            format!(
+                "client {client_id}: scope target for slot {routing_slot} still unresolved: {cause}"
+            ),
+        );
+        return;
     }
+    let outlook = match cause {
+        ScopeTargetUnresolved::ParentUnregistered => {
+            "retrying cannot help until the binding registers the client"
+        }
+        ScopeTargetUnresolved::SlotUnmapped(_) | ScopeTargetUnresolved::TopologyLocked => {
+            "scope acquire will be retried"
+        }
+    };
+    logger_core::log_warn(
+        "try_acquire_scope",
+        format!(
+            "client {client_id}: cannot resolve scope target for slot {routing_slot}: \
+             {cause}; {outlook}"
+        ),
+    );
+}
+
+/// Turn a routing slot into the target its scoped connection must reach.
+///
+/// Standalone parents always resolve to [`ScopeTarget::Standalone`]; the slot is
+/// meaningless there. Cluster parents resolve to the primary currently mapped for
+/// the slot. Every failure names its cause (see [`ScopeTargetUnresolved`]) so the
+/// caller can tell a transient gap from a parent that is gone, and never falls
+/// back to a seed node.
+///
+/// Non-blocking: a held client wrapper lock is reported as
+/// [`ScopeTargetUnresolved::TopologyLocked`] rather than waited on, because the
+/// acquire path runs on the binding's thread outside a runtime context.
+#[cfg(feature = "proto")]
+pub fn try_resolve_scope_target(
+    client: Option<&Client>,
+    routing_slot: u16,
+) -> Result<ScopeTarget, ScopeTargetUnresolved> {
+    let client = client.ok_or(ScopeTargetUnresolved::ParentUnregistered)?;
+    if !client.is_cluster_mode() {
+        return Ok(ScopeTarget::Standalone);
+    }
+    target_from_slot_lookup(client.try_address_for_slot(routing_slot), routing_slot)
 }
 
 /// Async counterpart of [`try_resolve_scope_target`] for callers already on the
 /// runtime (prewarm, tests).
 ///
-/// Same rules and same source of truth: topology comes from the registered parent
-/// client, and a missing parent fails closed. The difference is that this variant
-/// waits for the client wrapper lock rather than treating a held lock (e.g.
-/// mid-reconnect) as unresolved.
+/// Same rules and same source of truth. The difference is that this variant waits
+/// for the client wrapper lock, so it never yields
+/// [`ScopeTargetUnresolved::TopologyLocked`].
 #[cfg(feature = "proto")]
 pub async fn resolve_scope_target(
     client: Option<&Client>,
     routing_slot: u16,
-) -> Option<ScopeTarget> {
-    let client = client?;
-    if client.is_cluster_mode() {
-        client
-            .address_for_slot(routing_slot)
-            .await
-            .map(ScopeTarget::cluster_primary)
-    } else {
-        Some(ScopeTarget::Standalone)
+) -> Result<ScopeTarget, ScopeTargetUnresolved> {
+    let client = client.ok_or(ScopeTargetUnresolved::ParentUnregistered)?;
+    if !client.is_cluster_mode() {
+        return Ok(ScopeTarget::Standalone);
+    }
+    target_from_slot_lookup(client.address_for_slot(routing_slot).await, routing_slot)
+}
+
+/// Shared tail of the two resolvers, so their cluster-mode mapping cannot drift.
+///
+/// `NotClusterMode` maps to the standalone target because that is what it means;
+/// in practice the resolvers only reach this after `is_cluster_mode()` returned
+/// true, and a cluster client never holds a standalone wrapper, so the arm exists
+/// to keep the match exhaustive without a wildcard rather than to handle a live
+/// case. A lazily connected cluster client reports `Unmapped`, not
+/// `NotClusterMode`: it has no topology yet, and retrying is the right answer.
+#[cfg(feature = "proto")]
+fn target_from_slot_lookup(
+    lookup: Result<String, SlotAddressError>,
+    routing_slot: u16,
+) -> Result<ScopeTarget, ScopeTargetUnresolved> {
+    match lookup {
+        Ok(address) => Ok(ScopeTarget::cluster_primary(address)),
+        Err(SlotAddressError::NotClusterMode) => Ok(ScopeTarget::Standalone),
+        Err(SlotAddressError::Unmapped) => Err(ScopeTargetUnresolved::SlotUnmapped(routing_slot)),
+        Err(SlotAddressError::TopologyLocked) => Err(ScopeTargetUnresolved::TopologyLocked),
     }
 }
 
@@ -852,8 +928,8 @@ mod tests {
 
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
-        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, get_client_scope_pools,
-        get_scope_registry,
+        ScopeAcquire, ScopePool, ScopePoolConfig, ScopeTarget, ScopeTargetUnresolved,
+        get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
 
@@ -1019,7 +1095,10 @@ mod tests {
         register_client(client_id, parent.clone());
 
         assert!(parent.is_cluster_mode());
-        assert_eq!(try_resolve_scope_target(Some(&parent), 42), None);
+        assert_eq!(
+            try_resolve_scope_target(Some(&parent), 42),
+            Err(ScopeTargetUnresolved::SlotUnmapped(42))
+        );
         let acquired = try_acquire_scope(
             client_id,
             request_bytes.clone(),
@@ -1114,27 +1193,114 @@ mod tests {
     /// Scope target resolution derives topology exclusively from the registered parent Client,
     /// keeping it as the single source of truth rather than duplicating state in the pool.
     /// A missing parent fails closed; standalone parents ignore the slot, while cluster parents
-    /// require a mapped primary and otherwise remain unresolved.
+    /// require a mapped primary and otherwise name the unmapped slot. Each failure
+    /// carries its cause, so the acquire path can tell a gone parent from a gap.
     #[tokio::test]
     async fn resolves_scope_targets_from_parent_client() {
         let standalone = lazy_parent(false).await;
 
-        assert_eq!(try_resolve_scope_target(None, DEFAULT_ROUTING_SLOT), None);
+        assert_eq!(
+            try_resolve_scope_target(None, DEFAULT_ROUTING_SLOT),
+            Err(ScopeTargetUnresolved::ParentUnregistered)
+        );
 
         assert_eq!(
             try_resolve_scope_target(Some(&standalone), DEFAULT_ROUTING_SLOT),
-            Some(ScopeTarget::Standalone)
+            Ok(ScopeTarget::Standalone)
         );
         assert_eq!(
             try_resolve_scope_target(Some(&standalone), MAX_CLUSTER_SLOT),
-            Some(ScopeTarget::Standalone)
+            Ok(ScopeTarget::Standalone)
         );
 
         let cluster = lazy_parent(true).await;
         assert_eq!(
             try_resolve_scope_target(Some(&cluster), DEFAULT_ROUTING_SLOT),
-            None
+            Err(ScopeTargetUnresolved::SlotUnmapped(DEFAULT_ROUTING_SLOT))
         );
+        assert_eq!(
+            try_resolve_scope_target(Some(&cluster), MAX_CLUSTER_SLOT),
+            Err(ScopeTargetUnresolved::SlotUnmapped(MAX_CLUSTER_SLOT))
+        );
+    }
+
+    /// An unresolved target is recorded on the pool the first time it is seen and
+    /// left in place while the same cause repeats, so the acquire path warns once
+    /// per cause instead of once per binding retry. A change of cause is a new
+    /// record, and a successful resolution clears it.
+    ///
+    /// The log lines themselves are not observable here; the field they key on is.
+    /// A lazily connected cluster parent has no slot map, so every slot is
+    /// `SlotUnmapped`; unregistering the parent switches the cause to
+    /// `ParentUnregistered`; re-registering a standalone parent under the same id
+    /// makes resolution succeed.
+    #[tokio::test]
+    async fn unresolved_target_is_recorded_once_per_cause_and_cleared_on_success() {
+        let listener = listening_endpoint();
+        let port = listener.local_addr().expect("listener address").port();
+        let request_bytes = request_bytes_with_mode("", port, true);
+
+        let client_id = 67_950_002_u64;
+        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            request_bytes.clone(),
+            client_id,
+        )));
+        get_client_scope_pools().insert(client_id, pool.clone());
+        register_client(client_id, lazy_parent(true).await);
+
+        let acquire = |slot: u16| {
+            try_acquire_scope(
+                client_id,
+                request_bytes.clone(),
+                &tokio::runtime::Handle::current(),
+                slot,
+            )
+        };
+        let recorded = || {
+            pool.try_lock()
+                .expect("pool lock is free between acquires")
+                .last_unresolved_target
+        };
+
+        assert_eq!(
+            recorded(),
+            None,
+            "nothing recorded before the first acquire"
+        );
+
+        assert_eq!(acquire(42), -1);
+        assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(42)));
+
+        // Same cause again: the record is unchanged (a repeat, logged at debug).
+        assert_eq!(acquire(42), -1);
+        assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(42)));
+
+        // A different slot is a different cause value, so it is recorded afresh.
+        assert_eq!(acquire(7), -1);
+        assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(7)));
+
+        // The parent going away is a new cause.
+        unregister_client(client_id);
+        // unregister_client tears the pool down with the client; reseat it so the
+        // remaining acquires observe the same pool instance.
+        get_client_scope_pools().insert(client_id, pool.clone());
+        assert_eq!(acquire(7), -1);
+        assert_eq!(recorded(), Some(ScopeTargetUnresolved::ParentUnregistered));
+
+        // Resolution succeeding clears the record. The standalone parent resolves
+        // without touching the network; the acquire then reserves and spawns a
+        // creation task we do not wait for.
+        register_client(client_id, lazy_parent(false).await);
+        assert_eq!(
+            acquire(7),
+            -1,
+            "no idle connection yet, so the caller retries"
+        );
+        assert_eq!(recorded(), None);
+
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
     }
 
     #[tokio::test]
