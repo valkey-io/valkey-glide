@@ -5,7 +5,8 @@
 
 use crate::ValkeyFuture;
 use crate::commands::core::AsyncCommands;
-use crate::value::{FromValkeyValue, ToValkeyArgs};
+use crate::value::FromValkeyValue;
+use crate::write::ToValkeyArgs;
 
 #[cfg(feature = "sync")]
 use crate::{ValkeyResult, commands::core::Commands};
@@ -66,7 +67,7 @@ impl Cmd {
     /// Append an argument and return `&mut self` for chaining.
     #[inline]
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
-        self.inner.arg(arg.to_valkey_args());
+        arg.write_valkey_args(self);
         self
     }
 
