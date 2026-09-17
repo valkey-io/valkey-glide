@@ -670,6 +670,14 @@ pub fn try_acquire_scope(
     };
     let registry = get_scope_registry();
 
+    // The database the borrowed connection must be on: the parent client's current
+    // runtime database (updated by runtime SELECT), falling back to 0 if the parent
+    // is not resolvable. Read synchronously — `current_database()` is an atomic load.
+    let runtime_db = get_client_registry()
+        .get(&client_id)
+        .map(|c| c.value().current_database())
+        .unwrap_or(0);
+
     match scope_pool.try_lock() {
         Ok(mut pool) => {
             // Resolve the slot's current primary before touching the pool so a
@@ -695,7 +703,7 @@ pub fn try_acquire_scope(
                     return -1;
                 }
             };
-            match pool.try_acquire(registry, target.clone()) {
+            match pool.try_acquire(registry, target.clone(), runtime_db) {
                 ScopeAcquire::Reused(scope_id) => {
                     let _ = telemetrylib::GlideOpenTelemetry::record_scope_acquire();
                     scope_id as i64
@@ -711,10 +719,65 @@ pub fn try_acquire_scope(
                     });
                     -1
                 }
+                ScopeAcquire::NeedsResync => {
+                    // The only reusable connection for this target is on a different
+                    // database. Re-SELECT it onto the runtime database off-lock, then
+                    // retry — the borrower never sees a connection on the wrong database.
+                    let pool_clone = scope_pool.clone();
+                    drop(pool);
+                    runtime.spawn(async move {
+                        resync_idle_connection_database(pool_clone, target, runtime_db).await;
+                    });
+                    -1
+                }
                 ScopeAcquire::Exhausted => -1,
             }
         }
         Err(_) => -1,
+    }
+}
+
+/// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
+/// `runtime_db`, off the pool lock, then return it to idle. Backs the
+/// [`ScopeAcquire::NeedsResync`] retry path in [`try_acquire_scope`]. If the
+/// SELECT fails, the connection is discarded (its slot reclaimed).
+#[cfg(feature = "proto")]
+pub(crate) async fn resync_idle_connection_database(
+    pool: Arc<TokioMutex<ScopePool>>,
+    target: ScopeTarget,
+    runtime_db: u32,
+) {
+    // Take the wrong-db connection out of idle, capturing the request timeout in the
+    // same critical section so the round-trip below needs no extra lock.
+    let (mut conn, request_timeout) = {
+        let mut guard = pool.lock().await;
+        match guard.take_idle_for_resync(target, runtime_db) {
+            Some(c) => (c, guard.config.request_timeout),
+            // Another acquire raced us and took or fixed it; nothing to do.
+            None => return,
+        }
+    };
+
+    // SELECT onto the runtime database off-lock (single round-trip).
+    let mut pipe = redis::Pipeline::new();
+    pipe.cmd("SELECT").arg(runtime_db.to_string());
+    let result = tokio::time::timeout(
+        request_timeout * 2,
+        conn.connection.send_packed_commands(&pipe, 0, 1),
+    )
+    .await;
+
+    let mut guard = pool.lock().await;
+    if matches!(result, Ok(Ok(_))) {
+        // Record the connection's new actual database and return it to idle.
+        conn.state = ConnectionState::with_configured_db(runtime_db as u8);
+        conn.last_idle_at = std::time::Instant::now();
+        guard.reidle_after_resync(conn);
+    } else {
+        // Re-SELECT failed — discard the connection and reclaim its slot.
+        guard
+            .total_count
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
     }
 }
 
@@ -1354,7 +1417,7 @@ mod tests {
             assert_eq!(pool.idle.len(), 1);
             let target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
                 .expect("standalone always resolves");
-            reused_scope_id(pool.try_acquire(registry, target))
+            reused_scope_id(pool.try_acquire(registry, target, 0))
         };
 
         {
@@ -1369,7 +1432,7 @@ mod tests {
             let alternate_target = try_resolve_scope_target(Some(&parent), MAX_CLUSTER_SLOT)
                 .expect("standalone always resolves");
             assert_eq!(alternate_target, ScopeTarget::Standalone);
-            reused_scope_id(pool.try_acquire(registry, alternate_target))
+            reused_scope_id(pool.try_acquire(registry, alternate_target, 0))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
@@ -1408,7 +1471,7 @@ mod tests {
         let first_scope_id = {
             let mut pool = pool.lock().await;
             pool.idle[0].target = target.clone();
-            reused_scope_id(pool.try_acquire(registry, target.clone()))
+            reused_scope_id(pool.try_acquire(registry, target.clone(), 0))
         };
 
         {
@@ -1423,7 +1486,7 @@ mod tests {
         // would produce) is equal by address, not by Arc identity.
         let second_scope_id = {
             let mut pool = pool.lock().await;
-            reused_scope_id(pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)))
+            reused_scope_id(pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0))
         };
         assert_eq!(second_scope_id, first_scope_id);
 
@@ -1455,7 +1518,7 @@ mod tests {
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_A);
             assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B)),
+                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B), 0),
                 ScopeAcquire::Reserved
             );
             assert_eq!(pool.idle.len(), 1);
@@ -1463,7 +1526,7 @@ mod tests {
 
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_B);
             assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)),
+                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0),
                 ScopeAcquire::Reserved
             );
             assert_eq!(pool.idle.len(), 1);
@@ -1471,7 +1534,7 @@ mod tests {
 
             // Reuse consumes no additional capacity.
             pool.idle[0].target = ScopeTarget::Standalone;
-            let reused = reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone));
+            let reused = reused_scope_id(pool.try_acquire(registry, ScopeTarget::Standalone, 0));
             assert_eq!(pool.total_count.load(Ordering::Acquire), 3);
             reused
         };
@@ -1535,7 +1598,7 @@ mod tests {
 
             // Full + all mismatched: evict the oldest, reserve for the new target.
             assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary("10.0.0.3:6379")),
+                pool.try_acquire(registry, ScopeTarget::cluster_primary("10.0.0.3:6379"), 0),
                 ScopeAcquire::Reserved
             );
             assert_eq!(pool.idle.len(), 1, "exactly one idle connection evicted");
@@ -1552,16 +1615,18 @@ mod tests {
 
             // Still full; the remaining idle connection is a match and is reused,
             // so nothing is evicted.
-            let reused = reused_scope_id(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_B)),
-            );
+            let reused = reused_scope_id(pool.try_acquire(
+                registry,
+                ScopeTarget::cluster_primary(PRIMARY_B),
+                0,
+            ));
             assert_eq!(reused, newest_id);
             assert!(pool.idle.is_empty());
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
             // Full with nothing idle: genuinely exhausted, and no reservation leaks.
             assert_eq!(
-                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A)),
+                pool.try_acquire(registry, ScopeTarget::cluster_primary(PRIMARY_A), 0),
                 ScopeAcquire::Exhausted
             );
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
@@ -1600,7 +1665,7 @@ mod tests {
         create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
         let acquired = {
             let mut pool = pool.lock().await;
-            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone)
+            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0)
         };
 
         let resolved = if let ScopeAcquire::Reused(scope_id) = acquired {
@@ -1652,7 +1717,7 @@ mod tests {
         create_scope_connection(pool.clone(), None, &request_bytes, ScopeTarget::Standalone).await;
         let acquired = {
             let mut pool = pool.lock().await;
-            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone)
+            pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0)
         };
 
         let observed = if let ScopeAcquire::Reused(scope_id) = acquired {
