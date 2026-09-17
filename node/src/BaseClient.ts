@@ -859,8 +859,22 @@ export type ReadFrom =
     /** Spread the read requests round robin across all nodes (primary and replicas) within the client's Availability
         Zone (AZ). Falls back to a round robin across all nodes when no node in the client's AZ is available. Unlike
         `AZAffinityReplicasAndPrimary`, this strategy does not prioritize replicas ahead of the primary within the AZ,
-        which allows an even per-node read distribution.*/
+        which allows an even per-node read distribution. Unlike `allNodes`, which is AZ agnostic, this strategy is
+        scoped to the client's AZ. Requires `clientAz` to be set.*/
     | "AZAffinityAllNodes";
+
+/**
+ * The set of {@link ReadFrom} strategies that are scoped to the client's Availability
+ * Zone and therefore require `clientAz` to be set. This is the single source of truth
+ * for AZ-affinity validation: any new AZ-scoped {@link ReadFrom} member must be added
+ * here so it is not silently allowed to skip the `clientAz` requirement. It is enforced
+ * to stay in sync with {@link ReadFrom} by a unit test.
+ */
+export const AZ_AFFINITY_READ_FROM_STRATEGIES: ReadonlySet<ReadFrom> = new Set([
+    "AZAffinity",
+    "AZAffinityReplicasAndPrimary",
+    "AZAffinityAllNodes",
+]);
 
 /**
  * Controls how the client discovers node roles and topology in standalone mode.
@@ -9921,11 +9935,12 @@ export class BaseClient {
                 ? undefined
                 : trimmedClientAz;
 
-        // Validate that clientAz is set when using AZ affinity strategies
+        // Validate that clientAz is set when using AZ affinity strategies. The set of
+        // AZ-scoped strategies is declared once (AZ_AFFINITY_READ_FROM_STRATEGIES) so a
+        // newly added AZ strategy cannot silently skip this check.
         if (
-            (options.readFrom === "AZAffinity" ||
-                options.readFrom === "AZAffinityReplicasAndPrimary" ||
-                options.readFrom === "AZAffinityAllNodes") &&
+            options.readFrom !== undefined &&
+            AZ_AFFINITY_READ_FROM_STRATEGIES.has(options.readFrom) &&
             !clientAz
         ) {
             throw new ConfigurationError(

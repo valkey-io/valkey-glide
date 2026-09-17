@@ -10,6 +10,7 @@ import { BufferReader, BufferWriter } from "protobufjs/minimal";
 import {
     BaseClient,
     BaseClientConfiguration,
+    AZ_AFFINITY_READ_FROM_STRATEGIES,
     ConfigurationError,
     GlideClusterClientConfiguration,
     Logger,
@@ -314,6 +315,47 @@ describe("ReadFrom strategy configuration", () => {
 
         expect(new TestBaseClient().buildRequest(config).clientAz).toBe(
             "us-east-1a",
+        );
+    });
+
+    // Guard against a future AZ-scoped ReadFrom strategy being added to the union
+    // and the protobuf mapping while silently skipping the clientAz validation set.
+    // Every strategy that maps to an AZ-affinity protobuf value must be declared in
+    // AZ_AFFINITY_READ_FROM_STRATEGIES; this test fails loudly if one is missing.
+    it("keeps AZ_AFFINITY_READ_FROM_STRATEGIES in sync with the ReadFrom mapping", () => {
+        // The set of protobuf ReadFrom enum names that are scoped to the client's AZ.
+        const azProtoNames = Object.keys(connection_request.ReadFrom).filter(
+            (name) => isNaN(Number(name)) && name.startsWith("AZAffinity"),
+        );
+
+        // Reconstruct the string ReadFrom values that map to each AZ-affinity proto
+        // value by reading the client's own strategy mapping. This mirrors the single
+        // source of truth used at runtime and avoids hardcoding the list twice.
+        const mapping = (
+            new TestBaseClient() as unknown as {
+                MAP_READ_FROM_STRATEGY: Record<
+                    ReadFrom,
+                    connection_request.ReadFrom
+                >;
+            }
+        ).MAP_READ_FROM_STRATEGY;
+
+        const azReadFromValues = (
+            Object.entries(mapping) as [ReadFrom, connection_request.ReadFrom][]
+        )
+            .filter(([, protoValue]) =>
+                azProtoNames.includes(connection_request.ReadFrom[protoValue]),
+            )
+            .map(([readFrom]) => readFrom);
+
+        // Sanity check: we actually discovered the AZ strategies.
+        expect(azReadFromValues.length).toBe(azProtoNames.length);
+        expect(azReadFromValues.length).toBeGreaterThan(0);
+
+        // Every AZ-scoped strategy must be part of the validation set, and the
+        // validation set must not contain anything that is not AZ-scoped.
+        expect([...azReadFromValues].sort()).toEqual(
+            [...AZ_AFFINITY_READ_FROM_STRATEGIES].sort(),
         );
     });
 });

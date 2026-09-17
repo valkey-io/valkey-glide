@@ -154,7 +154,9 @@ describe("ReadOnlyMode", () => {
                     readFrom: "AZAffinityAllNodes",
                     clientAz: "us-east-1a",
                 }),
-            ).rejects.toThrow();
+            ).rejects.toThrow(
+                /read-only mode is not compatible with AZAffinity/,
+            );
         },
         10000,
     );
