@@ -61,7 +61,7 @@
 ### Breaking Changes
 
 * Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
-* Node: `clientAz` is now trimmed and validated for AZ-affinity read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError` at client creation instead of being accepted, and a padded value (e.g. `" us-east-1a "`) is now trimmed before it reaches the core, so reads pin to that zone instead of silently spreading across the cluster via the all-nodes fallback. Affects `AZAffinity` and `AZAffinityReplicasAndPrimary` as well as the new `AZAffinityAllNodes` ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
+* Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 
 ## 2.5
 
