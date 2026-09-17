@@ -3345,6 +3345,241 @@ describe("GlideClusterClient", () => {
         );
     });
 
+    describe("AZAffinityAllNodes Read Strategy Tests", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should split GET commands evenly between primary and replica in the same AZ using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                const az = "us-east-1a";
+                const other_az = "us-east-1b";
+                const get_calls = 4;
+                const nodes_in_same_az = 2; // one primary + one replica
+                const per_node_get_calls = get_calls / nodes_in_same_az;
+                const per_node_cmdstat = `cmdstat_get:calls=${per_node_get_calls}`;
+
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Configure nodes.
+                    client_for_config_set =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                { requestTimeout: 3000 },
+                            ),
+                        );
+
+                    // Reset stats and place every node in the other AZ first.
+                    await client_for_config_set.configResetStat({
+                        route: "allNodes",
+                    });
+                    await client_for_config_set.configSet(
+                        { "availability-zone": other_az },
+                        { route: "allNodes" },
+                    );
+
+                    // Move the primary and one replica of slot 12182 ("foo") into the client's AZ.
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
+                        { route: { type: "primarySlotId", id: 12182 } },
+                    );
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
+                        { route: { type: "replicaSlotId", id: 12182 } },
+                    );
+
+                    // Stage 2: Create the AZ affinity client AFTER configuration so it
+                    // discovers the AZs on connect.
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinityAllNodes",
+                                    clientAz: az,
+                                },
+                            ),
+                        );
+
+                    // Stage 3: Perform GET operations against slot 12182.
+                    const key = "foo_{12182}"; // Key targets slot 12182
+
+                    for (let i = 0; i < get_calls; i++) {
+                        await client_for_testing_az.get(key);
+                    }
+
+                    // Stage 4: Verify GET commands were split evenly across the in-AZ
+                    // primary and replica, and never landed on out-of-AZ nodes.
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    let matching_entries_count = 0;
+                    let total_get_calls = 0;
+
+                    Object.entries(info_result).forEach(([nodeId, infoStr]) => {
+                        if (!infoStr.includes("cmdstat_get:calls=")) return;
+
+                        const azMatch = infoStr.match(
+                            /availability_zone:(\S+)/,
+                        );
+                        const nodeAZ = azMatch ? azMatch[1] : "unknown";
+                        const isInClientAZ = nodeAZ === az;
+                        const getCalls = parseInt(
+                            (infoStr.match(/cmdstat_get:calls=(\d+)/) ||
+                                [])[1] || "0",
+                        );
+                        total_get_calls += getCalls;
+
+                        if (
+                            isInClientAZ &&
+                            infoStr.includes(per_node_cmdstat)
+                        ) {
+                            matching_entries_count++;
+                        } else if (!isInClientAZ && getCalls > 0) {
+                            throw new Error(
+                                `WARNING: GET calls to node not in client AZ: ${nodeId}`,
+                            );
+                        }
+                    });
+
+                    // The in-AZ primary and replica should evenly split the GET calls.
+                    expect(matching_entries_count).toBe(nodes_in_same_az);
+                    expect(total_get_calls).toBe(get_calls);
+                } finally {
+                    // Cleanup
+                    await client_for_config_set?.configSet(
+                        { "availability-zone": "" },
+                        { route: "allNodes" },
+                    );
+                    client_for_config_set?.close();
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should fall back to all nodes when no node is in the client's AZ using protocol %p",
+            async (protocol) => {
+                // Skip test if version is below 8.0.0
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Reset stats and clear all AZ assignments so that the
+                    // client's AZ ("non-existing-az") matches no node, triggering the
+                    // all-nodes fallback.
+                    client_for_config_set =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                { requestTimeout: 3000 },
+                            ),
+                        );
+
+                    await client_for_config_set.configSet(
+                        { "availability-zone": "" },
+                        { route: "allNodes" },
+                    );
+                    await client_for_config_set.configResetStat({
+                        route: "allNodes",
+                    });
+
+                    // Determine how many nodes serve the shard that owns "foo"
+                    // (primary + connected replicas).
+                    const replication_info = (await client_for_config_set.info({
+                        sections: [InfoOptions.Replication],
+                        route: { type: "primarySlotKey", key: "foo" },
+                    })) as string;
+                    const replicas_match = replication_info.match(
+                        /connected_slaves:(\d+)/,
+                    );
+                    const n_replicas = replicas_match
+                        ? parseInt(replicas_match[1])
+                        : 0;
+                    const nodes_in_shard = n_replicas + 1; // primary + replicas
+
+                    expect(nodes_in_shard).toBeGreaterThan(1);
+
+                    // One GET per shard node under round-robin fallback.
+                    const get_calls = nodes_in_shard;
+
+                    // Stage 2: Create a client with an AZ that no node belongs to.
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinityAllNodes",
+                                    clientAz: "non-existing-az",
+                                },
+                            ),
+                        );
+
+                    for (let i = 0; i < get_calls; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+
+                    // Stage 3: Verify every node in the shard (primary + replicas)
+                    // received traffic, with the total matching the number of calls.
+                    const info_result = (await client_for_testing_az.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    let nodes_with_gets = 0;
+                    let total_get_calls = 0;
+                    let primary_received_gets = false;
+                    let replica_received_gets = false;
+
+                    Object.values(info_result).forEach((infoStr) => {
+                        if (!infoStr.includes("cmdstat_get:calls=")) return;
+
+                        nodes_with_gets++;
+                        total_get_calls += parseInt(
+                            (infoStr.match(/cmdstat_get:calls=(\d+)/) ||
+                                [])[1] || "0",
+                        );
+
+                        if (
+                            infoStr.includes("role:master") ||
+                            infoStr.includes("role:primary")
+                        ) {
+                            primary_received_gets = true;
+                        }
+
+                        if (
+                            infoStr.includes("role:slave") ||
+                            infoStr.includes("role:replica")
+                        ) {
+                            replica_received_gets = true;
+                        }
+                    });
+
+                    expect(nodes_with_gets).toBe(nodes_in_shard);
+                    expect(primary_received_gets).toBe(true);
+                    expect(replica_received_gets).toBe(true);
+                    expect(total_get_calls).toBe(get_calls);
+                } finally {
+                    client_for_config_set?.close();
+                    client_for_testing_az?.close();
+                }
+            },
+        );
+    });
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "lazy cluster connection establishes only on first command_%p",
         async (protocol) => {
