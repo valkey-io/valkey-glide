@@ -768,7 +768,12 @@ pub(crate) async fn resync_idle_connection_database(
     .await;
 
     let mut guard = pool.lock().await;
-    if matches!(result, Ok(Ok(_))) {
+    // A SELECT that the server rejects (e.g. DB index out of range) comes back as a
+    // ServerError *inside* the reply, not an outer Err — so a successful resync requires
+    // both the round-trip to succeed AND no reply to be a server error.
+    let resync_ok = matches!(&result, Ok(Ok(replies))
+        if !replies.iter().any(|v| matches!(v, redis::Value::ServerError(_))));
+    if resync_ok {
         // Record the connection's new actual database and return it to idle.
         conn.state = ConnectionState::with_configured_db(runtime_db as u8);
         conn.last_idle_at = std::time::Instant::now();

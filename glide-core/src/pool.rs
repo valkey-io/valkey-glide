@@ -2271,4 +2271,457 @@ mod scope_pool_tests {
 
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
+
+    /// The parent changes its runtime database while a scoped connection sits idle:
+    /// the next acquisition must observe the new parent database, not the one the
+    /// idle connection was left on.
+    ///
+    /// Borrow+release on db 3 (the connection idles on db 3), then acquire at the
+    /// parent's new runtime db 5. The idle connection is on the wrong db, so the pool
+    /// signals `NeedsResync`; after the resync it reads from db 5.
+    ///
+    /// A-B: without the db-preferring scan the idle db-3 connection is reused as-is,
+    /// so a key written on db 5 lands on a connection still pointing at db 3.
+    #[tokio::test]
+    async fn idle_connection_follows_parent_database_change() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 0;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_002_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        // Borrow at runtime db 3 (connection opens on db 0, so it needs a resync first),
+        // then release cleanly so it idles on db 3.
+        assert_eq!(
+            {
+                pool_arc
+                    .lock()
+                    .await
+                    .try_acquire(registry, ScopeTarget::Standalone, 3)
+            },
+            ScopeAcquire::NeedsResync
+        );
+        crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 3)
+            .await;
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected reuse on db 3: {other:?}"),
+            }
+        };
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(pool.release(scope_id, registry));
+        }
+        assert_eq!(
+            pool_arc.lock().await.idle.len(),
+            1,
+            "clean release must idle the connection with no round-trip"
+        );
+
+        // Parent has since moved to db 5. Acquiring at the new runtime db must not reuse
+        // the idle db-3 connection as-is — it needs a resync onto db 5.
+        assert_eq!(
+            {
+                pool_arc
+                    .lock()
+                    .await
+                    .try_acquire(registry, ScopeTarget::Standalone, 5)
+            },
+            ScopeAcquire::NeedsResync,
+            "an idle connection on the old db must be resynced to the new parent db"
+        );
+        crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 5)
+            .await;
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected reuse on db 5 after resync: {other:?}"),
+            }
+        };
+
+        // Prove the reused connection is really on db 5: a key set here must be absent on
+        // db 3 (where it idled) and present after re-selecting db 5.
+        crate::scope::execute_scope_command(
+            scope_id,
+            "SET",
+            &[b"db5-key".to_vec(), b"here".to_vec()],
+            None,
+        )
+        .await
+        .expect("SET must succeed");
+        crate::scope::execute_scope_command(scope_id, "SELECT", &[b"3".to_vec()], None)
+            .await
+            .expect("SELECT 3 must succeed");
+        let on_db3 =
+            crate::scope::execute_scope_command(scope_id, "GET", &[b"db5-key".to_vec()], None)
+                .await
+                .expect("GET must succeed");
+        assert!(
+            matches!(on_db3, redis::Value::Nil),
+            "the key must NOT exist on db 3 — the connection wrote it on the new parent db 5"
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// Connections opened on different databases must never be handed out on the wrong
+    /// one: with two idle connections at db 3 and db 5, acquiring at runtime db 5 must
+    /// reuse the db-5 connection directly (a clean match, no resync), leaving the db-3
+    /// connection untouched — the pool never exposes a mixed-database connection.
+    ///
+    /// A-B: without the db-preferring idle scan `try_acquire` reuses whichever connection
+    /// pops first, so an acquire at db 5 could hand out the db-3 connection.
+    #[tokio::test]
+    async fn pool_prefers_a_matching_database_connection_over_a_mixed_one() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 0;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_003_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        // Seat two connections on distinct databases (3 and 5). Because
+        // take_idle_for_resync pops LIFO and skips connections already on the target, the
+        // db-3 connection must be held OUT of idle while the second is moved to db 5 —
+        // otherwise the second resync would just move the db-3 connection to db 5.
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+        crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 3)
+            .await;
+        // Hold the db-3 connection by acquiring it, so the next resync can't touch it.
+        let held_db3 = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 3) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected to hold the db-3 connection: {other:?}"),
+            }
+        };
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+        crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 5)
+            .await;
+        // Return the db-3 connection to idle: now idle holds one db-3 and one db-5 conn.
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(pool.release(held_db3, registry));
+        }
+        {
+            let pool = pool_arc.lock().await;
+            let mut dbs: Vec<u8> = pool.idle.iter().map(|c| c.state.db_selected).collect();
+            dbs.sort_unstable();
+            assert_eq!(
+                dbs,
+                vec![3, 5],
+                "the two idle connections must be seated on db 3 and db 5"
+            );
+        }
+
+        // Acquire at runtime db 5: must be a clean reuse of the db-5 connection, no resync.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 5) {
+                ScopeAcquire::Reused(id) => id,
+                other => {
+                    panic!("acquire at db 5 must directly reuse the db-5 connection, not {other:?}")
+                }
+            }
+        };
+        // Exactly one connection left idle, and it is the db-3 one (the db-5 one was reused,
+        // the db-3 one left untouched — the pool never resynced or exposed it).
+        {
+            let pool = pool_arc.lock().await;
+            assert_eq!(pool.idle.len(), 1, "one connection must remain idle");
+            assert_eq!(
+                pool.idle.back().unwrap().state.db_selected,
+                3,
+                "the untouched idle connection must be the db-3 one"
+            );
+        }
+
+        // The acquired connection is genuinely on db 5: writing a key and reading it back
+        // on db 3 must miss.
+        crate::scope::execute_scope_command(
+            scope_id,
+            "SET",
+            &[b"mixed-db-key".to_vec(), b"v".to_vec()],
+            None,
+        )
+        .await
+        .expect("SET must succeed");
+        crate::scope::execute_scope_command(scope_id, "SELECT", &[b"3".to_vec()], None)
+            .await
+            .expect("SELECT 3 must succeed");
+        let on_db3 =
+            crate::scope::execute_scope_command(scope_id, "GET", &[b"mixed-db-key".to_vec()], None)
+                .await
+                .expect("GET must succeed");
+        assert!(
+            matches!(on_db3, redis::Value::Nil),
+            "the acquired connection wrote on db 5, so the key must be absent on db 3"
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// Core tracker assertion: `ConnectionState.db_selected` must match the underlying
+    /// connection's actual database at initialization, after an acquire+resync, and after
+    /// release — i.e. the tracker is never out of step with the real connection state.
+    ///
+    /// This asserts on the tracked `db_selected` directly (peeking the idle connection),
+    /// rather than only inferring it from key visibility as the e2e tests do.
+    ///
+    /// A-B: pre-fix `try_acquire`/`release` wrote `ConnectionState::default()` (db_selected
+    /// = 0) on reuse/idle, so the tracker read 0 regardless of the connection's real db.
+    #[tokio::test]
+    async fn tracked_db_selected_matches_the_connection_across_acquire_and_release() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 4;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_004_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        // Initialization: the connection opens on the configured db (4); the tracker must
+        // record 4, not 0.
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+        assert_eq!(
+            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            4,
+            "a freshly created connection's tracker must match its init database (4)"
+        );
+
+        // Acquire at runtime db 6 → resync → the idle connection is now tracked on db 6.
+        assert_eq!(
+            {
+                pool_arc
+                    .lock()
+                    .await
+                    .try_acquire(registry, ScopeTarget::Standalone, 6)
+            },
+            ScopeAcquire::NeedsResync
+        );
+        crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 6)
+            .await;
+        assert_eq!(
+            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            6,
+            "after resync the tracker must match the new database (6)"
+        );
+
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone, 6) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected reuse on db 6: {other:?}"),
+            }
+        };
+
+        // Release cleanly: the connection idles back, and its tracker must still read 6
+        // (the borrow baseline), not be reset to 0 or to the configured db 4.
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(pool.release(scope_id, registry));
+        }
+        assert_eq!(
+            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            6,
+            "after a clean release the tracker must preserve the connection's real db (6)"
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// A failed resync `SELECT` must discard the connection and reclaim its slot, not
+    /// re-idle it — otherwise the `NeedsResync` retry loop could spin forever on a
+    /// connection that can never reach the target database.
+    ///
+    /// Force the failure by resyncing to an out-of-range database (the server has 16 by
+    /// default, so `SELECT 200` errors). After the failed resync, idle must be empty and
+    /// `total_count` back to 0, so the next acquire opens a fresh connection instead of
+    /// looping on the broken one.
+    #[tokio::test]
+    async fn failed_resync_discards_the_connection_and_reclaims_the_slot() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 0;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_064_005_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+
+        // Seat one connection on db 0.
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+        assert_eq!(pool_arc.lock().await.idle.len(), 1);
+        assert_eq!(pool_arc.lock().await.total_count.load(Ordering::Acquire), 1);
+
+        // Resync to an out-of-range database → the SELECT fails.
+        crate::scope::resync_idle_connection_database(
+            pool_arc.clone(),
+            ScopeTarget::Standalone,
+            200,
+        )
+        .await;
+
+        // The connection must be gone and its slot reclaimed — not re-idled on a bad db.
+        {
+            let pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle.len(),
+                0,
+                "a failed resync must not return the connection to idle"
+            );
+            assert_eq!(
+                pool.total_count.load(Ordering::Acquire),
+                0,
+                "a failed resync must reclaim the connection's slot"
+            );
+        }
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
 }
