@@ -9,10 +9,15 @@
 //! - Background connection creation
 //!
 //! Each client has a per-client `ScopePool` (stored in `CLIENT_SCOPE_POOLS`).
-//! The pool maintains idle `ScopedConnection`s with explicit standalone or cluster-slot targets.
-//! On acquire, idle connections are filtered by exact target equality; mismatched connections
-//! are preserved for future acquires. When no match exists, a new connection is created
-//! targeting the configured standalone server or the primary owning the concrete cluster slot.
+//! The pool maintains idle `ScopedConnection`s, each tagged with a `ScopeTarget`: the
+//! standalone server, or a cluster primary keyed by its `host:port`. On acquire, the
+//! requested slot is resolved to its current primary through the parent `Client`'s slot
+//! map, and idle connections are matched by exact target equality, so every slot owned by
+//! one primary shares that primary's idle sockets. Mismatched connections are kept for
+//! later acquires; when the pool is full and nothing matches, the oldest idle one is
+//! evicted to make room. When no match exists, a new connection is created for the
+//! resolved target. A slot that cannot be resolved (parent not registered, slot unmapped,
+//! topology lock held) never falls back to a seed node; the acquire reports "retry".
 //! Language bindings (Java JNI, Python CFFI, Node N-API, Go CGO) should call
 //! these functions rather than duplicating the logic.
 //!

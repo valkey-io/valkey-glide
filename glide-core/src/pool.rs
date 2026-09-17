@@ -776,8 +776,12 @@ impl Default for ScopePoolConfig {
 /// Cluster targets are keyed on the primary's canonical `host:port` (the same key
 /// redis-rs uses for its connection map), not on the hash slot. Every slot owned by
 /// one primary therefore shares idle connections, and a slot whose owner changed
-/// (failover, migration) stops matching sockets to the former owner because the
-/// address is re-resolved against the live slot map on each acquire.
+/// (failover, migration) stops matching sockets to the former owner once the parent
+/// client's slot map reflects the change, because the address is re-resolved
+/// against that map on each acquire. The map refreshes on the parent's own MOVED
+/// handling and its periodic topology check, not on a MOVED seen by a scoped
+/// connection, so a scope-only workload can keep matching the former owner until
+/// the next refresh.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScopeTarget {
     /// The configured server for a standalone client.
