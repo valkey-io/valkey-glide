@@ -10,10 +10,12 @@ import { BufferReader, BufferWriter } from "protobufjs/minimal";
 import {
     BaseClient,
     BaseClientConfiguration,
+    AZ_AFFINITY_READ_FROM_STRATEGIES,
     ConfigurationError,
     GlideClusterClientConfiguration,
     Logger,
     MAX_REQUEST_ARGS_LEN,
+    ReadFrom,
     applyTlsAdvancedConfiguration,
     loadClientCertificateAndKeyFromFile,
     loadRootCertificatesFromFile,
@@ -223,6 +225,139 @@ describe("Client library identification requests", () => {
             );
         },
     );
+});
+
+describe("ReadFrom strategy configuration", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+
+        public buildRequest(
+            options: BaseClientConfiguration,
+        ): connection_request.IConnectionRequest {
+            return this.createClientRequest(options);
+        }
+    }
+
+    it.each([
+        ["primary", connection_request.ReadFrom.Primary],
+        ["preferReplica", connection_request.ReadFrom.PreferReplica],
+        ["AZAffinity", connection_request.ReadFrom.AZAffinity],
+        [
+            "AZAffinityReplicasAndPrimary",
+            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        ],
+        ["allNodes", connection_request.ReadFrom.AllNodes],
+        ["AZAffinityAllNodes", connection_request.ReadFrom.AZAffinityAllNodes],
+    ])(
+        "maps readFrom=%p to the correct protobuf ReadFrom value",
+        (readFrom, expected) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+                // clientAz is required for the AZ affinity strategies
+                clientAz: "us-east-1a",
+            };
+
+            expect(new TestBaseClient().buildRequest(config).readFrom).toBe(
+                expected,
+            );
+        },
+    );
+
+    it.each([
+        "AZAffinity",
+        "AZAffinityReplicasAndPrimary",
+        "AZAffinityAllNodes",
+    ])(
+        "throws ConfigurationError when clientAz is unset for readFrom=%p",
+        (readFrom) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+            };
+
+            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+                ConfigurationError,
+            );
+        },
+    );
+
+    it.each([
+        ["", "AZAffinity"],
+        [" ", "AZAffinityReplicasAndPrimary"],
+        ["   ", "AZAffinityAllNodes"],
+        ["\t", "AZAffinityAllNodes"],
+        ["\n", "AZAffinityAllNodes"],
+        [" \t\n ", "AZAffinityAllNodes"],
+    ])(
+        "throws ConfigurationError for whitespace-only clientAz=%j with readFrom=%p",
+        (clientAz, readFrom) => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "localhost", port: 6379 }],
+                readFrom: readFrom as ReadFrom,
+                clientAz,
+            };
+
+            expect(() => new TestBaseClient().buildRequest(config)).toThrow(
+                ConfigurationError,
+            );
+        },
+    );
+
+    it("trims surrounding whitespace from clientAz before forwarding", () => {
+        const config: BaseClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            readFrom: "AZAffinityAllNodes",
+            clientAz: "  us-east-1a  ",
+        };
+
+        expect(new TestBaseClient().buildRequest(config).clientAz).toBe(
+            "us-east-1a",
+        );
+    });
+
+    // Guard against a future AZ-scoped ReadFrom strategy being added to the union
+    // and the protobuf mapping while silently skipping the clientAz validation set.
+    // Every strategy that maps to an AZ-affinity protobuf value must be declared in
+    // AZ_AFFINITY_READ_FROM_STRATEGIES; this test fails loudly if one is missing.
+    it("keeps AZ_AFFINITY_READ_FROM_STRATEGIES in sync with the ReadFrom mapping", () => {
+        // The set of protobuf ReadFrom enum names that are scoped to the client's AZ.
+        const azProtoNames = Object.keys(connection_request.ReadFrom).filter(
+            (name) => isNaN(Number(name)) && name.startsWith("AZAffinity"),
+        );
+
+        // Reconstruct the string ReadFrom values that map to each AZ-affinity proto
+        // value by reading the client's own strategy mapping. This mirrors the single
+        // source of truth used at runtime and avoids hardcoding the list twice.
+        const mapping = (
+            new TestBaseClient() as unknown as {
+                MAP_READ_FROM_STRATEGY: Record<
+                    ReadFrom,
+                    connection_request.ReadFrom
+                >;
+            }
+        ).MAP_READ_FROM_STRATEGY;
+
+        const azReadFromValues = (
+            Object.entries(mapping) as [ReadFrom, connection_request.ReadFrom][]
+        )
+            .filter(([, protoValue]) =>
+                azProtoNames.includes(connection_request.ReadFrom[protoValue]),
+            )
+            .map(([readFrom]) => readFrom);
+
+        // Sanity check: we actually discovered the AZ strategies.
+        expect(azReadFromValues.length).toBe(azProtoNames.length);
+        expect(azReadFromValues.length).toBeGreaterThan(0);
+
+        // Every AZ-scoped strategy must be part of the validation set, and the
+        // validation set must not contain anything that is not AZ-scoped.
+        expect([...azReadFromValues].sort()).toEqual(
+            [...AZ_AFFINITY_READ_FROM_STRATEGIES].sort(),
+        );
+    });
 });
 
 describe("BaseClient response handling", () => {
