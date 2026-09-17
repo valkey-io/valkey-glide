@@ -240,7 +240,7 @@ jobs:
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
-              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.TARGET == 'x86_64-unknown-linux-gnu' && matrix.python == '3.13' }}
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
               with:
                   language-flag: -python
 
