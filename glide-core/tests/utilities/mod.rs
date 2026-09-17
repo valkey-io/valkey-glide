@@ -17,12 +17,12 @@ use socket2::{Domain, Socket, Type};
 use std::{
     collections::HashMap,
     env, fs, io,
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, TcpListener, TcpStream},
     ops::Deref,
     path::PathBuf,
     process,
     sync::Mutex,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
 use versions::Versioning;
@@ -133,6 +133,34 @@ pub fn get_listener_on_available_port() -> TcpListener {
         .expect("failed to bind test listener to an ephemeral port")
 }
 
+/// Blocks until the server started on `addr` accepts connections.
+///
+/// Spawning `redis-server` returns before the server has bound its port, so a
+/// [`RedisServer`] handed out right after spawning is racy: whichever client
+/// connects first can be refused, which surfaces as an unrelated failure in the
+/// test that happened to get there first.
+fn wait_until_server_listens(addr: &ConnectionAddr) {
+    const TIMEOUT: Duration = Duration::from_secs(10);
+    let start = Instant::now();
+    loop {
+        let listening = match addr {
+            ConnectionAddr::Tcp(host, port) | ConnectionAddr::TcpTls { host, port, .. } => {
+                TcpStream::connect((host.as_str(), *port)).is_ok()
+            }
+            // The server creates the socket file when it starts listening on it.
+            ConnectionAddr::Unix(path) => path.exists(),
+        };
+        if listening {
+            return;
+        }
+        assert!(
+            start.elapsed() < TIMEOUT,
+            "Server on {addr:?} didn't start listening within {TIMEOUT:?}"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 impl RedisServer {
     pub fn new(server_type: ServerType) -> RedisServer {
         RedisServer::with_modules(server_type, &[])
@@ -221,7 +249,7 @@ impl RedisServer {
             .prefix("redis")
             .tempdir()
             .expect("failed to create tempdir");
-        match addr {
+        let server = match addr {
             redis::ConnectionAddr::Tcp(ref bind, server_port) => {
                 redis_cmd
                     .arg("--port")
@@ -284,7 +312,9 @@ impl RedisServer {
                     addr,
                 }
             }
-        }
+        };
+        wait_until_server_listens(&server.addr);
+        server
     }
 
     pub fn get_client_addr(&self) -> redis::ConnectionAddr {
