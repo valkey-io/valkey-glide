@@ -61,6 +61,7 @@ EXCLUDED_TESTS = {
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
+        "assert_no_spans_exported",
         # Async-only lifecycle tests (pipe/event-loop specific)
         "test_concurrent_commands_from_multiple_clients",
         "test_response_after_client_close_is_managed",
