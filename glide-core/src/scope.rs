@@ -770,8 +770,11 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
 /// Bindings retry `try_acquire_scope` on a 1-50 ms backoff until their acquire
 /// timeout, so an outage of a few seconds would otherwise produce hundreds of
 /// identical warnings per caller. The pool remembers the last cause it reported:
-/// a new or changed cause is a warning, a repeat is a debug line, and the acquire
-/// path clears the memory (with one debug line) once resolution succeeds again.
+/// a cause of a new kind is a warning, a repeat of the same kind is a debug line,
+/// and the acquire path clears the memory (with one debug line) once resolution
+/// succeeds again. Kind, not value: concurrent acquires for different unmapped
+/// slots (every slot, on a lazily connected cluster client before its first
+/// command) would otherwise flip the record on each retry and warn every time.
 /// Without any of this the borrower only ever sees "pool exhausted" while the
 /// slot stays uncovered.
 #[cfg(feature = "proto")]
@@ -781,7 +784,9 @@ fn log_unresolved_target(
     routing_slot: u16,
     cause: ScopeTargetUnresolved,
 ) {
-    let repeated = pool.last_unresolved_target == Some(cause);
+    let repeated = pool
+        .last_unresolved_target
+        .is_some_and(|last| last.same_kind(cause));
     pool.last_unresolved_target = Some(cause);
     if repeated {
         logger_core::log_debug(
@@ -1229,14 +1234,16 @@ mod tests {
         );
     }
 
-    /// An unresolved target is recorded on the pool the first time it is seen and
-    /// left in place while the same cause repeats, so the acquire path warns once
-    /// per cause instead of once per binding retry. A change of cause is a new
-    /// record, and a successful resolution clears it.
+    /// An unresolved target is recorded on the pool and always holds the latest
+    /// cause, so the acquire path can tell a repeat of the same kind (debug) from a
+    /// new kind of cause (warn) instead of warning on every binding retry. A
+    /// different unmapped slot is the same kind, so interleaved acquires for
+    /// distinct slots do not flip it back to a warn. A successful resolution
+    /// clears it.
     ///
-    /// The log lines themselves are not observable here; the field they key on is.
-    /// A lazily connected cluster parent has no slot map, so every slot is
-    /// `SlotUnmapped`; unregistering the parent switches the cause to
+    /// The log lines themselves are not observable here; the field they key on and
+    /// `same_kind` are. A lazily connected cluster parent has no slot map, so every
+    /// slot is `SlotUnmapped`; unregistering the parent switches the kind to
     /// `ParentUnregistered`; re-registering a standalone parent under the same id
     /// makes resolution succeed.
     #[tokio::test]
@@ -1281,11 +1288,25 @@ mod tests {
         assert_eq!(acquire(42), -1);
         assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(42)));
 
-        // A different slot is a different cause value, so it is recorded afresh.
+        // A different unmapped slot updates the recorded value (so the message
+        // names the current slot) but is the same kind, so it counts as a repeat.
         assert_eq!(acquire(7), -1);
-        assert_eq!(recorded(), Some(ScopeTargetUnresolved::SlotUnmapped(7)));
+        let after_other_slot = recorded();
+        assert_eq!(
+            after_other_slot,
+            Some(ScopeTargetUnresolved::SlotUnmapped(7))
+        );
+        assert!(
+            after_other_slot.is_some_and(|c| c.same_kind(ScopeTargetUnresolved::SlotUnmapped(42))),
+            "interleaved unmapped slots are one episode, not a new warning each"
+        );
+        assert!(
+            !ScopeTargetUnresolved::SlotUnmapped(7)
+                .same_kind(ScopeTargetUnresolved::ParentUnregistered),
+            "a different variant is a different kind"
+        );
 
-        // The parent going away is a new cause.
+        // The parent going away is a new kind of cause.
         unregister_client(client_id);
         // unregister_client tears the pool down with the client; reseat it so the
         // remaining acquires observe the same pool instance.

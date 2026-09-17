@@ -816,6 +816,16 @@ pub enum ScopeTargetUnresolved {
     TopologyLocked,
 }
 
+impl ScopeTargetUnresolved {
+    /// Whether two causes call for the same remedy, ignoring the slot carried by
+    /// `SlotUnmapped`. Every unmapped slot is fixed by the same topology refresh,
+    /// so interleaved acquires for different unmapped slots are one episode, not
+    /// a fresh cause on every flip.
+    pub fn same_kind(self, other: Self) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    }
+}
+
 impl std::fmt::Display for ScopeTargetUnresolved {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -874,8 +884,10 @@ pub struct ScopePool {
     pub configured_client_name: String,
     /// The most recent reason an acquire could not resolve its target, or `None`
     /// once resolution succeeds again. Bindings retry acquire every few
-    /// milliseconds, so the acquire path logs only when this changes rather than
-    /// on every attempt.
+    /// milliseconds, so the acquire path warns only when the kind of cause
+    /// changes (see [`ScopeTargetUnresolved::same_kind`]) rather than on every
+    /// attempt. The value is still the latest one, so the slot in the message is
+    /// current.
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
 }
 
