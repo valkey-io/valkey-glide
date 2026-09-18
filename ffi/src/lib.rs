@@ -834,12 +834,13 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
                 }
                 let mut off = 0;
                 while off < data.len() {
+                    #[cfg(windows)]
+                    let write_len = libc::c_uint::try_from(data.len() - off)
+                        .expect("pipe write buffer length exceeds c_uint");
+                    #[cfg(not(windows))]
+                    let write_len = data.len() - off;
                     let w = unsafe {
-                        libc::write(
-                            fd,
-                            data[off..].as_ptr() as *const libc::c_void,
-                            data.len() - off,
-                        )
+                        libc::write(fd, data[off..].as_ptr() as *const libc::c_void, write_len)
                     };
                     if w > 0 {
                         off += w as usize;
@@ -1341,11 +1342,11 @@ unsafe fn process_push_notification(
             client_adapter_ptr,
             push_msg.kind.into(),
             message_ptr,
-            message_len,
+            message_len.into(),
             channel_ptr,
-            channel_len,
+            channel_len.into(),
             pattern_ptr,
-            pattern_len,
+            pattern_len.into(),
         );
         let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
             message_ptr,
