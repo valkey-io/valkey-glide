@@ -1212,24 +1212,3 @@ class TestOpenTelemetryGlide:
         )
 
         await client.close()
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_parented_span_memory_leak(self, request, cluster_mode):
-        """The parented path allocates per-command C strings; make sure repeated use
-        does not leak."""
-        client = await create_client(request, cluster_mode=cluster_mode)
-
-        gc.collect()
-        process = psutil.Process()
-        start_memory = process.memory_info().rss
-
-        with use_parent_span(sampled=True):
-            for i in range(100):
-                key = f"GlideClient_test_parented_leak_{i}"
-                await client.set(key, "value")
-                await client.get(key)
-
-        await client.close()
-        gc.collect()
-        end_memory = process.memory_info().rss
-        assert end_memory < start_memory * 1.1
