@@ -1124,6 +1124,10 @@ class BaseClient(CoreCommands):
         deadline = time.monotonic() + timeout
         backoff = 0.01  # Start at 10ms (first scope needs ~500ms for TCP connect)
 
+        # One logical acquire: one stable token across the retry loop, so the core
+        # dedupes this acquire's retries without serializing distinct borrowers.
+        attempt_token = self._lib.glide_scope_next_attempt_token()
+
         while True:
             buf = self._ffi.from_buffer(conn_req_bytes)
             scope_id = self._lib.glide_scope_try_acquire(
@@ -1131,6 +1135,7 @@ class BaseClient(CoreCommands):
                 self._ffi.cast("const uint8_t*", buf),
                 len(conn_req_bytes),
                 routing_slot,
+                attempt_token,
             )
 
             if scope_id >= 0:

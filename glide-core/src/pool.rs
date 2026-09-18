@@ -34,6 +34,7 @@
 
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
@@ -892,10 +893,15 @@ pub struct ScopePool {
     /// attempt. The value is still the latest one, so the slot in the message is
     /// current.
     pub last_unresolved_target: Option<ScopeTargetUnresolved>,
-    /// Targets with an in-flight creation, so concurrent acquires for the same
-    /// target dedupe instead of each reserving and spawning another connection.
-    /// `Arc<StdMutex>` so a [`ScopeReservation`] can clear its marker from `Drop`.
-    pub pending: Arc<StdMutex<HashSet<ScopeTarget>>>,
+    /// In-flight creations, keyed by target then by the acquire-attempt token that
+    /// spawned each one. A single acquire polls with the same token across its
+    /// retries, so a repeat poll finds its own token already in flight and does not
+    /// spawn a second creation (the #7067 retry storm). Distinct concurrent
+    /// borrowers carry distinct tokens, so each reserves and dials its own
+    /// connection up to `max_total` — the RFC #5815 unbounded-concurrent-dials
+    /// contract, which a target-only key would collapse into one serialized creation.
+    /// `Arc<StdMutex>` so a [`ScopeReservation`] can clear its token from `Drop`.
+    pub pending: Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>,
 }
 
 /// Saturating give-back for the sites the guard doesn't own (idle eviction,
@@ -919,8 +925,13 @@ fn saturating_dec(total_count: &AtomicU32) {
 pub struct ScopeReservation {
     total_count: Arc<AtomicU32>,
     committed: bool,
-    /// `(pending set, target)` to clear on `Drop`; `None` when no target is tracked.
-    pending: Option<(Arc<StdMutex<HashSet<ScopeTarget>>>, ScopeTarget)>,
+    /// `(pending map, target, attempt token)` to clear on `Drop`; `None` when no
+    /// creation is tracked (the prewarm path and test guards).
+    pending: Option<(
+        Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>,
+        ScopeTarget,
+        u64,
+    )>,
 }
 
 impl ScopeReservation {
@@ -942,12 +953,18 @@ impl ScopeReservation {
 
 impl Drop for ScopeReservation {
     fn drop(&mut self) {
-        // Clear the pending marker regardless of commit: creation for this target
-        // is no longer in flight.
-        if let Some((pending, target)) = &self.pending
-            && let Ok(mut set) = pending.lock()
+        // Clear this creation's token regardless of commit: it is no longer in
+        // flight. Remove only our own token so a concurrent borrower's in-flight
+        // creation to the same target is untouched; drop the target entry once its
+        // last in-flight token is gone.
+        if let Some((pending, target, token)) = &self.pending
+            && let Ok(mut map) = pending.lock()
+            && let Some(tokens) = map.get_mut(target)
         {
-            set.remove(target);
+            tokens.remove(token);
+            if tokens.is_empty() {
+                map.remove(target);
+            }
         }
         if !self.committed {
             saturating_dec(&self.total_count);
@@ -964,8 +981,8 @@ pub enum ScopeAcquire {
     /// A slot was reserved against `max_total`; the caller fills it. The
     /// [`ScopeReservation`] gives the slot back unless the creator commits it.
     Reserved(ScopeReservation),
-    /// A creation for this target is already in flight; retry and pick it up
-    /// once it lands, without reserving or spawning.
+    /// This acquire's own creation (same attempt token) is already in flight;
+    /// retry and pick it up once it lands, without reserving or spawning again.
     CreationPending,
     /// Nothing idle at all and the pool is at `max_total` (an idle connection to a
     /// different target is evicted to make room, so it never causes exhaustion).
@@ -1008,7 +1025,7 @@ impl ScopePool {
             configured_database_id,
             configured_client_name,
             last_unresolved_target: None,
-            pending: Arc::new(StdMutex::new(HashSet::new())),
+            pending: Arc::new(StdMutex::new(HashMap::new())),
         }
     }
 
@@ -1017,10 +1034,17 @@ impl ScopePool {
     }
 
     /// Non-blocking acquire. See [`ScopeAcquire`].
+    ///
+    /// `attempt_token` identifies the logical acquire: a binding generates one
+    /// token per `acquire()` call and passes it on every retry poll. Retries of the
+    /// same acquire (same token) dedupe to a single in-flight creation; distinct
+    /// concurrent borrowers (distinct tokens) each reserve and dial, up to
+    /// `max_total`.
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
         target: ScopeTarget,
+        attempt_token: u64,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
@@ -1066,12 +1090,18 @@ impl ScopePool {
             return ScopeAcquire::Reused(scope_id);
         }
 
-        // No idle match. Check dedupe BEFORE touching capacity: a retry for a
-        // target whose creation is already in flight must be a cheap no-op, never
-        // evict a healthy idle connection to another primary for a slot it won't use.
+        // No idle match. Check dedupe BEFORE touching capacity: a retry from this
+        // same acquire (its token already in flight for this target) must be a
+        // cheap no-op, never evict a healthy idle connection to another primary for
+        // a slot it won't use. A distinct borrower (a token not yet in flight)
+        // falls through to reserve its own slot, so concurrent scopes to one target
+        // are not serialized.
         let pending = self.pending.clone();
         let mut pending = pending.lock().unwrap_or_else(|e| e.into_inner());
-        if pending.contains(&target) {
+        if pending
+            .get(&target)
+            .is_some_and(|tokens| tokens.contains(&attempt_token))
+        {
             return ScopeAcquire::CreationPending;
         }
 
@@ -1096,19 +1126,35 @@ impl ScopePool {
 
         match self.reserve_slot_inner() {
             Some(mut reservation) => {
-                pending.insert(target.clone());
-                reservation.pending = Some((self.pending.clone(), target));
+                pending
+                    .entry(target.clone())
+                    .or_default()
+                    .insert(attempt_token);
+                reservation.pending = Some((self.pending.clone(), target, attempt_token));
                 ScopeAcquire::Reserved(reservation)
             }
             None => ScopeAcquire::Exhausted,
         }
     }
 
-    /// Reserve one slot against `max_total`, or `None` if closed or at capacity.
-    /// The returned guard tracks no pending target; used by the prewarm path and
-    /// internally by `try_acquire`.
-    pub fn reserve_slot(&mut self) -> Option<ScopeReservation> {
-        self.reserve_slot_inner()
+    /// Reserve one slot against `max_total` for a resolved `target`, registering
+    /// `attempt_token` as an in-flight creation so the reservation participates in
+    /// the same dedupe/accounting as [`try_acquire`]. Returns `None` if closed or
+    /// at capacity. Used by the prewarm path, which resolves its target first and
+    /// passes a unique token per task (prewarm wants `min_idle` distinct dials, so
+    /// the tokens differ and none dedupe against each other). The guard clears the
+    /// token on drop.
+    pub fn reserve_slot_for(
+        &mut self,
+        target: ScopeTarget,
+        attempt_token: u64,
+    ) -> Option<ScopeReservation> {
+        let mut reservation = self.reserve_slot_inner()?;
+        if let Ok(mut map) = self.pending.lock() {
+            map.entry(target.clone()).or_default().insert(attempt_token);
+        }
+        reservation.pending = Some((self.pending.clone(), target, attempt_token));
+        Some(reservation)
     }
 
     fn reserve_slot_inner(&self) -> Option<ScopeReservation> {
@@ -1404,6 +1450,19 @@ pub fn allocate_scope_id() -> u64 {
     NEXT_SCOPE_ID.fetch_add(1, Ordering::Relaxed)
 }
 
+/// Monotonic source of scope-acquire attempt tokens. A binding takes one token
+/// per `acquire()` call and passes it on every retry poll of `try_acquire_scope`,
+/// so the core can tell one acquire's retries (same token — dedupe to a single
+/// in-flight creation) from distinct concurrent borrowers (different tokens — each
+/// dials its own connection up to `max_total`). Process-wide and never reused, so
+/// tokens are unique across clients and pools; the value is opaque.
+static NEXT_SCOPE_ATTEMPT_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a unique scope-acquire attempt token. See [`NEXT_SCOPE_ATTEMPT_TOKEN`].
+pub fn next_scope_attempt_token() -> u64 {
+    NEXT_SCOPE_ATTEMPT_TOKEN.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Global scope registry: scope_id → ScopeEntry (for command dispatch).
 static SCOPE_REGISTRY: OnceLock<DashMap<u64, ScopeEntry>> = OnceLock::new();
 
@@ -1579,7 +1638,7 @@ mod connection_state_tests {
 mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
-        ScopeReservation, ScopeTarget, saturating_dec,
+        ScopeReservation, ScopeTarget, next_scope_attempt_token, saturating_dec,
     };
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
@@ -1606,6 +1665,7 @@ mod scope_pool_tests {
                 match pool.try_acquire(
                     &registry,
                     ScopeTarget::cluster_primary(format!("10.0.0.1:{slot}")),
+                    next_scope_attempt_token(),
                 ) {
                     ScopeAcquire::Reserved(guard) => guards.push(guard),
                     other => panic!(
@@ -1617,7 +1677,8 @@ mod scope_pool_tests {
                 matches!(
                     pool.try_acquire(
                         &registry,
-                        ScopeTarget::cluster_primary(format!("10.0.0.1:{max_total}"))
+                        ScopeTarget::cluster_primary(format!("10.0.0.1:{max_total}")),
+                        next_scope_attempt_token()
                     ),
                     ScopeAcquire::Exhausted
                 ),
@@ -1787,7 +1848,7 @@ mod scope_pool_tests {
         let reservation = pool_arc
             .lock()
             .await
-            .reserve_slot()
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
             .expect("fresh pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
@@ -1802,7 +1863,11 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1843,7 +1908,11 @@ mod scope_pool_tests {
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -1910,7 +1979,7 @@ mod scope_pool_tests {
         let reservation = pool_arc
             .lock()
             .await
-            .reserve_slot()
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
             .expect("fresh pool must grant a reservation");
         crate::scope::create_scope_connection(
             pool_arc.clone(),
@@ -1925,7 +1994,11 @@ mod scope_pool_tests {
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
             }
@@ -1985,7 +2058,11 @@ mod scope_pool_tests {
         // borrower's override, and not empty.
         let scope_id = {
             let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                next_scope_attempt_token(),
+            ) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
             }
@@ -2074,7 +2151,10 @@ mod scope_pool_tests {
     }
 
     /// Retries for an in-flight target must not reserve or spawn again — the
-    /// first acquire reserves once, the rest return CreationPending.
+    /// Retries of the SAME acquire (same attempt token) for an in-flight target
+    /// must not reserve or spawn again — the first poll reserves once, the rest
+    /// return CreationPending. (A distinct borrower carrying a different token is
+    /// covered by `distinct_borrower_same_target_each_reserve`.)
     #[test]
     fn same_target_retries_reserve_only_once() {
         let config = ScopePoolConfig {
@@ -2086,8 +2166,10 @@ mod scope_pool_tests {
 
         let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
         let other = ScopeTarget::cluster_primary("10.0.0.2:6379");
+        // One logical acquire — the same token on every poll.
+        let token = next_scope_attempt_token();
 
-        let reservation = match pool.try_acquire(&registry, target.clone()) {
+        let reservation = match pool.try_acquire(&registry, target.clone(), token) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("first acquire must reserve, got {other:?}"),
         };
@@ -2096,34 +2178,71 @@ mod scope_pool_tests {
         for _ in 0..5 {
             assert!(
                 matches!(
-                    pool.try_acquire(&registry, target.clone()),
+                    pool.try_acquire(&registry, target.clone(), token),
                     ScopeAcquire::CreationPending
                 ),
-                "a retry for an in-flight target must be CreationPending"
+                "a same-token retry for an in-flight target must be CreationPending"
             );
         }
         assert_eq!(
             pool.total_count.load(Ordering::Acquire),
             1,
-            "retries for the same target must not increase total_count"
+            "same-token retries must not increase total_count"
         );
 
         // A different target still reserves independently.
-        let _r2 = match pool.try_acquire(&registry, other) {
+        let _r2 = match pool.try_acquire(&registry, other, next_scope_attempt_token()) {
             ScopeAcquire::Reserved(r) => r,
             other => panic!("a different target must reserve, got {other:?}"),
         };
         assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
 
-        // Once the first creation finishes (guard drops), the target is no longer
-        // pending, so a fresh acquire for it reserves again.
+        // Once the first creation finishes (guard drops), the token is no longer
+        // in flight, so a fresh acquire for it reserves again.
         drop(reservation);
         assert!(
             matches!(
-                pool.try_acquire(&registry, target),
+                pool.try_acquire(&registry, target, next_scope_attempt_token()),
                 ScopeAcquire::Reserved(_)
             ),
             "after the in-flight creation completes, the target reserves again"
+        );
+    }
+
+    /// The heart of option 1: two DISTINCT concurrent borrowers of the same
+    /// healthy target (distinct attempt tokens) must EACH reserve their own slot
+    /// while capacity is free — a target-only dedupe would serialize the second
+    /// into CreationPending with slots idle (RFC #5815: concurrent dials are
+    /// unbounded up to max_total). A-B: on target-only keying the second acquire
+    /// returns CreationPending and total_count stays at 1.
+    #[test]
+    fn distinct_borrower_same_target_each_reserve() {
+        let config = ScopePoolConfig {
+            max_total: 8,
+            ..ScopePoolConfig::default()
+        };
+        let mut pool = ScopePool::new(config, Vec::new(), 1);
+        let registry: DashMap<u64, ScopeEntry> = DashMap::new();
+        let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
+
+        // Borrower #1 reserves and holds its slot (its creation is in flight).
+        let _r1 = match pool.try_acquire(&registry, target.clone(), next_scope_attempt_token()) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("borrower #1 must reserve, got {other:?}"),
+        };
+        // Borrower #2, a distinct acquire (different token) to the SAME target,
+        // must get its own reservation, not CreationPending, with 6 slots free.
+        let _r2 = match pool.try_acquire(&registry, target, next_scope_attempt_token()) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!(
+                "a distinct concurrent borrower of the same target must reserve \
+                 (not serialize), got {other:?}"
+            ),
+        };
+        assert_eq!(
+            pool.total_count.load(Ordering::Acquire),
+            2,
+            "both distinct borrowers reserve their own slot"
         );
     }
 
@@ -2135,12 +2254,13 @@ mod scope_pool_tests {
         let registry: DashMap<u64, ScopeEntry> = DashMap::new();
 
         let target = ScopeTarget::cluster_primary("10.0.0.1:6379");
-        let reservation = match pool.try_acquire(&registry, target.clone()) {
-            ScopeAcquire::Reserved(r) => r,
-            other => panic!("expected a reservation, got {other:?}"),
-        };
+        let reservation =
+            match pool.try_acquire(&registry, target.clone(), next_scope_attempt_token()) {
+                ScopeAcquire::Reserved(r) => r,
+                other => panic!("expected a reservation, got {other:?}"),
+            };
         let pending = pool.pending.clone();
-        assert!(pending.lock().unwrap().contains(&target));
+        assert!(pending.lock().unwrap().contains_key(&target));
 
         let handle = tokio::spawn(async move {
             let _r = reservation;
@@ -2151,7 +2271,7 @@ mod scope_pool_tests {
         let _ = handle.await;
 
         assert!(
-            !pending.lock().unwrap().contains(&target),
+            !pending.lock().unwrap().contains_key(&target),
             "a cancelled creation must clear its pending marker"
         );
         assert_eq!(
@@ -2170,11 +2290,14 @@ mod scope_pool_tests {
         let mut pool = ScopePool::new(ScopePoolConfig::default(), Vec::new(), 1);
         let registry: DashMap<u64, ScopeEntry> = DashMap::new();
 
-        let _reservation =
-            match pool.try_acquire(&registry, ScopeTarget::cluster_primary("10.0.0.1:6379")) {
-                ScopeAcquire::Reserved(r) => r,
-                other => panic!("expected a reservation, got {other:?}"),
-            };
+        let _reservation = match pool.try_acquire(
+            &registry,
+            ScopeTarget::cluster_primary("10.0.0.1:6379"),
+            next_scope_attempt_token(),
+        ) {
+            ScopeAcquire::Reserved(r) => r,
+            other => panic!("expected a reservation, got {other:?}"),
+        };
         assert!(!pool.pending.lock().unwrap().is_empty());
 
         pool.destroy(&registry);

@@ -1569,7 +1569,11 @@ pub(crate) mod shared_client_tests {
                 .expect("slot owner resolvable against live topology");
             let reservation = {
                 let mut guard = pool.lock().await;
-                match guard.try_acquire(glide_core::pool::get_scope_registry(), target.clone()) {
+                match guard.try_acquire(
+                    glide_core::pool::get_scope_registry(),
+                    target.clone(),
+                    glide_core::pool::next_scope_attempt_token(),
+                ) {
                     glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
@@ -1585,7 +1589,11 @@ pub(crate) mod shared_client_tests {
 
             let scope_id = {
                 let mut guard = pool.lock().await;
-                match guard.try_acquire(glide_core::pool::get_scope_registry(), target) {
+                match guard.try_acquire(
+                    glide_core::pool::get_scope_registry(),
+                    target,
+                    glide_core::pool::next_scope_attempt_token(),
+                ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
                 }
@@ -1632,10 +1640,18 @@ pub(crate) mod shared_client_tests {
         timeout: std::time::Duration,
     ) -> Option<u64> {
         let runtime = tokio::runtime::Handle::current();
+        // One logical acquire — mint the token once and reuse it on every poll,
+        // as a production binding's acquire() does.
+        let attempt_token = glide_core::pool::next_scope_attempt_token();
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
-            let result =
-                glide_core::scope::try_acquire_scope(client_id, bytes.to_vec(), &runtime, 0);
+            let result = glide_core::scope::try_acquire_scope(
+                client_id,
+                bytes.to_vec(),
+                &runtime,
+                0,
+                attempt_token,
+            );
             if result >= 0 {
                 return Some(result as u64);
             }
@@ -4566,11 +4582,18 @@ pub(crate) mod shared_client_tests {
             scope::register_client(client_id, client.clone());
 
             let runtime = tokio::runtime::Handle::current();
+            // One logical acquire — one stable token across the retry loop.
+            let attempt_token = glide_core::pool::next_scope_attempt_token();
             let scope_id = retry(|| {
                 let connection_request_bytes = connection_request_bytes.clone();
                 async {
-                    let result =
-                        scope::try_acquire_scope(client_id, connection_request_bytes, &runtime, 0);
+                    let result = scope::try_acquire_scope(
+                        client_id,
+                        connection_request_bytes,
+                        &runtime,
+                        0,
+                        attempt_token,
+                    );
                     if result >= 0 { Some(result) } else { None }
                 }
             })

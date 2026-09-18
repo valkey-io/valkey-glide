@@ -548,12 +548,27 @@ pub fn scope_try_acquire(
     client_id: i64,
     connection_request_bytes: Uint8Array,
     routing_slot: u16,
+    attempt_token: BigInt,
 ) -> Result<i64> {
     let conn_bytes = connection_request_bytes.as_ref().to_vec();
     let runtime = get_pool_runtime();
-    let result =
-        scope::try_acquire_scope(client_id as u64, conn_bytes, runtime.handle(), routing_slot);
+    let (_, token, _) = attempt_token.get_u64();
+    let result = scope::try_acquire_scope(
+        client_id as u64,
+        conn_bytes,
+        runtime.handle(),
+        routing_slot,
+        token,
+    );
     Ok(result)
+}
+
+/// Allocate a unique scope-acquire attempt token. The caller mints one per
+/// `acquire()` and passes it on every retry poll of `scope_try_acquire`, so the
+/// core dedupes a single acquire's retries without serializing distinct borrowers.
+#[napi]
+pub fn scope_next_attempt_token() -> BigInt {
+    BigInt::from(glide_core::pool::next_scope_attempt_token())
 }
 
 /// Execute a command on a scoped connection. Returns `Promise<string | null>`.
