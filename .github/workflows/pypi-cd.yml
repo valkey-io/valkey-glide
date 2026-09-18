@@ -6,6 +6,7 @@ on:
     pull_request:
         paths:
             - .github/workflows/pypi-cd.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -305,7 +306,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                  args: --locked --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   docker-options: --pull always --rm
@@ -358,7 +359,7 @@ jobs:
 
                       # Build FFI library and glide-shared native extension for async wheel
                       # Note: working directory inside container is python/glide-async
-                      cd ../../ffi && cargo build --release && cd ..
+                      cd ../../ffi && cargo build --locked --release && cd ..
                       cp ffi/target/release/libglide_ffi.so python/glide-async/python/glide_shared/
                       cd python/glide-shared
                       pip install maturin
@@ -366,8 +367,8 @@ jobs:
                       # maturin-action will later build a separate async wheel per interpreter,
                       # and each wheel bundles all .so files from the include glob.
                       # Python will load the one matching its ABI at runtime.
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11 2>/dev/null || \
-                      maturin build --release --out /tmp/glide_shared_wheels -i python3.14
+                      maturin build --locked --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11 2>/dev/null || \
+                      maturin build --locked --release --out /tmp/glide_shared_wheels -i python3.14
                       for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                         unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
                       done
@@ -382,13 +383,13 @@ jobs:
               shell: bash
               run: |
                   # Build FFI library
-                  cd ffi && cargo build --release --target ${{ matrix.build.TARGET }}
+                  cd ffi && cargo build --locked --release --target ${{ matrix.build.TARGET }}
                   cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
                   cd ..
                   # Build glide-shared native extension (_fast_response) for all target interpreters
                   cd python/glide-shared
                   pip install maturin
-                  maturin build --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
+                  maturin build --locked --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
                     -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
                   for WHEEL in /tmp/glide_shared_wheels/*.whl; do
                     unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
@@ -401,7 +402,7 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
+                  args: --locked --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.11' || 'python3.14' }}
 
             ### SYNC CLIENT ###
 
@@ -475,6 +476,48 @@ jobs:
                   /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels "valkey-glide-sync==${RELEASE_VERSION}"
                   /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient; print('Sync smoke test passed')"
 
+            - name: Validate tracked changes from PyPI binary build
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "ffi/.cargo/config.toml"
+                    "python/.gitignore"
+                    "python/glide-async/.cargo/config.toml"
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::PyPI binary build changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
@@ -535,7 +578,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   command: sdist
-                  args: --out sdist
+                  args: --locked --out sdist
 
             - name: Async client - Download binaries
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -549,6 +592,45 @@ jobs:
                   mkdir -p python/glide-async/dist
                   cp python/glide-async/wheels/*.whl python/glide-async/dist/
                   cp python/glide-async/sdist/*.tar.gz python/glide-async/dist/
+
+            - name: Validate tracked changes from async PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Async PyPI packaging changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
 
             - name: Async client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
@@ -627,6 +709,45 @@ jobs:
                   # The sdist is already in python/glide-sync/dist (from `build --sdist`);
                   # add the wheels alongside it so a single directory is published.
                   cp python/glide-sync/wheels/*.whl python/glide-sync/dist/
+
+            - name: Validate tracked changes from sync PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Sync PyPI packaging changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
 
             - name: Sync client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the

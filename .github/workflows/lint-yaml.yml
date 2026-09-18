@@ -12,11 +12,13 @@ on:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
             - "node/pm-and-types-tests/*/.yarnrc.yml"
+            - .github/actions/ensure-clean-tree/action.yml
     pull_request:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
             - "node/pm-and-types-tests/*/.yarnrc.yml"
+            - .github/actions/ensure-clean-tree/action.yml
     workflow_dispatch:
 
 jobs:
@@ -74,3 +76,8 @@ jobs:
                       sys.exit(1)
                   print(f"OK: all {len(paths)} .yarnrc.yml files have npmMinimalAgeGate == '7d'")
                   EOF
+
+            - name: Ensure YAML utility checks leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: YAML npm install, formatting, and configuration validation

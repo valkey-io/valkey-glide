@@ -18,6 +18,7 @@ on:
             - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -31,6 +32,7 @@ on:
             - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -104,6 +106,11 @@ jobs:
                     standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
+            - name: Ensure module build and tests leave tracked files unchanged
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module build and tests on Linux
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -144,6 +151,19 @@ jobs:
             - name: Install zig
               uses: ./.github/actions/install-zig
 
+            - name: Ensure tracked tree is clean before RC changes
+              if: ${{ github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module RC pre-script baseline
+
+            - name: Record declared RC import edit paths
+              if: ${{ github.event.inputs.rc-version }}
+              run: |
+                  find go/integTest -name '*.go' -type f \
+                    -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
+                    | sort > "$RUNNER_TEMP/go-rc-import-paths"
+
             - name: Run patch to test with RC
               working-directory: go
               if: ${{ github.event.inputs.rc-version }}
@@ -151,6 +171,42 @@ jobs:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Validate RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC script:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
 
             - name: Build and test
               working-directory: ./go
@@ -162,6 +218,48 @@ jobs:
                   else
                       make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
                   fi
+
+            - name: Validate final RC tracked changes
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  rc_major="${RC_VERSION#v}"
+                  rc_major="${rc_major%%.*}"
+                  unexpected_paths=()
+                  while IFS= read -r path; do
+                    case "$path" in
+                      go/go.mod|go/go.sum)
+                        ;;
+                      go/integTest/*.go)
+                        if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      utils/cluster_manager.py)
+                        if (( rc_major >= 2 )); then
+                          unexpected_paths+=("$path")
+                        fi
+                        ;;
+                      *)
+                        unexpected_paths+=("$path")
+                        ;;
+                    esac
+                  done < <(git diff --name-only HEAD)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "Unexpected tracked changes after Go RC workload:"
+                    echo "Tracked status (first 200 entries):"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected paths (first 200 entries):"
+                    printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    exit 1
+                  fi
+
+            - name: Ensure module build and tests leave tracked files unchanged
+              if: ${{ !github.event.inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module build and tests on persistent ARM64 runner
 
             - name: Upload test reports
               if: always()
