@@ -296,6 +296,10 @@ impl<T: ToValkeyArgs> ToValkeyArgs for &T {
         (*self).write_valkey_args(out);
     }
 
+    fn describe_numeric_behavior(&self) -> ValkeyNumericBehavior {
+        (*self).describe_numeric_behavior()
+    }
+
     fn is_single_arg(&self) -> bool {
         (*self).is_single_arg()
     }
@@ -527,7 +531,7 @@ mod to_valkey_args_tests {
         same!("hello");
         same!(String::from("world"));
 
-        // Sequences (vectors, slices, arrays)
+        // Sequences
         same!(vec!["a", "b", "c"]);
         same!(&["a", "b"][..]);
         same!(&["a", "b"]);
@@ -583,23 +587,33 @@ mod to_valkey_args_tests {
 
     #[test]
     fn is_single_arg() {
-        // Scalars
+        // Integers
         assert!(1i8.is_single_arg());
         assert!(1i64.is_single_arg());
         assert!(1usize.is_single_arg());
-        assert!(core::num::NonZeroU8::new(1).unwrap().is_single_arg());
-        assert!(1.5f64.is_single_arg());
-        assert!(true.is_single_arg());
-        assert!("k".is_single_arg());
-        assert!(String::from("k").is_single_arg());
-        assert!(Bytes::from_static(b"b").is_single_arg());
 
-        // Byte sequences
+        // Non-zero integers
+        assert!(core::num::NonZeroU8::new(1).unwrap().is_single_arg());
+
+        // Floats
+        assert!(1.5f64.is_single_arg());
+
+        // Byte slices
         assert!(b"bytes".to_vec().is_single_arg());
         assert!(Vec::<u8>::new().is_single_arg());
         assert!((&b"bytes"[..]).is_single_arg());
 
-        // Non-byte sequences
+        // Booleans
+        assert!(true.is_single_arg());
+
+        // Strings
+        assert!("k".is_single_arg());
+        assert!(String::from("k").is_single_arg());
+
+        // Bytes
+        assert!(Bytes::from_static(b"b").is_single_arg());
+
+        // Sequences
         assert!(vec!["one"].is_single_arg());
         assert!(!vec!["a", "b"].is_single_arg());
         assert!(!Vec::<&str>::new().is_single_arg());
@@ -608,13 +622,13 @@ mod to_valkey_args_tests {
         assert!((&["one"]).is_single_arg());
         assert!(!(&["a", "b"]).is_single_arg());
 
-        // Option
+        // Options
         assert!(!Option::<i64>::None.is_single_arg());
         assert!(Some(1i64).is_single_arg());
 
         // References
-        assert!(1i64.is_single_arg());
-        assert!(!vec!["a", "b"].is_single_arg());
+        assert!((&1i64).is_single_arg());
+        assert!(!(&vec!["a", "b"]).is_single_arg());
 
         // Maps and sets
         assert!((*HASH_SET_0).is_single_arg());
@@ -640,25 +654,87 @@ mod to_valkey_args_tests {
 
     #[test]
     fn describe_numeric_behavior() {
-        assert_eq!(
-            5i64.describe_numeric_behavior(),
-            ValkeyNumericBehavior::NumberIsInteger
-        );
-        assert_eq!(
-            1.5f64.describe_numeric_behavior(),
-            ValkeyNumericBehavior::NumberIsFloat
-        );
-        assert_eq!(
-            "x".describe_numeric_behavior(),
-            ValkeyNumericBehavior::NonNumeric
-        );
-        assert_eq!(
-            Some(1.5f64).describe_numeric_behavior(),
-            ValkeyNumericBehavior::NumberIsFloat
-        );
-        assert_eq!(
-            Option::<f64>::None.describe_numeric_behavior(),
-            ValkeyNumericBehavior::NonNumeric
-        );
+        use ValkeyNumericBehavior::{NonNumeric, NumberIsFloat, NumberIsInteger};
+        macro_rules! num {
+            ($v:expr, $b:expr) => {
+                assert_eq!(
+                    $v.describe_numeric_behavior(),
+                    $b,
+                    "numeric behavior of {:?}",
+                    $v
+                );
+            };
+        }
+
+        // Integers
+        num!(1i8, NumberIsInteger);
+        num!(2i16, NumberIsInteger);
+        num!(3i32, NumberIsInteger);
+        num!(4i64, NumberIsInteger);
+        num!(5isize, NumberIsInteger);
+        num!(6u16, NumberIsInteger);
+        num!(7u32, NumberIsInteger);
+        num!(8u64, NumberIsInteger);
+        num!(9usize, NumberIsInteger);
+
+        // Non-zero integers
+        num!(core::num::NonZeroI8::new(-1).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroI16::new(-2).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroI32::new(-3).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroI64::new(-4).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroIsize::new(-5).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroU8::new(1).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroU16::new(2).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroU32::new(3).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroU64::new(4).unwrap(), NumberIsInteger);
+        num!(core::num::NonZeroUsize::new(5).unwrap(), NumberIsInteger);
+
+        // Floats
+        num!(1.5f32, NumberIsFloat);
+        num!(1.5f64, NumberIsFloat);
+
+        // Byte slices. `u8` is a byte, not an integer (matching redis-rs), so
+        // it is non-numeric.
+        num!(0u8, NonNumeric);
+        num!(b"raw".to_vec(), NonNumeric);
+        num!(&b"raw"[..], NonNumeric);
+
+        // Booleans
+        num!(true, NonNumeric);
+
+        // Strings
+        num!("hello", NonNumeric);
+        num!(String::from("world"), NonNumeric);
+
+        // Bytes
+        num!(Bytes::from_static(b"b"), NonNumeric);
+
+        // Sequences
+        num!(vec!["a", "b"], NonNumeric);
+        num!(&["a", "b"][..], NonNumeric);
+        num!(&["a", "b"], NonNumeric);
+
+        // Options
+        num!(Some(5i64), NumberIsInteger);
+        num!(Some(1.5f64), NumberIsFloat);
+        num!(Some("x"), NonNumeric);
+        num!(Option::<f64>::None, NonNumeric);
+
+        // References
+        num!(&5i64, NumberIsInteger);
+        num!(&1.5f64, NumberIsFloat);
+        num!(&&5i64, NumberIsInteger);
+        num!(&"x", NonNumeric);
+
+        // Maps and sets
+        num!(&*HASH_SET_2, NonNumeric);
+        num!(&*BTREE_SET_2, NonNumeric);
+        num!(&*HASH_MAP_2, NonNumeric);
+        num!(&*BTREE_MAP_2, NonNumeric);
+
+        // Tuples
+        num!((1,), NonNumeric);
+        num!((1, 2), NonNumeric);
+        num!((1, 2, 3), NonNumeric);
     }
 }
