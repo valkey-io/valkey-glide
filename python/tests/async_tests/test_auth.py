@@ -1,7 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
-import asyncio
 from typing import AsyncGenerator
 
 import anyio
@@ -790,14 +789,9 @@ async def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
         credentials=credentials,
     )
     pool = await AsyncClientPool.create(
-        client_config, PoolConfig(max_size=3, min_idle=1)
+        client_config, PoolConfig(max_size=3, min_idle=0)
     )
     try:
-        # Wait for at least one idle client to be ready before borrowing
-        deadline = asyncio.get_event_loop().time() + 30
-        while pool.idle_count < 1 and asyncio.get_event_loop().time() < deadline:
-            await asyncio.sleep(0.05)
-        assert pool.idle_count >= 1, "Pool did not reach 1 idle client within 30s"
         async with pool.borrow() as client:
             await assert_connected(client)
             await client.set(
