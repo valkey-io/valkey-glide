@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import connection_request.ConnectionRequestOuterClass;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
@@ -409,5 +410,24 @@ public class ConnectionManagerTest {
         IllegalArgumentException error =
                 assertThrows(IllegalArgumentException.class, () -> ClientPool.create(poolConfig));
         assertTrue(error.getMessage().contains("custom IAM credentials provider"), error.getMessage());
+    }
+
+    /**
+     * A pool cannot forward the per-client address-resolver callback either. The connectivity probe
+     * runs the resolver and can pass, but pooled connections would use the untranslated address and
+     * fail — so {@code ClientPool.create} must reject it up front. Throws synchronously, before any
+     * native call.
+     */
+    @Test
+    void clientPoolCreate_rejectsCustomAddressResolver() {
+        AddressResolver resolver = (host, port) -> null; // never invoked; the guard throws first
+        ClientPoolConfig poolConfig =
+                ClientPoolConfig.builder()
+                        .clientConfig(GlideClientConfiguration.builder().addressResolver(resolver).build())
+                        .build();
+
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> ClientPool.create(poolConfig));
+        assertTrue(error.getMessage().contains("custom address resolver"), error.getMessage());
     }
 }

@@ -88,6 +88,16 @@ public class ClientPool implements AutoCloseable {
                             + "Configure IAM without a provider to use the default credential chain.");
         }
 
+        // Reject a custom address resolver for the same reason: it is a Java callback forwarded to
+        // native per client, and glidePoolCreate cannot receive it. The connectivity probe below runs
+        // the resolver and could pass, but pooled connections would then use the untranslated address
+        // and fail at runtime — so fail fast here instead.
+        if (config.getClientConfig().getAddressResolver().isPresent()) {
+            throw new IllegalArgumentException(
+                    "Pool clients cannot use a custom address resolver. "
+                            + "Resolve addresses before configuring the pool.");
+        }
+
         // Ahead of the connectivity probe below, so a static-config mistake surfaces as a
         // ConfigurationError naming the real reason instead of a probe failure. The serializer below
         // delegates to ConnectionManager's shared builder, so a pooled request carries the same fields
