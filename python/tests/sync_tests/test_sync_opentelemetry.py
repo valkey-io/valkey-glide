@@ -1184,24 +1184,3 @@ class TestOpenTelemetryGlideSync:
         )
 
         client.close()
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_parented_span_memory_leak(self, request, cluster_mode):
-        """The parented path allocates per-command C strings. Make sure repeated use
-        does not leak."""
-        client = create_sync_client(request, cluster_mode=cluster_mode)
-
-        gc.collect()
-        process = psutil.Process()
-        start_memory = process.memory_info().rss
-
-        with use_parent_span(sampled=True):
-            for i in range(100):
-                key = f"GlideSync_test_parented_leak_{i}"
-                client.set(key, "value")
-                client.get(key)
-
-        client.close()
-        gc.collect()
-        end_memory = process.memory_info().rss
-        assert end_memory < start_memory * 1.1

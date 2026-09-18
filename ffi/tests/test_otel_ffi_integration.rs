@@ -1555,13 +1555,43 @@ fn test_span_create_drop_loop_does_not_leak() {
 
     const ITERATIONS: usize = 1000;
     let named = CString::new("loop_named_span").expect("CString::new failed");
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let span_id = CString::new("b7ad6b7169203331").unwrap();
+    let trace_state = CString::new("vendor=value").unwrap();
 
     for i in 0..ITERATIONS {
-        // Rotate across the parentless create paths to exercise each one's into_raw/from_raw.
-        let span_ptr = match i % 3 {
+        // Rotate across the parentless create paths, including the three
+        // `_with_trace_context` entry points, to exercise each one's into_raw/from_raw.
+        let span_ptr = match i % 6 {
             0 => create_otel_span(RequestType::Get),
             1 => create_otel_span(RequestType::Set),
-            _ => unsafe { create_named_otel_span(named.as_ptr()) },
+            2 => unsafe { create_named_otel_span(named.as_ptr()) },
+            3 => unsafe {
+                create_otel_span_with_trace_context(
+                    RequestType::Get,
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
+            4 => unsafe {
+                create_named_otel_span_with_trace_context(
+                    named.as_ptr(),
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
+            _ => unsafe {
+                create_batch_otel_span_with_trace_context(
+                    trace_id.as_ptr(),
+                    span_id.as_ptr(),
+                    1,
+                    trace_state.as_ptr(),
+                )
+            },
         };
         assert_ne!(span_ptr, 0, "Span creation should succeed on iteration {i}");
 
