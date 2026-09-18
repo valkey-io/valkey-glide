@@ -1,12 +1,17 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Configuration types shared by the standalone and cluster configurations.
 
-use glide_core::client::{
-    AuthenticationInfo, ConnectionRetryStrategy, IamAuthenticationConfig,
-    NodeAddress as CoreNodeAddress, PeriodicCheck, ReadFrom as CoreReadFrom, TlsMode,
-};
+use glide_core::client::AuthenticationInfo;
+use glide_core::client::ConnectionRetryStrategy;
+use glide_core::client::IamAuthenticationConfig;
+use glide_core::client::NodeAddress as CoreNodeAddress;
+use glide_core::client::NodeDiscoveryMode as CoreNodeDiscoveryMode;
+use glide_core::client::PeriodicCheck;
+use glide_core::client::ReadFrom as CoreReadFrom;
+use glide_core::client::TlsMode;
 use glide_core::iam::ServiceType as CoreServiceType;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 /// Library name reported to the server.
@@ -89,9 +94,9 @@ pub enum ProtocolVersion {
     RESP3,
 }
 
-impl From<ProtocolVersion> for redis::ProtocolVersion {
-    fn from(v: ProtocolVersion) -> Self {
-        match v {
+impl ProtocolVersion {
+    pub(crate) fn to_core(self) -> redis::ProtocolVersion {
+        match self {
             ProtocolVersion::RESP2 => redis::ProtocolVersion::RESP2,
             ProtocolVersion::RESP3 => redis::ProtocolVersion::RESP3,
         }
@@ -119,17 +124,42 @@ pub enum ReadFrom {
     AllNodes,
 }
 
-impl From<ReadFrom> for CoreReadFrom {
-    fn from(v: ReadFrom) -> Self {
-        match v {
+impl ReadFrom {
+    pub(crate) fn to_core(&self) -> CoreReadFrom {
+        match self {
             ReadFrom::Primary => CoreReadFrom::Primary,
             ReadFrom::PreferReplica => CoreReadFrom::PreferReplica,
-            ReadFrom::AZAffinity(az) => CoreReadFrom::AZAffinity(az),
+            ReadFrom::AZAffinity(az) => CoreReadFrom::AZAffinity(az.clone()),
             ReadFrom::AZAffinityReplicasAndPrimary(az) => {
-                CoreReadFrom::AZAffinityReplicasAndPrimary(az)
+                CoreReadFrom::AZAffinityReplicasAndPrimary(az.clone())
             }
-            ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az),
+            ReadFrom::AZAffinityAllNodes(az) => CoreReadFrom::AZAffinityAllNodes(az.clone()),
             ReadFrom::AllNodes => CoreReadFrom::AllNodes,
+        }
+    }
+}
+
+/// Controls how the standalone client discovers node roles and topology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NodeDiscoveryMode {
+    /// Verify node roles via `INFO REPLICATION`, using only the provided addresses.
+    #[default]
+    Standard,
+
+    /// Skip role detection and trust the provided addresses as-is.
+    /// For proxies (e.g. Envoy) or known-static topologies.
+    Static,
+
+    /// Discover the full topology from any starting node.
+    DiscoverAll,
+}
+
+impl NodeDiscoveryMode {
+    pub(crate) fn to_core(self) -> CoreNodeDiscoveryMode {
+        match self {
+            NodeDiscoveryMode::Standard => CoreNodeDiscoveryMode::Standard,
+            NodeDiscoveryMode::Static => CoreNodeDiscoveryMode::Static,
+            NodeDiscoveryMode::DiscoverAll => CoreNodeDiscoveryMode::DiscoverAll,
         }
     }
 }
@@ -161,11 +191,11 @@ impl Default for NodeAddress {
     }
 }
 
-impl From<NodeAddress> for CoreNodeAddress {
-    fn from(a: NodeAddress) -> Self {
+impl NodeAddress {
+    pub(crate) fn to_core(&self) -> CoreNodeAddress {
         CoreNodeAddress {
-            host: a.host,
-            port: a.port,
+            host: self.host.clone(),
+            port: self.port,
         }
     }
 }
@@ -297,9 +327,9 @@ pub enum ServiceType {
     MemoryDB,
 }
 
-impl From<ServiceType> for CoreServiceType {
-    fn from(s: ServiceType) -> Self {
-        match s {
+impl ServiceType {
+    pub(crate) fn to_core(self) -> CoreServiceType {
+        match self {
             ServiceType::ElastiCache => CoreServiceType::ElastiCache,
             ServiceType::MemoryDB => CoreServiceType::MemoryDB,
         }
@@ -349,7 +379,7 @@ impl IamAuthConfig {
         IamAuthenticationConfig {
             cluster_name: self.cluster_name.clone(),
             region: self.region.clone(),
-            service_type: self.service_type.into(),
+            service_type: self.service_type.to_core(),
             refresh_interval_seconds: self.refresh_interval_seconds,
             // The Rust public API wrapper does not expose a custom credentials provider;
             // the field is always None on this path.
@@ -373,13 +403,13 @@ pub struct BackoffStrategy {
     pub jitter_percent: Option<u32>,
 }
 
-impl From<BackoffStrategy> for ConnectionRetryStrategy {
-    fn from(b: BackoffStrategy) -> Self {
+impl BackoffStrategy {
+    pub(crate) fn to_core(self) -> ConnectionRetryStrategy {
         ConnectionRetryStrategy {
-            exponent_base: b.exponent_base,
-            factor: b.factor,
-            number_of_retries: b.num_of_retries,
-            jitter_percent: b.jitter_percent,
+            exponent_base: self.exponent_base,
+            factor: self.factor,
+            number_of_retries: self.num_of_retries,
+            jitter_percent: self.jitter_percent,
         }
     }
 }
@@ -398,9 +428,9 @@ pub enum PeriodicChecks {
     ManualInterval(u64),
 }
 
-impl From<PeriodicChecks> for PeriodicCheck {
-    fn from(p: PeriodicChecks) -> Self {
-        match p {
+impl PeriodicChecks {
+    pub(crate) fn to_core(self) -> PeriodicCheck {
+        match self {
             PeriodicChecks::Enabled => PeriodicCheck::Enabled,
             PeriodicChecks::Disabled => PeriodicCheck::Disabled,
             PeriodicChecks::ManualInterval(secs) => {
@@ -422,9 +452,9 @@ pub enum TlsConfig {
     InsecureTls,
 }
 
-impl From<TlsConfig> for TlsMode {
-    fn from(t: TlsConfig) -> Self {
-        match t {
+impl TlsConfig {
+    pub(crate) fn to_core(self) -> TlsMode {
+        match self {
             TlsConfig::NoTls => TlsMode::NoTls,
             TlsConfig::SecureTls => TlsMode::SecureTls,
             TlsConfig::InsecureTls => TlsMode::InsecureTls,
@@ -434,10 +464,18 @@ impl From<TlsConfig> for TlsMode {
 
 // ---- shared request-lowering helpers -------------------------------------------
 
+/// Parse a connection URL string into `ConnectionInfo`.
+pub(crate) fn to_redis_connection_info(
+    url: impl AsRef<str>,
+) -> crate::ValkeyResult<redis::ConnectionInfo> {
+    redis::IntoConnectionInfo::into_connection_info(url.as_ref())
+        .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))
+}
+
 /// Map a [`redis::ConnectionAddr`] to our address + TLS mode.
 pub(crate) fn split_connection_addr(
     addr: redis::ConnectionAddr,
-) -> crate::error::Result<(NodeAddress, TlsConfig)> {
+) -> crate::ValkeyResult<(NodeAddress, TlsConfig)> {
     match addr {
         redis::ConnectionAddr::Tcp(host, port) => {
             Ok((NodeAddress::new(host, port), TlsConfig::NoTls))
@@ -514,10 +552,9 @@ pub(crate) fn duration_as_millis_u32(d: Duration) -> u32 {
 ///
 /// Both structs carry the same common public fields (same names, same types), so
 /// the generated methods access them directly. Mode-specific fields/setters
-/// (`database_id`, `periodic_checks`, `from_url*`) stay in each struct's own
-/// `impl` block, as does `to_request()`, which starts from the generated
-/// generated `common_request` and layers the mode-specific fields
-/// on top.
+/// stay in each struct's own `impl` block, as does `to_request()`, which starts
+/// from the generated generated `common_request` and layers the mode-specific
+/// fields on top.
 macro_rules! impl_common_config_builders {
     ($ty:ty) => {
         impl $ty {
@@ -633,10 +670,10 @@ macro_rules! impl_common_config_builders {
             pub(crate) fn common_request(&self) -> glide_core::client::ConnectionRequest {
                 use glide_core::client::ConnectionRequest;
                 let mut req = ConnectionRequest {
-                    addresses: self.addresses.iter().cloned().map(Into::into).collect(),
-                    tls_mode: Some(self.tls.into()),
-                    read_from: Some(self.read_from.clone().into()),
-                    protocol: Some(self.protocol.into()),
+                    addresses: self.addresses.iter().map(NodeAddress::to_core).collect(),
+                    tls_mode: Some(self.tls.to_core()),
+                    read_from: Some(self.read_from.to_core()),
+                    protocol: Some(self.protocol.to_core()),
                     client_name: self.client_name.clone(),
                     lib_name: Some($crate::config::common::LIB_NAME.to_string()),
                     lib_ver: Some($crate::config::common::LIB_VERSION.to_string()),
@@ -679,7 +716,7 @@ macro_rules! impl_common_config_builders {
                     req.connection_timeout = Some(duration_as_millis_u32(t));
                 }
                 if let Some(strategy) = self.reconnect_strategy {
-                    req.connection_retry_strategy = Some(strategy.into());
+                    req.connection_retry_strategy = Some(strategy.to_core());
                 }
                 req
             }

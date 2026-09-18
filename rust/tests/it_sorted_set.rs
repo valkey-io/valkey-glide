@@ -223,7 +223,7 @@ matrix_test!(zinterstore, c, {
 matrix_test!(zset_wrong_type_errors, c, {
     let k = common::key("wt");
     let _: () = c.set(&k, "notazset").await.unwrap();
-    let res: redis::RedisResult<i64> = c.zadd(&k, "a", 1.0).await;
+    let res: glide::ValkeyResult<i64> = c.zadd(&k, "a", 1.0).await;
     assert!(res.is_err());
 });
 

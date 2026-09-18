@@ -8,13 +8,13 @@ use glide::{AsyncCommands, ServerManagementCommands};
 
 resp_test!(info_non_empty, c, {
     let info = c.info().await.unwrap();
-    assert!(!info.is_empty());
+
     // INFO always contains the server section header.
-    let text = String::from_utf8_lossy(&info);
+    assert!(!info.is_empty());
     assert!(
-        text.contains("redis_version")
-            || text.contains("valkey_version")
-            || text.contains("# Server")
+        info.contains("redis_version")
+            || info.contains("valkey_version")
+            || info.contains("# Server")
     );
 });
 

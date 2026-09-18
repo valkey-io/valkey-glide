@@ -70,8 +70,8 @@ src/
   executor.rs     CommandExecutor seam + custom_command
   client/
     mod.rs        GlideClient / GlideClusterClient (async)
-    connection.rs typed Pipeline execution (PipelineExt::query_glide)
-  pipeline_options.rs  Pipeline execution options (execute_pipeline)
+    connection.rs typed Pipeline execution (PipelineExt::query_async)
+  pipeline_options.rs  Pipeline execution options (exec)
   script.rs       Script (SHA-caching EVALSHA with EVAL fallback)
   telemetry.rs    OpenTelemetry config + init
   sync/mod.rs     blocking clients over a shared runtime

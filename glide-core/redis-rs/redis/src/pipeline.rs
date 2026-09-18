@@ -331,6 +331,14 @@ macro_rules! implement_pipeline_commands {
                 self.commands.iter()
             }
 
+            // TODO #7024: Revisit this. Is it needed?
+            /// The indices of commands whose replies are ignored (`.ignore()`).
+            /// Exposed so a downstream runner can reproduce the reply filtering
+            /// that `make_pipeline_results` performs.
+            pub fn ignored_commands(&self) -> &std::collections::HashSet<usize> {
+                &self.ignored_commands
+            }
+
             /// Instructs the pipeline to ignore the return value of this command.
             /// It will still be ensured that it is not an error, but any successful
             /// result is just thrown away.  This makes result processing through

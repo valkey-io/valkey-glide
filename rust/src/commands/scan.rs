@@ -1,10 +1,30 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! GLIDE's cursor scan iterators, returned by the `scan*` methods of
-//! [`AsyncCommands`] / `Commands`. See [`ScanIter`] (async) and
-//! `SyncScanIter`.
+//! GLIDE's cursor-driven scan iterators, returned by the `scan*` methods of
+//! [`crate::AsyncCommands`] / `glide::Commands`.
+//!
+//! These ride the unified API's owned-send dispatch (each page is one command
+//! built fresh and handed to glide-core **by value**), so scanning never
+//! touches the `redis` connection-object machinery. Call-site shape matches
+//! the familiar redis-rs iterators:
+//!
+//! ```rust,no_run
+//! # use glide::AsyncCommands;
+//! # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
+//! let mut iter = client.scan_match::<_, String>("prefix:*").await?;
+//! while let Some(key) = iter.next_item().await {
+//!     println!("{}", key?);
+//! }
+//! # Ok(()) }
+//! ```
+//!
+//! The first page is fetched eagerly, so errors there surface at the `scan*`
+//! call. A failure while fetching a later page surfaces as an error from
+//! `next_item`, after which the iteration ends.
 
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::core::AsyncCommands;
-use redis::{Cmd, FromRedisValue, RedisResult, from_owned_redis_value};
+use crate::value::FromValkeyValue;
 
 #[cfg(feature = "sync")]
 use crate::commands::core::Commands;
@@ -35,7 +55,7 @@ impl PageSpec {
 ///
 /// ```rust,no_run
 /// # use glide::AsyncCommands;
-/// # async fn demo(client: glide::GlideClient) -> glide::RedisResult<()> {
+/// # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
 /// let mut iter = client.scan_match::<_, String>("prefix:*").await?;
 /// while let Some(key) = iter.next_item().await {
 ///     println!("{}", key?);
@@ -49,19 +69,19 @@ pub struct ScanIter<'a, C: ?Sized, RV> {
     batch: std::vec::IntoIter<RV>,
 }
 
-impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
+impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
     /// Returns an iterator for the scan, or
     /// an error if fetching the first page fails.
     pub(crate) async fn new(
         con: &'a C,
         prefix: Vec<Vec<u8>>,
         suffix: Vec<Vec<u8>>,
-    ) -> RedisResult<ScanIter<'a, C, RV>> {
+    ) -> ValkeyResult<ScanIter<'a, C, RV>> {
         let spec = PageSpec { prefix, suffix };
 
         // Fetch first page immediately.
         let (cursor, batch): (u64, Vec<RV>) =
-            from_owned_redis_value(con.glide_send_owned(spec.to_cmd(0)).await?)?;
+            FromValkeyValue::from_owned_valkey_value(con.glide_send_owned(spec.to_cmd(0)).await?)?;
         Ok(ScanIter {
             con,
             spec,
@@ -73,7 +93,7 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
     /// The next element, an error if fetching a page fails, or `None` if the
     /// scan completed. An error ends the iteration and subsequent calls return
     /// `None`.
-    pub async fn next_item(&mut self) -> Option<RedisResult<RV>> {
+    pub async fn next_item(&mut self) -> Option<ValkeyResult<RV>> {
         // Page may be empty, so keep fetching until an
         // item is produced or the cursor wraps to 0.
         loop {
@@ -95,12 +115,12 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
     }
 
     /// Fetch the page at the current cursor.
-    async fn fetch_page(&mut self) -> RedisResult<()> {
+    async fn fetch_page(&mut self) -> ValkeyResult<()> {
         let reply = self
             .con
             .glide_send_owned(self.spec.to_cmd(self.cursor))
             .await?;
-        let (cursor, batch): (u64, Vec<RV>) = from_owned_redis_value(reply)?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
         self.batch = batch.into_iter();
         Ok(())
@@ -112,7 +132,7 @@ impl<'a, C: AsyncCommands, RV: FromRedisValue> ScanIter<'a, C, RV> {
 /// ```rust,no_run
 /// # use glide::Commands;
 /// # use glide::sync::SyncGlideClient;
-/// # fn demo(client: SyncGlideClient) -> glide::RedisResult<()> {
+/// # fn demo(client: SyncGlideClient) -> glide::ValkeyResult<()> {
 /// for key in client.scan_match::<_, String>("prefix:*")? {
 ///     println!("{}", key?);
 /// }
@@ -127,19 +147,19 @@ pub struct SyncScanIter<'a, C: ?Sized, RV> {
 }
 
 #[cfg(feature = "sync")]
-impl<'a, C: Commands, RV: FromRedisValue> SyncScanIter<'a, C, RV> {
+impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
     /// Returns an iterator for the scan, or
     /// an error if fetching the first page fails.
     pub(crate) fn new(
         con: &'a C,
         prefix: Vec<Vec<u8>>,
         suffix: Vec<Vec<u8>>,
-    ) -> RedisResult<SyncScanIter<'a, C, RV>> {
+    ) -> ValkeyResult<SyncScanIter<'a, C, RV>> {
         let spec = PageSpec { prefix, suffix };
 
         // Fetch first page immediately.
         let (cursor, batch): (u64, Vec<RV>) =
-            from_owned_redis_value(con.glide_send_owned_sync(spec.to_cmd(0))?)?;
+            FromValkeyValue::from_owned_valkey_value(con.glide_send_owned_sync(spec.to_cmd(0))?)?;
         Ok(SyncScanIter {
             con,
             spec,
@@ -149,11 +169,11 @@ impl<'a, C: Commands, RV: FromRedisValue> SyncScanIter<'a, C, RV> {
     }
 
     /// Fetch the page at the current cursor.
-    fn fetch_page(&mut self) -> RedisResult<()> {
+    fn fetch_page(&mut self) -> ValkeyResult<()> {
         let reply = self
             .con
             .glide_send_owned_sync(self.spec.to_cmd(self.cursor))?;
-        let (cursor, batch): (u64, Vec<RV>) = from_owned_redis_value(reply)?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
         self.batch = batch.into_iter();
         Ok(())
@@ -161,13 +181,13 @@ impl<'a, C: Commands, RV: FromRedisValue> SyncScanIter<'a, C, RV> {
 }
 
 #[cfg(feature = "sync")]
-impl<C: Commands, RV: FromRedisValue> Iterator for SyncScanIter<'_, C, RV> {
-    type Item = RedisResult<RV>;
+impl<C: Commands, RV: FromValkeyValue> Iterator for SyncScanIter<'_, C, RV> {
+    type Item = ValkeyResult<RV>;
 
     /// The next element, an error if fetching a page fails, or `None` if the
     /// scan completed. An error ends the iteration and subsequent calls return
     /// `None`.
-    fn next(&mut self) -> Option<RedisResult<RV>> {
+    fn next(&mut self) -> Option<ValkeyResult<RV>> {
         // Page may be empty, so keep fetching until an
         // item is produced or the cursor wraps to 0.
         loop {
@@ -192,17 +212,20 @@ impl<C: Commands, RV: FromRedisValue> Iterator for SyncScanIter<'_, C, RV> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use redis::{ErrorKind, RedisError, RedisFuture, Value};
+    use crate::error::GlideError;
+    use crate::value::ValkeyValue;
+    use crate::{ValkeyFuture, ValkeyResult};
+    use bytes::Bytes;
     use std::collections::VecDeque;
     use std::sync::Mutex;
 
     /// A mock connection that returns queued replies in order.
     struct MockConnection {
-        replies: Mutex<VecDeque<RedisResult<Value>>>,
+        replies: Mutex<VecDeque<ValkeyResult<ValkeyValue>>>,
     }
 
     impl MockConnection {
-        fn new(replies: Vec<RedisResult<Value>>) -> Self {
+        fn new(replies: Vec<ValkeyResult<ValkeyValue>>) -> Self {
             MockConnection {
                 replies: Mutex::new(replies.into()),
             }
@@ -210,7 +233,7 @@ mod tests {
 
         /// Pops and returns a queued reply.
         /// Panics if there are none remaining.
-        fn pop(&self) -> RedisResult<Value> {
+        fn pop(&self) -> ValkeyResult<ValkeyValue> {
             self.replies
                 .lock()
                 .unwrap()
@@ -225,40 +248,40 @@ mod tests {
     }
 
     impl crate::commands::core::AsyncCommands for MockConnection {
-        fn glide_send_owned<'a>(&'a self, _cmd: Cmd) -> RedisFuture<'a, Value> {
+        fn glide_send_owned<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
             Box::pin(async move { self.pop() })
         }
     }
 
     #[cfg(feature = "sync")]
     impl crate::commands::core::Commands for MockConnection {
-        fn glide_send_owned_sync(&self, _cmd: Cmd) -> RedisResult<Value> {
+        fn glide_send_owned_sync(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
             self.pop()
         }
     }
 
     /// Creates a scan page reply.
-    fn page(cursor: &str, items: &[&str]) -> Value {
-        Value::Array(vec![
-            Value::BulkString(cursor.as_bytes().to_vec().into()),
-            Value::Array(
+    fn page(cursor: &str, items: &[&str]) -> ValkeyValue {
+        ValkeyValue::Array(vec![
+            ValkeyValue::BulkString(Bytes::copy_from_slice(cursor.as_bytes())),
+            ValkeyValue::Array(
                 items
                     .iter()
-                    .map(|s| Value::BulkString(s.as_bytes().to_vec().into()))
+                    .map(|s| ValkeyValue::BulkString(Bytes::copy_from_slice(s.as_bytes())))
                     .collect(),
             ),
         ])
     }
 
     /// Creates a scan error.
-    fn error() -> RedisError {
-        RedisError::from((ErrorKind::IoError, "simulated scan failure"))
+    fn error() -> GlideError {
+        GlideError::Request("simulated scan failure".into())
     }
 
     // ---- async (`ScanIter::next_item`) ------------------------------------------
 
     /// Creates an async scan iterator over the mock connection.
-    async fn scan_iter(con: &MockConnection) -> RedisResult<ScanIter<'_, MockConnection, String>> {
+    async fn scan_iter(con: &MockConnection) -> ValkeyResult<ScanIter<'_, MockConnection, String>> {
         ScanIter::new(con, vec![b"SCAN".to_vec()], Vec::new()).await
     }
 
@@ -316,14 +339,14 @@ mod tests {
     #[cfg(feature = "sync")]
     fn sync_scan_iter(
         con: &MockConnection,
-    ) -> RedisResult<SyncScanIter<'_, MockConnection, String>> {
+    ) -> ValkeyResult<SyncScanIter<'_, MockConnection, String>> {
         SyncScanIter::new(con, vec![b"SCAN".to_vec()], Vec::new())
     }
 
     /// Returns all the items from a sync scan iterator.
     #[cfg(feature = "sync")]
     fn sync_get_items(iter: SyncScanIter<'_, MockConnection, String>) -> Vec<String> {
-        iter.collect::<RedisResult<Vec<String>>>()
+        iter.collect::<ValkeyResult<Vec<String>>>()
             .expect("unexpected error during scan")
     }
 

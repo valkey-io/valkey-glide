@@ -2,13 +2,15 @@
 //! Geospatial commands. Mirrors Python's geo command surface.
 #![allow(clippy::too_many_arguments)]
 
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::commands::options::{ConditionalChange, OrderBy};
-use crate::error::Result;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// Distance unit for geo commands.
 ///
@@ -91,72 +93,75 @@ impl GeoSearchShape {
 #[async_trait]
 pub trait GeoCommands: CommandExecutor {
     /// Add geospatial members to `key` (`GEOADD`); returns members added.
-    async fn geoadd<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geoadd<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members_positions: &[(M, GeospatialData)],
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOADD").arg(key);
         for (m, pos) in members_positions {
             cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the distance between two members (`GEODIST`).
-    async fn geodist<K: ToRedisArgs + Send, M1: ToRedisArgs + Send, M2: ToRedisArgs + Send>(
+    async fn geodist<K: ToValkeyArgs + Send, M1: ToValkeyArgs + Send, M2: ToValkeyArgs + Send>(
         &self,
         key: K,
         member1: M1,
         member2: M2,
         unit: Option<GeoUnit>,
-    ) -> Result<Option<f64>> {
+    ) -> ValkeyResult<Option<f64>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEODIST").arg(key).arg(member1).arg(member2);
         if let Some(u) = unit {
             cmd.arg(u.as_arg());
         }
-        value::to_opt_f64(self.execute_command(cmd, None).await?)
+        Option::<f64>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the geohash strings of members (`GEOHASH`).
-    async fn geohash<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geohash<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members: &[M],
-    ) -> Result<Vec<Option<Bytes>>> {
+    ) -> ValkeyResult<Vec<Option<Bytes>>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOHASH").arg(key);
         for m in members {
             cmd.arg(m);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_opt_bytes).collect(),
-            other => Ok(vec![value::to_opt_bytes(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Option::<Bytes>::from_owned_valkey_value)
+                .collect(),
+            other => Ok(vec![Option::<Bytes>::from_owned_valkey_value(other)?]),
         }
     }
 
     /// Get the positions (longitude, latitude) of members (`GEOPOS`).
-    async fn geopos<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geopos<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members: &[M],
-    ) -> Result<Vec<Option<(f64, f64)>>> {
+    ) -> ValkeyResult<Vec<Option<(f64, f64)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOPOS").arg(key);
         for m in members {
             cmd.arg(m);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => {
+            ValkeyValue::Array(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
                     match it {
-                        redis::Value::Nil => out.push(None),
-                        redis::Value::Array(mut pair) if pair.len() == 2 => {
-                            let lat = value::to_f64(pair.pop().unwrap())?;
-                            let lon = value::to_f64(pair.pop().unwrap())?;
+                        ValkeyValue::Nil => out.push(None),
+                        ValkeyValue::Array(mut pair) if pair.len() == 2 => {
+                            let lat = f64::from_owned_valkey_value(pair.pop().unwrap())?;
+                            let lon = f64::from_owned_valkey_value(pair.pop().unwrap())?;
                             out.push(Some((lon, lat)));
                         }
                         _ => out.push(None),
@@ -169,13 +174,13 @@ pub trait GeoCommands: CommandExecutor {
     }
 
     /// Search a geospatial index by radius from a member (`GEOSEARCH ... FROMMEMBER ... BYRADIUS`).
-    async fn geosearch_by_radius_from_member<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn geosearch_by_radius_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
         radius: f64,
         unit: GeoUnit,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH")
             .arg(key)
@@ -185,21 +190,24 @@ pub trait GeoCommands: CommandExecutor {
             .arg(radius)
             .arg(unit.as_arg());
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_bytes(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
+            other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
         }
     }
 
     /// Add geospatial members with options (`GEOADD` with `NX`/`XX`/`CH`).
     /// Returns the number of added (or, with `changed`, changed) members.
-    async fn geoadd_options<K: ToRedisArgs + Send, M: ToRedisArgs + Send + Sync>(
+    async fn geoadd_options<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send + Sync>(
         &self,
         key: K,
         members_positions: &[(M, GeospatialData)],
         conditional_change: Option<ConditionalChange>,
         changed: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOADD").arg(key);
         if let Some(c) = conditional_change {
@@ -211,12 +219,12 @@ pub trait GeoCommands: CommandExecutor {
         for (m, pos) in members_positions {
             cmd.arg(pos.longitude).arg(pos.latitude).arg(m);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Search a geospatial index from a member with a given shape (`GEOSEARCH
     /// ... FROMMEMBER ... BYRADIUS|BYBOX`). Returns matching member names.
-    async fn geosearch_from_member<K: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn geosearch_from_member<K: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         key: K,
         member: M,
@@ -224,7 +232,7 @@ pub trait GeoCommands: CommandExecutor {
         order: Option<OrderBy>,
         count: Option<i64>,
         any: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH").arg(key).arg("FROMMEMBER").arg(member);
         shape.add_to(&mut cmd);
@@ -234,7 +242,7 @@ pub trait GeoCommands: CommandExecutor {
 
     /// Search a geospatial index from a coordinate with a given shape
     /// (`GEOSEARCH ... FROMLONLAT ... BYRADIUS|BYBOX`).
-    async fn geosearch_from_coord<K: ToRedisArgs + Send>(
+    async fn geosearch_from_coord<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         coord: GeospatialData,
@@ -242,7 +250,7 @@ pub trait GeoCommands: CommandExecutor {
         order: Option<OrderBy>,
         count: Option<i64>,
         any: bool,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCH")
             .arg(key)
@@ -257,9 +265,9 @@ pub trait GeoCommands: CommandExecutor {
     /// Search from a member and store the results into `destination`
     /// (`GEOSEARCHSTORE ... FROMMEMBER`). Returns the number stored.
     async fn geosearchstore_from_member<
-        D: ToRedisArgs + Send,
-        S: ToRedisArgs + Send,
-        M: ToRedisArgs + Send,
+        D: ToValkeyArgs + Send,
+        S: ToValkeyArgs + Send,
+        M: ToValkeyArgs + Send,
     >(
         &self,
         destination: D,
@@ -270,7 +278,7 @@ pub trait GeoCommands: CommandExecutor {
         count: Option<i64>,
         any: bool,
         store_dist: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
             .arg(destination)
@@ -282,12 +290,12 @@ pub trait GeoCommands: CommandExecutor {
         if store_dist {
             cmd.arg("STOREDIST");
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Search from a coordinate and store the results into `destination`
     /// (`GEOSEARCHSTORE ... FROMLONLAT`).
-    async fn geosearchstore_from_coord<D: ToRedisArgs + Send, S: ToRedisArgs + Send>(
+    async fn geosearchstore_from_coord<D: ToValkeyArgs + Send, S: ToValkeyArgs + Send>(
         &self,
         destination: D,
         source: S,
@@ -297,7 +305,7 @@ pub trait GeoCommands: CommandExecutor {
         count: Option<i64>,
         any: bool,
         store_dist: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("GEOSEARCHSTORE")
             .arg(destination)
@@ -310,7 +318,7 @@ pub trait GeoCommands: CommandExecutor {
         if store_dist {
             cmd.arg("STOREDIST");
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
@@ -327,11 +335,14 @@ fn add_search_tail(cmd: &mut Cmd, order: Option<OrderBy>, count: Option<i64>, an
     }
 }
 
-fn collect_bytes(v: redis::Value) -> Result<Vec<Bytes>> {
+fn collect_bytes(v: ValkeyValue) -> ValkeyResult<Vec<Bytes>> {
     match v {
-        redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-        redis::Value::Nil => Ok(Vec::new()),
-        other => Ok(vec![value::to_bytes(other)?]),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(Bytes::from_owned_valkey_value)
+            .collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
     }
 }
 
@@ -342,7 +353,8 @@ mod tests {
     use super::*;
 
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,

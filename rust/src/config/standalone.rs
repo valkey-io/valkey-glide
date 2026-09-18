@@ -2,9 +2,10 @@
 //! Configuration for the **standalone** (non-cluster) client.
 
 use super::common::{
-    BackoffStrategy, ClientIdentity, NodeAddress, ProtocolVersion, PubSubSubscriptions, ReadFrom,
-    ServerCredentials, TlsConfig, credentials_from_info, duration_as_millis_u32,
-    from_redis_protocol, impl_common_config_builders, split_connection_addr,
+    BackoffStrategy, ClientIdentity, NodeAddress, NodeDiscoveryMode, ProtocolVersion,
+    PubSubSubscriptions, ReadFrom, ServerCredentials, TlsConfig, credentials_from_info,
+    duration_as_millis_u32, from_redis_protocol, impl_common_config_builders,
+    split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
 use std::time::Duration;
@@ -23,6 +24,8 @@ pub struct GlideClientConfiguration {
     pub credentials: Option<ServerCredentials>,
     /// Read strategy.
     pub read_from: ReadFrom,
+    /// How the client discovers node roles and topology.
+    pub node_discovery_mode: NodeDiscoveryMode,
     /// Overall request timeout.
     pub request_timeout: Option<Duration>,
     /// Connection establishment timeout.
@@ -65,6 +68,7 @@ impl GlideClientConfiguration {
             tls: TlsConfig::NoTls,
             credentials: None,
             read_from: ReadFrom::Primary,
+            node_discovery_mode: NodeDiscoveryMode::Standard,
             request_timeout: None,
             connection_timeout: None,
             reconnect_strategy: None,
@@ -80,39 +84,33 @@ impl GlideClientConfiguration {
         }
     }
 
-    /// Build a configuration from a Redis connection URL, using the exact URL
-    /// semantics of the vendored fork (`redis://` and `rediss://`, with
-    /// `[user][:password@]host[:port][/db]`):
+    /// Build a configuration from a connection URL.
+    ///
+    /// Supports Redis URLs:
     ///
     /// ```
     /// use glide::GlideClientConfiguration;
-    /// let cfg = GlideClientConfiguration::from_url("redis://user:pass@localhost:6379/2").unwrap();
+    /// let url = "redis://user:pass@localhost:6379/2";
+    /// let cfg = GlideClientConfiguration::from_url(url).unwrap();
     /// assert_eq!(cfg.database_id, 2);
     /// ```
     ///
     /// `rediss://` enables TLS with full verification;
-    /// `rediss://…/#insecure` disables certificate verification, as in
-    /// the fork. Unix-socket URLs are not supported by glide-core and return
-    /// a configuration error.
-    pub fn from_url(url: &str) -> crate::error::Result<Self> {
-        Self::from_connection_info(url)
-    }
-
-    /// Build a configuration from anything implementing
-    /// [`redis::IntoConnectionInfo`] (a URL string, or a prebuilt
-    /// [`redis::ConnectionInfo`]).
-    pub fn from_connection_info<T: redis::IntoConnectionInfo>(
-        info: T,
-    ) -> crate::error::Result<Self> {
-        let info = info
-            .into_connection_info()
-            .map_err(|e| crate::error::GlideError::Configuration(e.to_string()))?;
+    /// `rediss://…/#insecure` disables certificate verification.
+    ///
+    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
+    pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
+        let info = to_redis_connection_info(url)?;
         let (address, tls) = split_connection_addr(info.addr)?;
+
         let mut cfg = Self::new(vec![address]).tls(tls);
         cfg.database_id = info.redis.db;
         cfg.protocol = from_redis_protocol(info.redis.protocol);
         cfg.client_name = info.redis.client_name;
         cfg.credentials = credentials_from_info(info.redis.username, info.redis.password);
+
         Ok(cfg)
     }
 
@@ -122,10 +120,17 @@ impl GlideClientConfiguration {
         self
     }
 
+    /// Set how the client discovers node roles and topology.
+    pub fn node_discovery_mode(mut self, mode: NodeDiscoveryMode) -> Self {
+        self.node_discovery_mode = mode;
+        self
+    }
+
     pub(crate) fn to_request(&self) -> ConnectionRequest {
         let mut req = self.common_request();
         req.cluster_mode_enabled = false;
         req.database_id = self.database_id;
+        req.node_discovery_mode = self.node_discovery_mode.to_core();
         req
     }
 }
