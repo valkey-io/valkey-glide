@@ -318,7 +318,7 @@ pub fn pool_build_handle<'a>(
 
     get_pool_runtime().spawn(async move {
         // Retrieve the Client from the scope registry.
-        let client = match scope::get_parent_client(client_id_u64).await {
+        let client = match scope::get_parent_client(client_id_u64) {
             Some(c) => c,
             None => {
                 deferred.reject(Error::new(
