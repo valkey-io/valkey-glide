@@ -911,6 +911,13 @@ async fn create_client(
         .filter(|k| !k.is_empty())
         .map(|k| k.to_string());
 
+    // Extract the credential provider key before converting (protobuf field won't survive into())
+    let credential_provider_key = request
+        .credential_provider_key
+        .as_ref()
+        .filter(|k| !k.is_empty())
+        .map(|k| k.to_string());
+
     let mut conn_request: crate::client::ConnectionRequest = request.into();
 
     // Look up the address resolver from the global registry using the key
@@ -919,6 +926,35 @@ async fn create_client(
         && let Some(resolver) = crate::address_resolver_registry::remove(&key)
     {
         conn_request.address_resolver = Some(resolver);
+    }
+
+    // Look up the credential provider from the global registry using the key
+    // provided in the connection request.
+    if let Some(key) = credential_provider_key {
+        match crate::credential_provider_registry::remove(&key) {
+            Some(provider) => {
+                if let Some(auth_info) = conn_request.authentication_info.as_mut()
+                    && let Some(iam_config) = auth_info.iam_config.as_mut()
+                {
+                    iam_config.credentials_provider = Some(provider);
+                } else {
+                    log_warn(
+                        "credential_provider",
+                        "A credential_provider_key was set in the connection request but the \
+                         request contains no IAM configuration. The credential provider will \
+                         be ignored and the default AWS credential chain will be used.",
+                    );
+                }
+            }
+            None => {
+                log_warn(
+                    "credential_provider",
+                    "credential_provider_key was set in the connection request but no provider \
+                     was found in the registry. The key may have been consumed already or was \
+                     never registered.",
+                );
+            }
+        }
     }
 
     let client = match Client::new(conn_request, push_tx).await {

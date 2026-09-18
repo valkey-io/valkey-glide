@@ -9,7 +9,10 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.GlideCredentialProvider;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
 import glide.internal.ClientLibraryNameResolver;
@@ -89,6 +92,15 @@ public class ClientPool implements AutoCloseable {
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
 
+        // Extract credential provider from IAM config if set
+        GlideCredentialProvider credentialProvider = null;
+        ServerCredentials creds = config.getClientConfig().getCredentials();
+        if (creds != null
+                && creds.getIamConfig() != null
+                && creds.getIamConfig().getCredentialsProvider() != null) {
+            credentialProvider = creds.getIamConfig().getCredentialsProvider();
+        }
+
         long poolId =
                 GlidePoolResolver.glidePoolCreate(
                         config.getMaxSize(),
@@ -96,7 +108,8 @@ public class ClientPool implements AutoCloseable {
                         config.getIdleTimeout().toMillis(),
                         config.getRequestTimeout().toMillis(),
                         config.getAbandonTimeout().toMillis(),
-                        connectionRequestBytes);
+                        connectionRequestBytes,
+                        credentialProvider);
 
         if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");
         if (poolId < 0) throw new RuntimeException("Pool creation failed: " + poolId);
@@ -281,6 +294,27 @@ public class ClientPool implements AutoCloseable {
             AuthenticationInfo.Builder auth = AuthenticationInfo.newBuilder();
             if (creds.getUsername() != null) auth.setUsername(creds.getUsername());
             if (creds.getPassword() != null) auth.setPassword(creds.getPassword());
+            // Serialize IAM configuration if present
+            if (creds.getIamConfig() != null) {
+                IamAuthConfig iamCfg = creds.getIamConfig();
+                IamCredentials.Builder iamCredentials =
+                        IamCredentials.newBuilder()
+                                .setClusterName(iamCfg.getClusterName())
+                                .setRegion(iamCfg.getRegion());
+                if (iamCfg.getService() == ServiceType.ELASTICACHE) {
+                    iamCredentials.setServiceType(
+                            connection_request.ConnectionRequestOuterClass.ServiceType.ELASTICACHE);
+                } else {
+                    iamCredentials.setServiceType(
+                            connection_request.ConnectionRequestOuterClass.ServiceType.MEMORYDB);
+                }
+                if (iamCfg.getRefreshIntervalSeconds() != null) {
+                    iamCredentials.setRefreshIntervalSeconds(iamCfg.getRefreshIntervalSeconds());
+                }
+                auth.setIamCredentials(iamCredentials.build());
+                // NOTE: credential_provider_key is set via GlidePoolResolver.glidePoolCreate
+                // which passes the JNI callback directly — not via protobuf.
+            }
             b.setAuthenticationInfo(auth.build());
         }
 
