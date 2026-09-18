@@ -3,7 +3,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
-import fcntl
+try:
+    import fcntl  # POSIX only — not available on Windows
+except ImportError:
+    fcntl = None  # type: ignore[assignment]  # Windows — flock is skipped, see issue #7066
 import json
 import logging
 import os
@@ -181,7 +184,11 @@ def generate_tls_certs():
 
     # Blocks until any concurrent process releases the lock.
     with open(f"{TLS_FOLDER}/.certs-lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        # TODO(#7066): add Windows-compatible file locking for concurrent TLS cert generation
+        #              (e.g. msvcrt.locking or a cross-platform library like `filelock`)
+        #              https://github.com/valkey-io/valkey-glide/issues/7066
 
         if _verify_tls_certs():
             return
