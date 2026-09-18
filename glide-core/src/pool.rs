@@ -656,10 +656,10 @@ pub struct ConnectionState {
     pub tracking_enabled: bool,
     /// The database the connection is actually on. Survives borrows (never reset to 0
     /// on acquire/release); updated as `SELECT` runs and after release cleanup.
-    pub selected_db: u8,
+    pub selected_db: u32,
     /// The database this borrow must end on: the parent's runtime database captured at
     /// acquire. Release restores to this, not the pool's static config.
-    pub parent_db: u8,
+    pub parent_db: u32,
     pub client_name_changed: bool,
     pub subscriptions: Vec<ScopeSubscription>,
     /// Set while a blocking command is in flight; kept set only when it ends in a
@@ -674,7 +674,7 @@ pub struct ConnectionState {
 
 impl ConnectionState {
     /// State for a freshly opened connection on database `db` (`selected_db` and `parent_db` both `db`).
-    pub fn with_configured_db(db: u8) -> Self {
+    pub fn with_configured_db(db: u32) -> Self {
         Self {
             selected_db: db,
             parent_db: db,
@@ -685,7 +685,7 @@ impl ConnectionState {
     /// Reset the borrow-scoped mutation flags for a new borrow while preserving the
     /// connection's actual current database (`selected_db`); set this borrow's `parent_db`.
     /// Used instead of `= ConnectionState::default()`, which discarded `selected_db`.
-    pub fn begin_borrow(&mut self, parent_db: u8) {
+    pub fn begin_borrow(&mut self, parent_db: u32) {
         let selected_db = self.selected_db;
         *self = Self {
             selected_db,
@@ -696,7 +696,7 @@ impl ConnectionState {
 
     /// Clean relative to `parent_db` — the database this borrow should end on. A clean
     /// connection needs no cleanup round-trip on release.
-    pub fn is_clean_for(&self, parent_db: u8) -> bool {
+    pub fn is_clean_for(&self, parent_db: u32) -> bool {
         !self.watch_active
             && !self.multi_active
             && !self.tracking_enabled
@@ -746,7 +746,7 @@ pub fn update_state_for_command(state: &mut ConnectionState, cmd: &str, args: &[
         "SELECT" => {
             if let Some(b) = args.first() {
                 if let Ok(s) = std::str::from_utf8(b) {
-                    if let Ok(db) = s.parse::<u8>() {
+                    if let Ok(db) = s.parse::<u32>() {
                         state.selected_db = db;
                     }
                 }
@@ -1001,8 +1001,6 @@ impl ScopePool {
             return ScopeAcquire::Exhausted;
         }
 
-        let runtime_db_u8 = runtime_db as u8;
-
         // Prefer an idle connection matching the requested target AND already on the
         // runtime database. A target match on the wrong database is remembered so we can
         // signal a re-SELECT rather than open a new connection; target mismatches are kept
@@ -1020,7 +1018,7 @@ impl ScopePool {
             }
             // Scoped connections are reusable only for the same physical target.
             if conn.target == target {
-                if conn.state.selected_db == runtime_db_u8 {
+                if conn.state.selected_db == runtime_db {
                     found = Some(conn);
                     break;
                 }
@@ -1038,7 +1036,7 @@ impl ScopePool {
             let scope_id = conn.scope_id;
             conn.borrowed_at = Some(Instant::now());
             // Preserve the connection's actual db; reset only borrow-scoped flags.
-            conn.state.begin_borrow(runtime_db_u8);
+            conn.state.begin_borrow(runtime_db);
             registry.insert(
                 scope_id,
                 ScopeEntry {
@@ -1091,11 +1089,10 @@ impl ScopePool {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return None;
         }
-        let runtime_db_u8 = runtime_db as u8;
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut taken: Option<ScopedConnection> = None;
         while let Some(conn) = self.idle.pop_back() {
-            if conn.target == target && conn.state.selected_db != runtime_db_u8 {
+            if conn.target == target && conn.state.selected_db != runtime_db {
                 taken = Some(conn);
                 break;
             }
@@ -1517,7 +1514,7 @@ pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option
 mod connection_state_tests {
     use super::ConnectionState;
 
-    const CONFIGURED_DB: u8 = 0;
+    const CONFIGURED_DB: u32 = 0;
 
     #[test]
     fn default_state_is_clean() {
@@ -1581,6 +1578,24 @@ mod connection_state_tests {
         };
         assert!(on_db_3.is_clean_for(3));
         assert!(!on_db_3.is_clean_for(2));
+    }
+
+    #[test]
+    fn database_ids_above_the_u8_boundary_are_not_truncated() {
+        // selected_db/parent_db are the wire db id the release SELECT restores, so a
+        // db id > 255 must round-trip intact — a u8 field would fold db 300 to 44 and
+        // send SELECT 44 on cleanup. Covers both paths that write the id:
+        // begin_borrow (the acquire baseline) and update_state_for_command (SELECT).
+        let mut borrowed = ConnectionState::default();
+        borrowed.begin_borrow(300);
+        assert_eq!(borrowed.parent_db, 300, "begin_borrow must not truncate");
+
+        let mut selected = ConnectionState::default();
+        super::update_state_for_command(&mut selected, "SELECT", &[b"300"]);
+        assert_eq!(
+            selected.selected_db, 300,
+            "SELECT tracking must not truncate"
+        );
     }
 }
 
@@ -2496,7 +2511,7 @@ mod scope_pool_tests {
         }
         {
             let pool = pool_arc.lock().await;
-            let mut dbs: Vec<u8> = pool.idle.iter().map(|c| c.state.selected_db).collect();
+            let mut dbs: Vec<u32> = pool.idle.iter().map(|c| c.state.selected_db).collect();
             dbs.sort_unstable();
             assert_eq!(
                 dbs,

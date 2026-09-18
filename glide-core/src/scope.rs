@@ -635,7 +635,7 @@ pub async fn create_scope_connection(
                 created_at: Instant::now(),
                 last_idle_at: Instant::now(),
                 borrowed_at: None,
-                state: ConnectionState::with_configured_db(prepared.database_id as u8),
+                state: ConnectionState::with_configured_db(prepared.database_id),
                 pinned_slot: None,
                 target,
                 last_iam_generation: std::sync::atomic::AtomicU64::new(
@@ -688,14 +688,6 @@ pub fn try_acquire_scope(
     };
     let registry = get_scope_registry();
 
-    // The database the borrowed connection must be on: the parent client's current
-    // runtime database (updated by runtime SELECT), falling back to 0 if the parent
-    // is not resolvable. Read synchronously — `current_database()` is an atomic load.
-    let runtime_db = get_client_registry()
-        .get(&client_id)
-        .map(|c| c.value().current_database())
-        .unwrap_or(0);
-
     match scope_pool.try_lock() {
         Ok(mut pool) => {
             // Resolve the slot's current primary before touching the pool so a
@@ -720,6 +712,15 @@ pub fn try_acquire_scope(
                     log_unresolved_target(&mut pool, client_id, routing_slot, cause);
                     return -1;
                 }
+            };
+
+            // The database the borrowed connection must be on: the parent client's
+            // current runtime database (updated by runtime SELECT). Derived from the
+            // resolved parent so it fails closed — an unresolvable parent yields no
+            // scope rather than silently defaulting to db 0. Target resolution above
+            // already guarantees the parent is registered.
+            let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
+                return -1;
             };
             match pool.try_acquire(registry, target.clone(), runtime_db) {
                 ScopeAcquire::Reused(scope_id) => {
@@ -790,7 +791,7 @@ pub(crate) async fn resync_idle_connection_database(
     let resync_ok = crate::pool::pipeline_replies_ok(&result);
     if resync_ok {
         // Record the connection's new actual database and return it to idle.
-        conn.state = ConnectionState::with_configured_db(runtime_db as u8);
+        conn.state = ConnectionState::with_configured_db(runtime_db);
         conn.last_idle_at = std::time::Instant::now();
         guard.reidle_after_resync(conn);
     } else {
