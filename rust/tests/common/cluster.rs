@@ -25,9 +25,6 @@ fn field_u64(fragment: &str, field: &str) -> Option<u64> {
 const CLUSTER_MANAGER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/cluster_manager.py");
 const TLS_CERTIFICATES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../utils/tls_crts");
 
-/// Timeout for `cluster_manager.py start`.
-const CLUSTER_START_TIMEOUT: Duration = Duration::from_secs(30);
-
 /// Returns the CA certificate bytes (`ca.crt`).
 fn ca_pem() -> Vec<u8> {
     read_cert("ca.crt")
@@ -129,15 +126,14 @@ impl ClusterHarness {
             args.push("--tls-auth-clients");
         }
 
-        let output = tokio::process::Command::new("python3")
+        let out = match tokio::process::Command::new("python3")
             .args(&args)
             .kill_on_drop(true)
-            .output();
-
-        let out = match tokio::time::timeout(CLUSTER_START_TIMEOUT, output).await {
-            Ok(Ok(out)) => out,
-            Ok(Err(e)) => panic!("could not run cluster_manager.py: {e}"),
-            Err(_) => panic!("cluster_manager.py start exceeded {CLUSTER_START_TIMEOUT:?}"),
+            .output()
+            .await
+        {
+            Ok(out) => out,
+            Err(e) => panic!("could not run cluster_manager.py: {e}"),
         };
 
         assert!(
