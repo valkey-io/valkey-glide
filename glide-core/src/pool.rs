@@ -656,10 +656,10 @@ pub struct ConnectionState {
     pub tracking_enabled: bool,
     /// The database the connection is actually on. Survives borrows (never reset to 0
     /// on acquire/release); updated as `SELECT` runs and after release cleanup.
-    pub db_selected: u8,
+    pub selected_db: u8,
     /// The database this borrow must end on: the parent's runtime database captured at
     /// acquire. Release restores to this, not the pool's static config.
-    pub baseline_db: u8,
+    pub parent_db: u8,
     pub client_name_changed: bool,
     pub subscriptions: Vec<ScopeSubscription>,
     /// Set while a blocking command is in flight; kept set only when it ends in a
@@ -673,35 +673,34 @@ pub struct ConnectionState {
 }
 
 impl ConnectionState {
-    /// State for a freshly opened connection on database `db` (actual db and baseline both `db`).
+    /// State for a freshly opened connection on database `db` (`selected_db` and `parent_db` both `db`).
     pub fn with_configured_db(db: u8) -> Self {
         Self {
-            db_selected: db,
-            baseline_db: db,
+            selected_db: db,
+            parent_db: db,
             ..Default::default()
         }
     }
 
     /// Reset the borrow-scoped mutation flags for a new borrow while preserving the
-    /// connection's actual current database (`db_selected`); set this borrow's baseline
-    /// to `baseline_db`. Used instead of `= ConnectionState::default()`, which discarded
-    /// `db_selected`.
-    pub fn begin_borrow(&mut self, baseline_db: u8) {
-        let db_selected = self.db_selected;
+    /// connection's actual current database (`selected_db`); set this borrow's `parent_db`.
+    /// Used instead of `= ConnectionState::default()`, which discarded `selected_db`.
+    pub fn begin_borrow(&mut self, parent_db: u8) {
+        let selected_db = self.selected_db;
         *self = Self {
-            db_selected,
-            baseline_db,
+            selected_db,
+            parent_db,
             ..Default::default()
         };
     }
 
-    /// Clean relative to `baseline_db` — the database this borrow should end on. A clean
+    /// Clean relative to `parent_db` — the database this borrow should end on. A clean
     /// connection needs no cleanup round-trip on release.
-    pub fn is_clean_for(&self, baseline_db: u8) -> bool {
+    pub fn is_clean_for(&self, parent_db: u8) -> bool {
         !self.watch_active
             && !self.multi_active
             && !self.tracking_enabled
-            && self.db_selected == baseline_db
+            && self.selected_db == parent_db
             && !self.client_name_changed
             && self.subscriptions.is_empty()
             && !self.blocking_in_flight
@@ -753,7 +752,7 @@ pub fn update_state_for_command(state: &mut ConnectionState, cmd: &str, args: &[
             if let Some(b) = args.first() {
                 if let Ok(s) = std::str::from_utf8(b) {
                     if let Ok(db) = s.parse::<u8>() {
-                        state.db_selected = db;
+                        state.selected_db = db;
                     }
                 }
             }
@@ -1026,7 +1025,7 @@ impl ScopePool {
             }
             // Scoped connections are reusable only for the same physical target.
             if conn.target == target {
-                if conn.state.db_selected == runtime_db_u8 {
+                if conn.state.selected_db == runtime_db_u8 {
                     found = Some(conn);
                     break;
                 }
@@ -1101,7 +1100,7 @@ impl ScopePool {
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut taken: Option<ScopedConnection> = None;
         while let Some(conn) = self.idle.pop_back() {
-            if conn.target == target && conn.state.db_selected != runtime_db_u8 {
+            if conn.target == target && conn.state.selected_db != runtime_db_u8 {
                 taken = Some(conn);
                 break;
             }
@@ -1150,7 +1149,7 @@ impl ScopePool {
 
         match entry.connection.try_lock() {
             Ok(conn) => {
-                if conn.state.is_clean_for(conn.state.baseline_db) {
+                if conn.state.is_clean_for(conn.state.parent_db) {
                     let idle_conn = ScopedConnection {
                         scope_id: conn.scope_id,
                         connection: conn.connection.clone(),
@@ -1159,7 +1158,7 @@ impl ScopePool {
                         borrowed_at: None,
                         // Clean: already on the baseline. Carry the actual db forward rather
                         // than discarding it to 0.
-                        state: ConnectionState::with_configured_db(conn.state.db_selected),
+                        state: ConnectionState::with_configured_db(conn.state.selected_db),
                         pinned_slot: None,
                         target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
@@ -1182,7 +1181,7 @@ impl ScopePool {
                     let request_timeout = self.config.request_timeout;
                     // Reset to this borrow's baseline (the parent's runtime db), not the
                     // pool's static config.
-                    let self_baseline_db = conn.state.baseline_db;
+                    let self_parent_db = conn.state.parent_db;
                     let self_configured_client_name = self.configured_client_name.clone();
 
                     let client_id = self.parent_client_id;
@@ -1253,10 +1252,10 @@ impl ScopePool {
                             cmd_count += 1;
                         }
 
-                        // SELECT <baseline_db> — restore this borrow's database baseline
+                        // SELECT <parent_db> — restore this borrow's database baseline
                         // (the parent's runtime database at acquire), not the static config.
-                        if guard.state.db_selected != self_baseline_db {
-                            pipe.cmd("SELECT").arg(self_baseline_db.to_string());
+                        if guard.state.selected_db != self_parent_db {
+                            pipe.cmd("SELECT").arg(self_parent_db.to_string());
                             cmd_count += 1;
                         }
 
@@ -1295,7 +1294,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     // After cleanup the connection is on the baseline db,
                                     // so record that as its actual db, not a default.
-                                    state: ConnectionState::with_configured_db(self_baseline_db),
+                                    state: ConnectionState::with_configured_db(self_parent_db),
                                     pinned_slot: None,
                                     target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
@@ -1559,10 +1558,10 @@ mod connection_state_tests {
     fn blocking_in_flight_is_independent_of_other_dirty_flags() {
         // The blocking flag taints on its own, and the other tracked mutations
         // taint on their own — neither masks the other. A connection dirty only
-        // via db_selected (blocking flag clear) is not-clean, and a connection
+        // via selected_db (blocking flag clear) is not-clean, and a connection
         // dirty only via the blocking flag (db at baseline) is not-clean too.
         let db_only = ConnectionState {
-            db_selected: CONFIGURED_DB + 1,
+            selected_db: CONFIGURED_DB + 1,
             blocking_in_flight: false,
             ..Default::default()
         };
@@ -1582,7 +1581,7 @@ mod connection_state_tests {
         // baseline is the parent's runtime database at acquire, not a static db 0,
         // so a connection on db 3 is clean for a db-3 borrow but not for a db-2 one.
         let on_db_3 = ConnectionState {
-            db_selected: 3,
+            selected_db: 3,
             ..Default::default()
         };
         assert!(on_db_3.is_clean_for(3));
@@ -2502,7 +2501,7 @@ mod scope_pool_tests {
         }
         {
             let pool = pool_arc.lock().await;
-            let mut dbs: Vec<u8> = pool.idle.iter().map(|c| c.state.db_selected).collect();
+            let mut dbs: Vec<u8> = pool.idle.iter().map(|c| c.state.selected_db).collect();
             dbs.sort_unstable();
             assert_eq!(
                 dbs,
@@ -2527,7 +2526,7 @@ mod scope_pool_tests {
             let pool = pool_arc.lock().await;
             assert_eq!(pool.idle.len(), 1, "one connection must remain idle");
             assert_eq!(
-                pool.idle.back().unwrap().state.db_selected,
+                pool.idle.back().unwrap().state.selected_db,
                 3,
                 "the untouched idle connection must be the db-3 one"
             );
@@ -2558,17 +2557,17 @@ mod scope_pool_tests {
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 
-    /// Core tracker assertion: `ConnectionState.db_selected` must match the underlying
+    /// Core tracker assertion: `ConnectionState.selected_db` must match the underlying
     /// connection's actual database at initialization, after an acquire+resync, and after
     /// release — i.e. the tracker is never out of step with the real connection state.
     ///
-    /// This asserts on the tracked `db_selected` directly (peeking the idle connection),
+    /// This asserts on the tracked `selected_db` directly (peeking the idle connection),
     /// rather than only inferring it from key visibility as the e2e tests do.
     ///
-    /// A-B: pre-fix `try_acquire`/`release` wrote `ConnectionState::default()` (db_selected
+    /// A-B: pre-fix `try_acquire`/`release` wrote `ConnectionState::default()` (selected_db
     /// = 0) on reuse/idle, so the tracker read 0 regardless of the connection's real db.
     #[tokio::test]
-    async fn tracked_db_selected_matches_the_connection_across_acquire_and_release() {
+    async fn tracked_selected_db_matches_the_connection_across_acquire_and_release() {
         let server = TestServer::start();
         wait_for_server_ready(server.port).await;
 
@@ -2613,7 +2612,7 @@ mod scope_pool_tests {
         )
         .await;
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
             4,
             "a freshly created connection's tracker must match its init database (4)"
         );
@@ -2631,7 +2630,7 @@ mod scope_pool_tests {
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 6)
             .await;
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
             6,
             "after resync the tracker must match the new database (6)"
         );
@@ -2651,7 +2650,7 @@ mod scope_pool_tests {
             assert!(pool.release(scope_id, registry));
         }
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.db_selected,
+            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
             6,
             "after a clean release the tracker must preserve the connection's real db (6)"
         );
@@ -2807,7 +2806,7 @@ mod scope_pool_tests {
     }
 
     /// A rejected cleanup `SELECT` (embedded `ServerError`) must discard the connection, not
-    /// record `baseline_db` and re-idle one sitting on the wrong database. The borrow baseline
+    /// record `parent_db` and re-idle one sitting on the wrong database. The borrow baseline
     /// is forced out of range (200) so the cleanup `SELECT 200` fails.
     ///
     /// A-B: the pre-fix `matches!(cleanup_result, Ok(Ok(_)))` check re-idled it (idle == 1).
@@ -2871,7 +2870,7 @@ mod scope_pool_tests {
         {
             let entry = registry.get(&scope_id).expect("scope entry present");
             let mut conn = entry.connection.lock().await;
-            conn.state.baseline_db = 200;
+            conn.state.parent_db = 200;
         }
 
         {
@@ -2898,6 +2897,138 @@ mod scope_pool_tests {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
 
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// End-to-end through the FFI entry `try_acquire_scope`, exercising the glue the
+    /// direct-call tests skip: that a non-zero parent `current_database()` is actually
+    /// read from the client registry, that a wrong-db idle connection drives the
+    /// `NeedsResync` spawn (first call returns -1), and that the FFI retry converges to
+    /// a `Reused` scope on the parent's runtime db.
+    ///
+    /// The other pool tests all run on db 0, so the `.unwrap_or(0)` registry read and the
+    /// resync spawn are indistinguishable from no-ops there. Here the parent SELECTs db 4
+    /// before the scope opens on db 0, so only a working glue path yields a db-4 scope.
+    #[tokio::test]
+    async fn try_acquire_scope_reads_the_parent_runtime_db_and_retries_to_reuse() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.database_id = 0;
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        // A real, connected parent client that has SELECTed db 4, so its shared
+        // current_database() (an Arc<AtomicU32>) reports 4 to try_acquire_scope.
+        let mut parent = {
+            let mut request = crate::client::ConnectionRequest::default();
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: server.port,
+            });
+            crate::client::Client::new(request, None)
+                .await
+                .expect("parent client connects to the test server")
+        };
+        let mut select = redis::cmd("SELECT");
+        select.arg(4);
+        parent
+            .send_command(&mut select, None)
+            .await
+            .expect("parent SELECT 4 succeeds");
+        assert_eq!(parent.current_database(), 4, "parent must now report db 4");
+
+        let client_id = 7_064_008_u64;
+        crate::scope::register_client(client_id, parent);
+
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+
+        // Seat one idle connection on db 0 (mismatched with the parent's db 4).
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        // First FFI acquire: the only idle connection is on db 0 while the parent is on
+        // db 4, so the glue must read db 4, return -1, and spawn the resync.
+        let handle = tokio::runtime::Handle::current();
+        let first = crate::scope::try_acquire_scope(
+            client_id,
+            connection_request_bytes.clone(),
+            &handle,
+            0,
+        );
+        assert_eq!(
+            first, -1,
+            "a wrong-db idle connection must defer the acquire and spawn a resync"
+        );
+
+        // Retry until the spawned resync settles and the connection is reusable on db 4.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let scope_id = loop {
+            let id = crate::scope::try_acquire_scope(
+                client_id,
+                connection_request_bytes.clone(),
+                &handle,
+                0,
+            );
+            if id >= 0 {
+                break id as u64;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("try_acquire_scope never converged to a reused scope after resync");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        };
+
+        // The reused connection must really be on db 4: a key set here is absent on db 0.
+        crate::scope::execute_scope_command(
+            scope_id,
+            "SET",
+            &[b"db4-key".to_vec(), b"here".to_vec()],
+            None,
+        )
+        .await
+        .expect("SET on the acquired scope succeeds");
+        crate::scope::execute_scope_command(scope_id, "SELECT", &[b"0".to_vec()], None)
+            .await
+            .expect("SELECT 0 succeeds");
+        let on_db0 =
+            crate::scope::execute_scope_command(scope_id, "GET", &[b"db4-key".to_vec()], None)
+                .await
+                .expect("GET succeeds");
+        assert!(
+            matches!(on_db0, redis::Value::Nil),
+            "the key must be absent on db 0 — try_acquire_scope handed out a db-4 connection"
+        );
+
+        crate::scope::unregister_client(client_id);
         crate::pool::get_client_scope_pools().remove(&client_id);
     }
 }
