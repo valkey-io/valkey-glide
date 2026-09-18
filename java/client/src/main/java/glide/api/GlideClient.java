@@ -248,13 +248,17 @@ public class GlideClient extends BaseClient
         int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
         long timeoutMs = timeout.toMillis();
         long deadline = System.currentTimeMillis() + timeoutMs;
+        // One logical acquire: mint a single attempt token and pass it on every
+        // retry poll, so the core dedupes this acquire's retries to one in-flight
+        // creation while distinct concurrent acquires each dial their own.
+        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
 
         return CompletableFuture.supplyAsync(
                 () -> {
                     while (true) {
                         long scopeId =
                                 glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot);
+                                        clientId, connBytes, routingSlot, attemptToken);
                         if (scopeId >= 0) {
                             return new IsolatedScope(scopeId, clientId);
                         }
