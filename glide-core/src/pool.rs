@@ -707,11 +707,6 @@ impl ConnectionState {
             && !self.must_discard
     }
 
-    /// Legacy check — clean means no state mutations at all (db must be 0).
-    pub fn is_clean(&self) -> bool {
-        self.is_clean_for(0)
-    }
-
     pub fn has_subscriptions(&self) -> bool {
         !self.subscriptions.is_empty()
     }
