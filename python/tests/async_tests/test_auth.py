@@ -746,61 +746,66 @@ class TestAuthCommands:
         value = await client.get("iam_auto_refresh_key")
         assert value == b"iam_auto_refresh_value"
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.anyio
-    async def test_iam_pool_with_custom_credentials_provider(
-        self, request, cluster_mode
-    ):
-        """Pool with custom IAM credential provider: verifies the provider is invoked
-        when the pool creates clients and commands succeed."""
-        import os
 
-        from glide.client_pool import AsyncClientPool, PoolConfig
-        from glide_shared.config import AwsCredentials
+# ---------------------------------------------------------------------------
+# Pool IAM test — lives outside TestAuthCommands so it doesn't inherit the
+# autouse cleanup fixture that requires protocol/cluster_mode parametrize.
+# ---------------------------------------------------------------------------
 
-        from tests.utils.utils import create_client_config
 
-        invocations = [0]  # use list for mutability in closure
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.anyio
+async def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
+    """Pool with custom IAM credential provider: verifies the provider is invoked
+    when the pool creates clients and commands succeed."""
+    import os
 
-        def provider():
-            invocations[0] += 1
-            return AwsCredentials(
-                access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-                session_token=os.environ.get("AWS_SESSION_TOKEN"),
-            )
+    from glide.client_pool import AsyncClientPool, PoolConfig
+    from glide_shared.config import AwsCredentials
 
-        iam_config = IamAuthConfig(
-            cluster_name=IAM_TEST_CLUSTER_NAME,
-            service=ServiceType.ELASTICACHE,
-            region=IAM_TEST_REGION_US_EAST_1,
-            refresh_interval_seconds=5,
-            credential_provider=provider,
+    from tests.utils.utils import create_client_config
+
+    invocations = [0]  # use list for mutability in closure
+
+    def provider():
+        invocations[0] += 1
+        return AwsCredentials(
+            access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+            secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+            session_token=os.environ.get("AWS_SESSION_TOKEN"),
         )
-        credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
-        client_config = create_client_config(
-            request,
-            cluster_mode=cluster_mode,
-            credentials=credentials,
-        )
-        pool = await AsyncClientPool.create(
-            client_config, PoolConfig(max_size=3, min_idle=1)
-        )
+
+    iam_config = IamAuthConfig(
+        cluster_name=IAM_TEST_CLUSTER_NAME,
+        service=ServiceType.ELASTICACHE,
+        region=IAM_TEST_REGION_US_EAST_1,
+        refresh_interval_seconds=5,
+        credential_provider=provider,
+    )
+    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
+    client_config = create_client_config(
+        request,
+        cluster_mode=cluster_mode,
+        credentials=credentials,
+    )
+    pool = await AsyncClientPool.create(
+        client_config, PoolConfig(max_size=3, min_idle=1)
+    )
+    try:
+        client_id = await pool.acquire()
         try:
-            client_id = await pool.acquire()
-            try:
-                client = pool._get_or_create_client(client_id)
-                await assert_connected(client)
-                await client.set(
-                    "iam_pool_custom_provider_key", "iam_pool_custom_provider_value"
-                )
-                val = await client.get("iam_pool_custom_provider_key")
-                assert val == b"iam_pool_custom_provider_value"
-            finally:
-                pool.release(client_id)
+            client = pool._get_or_create_client(client_id)
+            await assert_connected(client)
+            await client.set(
+                "iam_pool_custom_provider_key", "iam_pool_custom_provider_value"
+            )
+            val = await client.get("iam_pool_custom_provider_key")
+            assert val == b"iam_pool_custom_provider_value"
         finally:
-            pool.close()
+            pool.release(client_id)
+    finally:
+        pool.close()
 
-        assert (
-            invocations[0] > 0
-        ), "Custom credentials provider was never invoked for pool client"
+    assert (
+        invocations[0] > 0
+    ), "Custom credentials provider was never invoked for pool client"
