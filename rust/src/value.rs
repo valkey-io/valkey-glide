@@ -270,30 +270,55 @@ fn to_glide_error(value: ValkeyValue, msg: &str) -> GlideError {
     GlideError::Request(format!("{msg} (response was {value:?})"))
 }
 
-/// Converts a `ValkeyValue` to a `Vec<ValkeyValue>`.
-fn into_sequence(value: ValkeyValue) -> Result<Vec<ValkeyValue>, ValkeyValue> {
-    match value {
-        ValkeyValue::Array(items) => Ok(items),
-        ValkeyValue::Set(items) => Ok(items),
-        ValkeyValue::Nil => Ok(Vec::new()),
-        other => Err(other),
-    }
-}
-
-/// Converts a `ValkeyValue` to a `Vec<(ValkeyValue, ValkeyValue)`.
-fn into_pairs(value: ValkeyValue) -> Result<Vec<(ValkeyValue, ValkeyValue)>, ValkeyValue> {
-    match value {
-        ValkeyValue::Map(pairs) => Ok(pairs),
+/// Decodes a `ValkeyValue` into a map.
+/// Returns an error with the given target type on failure.
+fn into_map<K, V, M>(value: ValkeyValue, target_type: &str) -> ValkeyResult<M>
+where
+    K: FromValkeyValue,
+    V: FromValkeyValue,
+    M: FromIterator<(K, V)>,
+{
+    // Normalize the reply into key/value pairs.
+    let pairs: Vec<(ValkeyValue, ValkeyValue)> = match value {
+        ValkeyValue::Nil => Vec::new(),
+        ValkeyValue::Map(pairs) => pairs,
         ValkeyValue::Array(items) if items.len() % 2 == 0 => {
             let mut it = items.into_iter();
             let mut pairs = Vec::with_capacity(it.len() / 2);
             while let (Some(k), Some(v)) = (it.next(), it.next()) {
                 pairs.push((k, v));
             }
-            Ok(pairs)
+            pairs
         }
-        other => Err(other),
-    }
+        other => return Err(to_glide_error(other, target_type)),
+    };
+
+    pairs
+        .into_iter()
+        .map(|(k, v)| {
+            Ok((
+                K::from_owned_valkey_value(k)?,
+                V::from_owned_valkey_value(v)?,
+            ))
+        })
+        .collect()
+}
+
+/// Decodes a `ValkeyValue` into a set.
+/// Returns an error with the given target type on failure.
+fn into_set<T, C>(value: ValkeyValue, target_type: &str) -> ValkeyResult<C>
+where
+    T: FromValkeyValue,
+    C: FromIterator<T>,
+{
+    let items = match value {
+        ValkeyValue::Array(items) => items,
+        ValkeyValue::Set(items) => items,
+        ValkeyValue::Nil => Vec::new(),
+        other => return Err(to_glide_error(other, target_type)),
+    };
+
+    items.into_iter().map(T::from_owned_valkey_value).collect()
 }
 
 /// Converts a `ValkeyValue` to a number.
@@ -443,20 +468,7 @@ where
     S: std::hash::BuildHasher + Default,
 {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
-        if value == ValkeyValue::Nil {
-            return Ok(Self::default());
-        }
-        let pairs = into_pairs(value)
-            .map_err(|v| to_glide_error(v, "Response type not hashmap compatible"))?;
-        pairs
-            .into_iter()
-            .map(|(k, v)| {
-                Ok((
-                    K::from_owned_valkey_value(k)?,
-                    V::from_owned_valkey_value(v)?,
-                ))
-            })
-            .collect()
+        into_map(value, "Response type not hashmap compatible")
     }
 }
 
@@ -467,9 +479,55 @@ where
     S: std::hash::BuildHasher + Default,
 {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
-        let items = into_sequence(value)
-            .map_err(|v| to_glide_error(v, "Response type not hashset compatible"))?;
-        items.into_iter().map(T::from_owned_valkey_value).collect()
+        into_set(value, "Response type not hashset compatible")
+    }
+}
+
+/// Converts a `ValkeyValue` to a `BTreeMap<K, V>` value.
+impl<K, V> FromValkeyValue for std::collections::BTreeMap<K, V>
+where
+    K: FromValkeyValue + std::cmp::Ord,
+    V: FromValkeyValue,
+{
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        into_map(value, "Response type not btreemap compatible")
+    }
+}
+
+/// Converts a `ValkeyValue` to a `BTreeSet<T>` value.
+impl<T> FromValkeyValue for std::collections::BTreeSet<T>
+where
+    T: FromValkeyValue + std::cmp::Ord,
+{
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Self> {
+        into_set(value, "Response type not btreeset compatible")
+    }
+}
+
+/// Converts a `ValkeyValue` to a fixed-size `[T; N]` array.
+impl<T: FromValkeyValue, const N: usize> FromValkeyValue for [T; N] {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<[T; N]> {
+        let items = Vec::<T>::from_owned_valkey_value(value)?;
+        let len = items.len();
+        items.try_into().map_err(|_| {
+            GlideError::Request(format!(
+                "Array response of wrong dimension (expected {N}, got {len})"
+            ))
+        })
+    }
+}
+
+/// Converts a `ValkeyValue` to a boxed slice `Box<[T]>`.
+impl<T: FromValkeyValue> FromValkeyValue for Box<[T]> {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Box<[T]>> {
+        Ok(Vec::<T>::from_owned_valkey_value(value)?.into_boxed_slice())
+    }
+}
+
+/// Converts a `ValkeyValue` to a reference-counted slice `Arc<[T]>`.
+impl<T: FromValkeyValue> FromValkeyValue for std::sync::Arc<[T]> {
+    fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<std::sync::Arc<[T]>> {
+        Ok(Vec::<T>::from_owned_valkey_value(value)?.into())
     }
 }
 
@@ -678,6 +736,30 @@ mod from_valkey_value_tests {
     }
 
     #[test]
+    fn from_owned_valkey_value_array() {
+        let v = ValkeyValue::Array(vec![BYTES_A, BYTES_B]);
+        let a: [String; 2] = decode(v.clone());
+        assert_eq!(a, ["a".to_string(), "b".to_string()]);
+
+        // A length mismatch is a decode error.
+        assert!(<[String; 3]>::from_owned_valkey_value(v).is_err());
+    }
+
+    #[test]
+    fn from_owned_valkey_value_boxed_slice() {
+        let v = ValkeyValue::Array(vec![BYTES_A, BYTES_B]);
+        let b: Box<[String]> = decode(v);
+        assert_eq!(&b[..], ["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn from_owned_valkey_value_arc_slice() {
+        let v = ValkeyValue::Array(vec![BYTES_A, BYTES_B]);
+        let a: std::sync::Arc<[String]> = decode(v);
+        assert_eq!(&a[..], ["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
     fn from_owned_valkey_value_option() {
         let none: Option<String> = decode(NIL);
         assert_eq!(none, None);
@@ -708,10 +790,37 @@ mod from_valkey_value_tests {
     }
 
     #[test]
+    fn from_owned_valkey_value_btreemap() {
+        use std::collections::BTreeMap;
+
+        let from_map = ValkeyValue::Map(vec![(BYTES_A, BYTES_1), (BYTES_B, BYTES_2)]);
+        let m: BTreeMap<String, i64> = decode(from_map);
+        assert_eq!(m.get("a"), Some(&1));
+        assert_eq!(m.get("b"), Some(&2));
+
+        let from_array = ValkeyValue::Array(vec![BYTES_A, BYTES_1, BYTES_B, BYTES_2]);
+        let m: BTreeMap<String, i64> = decode(from_array);
+        assert_eq!(m.get("a"), Some(&1));
+        assert_eq!(m.get("b"), Some(&2));
+
+        let empty: BTreeMap<String, String> = decode(NIL);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
     fn from_owned_valkey_value_hashset() {
         let v = ValkeyValue::Set(vec![BYTES_A, BYTES_B]);
         let s: HashSet<String> = decode(v);
         assert_eq!(s, HashSet::from(["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_btreeset() {
+        use std::collections::BTreeSet;
+
+        let v = ValkeyValue::Set(vec![BYTES_A, BYTES_B]);
+        let s: BTreeSet<String> = decode(v);
+        assert_eq!(s, BTreeSet::from(["a".to_string(), "b".to_string()]));
     }
 
     #[test]
