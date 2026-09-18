@@ -265,7 +265,7 @@ def create_address_resolver_callback(ffi, resolver_fn):
         The CFFI callback object. Caller must keep a reference to prevent GC.
     """
     if resolver_fn is None:
-        return ffi.NULL
+        return ffi.cast("AddressResolverCallback", ffi.NULL)
 
     def _address_resolver_callback(
         client_id,
@@ -374,7 +374,7 @@ def create_credential_provider_callback(ffi, credential_provider_fn, event_loop=
       succeeds); the captured token is passed to ``trio.from_thread.run`` later.
     """
     if credential_provider_fn is None:
-        return ffi.NULL
+        return ffi.cast("CredentialProviderCallback", ffi.NULL)
 
     from glide_shared.config import _is_async_callable
 
