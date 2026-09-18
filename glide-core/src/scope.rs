@@ -387,13 +387,13 @@ pub enum ScopeCreateError {
     InvalidUrl(RedisError),
     /// The connect attempt failed.
     ConnectFailed(RedisError),
-    /// The connect attempt did not complete within [`SCOPE_CONNECT_TIMEOUT`].
+    /// The connect attempt did not complete within `SCOPE_CONNECT_TIMEOUT`.
     ConnectTimedOut,
     /// IAM is configured on the parent but no token is currently available.
     IamTokenUnavailable,
     /// The AUTH/SELECT/CLIENT SETNAME init pipeline failed.
     InitFailed(RedisError),
-    /// The init pipeline did not complete within [`SCOPE_CONNECT_TIMEOUT`].
+    /// The init pipeline did not complete within `SCOPE_CONNECT_TIMEOUT`.
     InitTimedOut,
     /// The pool stopped running while the connection was being created.
     PoolClosed,

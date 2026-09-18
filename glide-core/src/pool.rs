@@ -869,6 +869,11 @@ pub struct ScopedConnection {
     pub last_iam_generation: AtomicU64,
 }
 
+/// In-flight scope creations, keyed by target then by the acquire-attempt tokens
+/// dialing it. Shared (`Arc<StdMutex>`) so a [`ScopeReservation`] can clear its own
+/// token from `Drop`.
+pub type ScopePendingMap = Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>;
+
 /// Per-client scope pool.
 pub struct ScopePool {
     pub config: ScopePoolConfig,
@@ -901,7 +906,7 @@ pub struct ScopePool {
     /// connection up to `max_total` — the RFC #5815 unbounded-concurrent-dials
     /// contract, which a target-only key would collapse into one serialized creation.
     /// `Arc<StdMutex>` so a [`ScopeReservation`] can clear its token from `Drop`.
-    pub pending: Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>,
+    pub pending: ScopePendingMap,
 }
 
 /// Saturating give-back for the sites the guard doesn't own (idle eviction,
@@ -927,11 +932,7 @@ pub struct ScopeReservation {
     committed: bool,
     /// `(pending map, target, attempt token)` to clear on `Drop`; `None` when no
     /// creation is tracked (the prewarm path and test guards).
-    pending: Option<(
-        Arc<StdMutex<HashMap<ScopeTarget, HashSet<u64>>>>,
-        ScopeTarget,
-        u64,
-    )>,
+    pending: Option<(ScopePendingMap, ScopeTarget, u64)>,
 }
 
 impl ScopeReservation {
@@ -1139,7 +1140,7 @@ impl ScopePool {
 
     /// Reserve one slot against `max_total` for a resolved `target`, registering
     /// `attempt_token` as an in-flight creation so the reservation participates in
-    /// the same dedupe/accounting as [`try_acquire`]. Returns `None` if closed or
+    /// the same dedupe/accounting as [`Self::try_acquire`]. Returns `None` if closed or
     /// at capacity. Used by the prewarm path, which resolves its target first and
     /// passes a unique token per task (prewarm wants `min_idle` distinct dials, so
     /// the tokens differ and none dedupe against each other). The guard clears the
@@ -1458,7 +1459,8 @@ pub fn allocate_scope_id() -> u64 {
 /// tokens are unique across clients and pools; the value is opaque.
 static NEXT_SCOPE_ATTEMPT_TOKEN: AtomicU64 = AtomicU64::new(1);
 
-/// Allocate a unique scope-acquire attempt token. See [`NEXT_SCOPE_ATTEMPT_TOKEN`].
+/// Allocate a unique scope-acquire attempt token. Tokens are monotonic and
+/// process-wide; the value is opaque (identity only).
 pub fn next_scope_attempt_token() -> u64 {
     NEXT_SCOPE_ATTEMPT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
