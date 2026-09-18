@@ -299,6 +299,10 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
+            # Ensure Rust routes pipe responses for this client to client_id.
+            # When credential_provider is set, pool_ffi uses credential_client_id (0 for Python)
+            # as pipe_client_id instead of the real client_id. This override fixes the mismatch.
+            self._lib.glide_pool_set_pipe_client_id(client_id, client_id)
             try:
                 client._loop = asyncio.get_running_loop()
             except RuntimeError:
