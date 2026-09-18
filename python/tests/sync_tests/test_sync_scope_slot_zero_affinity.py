@@ -51,8 +51,8 @@ def test_sync_scope_slot_zero_affinity_cluster(slot_zero_first):
     """Slot zero never reuses a scope targeting another cluster primary."""
     # require_cluster_addresses() skips when no cluster is configured, so a
     # standalone-only run skips instead of failing on a refused connection. The
-    # collection hook cannot rescue it: this test parameterizes on slot_zero_first
-    # rather than cluster_mode.
+    # collection hook cannot rescue it: it only acts on tests parameterized on
+    # cluster_mode, and only when external endpoints are passed.
     addresses = require_cluster_addresses()
 
     client = GlideClusterClient.create(

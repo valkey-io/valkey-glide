@@ -2238,9 +2238,12 @@ def require_cluster_addresses() -> list:
     """Get the cluster server addresses, skipping the test if none are configured.
 
     Pairs the availability check with the lookup so a cluster-only test cannot
-    obtain addresses without it. Tests parameterized on ``cluster_mode`` are
-    already skipped by the collection hook in ``conftest.py``; use this for
-    cluster-only tests that parameterize on something else (or not at all).
+    obtain addresses without it. When external endpoints are passed
+    (``--cluster-endpoints`` / ``--standalone-endpoints``), the collection hook
+    in ``conftest.py`` already skips tests parameterized on ``cluster_mode``
+    that lack a matching endpoint; on the default local run it adds nothing.
+    Use this helper for cluster-only tests that parameterize on something
+    else (or not at all), where the hook cannot help either way.
 
     Call from inside a test body or fixture; at module scope ``pytest.skip``
     raises rather than skips.
