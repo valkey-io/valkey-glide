@@ -256,9 +256,8 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static byte[] getCaCertificate() {
-        String glideHome =
-                System.getenv().getOrDefault("GLIDE_HOME_DIR", System.getProperty("user.dir") + "/../..");
-        Path caCertPath = Paths.get(glideHome, "utils/tls_crts/ca.crt");
+        String userDir = System.getProperty("user.dir");
+        Path caCertPath = Paths.get(userDir, "../../utils/tls_crts/ca.crt");
         return Files.readAllBytes(caCertPath);
     }
 

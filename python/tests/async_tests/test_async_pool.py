@@ -16,6 +16,7 @@ import pytest
 from glide import (
     AllNodes,
     AsyncClientPool,
+    GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
@@ -319,6 +320,51 @@ class TestAsyncClientPool:
                 await client.delete([key])
         finally:
             pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_scope_stops_executing_after_pool_close(self, cluster_mode):
+        """A scope must not outlive the pool its client was borrowed from.
+
+        Closing the pool has to invalidate outstanding scopes before it returns;
+        otherwise the scope keeps reading and mutating keyspace on a connection
+        whose owner is gone.
+        """
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(config, PoolConfig(max_size=3, min_idle=1))
+        await _wait_for_pool_ready(pool, 1)
+        key = _make_key(cluster_mode, "scope-after-pool-close")
+        scope = None
+        try:
+            async with pool.borrow() as client:
+                scope = await client.scoped_connection()
+
+                # Prove the scope works first, so a later failure cannot be a
+                # false positive.
+                await scope.set(key, "before")
+                assert await scope.get(key) == "before"
+                await client.delete([key])
+
+                # Tear the pool down with the scope still outstanding and the
+                # client still borrowed — how #6889 was reported.
+                pool.close()
+
+                # No polling: invalidation happens before glide_pool_destroy
+                # returns, so the very next command must fail. A write, so a
+                # regression is the actual harm — mutating keyspace through a
+                # scope whose owner is gone.
+                with pytest.raises(RuntimeError, match="invalid scope"):
+                    await scope.set(key, "after")
+        finally:
+            if scope is not None and not scope.is_released:
+                await scope.close()
+            pool.close()
+            # This test builds its own pool, so no fixture FLUSHALL runs. If the
+            # scope got one write in before invalidation, drop the key.
+            cleanup = await GlideClient.create(config)
+            try:
+                await cleanup.delete([key])
+            finally:
+                await cleanup.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_pool_abandon_detection(self, cluster_mode):

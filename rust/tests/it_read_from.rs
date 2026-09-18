@@ -57,7 +57,7 @@ async fn standalone_prefer_replica_resp3() {
 /// eventually readable via a replica.
 #[tokio::test]
 async fn cluster_prefer_replica_reads_data() {
-    let h = common::ClusterHarness::start();
+    let h = common::ClusterHarness::start().await;
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::PreferReplica)
         .request_timeout(Duration::from_secs(5));
@@ -74,7 +74,7 @@ async fn cluster_prefer_replica_reads_data() {
 /// falls back gracefully so commands still succeed. Works on any cluster backend.
 #[tokio::test]
 async fn cluster_az_affinity_config_is_accepted() {
-    let h = common::ClusterHarness::start();
+    let h = common::ClusterHarness::start().await;
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::AZAffinity("use1-az1".to_string()))
         .request_timeout(Duration::from_secs(5));
@@ -87,7 +87,7 @@ async fn cluster_az_affinity_config_is_accepted() {
 /// AllNodes read strategy is accepted and commands succeed on a cluster.
 #[tokio::test]
 async fn cluster_all_nodes_config_is_accepted() {
-    let h = common::ClusterHarness::start();
+    let h = common::ClusterHarness::start().await;
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
         .read_from(ReadFrom::AllNodes)
         .request_timeout(Duration::from_secs(5));
