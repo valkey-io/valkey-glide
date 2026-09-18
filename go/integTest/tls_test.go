@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -259,18 +258,18 @@ func (suite *GlideTestSuite) TestTlsLoadClientCertificateAndKeyFromFile() {
 // paths but does not stat them; callers use require.NoError so a missing file
 // fails the test at the top instead of silently skipping.
 func getClientCertAndKeyPaths() (certPath, keyPath string, err error) {
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		glideHome = "../.."
-	}
-	certPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.crt"))
+	tlsDir := filepath.Join("..", "..", "utils", "tls_crts")
+
+	certPath, err = filepath.Abs(filepath.Join(tlsDir, "client.crt"))
 	if err != nil {
 		return "", "", err
 	}
-	keyPath, err = filepath.Abs(filepath.Join(glideHome, "utils", "tls_crts", "client.key"))
+
+	keyPath, err = filepath.Abs(filepath.Join(tlsDir, "client.key"))
 	if err != nil {
 		return "", "", err
 	}
+
 	return certPath, keyPath, nil
 }
 
@@ -514,14 +513,8 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 // getCaCertificate returns the CA certificate bytes in PEM format.
 // It looks for the certificate in the utils/tls_crts directory.
 func getCaCertificate() ([]byte, error) {
-	// Try to get GLIDE_HOME_DIR from environment, otherwise use relative path
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		// Default to ../../ from the integTest directory
-		glideHome = "../.."
-	}
+	caCertPath := filepath.Join("..", "..", "utils", "tls_crts", "ca.crt")
 
-	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
 	absPath, err := filepath.Abs(caCertPath)
 	if err != nil {
 		return nil, err
