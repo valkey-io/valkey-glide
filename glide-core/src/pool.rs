@@ -295,6 +295,19 @@ impl ClientPool {
         }
 
         self.state.store(POOL_CLOSED, Ordering::Release);
+
+        // Invalidate scopes owned by this pool's clients before dropping them, so a
+        // scope cannot outlive the client it borrowed from.
+        for client_id in self
+            .idle
+            .iter()
+            .map(|c| c.client_id)
+            .chain(self.in_use.iter().map(|e| *e.key()))
+            .collect::<Vec<_>>()
+        {
+            destroy_client_scope_pool(client_id);
+        }
+
         self.idle.clear();
         self.in_use.clear();
         self.total_count.store(0, Ordering::Release);
@@ -758,6 +771,71 @@ impl Default for ScopePoolConfig {
     }
 }
 
+/// Topology-aware destination for a scoped connection.
+///
+/// Cluster targets are keyed on the primary's canonical `host:port` (the same key
+/// redis-rs uses for its connection map), not on the hash slot. Every slot owned by
+/// one primary therefore shares idle connections, and a slot whose owner changed
+/// (failover, migration) stops matching sockets to the former owner once the parent
+/// client's slot map reflects the change, because the address is re-resolved
+/// against that map on each acquire. The map refreshes on the parent's own MOVED
+/// handling and its periodic topology check, not on a MOVED seen by a scoped
+/// connection, so a scope-only workload can keep matching the former owner until
+/// the next refresh.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScopeTarget {
+    /// The configured server for a standalone client.
+    Standalone,
+    /// The cluster primary at this canonical `host:port`.
+    ClusterPrimary(Arc<String>),
+}
+
+impl ScopeTarget {
+    /// Build a cluster target from a resolved primary address.
+    pub fn cluster_primary(address: impl Into<String>) -> Self {
+        ScopeTarget::ClusterPrimary(Arc::new(address.into()))
+    }
+}
+
+/// Why a routing slot could not be turned into a [`ScopeTarget`].
+///
+/// The variants differ in whether retrying can help, which is what the acquire
+/// path needs to decide how loudly to report them. Holding a value proves only
+/// that resolution failed for that reason at that instant; the slot map and the
+/// registry can change before the next attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScopeTargetUnresolved {
+    /// No `Client` is registered under the pool's `parent_client_id`. Not
+    /// transient: the binding never registered it, or has already closed it.
+    ParentUnregistered,
+    /// Cluster parent whose slot map has no primary for this slot (initial
+    /// topology not yet fetched, or mid-resharding). Transient.
+    SlotUnmapped(u16),
+    /// Cluster parent whose wrapper lock was held (e.g. mid-reconnect) when the
+    /// non-blocking lookup ran. Transient on the order of the lock hold.
+    TopologyLocked,
+}
+
+impl ScopeTargetUnresolved {
+    /// Whether two causes call for the same remedy, ignoring the slot carried by
+    /// `SlotUnmapped`. Every unmapped slot is fixed by the same topology refresh,
+    /// so interleaved acquires for different unmapped slots are one episode, not
+    /// a fresh cause on every flip.
+    pub fn same_kind(self, other: Self) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    }
+}
+
+impl std::fmt::Display for ScopeTargetUnresolved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParentUnregistered => f.write_str("parent client is not registered"),
+            Self::SlotUnmapped(slot) => write!(f, "no primary mapped for slot {slot}"),
+            Self::TopologyLocked => f.write_str("cluster topology lock is held"),
+        }
+    }
+}
+
 /// A dedicated connection for isolated execution.
 ///
 /// Cluster mode support:
@@ -780,9 +858,8 @@ pub struct ScopedConnection {
     /// In cluster mode: the slot this scope is pinned to after first keyed command.
     /// None means not yet pinned (no keyed command issued).
     pub pinned_slot: Option<u16>,
-    /// The target slot this connection was created for (cluster routing).
-    /// Used to match idle connections to acquire requests for the same slot range.
-    pub target_slot: u16,
+    /// The topology-aware destination this connection was created for.
+    pub target: ScopeTarget,
     /// Last IAM token generation this connection's AUTH was applied at (see
     /// `IAMTokenManager::token_generation`). Per-connection rather than on the
     /// shared `Client` since scoped connections are reused independently.
@@ -802,6 +879,16 @@ pub struct ScopePool {
     pub parent_client_id: u64,
     /// The database_id from the connection config (for reset on release).
     pub configured_database_id: u32,
+    /// The client_name from the connection config (for reset on release), empty
+    /// if unconfigured.
+    pub configured_client_name: String,
+    /// The most recent reason an acquire could not resolve its target, or `None`
+    /// once resolution succeeds again. Bindings retry acquire every few
+    /// milliseconds, so the acquire path warns only when the kind of cause
+    /// changes (see [`ScopeTargetUnresolved::same_kind`]) rather than on every
+    /// attempt. The value is still the latest one, so the slot in the message is
+    /// current.
+    pub last_unresolved_target: Option<ScopeTargetUnresolved>,
 }
 
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
@@ -815,7 +902,8 @@ pub enum ScopeAcquire {
     /// A slot was reserved against `max_total`; the caller must create a
     /// connection to fill it.
     Reserved,
-    /// No idle connection and the pool is at `max_total`.
+    /// Nothing idle at all and the pool is at `max_total` (an idle connection to a
+    /// different target is evicted to make room, so it never causes exhaustion).
     Exhausted,
 }
 
@@ -825,19 +913,24 @@ impl ScopePool {
         connection_request_bytes: Vec<u8>,
         parent_client_id: u64,
     ) -> Self {
-        // Parse configured_database_id from the connection request
+        // Parse configured_database_id and configured_client_name from the
+        // connection request in a single parse; database_id is only
+        // a reset baseline on release, so an unparseable request falling back to 0
+        // costs a redundant SELECT rather than misrouting anything. Topology is not
+        // read here: scope targets come from the parent `Client` at acquire time
+        // (see `scope::try_resolve_scope_target`), keeping one source of truth.
         #[cfg(feature = "proto")]
-        let configured_database_id = {
+        let (configured_database_id, configured_client_name) = {
             use protobuf::Message as _;
             crate::connection_request::ConnectionRequest::parse_from_bytes(
                 &connection_request_bytes,
             )
             .ok()
-            .map(|req| req.database_id)
-            .unwrap_or(0)
+            .map(|req| (req.database_id, req.client_name.to_string()))
+            .unwrap_or((0, String::new()))
         };
         #[cfg(not(feature = "proto"))]
-        let configured_database_id = 0u32;
+        let (configured_database_id, configured_client_name) = (0u32, String::new());
 
         Self {
             config,
@@ -848,6 +941,8 @@ impl ScopePool {
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
+            configured_client_name,
+            last_unresolved_target: None,
         }
     }
 
@@ -859,14 +954,14 @@ impl ScopePool {
     pub fn try_acquire(
         &mut self,
         registry: &DashMap<u64, ScopeEntry>,
-        routing_slot: u16,
+        target: ScopeTarget,
     ) -> ScopeAcquire {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return ScopeAcquire::Exhausted;
         }
 
-        // Scan idle connections for one matching the requested routing slot.
-        // Connections targeting a different slot are kept aside and pushed back.
+        // Scan idle connections for one matching the requested target.
+        // Connections to a different target are kept aside and pushed back.
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
         let mut found: Option<ScopedConnection> = None;
 
@@ -877,9 +972,8 @@ impl ScopePool {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
-            // Slot 0 is the default/standalone wildcard — always matches.
-            // Otherwise, only reuse if target_slot matches.
-            if conn.target_slot == routing_slot || routing_slot == 0 || conn.target_slot == 0 {
+            // Scoped connections are reusable only for the same physical target.
+            if conn.target == target {
                 found = Some(conn);
                 break;
             }
@@ -899,28 +993,45 @@ impl ScopePool {
                 scope_id,
                 ScopeEntry {
                     connection: Arc::new(TokioMutex::new(conn)),
+                    parent_client_id: self.parent_client_id,
                 },
             );
             self.in_use.insert(scope_id, ());
             return ScopeAcquire::Reused(scope_id);
         }
 
-        if self.total_count.load(Ordering::Acquire) < self.config.max_total {
-            self.total_count.fetch_add(1, Ordering::AcqRel);
-            ScopeAcquire::Reserved
-        } else {
-            ScopeAcquire::Exhausted
+        if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
+            // Full, and every idle connection points at a different target. Evict
+            // the oldest idle one (front of the LIFO deque) to make room rather
+            // than reporting exhaustion while capacity sits idle on other primaries.
+            // Only when nothing is idle at all is the pool truly exhausted.
+            let Some(evicted) = self.idle.pop_front() else {
+                return ScopeAcquire::Exhausted;
+            };
+            self.total_count.fetch_sub(1, Ordering::AcqRel);
+            logger_core::log_debug(
+                "pool",
+                format!(
+                    "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                    evicted.scope_id, evicted.target, target
+                ),
+            );
+            drop(evicted);
         }
+
+        self.total_count.fetch_add(1, Ordering::AcqRel);
+        ScopeAcquire::Reserved
     }
 
     /// Release a scope. Zero-cost if state is clean.
     ///
-    /// Five outcomes, in order of precedence: a closed pool just decrements the
-    /// count; a clean connection goes straight back to idle with no round-trip; a
-    /// contended lock discards, since release must not block; an armed blocking
-    /// waiter or a failed re-auth discards, because no cleanup command can undo
-    /// either; anything else dirty runs the cleanup pipeline and discards if it
-    /// fails.
+    /// Returns `false` without side effects if `scope_id` is unknown or was
+    /// already released. Otherwise, five outcomes, in order of precedence: a
+    /// closed pool just decrements the count; a clean connection goes straight
+    /// back to idle with no round-trip; a contended lock discards, since release
+    /// must not block; an armed blocking waiter or a failed re-auth discards,
+    /// because no cleanup command can undo either; anything else dirty runs the
+    /// cleanup pipeline and discards if it fails.
     #[allow(clippy::needless_borrow)]
     pub fn release(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
         if self.in_use.remove(&scope_id).is_none() {
@@ -947,7 +1058,7 @@ impl ScopePool {
                         borrowed_at: None,
                         state: ConnectionState::default(),
                         pinned_slot: None,
-                        target_slot: conn.target_slot,
+                        target: conn.target.clone(),
                         last_iam_generation: AtomicU64::new(
                             conn.last_iam_generation.load(Ordering::Relaxed),
                         ),
@@ -967,6 +1078,7 @@ impl ScopePool {
                     let conn_arc = entry.connection.clone();
                     let request_timeout = self.config.request_timeout;
                     let self_configured_db = self.configured_database_id;
+                    let self_configured_client_name = self.configured_client_name.clone();
 
                     let client_id = self.parent_client_id;
                     let pools = get_client_scope_pools();
@@ -1042,6 +1154,15 @@ impl ScopePool {
                             cmd_count += 1;
                         }
 
+                        // CLIENT SETNAME <configured_client_name> (reset connection
+                        // name back to the configured baseline, empty if none).
+                        if guard.state.client_name_changed {
+                            pipe.cmd("CLIENT")
+                                .arg("SETNAME")
+                                .arg(self_configured_client_name.as_str());
+                            cmd_count += 1;
+                        }
+
                         // Send the entire pipeline as one round-trip with timeout
                         let cleanup_result = if cmd_count > 0 {
                             tokio::time::timeout(
@@ -1068,7 +1189,7 @@ impl ScopePool {
                                     borrowed_at: None,
                                     state: ConnectionState::default(),
                                     pinned_slot: None,
-                                    target_slot: guard.target_slot,
+                                    target: guard.target.clone(),
                                     last_iam_generation: AtomicU64::new(
                                         guard.last_iam_generation.load(Ordering::Relaxed),
                                     ),
@@ -1126,6 +1247,11 @@ impl ScopePool {
         }
     }
 
+    /// Close this pool and drop its scopes, with the pool lock held.
+    ///
+    /// Not the parent-close path — that is [`destroy_client_scope_pool`], which
+    /// works without the lock. Currently unused; kept for a graceful shutdown
+    /// that needs to drain in-use scopes rather than abandon them.
     pub fn destroy(&mut self, registry: &DashMap<u64, ScopeEntry>) {
         self.state.store(POOL_CLOSED, Ordering::Release);
         self.idle.clear();
@@ -1141,6 +1267,16 @@ impl ScopePool {
 /// Entry in the global scope registry for command routing.
 pub struct ScopeEntry {
     pub connection: Arc<TokioMutex<ScopedConnection>>,
+    /// The client whose scope pool owns this scope, recorded at acquire time.
+    ///
+    /// Resolving the parent by scanning the scope pools instead means a contended
+    /// pool lock reads as "no parent", which silently drops the request timeout,
+    /// circuit breaker, inflight limit, IAM re-authentication and compression.
+    ///
+    /// Kept here rather than on `ScopedConnection` so there is one source of
+    /// truth: a connection outlives any single scope, so an id on both could
+    /// disagree about which client currently owns the scope.
+    pub parent_client_id: u64,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1173,6 +1309,40 @@ pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
 
 pub fn get_client_scope_pools() -> &'static DashMap<u64, Arc<TokioMutex<ScopePool>>> {
     CLIENT_SCOPE_POOLS.get_or_init(DashMap::new)
+}
+
+/// Invalidate every scope owned by `client_id` and drop its scope pool.
+///
+/// Called when the parent client goes away. Removing the pool stops new acquires
+/// and removing the registry entries stops dispatch on outstanding scopes, which
+/// then fail as invalid rather than executing against a connection whose owner is
+/// gone. Idle connections drop with the pool once in-flight commands release it.
+///
+/// Deliberately takes no pool lock: teardown must not be skippable, and a
+/// `try_lock` here would silently leave scopes live under contention. The owning
+/// id on each [`ScopeEntry`] is what makes that possible.
+///
+/// A scope acquired concurrently with teardown can still land in the registry
+/// after the sweep, leaking one entry. Whether that entry is inert depends on the
+/// caller: FFI and JNI remove the parent from `CLIENT_REGISTRY` via their own close
+/// paths, so dispatch fails on an unresolvable parent. Node registers pooled clients
+/// in `CLIENT_REGISTRY` under the pool's `client_id` and does not shed that entry on
+/// pool close, so a Node pooled parent can still resolve. This is not fixed from here:
+/// the pool's `client_id` overlaps plain clients' registry keys, so removing it would
+/// need an id that is unambiguous against them.
+pub fn destroy_client_scope_pool(client_id: u64) {
+    get_client_scope_pools().remove(&client_id);
+
+    let registry = get_scope_registry();
+    // Collect before removing: mutating a DashMap while holding an iterator can deadlock.
+    let owned: Vec<u64> = registry
+        .iter()
+        .filter(|entry| entry.value().parent_client_id == client_id)
+        .map(|entry| *entry.key())
+        .collect();
+    for scope_id in owned {
+        registry.remove(&scope_id);
+    }
 }
 
 /// Get or create a scope pool for a client (atomic via DashMap entry API).
@@ -1266,6 +1436,18 @@ mod connection_state_tests {
     }
 
     #[test]
+    fn client_name_changed_marks_state_not_clean() {
+        // A connection whose name was changed via CLIENT SETNAME must be treated
+        // as dirty so release resets the name before the connection is reused,
+        // otherwise the name leaks to the next scope borrower.
+        let state = ConnectionState {
+            client_name_changed: true,
+            ..Default::default()
+        };
+        assert!(!state.is_clean_for(CONFIGURED_DB));
+    }
+
+    #[test]
     fn blocking_in_flight_is_independent_of_other_dirty_flags() {
         // The blocking flag taints on its own, and the other tracked mutations
         // taint on their own — neither masks the other. A connection dirty only
@@ -1288,7 +1470,13 @@ mod connection_state_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::{DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig};
+    use super::{
+        DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig, ScopeTarget,
+    };
+    use std::net::SocketAddr;
+    use std::process::{Child, Command, Stdio};
+    use std::sync::Arc;
+    use tokio::sync::Mutex as TokioMutex;
 
     /// `max_total = N` must grant exactly N reservations before reporting
     /// exhaustion. The slot is counted as the reservation is granted, so the Nth is
@@ -1305,13 +1493,13 @@ mod scope_pool_tests {
 
             for slot in 0..max_total {
                 assert_eq!(
-                    pool.try_acquire(&registry, 0),
+                    pool.try_acquire(&registry, ScopeTarget::Standalone),
                     ScopeAcquire::Reserved,
                     "max_total={max_total}: reservation {slot} must be granted"
                 );
             }
             assert_eq!(
-                pool.try_acquire(&registry, 0),
+                pool.try_acquire(&registry, ScopeTarget::Standalone),
                 ScopeAcquire::Exhausted,
                 "max_total={max_total}: only N reservations fit"
             );
@@ -1321,5 +1509,373 @@ mod scope_pool_tests {
                 "max_total={max_total}: a rejected acquire must not reserve"
             );
         }
+    }
+
+    /// A real Valkey server child process bound to an ephemeral port, killed on drop.
+    struct TestServer {
+        child: Child,
+        port: u16,
+    }
+
+    impl TestServer {
+        fn start() -> Self {
+            let port = get_available_port();
+            // Use `redis-server` to match the integration harness
+            // (tests/utilities/mod.rs): it's present on every CI engine version,
+            // whereas `valkey-server` is absent on pre-rename legs (6.2).
+            let child = Command::new("redis-server")
+                .args([
+                    "--port",
+                    &port.to_string(),
+                    "--daemonize",
+                    "no",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--bind",
+                    "127.0.0.1",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn redis-server for regression test");
+            Self { child, port }
+        }
+    }
+
+    /// Pick a port that is currently free on both IPv4 and IPv6, mirroring the
+    /// integration harness's `get_available_port`. A PID- or counter-derived port
+    /// collides when glide-core's tests run multi-threaded (CI runs `cargo test`
+    /// without `--test-threads=1`); bind-checking avoids that and cross-process
+    /// collisions on a shared runner. `valkey-server`'s `--port` needs a concrete
+    /// port, so binding to port 0 and reading it back is not an option here.
+    fn get_available_port() -> u16 {
+        use socket2::{Domain, Socket, Type};
+        for _ in 0..100 {
+            let port = rand::random::<u16>().max(6379);
+            let sock4 = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
+            if sock4
+                .bind(
+                    &format!("127.0.0.1:{port}")
+                        .parse::<SocketAddr>()
+                        .unwrap()
+                        .into(),
+                )
+                .is_err()
+            {
+                continue;
+            }
+            let sock6 = Socket::new(Domain::IPV6, Type::STREAM, None).unwrap();
+            sock6.set_only_v6(true).unwrap();
+            if sock6
+                .bind(
+                    &format!("[::1]:{port}")
+                        .parse::<SocketAddr>()
+                        .unwrap()
+                        .into(),
+                )
+                .is_err()
+            {
+                continue;
+            }
+            return port;
+        }
+        panic!("failed to find an available port for the test server");
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    async fn wait_for_server_ready(port: u16) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
+                let opts = redis::GlideConnectionOptions {
+                    push_sender: None,
+                    disconnect_notifier: None,
+                    discover_az: false,
+                    connection_timeout: Some(std::time::Duration::from_millis(200)),
+                    connection_retry_strategy: None,
+                    tcp_nodelay: true,
+                    pubsub_synchronizer: None,
+                    iam_token_provider: None,
+                    cert_params_provider: None,
+                };
+                if client.get_multiplexed_async_connection(opts).await.is_ok() {
+                    return;
+                }
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("valkey-server did not become ready in time");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
+    /// End-to-end regression test for the #6898 fix: releasing a scope whose
+    /// connection had `CLIENT SETNAME` applied must clear the name before the
+    /// connection is handed back out, otherwise the name leaks to the next
+    /// borrower. This drives the real `release()` cleanup pipeline against a live
+    /// server (not just the `ConnectionState::is_clean_for` classification, which
+    /// was already correct before this fix — the bug was the missing cleanup
+    /// command, not misclassification).
+    #[tokio::test]
+    async fn release_clears_client_name_set_during_the_scope() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 6_898_000_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        // Reserve a slot and create the real connection, mirroring the
+        // production `ScopeAcquire::Reserved` path.
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        // Pull the freshly-created connection out of idle and into in_use, the
+        // same way `try_acquire` would for a real borrower.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected the freshly created connection to be idle: {other:?}"),
+            }
+        };
+
+        // Set a connection name on the borrowed scope, then release it dirty.
+        crate::scope::execute_scope_command(
+            scope_id,
+            "CLIENT",
+            &[b"SETNAME".to_vec(), b"leaked-name".to_vec()],
+            None,
+        )
+        .await
+        .expect("CLIENT SETNAME must succeed");
+
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(
+                pool.release(scope_id, registry),
+                "release must succeed for an in-use scope"
+            );
+        }
+
+        // release() spawns the dirty-state cleanup pipeline; wait for it to land
+        // the connection back in idle.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if pool_arc.lock().await.idle.len() == 1 {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("cleanup pipeline did not return the connection to idle in time");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        // Re-acquire the same physical connection and confirm the name was
+        // cleared by the release cleanup pipeline, not merely reclassified.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
+            }
+        };
+        let name =
+            crate::scope::execute_scope_command(scope_id, "CLIENT", &[b"GETNAME".to_vec()], None)
+                .await
+                .expect("CLIENT GETNAME must succeed");
+        let name_bytes: Vec<u8> = match name {
+            redis::Value::BulkString(b) => b.to_vec(),
+            redis::Value::Nil => Vec::new(),
+            other => panic!("unexpected CLIENT GETNAME reply: {other:?}"),
+        };
+        assert!(
+            name_bytes.is_empty(),
+            "CLIENT SETNAME from the released scope leaked into the reused connection: {:?}",
+            String::from_utf8_lossy(&name_bytes)
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
+    }
+
+    /// End-to-end regression test for the configured-name branch of the #6898
+    /// fix. Where `release_clears_client_name_set_during_the_scope` covers a
+    /// client with NO configured name (reset-to-empty), this covers a client
+    /// WITH a configured `client_name`: a borrower overrides the name inside the
+    /// scope, and on release the cleanup pipeline must reset it back to the
+    /// client's *configured* name — not blindly clear it to empty. This matches
+    /// the issue's expected behavior: the name goes "back to the client's
+    /// configured name, empty if none".
+    #[tokio::test]
+    async fn release_resets_client_name_to_configured_name() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request.client_name = "configured-name".into();
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 6_898_001_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        // Reserve a slot and create the real connection, mirroring the
+        // production `ScopeAcquire::Reserved` path.
+        pool_arc
+            .lock()
+            .await
+            .total_count
+            .fetch_add(1, Ordering::Release);
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+        )
+        .await;
+
+        // Pull the freshly-created connection out of idle and into in_use, the
+        // same way `try_acquire` would for a real borrower.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected the freshly created connection to be idle: {other:?}"),
+            }
+        };
+
+        // Baseline: the init pipeline in scope.rs applies the configured name on
+        // creation, so a fresh connection should already carry it.
+        let baseline =
+            crate::scope::execute_scope_command(scope_id, "CLIENT", &[b"GETNAME".to_vec()], None)
+                .await
+                .expect("CLIENT GETNAME must succeed");
+        let baseline_bytes: Vec<u8> = match baseline {
+            redis::Value::BulkString(b) => b.to_vec(),
+            redis::Value::Nil => Vec::new(),
+            other => panic!("unexpected CLIENT GETNAME reply: {other:?}"),
+        };
+        assert_eq!(
+            baseline_bytes,
+            b"configured-name",
+            "fresh connection should already carry the configured name, got {:?}",
+            String::from_utf8_lossy(&baseline_bytes)
+        );
+
+        // Borrower overrides the configured name, then releases dirty.
+        crate::scope::execute_scope_command(
+            scope_id,
+            "CLIENT",
+            &[b"SETNAME".to_vec(), b"borrower-override".to_vec()],
+            None,
+        )
+        .await
+        .expect("CLIENT SETNAME must succeed");
+
+        {
+            let mut pool = pool_arc.lock().await;
+            assert!(
+                pool.release(scope_id, registry),
+                "release must succeed for an in-use scope"
+            );
+        }
+
+        // release() spawns the dirty-state cleanup pipeline; wait for it to land
+        // the connection back in idle.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if pool_arc.lock().await.idle.len() == 1 {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("cleanup pipeline did not return the connection to idle in time");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        // Re-acquire the same physical connection and confirm the release cleanup
+        // pipeline reset the name back to the CONFIGURED baseline — not the
+        // borrower's override, and not empty.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(registry, ScopeTarget::Standalone) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
+            }
+        };
+        let name =
+            crate::scope::execute_scope_command(scope_id, "CLIENT", &[b"GETNAME".to_vec()], None)
+                .await
+                .expect("CLIENT GETNAME must succeed");
+        let name_bytes: Vec<u8> = match name {
+            redis::Value::BulkString(b) => b.to_vec(),
+            redis::Value::Nil => Vec::new(),
+            other => panic!("unexpected CLIENT GETNAME reply: {other:?}"),
+        };
+        assert_eq!(
+            name_bytes,
+            b"configured-name",
+            "release must reset the name back to the configured name, got {:?}",
+            String::from_utf8_lossy(&name_bytes)
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
     }
 }

@@ -1273,6 +1273,7 @@ dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sigv4",
+ "aws-smithy-types",
  "bytes",
  "criterion",
  "ctor",
@@ -1306,7 +1307,7 @@ dependencies = [
  "sha2",
  "socket2",
  "strum",
- "strum_macros 0.26.4",
+ "strum_macros",
  "telemetrylib",
  "tempfile",
  "thiserror 2.0.20",
@@ -1316,7 +1317,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "versions",
- "which 8.0.5",
+ "which 8.0.6",
  "zstd",
 ]
 
@@ -2603,7 +2604,7 @@ dependencies = [
  "ryu",
  "socket2",
  "strum",
- "strum_macros 0.28.0",
+ "strum_macros",
  "telemetrylib",
  "tokio",
  "tokio-retry2 0.5.8",
@@ -3108,19 +3109,6 @@ name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "strum_macros"
@@ -3872,9 +3860,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "8.0.5"
+version = "8.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3ef584124b911bcc3875c2f1472e80f24361ceb789bd1c62b3e9a3df9ff43c"
+checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
 dependencies = [
  "libc",
 ]

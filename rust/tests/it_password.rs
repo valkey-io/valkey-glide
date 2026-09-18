@@ -117,7 +117,7 @@ fn sync_update_password_store_only() {
 
 #[tokio::test]
 async fn cluster_update_password_store_only() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     // Store-then-clear on the cluster client (no server-side requirepass dance):

@@ -65,8 +65,7 @@ export async function socketDrainDelay(ms = 50): Promise<void> {
  * @returns The CA certificate data as a Buffer
  */
 export function getCaCertificateData(): Buffer {
-    const glideHomeDir = process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
-    const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
+    const caCertPath = `${process.cwd()}/../utils/tls_crts/ca.crt`;
     return fs.readFileSync(caCertPath);
 }
 
