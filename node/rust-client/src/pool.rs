@@ -552,7 +552,17 @@ pub fn scope_try_acquire(
 ) -> Result<i64> {
     let conn_bytes = connection_request_bytes.as_ref().to_vec();
     let runtime = get_pool_runtime();
-    let (_, token, _) = attempt_token.get_u64();
+    // scope_next_attempt_token mints the token, but this export is public, so a JS
+    // caller can pass any BigInt. Reject a negative or >u64 value rather than
+    // silently narrowing it (which could collide with a live token and wrongly
+    // report CreationPending).
+    let (signed, token, lossless) = attempt_token.get_u64();
+    if signed || !lossless {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "attempt_token must be a non-negative u64",
+        ));
+    }
     let result = scope::try_acquire_scope(
         client_id as u64,
         conn_bytes,

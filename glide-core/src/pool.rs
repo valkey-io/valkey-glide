@@ -954,6 +954,14 @@ impl ScopeReservation {
 
 impl Drop for ScopeReservation {
     fn drop(&mut self) {
+        // Give the slot back FIRST, then clear the token. A parameter-position
+        // `reservation` drops after the creation task's `pool_guard`, so a retry can
+        // lock the pool mid-drop; releasing the slot before removing the token means
+        // it never observes a token-cleared-but-slot-still-held pool and evicts a
+        // healthy idle connection for a slot that is about to free itself.
+        if !self.committed {
+            saturating_dec(&self.total_count);
+        }
         // Clear this creation's token regardless of commit: it is no longer in
         // flight. Remove only our own token so a concurrent borrower's in-flight
         // creation to the same target is untouched; drop the target entry once its
@@ -966,9 +974,6 @@ impl Drop for ScopeReservation {
             if tokens.is_empty() {
                 map.remove(target);
             }
-        }
-        if !self.committed {
-            saturating_dec(&self.total_count);
         }
     }
 }
