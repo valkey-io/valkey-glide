@@ -552,14 +552,14 @@ macro_rules! impl_from_valkey_tuple {
                     ValkeyValue::Map(items) => {
                         let mut n = 0;
                         $(let $name = (); n += 1;)*
-                        if n != 2 {
+
+                        // Only support decoding a map with one key-value pair as a 2-element tuple.
+                        if n != 2 || items.len() != 1 {
                             return Err(GlideError::Request("Map response of wrong dimension".into()));
                         }
-                        let mut flat = Vec::with_capacity(items.len() * 2);
-                        for (k, v) in items {
-                            flat.push(k);
-                            flat.push(v);
-                        }
+
+                        let (k, v) = items.into_iter().next().expect("exactly one entry checked above");
+                        let mut flat = [k, v];
                         let mut i = 0;
                         Ok(($({ let $name = (); $name::from_owned_valkey_value(
                             std::mem::replace(&mut flat[{ i += 1; i - 1 }], ValkeyValue::Nil))? },)*))
@@ -597,6 +597,10 @@ macro_rules! impl_from_valkey_tuple {
                 }
 
                 // Otherwise treat the flat sequence as chunks of N.
+                if items.len() % n != 0 {
+                    return Err(GlideError::Request("Array response of wrong dimension".into()));
+                }
+
                 let mut rv = Vec::with_capacity(items.len() / n);
                 for chunk in items.chunks_mut(n) {
                     if let [$($name),*] = chunk {
@@ -831,12 +835,20 @@ mod from_valkey_value_tests {
         let t: (String, i64, f64) = decode(ValkeyValue::Array(vec![BULK, INT, DOUBLE]));
         assert_eq!(t, ("hi".to_string(), 7, 1.5));
 
+        // Conversion from array with unexpected number of entries fails.
         assert!(<(String, i64)>::from_owned_valkey_value(ValkeyValue::Array(vec![INT])).is_err());
+
+        let t: (String, i64) = decode(ValkeyValue::Map(vec![(BULK, INT)]));
+        assert_eq!(t, ("hi".to_string(), 7));
+
+        // Conversion from map with unexpected number of entries fails.
+        let map_2 = ValkeyValue::Map(vec![(BULK, INT), (BYTES_A, INT)]);
+        assert!(<(String, i64)>::from_owned_valkey_value(map_2).is_err());
     }
 
     #[test]
     fn from_owned_valkey_value_vec_of_pairs() {
-        // Array of 2-element arrays (normalized shape).
+        // Nested array
         let nested = ValkeyValue::Array(vec![
             ValkeyValue::Array(vec![BULK, DOUBLE]),
             ValkeyValue::Array(vec![BULK, DOUBLE]),
@@ -847,12 +859,20 @@ mod from_valkey_value_tests {
             vec![("hi".to_string(), 1.5), ("hi".to_string(), 1.5)]
         );
 
-        // Flat sequence chunked into pairs (RESP2 shape).
+        // Flat array
         let flat = ValkeyValue::Array(vec![BULK, DOUBLE, BULK, DOUBLE]);
         let pairs: Vec<(String, f64)> = decode(flat);
         assert_eq!(
             pairs,
             vec![("hi".to_string(), 1.5), ("hi".to_string(), 1.5)]
+        );
+
+        // Conversion from flat array with odd number of entries fails.
+        assert!(
+            <Vec<(String, f64)>>::from_owned_valkey_value(ValkeyValue::Array(vec![
+                BULK, DOUBLE, BULK
+            ]))
+            .is_err()
         );
     }
 
