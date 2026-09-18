@@ -18,6 +18,7 @@ export default tseslint.config(
             "jest.config.js",
             "**/dist/**",
             "docs/**",
+            "**/target/**",
         ],
     },
     {
