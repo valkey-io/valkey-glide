@@ -388,6 +388,21 @@ pub struct ClientShared {
     is_cluster: bool,
 }
 
+/// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
+/// produce a primary address for a hash slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SlotAddressError {
+    /// The client is not in cluster mode; slots have no per-node meaning.
+    NotClusterMode,
+    /// No primary is mapped for the slot in the current slot map (initial
+    /// topology not yet fetched, or mid-resharding).
+    Unmapped,
+    /// The client wrapper is write-locked (e.g. mid-reconnect) and the
+    /// non-blocking lookup declined to wait. Only `try_address_for_slot` returns
+    /// this.
+    TopologyLocked,
+}
+
 #[derive(Clone)]
 pub struct Client {
     shared: Arc<ClientShared>,
@@ -1589,16 +1604,42 @@ impl Client {
     }
 
     /// Get the primary node address for a given hash slot (cluster mode).
-    /// Returns the host:port string for the primary that owns the slot.
-    /// Returns None in standalone mode or if the slot is unmapped.
+    /// Returns the `host:port` string for the primary that owns the slot.
     ///
     /// Used by isolated execution to open scoped connections
     /// directly to the correct node, avoiding MOVED redirects.
-    pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
+    ///
+    /// Waits for the client wrapper lock, so it never returns
+    /// [`SlotAddressError::TopologyLocked`].
+    pub async fn address_for_slot(&self, slot: u16) -> Result<String, SlotAddressError> {
         let client = self.internal_client.read().await;
-        match &*client {
-            ClientWrapper::Cluster { client, .. } => client.address_for_slot(slot),
-            _ => None,
+        Self::address_for_slot_in(&client, slot)
+    }
+
+    /// Variant of [`Client::address_for_slot`] for synchronous callers (the scope
+    /// acquire path runs without a runtime context).
+    ///
+    /// Does not wait for the client wrapper lock: if it is write-locked (e.g.
+    /// mid-reconnect) this returns [`SlotAddressError::TopologyLocked`] so the
+    /// caller can retry rather than fall back to a seed node. The slot-map read
+    /// inside the cluster connection is still a short blocking read.
+    pub fn try_address_for_slot(&self, slot: u16) -> Result<String, SlotAddressError> {
+        let client = self
+            .internal_client
+            .try_read()
+            .map_err(|_| SlotAddressError::TopologyLocked)?;
+        Self::address_for_slot_in(&client, slot)
+    }
+
+    fn address_for_slot_in(wrapper: &ClientWrapper, slot: u16) -> Result<String, SlotAddressError> {
+        match wrapper {
+            ClientWrapper::Cluster { client, .. } => client
+                .address_for_slot(slot)
+                .ok_or(SlotAddressError::Unmapped),
+            // A lazily connected client has fetched no topology yet, so no slot is
+            // mapped. Its mode still comes from `shared.is_cluster`, not from here.
+            ClientWrapper::Lazy(_) => Err(SlotAddressError::Unmapped),
+            ClientWrapper::Standalone(_) => Err(SlotAddressError::NotClusterMode),
         }
     }
 

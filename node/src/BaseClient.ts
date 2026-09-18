@@ -855,7 +855,26 @@ export type ReadFrom =
          prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.*/
     | "AZAffinityReplicasAndPrimary"
     /** Spread the read requests between all nodes (primary and replicas) in a round robin manner.*/
-    | "allNodes";
+    | "allNodes"
+    /** Spread the read requests round robin across all nodes (primary and replicas) within the client's Availability
+        Zone (AZ). Falls back to a round robin across all nodes when no node in the client's AZ is available. Unlike
+        `AZAffinityReplicasAndPrimary`, this strategy does not prioritize replicas ahead of the primary within the AZ,
+        which allows an even per-node read distribution. Unlike `allNodes`, which is AZ agnostic, this strategy is
+        scoped to the client's AZ. Requires `clientAz` to be set.*/
+    | "AZAffinityAllNodes";
+
+/**
+ * The set of {@link ReadFrom} strategies that are scoped to the client's Availability
+ * Zone and therefore require `clientAz` to be set. This is the single source of truth
+ * for AZ-affinity validation: any new AZ-scoped {@link ReadFrom} member must be added
+ * here so it is not silently allowed to skip the `clientAz` requirement. It is enforced
+ * to stay in sync with {@link ReadFrom} by a unit test.
+ */
+export const AZ_AFFINITY_READ_FROM_STRATEGIES: ReadonlySet<ReadFrom> = new Set([
+    "AZAffinity",
+    "AZAffinityReplicasAndPrimary",
+    "AZAffinityAllNodes",
+]);
 
 /**
  * Controls how the client discovers node roles and topology in standalone mode.
@@ -913,11 +932,11 @@ export enum NodeDiscoveryMode {
  *
  * ### Read Strategy
  *
- * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity, AZAffinityReplicasAndPrimary).
+ * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity, AZAffinityReplicasAndPrimary, AZAffinityAllNodes).
  *
  * ### Availability Zone
  *
- * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'or `readFrom: 'AZAffinityReplicasAndPrimary'`.
+ * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'`, `readFrom: 'AZAffinityReplicasAndPrimary'`, or `readFrom: 'AZAffinityAllNodes'`.
  *
  * ### Decoder Settings
  *
@@ -1094,7 +1113,7 @@ export interface BaseClientConfiguration {
     inflightRequestsLimit?: number;
     /**
      * Availability Zone of the client.
-     * If ReadFrom strategy is AZAffinity or AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes within the specified AZ if they exist.
+     * If ReadFrom strategy is AZAffinity, AZAffinityReplicasAndPrimary, or AZAffinityAllNodes, this setting ensures that readonly commands are directed to nodes within the specified AZ if they exist.
      *
      * @example
      * ```typescript
@@ -1103,6 +1122,8 @@ export interface BaseClientConfiguration {
      * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
      * Or
      * configuration.readFrom = 'AZAffinityReplicasAndPrimary'; // Directs read operations to any node (primary or replica) within the same AZ
+     * Or
+     * configuration.readFrom = 'AZAffinityAllNodes'; // Spreads read operations round robin across all nodes (primary and replicas) within the same AZ
      * ```
      */
     clientAz?: string;
@@ -8156,6 +8177,7 @@ export class BaseClient {
         AZAffinityReplicasAndPrimary:
             connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
         allNodes: connection_request.ReadFrom.AllNodes,
+        AZAffinityAllNodes: connection_request.ReadFrom.AZAffinityAllNodes,
     };
 
     /**
@@ -9902,11 +9924,24 @@ export class BaseClient {
         const protocol = options.protocol as
             connection_request.ProtocolVersion | undefined;
 
-        // Validate that clientAz is set when using AZ affinity strategies
+        // Normalize clientAz: trim surrounding whitespace and treat a blank value as
+        // absent. The core compares availability zones with exact equality and never
+        // trims, so an untrimmed or whitespace-only value (e.g. " us-east-1a " or
+        // "   ") would match no node and silently fall through to the AZ-affinity
+        // all-nodes fallback. This mirrors Java's ConnectionManager.resolveClientAz.
+        const trimmedClientAz = options.clientAz?.trim();
+        const clientAz =
+            trimmedClientAz === undefined || trimmedClientAz === ""
+                ? undefined
+                : trimmedClientAz;
+
+        // Validate that clientAz is set when using AZ affinity strategies. The set of
+        // AZ-scoped strategies is declared once (AZ_AFFINITY_READ_FROM_STRATEGIES) so a
+        // newly added AZ strategy cannot silently skip this check.
         if (
-            (options.readFrom === "AZAffinity" ||
-                options.readFrom === "AZAffinityReplicasAndPrimary") &&
-            !options.clientAz
+            options.readFrom !== undefined &&
+            AZ_AFFINITY_READ_FROM_STRATEGIES.has(options.readFrom) &&
+            !clientAz
         ) {
             throw new ConfigurationError(
                 `clientAz must be set when readFrom is set to ${options.readFrom}`,
@@ -9945,7 +9980,7 @@ export class BaseClient {
             authenticationInfo,
             databaseId: options.databaseId,
             inflightRequestsLimit: options.inflightRequestsLimit,
-            clientAz: options.clientAz ?? null,
+            clientAz: clientAz ?? null,
             connectionRetryStrategy: options.connectionBackoff,
             lazyConnect: options.lazyConnect ?? false,
             clientSideCache,
