@@ -15,6 +15,7 @@
 * Core: Scoped connections authenticate as the configured IAM identity, re-authenticate on IAM token rotation, and are discarded rather than reused when re-authentication fails ([#7001](https://github.com/valkey-io/valkey-glide/issues/7001))
 * Java: Fix scoped connection truncating values larger than 16 KB ([#6893](https://github.com/valkey-io/valkey-glide/issues/6893))
 * Go: Propagate pool ConnectionRequest into pool-borrowed clients so `ScopedConnection` works on pooled clients ([#6763](https://github.com/valkey-io/valkey-glide/issues/6763))
+* Go: Reject a custom address resolver on a pool config instead of silently dropping it. The resolver is a per-client callback the core-backed pool cannot forward, so a pool built with one previously passed its connectivity probe and then failed at runtime on the untranslated address ([#7126](https://github.com/valkey-io/valkey-glide/issues/7126))
 * Core/FFI: Standalone AZ-affinity reads skip nodes that are reconnecting instead of blocking on them; accept `AllNodes` in `create_client_from_uri`'s `read_from` option ([#6721](https://github.com/valkey-io/valkey-glide/pull/6721))
 * Core: retry empty-receivers multi-node fan-out under topology churn ([#6768](https://github.com/valkey-io/valkey-glide/pull/6768))
 * Java: Allow scopedConnection on pool-borrowed GlideClient ([#6764](https://github.com/valkey-io/valkey-glide/issues/6764))
