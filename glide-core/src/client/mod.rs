@@ -201,38 +201,39 @@ async fn execute_cluster_command_owned(
     has_explicit_routing: bool,
     client_side_cache_enabled: bool,
 ) -> RedisResult<Value> {
-    if !client_side_cache_enabled
+    let can_batch_multislot_mget = !client_side_cache_enabled
         && should_route_multislot_mget_as_pipeline(
             cmd.as_ref(),
             &final_routing,
             has_explicit_routing,
         )
-        && client.multislot_routes_share_primary_connection(&final_routing)
-    {
-        let mut pipeline = redis::Pipeline::with_capacity(1);
-        pipeline.add_shared_command(Arc::clone(cmd));
-        let mut values = client
-            .route_pipeline(
-                &pipeline,
-                0,
-                1,
-                None,
-                Some(PipelineRetryStrategy::new(true, true)),
-            )
-            .await?;
-        if values.len() != 1 {
-            return Err(RedisError::from((
-                ErrorKind::ResponseError,
-                "Unexpected number of responses from multi-slot MGET pipeline",
-            )));
-        }
-        let value = values.pop().expect("response count was checked");
-        match extract_multislot_mget_pipeline_response(value)? {
-            Some(value) => Ok(value),
-            None => client.route_command(cmd, final_routing).await,
-        }
-    } else {
-        client.route_command(cmd, final_routing).await
+        && client.multislot_routes_share_primary_connection(&final_routing);
+
+    if !can_batch_multislot_mget {
+        return client.route_command(cmd, final_routing).await;
+    }
+
+    let mut pipeline = redis::Pipeline::with_capacity(1);
+    pipeline.add_shared_command(Arc::clone(cmd));
+    let mut values = client
+        .route_pipeline(
+            &pipeline,
+            0,
+            1,
+            None,
+            Some(PipelineRetryStrategy::new(true, true)),
+        )
+        .await?;
+    if values.len() != 1 {
+        return Err(RedisError::from((
+            ErrorKind::ResponseError,
+            "Unexpected number of responses from multi-slot MGET pipeline",
+        )));
+    }
+    let value = values.pop().expect("response count was checked");
+    match extract_multislot_mget_pipeline_response(value)? {
+        Some(value) => Ok(value),
+        None => client.route_command(cmd, final_routing).await,
     }
 }
 
