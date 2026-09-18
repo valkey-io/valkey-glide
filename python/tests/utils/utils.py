@@ -2234,24 +2234,6 @@ def get_standalone_address() -> NodeAddress:
         return NodeAddress("localhost", 6379)
 
 
-def get_cluster_addresses() -> list:
-    """Get the cluster server addresses from conftest (CI) or fallback to localhost:7000.
-
-    Use in tests that run both with conftest (CI) and without (--noconftest local).
-
-    Cluster-only tests should call ``require_cluster_addresses()`` instead so
-    they skip (rather than fail on a refused connection) when the run has no
-    cluster configured.
-    """
-    import pytest
-
-    try:
-        cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
-        return [NodeAddress(addr.host, addr.port) for addr in cluster.nodes_addr]
-    except (AttributeError, IndexError):
-        return [NodeAddress("localhost", 7000)]
-
-
 def require_cluster_addresses() -> list:
     """Get the cluster server addresses, skipping the test if none are configured.
 
