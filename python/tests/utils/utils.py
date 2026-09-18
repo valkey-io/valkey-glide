@@ -2241,6 +2241,9 @@ def require_cluster_addresses() -> list:
     obtain addresses without it. Tests parameterized on ``cluster_mode`` are
     already skipped by the collection hook in ``conftest.py``; use this for
     cluster-only tests that parameterize on something else (or not at all).
+
+    Call from inside a test body or fixture; at module scope ``pytest.skip``
+    raises rather than skips.
     """
     import pytest
 
