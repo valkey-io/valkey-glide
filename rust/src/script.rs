@@ -28,9 +28,6 @@ use crate::commands::core::AsyncCommands;
 use crate::value::FromValkeyValue;
 use crate::write::ToValkeyArgs;
 
-/// Error code for an uncached script.
-const NOSCRIPT: &str = "NOSCRIPT";
-
 /// A cached Lua script with its SHA-1 hash.
 ///
 /// Create once (computes the SHA-1), then [`Self::arg`]/[`Self::key`] to build
@@ -168,8 +165,7 @@ impl ScriptInvocation<'_> {
         con: &C,
     ) -> ValkeyResult<T> {
         match con.glide_send_owned(self.evalsha_cmd()).await {
-            Err(err) if err.message().contains(NOSCRIPT) => {
-                // Not cached on the server yet — EVAL both runs and caches it.
+            Err(err) if Self::is_noscript(&err) => {
                 T::from_owned_valkey_value(con.glide_send_owned(self.eval_cmd()).await?)
             }
             other => T::from_owned_valkey_value(other?),
@@ -185,11 +181,16 @@ impl ScriptInvocation<'_> {
         con: &C,
     ) -> ValkeyResult<T> {
         match con.glide_send_owned_sync(self.evalsha_cmd()) {
-            Err(err) if err.message().contains(NOSCRIPT) => {
+            Err(err) if Self::is_noscript(&err) => {
                 T::from_owned_valkey_value(con.glide_send_owned_sync(self.eval_cmd())?)
             }
             other => T::from_owned_valkey_value(other?),
         }
+    }
+
+    /// Returns `true` if the given error is a "NOSCRIPT" error.
+    fn is_noscript(err: &crate::GlideError) -> bool {
+        err.message().to_ascii_uppercase().contains("NOSCRIPT")
     }
 }
 
