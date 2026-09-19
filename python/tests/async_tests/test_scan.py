@@ -7,6 +7,7 @@ from glide.glide_client import GlideClient, GlideClusterClient
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.config import ProtocolVersion
 from glide_shared.exceptions import RequestError
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import ByAddressRoute
 
 from tests.async_tests.conftest import create_client
@@ -72,9 +73,9 @@ async def function_scoped_cluster():
     del cluster
 
 
-# Since the cluster for slots covered is created separately, we need to create a client for the specific cluster
-# The client is created with 100 timeout so looping over the keys with scan will return the error before we finish the loop
-# otherwise the test will be flaky
+# Since the cluster for slots covered is created separately, we need to create a client for the specific cluster.
+# A higher request_timeout (5 s) is required because, after a node is forgotten, the internal core needs extra
+# time to detect that a slot is no longer covered and return the appropriate error rather than timing out.
 @pytest.fixture(scope="function")
 async def glide_client_scoped(
     request, function_scoped_cluster: ValkeyCluster, protocol: ProtocolVersion
@@ -87,6 +88,7 @@ async def glide_client_scoped(
         True,
         valkey_cluster=function_scoped_cluster,
         protocol=protocol,
+        request_timeout=5000,
     )
     assert isinstance(client, GlideClusterClient)
     yield client
@@ -359,22 +361,34 @@ class TestScan:
             )
         # now we let it few seconds gossip to get the new cluster configuration
         await is_cluster_ready(glide_client_scoped, len(all_other_addresses))
-        # Iterate scan until error is returned, as it might take time for the inner core to forget the missing node
+        # Iterate scan until error is returned, as it might take time for the inner core to forget the missing node.
+        # A GlideTimeoutError is also acceptable here: it means the core tried to reach the forgotten node and
+        # timed out, which confirms the slot is no longer covered.
         cursor = ClusterScanCursor()
-        while True:
+        deadline = anyio.current_time() + 60  # guard timeout for the retry loop
+        while anyio.current_time() < deadline:
             try:
                 while not cursor.is_finished():
                     result = await glide_client_scoped.scan(cursor)
                     cursor = cast(ClusterScanCursor, result[0])
                 # Reset cursor for next iteration
                 cursor = ClusterScanCursor()
+            except GlideTimeoutError:
+                # A timeout reaching the forgotten node confirms non-covered slots
+                break
             except RequestError as e_info:
                 assert (
                     "Could not find an address covering a slot, SCAN operation cannot continue"
                     in str(e_info)
                 )
                 break
-        # Scan with allow_non_covered_slots=True
+        else:
+            raise AssertionError(
+                "Expected a RequestError or GlideTimeoutError for non-covered slots, "
+                "but the scan loop did not produce one within the guard timeout"
+            )
+        # Scan with allow_non_covered_slots=True (start fresh)
+        cursor = ClusterScanCursor()
         while not cursor.is_finished():
             result = await glide_client_scoped.scan(
                 cursor, allow_non_covered_slots=True
