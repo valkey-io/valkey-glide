@@ -1,5 +1,15 @@
 import java.nio.file.Paths
 
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
+
+// Gradle 9 removed Project.exec()/Task.exec(); ExecOperations is the replacement and
+// must be obtained via dependency injection.
+abstract class ExecOperationsHolder {
+    @Inject
+    abstract ExecOperations getExecOperations()
+}
+
 plugins {
     id 'java-library'
     id 'maven-publish'
@@ -66,10 +76,11 @@ ext {
 }
 
 tasks.register('protobuf', Exec) {
+    def execOps = objects.newInstance(ExecOperationsHolder).execOperations
     doFirst {
         try {
             new ByteArrayOutputStream().withStream { os ->
-                exec {
+                execOps.exec {
                     commandLine 'protoc', '--version'
                     workingDir Paths.get(project.rootDir.path, '..').toFile()
                     standardOutput = os
