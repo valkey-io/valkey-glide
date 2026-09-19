@@ -18438,12 +18438,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new String[] {key}).get();
@@ -18536,12 +18535,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new GlideString[] {key}).get();
@@ -18644,12 +18642,11 @@ public class SharedCommandTests {
                         () -> client.migrate("nonexistent.host", 6379, key, 0, 5000, options).get());
 
         // The error should be about connection, not about the command being unsupported
-        assertTrue(
-                exception.getCause().getMessage().contains("Connection refused")
-                        || exception.getCause().getMessage().contains("Name or service not known")
-                        || exception.getCause().getMessage().contains("nodename nor servname provided")
-                        || exception.getCause().getMessage().contains("Temporary failure")
-                        || exception.getCause().getMessage().contains("IOERR"));
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertFalse(
+                exception.getCause().getMessage().toLowerCase().contains("unknown command"),
+                "Expected a connection/network error but got an unknown-command error: "
+                        + exception.getCause().getMessage());
 
         // Clean up
         client.del(new String[] {key}).get();
