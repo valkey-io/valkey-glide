@@ -23,6 +23,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_sync.glide_client import GlideClient as SyncGlideClient
 from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
 
@@ -1214,12 +1215,25 @@ def sync_wait_for_subscription_state(
 
     modes = get_pubsub_modes(client)
     start_time = time.time()
+    # Remember the most recent state we managed to read so the final error
+    # report can use it even if the client is timing out at the deadline.
+    last_subs = None
 
     while time.time() - start_time < timeout_sec:
-        state = client.get_subscriptions()
+        try:
+            state = client.get_subscriptions()
+        except GlideTimeoutError:
+            # Client may still be reconnecting after a connection kill;
+            # get_subscriptions() is a command that can time out while the
+            # underlying connection is being re-established.  Continue
+            # polling until the outer timeout expires.
+            time.sleep(0.1)
+            continue
+
         subs = (
             state.actual_subscriptions if check_actual else state.desired_subscriptions
         )
+        last_subs = subs
 
         # For each subscription type, check if it matches expected
         # If expected is None, skip the check
@@ -1253,9 +1267,16 @@ def sync_wait_for_subscription_state(
 
         time.sleep(0.1)
 
-    # Final check with detailed error
-    state = client.get_subscriptions()
-    subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
+    # Final check with detailed error. Reuse the last state that was read
+    # successfully inside the loop instead of issuing another command: the
+    # client may still be reconnecting at the deadline, and re-reading here
+    # would raise the very TimeoutError this helper is meant to tolerate.
+    if last_subs is None:
+        raise AssertionError(
+            f"No subscription state could be read within {timeout_sec}s "
+            "(client did not reconnect in time)"
+        )
+    subs = last_subs
 
     if expected_channels is not None:
         if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
