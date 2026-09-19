@@ -2706,6 +2706,13 @@ pub(crate) mod shared_client_tests {
                         )
                         .await
                         .ok()
+                        .filter(|value| {
+                            // Retry if any response contains a server error (e.g. BrokenPipe
+                            // during reconnection). The pipeline may partially succeed when
+                            // some commands route to a healthy node while others hit a
+                            // still-recovering connection.
+                            !matches!(value, Value::Array(arr) if arr.iter().any(|v| matches!(v, Value::ServerError(_))))
+                        })
                 },
                 std::time::Duration::from_millis(10_000),
             )
@@ -2863,6 +2870,11 @@ pub(crate) mod shared_client_tests {
                         )
                         .await
                         .ok()
+                        .filter(|value| {
+                            // Retry if any response contains a server error (e.g. BrokenPipe
+                            // during reconnection).
+                            !matches!(value, Value::Array(arr) if arr.iter().any(|v| matches!(v, Value::ServerError(_))))
+                        })
                 },
                 std::time::Duration::from_millis(10_000),
             )
