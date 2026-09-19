@@ -484,6 +484,20 @@ where
         self.inner_core.conn_lock.read().address_for_route(&route)
     }
 
+    /// Returns whether all routes resolve to one connected primary.
+    ///
+    /// This is intentionally false for replica-read strategies because their route selection may
+    /// vary between this check and pipeline dispatch.
+    pub fn routes_share_primary_connection<'a>(
+        &self,
+        routes: impl IntoIterator<Item = &'a Route>,
+    ) -> bool {
+        self.inner_core
+            .conn_lock
+            .read()
+            .routes_share_primary_connection(routes)
+    }
+
     /// Routes an operation request to the appropriate handler.
     async fn route_operation_request(
         &mut self,
