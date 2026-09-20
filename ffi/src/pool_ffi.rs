@@ -134,9 +134,12 @@ fn create_pool_client(
     internal_client_id: usize,
     credential_client_id: usize,
 ) -> Result<(usize, glide_core::client::Client), String> {
-    // Use credential_client_id so that the FFI callback fires with the same key
-    // under which the language binding registered the provider.
-    let ffi_client_id = if credential_provider.is_some() {
+    // Use credential_client_id for registry-based bindings (e.g. Go) where a
+    // non-zero ID is passed so the language-side callback registry can look up
+    // the provider.  For direct-callback bindings (e.g. Python) that pass
+    // credential_client_id=0, always use internal_client_id so the async pipe
+    // routes responses to the correct client rather than the broadcast slot 0.
+    let ffi_client_id = if credential_provider.is_some() && credential_client_id != 0 {
         credential_client_id
     } else {
         internal_client_id
