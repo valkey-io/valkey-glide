@@ -299,6 +299,11 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
+            # Ensure the Rust adapter's pipe_client_id matches the Python-side
+            # client_id.  When a credential_provider is set, the adapter may
+            # have been created with a different ffi_client_id; this call
+            # forces the correct pipe routing for async response delivery.
+            self._lib.glide_pool_set_pipe_client_id(client_id, client_id)
             try:
                 client._loop = asyncio.get_running_loop()
             except RuntimeError:
