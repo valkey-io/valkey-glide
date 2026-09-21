@@ -207,6 +207,9 @@ fn parse_table(body: &str) -> BTreeMap<String, NormSig> {
         }
         li += 1;
         // Skip the method body by brace counting.
+        // TODO #7154: only the signature is compared; the body is discarded, so a
+        // typo in a hand-copied `build_cmd!` encoder passes. Compare packed
+        // commands/args too.
         let count = |s: &str, c: char| s.matches(c).count() as i64;
         let mut depth = count(&sig, '{') - count(&sig, '}');
         while depth > 0 {
