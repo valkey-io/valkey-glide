@@ -1135,12 +1135,7 @@ type PubSubQueuer interface {
 // It looks for the certificate in the utils/tls_crts directory.
 // Returns the certificate data or an error if not found.
 func loadCaCertificateForTests() ([]byte, error) {
-	glideHome := os.Getenv("GLIDE_HOME_DIR")
-	if glideHome == "" {
-		glideHome = "../.."
-	}
-
-	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
+	caCertPath := filepath.Join("..", "..", "utils", "tls_crts", "ca.crt")
 	absPath, err := filepath.Abs(caCertPath)
 	if err != nil {
 		return nil, err

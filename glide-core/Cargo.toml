@@ -55,7 +55,7 @@ serde = { version = "1", features = ["derive"] }
 versions = "7"
 strum = "0.28"       
 strum_macros = "0.28"
-zstd = { version = "0.13" }
+zstd = { version = "0.14" }
 lz4 = { version = "1.28" }
 libc = "0.2.186"
 regex = "=1.13.1"
@@ -78,7 +78,7 @@ test-util = []
 rsevents = "0.3.1"
 socket2 = "0.6"
 tempfile = "3.3.0"
-rstest = "^0.26"
+rstest = "^0.27"
 serial_test = "4"
 criterion = { version = "^0.8", features = ["html_reports", "async_tokio"] }
 which = "8"
