@@ -55,6 +55,77 @@ jobs:
                   print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
                   EOF
 
+            - name: Validate engine runner classes
+              run: |
+                  # Two runner images that install the engine for one target share a cache
+                  # key, and a binary built on the newer image cannot run on the older one.
+                  python3 - <<'EOF'
+                  import glob, json, sys, yaml
+
+                  def labels(runner):
+                      names = runner if isinstance(runner, list) else [runner]
+                      # The CD workflows swap this label, so treat both pools as one image.
+                      return tuple(sorted(n.replace("persistent", "ephemeral") for n in names))
+
+                  with open(".github/json_matrices/build-matrix.json") as f:
+                      declared = {}
+                      for entry in json.load(f):
+                          for key in ("RUNNER", "SELF_HOSTED_RUNNER"):
+                              if entry.get("TARGET") and entry.get(key):
+                                  declared.setdefault(entry["TARGET"], set()).add(labels(entry[key]))
+
+                  def reference(value):
+                      """Split '${{ matrix.host.target }}' into ('host', 'target')."""
+                      if not isinstance(value, str) or not value.strip().startswith("${{"):
+                          return None
+                      parts = value.strip()[3:-2].strip().split(".")
+                      return (parts[1], parts[2]) if len(parts) == 3 and parts[0] == "matrix" else None
+
+                  def expression(value):
+                      return isinstance(value, str) and "${{" in value
+
+                  def pairs(job, target):
+                      """Runner and target pairs this job can resolve to, skipping the rest."""
+                      runner = job.get("runs-on")
+                      runner_ref, target_ref = reference(runner), reference(target)
+                      if expression(runner) and not runner_ref or expression(target) and not target_ref:
+                          return []
+                      if not runner_ref and not target_ref:
+                          return [(runner, target)]
+                      if not runner_ref or not target_ref or runner_ref[0] != target_ref[0]:
+                          return []
+                      entries = job.get("strategy", {}).get("matrix", {}).get(runner_ref[0])
+                      if not isinstance(entries, list):
+                          return []
+                      return [
+                          (e[runner_ref[1]], e[target_ref[1]])
+                          for e in entries
+                          if isinstance(e, dict) and runner_ref[1] in e and target_ref[1] in e
+                      ]
+
+                  violations = []
+                  for path in sorted(glob.glob(".github/workflows/*.yml")):
+                      with open(path) as f:
+                          workflow = yaml.safe_load(f) or {}
+                      for name, job in (workflow.get("jobs") or {}).items():
+                          for step in job.get("steps") or []:
+                              uses, using = step.get("uses", ""), step.get("with") or {}
+                              installs = "install-engine" in uses or (
+                                  "install-shared-dependencies" in uses and using.get("engine-version")
+                              )
+                              if not installs:
+                                  continue
+                              for runner, target in pairs(job, using.get("target")):
+                                  if target in declared and labels(runner) not in declared[target]:
+                                      violations.append(f"{path}:{name} runs {target} on {runner}")
+
+                  if violations:
+                      print("ERROR: these jobs install the engine on a runner that build-matrix.json")
+                      print("does not declare for that target:", *violations, sep="\n  ")
+                      sys.exit(1)
+                  print("OK: every engine install uses the runner declared for its target")
+                  EOF
+
             - name: Validate npmMinimalAgeGate
               run: |
                   python3 - <<'EOF'
