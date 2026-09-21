@@ -305,11 +305,11 @@ pub unsafe extern "C" fn glide_pool_create(
 /// Reconcile a just-acquired pooled client's IAM auth before it is lent.
 ///
 /// `just_acquired_id` is already in `in_use` (a `try_acquire()` that returned
-/// `>= 0`). Runs [`Client::prepare_for_borrow`], which re-AUTHs the live
-/// connection only when the token rotated while the client sat idle. On failure
-/// the client is discarded like the abandon-monitor cleanup and the next idle
-/// client is reconciled in turn; when none remain, `miss` is returned so the
-/// caller falls through to its create/timeout path.
+/// `>= 0`). Runs [`prepare_for_borrow`](glide_core::client::Client::prepare_for_borrow),
+/// which re-AUTHs the live connection only when the token rotated while the client
+/// sat idle. On failure the client is discarded like the abandon-monitor cleanup
+/// and the next idle client is reconciled in turn; when none remain, `miss` is
+/// returned so the caller falls through to its create/timeout path.
 ///
 /// The AUTH round-trip is async and MUST run off the pool lock: the guard is held
 /// only for synchronous bookkeeping and dropped before `block_on`, mirroring
@@ -346,36 +346,35 @@ fn reconcile_borrowed_client(
             format!("Discarding pooled client {client_id}: IAM re-auth on borrow failed")
         );
 
-        // Discard this client and try the next idle one. The lock is held only for
-        // synchronous bookkeeping; no await under it.
-        match pool_arc.try_lock() {
-            Ok(mut pool) => {
-                // Remove from `in_use` (try_acquire already moved it there), decrement.
-                let _ = pool.take_for_release(client_id as u64);
-                pool.discard_client();
+        // Discard this client and try the next idle one. Acquire the pool lock via
+        // the runtime (not `try_lock`) so a contended lock still removes the broken
+        // client immediately — leaving it in `in_use` would strand it until
+        // `abandon_timeout`, which a shorter borrower timeout can outlast. The
+        // critical section is synchronous (no await under the guard).
+        let next = get_pool_runtime().block_on(async {
+            let mut pool = pool_arc.lock().await;
+            // Remove from `in_use` (try_acquire already moved it there), decrement.
+            let _ = pool.take_for_release(client_id as u64);
+            pool.discard_client();
 
-                if let Some((_, entry)) = get_pool_clients().remove(&(client_id as u64)) {
-                    get_pool_adapter_map().remove(&entry.adapter_ptr);
-                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    // Release the adapter Arc kept alive via mem::forget in
-                    // create_pool_client — drops the broken connection.
-                    unsafe {
-                        drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                    }
+            if let Some((_, entry)) = get_pool_clients().remove(&(client_id as u64)) {
+                get_pool_adapter_map().remove(&entry.adapter_ptr);
+                glide_core::scope::unregister_client(entry.adapter_ptr as u64);
+                // Release the adapter Arc kept alive via mem::forget in
+                // create_pool_client — drops the broken connection.
+                unsafe {
+                    drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
                 }
-
-                let next = pool.try_acquire();
-                if next < 0 {
-                    return miss;
-                }
-                client_id = next;
-                // Guard drops here; loop reconciles `next` off-lock.
             }
-            // Pool contended — cannot discard/retry now. The broken client stays in
-            // `in_use` (its `borrowed_at` is set), so the abandon monitor reclaims it
-            // after `abandon_timeout`; report a miss for now.
-            Err(_) => return miss,
+
+            pool.try_acquire()
+        });
+
+        if next < 0 {
+            return miss;
         }
+        client_id = next;
+        // Loop reconciles `next` off-lock.
     }
 }
 
