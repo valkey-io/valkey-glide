@@ -9,26 +9,23 @@ use crate::pipeline_options::PipelineOptions;
 use crate::value::{FromValkeyValue, ValkeyValue};
 use glide_core::client::Client as CoreClient;
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::GlideClient {}
-    impl Sealed for super::GlideClusterClient {}
-}
-
 /// An async GLIDE client that can run a [`Pipeline`].
 /// Sealed — implemented only by [`GlideClient`] and [`GlideClusterClient`].
-pub trait GlidePipelineTarget: sealed::Sealed {
+#[sealed::sealed]
+pub trait GlidePipelineTarget {
     /// A cheap handle to the underlying core client (Arc inside).
     #[doc(hidden)]
     fn core_handle(&self) -> CoreClient;
 }
 
+#[sealed::sealed]
 impl GlidePipelineTarget for GlideClient {
     fn core_handle(&self) -> CoreClient {
         self.inner.clone()
     }
 }
 
+#[sealed::sealed]
 impl GlidePipelineTarget for GlideClusterClient {
     fn core_handle(&self) -> CoreClient {
         self.inner.clone()

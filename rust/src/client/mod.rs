@@ -24,6 +24,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+mod connection;
+pub use connection::{GlidePipelineTarget, PipelineExt};
+
 /// The kind of a received Pub/Sub message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PubSubMessageKind {
@@ -485,44 +488,57 @@ impl CommandExecutor for GlideClusterClient {
     }
 }
 
-mod connection;
+// ---- Command dispatch -------------------------------------------------------
 
-pub use connection::{GlidePipelineTarget, PipelineExt};
-
-// ---- unified command API dispatch ---------------------------------------------
-//
-// `glide::AsyncCommands` methods build the `Cmd` themselves and hand it here
-// **by value**: one copy to build, glide-core's internal owned copy, nothing
-// else — this is the client's primary command path.
-
-impl crate::commands::core::AsyncCommands for GlideClient {
-    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
-        // `Client` is Clone (Arc inside); operate on a cheap clone so the
-        // unified API can take `&self` — same pattern as `execute_command`.
-        let mut client = self.inner.clone();
-        Box::pin(async move {
-            let value = client
-                .send_command(cmd.as_redis_mut(), None)
-                .await
-                .map_err(GlideError::from_redis_error)?;
-            ValkeyValue::from_redis(value)
-        })
-    }
+macro_rules! impl_async_command {
+    ($ty:ty) => {
+        impl crate::commands::core::AsyncCommands for $ty {
+            fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+                let mut client = self.inner.clone();
+                Box::pin(async move {
+                    let value = client
+                        .send_command(cmd.as_redis_mut(), None)
+                        .await
+                        .map_err(GlideError::from_redis_error)?;
+                    ValkeyValue::from_redis(value)
+                })
+            }
+        }
+    };
 }
 
-impl crate::commands::core::AsyncCommands for GlideClusterClient {
-    fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
-        // Routing is decided by glide-core from the command's keys.
-        let mut client = self.inner.clone();
-        Box::pin(async move {
-            let value = client
-                .send_command(cmd.as_redis_mut(), None)
-                .await
-                .map_err(GlideError::from_redis_error)?;
-            ValkeyValue::from_redis(value)
-        })
-    }
+impl_async_command!(GlideClient);
+impl_async_command!(GlideClusterClient);
+
+// ---- Script dispatch --------------------------------------------------------
+
+macro_rules! impl_script_exec {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl crate::script::ScriptExec for $ty {
+            fn glide_invoke_script<'a>(
+                &'a self,
+                hash: &'a str,
+                keys: &'a [Vec<u8>],
+                args: &'a [Vec<u8>],
+            ) -> ValkeyFuture<'a, ValkeyValue> {
+                let mut client = self.inner.clone();
+                Box::pin(async move {
+                    let key_refs: Vec<&[u8]> = keys.iter().map(Vec::as_slice).collect();
+                    let arg_refs: Vec<&[u8]> = args.iter().map(Vec::as_slice).collect();
+                    let value = client
+                        .invoke_script(hash, &key_refs, &arg_refs, None)
+                        .await
+                        .map_err(GlideError::from_redis_error)?;
+                    ValkeyValue::from_redis(value)
+                })
+            }
+        }
+    };
 }
+
+impl_script_exec!(GlideClient);
+impl_script_exec!(GlideClusterClient);
 
 #[cfg(test)]
 mod push_tests {

@@ -1,8 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Lua script helper (`Script`): SHA-caching `EVALSHA` with `EVAL` fallback.
 //!
-//! A clean-room implementation of the `Script` convenience type (absent from
-//! the vendored fork), provided for migration parity:
 //!
 //! ```rust,no_run
 //! use glide::Script;
@@ -13,26 +11,52 @@
 //! # Ok(()) }
 //! ```
 //!
-//! `invoke_async` / `invoke` first attempt `EVALSHA`
-//! (cheap, cached) and transparently fall back to `EVAL` (which also loads the
-//! script) when the server does not know the hash (`NOSCRIPT`); `load_async` /
-//! `load` populate the script cache explicitly. Invocations ride the unified
-//! command API's zero-extra-copy path: async methods take any
-//! [`crate::AsyncCommands`] implementor ([`crate::GlideClient`] /
-//! [`crate::GlideClusterClient`]); blocking methods take any `glide::Commands`
-//! implementor (the sync clients).
+//! Async methods take an async GLIDE client ([`crate::GlideClient`] or
+//! [`crate::GlideClusterClient`]); blocking methods take a sync GLIDE client
+//! ([`crate::sync::SyncGlideClient`] or [`crate::sync::SyncGlideClusterClient`]).
 
+use crate::ValkeyFuture;
 use crate::ValkeyResult;
-use crate::cmd::{Cmd, cmd};
+use crate::cmd::cmd;
 use crate::commands::core::AsyncCommands;
 use crate::value::FromValkeyValue;
+use crate::value::ValkeyValue;
 use crate::write::ToValkeyArgs;
+use glide_core::scripts_container::add_script;
+use glide_core::scripts_container::remove_script;
+
+/// Runs a cached script by hash on an async client.
+/// Implemented by the async GLIDE clients.
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait ScriptExec {
+    fn glide_invoke_script<'a>(
+        &'a self,
+        hash: &'a str,
+        keys: &'a [Vec<u8>],
+        args: &'a [Vec<u8>],
+    ) -> ValkeyFuture<'a, ValkeyValue>;
+}
+
+/// Blocking counterpart of [`ScriptExec`]. Sealed; implemented by the sync
+/// GLIDE clients.
+#[cfg(feature = "sync")]
+#[doc(hidden)]
+#[sealed::sealed(pub(crate))]
+pub trait ScriptExecSync {
+    fn glide_invoke_script_sync(
+        &self,
+        hash: &str,
+        keys: &[Vec<u8>],
+        args: &[Vec<u8>],
+    ) -> ValkeyResult<ValkeyValue>;
+}
 
 /// A cached Lua script with its SHA-1 hash.
 ///
 /// Create once (computes the SHA-1), then [`Self::arg`]/[`Self::key`] to build
 /// an invocation. See the [module docs](self) for an example.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Script {
     code: String,
     hash: String,
@@ -41,11 +65,10 @@ pub struct Script {
 impl Script {
     /// Create a new script object with a precomputed SHA-1 hash.
     pub fn new(code: &str) -> Script {
-        let mut sha1 = sha1_smol::Sha1::new();
-        sha1.update(code.as_bytes());
+        let hash = add_script(code.as_bytes());
         Script {
             code: code.to_string(),
-            hash: sha1.digest().to_string(),
+            hash,
         }
     }
 
@@ -81,7 +104,7 @@ impl Script {
     }
 
     /// Invoke the script without keys or args.
-    pub async fn invoke_async<C: AsyncCommands, T: FromValkeyValue>(
+    pub async fn invoke_async<C: ScriptExec, T: FromValkeyValue>(
         &self,
         con: &C,
     ) -> ValkeyResult<T> {
@@ -91,10 +114,7 @@ impl Script {
     /// Invoke the script without keys or args on a **blocking** connection
     /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]).
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromValkeyValue>(
-        &self,
-        con: &C,
-    ) -> ValkeyResult<T> {
+    pub fn invoke<C: ScriptExecSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
         self.prepare_invoke().invoke(con)
     }
 
@@ -113,6 +133,23 @@ impl Script {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
         String::from_owned_valkey_value(con.glide_send_owned_sync(load)?)
+    }
+}
+
+impl Clone for Script {
+    fn clone(&self) -> Self {
+        // Bump glide-core's ref-count for the script.
+        add_script(self.code.as_bytes());
+        Script {
+            code: self.code.clone(),
+            hash: self.hash.clone(),
+        }
+    }
+}
+
+impl Drop for Script {
+    fn drop(&mut self) {
+        remove_script(&self.hash);
     }
 }
 
@@ -137,60 +174,30 @@ impl ScriptInvocation<'_> {
         self
     }
 
-    /// Build the `EVALSHA` command for this invocation.
-    fn evalsha_cmd(&self) -> Cmd {
-        let mut evalsha = cmd("EVALSHA");
-        evalsha
-            .arg(self.script.hash.as_bytes())
-            .arg(self.keys.len())
-            .arg(&self.keys)
-            .arg(&self.args);
-        evalsha
-    }
-
-    /// Build the `EVAL` fallback command (also loads the script server-side).
-    fn eval_cmd(&self) -> Cmd {
-        let mut eval = cmd("EVAL");
-        eval.arg(self.script.code.as_bytes())
-            .arg(self.keys.len())
-            .arg(&self.keys)
-            .arg(&self.args);
-        eval
-    }
-
-    /// Invoke the script: `EVALSHA` first, transparent `EVAL` fallback when the
-    /// server does not have the script cached (`NOSCRIPT`).
-    pub async fn invoke_async<C: AsyncCommands, T: FromValkeyValue>(
+    /// Executes the script using [`EVALSHA`], with automatic fallback to
+    /// [`EVAL`] if the script is not cached on the server.
+    ///
+    /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
+    /// [`EVAL`]: https://valkey.io/commands/eval/
+    pub async fn invoke_async<C: ScriptExec, T: FromValkeyValue>(
         &self,
         con: &C,
     ) -> ValkeyResult<T> {
-        match con.glide_send_owned(self.evalsha_cmd()).await {
-            Err(err) if Self::is_noscript(&err) => {
-                T::from_owned_valkey_value(con.glide_send_owned(self.eval_cmd()).await?)
-            }
-            other => T::from_owned_valkey_value(other?),
-        }
+        let value = con
+            .glide_invoke_script(&self.script.hash, &self.keys, &self.args)
+            .await?;
+        T::from_owned_valkey_value(value)
     }
 
-    /// Invoke the script on a **blocking** connection
-    /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]):
-    /// `EVALSHA` first, transparent `EVAL` fallback on `NOSCRIPT`.
+    /// Executes the script on a **blocking** connection using [`EVALSHA`],
+    /// with automatic fallback to [`EVAL`] if the script is not cached on the server.
+    ///
+    /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
+    /// [`EVAL`]: https://valkey.io/commands/eval/
     #[cfg(feature = "sync")]
-    pub fn invoke<C: crate::commands::core::Commands, T: FromValkeyValue>(
-        &self,
-        con: &C,
-    ) -> ValkeyResult<T> {
-        match con.glide_send_owned_sync(self.evalsha_cmd()) {
-            Err(err) if Self::is_noscript(&err) => {
-                T::from_owned_valkey_value(con.glide_send_owned_sync(self.eval_cmd())?)
-            }
-            other => T::from_owned_valkey_value(other?),
-        }
-    }
-
-    /// Returns `true` if the given error is a "NOSCRIPT" error.
-    fn is_noscript(err: &crate::GlideError) -> bool {
-        err.message().to_ascii_uppercase().contains("NOSCRIPT")
+    pub fn invoke<C: ScriptExecSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
+        let value = con.glide_invoke_script_sync(&self.script.hash, &self.keys, &self.args)?;
+        T::from_owned_valkey_value(value)
     }
 }
 

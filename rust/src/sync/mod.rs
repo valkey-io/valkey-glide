@@ -188,13 +188,11 @@ impl SyncGlideClusterClient {
     }
 }
 
-// ---- unified command API dispatch ---------------------------------------------
-// See the async impls in `client/`: commands arrive **by value**, so the
-// blocking typed API costs no `Cmd` clone and no packed-byte round-trip.
+// ---- Command dispatch -------------------------------------------------------
 
-macro_rules! impl_sync_owned_send {
-    ($sync_ty:ty) => {
-        impl crate::commands::core::Commands for $sync_ty {
+macro_rules! impl_sync_command_dispatch {
+    ($ty:ty) => {
+        impl crate::commands::core::Commands for $ty {
             fn glide_send_owned_sync(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
                 runtime().block_on(crate::commands::core::AsyncCommands::glide_send_owned(
                     &self.inner,
@@ -205,8 +203,34 @@ macro_rules! impl_sync_owned_send {
     };
 }
 
-impl_sync_owned_send!(SyncGlideClient);
-impl_sync_owned_send!(SyncGlideClusterClient);
+impl_sync_command_dispatch!(SyncGlideClient);
+impl_sync_command_dispatch!(SyncGlideClusterClient);
+
+// ---- Script dispatch --------------------------------------------------------
+
+macro_rules! impl_sync_script_exec {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl crate::script::ScriptExecSync for $ty {
+            fn glide_invoke_script_sync(
+                &self,
+                hash: &str,
+                keys: &[Vec<u8>],
+                args: &[Vec<u8>],
+            ) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(crate::script::ScriptExec::glide_invoke_script(
+                    &self.inner,
+                    hash,
+                    keys,
+                    args,
+                ))
+            }
+        }
+    };
+}
+
+impl_sync_script_exec!(SyncGlideClient);
+impl_sync_script_exec!(SyncGlideClusterClient);
 
 // ---- native-copy sync pipelines ----------------------------------------------
 //
