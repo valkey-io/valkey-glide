@@ -80,17 +80,16 @@ def generating_job(workflow, value):
     return match.group(1) if match.group(1) in (workflow.get("jobs") or {}) else None
 
 
-def reads_matrix_file(workflow, job_id):
-    """Whether the named job derives its output from build-matrix.json."""
+def matrix_source(workflow, job_id):
+    """Everything the named job runs to build its outputs, for reading what it produces."""
+    text = ""
     for step in ((workflow.get("jobs") or {}).get(job_id) or {}).get("steps") or []:
-        if MATRIX_FILE in (step.get("run") or ""):
-            return True
-        uses = step.get("uses") or ""
-        if uses.startswith("./"):
-            for candidate in (uses[2:], os.path.join(uses[2:], "action.yml")):
-                if os.path.isfile(candidate) and MATRIX_FILE in open(candidate).read():
-                    return True
-    return False
+        text += step.get("run") or ""
+        action = local_action(step.get("uses") or "")
+        if action:
+            with open(action) as handle:
+                text += handle.read()
+    return text
 
 
 def local_action(uses):
@@ -103,8 +102,12 @@ def local_action(uses):
     return None
 
 
-def installs_engine(step, depth=2):
-    """Whether a step ends up running install-engine, directly or through a wrapper."""
+def installs_engine(step, seen=None):
+    """Whether a step ends up running install-engine, directly or through a wrapper.
+
+    Wrappers are followed to the end rather than to a depth limit, so a step that
+    installs the engine indirectly is never mistaken for one that does not.
+    """
     uses, using = step.get("uses") or "", step.get("with") or {}
     if "install-engine" in uses:
         return True
@@ -112,12 +115,13 @@ def installs_engine(step, depth=2):
         return False
     if "install-shared-dependencies" in uses:
         return True
-    action = local_action(uses)
-    if not action or depth == 0:
+    action, seen = local_action(uses), seen or set()
+    if not action or action in seen:
         return False
+    seen.add(action)
     with open(action) as handle:
         wrapped = yaml.safe_load(handle) or {}
-    return any(installs_engine(inner, depth - 1) for inner in ((wrapped.get("runs") or {}).get("steps") or []))
+    return any(installs_engine(inner, seen) for inner in ((wrapped.get("runs") or {}).get("steps") or []))
 
 
 def first_field(entry, names):
@@ -142,7 +146,8 @@ def from_matrix(workflow, path, job_id, job, runner_refs, target_refs, state):
         return mismatches(where, pairs, state.declared)
 
     source = generating_job(workflow, entries)
-    if not source or not reads_matrix_file(workflow, source):
+    text = matrix_source(workflow, source) if source else ""
+    if MATRIX_FILE not in text:
         return [f"{where} builds its {key} matrix in a way this check cannot resolve"]
     # The matrix comes from build-matrix.json, so a runner and a target read from one
     # entry agree by construction. Fields belonging to other entries do not.
@@ -153,6 +158,9 @@ def from_matrix(workflow, path, job_id, job, runner_refs, target_refs, state):
     ]
     if foreign:
         return [f"{where} reads {', '.join(foreign)}, which is not the runner or target of one entry"]
+    rewritten = [name for name in ("CD_RUNNER", "CD_TARGET") if name in text]
+    if rewritten:
+        return [f"{where} takes a {key} matrix that {source} can rewrite with {', '.join(rewritten)}"]
     state.notes.append(f"{where}: {key} matrix comes from build-matrix.json via {source}")
     return []
 
@@ -161,8 +169,10 @@ def mismatches(where, pairs, declared):
     found = []
     for runner, target in pairs:
         if runner is None or target is None:
-            found.append(f"{where} has a matrix entry without both a runner and a target")
-        elif target in declared and labels(runner) not in declared[target]:
+            found.append(f"{where} has an engine install without both a runner and a target")
+        elif target not in declared:
+            found.append(f"{where} installs the engine for {target}, which build-matrix.json does not declare")
+        elif labels(runner) not in declared[target]:
             found.append(f"{where} runs {target} on {runner}, which build-matrix.json does not declare for it")
     return found
 
@@ -201,6 +211,10 @@ def main():
                     problems += check_job(workflow, path, job_id, job, target, state)
 
     print("\n".join(f"  {note}" for note in state.notes))
+    if not state.notes and not problems:
+        # Finding nothing means the detection broke, not that the workflows are clean.
+        print("ERROR: no engine installs found, so this check is no longer looking at anything")
+        return 1
     if problems:
         print("ERROR: engine installs on runners that build-matrix.json does not declare:")
         print("\n".join(f"  {problem}" for problem in problems))
