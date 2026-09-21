@@ -7,6 +7,7 @@ name: FMT Node
 permissions:
     contents: read
     actions: write
+    id-token: write
 
 on:
     # Nightly at 03:30 UTC (8:30 PM PDT).
