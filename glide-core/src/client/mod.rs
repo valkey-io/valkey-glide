@@ -384,6 +384,11 @@ pub struct ClientShared {
     // Tracks the current database selected at runtime (updated on SELECT commands).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
+    // IAM token generation the live connection last authenticated at. Compared on
+    // borrow by `prepare_for_borrow` to detect a rotation that landed while the
+    // client sat idle in a pool, triggering a re-AUTH before it is lent. Shared
+    // across clones (like `current_database`). `0` for non-IAM clients (never read).
+    last_iam_generation: Arc<AtomicU64>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
 }
@@ -2958,6 +2963,7 @@ impl Client {
                         ))
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
+                    last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_cluster: request.cluster_mode_enabled,
                 }),
                 iam_token_manager: None,
@@ -2977,6 +2983,14 @@ impl Client {
             {
                 let mut client_guard = client_arc.write().await;
                 client_guard.iam_token_manager = iam_token_manager.clone();
+                // Seed the bookmark to the generation the initial connection AUTHs
+                // with, so the first borrow of a fresh IAM client skips a redundant
+                // re-AUTH.
+                if let Some(manager) = &iam_token_manager {
+                    client_guard
+                        .last_iam_generation
+                        .store(manager.token_generation(), Ordering::Release);
+                }
             }
 
             let is_lazy = request.lazy_connect;
@@ -3095,6 +3109,49 @@ impl Client {
         Ok(())
     }
 
+    /// Reconcile per-borrow authentication before a pooled client is lent.
+    ///
+    /// Borrow-side sibling of [`reset_connection_state`](Self::reset_connection_state),
+    /// which reconciles per-borrow *state* (db/MULTI) on release. Here we reconcile
+    /// per-borrow *auth*: if the IAM token rotated while this client sat idle, its
+    /// live connection still holds the old (possibly expired) token — the background
+    /// refresh only updates the password stored for reconnect — so we re-AUTH the
+    /// live connection with the current token before lending it.
+    ///
+    /// The gate is a zero-cost generation compare; the AUTH round-trip runs only
+    /// when a rotation is pending. Non-IAM (password) clients are a no-op. An `Err`
+    /// means the connection could not be re-authenticated and the caller must
+    /// discard it, exactly as a `reset_connection_state` failure does on release.
+    pub async fn prepare_for_borrow(&mut self) -> RedisResult<()> {
+        let Some(iam_manager) = self.iam_token_manager.clone() else {
+            return Ok(());
+        };
+        let current_generation = iam_manager.token_generation();
+        if current_generation == self.last_iam_generation.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        let current_token = iam_manager.get_token().await;
+        if current_token.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "IAM token not available",
+            )));
+        }
+
+        // immediate_auth=true sends a real AUTH on the live connection, unlike the
+        // reconnect-only password update the `token_changed` pull-model performs.
+        // It also clears `token_changed` so the next command does not re-apply it.
+        self.update_connection_password(Some(current_token), true)
+            .await?;
+        if let Some(iam_manager) = &self.iam_token_manager {
+            iam_manager.clear_token_changed();
+        }
+        self.last_iam_generation
+            .store(current_generation, Ordering::Release);
+        Ok(())
+    }
+
     /// Check if compression is enabled for this client
     ///
     /// # Returns
@@ -3188,6 +3245,7 @@ impl Client {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3628,6 +3686,7 @@ mod tests {
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
         use std::sync::atomic::AtomicU32;
+        use std::sync::atomic::AtomicU64;
         use tokio::sync::RwLock;
 
         let config = ConnectionRequest {
@@ -3671,6 +3730,7 @@ mod tests {
                 latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
+                last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3682,6 +3742,138 @@ mod tests {
                 db_namespace: "0".to_string(),
             }),
         }
+    }
+
+    /// Build an offline `IAMTokenManager` for unit tests via a fake credentials
+    /// provider — no env vars, no live AWS (the SigV4 signer accepts any non-empty
+    /// key material).
+    async fn test_iam_manager() -> std::sync::Arc<crate::iam::IAMTokenManager> {
+        let callback: crate::iam::CredentialsProvider = std::sync::Arc::new(|| {
+            Ok((
+                "test_access_key".to_string(),
+                "test_secret_key".to_string(),
+                Some("test_session_token".to_string()),
+                None,
+            ))
+        });
+        let manager = crate::iam::IAMTokenManager::new(
+            "test-cluster".to_string(),
+            "test-user".to_string(),
+            "us-east-1".to_string(),
+            crate::iam::ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await
+        .expect("offline IAM manager construction should succeed");
+        std::sync::Arc::new(manager)
+    }
+
+    /// Attach an IAM manager to a lazy test client and seed its bookmark to
+    /// `seed_generation`, mirroring how real construction seeds `last_iam_generation`.
+    /// Takes the client by value (built outside any runtime — see `borrow_test_runtime`).
+    fn attach_iam(
+        mut client: Client,
+        manager: std::sync::Arc<crate::iam::IAMTokenManager>,
+        seed_generation: u64,
+    ) -> Client {
+        use std::sync::atomic::Ordering;
+        client
+            .shared
+            .last_iam_generation
+            .store(seed_generation, Ordering::Release);
+        client.iam_token_manager = Some(manager);
+        client
+    }
+
+    /// A dedicated runtime for driving the async `prepare_for_borrow`.
+    ///
+    /// These tests are `#[test]` (sync), not `#[tokio::test]`: `create_test_client`
+    /// `block_on`s its own runtime, which panics if called inside an active tokio
+    /// runtime. So build the client outside any runtime, then drive async work here.
+    fn borrow_test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Runtime::new().unwrap()
+    }
+
+    /// A non-IAM (password) client must be a pure no-op: no manager, no AUTH, Ok.
+    #[test]
+    fn prepare_for_borrow_is_noop_for_non_iam_client() {
+        use std::sync::atomic::Ordering;
+        let mut client = create_test_client();
+        assert!(client.iam_token_manager.is_none());
+        let before = client.shared.last_iam_generation.load(Ordering::Acquire);
+        let rt = borrow_test_runtime();
+        assert!(
+            rt.block_on(client.prepare_for_borrow()).is_ok(),
+            "non-IAM client should reconcile to Ok without touching the connection"
+        );
+        assert_eq!(
+            before,
+            client.shared.last_iam_generation.load(Ordering::Acquire),
+            "non-IAM reconcile must not advance the bookmark"
+        );
+    }
+
+    /// No rotation: the client's bookmark already equals the manager's current
+    /// generation, so `prepare_for_borrow` short-circuits before any AUTH round-trip
+    /// and returns Ok even though the client has no live connection to AUTH against.
+    #[test]
+    fn prepare_for_borrow_is_noop_when_generation_unchanged() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client(); // built outside any runtime
+        let rt = borrow_test_runtime();
+        let (mut client, current) = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let current = manager.token_generation();
+            (attach_iam(client, manager, current), current)
+        });
+        assert!(
+            rt.block_on(client.prepare_for_borrow()).is_ok(),
+            "matching generation should short-circuit to Ok with no AUTH attempt"
+        );
+        assert_eq!(
+            current,
+            client.shared.last_iam_generation.load(Ordering::Acquire),
+            "no-rotation reconcile must leave the bookmark unchanged"
+        );
+    }
+
+    /// A-B-validated rotation detection. A rotation advances the manager's generation
+    /// past the client's stale bookmark, so `prepare_for_borrow` passes its gate and
+    /// attempts a re-AUTH. Against this lazy (no live connection) client the AUTH
+    /// fails, so the call returns Err and leaves the bookmark un-advanced — that Err
+    /// is the discriminating signal that the gate fired. Neutralizing the check to an
+    /// early `Ok(())` flips this to Ok and fails the test. The successful-AUTH path is
+    /// covered by the IAM integration suite (needs a server).
+    #[test]
+    fn prepare_for_borrow_detects_rotation_and_attempts_reauth() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client(); // built outside any runtime
+        let rt = borrow_test_runtime();
+        let (mut client, seeded) = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let seeded = manager.token_generation();
+            // Seed the client at the current generation, then rotate so the bookmark is stale.
+            let client = attach_iam(client, manager.clone(), seeded);
+            manager.refresh_token().await; // bumps token_generation past `seeded`
+            assert!(
+                manager.token_generation() > seeded,
+                "refresh_token must advance the manager generation for a valid A-B setup"
+            );
+            (client, seeded)
+        });
+
+        let result = rt.block_on(client.prepare_for_borrow());
+        assert!(
+            result.is_err(),
+            "a pending rotation must drive prepare_for_borrow into a re-AUTH attempt, \
+             which errors here (no live connection); neutralizing the gate makes this Ok"
+        );
+        assert_eq!(
+            seeded,
+            client.shared.last_iam_generation.load(Ordering::Acquire),
+            "a failed re-AUTH must NOT advance the bookmark (only a successful AUTH does)"
+        );
     }
 
     #[test]
