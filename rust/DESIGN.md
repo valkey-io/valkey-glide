@@ -53,7 +53,7 @@ Deliberate deviations, all performance-motivated:
   owned dispatch. Raw commands go through the typed `glide_send` escape
   hatch instead;
 - the `scan*` methods return GLIDE-owned iterators (`src/commands/scan.rs`)
-  that yield `RedisResult<RV>` via `next_item()` / `Iterator` (unlike redis-rs,
+  that yield `ValkeyResult<RV>` via `next_item()` / `Iterator` (unlike redis-rs,
   which yields the bare value and swallows mid-scan errors), each page
   dispatched by value.
 

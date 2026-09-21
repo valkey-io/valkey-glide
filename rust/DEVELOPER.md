@@ -66,7 +66,8 @@ src/
     standalone.rs GlideClientConfiguration
     cluster.rs    GlideClusterClientConfiguration
   routes.rs       cluster routing (Route -> RoutingInfo)
-  value.rs        redis::Value -> typed Rust conversions (RESP2 + RESP3)
+  value.rs        ValkeyValue and typed conversions (RESP2 + RESP3)
+  write.rs        ToValkeyArgs and ValkeyWrite argument encoding
   executor.rs     CommandExecutor seam + custom_command
   client/
     mod.rs        GlideClient / GlideClusterClient (async)
@@ -91,7 +92,7 @@ benches/
 
 1. Pick the family module in `src/commands/`.
 2. Add an `async fn` to that family's trait following the template in
-   `string.rs`: build a `redis::Cmd`, call `self.execute_command(cmd, None)`,
+   `string.rs`: build a `Cmd`, call `self.execute_command(cmd, None)`,
    convert with a `crate::value::*` helper.
 3. Add an integration test in the family's `tests/it_<family>.rs` (use the
    `resp_test!` macro for RESP2/RESP3 coverage), and a server-free encoding test
@@ -101,7 +102,8 @@ benches/
 ## Extending value conversion
 
 Because the client negotiates **RESP3** by default, replies may arrive as
-`Value::Map`, `Value::Double`, `Value::Boolean`, or `Value::VerbatimString`.
+`ValkeyValue::Map`, `ValkeyValue::Double`, `ValkeyValue::Boolean`, or
+`ValkeyValue::VerbatimString`.
 Prefer the helpers in `src/value.rs`, which already normalize these, and add new
 shapes there rather than in individual commands.
 

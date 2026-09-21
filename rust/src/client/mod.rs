@@ -261,7 +261,7 @@ impl GlideClient {
         try_recv_pubsub_message(&self.pubsub_rx).await
     }
 
-    /// Execute a [`redis::Pipeline`] with GLIDE execution options
+    /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options
     /// (per-call timeout, pipeline retry policy) and return the raw per-command
     /// replies. Build with [`crate::pipe()`]; `.atomic()` pipelines run as a
     /// `MULTI`/`EXEC` transaction. For plain typed execution prefer

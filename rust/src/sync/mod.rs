@@ -172,7 +172,7 @@ impl SyncGlideClusterClient {
         )
     }
 
-    /// Execute a [`redis::Pipeline`] with GLIDE execution options,
+    /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options,
     /// optionally routed (blocking). See
     /// [`crate::GlideClusterClient::exec`].
     pub fn exec(
