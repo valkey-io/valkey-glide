@@ -1,0 +1,471 @@
+#!/usr/bin/env python3
+# Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
+"""
+EC2 orchestrator for Windows CI builds.
+Launches Linux EC2 (Valkey server) + Windows EC2 (build+test),
+polls S3 for completion, downloads report.
+
+Usage: python3 utils/ec2_orchestrator.py
+
+Required env vars:
+  EC2_LINUX_AMI_ID, EC2_WINDOWS_AMI_ID
+  EC2_SUBNET_ID, EC2_SECURITY_GROUP
+  EC2_INSTANCE_PROFILE, EC2_WINDOWS_INSTANCE_PROFILE
+  EC2_LINUX_INSTANCE_TYPE (default: t3.small)
+  EC2_WINDOWS_INSTANCE_TYPE (default: c5.2xlarge)
+  REPORT_BUCKET, AWS_REGION (default: us-east-1)
+  BUILD_ID, COMMIT_SHA, NODE_VERSION
+
+Optional debug env vars:
+  GLIDE_KEEP_EC2  — if set, skip EC2 termination so you can SSM in for debugging
+"""
+
+import base64
+import json
+import logging
+import os
+import sys
+import time
+from pathlib import Path
+
+import boto3  # type: ignore[import-not-found]
+
+logging.basicConfig(level=logging.INFO, format="[orchestrator] %(message)s")
+log = logging.getLogger(__name__)
+
+REGION = os.environ.get("AWS_REGION", "us-east-1")
+BUILD_ID = os.environ.get("BUILD_ID", "")
+COMMIT_SHA = os.environ.get("COMMIT_SHA", "")
+REPORT_BUCKET = os.environ.get("REPORT_BUCKET", "")
+NODE_VERSION = os.environ.get("NODE_VERSION", "20.18.0")
+GHA_RUN_ID = os.environ.get("GHA_RUN_ID", "")
+
+
+def launch_linux_ec2(ec2_client) -> tuple[str, str]:
+    """Launch Linux EC2, return (instance_id, private_ip)."""
+    resp = ec2_client.run_instances(
+        ImageId=os.environ["EC2_LINUX_AMI_ID"],
+        InstanceType=os.environ.get("EC2_LINUX_INSTANCE_TYPE", "t3.small"),
+        MinCount=1,
+        MaxCount=1,
+        NetworkInterfaces=[{
+            "DeviceIndex": 0,
+            "SubnetId": os.environ["EC2_SUBNET_ID"],
+            "Groups": [os.environ["EC2_SECURITY_GROUP"]],
+            "AssociatePublicIpAddress": True,
+        }],
+        IamInstanceProfile={"Name": os.environ["EC2_INSTANCE_PROFILE"]},
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    {"Key": "Name", "Value": f"glide-ci-valkey-{BUILD_ID}"},
+                    {"Key": "Project", "Value": "glide-ci"},
+                    {"Key": "GHA_RUN_ID", "Value": os.environ.get("GHA_RUN_ID", BUILD_ID)},
+                ],
+            }
+        ],
+    )
+    instance_id = resp["Instances"][0]["InstanceId"]
+    log.info(f"Linux EC2 launched: {instance_id}")
+
+    try:
+        waiter = ec2_client.get_waiter("instance_running")
+        waiter.wait(InstanceIds=[instance_id])
+        resp2 = ec2_client.describe_instances(InstanceIds=[instance_id])
+        private_ip = resp2["Reservations"][0]["Instances"][0]["PrivateIpAddress"]
+        log.info(f"Linux EC2 running: {instance_id} ({private_ip})")
+        return instance_id, private_ip
+    except Exception:
+        log.error(f"Linux EC2 post-launch setup failed; terminating {instance_id}")
+        try:
+            ec2_client.terminate_instances(InstanceIds=[instance_id])
+        except Exception as te:
+            log.error(f"Failed to terminate {instance_id} during error cleanup: {te}")
+        raise
+
+
+def setup_linux_ec2(ssm_client, instance_id: str) -> None:
+    """Copy cluster_manager.py to the Linux EC2 and set up the environment.
+    Called once before tests start so createCluster calls just run the script."""
+    import gzip as _gzip
+
+    script_path = Path("utils/cluster_manager.py")
+    script_data = script_path.read_bytes()
+    compressed = _gzip.compress(script_data, compresslevel=9)
+    gz_b64 = base64.b64encode(compressed).decode()
+    log.info(f"Copying cluster_manager.py to {instance_id} ({len(compressed)} bytes gzipped)")
+
+    # SSM agent can take 30-120s to register after instance start; poll until visible.
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        info = ssm_client.describe_instance_information(
+            Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
+        )
+        if info.get("InstanceInformationList"):
+            break
+        time.sleep(5)
+    else:
+        raise TimeoutError(f"SSM agent not ready on {instance_id}")
+
+    # Copy and set up in one SSM call
+    setup_cmd = ";".join([
+        "mkdir -p /home/ssm-user/glide/clusters",
+        f"echo '{gz_b64}' | base64 -d | gzip -d > /home/ssm-user/glide/cluster_manager.py",
+        "sudo sysctl vm.overcommit_memory=1 2>/dev/null || true",
+        "echo SETUP_DONE",
+    ])
+
+    resp = ssm_client.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={"commands": [setup_cmd]},
+        TimeoutSeconds=120,
+    )
+    cmd_id = resp["Command"]["CommandId"]
+    time.sleep(2)
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        try:
+            inv = ssm_client.get_command_invocation(CommandId=cmd_id, InstanceId=instance_id)
+        except ssm_client.exceptions.InvocationDoesNotExist:
+            time.sleep(3)
+            continue
+        if inv["Status"] in ("Success", "Failed", "Cancelled", "TimedOut"):
+            if inv["Status"] != "Success":
+                raise RuntimeError(f"Linux EC2 setup failed: {inv.get('StandardErrorContent', '')}")
+            log.info(f"Linux EC2 setup complete: {inv.get('StandardOutputContent','').strip()}")
+            return
+        time.sleep(3)
+    raise TimeoutError("Linux EC2 setup timed out")
+
+
+def build_windows_userdata(
+    linux_instance_id: str, linux_private_ip: str,
+) -> bytes:
+    """Build the PowerShell user-data script for the Windows EC2.
+
+    All values interpolated into the PowerShell script are validated against
+    strict regex patterns before interpolation to prevent injection.
+    """
+    import re as _re
+    # Validate all values interpolated into PowerShell to prevent injection.
+    # These come from the EC2 API and environment variables, but we enforce
+    # strict formats as a defence-in-depth measure.
+    _ec2_id   = _re.compile(r'^i-[0-9a-f]{8,17}$')
+    _ipv4     = _re.compile(r'^\d{1,3}(\.\d{1,3}){3}$')
+    _alphanum = _re.compile(r'^[a-zA-Z0-9_:/-]{1,128}$')
+    _sha      = _re.compile(r'^[0-9a-f]{40}$')
+    _bucket   = _re.compile(r'^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$')
+    _region   = _re.compile(r'^[a-z]{2}-[a-z]+-\d$')
+    if not _ec2_id.fullmatch(linux_instance_id):
+        raise ValueError(f"Invalid linux_instance_id: {linux_instance_id!r}")
+    if not _ipv4.fullmatch(linux_private_ip):
+        raise ValueError(f"Invalid linux_private_ip: {linux_private_ip!r}")
+    if not _alphanum.fullmatch(BUILD_ID):
+        raise ValueError(f"Invalid BUILD_ID: {BUILD_ID!r}")
+    if not COMMIT_SHA or not _sha.fullmatch(COMMIT_SHA):
+        raise ValueError(f"COMMIT_SHA is required and must be a 40-char hex string, got: {COMMIT_SHA!r}")
+    if not _bucket.fullmatch(REPORT_BUCKET):
+        raise ValueError(f"Invalid REPORT_BUCKET: {REPORT_BUCKET!r}")
+    if not _region.fullmatch(REGION):
+        raise ValueError(f"Invalid REGION: {REGION!r}")
+    lines = [
+        "<powershell>",
+        "$ErrorActionPreference = 'Continue'",
+        f"$buildId = '{BUILD_ID}'",
+        f"$commitSha = '{COMMIT_SHA}'",
+        f"$reportBucket = '{REPORT_BUCKET}'",
+        f"$region = '{REGION}'",
+        f"[System.IO.File]::WriteAllText('C:\\glide-remote.json', '{{\"instanceId\":\"{linux_instance_id}\",\"privateIp\":\"{linux_private_ip}\",\"region\":\"{REGION}\"}}', (New-Object System.Text.UTF8Encoding $false))",
+        "$logFile = 'C:\\build-log.txt'",
+        "$aws = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'",
+        "$exitCode = 1",
+        "",
+        "function Write-Log { param($msg) $ts = Get-Date -Format 'HH:mm:ss'; \"$ts $msg\" | Tee-Object -FilePath $logFile -Append }",
+        "function Push-Log { try { & $aws s3 cp $logFile \"s3://$reportBucket/$buildId/build-log.txt\" --region $region 2>&1 | Out-Null } catch {} }",
+        "function Push-Checkpoint { param($step) $json = '{\"step\":\"' + $step + '\"}'; $json | Out-File 'C:\\checkpoint.json' -Encoding UTF8; try { & $aws s3 cp 'C:\\checkpoint.json' \"s3://$reportBucket/$buildId/checkpoint.json\" --region $region 2>&1 | Out-Null } catch {} }",
+        "",
+        "Write-Log '=== Windows EC2 user-data started ===' ",
+        "Push-Checkpoint 'started'",
+        "",
+        "try {",
+        "    $env:CARGO_HOME = 'C:\\cargo'",
+        "    $env:RUSTUP_HOME = 'C:\\rustup'",
+        "    $env:RUSTUP_TOOLCHAIN = 'stable'",
+        "    $env:PROTOC = 'C:\\Windows\\System32\\protoc.exe'",
+        '    $env:PATH = "C:\\cargo\\bin;C:\\Windows\\System32;C:\\Program Files\\nodejs;$env:PATH"',
+        "",
+        "    Write-Log '=== Checking pre-installed tools ==='",
+        "    Write-Log \"Node: $(node --version 2>&1)\"",
+        "    Write-Log \"npm: $(npm --version 2>&1)\"",
+        "    Write-Log \"git: $(git --version 2>&1)\"",
+        "    Write-Log \"protoc: $(protoc --version 2>&1)\"",
+        "    Write-Log \"aws: $(& $aws --version 2>&1)\"",
+        "    Push-Log",
+        "    Push-Checkpoint 'tools-checked'",
+        "",
+        "    Write-Log '=== Updating Rust ==='",
+        "    $vsWhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'",
+        "    if (Test-Path $vsWhere) {",
+        "        $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null",
+        "        if ($vsPath) {",
+        "            $vcVer = (Get-Content \"$vsPath\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt\").Trim()",
+        '            $env:PATH = "$vsPath\\VC\\Tools\\MSVC\\$vcVer\\bin\\Hostx64\\x64;$env:PATH"',
+        "            Write-Log \"MSVC linker: $vsPath ($vcVer)\"",
+        "        } else { Write-Log 'WARNING: vswhere found no MSVC installation' }",
+        "    } else { Write-Log 'WARNING: vswhere not found' }",
+        "    & 'C:\\cargo\\bin\\rustup.exe' update stable 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    Write-Log \"Cargo: $(& 'C:\\cargo\\bin\\cargo.exe' --version 2>&1)\"",
+        "    Push-Log",
+        "    Push-Checkpoint 'rust-ready'",
+        "",
+        "    Write-Log '=== Cloning repo ==='",
+        "    if (Test-Path 'C:\\build\\valkey-glide\\.git') {",
+        "        Write-Log 'Repo already exists, fetching latest...'",
+        "        Set-Location C:\\build\\valkey-glide",
+        "        git fetch origin 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    } else {",
+        "        Write-Log 'Cloning fresh repo...'",
+        "        New-Item -ItemType Directory -Force -Path C:\\build | Out-Null",
+        "        git clone https://github.com/valkey-io/valkey-glide.git C:\\build\\valkey-glide --depth=1 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "        Set-Location C:\\build\\valkey-glide",
+        "    }",
+        "    git fetch origin $commitSha 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    if ($LASTEXITCODE -ne 0) { throw \"git fetch of $commitSha failed\" }",
+        "    git checkout $commitSha 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    if ($LASTEXITCODE -ne 0) { throw \"git checkout of $commitSha failed\" }",
+        "    $headSha = (git rev-parse HEAD).Trim()",
+        "    if ($headSha -ne $commitSha) { throw \"HEAD is $headSha, expected $commitSha\" }",
+        "    Push-Log",
+        "    Push-Checkpoint 'repo-cloned'",
+        "",
+        "    Write-Log '=== Building utils ==='",
+        "    Set-Location utils; npm ci 2>&1 | Tee-Object -FilePath $logFile -Append; npm run build 2>&1 | Tee-Object -FilePath $logFile -Append; Set-Location ..",
+        "    Push-Checkpoint 'utils-built'",
+        "",
+        "    Write-Log '=== Building node client ==='",
+        "    Set-Location node; npm ci 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    npm run build:release 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    if ($LASTEXITCODE -ne 0) { throw \"build:release failed with exit code $LASTEXITCODE\" }",
+        "    Push-Log",
+        "    Push-Checkpoint 'node-built'",
+        "",
+        "    Write-Log '=== Installing Python dependencies ===' ",
+        "    python -m pip install --quiet boto3==1.35.36 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    Push-Checkpoint 'pip-ready'",
+        "",
+        "    Write-Log '=== Warming up SSM agent on Linux EC2 (10 pings) ===' ",
+        "    $cfg = Get-Content 'C:\\glide-remote.json' | ConvertFrom-Json",
+        "    $warmupPy = @'",
+        "import boto3, time, sys",
+        "cfg_instance = sys.argv[1]",
+        "cfg_region   = sys.argv[2]",
+        "ssm = boto3.client('ssm', region_name=cfg_region)",
+        "for i in range(10):",
+        "    r = ssm.send_command(InstanceIds=[cfg_instance], DocumentName='AWS-RunShellScript', Parameters={'commands': ['echo warm-' + str(i)]}, TimeoutSeconds=30)",
+        "    print('ping', i+1, 'sent:', r['Command']['CommandId'][:8])",
+        "    time.sleep(3)",
+        "time.sleep(5)",
+        "print('SSM warmup complete')",
+        "'@",
+        "    $warmupPy | Set-Content 'C:\\warmup_ssm.py' -Encoding UTF8",
+        "    python 'C:\\warmup_ssm.py' $cfg.instanceId $cfg.region 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    Push-Checkpoint 'ssm-warmed'",
+        "",
+        "    Write-Log '=== Running tests ==='",
+        "    $env:CI = 'true'",
+        "    $env:CI_WINDOWS_EC2 = 'true'",
+        "    $testArgs = @('test', '--', '--forceExit', '--maxWorkers=4')",
+        "    $testArgs += '--testPathIgnorePatterns=ServerModules'",
+        "    $testArgs += '--testPathIgnorePatterns=TlsTest'",
+        "    $testArgs += '--testPathIgnorePatterns=MutualTLS'",
+        "    & npm $testArgs 2>&1 | Tee-Object -FilePath $logFile -Append",
+        "    $exitCode = $LASTEXITCODE",
+        "    Write-Log \"Tests finished with exit code: $exitCode\"",
+        "    Push-Checkpoint 'tests-done'",
+        "} catch {",
+        "    Write-Log \"FATAL: $_\"",
+        "    $exitCode = 1",
+        "} finally {",
+        "    # Delete sensitive files before S3 upload and instance termination",
+        "    Remove-Item -Path 'C:\\glide-remote.json' -Force -ErrorAction SilentlyContinue",
+        "    Remove-Item -Path 'C:\\warmup_ssm.py' -Force -ErrorAction SilentlyContinue",
+        "    Push-Log",
+        "    try {",
+        "        if (Test-Path 'C:\\build\\valkey-glide\\node\\test-report.html') {",
+        "            & $aws s3 cp 'C:\\build\\valkey-glide\\node\\test-report.html' \"s3://$reportBucket/$buildId/test-report.html\" --region $region",
+        "        }",
+        "        $status = if ($exitCode -eq 0) { 'success' } else { 'failed' }",
+        "        $json = '{\"status\":\"' + $status + '\",\"exitCode\":' + $exitCode + '}'",
+        "        $json | Out-File -FilePath 'C:\\status.json' -Encoding UTF8",
+        "        & $aws s3 cp 'C:\\status.json' \"s3://$reportBucket/$buildId/status.json\" --region $region",
+        "    } catch { Write-Log \"S3 upload failed: $_\" }",
+        "}",
+        "</powershell>",
+        "<persist>true</persist>",
+    ]
+    return "\n".join(lines).encode("utf-8")
+
+
+def launch_windows_ec2(ec2_client, userdata: bytes) -> str:
+    """Launch Windows EC2 with user-data, return instance_id."""
+    resp = ec2_client.run_instances(
+        ImageId=os.environ["EC2_WINDOWS_AMI_ID"],
+        InstanceType=os.environ.get("EC2_WINDOWS_INSTANCE_TYPE", "c5.2xlarge"),
+        MinCount=1,
+        MaxCount=1,
+        NetworkInterfaces=[{
+            "DeviceIndex": 0,
+            "SubnetId": os.environ["EC2_SUBNET_ID"],
+            "Groups": [os.environ["EC2_SECURITY_GROUP"]],
+            "AssociatePublicIpAddress": True,
+        }],
+        IamInstanceProfile={"Name": os.environ["EC2_WINDOWS_INSTANCE_PROFILE"]},
+        UserData=userdata,
+        MetadataOptions={
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+        },
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    {"Key": "Name", "Value": f"glide-ci-windows-{BUILD_ID}"},
+                    {"Key": "Project", "Value": "glide-ci"},
+                    {"Key": "GHA_RUN_ID", "Value": os.environ.get("GHA_RUN_ID", BUILD_ID)},
+                ],
+            }
+        ],
+    )
+    instance_id = resp["Instances"][0]["InstanceId"]
+    log.info(f"Windows EC2 launched: {instance_id}")
+    return instance_id
+
+
+def poll_s3_for_completion(
+    s3_client, timeout: int = 5400
+) -> dict:
+    """Poll S3 for status.json written by Windows EC2. Returns status dict."""
+    status_key = f"{BUILD_ID}/status.json"
+    checkpoint_key = f"{BUILD_ID}/checkpoint.json"
+    deadline = time.time() + timeout
+    last_checkpoint = None
+    last_checkpoint_log: float = 0.0
+    while time.time() < deadline:
+        # Check for completion
+        try:
+            obj = s3_client.get_object(Bucket=REPORT_BUCKET, Key=status_key)
+            data = json.loads(obj["Body"].read())
+            log.info(f"Build complete: {data}")
+            return data
+        except s3_client.exceptions.NoSuchKey:
+            pass
+        except Exception as e:
+            log.warning(f"Poll error (status): {e}")
+
+        # Log checkpoint progress every 60s
+        now = time.time()
+        if now - last_checkpoint_log >= 60:
+            try:
+                cp = s3_client.get_object(Bucket=REPORT_BUCKET, Key=checkpoint_key)
+                cp_data = json.loads(cp["Body"].read())
+                step = cp_data.get("step", "unknown")
+                if step != last_checkpoint:
+                    last_checkpoint = step
+                    log.info(f"Windows EC2 checkpoint: {step}")
+                else:
+                    elapsed = int(now - (deadline - timeout))
+                    log.info(f"Windows EC2 still at checkpoint '{step}' ({elapsed}s elapsed)")
+            except s3_client.exceptions.NoSuchKey:
+                elapsed = int(now - (deadline - timeout))
+                log.info(f"Windows EC2 has not written any checkpoint yet ({elapsed}s elapsed) - user-data may not have started")
+            except Exception as e:
+                log.warning(f"Poll error (checkpoint): {e}")
+            last_checkpoint_log = now
+
+        time.sleep(30)
+    raise TimeoutError(f"Windows build did not complete within {timeout}s")
+
+
+def download_report(s3_client) -> None:
+    """Download test-report.html from S3."""
+    try:
+        s3_client.download_file(
+            REPORT_BUCKET,
+            f"{BUILD_ID}/test-report.html",
+            "node/test-report.html",
+        )
+        log.info("Test report downloaded to node/test-report.html")
+    except Exception as e:
+        log.warning(f"Could not download test report: {e}")
+
+
+def terminate_instance(ec2_client, instance_id: str) -> None:
+    """Terminate an EC2 instance."""
+    try:
+        ec2_client.terminate_instances(InstanceIds=[instance_id])
+        log.info(f"Terminated EC2 {instance_id}")
+    except Exception as e:
+        log.error(f"Failed to terminate {instance_id}: {e}")
+
+
+def main() -> int:
+    ec2 = boto3.client("ec2", region_name=REGION)
+    s3 = boto3.client("s3", region_name=REGION)
+
+    linux_instance_id = None
+    windows_instance_id = None
+    try:
+        # Step 1: Linux EC2
+        linux_instance_id, linux_private_ip = launch_linux_ec2(ec2)
+        ssm = boto3.client("ssm", region_name=REGION)
+        setup_linux_ec2(ssm, linux_instance_id)
+        log.info(f"Linux EC2 ready: {linux_instance_id} ({linux_private_ip})")
+
+        # Step 2: Windows EC2 (build + test)
+        userdata = build_windows_userdata(linux_instance_id, linux_private_ip)
+        windows_instance_id = launch_windows_ec2(ec2, userdata)
+
+        # Step 3: Poll for completion
+        status = poll_s3_for_completion(s3)
+        download_report(s3)
+
+        return 0 if status.get("status") == "success" else 1
+
+    except Exception as e:
+        log.error(f"Orchestration failed: {e}")
+        return 1
+    finally:
+        if os.environ.get("GLIDE_KEEP_EC2"):
+            log.info(f"GLIDE_KEEP_EC2 set — skipping EC2 termination for debugging.")
+            if windows_instance_id:
+                log.info(f"  Windows EC2: {windows_instance_id}")
+            if linux_instance_id:
+                log.info(f"  Linux EC2:   {linux_instance_id}")
+        else:
+            if windows_instance_id:
+                terminate_instance(ec2, windows_instance_id)
+            if linux_instance_id:
+                terminate_instance(ec2, linux_instance_id)
+
+
+if __name__ == "__main__":
+    import argparse as _ap
+    if len(sys.argv) > 1 and sys.argv[1] == "setup-linux":
+        _p = _ap.ArgumentParser(description="Copy cluster_manager.py to a Linux EC2")
+        _p.add_argument("setup-linux")
+        _p.add_argument("--instance-id", required=True)
+        _p.add_argument("--region", default="us-east-1")
+        _a = _p.parse_args()
+        _ssm = boto3.client("ssm", region_name=_a.region)
+        setup_linux_ec2(_ssm, _a.instance_id)
+        print("Done")
+        sys.exit(0)
+    sys.exit(main())

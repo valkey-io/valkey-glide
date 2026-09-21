@@ -1581,7 +1581,11 @@ pub(crate) mod shared_client_tests {
 
             let scope_id = {
                 let mut guard = pool.lock().await;
-                match guard.try_acquire(glide_core::pool::get_scope_registry(), target) {
+                match guard.try_acquire(
+                    glide_core::pool::get_scope_registry(),
+                    target,
+                    client.current_database(),
+                ) {
                     glide_core::pool::ScopeAcquire::Reused(scope_id) => scope_id,
                     other => panic!("failed to acquire scope (connection not seated): {other:?}"),
                 }

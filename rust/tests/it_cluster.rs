@@ -12,7 +12,7 @@ use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand, FromValk
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     // Keys hash to different slots; the client routes each automatically.
@@ -26,7 +26,7 @@ async fn cluster_set_get_routed_by_key() {
 
 #[tokio::test]
 async fn cluster_ping_all_primaries() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     // Broadcast PING to all primaries via explicit routing.
@@ -40,7 +40,7 @@ async fn cluster_ping_all_primaries() {
 
 #[tokio::test]
 async fn cluster_info_reports_ok() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     // Retry briefly to absorb any residual propagation lag under load.
@@ -64,7 +64,7 @@ async fn cluster_info_reports_ok() {
 
 #[tokio::test]
 async fn cluster_del_and_exists() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     let k = "cluster:delkey";
@@ -79,7 +79,7 @@ async fn cluster_del_and_exists() {
 
 #[tokio::test]
 async fn cluster_incr() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     let k = "cluster:counter";
@@ -91,7 +91,7 @@ async fn cluster_incr() {
 
 #[tokio::test]
 async fn cluster_hashtag_same_slot() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     let client = cluster.client().await;
 
     // Hash tags force keys into the same slot, so a multi-key MSET/MGET works.
@@ -104,7 +104,7 @@ async fn cluster_hashtag_same_slot() {
 
 #[tokio::test]
 async fn cluster_ping_resp2_and_resp3() {
-    let cluster = common::ClusterHarness::start();
+    let cluster = common::ClusterHarness::start().await;
     for proto in [glide::ProtocolVersion::RESP2, glide::ProtocolVersion::RESP3] {
         let client = cluster.client_with_protocol(proto).await;
         assert_eq!(client.ping().await.unwrap(), "PONG");

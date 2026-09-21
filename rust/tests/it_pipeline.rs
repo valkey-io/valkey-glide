@@ -257,7 +257,7 @@ async fn typed_pipeline_query_async_still_works() {
 
 timed_tokio_test!(
     async fn cluster_atomic_transaction_same_slot() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // All keys share a hash tag → same slot → a cluster MULTI/EXEC is valid.
@@ -285,7 +285,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_non_atomic_pipeline() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // A non-atomic pipeline may span slots; GLIDE routes each command.

@@ -126,7 +126,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_client_info_reports_lib_name_and_ver() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         skip_if_version_below!(client, 7, 2, 0);
@@ -151,7 +151,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_iterates_all_keys() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // Insert a known set of keys (routed automatically across shards).
@@ -201,7 +201,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_scan_with_match_pattern() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         let uniq = common::key("m");
@@ -235,7 +235,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn route_command_ping_variants() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // ECHO to all primaries returns reply per primary node.

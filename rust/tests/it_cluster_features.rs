@@ -15,7 +15,7 @@ use std::time::Duration;
 
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let c = cluster.client().await;
 
         // Same-slot keys (hash tag) so the pipeline routes to one shard; options
@@ -51,7 +51,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_fcall_route() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         skip_if_version_below!(client, 7, 0, 0);
@@ -90,7 +90,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_runtime_subscribe_receive() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let publisher = cluster.client().await;
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
@@ -117,7 +117,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_ssubscribe_sharded_receive() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let publisher = cluster.client().await;
 
         // Sharded pub/sub is Valkey 7.0+
@@ -149,7 +149,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn cluster_zrangestore_by_score_same_slot() {
-        let cluster = common::ClusterHarness::start();
+        let cluster = common::ClusterHarness::start().await;
         let client = cluster.client().await;
 
         // src + dst must share a slot in cluster mode (multi-key command).
