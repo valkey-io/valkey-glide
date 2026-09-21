@@ -307,10 +307,10 @@ impl Drop for UnmarkOnDrop {
             if let Some(client_id) = self.1 {
                 glide_core::pool::refresh_activity_by_client(client_id);
             }
-            // Saturating decrement: guard against underflow.
-            if arc.load(Ordering::Acquire) > 0 {
-                arc.fetch_sub(1, Ordering::Release);
-            }
+            // Saturating decrement via CAS to avoid TOCTOU between load and fetch_sub.
+            let _ = arc.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+                if v > 0 { Some(v - 1) } else { None }
+            });
         }
     }
 }

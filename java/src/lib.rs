@@ -1615,7 +1615,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 }
             });
             if has_blocking {
-                let arc = glide_core::pool::get_blocking_flag(handle_id);
+                let arc = if crate::jni_pool::get_pool_client_map().contains_key(&handle_id) {
+                    glide_core::pool::get_blocking_flag(handle_id)
+                } else {
+                    None
+                };
                 if let Some(ref a) = arc {
                     a.fetch_add(1, std::sync::atomic::Ordering::Release);
                 }
@@ -1947,7 +1951,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 false
             };
             if is_blocking {
-                let arc = glide_core::pool::get_blocking_flag(handle_id);
+                let arc = if crate::jni_pool::get_pool_client_map().contains_key(&handle_id) {
+                    glide_core::pool::get_blocking_flag(handle_id)
+                } else {
+                    None
+                };
                 if let Some(ref a) = arc {
                     a.fetch_add(1, std::sync::atomic::Ordering::Release);
                 }
