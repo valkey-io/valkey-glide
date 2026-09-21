@@ -55,7 +55,6 @@ pub use routes::SlotType;
 pub use client::ClusterScanCursor;
 pub use client::GlideClient;
 pub use client::GlideClusterClient;
-pub use client::GlidePipelineTarget;
 pub use client::PipelineExt;
 pub use client::PubSubMessage;
 pub use client::PubSubMessageKind;

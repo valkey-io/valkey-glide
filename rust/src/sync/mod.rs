@@ -24,6 +24,9 @@ use std::future::Future;
 use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 
+mod pipeline;
+pub use pipeline::PipelineExt;
+
 fn runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
@@ -193,8 +196,8 @@ impl SyncGlideClusterClient {
 macro_rules! impl_sync_command_dispatch {
     ($ty:ty) => {
         impl crate::commands::core::Commands for $ty {
-            fn glide_send_owned_sync(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
-                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_owned(
+            fn glide_send_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_command(
                     &self.inner,
                     cmd,
                 ))
@@ -208,17 +211,17 @@ impl_sync_command_dispatch!(SyncGlideClusterClient);
 
 // ---- Script dispatch --------------------------------------------------------
 
-macro_rules! impl_sync_script_exec {
+macro_rules! impl_sync_script_invoke {
     ($ty:ty) => {
         #[::sealed::sealed]
-        impl crate::script::ScriptExecSync for $ty {
-            fn glide_invoke_script_sync(
+        impl crate::script::ScriptInvokeSync for $ty {
+            fn glide_invoke_script(
                 &self,
                 hash: &str,
                 keys: &[Vec<u8>],
                 args: &[Vec<u8>],
             ) -> ValkeyResult<ValkeyValue> {
-                runtime().block_on(crate::script::ScriptExec::glide_invoke_script(
+                runtime().block_on(crate::script::ScriptInvoke::glide_invoke_script(
                     &self.inner,
                     hash,
                     keys,
@@ -229,83 +232,28 @@ macro_rules! impl_sync_script_exec {
     };
 }
 
-impl_sync_script_exec!(SyncGlideClient);
-impl_sync_script_exec!(SyncGlideClusterClient);
+impl_sync_script_invoke!(SyncGlideClient);
+impl_sync_script_invoke!(SyncGlideClusterClient);
 
-// ---- native-copy sync pipelines ----------------------------------------------
-//
-// `query` drives the async `PipelineExt::query_async` (which hands the
-// built `&Pipeline` to glide-core by reference) on the wrapped async client,
-// so a blocking pipeline copies the payload exactly as many times as the
-// async pipeline path. Drop-in shape: `pipe()...query(&client)`.
+// ---- Pipeline dispatch ------------------------------------------------------
 
-/// A blocking GLIDE client that can run a [`crate::Pipeline`] with
-/// **native copy behavior**. Sealed — implemented only by
-/// [`SyncGlideClient`] and [`SyncGlideClusterClient`].
-pub trait SyncPipelineTarget: sealed::Sealed {
-    /// The wrapped async client type.
-    #[doc(hidden)]
-    type Async: crate::client::GlidePipelineTarget;
-    /// A cheap clone of the wrapped async client (Arc inside).
-    #[doc(hidden)]
-    fn async_conn(&self) -> Self::Async;
+macro_rules! impl_sync_pipeline_dispatch {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl pipeline::SyncPipelineDispatch for $ty {
+            fn glide_dispatch_pipeline<T: crate::value::FromValkeyValue + Send>(
+                &self,
+                pipeline: &crate::pipeline::Pipeline,
+            ) -> ValkeyResult<T> {
+                let async_conn = self.inner.clone();
+                runtime().block_on(crate::client::PipelineExt::query_async(
+                    pipeline,
+                    &async_conn,
+                ))
+            }
+        }
+    };
 }
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::SyncGlideClient {}
-    impl Sealed for super::SyncGlideClusterClient {}
-}
-
-impl SyncPipelineTarget for SyncGlideClient {
-    type Async = GlideClient;
-    fn async_conn(&self) -> GlideClient {
-        self.inner.clone()
-    }
-}
-
-impl SyncPipelineTarget for SyncGlideClusterClient {
-    type Async = GlideClusterClient;
-    fn async_conn(&self) -> GlideClusterClient {
-        self.inner.clone()
-    }
-}
-
-/// Extension for running a [`crate::Pipeline`] on a blocking GLIDE
-/// client with **native copy behavior** (no packed-byte round-trip).
-///
-/// Like the rest of the sync layer, this blocks on the internal runtime and
-/// therefore **must not be called from within an async context** (doing so
-/// panics with tokio's "cannot block the current thread from within a runtime"
-/// — use the async [`crate::PipelineExt::query_async`] there instead).
-///
-/// ```no_run
-/// use glide::sync::{PipelineExt, SyncGlideClient};
-/// # fn demo(client: &SyncGlideClient) -> glide::ValkeyResult<()> {
-/// let (a, b): (i64, i64) = glide::pipe()
-///     .atomic()
-///     .incr("c", 1)
-///     .incr("c", 1)
-///     .query(client)?;
-/// # let _ = (a, b); Ok(()) }
-/// ```
-pub trait PipelineExt {
-    /// Execute this pipeline on a blocking GLIDE client, sending the built
-    /// `Pipeline` to glide-core by reference (native copy count), and decode
-    /// the replies into `T` honoring `.ignore()` markers and transaction
-    /// unwrapping.
-    fn query<C: SyncPipelineTarget, T: crate::FromValkeyValue + Send>(
-        &self,
-        con: &C,
-    ) -> ValkeyResult<T>;
-}
-
-impl PipelineExt for crate::Pipeline {
-    fn query<C: SyncPipelineTarget, T: crate::FromValkeyValue + Send>(
-        &self,
-        con: &C,
-    ) -> ValkeyResult<T> {
-        let async_conn = con.async_conn();
-        runtime().block_on(crate::client::PipelineExt::query_async(self, &async_conn))
-    }
-}
+impl_sync_pipeline_dispatch!(SyncGlideClient);
+impl_sync_pipeline_dispatch!(SyncGlideClusterClient);

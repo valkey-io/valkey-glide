@@ -44,7 +44,7 @@ where
                 ObjectType::Stream => "stream",
             });
         }
-        let result: (u64, Vec<Vec<u8>>) = c.glide_send(cmd).await.unwrap();
+        let result: (u64, Vec<Vec<u8>>) = c.glide_send_command_as(cmd).await.unwrap();
         for k in result.1 {
             seen.insert(k);
         }

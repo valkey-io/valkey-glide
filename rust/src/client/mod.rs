@@ -24,8 +24,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-mod connection;
-pub use connection::{GlidePipelineTarget, PipelineExt};
+mod pipeline;
+pub use pipeline::PipelineExt;
 
 /// The kind of a received Pub/Sub message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -493,7 +493,7 @@ impl CommandExecutor for GlideClusterClient {
 macro_rules! impl_async_command {
     ($ty:ty) => {
         impl crate::commands::core::AsyncCommands for $ty {
-            fn glide_send_owned<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+            fn glide_send_command<'a>(&'a self, mut cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
                 let mut client = self.inner.clone();
                 Box::pin(async move {
                     let value = client
@@ -512,10 +512,10 @@ impl_async_command!(GlideClusterClient);
 
 // ---- Script dispatch --------------------------------------------------------
 
-macro_rules! impl_script_exec {
+macro_rules! impl_script_invoke {
     ($ty:ty) => {
         #[::sealed::sealed]
-        impl crate::script::ScriptExec for $ty {
+        impl crate::script::ScriptInvoke for $ty {
             fn glide_invoke_script<'a>(
                 &'a self,
                 hash: &'a str,
@@ -537,8 +537,35 @@ macro_rules! impl_script_exec {
     };
 }
 
-impl_script_exec!(GlideClient);
-impl_script_exec!(GlideClusterClient);
+impl_script_invoke!(GlideClient);
+impl_script_invoke!(GlideClusterClient);
+
+// ---- Pipeline dispatch ------------------------------------------------------
+
+macro_rules! impl_pipeline_dispatch {
+    ($ty:ty) => {
+        #[::sealed::sealed]
+        impl pipeline::PipelineDispatch for $ty {
+            fn glide_dispatch_pipeline<'a>(
+                &self,
+                pipeline: &'a crate::pipeline::Pipeline,
+            ) -> ValkeyFuture<'a, ValkeyValue> {
+                // Clone the core handle (Arc inside) before the async move so
+                // the returned future does not borrow `self`.
+                let core = self.inner.clone();
+                Box::pin(async move {
+                    let opts = &PipelineOptions::default();
+                    dispatch_pipeline(&core, pipeline, None, true, opts).await
+                })
+            }
+        }
+    };
+}
+
+impl_pipeline_dispatch!(GlideClient);
+impl_pipeline_dispatch!(GlideClusterClient);
+
+// ---- Tests ------------------------------------------------------------------
 
 #[cfg(test)]
 mod push_tests {

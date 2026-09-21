@@ -11,7 +11,7 @@
 //! signature parity is enforced by `tests/it_parity_guard.rs`.
 //!
 //! The built command is handed to glide-core **by value** through
-//! [`AsyncCommands::glide_send_owned`] — the same zero-extra-copy path as the
+//! [`AsyncCommands::glide_send_command`] — the same zero-extra-copy path as the
 //! rest of the client. Methods take `&self` (the clients are cheaply
 //! cloneable handles); migrated `&mut` call sites still compile via
 //! auto-borrow.
@@ -108,7 +108,7 @@ macro_rules! implement_glide_commands {
         /// [`crate::GlideClusterClient`] — see the [module docs](self).
         ///
         /// Deliberately **not** tied to the `redis` crate's connection-object
-        /// traits: every method dispatches through [`Self::glide_send_owned`],
+        /// traits: every method dispatches through [`Self::glide_send_command`],
         /// GLIDE's zero-extra-copy path.
         pub trait AsyncCommands: Send + Sync + Sized {
             /// Send an already-built command **by value** (no clone). This is
@@ -118,7 +118,7 @@ macro_rules! implement_glide_commands {
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
-            fn glide_send_owned<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
+            fn glide_send_command<'a>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue>;
 
             /// Typed escape hatch: send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`. An alternative to
@@ -128,8 +128,8 @@ macro_rules! implement_glide_commands {
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
             #[inline]
-            fn glide_send<'a, RV: FromValkeyValue>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, RV> {
-                Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_owned(cmd).await?) })
+            fn glide_send_command_as<'a, RV: FromValkeyValue>(&'a self, cmd: Cmd) -> ValkeyFuture<'a, RV> {
+                Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
             }
 
             $(
@@ -144,7 +144,7 @@ macro_rules! implement_glide_commands {
                     RV: FromValkeyValue,
                 {
                     let cmd = Cmd::$name($($arg),*);
-                    Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_owned(cmd).await?) })
+                    Box::pin(async move { RV::from_owned_valkey_value(self.glide_send_command(cmd).await?) })
                 }
             )*
 
@@ -275,17 +275,17 @@ macro_rules! implement_glide_commands {
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement.
-            fn glide_send_owned_sync(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
+            fn glide_send_command(&self, cmd: Cmd) -> ValkeyResult<ValkeyValue>;
 
             /// Typed escape hatch (blocking counterpart of the async
-            /// `glide_send`): send an already-built [`Cmd`] by value and
+            /// `glide_send_command_as`): send an already-built [`Cmd`] by value and
             /// decode the reply into `RV`.
             ///
             /// Prefer the typed commands (e.g. [`get`](Self::get)).
             /// Use this method only for commands GLIDE does not implement..
             #[inline]
-            fn glide_send_sync<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
-                RV::from_owned_valkey_value(self.glide_send_owned_sync(cmd)?)
+            fn glide_send_command_as<RV: FromValkeyValue>(&self, cmd: Cmd) -> ValkeyResult<RV> {
+                RV::from_owned_valkey_value(self.glide_send_command(cmd)?)
             }
 
             $(
@@ -296,7 +296,7 @@ macro_rules! implement_glide_commands {
                 fn $name<$lifetime, $($g: $b,)* RV: FromValkeyValue>(
                     &self $(, $arg: $ty)*
                 ) -> ValkeyResult<RV> {
-                    RV::from_owned_valkey_value(self.glide_send_owned_sync(Cmd::$name($($arg),*))?)
+                    RV::from_owned_valkey_value(self.glide_send_command(Cmd::$name($($arg),*))?)
                 }
             )*
 

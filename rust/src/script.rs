@@ -26,10 +26,10 @@ use glide_core::scripts_container::add_script;
 use glide_core::scripts_container::remove_script;
 
 /// Runs a cached script by hash on an async client.
-/// Implemented by the async GLIDE clients.
+/// Implemented by [`GlideClient`] and [`GlideClusterClient`].
 #[doc(hidden)]
 #[sealed::sealed(pub(crate))]
-pub trait ScriptExec {
+pub trait ScriptInvoke {
     fn glide_invoke_script<'a>(
         &'a self,
         hash: &'a str,
@@ -38,13 +38,14 @@ pub trait ScriptExec {
     ) -> ValkeyFuture<'a, ValkeyValue>;
 }
 
-/// Blocking counterpart of [`ScriptExec`]. Sealed; implemented by the sync
-/// GLIDE clients.
+/// Runs a cached script by hash on a sync client.
+/// Blocking counterpart of [`ScriptInvoke`].
+/// Implemented by the [`SyncGlideClient`] and [`SyncGlideClusterClient`].
 #[cfg(feature = "sync")]
 #[doc(hidden)]
 #[sealed::sealed(pub(crate))]
-pub trait ScriptExecSync {
-    fn glide_invoke_script_sync(
+pub trait ScriptInvokeSync {
+    fn glide_invoke_script(
         &self,
         hash: &str,
         keys: &[Vec<u8>],
@@ -104,7 +105,7 @@ impl Script {
     }
 
     /// Invoke the script without keys or args.
-    pub async fn invoke_async<C: ScriptExec, T: FromValkeyValue>(
+    pub async fn invoke_async<C: ScriptInvoke, T: FromValkeyValue>(
         &self,
         con: &C,
     ) -> ValkeyResult<T> {
@@ -114,7 +115,7 @@ impl Script {
     /// Invoke the script without keys or args on a **blocking** connection
     /// ([`crate::sync::SyncGlideClient`] / [`crate::sync::SyncGlideClusterClient`]).
     #[cfg(feature = "sync")]
-    pub fn invoke<C: ScriptExecSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
+    pub fn invoke<C: ScriptInvokeSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
         self.prepare_invoke().invoke(con)
     }
 
@@ -123,7 +124,7 @@ impl Script {
     pub async fn load_async<C: AsyncCommands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        String::from_owned_valkey_value(con.glide_send_owned(load).await?)
+        String::from_owned_valkey_value(con.glide_send_command(load).await?)
     }
 
     /// Load the script into the server's script cache (`SCRIPT LOAD`) on a
@@ -132,7 +133,7 @@ impl Script {
     pub fn load<C: crate::commands::core::Commands>(&self, con: &C) -> ValkeyResult<String> {
         let mut load = cmd("SCRIPT");
         load.arg("LOAD").arg(self.code.as_bytes());
-        String::from_owned_valkey_value(con.glide_send_owned_sync(load)?)
+        String::from_owned_valkey_value(con.glide_send_command(load)?)
     }
 }
 
@@ -179,7 +180,7 @@ impl ScriptInvocation<'_> {
     ///
     /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
     /// [`EVAL`]: https://valkey.io/commands/eval/
-    pub async fn invoke_async<C: ScriptExec, T: FromValkeyValue>(
+    pub async fn invoke_async<C: ScriptInvoke, T: FromValkeyValue>(
         &self,
         con: &C,
     ) -> ValkeyResult<T> {
@@ -195,8 +196,8 @@ impl ScriptInvocation<'_> {
     /// [`EVALSHA`]: https://valkey.io/commands/evalsha/
     /// [`EVAL`]: https://valkey.io/commands/eval/
     #[cfg(feature = "sync")]
-    pub fn invoke<C: ScriptExecSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
-        let value = con.glide_invoke_script_sync(&self.script.hash, &self.keys, &self.args)?;
+    pub fn invoke<C: ScriptInvokeSync, T: FromValkeyValue>(&self, con: &C) -> ValkeyResult<T> {
+        let value = con.glide_invoke_script(&self.script.hash, &self.keys, &self.args)?;
         T::from_owned_valkey_value(value)
     }
 }

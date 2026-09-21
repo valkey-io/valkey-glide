@@ -18,7 +18,7 @@ const FUTURE_EXPIRY_MS: usize = i64::MAX as usize;
 matrix_test!(hset_hget, c, {
     let k = common::key("h");
     // HSET with multiple fields returns the count of NEW fields added.
-    // compat hset_multiple uses HMSET (returns OK), so use glide_send for the count.
+    // compat hset_multiple uses HMSET (returns OK), so use glide_send_command_as for the count.
     let mut cmd = glide::Cmd::new();
     cmd.arg("HSET")
         .arg(&k)
@@ -26,7 +26,7 @@ matrix_test!(hset_hget, c, {
         .arg("v1")
         .arg("f2")
         .arg("v2");
-    let n: i64 = c.glide_send(cmd).await.unwrap();
+    let n: i64 = c.glide_send_command_as(cmd).await.unwrap();
     assert_eq!(n, 2);
     let v: Option<String> = c.hget(&k, "f1").await.unwrap();
     assert_eq!(v.as_deref(), Some("v1"));
@@ -52,7 +52,7 @@ matrix_test!(hset_updates_existing_returns_zero, c, {
     // Updating an existing field returns 0 new fields via HSET.
     let mut cmd = glide::Cmd::new();
     cmd.arg("HSET").arg(&k).arg("f").arg("v2");
-    let n: i64 = c.glide_send(cmd).await.unwrap();
+    let n: i64 = c.glide_send_command_as(cmd).await.unwrap();
     assert_eq!(n, 0);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
     assert_eq!(v.as_deref(), Some("v2"));

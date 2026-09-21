@@ -71,7 +71,7 @@ matrix_test!(bitcount_range_bit, c, {
     // bitcount_range in compat takes byte offsets; use native bitpos_range for BIT index type
     // Use cmd for BITCOUNT with BIT index type
     let count: i64 = c
-        .glide_send(
+        .glide_send_command_as(
             glide::cmd("BITCOUNT")
                 .arg(&k)
                 .arg(0i64)

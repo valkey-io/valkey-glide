@@ -626,9 +626,14 @@ mod to_valkey_args_tests {
         assert!(!Option::<i64>::None.is_single_arg());
         assert!(Some(1i64).is_single_arg());
 
-        // References
-        assert!((&1i64).is_single_arg());
-        assert!(!(&vec!["a", "b"]).is_single_arg());
+        // References. The explicit `&` exercises the `ToValkeyArgs for &T` impl
+        // (method resolution binds to `&&T`), not the referent's impl — so the
+        // borrow is deliberate, not `needless_borrow`.
+        #[allow(clippy::needless_borrow)]
+        {
+            assert!((&1i64).is_single_arg());
+            assert!(!(&vec!["a", "b"]).is_single_arg());
+        }
 
         // Maps and sets
         assert!((*HASH_SET_0).is_single_arg());

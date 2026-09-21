@@ -77,7 +77,7 @@ matrix_test!(spop_count, c, {
     // spop with count: not in AsyncCommands, use cmd escape hatch.
     let mut cmd = glide::Cmd::new();
     cmd.arg("SPOP").arg(&k).arg(2);
-    let popped: HashSet<String> = c.glide_send(cmd).await.unwrap();
+    let popped: HashSet<String> = c.glide_send_command_as(cmd).await.unwrap();
     assert_eq!(popped.len(), 2);
     let card: i64 = c.scard(&k).await.unwrap();
     assert_eq!(card, 1);

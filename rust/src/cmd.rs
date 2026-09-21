@@ -29,19 +29,19 @@ pub fn cmd(name: &str) -> Cmd {
 ///
 /// Build a command, then send it with one of:
 ///
-/// - [`glide_send`](crate::AsyncCommands::glide_send)
-/// - [`glide_send_owned`](crate::AsyncCommands::glide_send_owned)
-/// - [`glide_send_sync`](crate::Commands::glide_send_sync)
-/// - [`glide_send_owned_sync`](crate::Commands::glide_send_owned_sync)
+/// - `crate::AsyncCommands::glide_send_command_as`
+/// - `crate::AsyncCommands::glide_send_command`
+/// - `crate::Commands::glide_send_command_as`
+/// - `crate::Commands::glide_send_command`
 ///
-/// ```no_run
+/// ```rust,no_run
 /// use glide::AsyncCommands;
 /// # async fn demo(client: glide::GlideClient) -> glide::ValkeyResult<()> {
 /// let set = glide::cmd("SET").arg("my_key").arg(42).clone();
-/// let _: () = client.glide_send(set).await?;
+/// let _: () = client.glide_send_command_as(set).await?;
 ///
 /// let get = glide::cmd("GET").arg("my_key").clone();
-/// let value: i64 = client.glide_send(get).await?;
+/// let value: i64 = client.glide_send_command_as(get).await?;
 ///
 /// # assert_eq!(value, 42);
 /// # Ok(()) }
@@ -73,7 +73,7 @@ impl Cmd {
 
     /// Execute this command on an async GLIDE client.
     ///
-    /// ```no_run
+    /// ```rust,no_run
     /// use glide::cmd;
     /// # async fn demo(client: &glide::GlideClient) -> glide::ValkeyResult<()> {
     /// let v: i64 = cmd("GET").arg("k").query_async(client).await?;
@@ -86,12 +86,12 @@ impl Cmd {
         &self,
         con: &'a C,
     ) -> ValkeyFuture<'a, RV> {
-        con.glide_send(self.clone())
+        con.glide_send_command_as(self.clone())
     }
 
     /// Execute this command on a blocking GLIDE client.
     ///
-    /// ```no_run
+    /// ```rust,no_run
     /// use glide::cmd;
     /// use glide::sync::SyncGlideClient;
     /// # fn demo(client: &SyncGlideClient) -> glide::ValkeyResult<()> {
@@ -103,7 +103,7 @@ impl Cmd {
     #[cfg(feature = "sync")]
     #[inline]
     pub fn query<C: Commands, RV: FromValkeyValue>(&self, con: &C) -> ValkeyResult<RV> {
-        con.glide_send_sync(self.clone())
+        con.glide_send_command_as(self.clone())
     }
 
     /// Borrow the underlying `redis::Cmd`.

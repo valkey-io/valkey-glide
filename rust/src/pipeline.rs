@@ -22,7 +22,7 @@ pub fn pipe() -> Pipeline {
 
 /// A pipeline that batches commands into a single round-trip.
 ///
-/// ```no_run
+/// ```rust,no_run
 /// use glide::{PipelineExt, pipe};
 /// # async fn demo(client: &glide::GlideClient) -> glide::ValkeyResult<()> {
 /// let (a, b): (i64, i64) = pipe()

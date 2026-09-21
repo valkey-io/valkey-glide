@@ -80,8 +80,9 @@ impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
         let spec = PageSpec { prefix, suffix };
 
         // Fetch first page immediately.
-        let (cursor, batch): (u64, Vec<RV>) =
-            FromValkeyValue::from_owned_valkey_value(con.glide_send_owned(spec.to_cmd(0)).await?)?;
+        let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(
+            con.glide_send_command(spec.to_cmd(0)).await?,
+        )?;
         Ok(ScanIter {
             con,
             spec,
@@ -118,7 +119,7 @@ impl<'a, C: AsyncCommands, RV: FromValkeyValue> ScanIter<'a, C, RV> {
     async fn fetch_page(&mut self) -> ValkeyResult<()> {
         let reply = self
             .con
-            .glide_send_owned(self.spec.to_cmd(self.cursor))
+            .glide_send_command(self.spec.to_cmd(self.cursor))
             .await?;
         let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
@@ -159,7 +160,7 @@ impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
 
         // Fetch first page immediately.
         let (cursor, batch): (u64, Vec<RV>) =
-            FromValkeyValue::from_owned_valkey_value(con.glide_send_owned_sync(spec.to_cmd(0))?)?;
+            FromValkeyValue::from_owned_valkey_value(con.glide_send_command(spec.to_cmd(0))?)?;
         Ok(SyncScanIter {
             con,
             spec,
@@ -170,9 +171,7 @@ impl<'a, C: Commands, RV: FromValkeyValue> SyncScanIter<'a, C, RV> {
 
     /// Fetch the page at the current cursor.
     fn fetch_page(&mut self) -> ValkeyResult<()> {
-        let reply = self
-            .con
-            .glide_send_owned_sync(self.spec.to_cmd(self.cursor))?;
+        let reply = self.con.glide_send_command(self.spec.to_cmd(self.cursor))?;
         let (cursor, batch): (u64, Vec<RV>) = FromValkeyValue::from_owned_valkey_value(reply)?;
         self.cursor = cursor;
         self.batch = batch.into_iter();
@@ -248,14 +247,14 @@ mod tests {
     }
 
     impl crate::commands::core::AsyncCommands for MockConnection {
-        fn glide_send_owned<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
+        fn glide_send_command<'a>(&'a self, _cmd: Cmd) -> ValkeyFuture<'a, ValkeyValue> {
             Box::pin(async move { self.pop() })
         }
     }
 
     #[cfg(feature = "sync")]
     impl crate::commands::core::Commands for MockConnection {
-        fn glide_send_owned_sync(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
+        fn glide_send_command(&self, _cmd: Cmd) -> ValkeyResult<ValkeyValue> {
             self.pop()
         }
     }
