@@ -6,6 +6,7 @@ name: FMT All Languages
 permissions:
     contents: read
     actions: write
+    id-token: write
 
 on:
     workflow_dispatch:
