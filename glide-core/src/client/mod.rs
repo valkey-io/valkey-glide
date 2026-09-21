@@ -26,7 +26,7 @@ use redis::{
 use regex::Regex;
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::sync::atomic::{AtomicIsize, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::thread::JoinHandle;
@@ -384,11 +384,17 @@ pub struct ClientShared {
     // Tracks the current database selected at runtime (updated on SELECT commands).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
-    // IAM token generation the live connection last authenticated at. Compared on
-    // borrow by `prepare_for_borrow` to detect a rotation that landed while the
-    // client sat idle in a pool, triggering a re-AUTH before it is lent. Shared
-    // across clones (like `current_database`). `0` for non-IAM clients (never read).
+    // IAM token generation the live connection last authenticated at. Compared by
+    // `prepare_for_borrow` on the first command after a borrow to detect a rotation
+    // that landed while the client sat idle in a pool, triggering a re-AUTH before
+    // the command runs. Shared across clones (like `current_database`). `0` for
+    // non-IAM clients (never read).
     last_iam_generation: Arc<AtomicU64>,
+    // True for a pool-managed client. Gates the borrow-time immediate re-AUTH in
+    // `send_command`: a pooled client sits idle between borrows, so its live
+    // connection can hold a token that rotated in the gap; a direct client stays
+    // hot and keeps the existing reconnect-deferred `token_changed` refresh.
+    is_pool_managed: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
 }
@@ -1177,8 +1183,22 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            // Check for IAM token changes and update the password without authentication if needed (pull model)
-            if let Some(iam_manager) = &self.iam_token_manager
+            // IAM token freshness on the first command after a borrow.
+            //
+            // A pool-managed client sits idle between borrows, so its live connection
+            // can still hold a token that rotated in the gap. `prepare_for_borrow`
+            // re-AUTHs the live connection when the generation advanced (discarding
+            // via an Err only if the AUTH fails), so the borrower never runs on a
+            // stale-auth connection. Runs here — on the client's own runtime, awaited
+            // — rather than in the synchronous acquire FFI, which would block the
+            // async caller's event loop.
+            //
+            // A direct client stays hot, so it keeps the reconnect-deferred pull
+            // model: refresh the stored password on `token_changed` without an
+            // immediate AUTH (the live connection re-auths on its next reconnect).
+            if self.is_pool_managed.load(Ordering::Acquire) {
+                self.prepare_for_borrow().await?;
+            } else if let Some(iam_manager) = &self.iam_token_manager
                 && iam_manager.token_changed()
             {
                 let current_token = iam_manager.get_token().await;
@@ -2964,6 +2984,7 @@ impl Client {
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
+                    is_pool_managed: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                 }),
                 iam_token_manager: None,
@@ -3109,19 +3130,29 @@ impl Client {
         Ok(())
     }
 
-    /// Reconcile per-borrow authentication before a pooled client is lent.
+    /// Mark this client as pool-managed. Called by the pool FFI right after a
+    /// pooled client is created. Enables the borrow-time IAM reconcile in
+    /// `send_command`; direct clients leave it unset.
+    pub fn mark_pool_managed(&self) {
+        self.is_pool_managed.store(true, Ordering::Release);
+    }
+
+    /// Reconcile per-borrow IAM authentication on the first command after a borrow.
     ///
     /// Borrow-side sibling of [`reset_connection_state`](Self::reset_connection_state),
     /// which reconciles per-borrow *state* (db/MULTI) on release. Here we reconcile
-    /// per-borrow *auth*: if the IAM token rotated while this client sat idle, its
-    /// live connection still holds the old (possibly expired) token — the background
-    /// refresh only updates the password stored for reconnect — so we re-AUTH the
-    /// live connection with the current token before lending it.
+    /// per-borrow *auth*: if the IAM token rotated while this pool-managed client sat
+    /// idle, its live connection still holds the old (possibly expired) token — the
+    /// background refresh only updates the password stored for reconnect — so we
+    /// re-AUTH the live connection with the current token. Invoked from `send_command`
+    /// so it runs on the client's own runtime and is awaited (never blocking an async
+    /// caller's event loop), before the command dispatches — so no command runs on a
+    /// stale-auth connection, matching how the scope path re-auths at command time.
     ///
     /// The gate is a zero-cost generation compare; the AUTH round-trip runs only
     /// when a rotation is pending. Non-IAM (password) clients are a no-op. An `Err`
-    /// means the connection could not be re-authenticated and the caller must
-    /// discard it, exactly as a `reset_connection_state` failure does on release.
+    /// means the connection could not be re-authenticated and the command fails
+    /// rather than running on a stale-auth connection.
     pub async fn prepare_for_borrow(&mut self) -> RedisResult<()> {
         let Some(iam_manager) = self.iam_token_manager.clone() else {
             return Ok(());
@@ -3246,6 +3277,7 @@ impl Client {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
+                is_pool_managed: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3684,6 +3716,7 @@ mod tests {
     fn create_test_client() -> Client {
         use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
         use std::sync::atomic::AtomicIsize;
         use std::sync::atomic::AtomicU32;
         use std::sync::atomic::AtomicU64;
@@ -3731,6 +3764,7 @@ mod tests {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
+                is_pool_managed: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3873,6 +3907,24 @@ mod tests {
             seeded,
             client.shared.last_iam_generation.load(Ordering::Acquire),
             "a failed re-AUTH must NOT advance the bookmark (only a successful AUTH does)"
+        );
+    }
+
+    /// The borrow-time reconcile in `send_command` is gated on `is_pool_managed`, so
+    /// a direct client keeps the reconnect-deferred `token_changed` path unchanged.
+    /// A fresh client is not pool-managed until the pool FFI marks it.
+    #[test]
+    fn mark_pool_managed_flips_the_borrow_reconcile_gate() {
+        use std::sync::atomic::Ordering;
+        let client = create_test_client();
+        assert!(
+            !client.shared.is_pool_managed.load(Ordering::Acquire),
+            "a fresh (direct) client must not run the borrow reconcile"
+        );
+        client.mark_pool_managed();
+        assert!(
+            client.shared.is_pool_managed.load(Ordering::Acquire),
+            "mark_pool_managed must enable the borrow reconcile for pooled clients"
         );
     }
 

@@ -136,6 +136,8 @@ fn create_pool_client(
         Arc::from_raw(adapter_ptr)
     };
     let client = adapter.core.client.clone();
+    // Enable the borrow-time IAM reconcile in send_command for pooled clients.
+    client.mark_pool_managed();
     let ptr = adapter_ptr as usize;
     // Don't drop — the Arc is owned by the pool now
     std::mem::forget(adapter);
@@ -302,92 +304,6 @@ pub unsafe extern "C" fn glide_pool_create(
     pool_id as i64
 }
 
-/// Reconcile a just-acquired pooled client's IAM auth before it is lent.
-///
-/// `just_acquired_id` is already in `in_use` (a `try_acquire()` that returned
-/// `>= 0`). Runs [`prepare_for_borrow`](glide_core::client::Client::prepare_for_borrow),
-/// which re-AUTHs the live connection only when the token rotated while the client
-/// sat idle. On failure the client is discarded like the abandon-monitor cleanup
-/// and the next idle client is reconciled in turn; when none remain, `miss` is
-/// returned so the caller falls through to its create/timeout path.
-///
-/// The AUTH round-trip is async and MUST run off the pool lock: the guard is held
-/// only for synchronous bookkeeping and dropped before `block_on`, mirroring
-/// `glide_scope_execute`, so it cannot deadlock with `release_client_async`. Safe
-/// because the acquire FFI is always called from a binding thread, never from
-/// inside the pool runtime.
-fn reconcile_borrowed_client(
-    pool_arc: &Arc<tokio::sync::Mutex<ClientPool>>,
-    just_acquired_id: i64,
-    miss: i64,
-) -> i64 {
-    let mut client_id = just_acquired_id;
-    loop {
-        // A `Client` clone shares the live connection and the `last_iam_generation`
-        // bookmark, so the re-AUTH and bookmark advance are seen by every handle.
-        let Some(mut client) = get_pool_clients()
-            .get(&(client_id as u64))
-            .map(|e| e.client.clone())
-        else {
-            // No adapter entry (e.g. destroyed concurrently) — nothing to reconcile.
-            return client_id;
-        };
-
-        // AUTH round-trip strictly OFF the pool lock.
-        if get_pool_runtime()
-            .block_on(client.prepare_for_borrow())
-            .is_ok()
-        {
-            return client_id;
-        }
-
-        logger_core::log_error_lazy!(
-            "pool",
-            format!("Discarding pooled client {client_id}: IAM re-auth on borrow failed")
-        );
-
-        // Discard this client and try the next idle one. Acquire the pool lock via
-        // the runtime (not `try_lock`) so a contended lock still removes the broken
-        // client immediately — leaving it in `in_use` would strand it until
-        // `abandon_timeout`, which a shorter borrower timeout can outlast. The
-        // critical section is synchronous (no await under the guard).
-        let next = get_pool_runtime().block_on(async {
-            let mut pool = pool_arc.lock().await;
-            // Only decrement if this call is the one removing the client: the abandon
-            // monitor may have reclaimed it (and already decremented) while the AUTH
-            // ran, in which case take_for_release returns None and a second
-            // discard_client would underflow total_count.
-            if pool.take_for_release(client_id as u64).is_some() {
-                pool.discard_client();
-            }
-
-            if let Some((_, entry)) = get_pool_clients().remove(&(client_id as u64)) {
-                get_pool_adapter_map().remove(&entry.adapter_ptr);
-                glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                // Release the adapter Arc kept alive via mem::forget in
-                // create_pool_client — drops the broken connection.
-                unsafe {
-                    drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                }
-            }
-
-            pool.try_acquire()
-        });
-
-        // try_acquire returns -3 for exhaustion (map to the caller's miss) but other
-        // negatives (e.g. -1 for a closed pool) are distinct sentinels — pass them
-        // through unchanged rather than flattening every negative to miss.
-        if next == -3 {
-            return miss;
-        }
-        if next < 0 {
-            return next;
-        }
-        client_id = next;
-        // Loop reconciles `next` off-lock.
-    }
-}
-
 /// Non-blocking acquire. Returns client_id >= 0, -1 if exhausted, -2 if invalid pool.
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
@@ -494,12 +410,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
         Err(_) => -1,
     };
 
-    // Reconcile IAM auth off the pool lock. No-op unless the token rotated.
-    if acquired >= 0 {
-        reconcile_borrowed_client(&pool_arc, acquired, -3)
-    } else {
-        acquired
-    }
+    acquired
 }
 
 /// Blocking acquire with timeout. Waits on a condvar until a client becomes
@@ -625,13 +536,7 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
         };
 
         if result >= 0 {
-            // Reconcile IAM auth off the pool lock. On failure with no other idle
-            // client this returns the -3 miss sentinel, so fall through to the wait
-            // loop rather than returning a spurious client_id.
-            let reconciled = reconcile_borrowed_client(&pool_arc, result, -3);
-            if reconciled >= 0 {
-                return reconciled;
-            }
+            return result;
         }
 
         // Check timeout
