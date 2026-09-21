@@ -56,7 +56,7 @@ runs:
           env:
               WSLENV: GITHUB_OUTPUT/p
           run: |
-              LIBC_FP=$( (ldd --version 2>/dev/null || true) | head -1 | grep -o -E '[0-9]+\.[0-9]+' | tail -1)
+              LIBC_FP=$( (ldd --version 2>/dev/null || true) | head -1 | grep -o -E '[0-9]+\.[0-9]+' | tail -1 || true)
               if [[ -z $LIBC_FP ]]; then
                   LIBC_FP="unknown"
               fi
