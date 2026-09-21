@@ -31,5 +31,6 @@ jobs:
         with:
             run-with-macos: use-self-hosted
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
-        secrets: inherit
+        secrets:
+            AWS_CODEBUILD_ROLE_ARN: ${{ secrets.AWS_CODEBUILD_ROLE_ARN }}
         name: FMT - Node
