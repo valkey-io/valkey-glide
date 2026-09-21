@@ -758,8 +758,6 @@ class TestAuthCommands:
 async def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
     """Pool with custom IAM credential provider: verifies the provider is invoked
     when the pool creates clients and commands succeed."""
-    import os
-
     from glide.client_pool import AsyncClientPool, PoolConfig
     from glide_shared.config import AwsCredentials
 
@@ -770,9 +768,9 @@ async def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
     def provider():
         invocations[0] += 1
         return AwsCredentials(
-            access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-            secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-            session_token=os.environ.get("AWS_SESSION_TOKEN"),
+            access_key_id="test_access_key",
+            secret_access_key="test_secret_key",
+            session_token="test_session_token",
         )
 
     iam_config = IamAuthConfig(
