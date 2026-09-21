@@ -9,6 +9,7 @@ use crate::error::GlideError;
 use crate::pipeline_options::PipelineOptions;
 use crate::value::ValkeyValue;
 use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 use glide_core::client::Client as CoreClient;
 use redis::PipelineRetryStrategy;
 use redis::cluster_routing::RoutingInfo;
@@ -63,7 +64,7 @@ impl Pipeline {
 
     /// Append argument(s) to the last started command.
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
-        self.inner.arg(arg.to_valkey_args());
+        arg.write_valkey_args(self);
         self
     }
 
@@ -84,6 +85,17 @@ impl Pipeline {
     /// exposes `ignored_commands()` for the typed-decode reply filtering).
     pub(crate) fn as_redis(&self) -> &redis::Pipeline {
         &self.inner
+    }
+}
+
+/// Writes arguments into the last started command.
+impl ValkeyWrite for Pipeline {
+    fn write_arg(&mut self, arg: &[u8]) {
+        self.inner.arg(arg);
+    }
+
+    fn write_arg_fmt(&mut self, arg: impl std::fmt::Display) {
+        self.inner.arg(arg.to_string().into_bytes());
     }
 }
 
@@ -158,8 +170,17 @@ mod tests {
                 .rpush("l", &["a", "b"][..]);
 
             // Untyped command.
-            glide_pipe.cmd("APPEND").arg("k").arg("x");
-            redis_pipe.cmd("APPEND").arg("k").arg("x");
+            let big = vec![0xABu8; 4096];
+            glide_pipe
+                .cmd("APPEND")
+                .arg("k")
+                .arg(&big)
+                .arg(&["a", "b", "c"][..]);
+            redis_pipe
+                .cmd("APPEND")
+                .arg("k")
+                .arg(&big)
+                .arg(&["a", "b", "c"][..]);
 
             assert_eq!(
                 glide_pipe.as_redis().get_packed_pipeline(),
