@@ -3,7 +3,6 @@
  */
 
 import { connection_request } from "../build-ts/ProtobufMessage";
-import { GlideClientHandle } from "../build-ts/native";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -339,25 +338,6 @@ export class GlideClient extends BaseClient {
         options: GlideClientConfiguration,
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
-            options,
-            (options?: GlideClientConfiguration) => new GlideClient(options),
-        );
-    }
-
-    /**
-     * @internal
-     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
-     * `GlideClient` instance.  No network connection is made — the handle
-     * already owns a live connection managed by the pool.
-     *
-     * Used by `ClientPool.acquire()` after `poolBuildHandle` returns a handle.
-     */
-    public static createFromHandle(
-        handle: GlideClientHandle,
-        options: GlideClientConfiguration,
-    ): GlideClient {
-        return super.createClientFromHandle<GlideClient>(
-            handle,
             options,
             (options?: GlideClientConfiguration) => new GlideClient(options),
         );

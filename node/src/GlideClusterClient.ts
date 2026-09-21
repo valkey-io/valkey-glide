@@ -2,11 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import {
-    ClusterScanCursor,
-    GlideClientHandle,
-    Script,
-} from "../build-ts/native";
+import { ClusterScanCursor, Script } from "../build-ts/native";
 import {
     command_request,
     connection_request,
@@ -777,24 +773,6 @@ export class GlideClusterClient extends BaseClient {
         options: GlideClusterClientConfiguration,
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
-            options,
-            (options?: GlideClusterClientConfiguration) =>
-                new GlideClusterClient(options),
-        );
-    }
-
-    /**
-     * @internal
-     * Wrap a pre-built {@link GlideClientHandle} (from the pool layer) in a
-     * `GlideClusterClient` instance.  No network connection is made — the handle
-     * already owns a live connection managed by the pool.
-     */
-    public static createFromHandle(
-        handle: GlideClientHandle,
-        options: GlideClusterClientConfiguration,
-    ): GlideClusterClient {
-        return super.createClientFromHandle<GlideClusterClient>(
-            handle,
             options,
             (options?: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(options),

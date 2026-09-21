@@ -95,6 +95,7 @@ export class ClientPool {
     private readonly isCluster: boolean;
     private readonly clientConfig: BaseClientConfiguration;
     private readonly resolverKey: string | undefined;
+    private readonly activeClientIds = new Set<number>();
 
     private constructor(
         poolId: number,
@@ -198,7 +199,9 @@ export class ClientPool {
 
         if (clientId >= 0) {
             try {
-                return await this.buildClientForId(clientId);
+                const client = await this.buildClientForId(clientId);
+                this.activeClientIds.add(clientId);
+                return client;
             } catch (e) {
                 // Handle build failed — release the slot so pool capacity is recovered.
                 await poolRelease(this.poolId, clientId).catch(() => {
@@ -214,7 +217,9 @@ export class ClientPool {
 
         if (result >= 0) {
             try {
-                return await this.buildClientForId(result);
+                const client = await this.buildClientForId(result);
+                this.activeClientIds.add(result);
+                return client;
             } catch (e) {
                 // Handle build failed — release the slot so pool capacity is recovered.
                 await poolRelease(this.poolId, result).catch(() => {
@@ -244,7 +249,13 @@ export class ClientPool {
      */
     async release(client: BaseClient): Promise<void> {
         const clientId = client.getClientId();
-        if (clientId < 0) return;
+
+        if (clientId < 0 || !this.activeClientIds.has(clientId)) {
+            // Not a client from this pool — ignore silently to avoid corrupting pool state.
+            return;
+        }
+
+        this.activeClientIds.delete(clientId);
 
         // Stop the handle's worker thread without removing from scope registry.
         // This is pool-safe: the underlying Client remains registered so that
