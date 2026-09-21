@@ -2386,6 +2386,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
             match client_result {
                 Ok(mut client) => {
                     // Get or create scan state cursor - using redis compatible types for now
+                    // TODO #7161: Update to use new glide_core::Client methods.
                     let scan_state_cursor = if cursor_str.is_empty() || cursor_str == "0" {
                         // Create new initial cursor
                         redis::ScanStateRC::new()

@@ -422,6 +422,7 @@ impl GlideClusterClient {
         count: Option<u32>,
         object_type: Option<crate::commands::options::ObjectType>,
     ) -> ValkeyResult<(ClusterScanCursor, Vec<Bytes>)> {
+        // TODO #7161: Update to use new glide_core::Client methods.
         let scan_state = if cursor.is_initial() {
             ScanStateRC::new()
         } else {
