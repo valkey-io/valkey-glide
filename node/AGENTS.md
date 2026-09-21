@@ -138,7 +138,7 @@ npm run test:modules -- --cluster-endpoints=localhost:7000
 
 ### Testing Connection Establishment (Avoid Count-Based CLIENT LIST Assertions)
 
-Do not assert on `CLIENT LIST` connection *counts* to detect whether a specific
+Do not assert on `CLIENT LIST` connection _counts_ to detect whether a specific
 client connected (e.g. baseline + 1). Since the socket-IPC-to-NAPI change,
 `close()` only drops the JS handle and the Rust worker exits later, so
 connections from a preceding test can linger in `CLIENT LIST` when the baseline
