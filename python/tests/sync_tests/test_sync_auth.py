@@ -753,8 +753,6 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
     """Sync pool with IAM credential provider: the sync pool raises ValueError
     because it does not support custom credential providers by design.
     Verify the error occurs before any native client creation."""
-    import os
-
     from glide_shared.config import AwsCredentials
     from glide_sync.client_pool import ClientPool, PoolConfig
 
@@ -762,8 +760,8 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
 
     def provider():
         return AwsCredentials(
-            access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "key"),
-            secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "secret"),
+            access_key_id="test_access_key",
+            secret_access_key="test_secret_key",
         )
 
     iam_config = IamAuthConfig(
@@ -784,8 +782,6 @@ def test_iam_pool_with_custom_credentials_provider(request, cluster_mode):
 
 def test_iam_sync_pool_rejects_credential_provider(request):
     """Sync pool raises ValueError when IamAuthConfig.credential_provider is set."""
-    import os
-
     from glide_shared.config import AwsCredentials
     from glide_sync.client_pool import ClientPool, PoolConfig
 
@@ -793,8 +789,8 @@ def test_iam_sync_pool_rejects_credential_provider(request):
 
     def provider():
         return AwsCredentials(
-            access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "key"),
-            secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "secret"),
+            access_key_id="test_access_key",
+            secret_access_key="test_secret_key",
         )
 
     iam_config = IamAuthConfig(
