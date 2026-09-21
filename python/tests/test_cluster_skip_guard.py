@@ -2,12 +2,12 @@
 
 """pytester coverage for the unexpected cluster-skip session guard."""
 
+import os
 from pathlib import Path
-
-from tests.utils.cluster_skip_guard import CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP
 
 pytest_plugins = ["pytester"]
 
+_PYTHON_ROOT = Path(__file__).resolve().parent.parent
 _GUARD_SRC = (
     Path(__file__).resolve().parent / "utils" / "cluster_skip_guard.py"
 ).read_text()
@@ -38,22 +38,9 @@ def pytest_sessionfinish(session, exitstatus):
     fail_session_on_unexpected_cluster_skips(session)
 """
 
-
-def _require_cluster_addresses_test() -> str:
-    return f"""
+_REQUIRE_CLUSTER_ADDRESSES_TEST = """
 import pytest
-
-
-def require_cluster_addresses():
-    try:
-        cluster = pytest.valkey_cluster
-        if cluster is None or len(cluster.nodes_addr) == 0:
-            pytest.skip("{CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP}")
-    except AttributeError:
-        pytest.skip(
-            "{CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP} (pytest.valkey_cluster not set)"
-        )
-    return cluster.nodes_addr
+from tests.utils.utils import require_cluster_addresses
 
 
 def test_cluster_only():
@@ -63,14 +50,19 @@ def test_cluster_only():
 """
 
 
-def _prepare(pytester):
+def _prepare(pytester, monkeypatch):
+    current = os.environ.get("PYTHONPATH", "")
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        str(_PYTHON_ROOT) if not current else f"{_PYTHON_ROOT}{os.pathsep}{current}",
+    )
     pytester.makepyfile(cluster_skip_guard=_GUARD_SRC)
     pytester.makeconftest(_CONFTEST)
 
 
-def test_unexpected_cluster_skip_fails_session(pytester):
-    _prepare(pytester)
-    pytester.makepyfile(_require_cluster_addresses_test())
+def test_unexpected_cluster_skip_fails_session(pytester, monkeypatch):
+    _prepare(pytester, monkeypatch)
+    pytester.makepyfile(_REQUIRE_CLUSTER_ADDRESSES_TEST)
     result = pytester.runpytest_subprocess("-q")
     assert result.ret != 0
     result.stdout.fnmatch_lines(
@@ -81,22 +73,24 @@ def test_unexpected_cluster_skip_fails_session(pytester):
     )
 
 
-def test_standalone_only_cluster_skip_is_accepted(pytester):
-    _prepare(pytester)
-    pytester.makepyfile(_require_cluster_addresses_test())
+def test_standalone_only_cluster_skip_is_accepted(pytester, monkeypatch):
+    _prepare(pytester, monkeypatch)
+    pytester.makepyfile(_REQUIRE_CLUSTER_ADDRESSES_TEST)
     result = pytester.runpytest_subprocess("-q", "--standalone-endpoints=127.0.0.1:1")
     assert result.ret == 0
     assert "although one was expected" not in result.stdout.str()
 
 
-def test_unrelated_skip_does_not_fail_session(pytester):
-    _prepare(pytester)
-    pytester.makepyfile("""
+def test_unrelated_skip_does_not_fail_session(pytester, monkeypatch):
+    _prepare(pytester, monkeypatch)
+    pytester.makepyfile(
+        """
 import pytest
 
 def test_other():
     pytest.skip("server version too old")
-""")
+"""
+    )
     result = pytester.runpytest_subprocess("-q")
     assert result.ret == 0
     assert "although one was expected" not in result.stdout.str()

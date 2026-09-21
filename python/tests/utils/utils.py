@@ -100,6 +100,7 @@ from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.cluster_skip_guard import CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP
 
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
@@ -2256,7 +2257,9 @@ def require_cluster_addresses() -> list:
     try:
         cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
     except AttributeError:
-        pytest.skip("No cluster endpoints available (pytest.valkey_cluster not set)")
+        pytest.skip(
+            f"{CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP} (pytest.valkey_cluster not set)"
+        )
     if cluster is None or len(cluster.nodes_addr) == 0:
-        pytest.skip("No cluster endpoints available")
+        pytest.skip(CLUSTER_ENDPOINTS_UNAVAILABLE_SKIP)
     return [NodeAddress(addr.host, addr.port) for addr in cluster.nodes_addr]
