@@ -353,9 +353,13 @@ fn reconcile_borrowed_client(
         // critical section is synchronous (no await under the guard).
         let next = get_pool_runtime().block_on(async {
             let mut pool = pool_arc.lock().await;
-            // Remove from `in_use` (try_acquire already moved it there), decrement.
-            let _ = pool.take_for_release(client_id as u64);
-            pool.discard_client();
+            // Only decrement if this call is the one removing the client: the abandon
+            // monitor may have reclaimed it (and already decremented) while the AUTH
+            // ran, in which case take_for_release returns None and a second
+            // discard_client would underflow total_count.
+            if pool.take_for_release(client_id as u64).is_some() {
+                pool.discard_client();
+            }
 
             if let Some((_, entry)) = get_pool_clients().remove(&(client_id as u64)) {
                 get_pool_adapter_map().remove(&entry.adapter_ptr);
@@ -370,8 +374,14 @@ fn reconcile_borrowed_client(
             pool.try_acquire()
         });
 
-        if next < 0 {
+        // try_acquire returns -3 for exhaustion (map to the caller's miss) but other
+        // negatives (e.g. -1 for a closed pool) are distinct sentinels — pass them
+        // through unchanged rather than flattening every negative to miss.
+        if next == -3 {
             return miss;
+        }
+        if next < 0 {
+            return next;
         }
         client_id = next;
         // Loop reconciles `next` off-lock.
