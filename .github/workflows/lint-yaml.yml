@@ -74,15 +74,18 @@ jobs:
                               if entry.get("TARGET") and entry.get(key):
                                   declared.setdefault(entry["TARGET"], set()).add(labels(entry[key]))
 
+                  # Spelled in pieces so Actions does not read it as an expression to evaluate.
+                  OPEN = "$" + "{{"
+
                   def reference(value):
-                      """Split '${{ matrix.host.target }}' into ('host', 'target')."""
-                      if not isinstance(value, str) or not value.strip().startswith("${{"):
+                      """Split a matrix reference such as matrix.host.target into ('host', 'target')."""
+                      if not isinstance(value, str) or not value.strip().startswith(OPEN):
                           return None
-                      parts = value.strip()[3:-2].strip().split(".")
+                      parts = value.strip()[len(OPEN):-2].strip().split(".")
                       return (parts[1], parts[2]) if len(parts) == 3 and parts[0] == "matrix" else None
 
                   def expression(value):
-                      return isinstance(value, str) and "${{" in value
+                      return isinstance(value, str) and OPEN in value
 
                   def pairs(job, target):
                       """Runner and target pairs this job can resolve to, skipping the rest."""
