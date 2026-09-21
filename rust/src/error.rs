@@ -9,6 +9,7 @@ use thiserror::Error;
 
 /// Base error type for the GLIDE client.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GlideError {
     /// The client is closed and can no longer be used. Unrecoverable.
     #[error("ClosingError: {0}")]
