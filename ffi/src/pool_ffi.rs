@@ -312,7 +312,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
         None => return -2,
     };
 
-    let acquired = match pool_arc.try_lock() {
+    match pool_arc.try_lock() {
         Ok(mut pool) => {
             // Clean up any clients discarded by the abandon monitor
             let discarded = pool.drain_discarded_ids();
@@ -408,9 +408,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
             result
         }
         Err(_) => -1,
-    };
-
-    acquired
+    }
 }
 
 /// Blocking acquire with timeout. Waits on a condvar until a client becomes

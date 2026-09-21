@@ -395,6 +395,11 @@ pub struct ClientShared {
     // connection can hold a token that rotated in the gap; a direct client stays
     // hot and keeps the existing reconnect-deferred `token_changed` refresh.
     is_pool_managed: Arc<AtomicBool>,
+    // Set while `prepare_for_borrow` is dispatching its own re-AUTH. That AUTH goes
+    // through `send_command`, which would otherwise re-enter the borrow gate and
+    // recurse forever (the bookmark only advances after AUTH returns). The guard
+    // makes the nested AUTH command skip the gate.
+    reconciling_borrow: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
 }
@@ -1183,39 +1188,8 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            // IAM token freshness on the first command after a borrow.
-            //
-            // A pool-managed client sits idle between borrows, so its live connection
-            // can still hold a token that rotated in the gap. `prepare_for_borrow`
-            // re-AUTHs the live connection when the generation advanced (discarding
-            // via an Err only if the AUTH fails), so the borrower never runs on a
-            // stale-auth connection. Runs here — on the client's own runtime, awaited
-            // — rather than in the synchronous acquire FFI, which would block the
-            // async caller's event loop.
-            //
-            // A direct client stays hot, so it keeps the reconnect-deferred pull
-            // model: refresh the stored password on `token_changed` without an
-            // immediate AUTH (the live connection re-auths on its next reconnect).
-            if self.is_pool_managed.load(Ordering::Acquire) {
-                self.prepare_for_borrow().await?;
-            } else if let Some(iam_manager) = &self.iam_token_manager
-                && iam_manager.token_changed()
-            {
-                let current_token = iam_manager.get_token().await;
-                if current_token.is_empty() {
-                    return Err(RedisError::from((
-                        ErrorKind::ClientError,
-                        "IAM token not available",
-                    )));
-                }
-                iam_manager.clear_token_changed();
-                log_debug(
-                    "update_connection_password",
-                    "Updating connection password with IAM token",
-                );
-                self.update_connection_password(Some(current_token), false)
-                    .await?;
-            }
+            // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
+            self.reconcile_iam_before_dispatch().await?;
 
             let client = self.get_or_initialize_client().await?;
 
@@ -1887,6 +1861,7 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            self.reconcile_iam_before_dispatch().await?;
             let client = self.get_or_initialize_client().await?;
 
             let command_count = pipeline.cmd_iter().count();
@@ -1964,6 +1939,7 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            self.reconcile_iam_before_dispatch().await?;
             let client = self.get_or_initialize_client().await?;
 
             let command_count = pipeline.cmd_iter().count();
@@ -2985,6 +2961,7 @@ impl Client {
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
+                    reconciling_borrow: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                 }),
                 iam_token_manager: None,
@@ -3130,6 +3107,45 @@ impl Client {
         Ok(())
     }
 
+    /// Refresh IAM authentication before dispatching a command, transaction, or
+    /// pipeline — the shared entry gate for all three execution APIs.
+    ///
+    /// A pool-managed client sits idle between borrows, so its live connection can
+    /// hold a token that rotated in the gap: `prepare_for_borrow` re-AUTHs it before
+    /// the first command runs, so the borrower never runs on a stale-auth connection.
+    /// A direct client stays hot and keeps the reconnect-deferred pull model: refresh
+    /// the stored password on `token_changed` without an immediate AUTH.
+    ///
+    /// `reconciling_borrow` suppresses both paths: the AUTH `prepare_for_borrow`
+    /// dispatches comes back through `send_command`, and must not re-enter the gate.
+    async fn reconcile_iam_before_dispatch(&mut self) -> RedisResult<()> {
+        if self.reconciling_borrow.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if self.is_pool_managed.load(Ordering::Acquire) {
+            return self.prepare_for_borrow().await;
+        }
+        if let Some(iam_manager) = &self.iam_token_manager
+            && iam_manager.token_changed()
+        {
+            let current_token = iam_manager.get_token().await;
+            if current_token.is_empty() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "IAM token not available",
+                )));
+            }
+            iam_manager.clear_token_changed();
+            log_debug(
+                "update_connection_password",
+                "Updating connection password with IAM token",
+            );
+            self.update_connection_password(Some(current_token), false)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Mark this client as pool-managed. Called by the pool FFI right after a
     /// pooled client is created. Enables the borrow-time IAM reconcile in
     /// `send_command`; direct clients leave it unset.
@@ -3172,9 +3188,16 @@ impl Client {
 
         // immediate_auth=true sends a real AUTH on the live connection, unlike the
         // reconnect-only password update the `token_changed` pull-model performs.
-        // It also clears `token_changed` so the next command does not re-apply it.
-        self.update_connection_password(Some(current_token), true)
-            .await?;
+        // The AUTH is itself a command through `send_command`; set reconciling_borrow
+        // so that nested call skips the borrow gate instead of recursing. Clear it on
+        // every exit path (the AUTH may fail).
+        self.reconciling_borrow.store(true, Ordering::Release);
+        let auth_result = self
+            .update_connection_password(Some(current_token), true)
+            .await;
+        self.reconciling_borrow.store(false, Ordering::Release);
+        auth_result?;
+
         if let Some(iam_manager) = &self.iam_token_manager {
             iam_manager.clear_token_changed();
         }
@@ -3278,6 +3301,7 @@ impl Client {
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                reconciling_borrow: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
@@ -3765,6 +3789,7 @@ mod tests {
                 current_database: Arc::new(AtomicU32::new(0)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                reconciling_borrow: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
             }),
             iam_token_manager: None,
