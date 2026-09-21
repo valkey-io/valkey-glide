@@ -17,8 +17,8 @@
 //! (minus GLIDE's deliberate `&self`-receiver / lifetime / `Send` additions),
 //! present in both the async and blocking flavors.
 //!
-//! The fork source is resolved via `cargo metadata` (the in-tree path
-//! dependency), exactly like the Python script did.
+//! The redis-rs source is resolved directly from the `redis` path dependency
+//! declared in `Cargo.toml`.
 //!
 //! TODO #6904: This guard verifies our command table against the *in-repo*
 //! redis-rs fork, not upstream redis-rs. The client's real goal is
@@ -28,7 +28,6 @@
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Outcome of a failed or skipped parity check.
 pub enum ParityError {
@@ -93,36 +92,31 @@ fn read(path: &Path) -> Result<String, ParityError> {
         .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", path.display())))
 }
 
-/// Locate the fork's `src/commands/mod.rs` via `cargo metadata` (the same
-/// resolution the Python script used): find the `redis` package's manifest and
-/// take `src/commands/mod.rs` next to it.
+/// Locate redis-rs's `src/commands/mod.rs` file from the `redis`
+/// path dependency declared in this crate's `Cargo.toml`.
 fn resolve_fork_mod_rs(manifest_dir: &Path) -> Result<PathBuf, ParityError> {
-    let out = Command::new(env!("CARGO"))
-        .args(["metadata", "--format-version", "1", "--offline"])
-        .current_dir(manifest_dir)
-        .output()
-        .map_err(|e| ParityError::Skip(format!("cannot run cargo metadata: {e}")))?;
-    if !out.status.success() {
+    let manifest_path = manifest_dir.join("Cargo.toml");
+    let manifest = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| ParityError::Skip(format!("cannot read {}: {e}", manifest_path.display())))?;
+
+    // Declared as `redis = { path = "..." }`.
+    let rel = Regex::new(r#"(?m)^\s*redis\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)""#)
+        .unwrap()
+        .captures(&manifest)
+        .and_then(|c| c.get(1))
+        .ok_or_else(|| ParityError::Skip("no `redis` path dependency in Cargo.toml".into()))?
+        .as_str()
+        .to_owned();
+
+    let mod_rs = manifest_dir.join(rel).join("src/commands/mod.rs");
+    if !mod_rs.exists() {
         return Err(ParityError::Skip(format!(
-            "cargo metadata failed:\n{}",
-            String::from_utf8_lossy(&out.stderr)
+            "fork source not found at {}",
+            mod_rs.display()
         )));
     }
-    let meta: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .map_err(|e| ParityError::Skip(format!("cannot parse cargo metadata: {e}")))?;
-    let manifest = meta["packages"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|p| p["name"] == "redis")
-        .and_then(|p| p["manifest_path"].as_str())
-        .ok_or_else(|| {
-            ParityError::Skip("could not resolve the `redis` package via cargo metadata".into())
-        })?;
-    let dir = Path::new(manifest)
-        .parent()
-        .expect("manifest path has a parent");
-    Ok(dir.join("src").join("commands").join("mod.rs"))
+
+    Ok(mod_rs)
 }
 
 /// Extract the body of a top-level `<macro_name> {` invocation: from the marker
