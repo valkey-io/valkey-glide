@@ -104,9 +104,8 @@ impl ProtocolVersion {
 }
 
 /// Strategy for selecting which node to read from.
-///
-/// Mirrors Python `ReadFrom`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ReadFrom {
     /// Always read from the primary.
     #[default]
@@ -141,6 +140,7 @@ impl ReadFrom {
 
 /// Controls how the standalone client discovers node roles and topology.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum NodeDiscoveryMode {
     /// Verify node roles via `INFO REPLICATION`, using only the provided addresses.
     #[default]
@@ -200,25 +200,25 @@ impl NodeAddress {
     }
 }
 
-/// Username/password credentials.
-///
-/// Mirrors Python `ServerCredentials`.
+/// Server credentials for connection.
+/// Username/password or IAM credentials.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct ServerCredentials {
-    /// Optional username (ACL). If omitted, the default user is used. Required
-    /// when [`Self::iam_config`] is set.
-    pub username: Option<String>,
-    /// Password for traditional authentication. Ignored when IAM is configured
-    /// and available (IAM acts as the password source); may still be set as a
-    /// fallback.
-    pub password: Option<String>,
-    /// AWS IAM authentication configuration. When set, IAM takes precedence over
-    /// [`Self::password`].
-    pub iam_config: Option<IamAuthConfig>,
+    // Username for authentication.
+    // If omitted, the default user is used.
+    // Required for IAM authentication.
+    username: Option<String>,
+    // Password for authentication.
+    // Mutually exclusive with `iam_config`.
+    pub(crate) password: Option<String>,
+    // AWS IAM authentication configuration.
+    // Mutually exclusive with `password`.
+    iam_config: Option<IamAuthConfig>,
 }
 
 impl ServerCredentials {
-    /// Password-only credentials (default user).
+    /// Password-based authentication with default username.
+    /// Mutually exclusive with IAM (see [`Self::iam`]).
     pub fn password(password: impl Into<String>) -> Self {
         ServerCredentials {
             username: None,
@@ -227,8 +227,9 @@ impl ServerCredentials {
         }
     }
 
-    /// Username + password credentials.
-    pub fn new(username: impl Into<String>, password: impl Into<String>) -> Self {
+    /// Password-based authentication with username.
+    /// Mutually exclusive with IAM (see [`Self::iam`]).
+    pub fn username_password(username: impl Into<String>, password: impl Into<String>) -> Self {
         ServerCredentials {
             username: Some(username.into()),
             password: Some(password.into()),
@@ -236,9 +237,7 @@ impl ServerCredentials {
         }
     }
 
-    /// AWS IAM credentials for ElastiCache/MemoryDB. `username` is the IAM user
-    /// and is required; the token is signed and refreshed automatically by the
-    /// core. Mirrors Python's IAM `ServerCredentials`.
+    /// AWS IAM authentication credentials.
     pub fn iam(username: impl Into<String>, iam_config: IamAuthConfig) -> Self {
         ServerCredentials {
             username: Some(username.into()),
@@ -247,11 +246,19 @@ impl ServerCredentials {
         }
     }
 
-    /// Set a fallback password (used when IAM is unavailable). Builder form.
-    #[must_use]
-    pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(password.into());
-        self
+    /// Username for authentication.
+    pub fn username(&self) -> Option<&str> {
+        self.username.as_deref()
+    }
+
+    /// AWS IAM authentication configuration.
+    pub fn iam_config(&self) -> Option<&IamAuthConfig> {
+        self.iam_config.as_ref()
+    }
+
+    /// Whether these are IAM credentials.
+    pub fn is_iam_auth(&self) -> bool {
+        self.iam_config.is_some()
     }
 
     pub(crate) fn to_core(&self) -> AuthenticationInfo {
@@ -317,9 +324,8 @@ impl std::fmt::Debug for ClientIdentity {
 }
 
 /// AWS service backing IAM authentication.
-///
-/// Mirrors Python's IAM `ServiceType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ServiceType {
     /// Amazon ElastiCache.
     ElastiCache,
@@ -336,25 +342,23 @@ impl ServiceType {
     }
 }
 
-/// AWS IAM authentication configuration for ElastiCache/MemoryDB.
-///
-/// The core resolves AWS credentials, signs a SigV4 auth token, and refreshes it automatically.
+/// AWS IAM authentication configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IamAuthConfig {
-    /// AWS ElastiCache or MemoryDB cluster name.
-    pub cluster_name: String,
-    /// AWS region of the cluster (e.g. `us-east-1`).
-    pub region: String,
-    /// Which AWS service backs the cluster.
-    pub service_type: ServiceType,
-    /// Token refresh interval in seconds (1s–12h).
-    /// `None` uses the core default.
-    pub refresh_interval_seconds: Option<u32>,
+    // AWS cluster name.
+    cluster_name: String,
+    // AWS region of the cluster (e.g. `us-east-1`).
+    region: String,
+    // Which AWS service backs the cluster.
+    service_type: ServiceType,
+    // Token refresh interval in seconds (1s–12h).
+    // `None` uses the core default.
+    refresh_interval_seconds: Option<u32>,
 }
 
 impl IamAuthConfig {
-    /// Create an IAM config for the given cluster, region, and service, using the
-    /// default refresh interval.
+    /// Create an IAM config for the given cluster, region, and service,
+    /// using the default refresh interval.
     pub fn new(
         cluster_name: impl Into<String>,
         region: impl Into<String>,
@@ -373,6 +377,26 @@ impl IamAuthConfig {
     pub fn with_refresh_interval_seconds(mut self, seconds: u32) -> Self {
         self.refresh_interval_seconds = Some(seconds);
         self
+    }
+
+    /// The cluster name.
+    pub fn cluster_name(&self) -> &str {
+        &self.cluster_name
+    }
+
+    /// The AWS region.
+    pub fn region(&self) -> &str {
+        &self.region
+    }
+
+    /// The AWS service backing the cluster.
+    pub fn service_type(&self) -> ServiceType {
+        self.service_type
+    }
+
+    /// The token refresh interval in seconds, if overridden.
+    pub fn refresh_interval_seconds(&self) -> Option<u32> {
+        self.refresh_interval_seconds
     }
 
     fn to_core(&self) -> IamAuthenticationConfig {

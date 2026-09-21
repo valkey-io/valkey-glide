@@ -315,7 +315,7 @@ fn credentials_password_only() {
 #[test]
 fn credentials_username_and_password() {
     let req = GlideClientConfiguration::with_address("h", 1)
-        .credentials(ServerCredentials::new("alice", "hunter2"))
+        .credentials(ServerCredentials::username_password("alice", "hunter2"))
         .to_request();
     let auth = req.authentication_info.expect("auth set");
     assert_eq!(auth.username.as_deref(), Some("alice"));
@@ -325,7 +325,7 @@ fn credentials_username_and_password() {
 #[test]
 fn credentials_apply_to_cluster() {
     let req = GlideClusterClientConfiguration::with_address("h", 1)
-        .credentials(ServerCredentials::new("u", "p"))
+        .credentials(ServerCredentials::username_password("u", "p"))
         .to_request();
     let auth = req.authentication_info.expect("auth set");
     assert_eq!(auth.username.as_deref(), Some("u"));
@@ -370,23 +370,6 @@ fn iam_credentials_memorydb_with_refresh_interval() {
     assert_eq!(iam.service_type, CoreServiceType::MemoryDB);
     assert_eq!(iam.region, "eu-west-1");
     assert_eq!(iam.refresh_interval_seconds, Some(300));
-}
-
-#[test]
-fn iam_with_fallback_password_keeps_both() {
-    // IAM takes precedence at auth time, but a fallback password may still be
-    // provided and must be lowered alongside the IAM config.
-    let creds = ServerCredentials::iam(
-        "u",
-        IamAuthConfig::new("c", "us-west-2", ServiceType::ElastiCache),
-    )
-    .with_password("fallback");
-    let req = GlideClientConfiguration::with_address("h", 1)
-        .credentials(creds)
-        .to_request();
-    let auth = req.authentication_info.expect("auth set");
-    assert_eq!(auth.password.as_deref(), Some("fallback"));
-    assert!(auth.iam_config.is_some());
 }
 
 #[test]
@@ -437,7 +420,7 @@ fn enable_pubsub_sets_flag_cluster() {
 
 #[test]
 fn credentials_debug_redacts_password() {
-    let creds = ServerCredentials::new("alice", "super-secret");
+    let creds = ServerCredentials::username_password("alice", "super-secret");
     let shown = format!("{creds:?}");
     assert!(!shown.contains("super-secret"), "password leaked: {shown}");
     assert!(shown.contains("<redacted>"));
@@ -728,7 +711,7 @@ fn standalone_request_full() {
     let cfg =
         GlideClientConfiguration::new(vec![NodeAddress::new("a", 1), NodeAddress::new("b", 2)])
             .tls(TlsConfig::SecureTls)
-            .credentials(ServerCredentials::new("user", "pass"))
+            .credentials(ServerCredentials::username_password("user", "pass"))
             .read_from(ReadFrom::PreferReplica)
             .protocol(ProtocolVersion::RESP2)
             .database_id(3)
@@ -831,13 +814,13 @@ fn from_url_default_port_and_db() {
 fn from_url_credentials() {
     let cfg = GlideClientConfiguration::from_url("redis://user:secret@h:1234").unwrap();
     let creds = cfg.credentials.expect("credentials parsed");
-    assert_eq!(creds.username.as_deref(), Some("user"));
+    assert_eq!(creds.username(), Some("user"));
     assert_eq!(creds.password.as_deref(), Some("secret"));
 
     // Password-only (empty username) form.
     let cfg = GlideClientConfiguration::from_url("redis://:secret@h:1234").unwrap();
     let creds = cfg.credentials.expect("credentials parsed");
-    assert!(creds.username.is_none());
+    assert!(creds.username().is_none());
     assert_eq!(creds.password.as_deref(), Some("secret"));
 }
 

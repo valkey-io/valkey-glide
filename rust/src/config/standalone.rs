@@ -11,10 +11,8 @@ use glide_core::client::ConnectionRequest;
 use std::time::Duration;
 
 /// Configuration for a **standalone** (non-cluster) GLIDE client.
-///
-/// Mirrors Python `GlideClientConfiguration`. Build with [`Self::new`] then chain
-/// the `with_*` setters.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct GlideClientConfiguration {
     /// Seed node addresses.
     pub addresses: Vec<NodeAddress>,

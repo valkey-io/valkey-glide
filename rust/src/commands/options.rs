@@ -438,9 +438,8 @@ pub struct Limit {
 }
 
 /// The type of a key, used by `OBJECT`/`TYPE`/`SCAN`.
-///
-/// Mirrors Python `ObjectType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ObjectType {
     /// String.
     String,

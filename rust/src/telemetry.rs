@@ -52,6 +52,7 @@ pub const DEFAULT_TRACE_SAMPLE_PERCENT: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 ///
 /// Mirrors `GlideOpenTelemetrySignalsExporter`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TelemetryExporter {
     /// Send to a collector over OTLP/gRPC at the given endpoint
     /// (e.g. `http://localhost:4317`).

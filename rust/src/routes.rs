@@ -37,6 +37,7 @@ impl SlotType {
 /// Mirrors the Python route classes: `AllNodes`, `AllPrimaries`, `RandomNode`,
 /// `SlotKeyRoute`, `SlotIdRoute`, `ByAddressRoute`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Route {
     /// Route to all nodes (primaries and replicas).
     AllNodes,

@@ -42,6 +42,7 @@ where
                 ObjectType::ZSet => "zset",
                 ObjectType::Hash => "hash",
                 ObjectType::Stream => "stream",
+                _ => unreachable!("unhandled ObjectType: {:?}", t),
             });
         }
         let result: (u64, Vec<Vec<u8>>) = c.glide_send_command_as(cmd).await.unwrap();
