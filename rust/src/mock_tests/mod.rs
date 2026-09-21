@@ -99,9 +99,9 @@ impl CommandExecutor for Mock {
         let args: Vec<Vec<u8>> = cmd
             .as_redis()
             .args_iter()
-            .filter_map(|a| match a {
-                redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
-                redis::Arg::Cursor => None,
+            .map(|a| match a {
+                redis::Arg::Simple(bytes) => bytes.to_vec(),
+                redis::Arg::Cursor => b"0".to_vec(),
             })
             .collect();
         *self.captured.lock().unwrap() = Some((args, route));
