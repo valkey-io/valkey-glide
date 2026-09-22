@@ -83,14 +83,12 @@ def test_standalone_only_cluster_skip_is_accepted(pytester, monkeypatch):
 
 def test_unrelated_skip_does_not_fail_session(pytester, monkeypatch):
     _prepare(pytester, monkeypatch)
-    pytester.makepyfile(
-        """
+    pytester.makepyfile("""
 import pytest
 
 def test_other():
     pytest.skip("server version too old")
-"""
-    )
+""")
     result = pytester.runpytest_subprocess("-q")
     assert result.ret == 0
     assert "although one was expected" not in result.stdout.str()
