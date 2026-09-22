@@ -693,6 +693,9 @@ macro_rules! impl_common_config_builders {
             /// `database_id`, `periodic_checks`) are layered on by `to_request()`.
             pub(crate) fn common_request(&self) -> glide_core::client::ConnectionRequest {
                 use glide_core::client::ConnectionRequest;
+                // TODO #7162: build via a glide-core ConnectionRequest builder with
+                // intended defaults, instead of a struct literal + `..default()` that
+                // silently absorbs new fields (see the tcp_nodelay note below).
                 let mut req = ConnectionRequest {
                     addresses: self.addresses.iter().map(NodeAddress::to_core).collect(),
                     tls_mode: Some(self.tls.to_core()),
