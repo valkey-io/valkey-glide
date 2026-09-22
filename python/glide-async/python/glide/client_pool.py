@@ -63,6 +63,7 @@ class AsyncClientPool:
         "_cache_lock",
         "_is_cluster",
         "_credential_provider_callback_ref",
+        "_probe_callback_refs",
     )
 
     @classmethod
@@ -93,6 +94,15 @@ class AsyncClientPool:
             ClientClass = GlideClusterClient if pool._is_cluster else GlideClient
             probe = await ClientClass.create(client_config)
             await probe.close()
+            # Keep the probe's CFFI callback alive until the pool is closed.
+            # After probe.close(), Rust decrements the Arc but a background
+            # IAM token-refresh task may still be running and may invoke the
+            # callback.  If the Python object is GC'd first, the CFFI closure
+            # is freed -> SIGSEGV.  Holding a reference here prevents that.
+            if getattr(probe, "_credential_provider_callback_ref", None) is not None:
+                pool._probe_callback_refs.append(
+                    probe._credential_provider_callback_ref
+                )
         except Exception:
             pool.close()
             raise
@@ -123,6 +133,7 @@ class AsyncClientPool:
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
         self._credential_provider_callback_ref = None
+        self._probe_callback_refs: list = []
 
         # Serialize connection request. Route through the shared helper so
         # pooled clients honour lib_name / client_info_tag exactly like direct
@@ -364,6 +375,9 @@ class AsyncClientPool:
                 _client_registry.pop(cid, None)
             self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
+            # Release probe callbacks only after the Rust pool is destroyed so
+            # any lingering IAM refresh tasks have had a chance to complete.
+            self._probe_callback_refs.clear()
 
     async def aclose(self):
         self.close()
