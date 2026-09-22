@@ -20,10 +20,10 @@
 //! The redis-rs source is resolved directly from the `redis` path dependency
 //! declared in `Cargo.toml`.
 //!
-//! TODO #6904: This guard verifies our command table against the *in-repo*
+//! TODO #7058: This guard verifies our command table against the *in-repo*
 //! redis-rs fork, not upstream redis-rs. The client's real goal is
 //! compatibility with actual redis-rs, which the fork may diverge from —
-//! revisit as part of the API-compatibility work.
+//! revisit as part of the redis-rs 1.7.0 compatibility work.
 
 use regex::Regex;
 use std::collections::BTreeMap;

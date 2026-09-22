@@ -256,7 +256,7 @@ pub trait HashCommands: CommandExecutor {
 
     /// Set hash field values with an optional field condition and expiry
     /// (`HSETEX`). Returns `1` if all fields were set, `0` otherwise.
-    // TODO #6904: investigate whether the latest redis-rs version defines HSETEX and
+    // TODO #7058: investigate whether the latest redis-rs version defines HSETEX and
     // its option types, to mirror redis-rs instead of the Python-shaped signature.
     async fn hsetex<K, F, V>(
         &self,

@@ -4,7 +4,7 @@
 //! Mirrors the Python `glide_shared.commands.core_options` and
 //! `command_args` modules.
 
-// TODO #6904: investigate whether the latest redis-rs version defines equivalents
+// TODO #7058: investigate whether the latest redis-rs version defines equivalents
 // for these Python-mirrored option types, to mirror redis-rs instead. (`SetExpiry`
 // already mirrors redis-rs and is exempt.)
 use crate::cmd::Cmd;
