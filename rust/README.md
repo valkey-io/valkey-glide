@@ -101,8 +101,7 @@ takes a few minutes; subsequent builds are incremental.
 
 Cloning this repository to develop the client? See **[DEVELOPER.md](./DEVELOPER.md)**
 for the full workflow (build, run the unit + live integration tests — which spawn
-a `valkey-server`, set `VALKEY_SERVER_PATH` to point at your binary — lint,
-coverage, and benchmarks).
+a `valkey-server`, set `VALKEY_SERVER_PATH` to point at your binary — lint, and coverage).
 
 ## Quick start (async)
 
@@ -153,8 +152,7 @@ client.custom_command_with_route(&["PING"], Route::AllPrimaries).await?;
 # Ok(()) }
 ```
 
-See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to
-build, test, and benchmark.
+See `DESIGN.md` for architecture, and `DEVELOPER.md` for how to build and test.
 
 ## Migrating from redis-rs
 
@@ -255,7 +253,7 @@ cargo test           # everything, incl. live integration tests + doctests
 
 Integration tests auto-discover a `valkey-server`/`redis-server` on `PATH`; point
 them at a specific binary with `VALKEY_SERVER_PATH=/path/to/valkey-server`. See
-`DEVELOPER.md` for coverage and benchmarks.
+`DEVELOPER.md` for coverage.
 
 ## Status & publishing
 

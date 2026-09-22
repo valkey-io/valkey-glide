@@ -9,7 +9,7 @@
   it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those
   crates sit alongside it — **a monorepo checkout is required** (this crate lives
   in it, under `rust/`). No network fetch is needed to resolve the dependencies.
-- A `valkey-server` (or `redis-server`) binary for integration tests / benches.
+- A `valkey-server` (or `redis-server`) binary for integration tests.
   The harness auto-discovers one on `PATH`; override with:
 
   ```bash
@@ -46,15 +46,6 @@ cargo deny --config ../deny.toml check
 cargo doc --no-deps --document-private-items
 ```
 
-## Benchmarks
-
-```bash
-cargo bench
-```
-
-Prints a manual throughput probe (ops/sec at several concurrency levels) and runs
-Criterion latency benchmarks for `SET`/`GET`/`INCR`.
-
 ## Layout
 
 ```text
@@ -84,8 +75,6 @@ tests/
   common/         shared harness (server, cluster, timeout, pubsub, macros)
   mock_commands/  server-free encoding/decoding tests for the extensions
   it_*.rs         per-family live tests (one file per command family)
-benches/
-  throughput.rs   latency + throughput
 ```
 
 ## Adding a command

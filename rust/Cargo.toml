@@ -1,9 +1,7 @@
 [package]
 name = "glide-rust"
 version = "0.2.0"
-# edition 2024 to match the upstream valkey-glide Rust crates (glide-core, ffi,
-# python/glide-async, logger_core). No `rust-version` (MSRV) is declared, matching
-# upstream — Rust is an internal build detail, not a published-version surface.
+# TODO #7167: declare a `rust-version` (MSRV) before publishing.
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Valkey GLIDE Maintainers"]
@@ -13,8 +11,7 @@ homepage = "https://valkey.io/valkey-glide/"
 readme = "README.md"
 keywords = ["valkey", "redis", "glide", "client", "database"]
 categories = ["database", "asynchronous"]
-# TODO #7024: Remove benches
-exclude = ["/tests", "/benches"]
+exclude = ["/tests"]
 
 [lib]
 name = "glide"
@@ -42,15 +39,10 @@ thiserror = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-criterion = { version = "0.5", features = ["async_tokio"] }
 once_cell = "1"
 url = "2"
 regex = "1"
 serde_json = "1"
-
-[[bench]]
-name = "throughput"
-harness = false
 
 [features]
 default = ["sync"]
