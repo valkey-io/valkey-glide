@@ -3,126 +3,147 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+// Modules
+// -------
+
 pub mod client;
+pub mod cmd;
 pub mod commands;
 pub mod config;
 pub mod error;
 pub mod executor;
+pub mod pipeline;
 pub mod pipeline_options;
 pub mod routes;
 pub mod script;
 pub mod telemetry;
 pub mod value;
+pub mod write;
 
 #[cfg(feature = "sync")]
 pub mod sync;
 
-// ---- Primary public API re-exports (mirror Python's top-level `glide` package) ----
+#[cfg(test)]
+mod mock_tests;
 
-pub use client::{
-    ClusterScanCursor, GlideClient, GlideClusterClient, PubSubMessage, PubSubMessageKind,
-};
-pub use error::{GlideError, Result};
-pub use executor::{CommandExecutor, CustomCommand};
-pub use pipeline_options::PipelineOptions;
-pub use routes::{Route, SlotType};
+// Aliases
+// -------
 
-pub use config::{
-    BackoffStrategy, ClientIdentity, GlideClientConfiguration, GlideClusterClientConfiguration,
-    IamAuthConfig, NodeAddress, NodeDiscoveryMode, PeriodicChecks, ProtocolVersion,
-    PubSubChannelMode, PubSubSubscriptions, ReadFrom, ServerCredentials, ServiceType, TlsConfig,
-};
+/// The result type for GLIDE sync operations.
+pub type ValkeyResult<T> = std::result::Result<T, GlideError>;
 
-/// All command traits in one import.
-pub use commands::prelude::*;
+/// The future returned by GLIDE async commands.
+pub type ValkeyFuture<'a, T> = futures::future::BoxFuture<'a, ValkeyResult<T>>;
 
-/// All shared option types.
-pub use commands::options::{
-    ClientPauseMode, ConditionalChange, ExpireOptions, FlushMode, FunctionRestorePolicy,
-    HashFieldConditionalChange, Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions,
-};
+// Classes and methods
+// -------------------
 
-/// Family-specific option/type re-exports.
-pub use commands::bitmap::{
-    BitEncoding, BitFieldOffset, BitFieldSubcommand, BitOverflow, BitmapIndexType,
-};
-pub use commands::geo::{GeoSearchShape, GeoUnit, GeospatialData};
-pub use commands::sorted_set::{AggregationType, LexBound, ScoreBound};
-pub use commands::stream::{
-    PendingConsumer, StreamAddOptions, StreamClaimOptions, StreamEntry, StreamGroupCreateOptions,
-    StreamReadGroupOptions, StreamReadOptions, StreamTrimOptions, StreamTrimStrategy,
-    XPendingEntry, XPendingSummary,
-};
+// Values
+pub use value::FromValkeyValue;
+pub use value::ValkeyValue;
+pub use value::ValkeyVerbatimFormat;
+pub use write::ToValkeyArgs;
+pub use write::ValkeyNumericBehavior;
+pub use write::ValkeyWrite;
 
-/// Re-export the underlying `redis` value type for advanced use.
-pub use redis::Value;
+// Core types
+pub use error::GlideError;
+pub use routes::Route;
+pub use routes::SlotType;
 
-// ---- `redis` crate re-exports ----
-//
-// GLIDE's unified command traits are source-compatible with the fork's
-// command surface, and their signatures reference fork types
-// (`ToRedisArgs`, `FromRedisValue`, `SetOptions`, ...). Downstream crates
-// depend on `glide-rust` only — the vendored `redis` fork is a transitive path
-// dependency they cannot name — so re-export everything a migrating codebase
-// needs:
-//
-// ```rust,no_run
-// use glide::{AsyncCommands, GlideClient, GlideClientConfiguration};
-//
-// # async fn demo() -> glide::RedisResult<()> {
-// # let mut client = GlideClient::connect(GlideClientConfiguration::with_address("localhost", 6379)).await.unwrap();
-// client.set::<_, _, ()>("my_key", 42).await?;
-// let v: i64 = client.get("my_key").await?;
-// # Ok(()) }
-// ```
+// Client
+pub use client::ClusterScanCursor;
+pub use client::GlideClient;
+pub use client::GlideClusterClient;
+pub use client::PipelineExt;
+pub use client::PubSubMessage;
+pub use client::PubSubMessageKind;
 
-/// Typed [`Pipeline`] execution on the async clients with zero extra payload
-/// copies (`pipe()...query_glide(&client)`); the blocking counterpart lives
-/// at `sync::PipelineExt`.
-pub use client::{GlidePipelineTarget, PipelineExt};
-/// GLIDE's async command API (source-compatible with the redis-rs fork,
-/// v0.25.2 — see `commands::core`). Commands travel GLIDE's native
-/// zero-extra-copy path.
+// Configuration types
+pub use config::BackoffStrategy;
+pub use config::ClientIdentity;
+pub use config::GlideClientConfiguration;
+pub use config::GlideClusterClientConfiguration;
+pub use config::IamAuthConfig;
+pub use config::NodeAddress;
+pub use config::NodeDiscoveryMode;
+pub use config::PeriodicChecks;
+pub use config::ProtocolVersion;
+pub use config::PubSubChannelMode;
+pub use config::PubSubSubscriptions;
+pub use config::ReadFrom;
+pub use config::ServerCredentials;
+pub use config::ServiceType;
+pub use config::TlsConfig;
+
+// Commands
+pub use cmd::Cmd;
+pub use cmd::cmd;
 pub use commands::core::AsyncCommands;
-/// GLIDE's blocking command API (see [`AsyncCommands`]).
+pub use commands::prelude::*;
+pub use executor::CustomCommand;
+
 #[cfg(feature = "sync")]
 pub use commands::core::Commands;
-/// GLIDE's cursor-driven scan iterators, returned by the `scan*` methods.
+
+/// Shared command options.
+pub use commands::options::ClientPauseMode;
+pub use commands::options::ConditionalChange;
+pub use commands::options::Direction;
+pub use commands::options::ExistenceCheck;
+pub use commands::options::ExpireOptions;
+pub use commands::options::Expiry;
+pub use commands::options::FlushMode;
+pub use commands::options::FunctionRestorePolicy;
+pub use commands::options::HashFieldConditionalChange;
+pub use commands::options::Limit;
+pub use commands::options::LposOptions;
+pub use commands::options::MigrateOptions;
+pub use commands::options::ObjectType;
+pub use commands::options::OrderBy;
+pub use commands::options::RestoreOptions;
+pub use commands::options::SetExpiry;
+pub use commands::options::SetOptions;
+
+/// Command group-specific options.
+pub use commands::bitmap::BitEncoding;
+pub use commands::bitmap::BitFieldOffset;
+pub use commands::bitmap::BitFieldSubcommand;
+pub use commands::bitmap::BitOverflow;
+pub use commands::bitmap::BitmapIndexType;
+pub use commands::geo::GeoSearchShape;
+pub use commands::geo::GeoUnit;
+pub use commands::geo::GeospatialData;
+pub use commands::sorted_set::AggregationType;
+pub use commands::sorted_set::LexBound;
+pub use commands::sorted_set::ScoreBound;
+pub use commands::stream::PendingConsumer;
+pub use commands::stream::StreamAddOptions;
+pub use commands::stream::StreamClaimOptions;
+pub use commands::stream::StreamEntry;
+pub use commands::stream::StreamGroupCreateOptions;
+pub use commands::stream::StreamReadGroupOptions;
+pub use commands::stream::StreamReadOptions;
+pub use commands::stream::StreamTrimOptions;
+pub use commands::stream::StreamTrimStrategy;
+pub use commands::stream::XPendingEntry;
+pub use commands::stream::XPendingSummary;
+
+// Scan iterators
 pub use commands::scan::ScanIter;
-/// Blocking counterpart of [`ScanIter`] (implements [`Iterator`]).
+
 #[cfg(feature = "sync")]
 pub use commands::scan::SyncScanIter;
-/// The **whole vendored `redis` crate**, re-exported. Downstream crates cannot
-/// name the path-dep fork directly, and the curated flat re-exports above are
-/// deliberately incomplete where names collide with other exported types
-/// (`redis::SetOptions`, `redis::Expiry`, ...). Everything is reachable as
-/// `glide::redis::…` with zero collision risk:
-///
-/// ```rust,no_run
-/// use glide::redis::{Expiry, SetOptions};
-/// ```
-///
-/// Note: the GLIDE clients are deliberately **not** `redis` connection
-/// objects (no `ConnectionLike`) — that interop layer cost a payload copy
-/// per command. Use the unified traits, [`PipelineExt::query_glide`], or
-/// [`CustomCommand::custom_command`] instead.
-///
-/// **Semver note:** this makes the fork's API part of this crate's public
-/// surface — changing the vendored fork's API is a breaking change.
-pub use redis;
-/// Connection-description types, accepted by
-/// [`GlideClientConfiguration::from_connection_info`] and
-/// [`GlideClusterClientConfiguration::from_urls`].
-pub use redis::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
-/// Argument types appearing in command signatures (`lmpop`, `lpos`, …).
-pub use redis::{Direction, LposOptions};
-/// Error and conversion types (`RedisResult`, `FromRedisValue`, …).
-pub use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, ToRedisArgs, cmd};
-/// Pipeline / transaction builder (`pipe()`; run with
-/// [`PipelineExt::query_glide`] or `execute_pipeline`).
-pub use redis::{Pipeline, pipe};
-/// Lua script helper (`Script` — SHA-caching `EVALSHA` with `EVAL` fallback).
-pub use script::{Script, ScriptInvocation};
 
-/// Re-export `bytes::Bytes` — the byte-string type returned by binary-safe commands.
+/// Script types.
+pub use script::Script;
+pub use script::ScriptInvocation;
+
+// Pipeline
+pub use pipeline::Pipeline;
+pub use pipeline::pipe;
+pub use pipeline_options::PipelineOptions;
+
+// External types.
 pub use bytes::Bytes;
+pub use num_bigint::BigInt;

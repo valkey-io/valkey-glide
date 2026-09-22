@@ -40,6 +40,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    # TODO #7167: Pin to the MSRV
     lint:
         name: Lint - Rust client
         runs-on: ubuntu-latest

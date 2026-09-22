@@ -2,12 +2,14 @@
 //! Stream commands. Mirrors Python's stream command surface.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use crate::error::Result;
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// A single stream entry: its ID and its field/value pairs.
 pub type StreamEntry = (String, Vec<(Bytes, Bytes)>);
@@ -235,72 +237,77 @@ pub struct XPendingEntry {
 pub trait StreamCommands: CommandExecutor {
     /// Append an entry to the stream at `key` (`XADD`). Pass `"*"` for an
     /// auto-generated ID. Returns the generated entry ID.
-    async fn xadd<K, F, V>(&self, key: K, id: &str, fields: &[(F, V)]) -> Result<Option<String>>
+    async fn xadd<K, F, V>(
+        &self,
+        key: K,
+        id: &str,
+        fields: &[(F, V)],
+    ) -> ValkeyResult<Option<String>>
     where
-        K: ToRedisArgs + Send + Sync,
-        F: ToRedisArgs + Send + Sync,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send + Sync,
+        F: ToValkeyArgs + Send + Sync,
+        V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
         cmd.arg("XADD").arg(key).arg(id);
         for (f, v) in fields {
             cmd.arg(f).arg(v);
         }
-        value::to_opt_string(self.execute_command(cmd, None).await?)
+        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the number of entries in the stream (`XLEN`).
-    async fn xlen<K: ToRedisArgs + Send>(&self, key: K) -> Result<i64> {
+    async fn xlen<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XLEN").arg(key);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete entries by ID (`XDEL`); returns the number deleted.
-    async fn xdel<K: ToRedisArgs + Send>(&self, key: K, ids: &[&str]) -> Result<i64> {
+    async fn xdel<K: ToValkeyArgs + Send>(&self, key: K, ids: &[&str]) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XDEL").arg(key);
         for id in ids {
             cmd.arg(*id);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Trim the stream to (approximately) `maxlen` entries (`XTRIM ... MAXLEN`).
-    async fn xtrim_maxlen<K: ToRedisArgs + Send>(
+    async fn xtrim_maxlen<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         maxlen: i64,
         approximate: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XTRIM").arg(key).arg("MAXLEN");
         if approximate {
             cmd.arg("~");
         }
         cmd.arg(maxlen);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Read a range of entries (`XRANGE key start end`).
-    async fn xrange<K: ToRedisArgs + Send>(
+    async fn xrange<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         start: &str,
         end: &str,
-    ) -> Result<Vec<StreamEntry>> {
+    ) -> ValkeyResult<Vec<StreamEntry>> {
         let mut cmd = Cmd::new();
         cmd.arg("XRANGE").arg(key).arg(start).arg(end);
         parse_entries(self.execute_command(cmd, None).await?)
     }
 
     /// Read a range of entries in reverse (`XREVRANGE key end start`).
-    async fn xrevrange<K: ToRedisArgs + Send>(
+    async fn xrevrange<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         end: &str,
         start: &str,
-    ) -> Result<Vec<StreamEntry>> {
+    ) -> ValkeyResult<Vec<StreamEntry>> {
         let mut cmd = Cmd::new();
         cmd.arg("XREVRANGE").arg(key).arg(end).arg(start);
         parse_entries(self.execute_command(cmd, None).await?)
@@ -308,36 +315,45 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Create a consumer group (`XGROUP CREATE`). Set `mkstream` to create the
     /// stream if it does not exist.
-    async fn xgroup_create<K: ToRedisArgs + Send>(
+    async fn xgroup_create<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
         id: &str,
         mkstream: bool,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("CREATE").arg(key).arg(group).arg(id);
         if mkstream {
             cmd.arg("MKSTREAM");
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Destroy a consumer group (`XGROUP DESTROY`). Returns whether it existed.
-    async fn xgroup_destroy<K: ToRedisArgs + Send>(&self, key: K, group: &str) -> Result<bool> {
+    async fn xgroup_destroy<K: ToValkeyArgs + Send>(
+        &self,
+        key: K,
+        group: &str,
+    ) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("DESTROY").arg(key).arg(group);
-        value::to_bool(self.execute_command(cmd, None).await?)
+        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Acknowledge processed entries in a consumer group (`XACK`).
-    async fn xack<K: ToRedisArgs + Send>(&self, key: K, group: &str, ids: &[&str]) -> Result<i64> {
+    async fn xack<K: ToValkeyArgs + Send>(
+        &self,
+        key: K,
+        group: &str,
+        ids: &[&str],
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XACK").arg(key).arg(group);
         for id in ids {
             cmd.arg(*id);
         }
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Append an entry to the stream with options (`XADD` with `NOMKSTREAM` /
@@ -349,11 +365,11 @@ pub trait StreamCommands: CommandExecutor {
         id: &str,
         fields: &[(F, V)],
         options: &StreamAddOptions,
-    ) -> Result<Option<String>>
+    ) -> ValkeyResult<Option<String>>
     where
-        K: ToRedisArgs + Send + Sync,
-        F: ToRedisArgs + Send + Sync,
-        V: ToRedisArgs + Send + Sync,
+        K: ToValkeyArgs + Send + Sync,
+        F: ToValkeyArgs + Send + Sync,
+        V: ToValkeyArgs + Send + Sync,
     {
         let mut cmd = Cmd::new();
         cmd.arg("XADD").arg(key);
@@ -362,33 +378,33 @@ pub trait StreamCommands: CommandExecutor {
         for (f, v) in fields {
             cmd.arg(f).arg(v);
         }
-        value::to_opt_string(self.execute_command(cmd, None).await?)
+        Option::<String>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Trim the stream to a minimum ID (`XTRIM ... MINID`). Returns entries removed.
-    async fn xtrim_minid<K: ToRedisArgs + Send>(
+    async fn xtrim_minid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         minid: &str,
         approximate: bool,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XTRIM").arg(key).arg("MINID");
         if approximate {
             cmd.arg("~");
         }
         cmd.arg(minid);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Read from one or more streams (`XREAD`). `keys_ids` is a list of
     /// `(key, id)` pairs. Returns `(stream_key, entries)` per stream that
     /// produced data.
-    async fn xread<K: ToRedisArgs + Send + Sync>(
+    async fn xread<K: ToValkeyArgs + Send + Sync>(
         &self,
         keys_ids: &[(K, &str)],
         options: Option<StreamReadOptions>,
-    ) -> Result<Vec<(Bytes, Vec<StreamEntry>)>> {
+    ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XREAD");
         if let Some(o) = options {
@@ -405,13 +421,13 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Read from streams as part of a consumer group (`XREADGROUP`).
-    async fn xreadgroup<K: ToRedisArgs + Send + Sync>(
+    async fn xreadgroup<K: ToValkeyArgs + Send + Sync>(
         &self,
         group: &str,
         consumer: &str,
         keys_ids: &[(K, &str)],
         options: Option<StreamReadGroupOptions>,
-    ) -> Result<Vec<(Bytes, Vec<StreamEntry>)>> {
+    ) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("GROUP").arg(group).arg(consumer);
         if let Some(o) = options {
@@ -429,7 +445,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Claim ownership of pending messages (`XCLAIM`). Returns the claimed
     /// entries with their fields.
-    async fn xclaim<K: ToRedisArgs + Send>(
+    async fn xclaim<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -437,7 +453,7 @@ pub trait StreamCommands: CommandExecutor {
         min_idle_time_ms: i64,
         ids: &[&str],
         options: Option<StreamClaimOptions>,
-    ) -> Result<Vec<StreamEntry>> {
+    ) -> ValkeyResult<Vec<StreamEntry>> {
         let mut cmd = Cmd::new();
         cmd.arg("XCLAIM")
             .arg(key)
@@ -455,7 +471,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Claim ownership of pending messages, returning only their IDs
     /// (`XCLAIM ... JUSTID`).
-    async fn xclaim_justid<K: ToRedisArgs + Send>(
+    async fn xclaim_justid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -463,7 +479,7 @@ pub trait StreamCommands: CommandExecutor {
         min_idle_time_ms: i64,
         ids: &[&str],
         options: Option<StreamClaimOptions>,
-    ) -> Result<Vec<String>> {
+    ) -> ValkeyResult<Vec<String>> {
         let mut cmd = Cmd::new();
         cmd.arg("XCLAIM")
             .arg(key)
@@ -482,7 +498,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Automatically claim pending messages idle for at least `min_idle_time_ms`
     /// (`XAUTOCLAIM`). Returns `(next_cursor, claimed_entries, deleted_ids)`.
-    async fn xautoclaim<K: ToRedisArgs + Send>(
+    async fn xautoclaim<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -490,7 +506,7 @@ pub trait StreamCommands: CommandExecutor {
         min_idle_time_ms: i64,
         start: &str,
         count: Option<i64>,
-    ) -> Result<(String, Vec<StreamEntry>, Vec<String>)> {
+    ) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
         let mut cmd = Cmd::new();
         cmd.arg("XAUTOCLAIM")
             .arg(key)
@@ -505,7 +521,7 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Automatically claim pending messages returning only their IDs
-    async fn xautoclaim_justid<K: ToRedisArgs + Send>(
+    async fn xautoclaim_justid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -513,7 +529,7 @@ pub trait StreamCommands: CommandExecutor {
         min_idle_time_ms: i64,
         start: &str,
         count: Option<i64>,
-    ) -> Result<(String, Vec<String>, Vec<String>)> {
+    ) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
         let mut cmd = Cmd::new();
         cmd.arg("XAUTOCLAIM")
             .arg(key)
@@ -529,11 +545,11 @@ pub trait StreamCommands: CommandExecutor {
     }
 
     /// Summary form of `XPENDING` (`XPENDING key group`).
-    async fn xpending<K: ToRedisArgs + Send>(
+    async fn xpending<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
-    ) -> Result<XPendingSummary> {
+    ) -> ValkeyResult<XPendingSummary> {
         let mut cmd = Cmd::new();
         cmd.arg("XPENDING").arg(key).arg(group);
         parse_xpending_summary(self.execute_command(cmd, None).await?)
@@ -541,7 +557,7 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Extended (range) form of `XPENDING`
     /// (`XPENDING key group [IDLE ms] start end count [consumer]`).
-    async fn xpending_range<K: ToRedisArgs + Send>(
+    async fn xpending_range<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
@@ -550,7 +566,7 @@ pub trait StreamCommands: CommandExecutor {
         count: i64,
         min_idle_time_ms: Option<i64>,
         consumer: Option<&str>,
-    ) -> Result<Vec<XPendingEntry>> {
+    ) -> ValkeyResult<Vec<XPendingEntry>> {
         let mut cmd = Cmd::new();
         cmd.arg("XPENDING").arg(key).arg(group);
         if let Some(idle) = min_idle_time_ms {
@@ -565,10 +581,10 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Get general information about a stream (`XINFO STREAM`). Returns the raw
     /// structured reply as a list of `(field, value)` pairs.
-    async fn xinfo_stream<K: ToRedisArgs + Send>(
+    async fn xinfo_stream<K: ToValkeyArgs + Send>(
         &self,
         key: K,
-    ) -> Result<Vec<(Bytes, redis::Value)>> {
+    ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("STREAM").arg(key);
         parse_field_value_map(self.execute_command(cmd, None).await?)
@@ -577,11 +593,11 @@ pub trait StreamCommands: CommandExecutor {
     /// Get the full state of a stream including entries and PEL
     /// (`XINFO STREAM ... FULL`). Returns the raw structured reply as
     /// `(field, value)` pairs. Pass `count` to limit returned entries/PEL.
-    async fn xinfo_stream_full<K: ToRedisArgs + Send>(
+    async fn xinfo_stream_full<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         count: Option<i64>,
-    ) -> Result<Vec<(Bytes, redis::Value)>> {
+    ) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("STREAM").arg(key).arg("FULL");
         if let Some(c) = count {
@@ -592,34 +608,34 @@ pub trait StreamCommands: CommandExecutor {
 
     /// Get information about the consumer groups of a stream (`XINFO GROUPS`).
     /// Returns one `(field, value)` map per group.
-    async fn xinfo_groups<K: ToRedisArgs + Send>(
+    async fn xinfo_groups<K: ToValkeyArgs + Send>(
         &self,
         key: K,
-    ) -> Result<Vec<Vec<(Bytes, redis::Value)>>> {
+    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("GROUPS").arg(key);
         parse_list_of_maps(self.execute_command(cmd, None).await?)
     }
 
     /// Get information about the consumers in a group (`XINFO CONSUMERS`).
-    async fn xinfo_consumers<K: ToRedisArgs + Send>(
+    async fn xinfo_consumers<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
-    ) -> Result<Vec<Vec<(Bytes, redis::Value)>>> {
+    ) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
         let mut cmd = Cmd::new();
         cmd.arg("XINFO").arg("CONSUMERS").arg(key).arg(group);
         parse_list_of_maps(self.execute_command(cmd, None).await?)
     }
 
     /// Set the last-delivered ID of a stream (`XSETID`).
-    async fn xsetid<K: ToRedisArgs + Send>(
+    async fn xsetid<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         last_id: &str,
         entries_added: Option<i64>,
         max_deleted_id: Option<&str>,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("XSETID").arg(key).arg(last_id);
         if let Some(e) = entries_added {
@@ -628,87 +644,87 @@ pub trait StreamCommands: CommandExecutor {
         if let Some(m) = max_deleted_id {
             cmd.arg("MAXDELETEDID").arg(m);
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Create a consumer group with options (`XGROUP CREATE` with `MKSTREAM` /
     /// `ENTRIESREAD`).
-    async fn xgroup_create_options<K: ToRedisArgs + Send>(
+    async fn xgroup_create_options<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
         id: &str,
         options: &StreamGroupCreateOptions,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("CREATE").arg(key).arg(group).arg(id);
         options.add_to(&mut cmd);
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Create a new consumer in a group (`XGROUP CREATECONSUMER`). Returns
     /// whether the consumer was created.
-    async fn xgroup_create_consumer<K: ToRedisArgs + Send>(
+    async fn xgroup_create_consumer<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
         consumer: &str,
-    ) -> Result<bool> {
+    ) -> ValkeyResult<bool> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP")
             .arg("CREATECONSUMER")
             .arg(key)
             .arg(group)
             .arg(consumer);
-        value::to_bool(self.execute_command(cmd, None).await?)
+        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Delete a consumer from a group (`XGROUP DELCONSUMER`). Returns the number
     /// of pending messages the consumer had.
-    async fn xgroup_del_consumer<K: ToRedisArgs + Send>(
+    async fn xgroup_del_consumer<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
         consumer: &str,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP")
             .arg("DELCONSUMER")
             .arg(key)
             .arg(group)
             .arg(consumer);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Set the last-delivered ID for a consumer group (`XGROUP SETID`).
-    async fn xgroup_set_id<K: ToRedisArgs + Send>(
+    async fn xgroup_set_id<K: ToValkeyArgs + Send>(
         &self,
         key: K,
         group: &str,
         id: &str,
         entries_read: Option<i64>,
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg("XGROUP").arg("SETID").arg(key).arg(group).arg(id);
         if let Some(e) = entries_read {
             cmd.arg("ENTRIESREAD").arg(e);
         }
-        value::to_unit(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 }
 
 /// Parse an `XRANGE`/`XREVRANGE` reply into `(id, [(field, value), ...])` entries,
 /// handling both RESP2 (array of `[id, [f, v, ...]]`) and RESP3 (map of
 /// `id -> [[f, v], ...]`).
-fn parse_entries(v: redis::Value) -> Result<Vec<StreamEntry>> {
-    let pairs: Vec<(redis::Value, redis::Value)> = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs,
-        redis::Value::Array(items) => {
+fn parse_entries(v: ValkeyValue) -> ValkeyResult<Vec<StreamEntry>> {
+    let pairs: Vec<(ValkeyValue, ValkeyValue)> = match v {
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs,
+        ValkeyValue::Array(items) => {
             // RESP2: each item is [id, fields]. Normalize to (id, fields) pairs.
             let mut out = Vec::with_capacity(items.len());
             for entry in items {
-                if let redis::Value::Array(mut parts) = entry
+                if let ValkeyValue::Array(mut parts) = entry
                     && parts.len() == 2
                 {
                     let fields = parts.pop().unwrap();
@@ -727,7 +743,7 @@ fn parse_entries(v: redis::Value) -> Result<Vec<StreamEntry>> {
 
     let mut out = Vec::with_capacity(pairs.len());
     for (id_val, fields_val) in pairs {
-        let id = value::to_string(id_val)?;
+        let id = String::from_owned_valkey_value(id_val)?;
         let fv = parse_fields(fields_val)?;
         out.push((id, fv));
     }
@@ -736,22 +752,22 @@ fn parse_entries(v: redis::Value) -> Result<Vec<StreamEntry>> {
 
 /// Parse a field/value collection that may be flat (`[f, v, f, v]`) or nested
 /// pairs (`[[f, v], [f, v]]`).
-fn parse_fields(v: redis::Value) -> Result<Vec<(Bytes, Bytes)>> {
+fn parse_fields(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Bytes)>> {
     let items = match v {
-        redis::Value::Array(items) => items,
-        redis::Value::Nil => return Ok(Vec::new()),
-        other => return Ok(vec![(value::to_bytes(other)?, Bytes::new())]),
+        ValkeyValue::Array(items) => items,
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        other => return Ok(vec![(Bytes::from_owned_valkey_value(other)?, Bytes::new())]),
     };
     // Nested pairs form.
     if items
         .iter()
-        .all(|it| matches!(it, redis::Value::Array(inner) if inner.len() == 2))
+        .all(|it| matches!(it, ValkeyValue::Array(inner) if inner.len() == 2))
     {
         let mut out = Vec::with_capacity(items.len());
         for it in items {
-            if let redis::Value::Array(mut pair) = it {
-                let val = value::to_bytes(pair.pop().unwrap())?;
-                let field = value::to_bytes(pair.pop().unwrap())?;
+            if let ValkeyValue::Array(mut pair) = it {
+                let val = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
+                let field = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                 out.push((field, val));
             }
         }
@@ -761,7 +777,10 @@ fn parse_fields(v: redis::Value) -> Result<Vec<(Bytes, Bytes)>> {
     let mut out = Vec::with_capacity(items.len() / 2);
     let mut iter = items.into_iter();
     while let (Some(f), Some(val)) = (iter.next(), iter.next()) {
-        out.push((value::to_bytes(f)?, value::to_bytes(val)?));
+        out.push((
+            Bytes::from_owned_valkey_value(f)?,
+            Bytes::from_owned_valkey_value(val)?,
+        ));
     }
     Ok(out)
 }
@@ -769,24 +788,27 @@ fn parse_fields(v: redis::Value) -> Result<Vec<(Bytes, Bytes)>> {
 impl<T: CommandExecutor + ?Sized> StreamCommands for T {}
 
 /// Collect an array reply into a `Vec<String>` (used by `JUSTID` variants).
-fn collect_strings(v: redis::Value) -> Result<Vec<String>> {
+fn collect_strings(v: ValkeyValue) -> ValkeyResult<Vec<String>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items.into_iter().map(value::to_string).collect(),
-        other => Ok(vec![value::to_string(other)?]),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items
+            .into_iter()
+            .map(String::from_owned_valkey_value)
+            .collect(),
+        other => Ok(vec![String::from_owned_valkey_value(other)?]),
     }
 }
 
 /// Parse an `XREAD`/`XREADGROUP` reply (map or array of `[key, entries]`) into
 /// `(stream_key, entries)` pairs.
-fn parse_stream_read(v: redis::Value) -> Result<Vec<(Bytes, Vec<StreamEntry>)>> {
-    let pairs: Vec<(redis::Value, redis::Value)> = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs,
-        redis::Value::Array(items) => {
+fn parse_stream_read(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, Vec<StreamEntry>)>> {
+    let pairs: Vec<(ValkeyValue, ValkeyValue)> = match v {
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs,
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len());
             for entry in items {
-                if let redis::Value::Array(mut parts) = entry
+                if let ValkeyValue::Array(mut parts) = entry
                     && parts.len() == 2
                 {
                     let entries = parts.pop().unwrap();
@@ -804,7 +826,7 @@ fn parse_stream_read(v: redis::Value) -> Result<Vec<(Bytes, Vec<StreamEntry>)>> 
     };
     let mut out = Vec::with_capacity(pairs.len());
     for (key_val, entries_val) in pairs {
-        let key = value::to_bytes(key_val)?;
+        let key = Bytes::from_owned_valkey_value(key_val)?;
         let entries = parse_entries(entries_val)?;
         out.push((key, entries));
     }
@@ -812,16 +834,16 @@ fn parse_stream_read(v: redis::Value) -> Result<Vec<(Bytes, Vec<StreamEntry>)>> 
 }
 
 /// Parse an `XAUTOCLAIM` reply `[cursor, entries, deleted]`.
-fn parse_autoclaim(v: redis::Value) -> Result<(String, Vec<StreamEntry>, Vec<String>)> {
+fn parse_autoclaim(v: ValkeyValue) -> ValkeyResult<(String, Vec<StreamEntry>, Vec<String>)> {
     match v {
-        redis::Value::Array(mut items) if items.len() == 2 || items.len() == 3 => {
+        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
             let deleted = if items.len() == 3 {
                 collect_strings(items.pop().unwrap())?
             } else {
                 Vec::new()
             };
             let entries = parse_entries(items.pop().unwrap())?;
-            let cursor = value::to_string(items.pop().unwrap())?;
+            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, entries, deleted))
         }
         other => Err(crate::error::GlideError::Request(format!(
@@ -831,16 +853,16 @@ fn parse_autoclaim(v: redis::Value) -> Result<(String, Vec<StreamEntry>, Vec<Str
 }
 
 /// Parse an `XAUTOCLAIM ... JUSTID` reply `[cursor, ids, deleted]`.
-fn parse_autoclaim_justid(v: redis::Value) -> Result<(String, Vec<String>, Vec<String>)> {
+fn parse_autoclaim_justid(v: ValkeyValue) -> ValkeyResult<(String, Vec<String>, Vec<String>)> {
     match v {
-        redis::Value::Array(mut items) if items.len() == 2 || items.len() == 3 => {
+        ValkeyValue::Array(mut items) if items.len() == 2 || items.len() == 3 => {
             let deleted = if items.len() == 3 {
                 collect_strings(items.pop().unwrap())?
             } else {
                 Vec::new()
             };
             let ids = collect_strings(items.pop().unwrap())?;
-            let cursor = value::to_string(items.pop().unwrap())?;
+            let cursor = String::from_owned_valkey_value(items.pop().unwrap())?;
             Ok((cursor, ids, deleted))
         }
         other => Err(crate::error::GlideError::Request(format!(
@@ -850,10 +872,10 @@ fn parse_autoclaim_justid(v: redis::Value) -> Result<(String, Vec<String>, Vec<S
 }
 
 /// Parse the summary form of `XPENDING`: `[count, min, max, [[consumer, count], ...]]`.
-fn parse_xpending_summary(v: redis::Value) -> Result<XPendingSummary> {
+fn parse_xpending_summary(v: ValkeyValue) -> ValkeyResult<XPendingSummary> {
     let mut items = match v {
-        redis::Value::Array(items) if items.len() == 4 => items,
-        redis::Value::Nil => return Ok(XPendingSummary::default()),
+        ValkeyValue::Array(items) if items.len() == 4 => items,
+        ValkeyValue::Nil => return Ok(XPendingSummary::default()),
         other => {
             return Err(crate::error::GlideError::Request(format!(
                 "unexpected XPENDING summary reply: {other:?}"
@@ -863,17 +885,17 @@ fn parse_xpending_summary(v: redis::Value) -> Result<XPendingSummary> {
     let consumers_val = items.pop().unwrap();
     let max_val = items.pop().unwrap();
     let min_val = items.pop().unwrap();
-    let count = value::to_i64(items.pop().unwrap())?;
+    let count = i64::from_owned_valkey_value(items.pop().unwrap())?;
     let consumers = match consumers_val {
-        redis::Value::Nil => Vec::new(),
-        redis::Value::Array(list) => {
+        ValkeyValue::Nil => Vec::new(),
+        ValkeyValue::Array(list) => {
             let mut out = Vec::with_capacity(list.len());
             for it in list {
-                if let redis::Value::Array(mut pair) = it
+                if let ValkeyValue::Array(mut pair) = it
                     && pair.len() == 2
                 {
-                    let cnt = value::to_i64(pair.pop().unwrap())?;
-                    let name = value::to_bytes(pair.pop().unwrap())?;
+                    let cnt = i64::from_owned_valkey_value(pair.pop().unwrap())?;
+                    let name = Bytes::from_owned_valkey_value(pair.pop().unwrap())?;
                     out.push((name, cnt));
                 }
             }
@@ -883,18 +905,18 @@ fn parse_xpending_summary(v: redis::Value) -> Result<XPendingSummary> {
     };
     Ok(XPendingSummary {
         count,
-        min_id: value::to_opt_bytes(min_val)?,
-        max_id: value::to_opt_bytes(max_val)?,
+        min_id: Option::<Bytes>::from_owned_valkey_value(min_val)?,
+        max_id: Option::<Bytes>::from_owned_valkey_value(max_val)?,
         consumers,
     })
 }
 
 /// Parse the extended (range) form of `XPENDING`: array of
 /// `[id, consumer, idle, delivery_count]`.
-fn parse_xpending_range(v: redis::Value) -> Result<Vec<XPendingEntry>> {
+fn parse_xpending_range(v: ValkeyValue) -> ValkeyResult<Vec<XPendingEntry>> {
     let items = match v {
-        redis::Value::Nil => return Ok(Vec::new()),
-        redis::Value::Array(items) => items,
+        ValkeyValue::Nil => return Ok(Vec::new()),
+        ValkeyValue::Array(items) => items,
         other => {
             return Err(crate::error::GlideError::Request(format!(
                 "unexpected XPENDING range reply: {other:?}"
@@ -903,13 +925,13 @@ fn parse_xpending_range(v: redis::Value) -> Result<Vec<XPendingEntry>> {
     };
     let mut out = Vec::with_capacity(items.len());
     for it in items {
-        if let redis::Value::Array(mut parts) = it
+        if let ValkeyValue::Array(mut parts) = it
             && parts.len() == 4
         {
-            let delivery_count = value::to_i64(parts.pop().unwrap())?;
-            let idle_ms = value::to_i64(parts.pop().unwrap())?;
-            let consumer = value::to_bytes(parts.pop().unwrap())?;
-            let id = value::to_bytes(parts.pop().unwrap())?;
+            let delivery_count = i64::from_owned_valkey_value(parts.pop().unwrap())?;
+            let idle_ms = i64::from_owned_valkey_value(parts.pop().unwrap())?;
+            let consumer = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
+            let id = Bytes::from_owned_valkey_value(parts.pop().unwrap())?;
             out.push(XPendingEntry {
                 id,
                 consumer,
@@ -923,18 +945,18 @@ fn parse_xpending_range(v: redis::Value) -> Result<Vec<XPendingEntry>> {
 
 /// Parse a structured reply (RESP3 map or RESP2 flat array of alternating
 /// field/value) into `(field, value)` pairs.
-fn parse_field_value_map(v: redis::Value) -> Result<Vec<(Bytes, redis::Value)>> {
+fn parse_field_value_map(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, ValkeyValue)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(k, val)| Ok((value::to_bytes(k)?, val)))
+            .map(|(k, val)| Ok((Bytes::from_owned_valkey_value(k)?, val)))
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(k), Some(val)) = (iter.next(), iter.next()) {
-                out.push((value::to_bytes(k)?, val));
+                out.push((Bytes::from_owned_valkey_value(k)?, val));
             }
             Ok(out)
         }
@@ -945,10 +967,10 @@ fn parse_field_value_map(v: redis::Value) -> Result<Vec<(Bytes, redis::Value)>> 
 }
 
 /// Parse a list of structured maps (e.g. `XINFO GROUPS`/`CONSUMERS`).
-fn parse_list_of_maps(v: redis::Value) -> Result<Vec<Vec<(Bytes, redis::Value)>>> {
+fn parse_list_of_maps(v: ValkeyValue) -> ValkeyResult<Vec<Vec<(Bytes, ValkeyValue)>>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => items.into_iter().map(parse_field_value_map).collect(),
         other => Err(crate::error::GlideError::Request(format!(
             "unexpected XINFO list reply: {other:?}"
         ))),
@@ -960,7 +982,8 @@ mod tests {
     use super::*;
 
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,

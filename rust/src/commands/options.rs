@@ -4,7 +4,12 @@
 //! Mirrors the Python `glide_shared.commands.core_options` and
 //! `command_args` modules.
 
-use redis::Cmd;
+// TODO #7058: investigate whether the latest redis-rs version defines equivalents
+// for these Python-mirrored option types, to mirror redis-rs instead. (`SetExpiry`
+// already mirrors redis-rs and is exempt.)
+use crate::cmd::Cmd;
+use crate::write::ToValkeyArgs;
+use crate::write::ValkeyWrite;
 
 /// Condition under which a `SET` (or similar) should be applied.
 ///
@@ -49,6 +54,213 @@ impl ExpireOptions {
             ExpireOptions::NewExpiryGreaterThanCurrent => cmd.arg("GT"),
             ExpireOptions::NewExpiryLessThanCurrent => cmd.arg("LT"),
         };
+    }
+}
+
+/// Expiry to apply when setting a value.
+///
+/// Mirrors redis-rs's `SetExpiry` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetExpiry {
+    /// Expire after the given number of seconds (`EX`).
+    EX(usize),
+
+    /// Expire after the given number of milliseconds (`PX`).
+    PX(usize),
+
+    /// Expire at the given Unix time in seconds (`EXAT`).
+    EXAT(usize),
+
+    /// Expire at the given Unix time in milliseconds (`PXAT`).
+    PXAT(usize),
+
+    /// Retain the key's existing TTL (`KEEPTTL`).
+    KEEPTTL,
+}
+
+impl ToValkeyArgs for SetExpiry {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        let mut kw = |k: &[u8], v: usize| {
+            out.write_arg(k);
+            out.write_arg_fmt(v);
+        };
+        match self {
+            SetExpiry::EX(secs) => kw(b"EX", *secs),
+            SetExpiry::PX(millis) => kw(b"PX", *millis),
+            SetExpiry::EXAT(ts) => kw(b"EXAT", *ts),
+            SetExpiry::PXAT(ts) => kw(b"PXAT", *ts),
+            SetExpiry::KEEPTTL => out.write_arg(b"KEEPTTL"),
+        }
+    }
+
+    fn is_single_arg(&self) -> bool {
+        matches!(self, SetExpiry::KEEPTTL)
+    }
+}
+
+/// Existence check for `SET` — whether the key must (not) already exist.
+///
+/// Mirrors redis-rs's `ExistenceCheck` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExistenceCheck {
+    /// Only set the key if it does not already exist (`NX`).
+    NX,
+    /// Only set the key if it already exists (`XX`).
+    XX,
+}
+
+/// Options for the `SET` command (`set_options`).
+///
+/// Mirrors redis-rs's `SetOptions` type.
+#[derive(Clone, Copy, Default)]
+pub struct SetOptions {
+    conditional_set: Option<ExistenceCheck>,
+    get: bool,
+    expiration: Option<SetExpiry>,
+}
+
+impl SetOptions {
+    /// Set the existence check (`NX`/`XX`).
+    pub fn conditional_set(mut self, existence_check: ExistenceCheck) -> Self {
+        self.conditional_set = Some(existence_check);
+        self
+    }
+
+    /// Return the key's old value (`GET`).
+    pub fn get(mut self, get: bool) -> Self {
+        self.get = get;
+        self
+    }
+
+    /// Set the expiry.
+    pub fn with_expiration(mut self, expiration: SetExpiry) -> Self {
+        self.expiration = Some(expiration);
+        self
+    }
+}
+
+impl ToValkeyArgs for SetOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(ref existence_check) = self.conditional_set {
+            match existence_check {
+                ExistenceCheck::NX => out.write_arg(b"NX"),
+                ExistenceCheck::XX => out.write_arg(b"XX"),
+            }
+        }
+        if self.get {
+            out.write_arg(b"GET");
+        }
+        if let Some(ref expiration) = self.expiration {
+            expiration.write_valkey_args(out);
+        }
+    }
+}
+
+/// The `LEFT`/`RIGHT` argument used by list commands (`LMOVE`, `LMPOP`, ...).
+///
+/// Mirrors redis-rs's `Direction` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// The head of the list (`LEFT`).
+    Left,
+    /// The tail of the list (`RIGHT`).
+    Right,
+}
+
+impl ToValkeyArgs for Direction {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            Direction::Left => b"LEFT".as_slice(),
+            Direction::Right => b"RIGHT".as_slice(),
+        });
+    }
+}
+
+/// Expiry argument for `GETEX`/`HGETEX`.
+///
+/// Mirrors redis-rs's `Expiry` type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Expiry {
+    /// Set expiry, in seconds (`EX`).
+    EX(usize),
+    /// Set expiry, in milliseconds (`PX`).
+    PX(usize),
+    /// Set expiry at a Unix time, in seconds (`EXAT`).
+    EXAT(usize),
+    /// Set expiry at a Unix time, in milliseconds (`PXAT`).
+    PXAT(usize),
+    /// Remove the time to live (`PERSIST`).
+    PERSIST,
+}
+
+impl ToValkeyArgs for Expiry {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        let mut kw = |k: &[u8], v: usize| {
+            out.write_arg(k);
+            out.write_arg_fmt(v);
+        };
+        match self {
+            Expiry::EX(sec) => kw(b"EX", *sec),
+            Expiry::PX(ms) => kw(b"PX", *ms),
+            Expiry::EXAT(ts) => kw(b"EXAT", *ts),
+            Expiry::PXAT(ts) => kw(b"PXAT", *ts),
+            Expiry::PERSIST => out.write_arg(b"PERSIST"),
+        }
+    }
+
+    fn is_single_arg(&self) -> bool {
+        matches!(self, Expiry::PERSIST)
+    }
+}
+
+/// Options for the `LPOS` command.
+///
+/// Mirrors redis-rs's `LposOptions` type.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LposOptions {
+    count: Option<usize>,
+    maxlen: Option<usize>,
+    rank: Option<isize>,
+}
+
+impl LposOptions {
+    /// Limit the results to the first `n` matches (`COUNT`).
+    pub fn count(mut self, n: usize) -> Self {
+        self.count = Some(n);
+        self
+    }
+
+    /// Return the `n`-th match (`RANK`).
+    pub fn rank(mut self, n: isize) -> Self {
+        self.rank = Some(n);
+        self
+    }
+
+    /// Limit the search to the first `n` list entries (`MAXLEN`).
+    pub fn maxlen(mut self, n: usize) -> Self {
+        self.maxlen = Some(n);
+        self
+    }
+}
+
+impl ToValkeyArgs for LposOptions {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(n) = self.count {
+            out.write_arg(b"COUNT");
+            out.write_arg_fmt(n);
+        }
+        if let Some(n) = self.rank {
+            out.write_arg(b"RANK");
+            out.write_arg_fmt(n);
+        }
+        if let Some(n) = self.maxlen {
+            out.write_arg(b"MAXLEN");
+            out.write_arg_fmt(n);
+        }
+    }
+
+    fn is_single_arg(&self) -> bool {
+        false
     }
 }
 
@@ -226,9 +438,8 @@ pub struct Limit {
 }
 
 /// The type of a key, used by `OBJECT`/`TYPE`/`SCAN`.
-///
-/// Mirrors Python `ObjectType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ObjectType {
     /// String.
     String,
@@ -285,7 +496,8 @@ mod tests {
 
     /// Collect a command's arguments as UTF-8 strings for assertions.
     fn args_of(cmd: &Cmd) -> Vec<String> {
-        cmd.args_iter()
+        cmd.as_redis()
+            .args_iter()
             .filter_map(|a| match a {
                 redis::Arg::Simple(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
                 redis::Arg::Cursor => None,
@@ -302,6 +514,78 @@ mod tests {
         let mut cmd = Cmd::new();
         ConditionalChange::OnlyIfDoesNotExist.add_to(&mut cmd);
         assert_eq!(args_of(&cmd), vec!["NX"]);
+    }
+
+    #[test]
+    fn set_expiry_args() {
+        let cases: [(SetExpiry, Vec<&str>); 5] = [
+            (SetExpiry::EX(60), vec!["EX", "60"]),
+            (SetExpiry::PX(1500), vec!["PX", "1500"]),
+            (SetExpiry::EXAT(100), vec!["EXAT", "100"]),
+            (SetExpiry::PXAT(200), vec!["PXAT", "200"]),
+            (SetExpiry::KEEPTTL, vec!["KEEPTTL"]),
+        ];
+        for (opt, expected) in cases {
+            let mut cmd = Cmd::new();
+            cmd.arg(opt);
+            assert_eq!(args_of(&cmd), expected);
+        }
+    }
+
+    #[test]
+    fn direction_args() {
+        let mut cmd = Cmd::new();
+        cmd.arg(Direction::Left).arg(Direction::Right);
+        assert_eq!(args_of(&cmd), vec!["LEFT", "RIGHT"]);
+    }
+
+    #[test]
+    fn expiry_args() {
+        let cases: [(Expiry, Vec<&str>); 5] = [
+            (Expiry::EX(60), vec!["EX", "60"]),
+            (Expiry::PX(1500), vec!["PX", "1500"]),
+            (Expiry::EXAT(100), vec!["EXAT", "100"]),
+            (Expiry::PXAT(200), vec!["PXAT", "200"]),
+            (Expiry::PERSIST, vec!["PERSIST"]),
+        ];
+        for (opt, expected) in cases {
+            let mut cmd = Cmd::new();
+            cmd.arg(opt);
+            assert_eq!(args_of(&cmd), expected);
+        }
+        assert!(!Expiry::EX(1).is_single_arg());
+        assert!(Expiry::PERSIST.is_single_arg());
+    }
+
+    #[test]
+    fn lpos_options_args() {
+        let mut cmd = Cmd::new();
+        cmd.arg(LposOptions::default());
+        assert!(args_of(&cmd).is_empty());
+
+        let mut cmd = Cmd::new();
+        cmd.arg(LposOptions::default().count(2).rank(-1).maxlen(100));
+        assert_eq!(
+            args_of(&cmd),
+            vec!["COUNT", "2", "RANK", "-1", "MAXLEN", "100"]
+        );
+        assert!(!LposOptions::default().is_single_arg());
+    }
+
+    #[test]
+    fn set_options_args() {
+        let mut cmd = Cmd::new();
+        cmd.arg(SetOptions::default());
+        assert!(args_of(&cmd).is_empty());
+
+        let mut cmd = Cmd::new();
+        cmd.arg(
+            SetOptions::default()
+                .conditional_set(ExistenceCheck::NX)
+                .get(true)
+                .with_expiration(SetExpiry::EX(60)),
+        );
+        assert_eq!(args_of(&cmd), vec!["NX", "GET", "EX", "60"]);
     }
 
     #[test]

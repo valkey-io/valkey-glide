@@ -8,12 +8,14 @@
 //! is delivered through the client (`get_pubsub_message`), not through these
 //! commands.
 
-use crate::error::Result;
+use crate::ValkeyResult;
+use crate::cmd::Cmd;
 use crate::executor::CommandExecutor;
-use crate::value;
+use crate::value::FromValkeyValue;
+use crate::value::ValkeyValue;
+use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
-use redis::{Cmd, ToRedisArgs};
 
 /// Pub/Sub commands (`SUBSCRIBE`/`UNSUBSCRIBE` at runtime, `SPUBLISH`,
 /// `PUBSUB ...`).
@@ -29,46 +31,52 @@ pub trait PubSubCommands: CommandExecutor {
     ///
     /// Note: runtime subscriptions are session-scoped and are not automatically
     /// restored after a reconnect (connect-time subscriptions are).
-    async fn subscribe<C: ToRedisArgs + Send + Sync>(&self, channels: &[C]) -> Result<()> {
+    async fn subscribe<C: ToValkeyArgs + Send + Sync>(&self, channels: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("SUBSCRIBE", channels).await
     }
 
     /// Unsubscribe from exact channels (`UNSUBSCRIBE`). An empty slice
     /// unsubscribes from all exact channels.
-    async fn unsubscribe<C: ToRedisArgs + Send + Sync>(&self, channels: &[C]) -> Result<()> {
+    async fn unsubscribe<C: ToValkeyArgs + Send + Sync>(&self, channels: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("UNSUBSCRIBE", channels).await
     }
 
     /// Subscribe to one or more glob patterns at runtime (`PSUBSCRIBE`). See
     /// [`Self::subscribe`] for delivery requirements.
-    async fn psubscribe<C: ToRedisArgs + Send + Sync>(&self, patterns: &[C]) -> Result<()> {
+    async fn psubscribe<C: ToValkeyArgs + Send + Sync>(&self, patterns: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("PSUBSCRIBE", patterns).await
     }
 
     /// Unsubscribe from patterns (`PUNSUBSCRIBE`). An empty slice unsubscribes
     /// from all patterns.
-    async fn punsubscribe<C: ToRedisArgs + Send + Sync>(&self, patterns: &[C]) -> Result<()> {
+    async fn punsubscribe<C: ToValkeyArgs + Send + Sync>(
+        &self,
+        patterns: &[C],
+    ) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("PUNSUBSCRIBE", patterns).await
     }
 
     /// Subscribe to one or more shard channels at runtime (`SSUBSCRIBE`, cluster
     /// only). See [`Self::subscribe`] for delivery requirements.
-    async fn ssubscribe<C: ToRedisArgs + Send + Sync>(&self, channels: &[C]) -> Result<()> {
+    async fn ssubscribe<C: ToValkeyArgs + Send + Sync>(&self, channels: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("SSUBSCRIBE", channels).await
     }
 
     /// Unsubscribe from shard channels (`SUNSUBSCRIBE`). An empty slice
     /// unsubscribes from all shard channels.
-    async fn sunsubscribe<C: ToRedisArgs + Send + Sync>(&self, channels: &[C]) -> Result<()> {
+    async fn sunsubscribe<C: ToValkeyArgs + Send + Sync>(
+        &self,
+        channels: &[C],
+    ) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("SUNSUBSCRIBE", channels).await
     }
 
     #[doc(hidden)]
-    async fn pubsub_subscribe_impl<C: ToRedisArgs + Send + Sync>(
+    async fn pubsub_subscribe_impl<C: ToValkeyArgs + Send + Sync>(
         &self,
         keyword: &'static str,
         channels: &[C],
-    ) -> Result<()> {
+    ) -> ValkeyResult<()> {
         let mut cmd = Cmd::new();
         cmd.arg(keyword);
         for c in channels {
@@ -85,47 +93,47 @@ pub trait PubSubCommands: CommandExecutor {
 
     /// Publish `message` to a shard `channel` (`SPUBLISH`, cluster). Returns the
     /// number of clients that received the message.
-    async fn spublish<C: ToRedisArgs + Send, M: ToRedisArgs + Send>(
+    async fn spublish<C: ToValkeyArgs + Send, M: ToValkeyArgs + Send>(
         &self,
         channel: C,
         message: M,
-    ) -> Result<i64> {
+    ) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("SPUBLISH").arg(channel).arg(message);
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// List active channels, optionally matching `pattern` (`PUBSUB CHANNELS`).
-    async fn pubsub_channels(&self, pattern: Option<&[u8]>) -> Result<Vec<Bytes>> {
+    async fn pubsub_channels(&self, pattern: Option<&[u8]>) -> ValkeyResult<Vec<Bytes>> {
         self.pubsub_channels_impl("CHANNELS", pattern).await
     }
 
     /// List active shard channels, optionally matching `pattern`
     /// (`PUBSUB SHARDCHANNELS`).
-    async fn pubsub_shardchannels(&self, pattern: Option<&[u8]>) -> Result<Vec<Bytes>> {
+    async fn pubsub_shardchannels(&self, pattern: Option<&[u8]>) -> ValkeyResult<Vec<Bytes>> {
         self.pubsub_channels_impl("SHARDCHANNELS", pattern).await
     }
 
     /// Get the number of subscriptions to patterns (`PUBSUB NUMPAT`).
-    async fn pubsub_numpat(&self) -> Result<i64> {
+    async fn pubsub_numpat(&self) -> ValkeyResult<i64> {
         let mut cmd = Cmd::new();
         cmd.arg("PUBSUB").arg("NUMPAT");
-        value::to_i64(self.execute_command(cmd, None).await?)
+        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Get the number of subscribers per channel (`PUBSUB NUMSUB`).
-    async fn pubsub_numsub<C: ToRedisArgs + Send + Sync>(
+    async fn pubsub_numsub<C: ToValkeyArgs + Send + Sync>(
         &self,
         channels: &[C],
-    ) -> Result<Vec<(Bytes, i64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, i64)>> {
         self.pubsub_numsub_impl("NUMSUB", channels).await
     }
 
     /// Get the number of subscribers per shard channel (`PUBSUB SHARDNUMSUB`).
-    async fn pubsub_shardnumsub<C: ToRedisArgs + Send + Sync>(
+    async fn pubsub_shardnumsub<C: ToValkeyArgs + Send + Sync>(
         &self,
         channels: &[C],
-    ) -> Result<Vec<(Bytes, i64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, i64)>> {
         self.pubsub_numsub_impl("SHARDNUMSUB", channels).await
     }
 
@@ -134,25 +142,28 @@ pub trait PubSubCommands: CommandExecutor {
         &self,
         sub: &'static str,
         pattern: Option<&[u8]>,
-    ) -> Result<Vec<Bytes>> {
+    ) -> ValkeyResult<Vec<Bytes>> {
         let mut cmd = Cmd::new();
         cmd.arg("PUBSUB").arg(sub);
         if let Some(p) = pattern {
             cmd.arg(p);
         }
         match self.execute_command(cmd, None).await? {
-            redis::Value::Array(items) => items.into_iter().map(value::to_bytes).collect(),
-            redis::Value::Nil => Ok(Vec::new()),
-            other => Ok(vec![value::to_bytes(other)?]),
+            ValkeyValue::Array(items) => items
+                .into_iter()
+                .map(Bytes::from_owned_valkey_value)
+                .collect(),
+            ValkeyValue::Nil => Ok(Vec::new()),
+            other => Ok(vec![Bytes::from_owned_valkey_value(other)?]),
         }
     }
 
     #[doc(hidden)]
-    async fn pubsub_numsub_impl<C: ToRedisArgs + Send + Sync>(
+    async fn pubsub_numsub_impl<C: ToValkeyArgs + Send + Sync>(
         &self,
         sub: &'static str,
         channels: &[C],
-    ) -> Result<Vec<(Bytes, i64)>> {
+    ) -> ValkeyResult<Vec<(Bytes, i64)>> {
         let mut cmd = Cmd::new();
         cmd.arg("PUBSUB").arg(sub);
         for c in channels {
@@ -163,18 +174,26 @@ pub trait PubSubCommands: CommandExecutor {
 }
 
 /// Parse a `PUBSUB NUMSUB` reply (flat `[channel, count, ...]` or RESP3 map).
-fn parse_numsub(v: redis::Value) -> Result<Vec<(Bytes, i64)>> {
+fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     match v {
-        redis::Value::Nil => Ok(Vec::new()),
-        redis::Value::Map(pairs) => pairs
+        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Map(pairs) => pairs
             .into_iter()
-            .map(|(c, n)| Ok((value::to_bytes(c)?, value::to_i64(n)?)))
+            .map(|(c, n)| {
+                Ok((
+                    Bytes::from_owned_valkey_value(c)?,
+                    i64::from_owned_valkey_value(n)?,
+                ))
+            })
             .collect(),
-        redis::Value::Array(items) => {
+        ValkeyValue::Array(items) => {
             let mut out = Vec::with_capacity(items.len() / 2);
             let mut iter = items.into_iter();
             while let (Some(c), Some(n)) = (iter.next(), iter.next()) {
-                out.push((value::to_bytes(c)?, value::to_i64(n)?));
+                out.push((
+                    Bytes::from_owned_valkey_value(c)?,
+                    i64::from_owned_valkey_value(n)?,
+                ));
             }
             Ok(out)
         }
