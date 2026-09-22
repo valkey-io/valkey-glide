@@ -1175,10 +1175,6 @@ class BaseClient(CoreCommands):
                 self._lib.close_client(self._core_client)
                 self._core_client = None
 
-            # Release CFFI callback refs so their memory can be reclaimed.
-            self._address_resolver_callback_ref = None
-            self._credential_provider_callback_ref = None
-
     async def aclose(self, err_message: Optional[str] = None) -> None:
         """Alias for close() for compatibility with async context managers."""
         await self.close(err_message)
