@@ -30,6 +30,11 @@ from .glide_client import (
     _client_registry,
 )
 
+# Module-level list that keeps CFFI credential-provider callbacks alive after
+# pool.close(). Rust's IAM refresh task may still invoke the callback briefly
+# after close(). Callbacks are removed after a fixed grace period (15 seconds).
+_pinned_credential_callbacks: list = []
+
 
 @dataclass
 class PoolConfig:
@@ -368,6 +373,42 @@ class AsyncClientPool:
         )
         return total[0]
 
+    def _pin_callbacks_with_grace_period(self) -> None:
+        """Pin CFFI credential callbacks for 15 s after pool destruction.
+
+        Rust's IAM refresh task may fire after ``glide_pool_destroy`` and
+        invoke the credential-provider callback.  If the Python object is
+        GC'd first the CFFI closure is freed — causing a SIGSEGV.  Keeping
+        the callbacks in a module-level list for 15 s (Rust's 10-second
+        callback deadline + margin) prevents that.
+        """
+        callbacks = list(self._probe_callback_refs)
+        if self._credential_provider_callback_ref is not None:
+            callbacks.append(self._credential_provider_callback_ref)
+        if not callbacks:
+            return
+
+        _pinned_credential_callbacks.extend(callbacks)
+
+        def _unpin(refs=callbacks):
+            for cb in refs:
+                try:
+                    _pinned_credential_callbacks.remove(cb)
+                except ValueError:
+                    pass
+
+        try:
+            asyncio.get_running_loop().call_later(15.0, _unpin)
+        except RuntimeError:
+            # No running event loop — use a daemon thread as fallback.
+            import time
+
+            def _unpin_thread(refs=callbacks):
+                time.sleep(15)
+                _unpin(refs)
+
+            threading.Thread(target=_unpin_thread, daemon=True).start()
+
     def close(self):
         if not self._closed:
             self._closed = True
@@ -375,8 +416,7 @@ class AsyncClientPool:
                 _client_registry.pop(cid, None)
             self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
-            # Release probe callbacks only after the Rust pool is destroyed so
-            # any lingering IAM refresh tasks have had a chance to complete.
+            self._pin_callbacks_with_grace_period()
             self._probe_callback_refs.clear()
 
     async def aclose(self):
