@@ -126,6 +126,18 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		)
 	}
 
+	// Reject a custom address resolver. It is a per-client callback registered
+	// with the core outside the serialized ConnectionRequest; glide_pool_create
+	// takes only the bytes, so the pool cannot forward it. The probe below runs
+	// a real client and can pass, but pooled connections would then use the
+	// untranslated address and fail at runtime — so fail fast here instead.
+	if clientConfig.GetAddressResolver() != nil {
+		return nil, errors.New(
+			"pool clients cannot use a custom address resolver; " +
+				"resolve addresses before configuring the pool",
+		)
+	}
+
 	// Serialize connection request protobuf
 	request, err := clientConfig.ToProtobuf()
 	if err != nil {
@@ -361,6 +373,18 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		return nil, errors.New(
 			"pool clients cannot have pubsub subscriptions configured; " +
 				"use the main client's pubsub API instead",
+		)
+	}
+
+	// Reject a custom address resolver. It is a per-client callback registered
+	// with the core outside the serialized ConnectionRequest; glide_pool_create
+	// takes only the bytes, so the pool cannot forward it. The probe below runs
+	// a real client and can pass, but pooled connections would then use the
+	// untranslated address and fail at runtime — so fail fast here instead.
+	if clientConfig.GetAddressResolver() != nil {
+		return nil, errors.New(
+			"pool clients cannot use a custom address resolver; " +
+				"resolve addresses before configuring the pool",
 		)
 	}
 

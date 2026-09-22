@@ -1,22 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.pool;
 
-import static connection_request.ConnectionRequestOuterClass.*;
-
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
-import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.GlideCredentialProvider;
-import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
-import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
-import glide.internal.ClientLibraryNameResolver;
-import glide.internal.GlideNativeBridge;
 import glide.managers.ConnectionManager;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -83,23 +75,36 @@ public class ClientPool implements AutoCloseable {
                             + "Use the main client's pubsub API instead.");
         }
 
+        // Reject a custom IAM credentials provider — it is a Java callback handed to native per
+        // client, and glidePoolCreate takes only the request bytes with no way to forward it. Failing
+        // here beats silently falling back to the core's default AWS credential chain (a different
+        // principal).
+        ServerCredentials credentials = config.getClientConfig().getCredentials();
+        if (credentials != null
+                && credentials.getIamConfig() != null
+                && credentials.getIamConfig().getCredentialsProvider() != null) {
+            throw new IllegalArgumentException(
+                    "Pool clients cannot use a custom IAM credentials provider. "
+                            + "Configure IAM without a provider to use the default credential chain.");
+        }
+
+        // Reject a custom address resolver for the same reason: it is a Java callback forwarded to
+        // native per client, and glidePoolCreate cannot receive it. The connectivity probe below runs
+        // the resolver and could pass, but pooled connections would then use the untranslated address
+        // and fail at runtime — so fail fast here instead.
+        if (config.getClientConfig().getAddressResolver().isPresent()) {
+            throw new IllegalArgumentException(
+                    "Pool clients cannot use a custom address resolver. "
+                            + "Resolve addresses before configuring the pool.");
+        }
+
         // Ahead of the connectivity probe below, so a static-config mistake surfaces as a
-        // ConfigurationError naming the real reason instead of a probe failure. Note that readFrom,
-        // clientAz and the pubsub guard are handled here, but circuit-breaker and lazyConnect config
-        // are still dropped by serializeConnectionRequest — see
-        // https://github.com/valkey-io/valkey-glide/issues/6897
+        // ConfigurationError naming the real reason instead of a probe failure. The serializer below
+        // delegates to ConnectionManager's shared builder, so a pooled request carries the same fields
+        // a directly-created client's does.
         ConnectionManager.validateClientAz(config.getClientConfig());
 
         byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
-
-        // Extract credential provider from IAM config if set
-        GlideCredentialProvider credentialProvider = null;
-        ServerCredentials creds = config.getClientConfig().getCredentials();
-        if (creds != null
-                && creds.getIamConfig() != null
-                && creds.getIamConfig().getCredentialsProvider() != null) {
-            credentialProvider = creds.getIamConfig().getCredentialsProvider();
-        }
 
         long poolId =
                 GlidePoolResolver.glidePoolCreate(
@@ -108,8 +113,7 @@ public class ClientPool implements AutoCloseable {
                         config.getIdleTimeout().toMillis(),
                         config.getRequestTimeout().toMillis(),
                         config.getAbandonTimeout().toMillis(),
-                        connectionRequestBytes,
-                        credentialProvider);
+                        connectionRequestBytes);
 
         if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");
         if (poolId < 0) throw new RuntimeException("Pool creation failed: " + poolId);
@@ -261,88 +265,12 @@ public class ClientPool implements AutoCloseable {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Internal: protobuf serialization (same as previous prototype)
+    // Internal: protobuf serialization
     // ═══════════════════════════════════════════════════════════════════
 
     private static byte[] serializeConnectionRequest(BaseClientConfiguration config) {
-        ConnectionRequest.Builder b = ConnectionRequest.newBuilder();
-        b.setLibName(ClientLibraryNameResolver.resolve(config.getLibName(), config.getClientInfoTag()));
-
-        for (glide.api.models.configuration.NodeAddress addr : config.getAddresses()) {
-            b.addAddresses(
-                    NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build());
-        }
-
-        b.setTlsMode(config.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls);
-        b.setClusterModeEnabled(config instanceof GlideClusterClientConfiguration);
-
-        int reqTimeout =
-                config.getRequestTimeout() != null
-                        ? config.getRequestTimeout()
-                        : (int) GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
-        b.setRequestTimeout(reqTimeout);
-        b.setConnectionTimeout(reqTimeout);
-
-        int inflight =
-                config.getInflightRequestsLimit() != null
-                        ? config.getInflightRequestsLimit()
-                        : GlideNativeBridge.getGlideCoreDefaultMaxInflightRequests();
-        b.setInflightRequestsLimit(inflight);
-
-        ServerCredentials creds = config.getCredentials();
-        if (creds != null) {
-            AuthenticationInfo.Builder auth = AuthenticationInfo.newBuilder();
-            if (creds.getUsername() != null) auth.setUsername(creds.getUsername());
-            if (creds.getPassword() != null) auth.setPassword(creds.getPassword());
-            // Serialize IAM configuration if present
-            if (creds.getIamConfig() != null) {
-                IamAuthConfig iamCfg = creds.getIamConfig();
-                IamCredentials.Builder iamCredentials =
-                        IamCredentials.newBuilder()
-                                .setClusterName(iamCfg.getClusterName())
-                                .setRegion(iamCfg.getRegion());
-                if (iamCfg.getService() == ServiceType.ELASTICACHE) {
-                    iamCredentials.setServiceType(
-                            connection_request.ConnectionRequestOuterClass.ServiceType.ELASTICACHE);
-                } else {
-                    iamCredentials.setServiceType(
-                            connection_request.ConnectionRequestOuterClass.ServiceType.MEMORYDB);
-                }
-                if (iamCfg.getRefreshIntervalSeconds() != null) {
-                    iamCredentials.setRefreshIntervalSeconds(iamCfg.getRefreshIntervalSeconds());
-                }
-                auth.setIamCredentials(iamCredentials.build());
-                // NOTE: credential_provider_key is set via GlidePoolResolver.glidePoolCreate
-                // which passes the JNI callback directly — not via protobuf.
-            }
-            b.setAuthenticationInfo(auth.build());
-        }
-
-        if (config.getReadFrom() != null) {
-            b.setReadFrom(ConnectionManager.mapReadFrom(config.getReadFrom()));
-        }
-        String clientAz = ConnectionManager.resolveClientAz(config);
-        if (clientAz != null) {
-            b.setClientAz(clientAz);
-        }
-
-        if (config.getClientName() != null) b.setClientName(config.getClientName());
-        if (config.getDatabaseId() != null) b.setDatabaseId(config.getDatabaseId());
-
-        if (config.getProtocol() != null) {
-            if ("RESP2".equals(config.getProtocol().name())) b.setProtocol(ProtocolVersion.RESP2);
-            else if ("RESP3".equals(config.getProtocol().name())) b.setProtocol(ProtocolVersion.RESP3);
-        }
-
-        BackoffStrategy rs = config.getReconnectStrategy();
-        if (rs != null) {
-            ConnectionRetryStrategy.Builder r = ConnectionRetryStrategy.newBuilder();
-            if (rs.getNumOfRetries() != null) r.setNumberOfRetries(rs.getNumOfRetries());
-            if (rs.getFactor() != null) r.setFactor(rs.getFactor());
-            if (rs.getExponentBase() != null) r.setExponentBase(rs.getExponentBase());
-            b.setConnectionRetryStrategy(r.build());
-        }
-
-        return b.build().toByteArray();
+        // Delegate to the one shared builder so a pooled client's request cannot drift from a
+        // directly-created one.
+        return ConnectionManager.buildConnectionRequest(config).toByteArray();
     }
 }
