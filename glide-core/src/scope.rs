@@ -40,6 +40,8 @@ use crate::pool::{
     ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopeTarget, ScopeTargetUnresolved,
 };
 #[cfg(feature = "proto")]
+use std::str::FromStr;
+#[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
 use std::sync::atomic::Ordering;
@@ -383,8 +385,8 @@ pub enum ScopeCreateError {
     InvalidLibName,
     /// Standalone target, but the request carries no seed address.
     NoSeedAddress,
-    /// redis-rs rejected the URL built from the target.
-    InvalidUrl(RedisError),
+    /// A `ClusterPrimary` target string was not a parseable `host:port`.
+    InvalidClusterTarget(Arc<String>),
     /// The connect attempt failed.
     ConnectFailed(RedisError),
     /// The connect attempt did not complete within `SCOPE_CONNECT_TIMEOUT`.
@@ -406,7 +408,9 @@ impl std::fmt::Display for ScopeCreateError {
             Self::InvalidConnectionRequest(e) => write!(f, "invalid connection request: {e}"),
             Self::InvalidLibName => f.write_str("invalid lib_name"),
             Self::NoSeedAddress => f.write_str("connection request has no seed address"),
-            Self::InvalidUrl(e) => write!(f, "invalid target url: {e}"),
+            Self::InvalidClusterTarget(addr) => {
+                write!(f, "cluster target is not a valid host:port: {addr}")
+            }
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
             Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
@@ -429,11 +433,45 @@ struct PreparedScopeConnection {
     initial_iam_generation: u64,
 }
 
+/// Parse a `ClusterPrimary` `host:port` target into `(host, port)`. The IPv6 host
+/// may or may not be bracketed depending on the source, so split and trim exactly as
+/// `cluster.rs`'s `get_connection_info` does, so the two paths cannot drift.
+#[cfg(feature = "proto")]
+fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
+    addr.rsplit_once(':').and_then(|(host, port)| {
+        Some(host.trim_start_matches('[').trim_end_matches(']'))
+            .filter(|h| !h.is_empty())
+            .zip(u16::from_str(port).ok())
+            .map(|(host, port)| (host.to_string(), port))
+    })
+}
+
+/// Build a `redis::ConnectionAddr` from a host/port and TLS mode, mirroring
+/// `client::get_connection_info`. Scoped connections carry no custom TLS certificate
+/// material, so `tls_params` is always `None`.
+#[cfg(feature = "proto")]
+fn build_scope_connection_addr(
+    host: String,
+    port: u16,
+    tls_mode: crate::connection_request::TlsMode,
+) -> redis::ConnectionAddr {
+    use crate::connection_request::TlsMode;
+    match tls_mode {
+        TlsMode::NoTls => redis::ConnectionAddr::Tcp(host, port),
+        _ => redis::ConnectionAddr::TcpTls {
+            host,
+            port,
+            insecure: tls_mode == TlsMode::InsecureTls,
+            tls_params: None,
+        },
+    }
+}
+
 /// Open and initialize a connection to `target`, without touching the pool.
 ///
-/// Pure pipeline: parse request → validate lib name → build URL → connect →
-/// AUTH/SELECT/CLIENT SETNAME. Any step failing short-circuits with the reason;
-/// reservation accounting is the caller's job.
+/// Pure pipeline: parse request → validate lib name → build ConnectionInfo →
+/// connect → AUTH/SELECT/CLIENT SETNAME. Any step failing short-circuits with the
+/// reason; reservation accounting is the caller's job.
 #[cfg(feature = "proto")]
 async fn build_scope_connection(
     client: Option<&Client>,
@@ -451,9 +489,14 @@ async fn build_scope_connection(
         return Err(ScopeCreateError::InvalidLibName);
     }
 
-    let use_tls = proto.tls_mode.value() != 0;
-    let scheme = if use_tls { "rediss" } else { "redis" };
-    let url = match target {
+    // Build a structured `ConnectionInfo` directly rather than a `redis://` URL,
+    // which would require a bare IPv6 host to be bracketed. Every other connection
+    // path in glide-core avoids the URL layer for this reason.
+    let tls_mode = proto
+        .tls_mode
+        .enum_value()
+        .unwrap_or(crate::connection_request::TlsMode::NoTls);
+    let (host, port) = match target {
         ScopeTarget::Standalone => {
             let addr = proto
                 .addresses
@@ -464,12 +507,24 @@ async fn build_scope_connection(
             } else {
                 addr.port as u16
             };
-            format!("{}://{}:{}", scheme, addr.host, port)
+            (addr.host.to_string(), port)
         }
-        ScopeTarget::ClusterPrimary(addr) => format!("{}://{}", scheme, addr),
+        ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
+            .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
     };
 
-    let redis_client = redis::Client::open(url.as_str()).map_err(ScopeCreateError::InvalidUrl)?;
+    let connection_addr = build_scope_connection_addr(host, port, tls_mode);
+    let redis_client = redis::Client::open(redis::ConnectionInfo {
+        addr: connection_addr,
+        // The old `redis://` URL carried no `resp3` param, so redis-rs parsed it
+        // as RESP2; `RedisConnectionInfo::default()` is RESP3, which would change
+        // the handshake. Everything else (db/auth) is set by the init pipeline below.
+        redis: redis::RedisConnectionInfo {
+            protocol: redis::ProtocolVersion::RESP2,
+            ..Default::default()
+        },
+    })
+    .expect("ConnectionInfo is always a valid IntoConnectionInfo");
     let opts = redis::GlideConnectionOptions {
         push_sender: None,
         disconnect_notifier: None,
@@ -1043,6 +1098,7 @@ mod tests {
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
+    use super::{build_scope_connection_addr, parse_cluster_target};
     use super::{
         create_scope_connection, resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
@@ -2125,5 +2181,83 @@ mod tests {
         // connection in a bad state and must not be treated as poisoning.
         let wrong_type = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE"));
         assert!(!is_poisoning_error(&wrong_type));
+    }
+
+    // ── IPv6 addressing (#7124) ──────────────────────────────────────────────
+    // Scoped connections build a structured `ConnectionInfo` rather than a
+    // `redis://` URL, so a bare IPv6 host does not need bracketing.
+
+    #[test]
+    fn parse_cluster_target_handles_ipv4_and_ipv6() {
+        assert_eq!(
+            parse_cluster_target("10.0.0.1:6379"),
+            Some(("10.0.0.1".to_string(), 6379))
+        );
+
+        // Bare IPv6: the final `:` before the port is the split point, and the
+        // host has no brackets to trim. This is the string the old URL path rejected.
+        assert_eq!(
+            parse_cluster_target("::1:7801"),
+            Some(("::1".to_string(), 7801))
+        );
+
+        // Bracketed IPv6 trims to the same host.
+        assert_eq!(
+            parse_cluster_target("[::1]:7801"),
+            Some(("::1".to_string(), 7801))
+        );
+        assert_eq!(
+            parse_cluster_target("[2001:db8::1]:6380"),
+            Some(("2001:db8::1".to_string(), 6380))
+        );
+    }
+
+    #[test]
+    fn parse_cluster_target_rejects_malformed() {
+        assert_eq!(parse_cluster_target("nohostport"), None); // no ':'
+        assert_eq!(parse_cluster_target(":6379"), None); // empty host
+        assert_eq!(parse_cluster_target("host:notaport"), None); // non-numeric port
+    }
+
+    #[test]
+    fn build_scope_connection_addr_ipv6_no_tls() {
+        use crate::connection_request::TlsMode;
+        let addr = build_scope_connection_addr("::1".to_string(), 7801, TlsMode::NoTls);
+        match addr {
+            redis::ConnectionAddr::Tcp(host, port) => {
+                assert_eq!(host, "::1");
+                assert_eq!(port, 7801);
+            }
+            other => panic!("expected Tcp(::1, 7801), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_scope_connection_addr_ipv6_secure_and_insecure_tls() {
+        use crate::connection_request::TlsMode;
+
+        let secure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::SecureTls);
+        match secure {
+            redis::ConnectionAddr::TcpTls {
+                host,
+                port,
+                insecure,
+                ..
+            } => {
+                assert_eq!(host, "::1");
+                assert_eq!(port, 6379);
+                assert!(!insecure, "SecureTls must verify");
+            }
+            other => panic!("expected verifying TcpTls, got {other:?}"),
+        }
+
+        let insecure = build_scope_connection_addr("::1".to_string(), 6379, TlsMode::InsecureTls);
+        match insecure {
+            redis::ConnectionAddr::TcpTls { host, insecure, .. } => {
+                assert_eq!(host, "::1");
+                assert!(insecure, "InsecureTls must skip verification");
+            }
+            other => panic!("expected insecure TcpTls, got {other:?}"),
+        }
     }
 }

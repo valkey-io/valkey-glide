@@ -1887,6 +1887,29 @@ mod scope_pool_tests {
                 .expect("spawn redis-server for regression test");
             Self { child, port }
         }
+
+        /// Like [`start`], but binds the server to the IPv6 loopback `::1`.
+        fn start_ipv6() -> Self {
+            let port = get_available_port();
+            let child = Command::new("redis-server")
+                .args([
+                    "--port",
+                    &port.to_string(),
+                    "--daemonize",
+                    "no",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--bind",
+                    "::1",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn redis-server (::1) for regression test");
+            Self { child, port }
+        }
     }
 
     /// Pick a port that is currently free on both IPv4 and IPv6, mirroring the
@@ -3576,5 +3599,112 @@ mod scope_pool_tests {
             pool.pending.lock().unwrap().is_empty(),
             "destroy must clear pending markers"
         );
+    }
+
+    /// A standalone scope opens against a server bound to the bare IPv6 loopback
+    /// `::1`. The old scope path built a `redis://::1:PORT` URL and re-parsed it;
+    /// redis-rs rejects the unbracketed IPv6 host, so the scope never seated and the
+    /// borrower saw only an eventual pool-exhaustion timeout. Building `ConnectionInfo`
+    /// directly makes the bare `::1` host connect. Pre-fix, this test fails:
+    /// `create_scope_connection` seats nothing and the `try_acquire` below panics.
+    #[tokio::test]
+    async fn scope_opens_against_ipv6_standalone_target() {
+        let server = TestServer::start_ipv6();
+
+        // Readiness probe. A bracketed URL here is fine — this is the harness, not
+        // the code under test.
+        {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                if let Ok(client) = redis::Client::open(format!("redis://[::1]:{}", server.port)) {
+                    let opts = redis::GlideConnectionOptions {
+                        push_sender: None,
+                        disconnect_notifier: None,
+                        discover_az: false,
+                        connection_timeout: Some(std::time::Duration::from_millis(200)),
+                        connection_retry_strategy: None,
+                        tcp_nodelay: true,
+                        pubsub_synchronizer: None,
+                        iam_token_provider: None,
+                        cert_params_provider: None,
+                    };
+                    if client.get_multiplexed_async_connection(opts).await.is_ok() {
+                        break;
+                    }
+                }
+                if std::time::Instant::now() > deadline {
+                    panic!("::1 server did not become ready in time");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+
+        // Seed the scope with a bare IPv6 host, as `NodeAddress("::1", port)` would.
+        let connection_request_bytes = {
+            use protobuf::Message as _;
+            let mut request = crate::connection_request::ConnectionRequest::new();
+            request
+                .addresses
+                .push(crate::connection_request::NodeAddress {
+                    host: "::1".into(),
+                    port: server.port.into(),
+                    ..Default::default()
+                });
+            request.lib_name = "GlideRust".into();
+            request
+                .write_to_bytes()
+                .expect("serialize connection request")
+        };
+
+        let client_id = 7_124_000_u64;
+        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            ScopePoolConfig::default(),
+            connection_request_bytes.clone(),
+            client_id,
+        )));
+        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+        let registry = crate::pool::get_scope_registry();
+
+        // Reserve a slot the RAII way (#7120), then hand the guard to the creator.
+        let reservation = pool_arc
+            .lock()
+            .await
+            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+            .expect("pool must grant a reservation");
+        crate::scope::create_scope_connection(
+            pool_arc.clone(),
+            None,
+            &connection_request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await;
+
+        // The connection must have seated. Pre-fix, create fails, idle is empty,
+        // and this acquire returns `Exhausted`.
+        let scope_id = {
+            let mut pool = pool_arc.lock().await;
+            match pool.try_acquire(
+                registry,
+                ScopeTarget::Standalone,
+                0,
+                next_scope_attempt_token(),
+            ) {
+                ScopeAcquire::Reused(id) => id,
+                other => panic!("scope against ::1 did not seat a connection: {other:?}"),
+            }
+        };
+
+        // And it is a live, usable connection.
+        let pong = crate::scope::execute_scope_command(scope_id, "PING", &[], None)
+            .await
+            .expect("PING on the IPv6 scope must succeed");
+        assert!(
+            matches!(&pong, redis::Value::SimpleString(s) if s == "PONG")
+                || matches!(&pong, redis::Value::BulkString(b) if b.as_ref() == b"PONG"),
+            "unexpected PING reply from IPv6 scope: {pong:?}"
+        );
+
+        crate::pool::get_client_scope_pools().remove(&client_id);
     }
 }
