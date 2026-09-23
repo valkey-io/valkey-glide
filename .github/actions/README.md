@@ -46,7 +46,8 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `os` | Yes | - | The current operating system (e.g., `ubuntu`, `macos`, `windows`, `amazon-linux`) |
-| `target` | No | `x86_64-unknown-linux-gnu` | Rust target toolchain (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
+| `rust-toolchain` | No | `stable` | Rust toolchain to install (e.g., `1.88.0`, `stable`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Build target (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
 | `engine-version` | No | `''` | Valkey engine version to install (optional) |
 | `language` | No | - | The language being built (optional, for language-specific setup) |
 | `github-token` | Yes | - | GitHub token for API access (typically `${{ secrets.GITHUB_TOKEN }}`) |
@@ -201,7 +202,7 @@ jobs:
 
 ### install-rust
 
-Installs the Rust stable toolchain with rustfmt and clippy components.
+Installs a Rust toolchain with rustfmt and clippy components.
 
 **Location:** `.github/actions/install-rust/action.yml`
 
@@ -209,7 +210,8 @@ Installs the Rust stable toolchain with rustfmt and clippy components.
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple (e.g., `aarch64-apple-darwin`) |
+| `toolchain` | No | `stable` | Rust toolchain to install (e.g., `1.88.0`, `stable`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Build target (e.g., `aarch64-apple-darwin`) |
 
 #### Example Usage
 
