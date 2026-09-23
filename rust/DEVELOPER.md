@@ -2,8 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.91.1+ (edition 2024; developed on 1.95). No MSRV is declared, matching the
-  upstream valkey-glide Rust crates.
+- Rust 1.94.1+ (edition 2024)
 - The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
   **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
   it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those

@@ -40,7 +40,6 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    # TODO #7167: Pin to the MSRV
     lint:
         name: Lint - Rust client
         runs-on: ubuntu-latest
@@ -82,14 +81,24 @@ jobs:
               with:
                   persist-credentials: false
 
+            - name: Determine minimum supported Rust version (MSRV)
+              id: msrv
+              working-directory: ./rust
+              shell: bash
+              run: |
+                  version=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+                  if [ -z "$version" ]; then echo "::error::rust-version not found in rust/Cargo.toml"; exit 1; fi
+                  echo "toolchain=$version" >> "$GITHUB_OUTPUT"
+
             - name: Install shared software dependencies
               uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
+                  rust-toolchain: ${{ steps.msrv.outputs.toolchain }}
                   target: ${{ matrix.host.target }}
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run rust client tests
               working-directory: ./rust
-              run: cargo test -- --show-output
+              run: cargo test --locked -- --show-output
