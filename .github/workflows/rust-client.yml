@@ -68,11 +68,9 @@ jobs:
                           runner: ubuntu-24.04,
                           target: x86_64-unknown-linux-gnu,
                       }
-                    # Sharing the engine cache with the rest of the repository means
-                    # using the same runner pool it uses for this target.
                     - {
                           arch: arm64,
-                          runner: [self-hosted, Linux, ARM64, ephemeral],
+                          runner: ubuntu-24.04-arm,
                           target: aarch64-unknown-linux-gnu,
                       }
                 engine:

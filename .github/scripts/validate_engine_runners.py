@@ -16,8 +16,10 @@ import yaml
 
 MATRIX_FILE = ".github/json_matrices/build-matrix.json"
 WORKFLOWS = ".github/workflows/*.yml"
-# Only these fields pair a runner with the target it was declared for. CD_RUNNER and
-# CD_TARGET belong to other entries, so pairing them would reintroduce the mismatch.
+# Only these matrix fields let a workflow pair a runner with the target it was declared
+# for. A workflow reading cd_runner or cd_target takes them from a rewritten matrix whose
+# other fields no longer belong to the same entry, so pairing those reintroduces the
+# mismatch. Reading them straight out of build-matrix.json is safe, and load_matrix does.
 RUNNER_FIELDS = ("runner", "self_hosted_runner")
 TARGET_FIELDS = ("target",)
 # Spelled in pieces so Actions does not read it as an expression to evaluate.
@@ -40,8 +42,14 @@ def load_matrix():
     declared, fields = {}, set()
     for entry in entries:
         fields.update(key.lower() for key in entry)
-        target = entry.get("TARGET")
-        for key in ("RUNNER", "SELF_HOSTED_RUNNER"):
+        # CD_RUNNER is the image the release workflows substitute for RUNNER, and they read
+        # the target as CD_TARGET || TARGET, so each runner is paired with its own target.
+        pairs = (
+            ("RUNNER", entry.get("TARGET")),
+            ("SELF_HOSTED_RUNNER", entry.get("TARGET")),
+            ("CD_RUNNER", entry.get("CD_TARGET") or entry.get("TARGET")),
+        )
+        for key, target in pairs:
             if target and entry.get(key):
                 declared.setdefault(target, set()).add(labels(entry[key]))
     return declared, fields
