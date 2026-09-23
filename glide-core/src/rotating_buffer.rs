@@ -2,7 +2,7 @@
 #[allow(unused_imports)]
 use bytes::{Bytes, BytesMut};
 use integer_encoding::VarInt;
-use logger_core::log_error;
+use glide_logger::log_error;
 use protobuf::Message;
 use std::io;
 

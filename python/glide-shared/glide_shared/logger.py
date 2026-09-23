@@ -120,7 +120,7 @@ class Logger:
                     ).decode(ENCODING)
 
                     # If the log failed due to invalid provided identifier or message,
-                    # Log the FFI log error using logger_core directly
+                    # Log the FFI log error using glide-logger directly
                     error_identifier = Logger._ffi.new(
                         "char[]", "Logger".encode(ENCODING)
                     )
@@ -137,7 +137,7 @@ class Logger:
                 Logger._lib.free_log_result(result_ptr)
 
         else:
-            # Log the null pointer error using logger_core directly
+            # Log the null pointer error using glide-logger directly
             error_identifier = Logger._ffi.new("char[]", "Logger".encode(ENCODING))
             error_message = Logger._ffi.new(
                 "char[]", "Log function returned a null pointer".encode(ENCODING)

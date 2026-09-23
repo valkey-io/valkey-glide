@@ -649,9 +649,9 @@ pub async fn create_scope_connection(
             // the borrower only ever sees a generic "pool exhausted" timeout.
             let message = format!("scoped connection to {target:?} not created: {err}");
             if matches!(err, ScopeCreateError::PoolClosed) {
-                logger_core::log_debug("create_scope_connection", message);
+                glide_logger::log_debug("create_scope_connection", message);
             } else {
-                logger_core::log_warn("create_scope_connection", message);
+                glide_logger::log_warn("create_scope_connection", message);
             }
             pool_guard.total_count.fetch_sub(1, Ordering::AcqRel);
         }
@@ -698,7 +698,7 @@ pub fn try_acquire_scope(
             let target = match try_resolve_scope_target(client.as_ref(), routing_slot) {
                 Ok(target) => {
                     if let Some(cleared) = pool.last_unresolved_target.take() {
-                        logger_core::log_debug(
+                        glide_logger::log_debug(
                             "try_acquire_scope",
                             format!(
                                 "client {client_id}: scope target resolves again \
@@ -874,7 +874,7 @@ fn log_unresolved_target(
         .is_some_and(|last| last.same_kind(cause));
     pool.last_unresolved_target = Some(cause);
     if repeated {
-        logger_core::log_debug(
+        glide_logger::log_debug(
             "try_acquire_scope",
             format!(
                 "client {client_id}: scope target for slot {routing_slot} still unresolved: {cause}"
@@ -890,7 +890,7 @@ fn log_unresolved_target(
             "scope acquire will be retried"
         }
     };
-    logger_core::log_warn(
+    glide_logger::log_warn(
         "try_acquire_scope",
         format!(
             "client {client_id}: cannot resolve scope target for slot {routing_slot}: \

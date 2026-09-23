@@ -2,7 +2,7 @@ include README.md
 # Ensure ffi, glide-core and logger are included
 recursive-include ffi *
 recursive-include glide-core *
-recursive-include logger_core *
+recursive-include glide-logger *
 recursive-include glide_shared *
 recursive-include glide-shared-rs *
 prune **/target

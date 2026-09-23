@@ -37,7 +37,7 @@ unsafe fn co_owner(span_ptr: u64) -> Arc<GlideSpan> {
 #[test]
 fn test_create_otel_span_with_valid_inputs() {
     // Initialize logger to capture debug messages
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test creating spans with various valid request types
     let request_types = vec![
@@ -91,7 +91,7 @@ fn test_create_otel_span_with_valid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_trace_context_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
     let span_id = CString::new("b7ad6b7169203331").unwrap();
@@ -117,7 +117,7 @@ fn test_create_otel_span_with_trace_context_valid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_trace_context_invalid_context_falls_back() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let invalid_trace_id = CString::new("not-valid").unwrap();
     let invalid_span_id = CString::new("zzzzzzzzzzzzzzzz").unwrap();
@@ -173,7 +173,7 @@ fn test_create_otel_span_with_trace_context_invalid_context_falls_back() {
 
 #[test]
 fn test_create_batch_otel_span_with_trace_context() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
     let span_id = CString::new("b7ad6b7169203331").unwrap();
@@ -200,7 +200,7 @@ fn test_create_batch_otel_span_with_trace_context() {
 
 #[test]
 fn test_create_otel_span_with_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with invalid request types that should return 0
     let invalid_request_types = vec![
@@ -219,7 +219,7 @@ fn test_create_otel_span_with_invalid_inputs() {
 
 #[test]
 fn test_create_named_otel_span_with_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let test_cases = vec![
         ("simple_span", true),
@@ -277,7 +277,7 @@ fn test_create_named_otel_span_with_valid_inputs() {
 
 #[test]
 fn test_create_named_otel_span_with_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null pointer
     let null_span_ptr = unsafe { create_named_otel_span(std::ptr::null()) };
@@ -309,7 +309,7 @@ fn test_create_named_otel_span_with_invalid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_parent_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("parent_span").expect("CString::new failed");
@@ -372,7 +372,7 @@ fn test_create_otel_span_with_parent_valid_inputs() {
 
 #[test]
 fn test_create_otel_span_with_parent_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null parent (should fallback to independent span)
     let child_with_null_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0) };
@@ -427,7 +427,7 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
 
 #[test]
 fn test_drop_otel_span_memory_safety() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test dropping null pointer (should not crash)
     unsafe {
@@ -461,7 +461,7 @@ fn test_drop_otel_span_memory_safety() {
 
 #[test]
 fn test_ffi_functions_concurrent_access() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let num_threads = 3; // Reduced number of threads to avoid race conditions
     let spans_per_thread = 2; // Reduced spans per thread
@@ -530,7 +530,7 @@ fn test_ffi_functions_concurrent_access() {
 
 #[test]
 fn test_span_hierarchy_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a multi-level span hierarchy
     let root_name = CString::new("root_span").expect("CString::new failed");
@@ -594,7 +594,7 @@ fn test_span_hierarchy_creation() {
 
 #[test]
 fn test_error_handling_and_logging() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test various error conditions to ensure proper logging
 
@@ -634,7 +634,7 @@ fn test_error_handling_and_logging() {
 
 #[test]
 fn test_boundary_conditions() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test span name length boundaries
     let boundary_cases = vec![
@@ -683,7 +683,7 @@ fn test_boundary_conditions() {
 }
 #[test]
 fn test_create_batch_otel_span() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test creating independent batch span
     let batch_span_ptr = create_batch_otel_span();
@@ -712,7 +712,7 @@ fn test_create_batch_otel_span() {
 
 #[test]
 fn test_create_batch_otel_span_with_parent_valid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("parent_operation").expect("CString::new failed");
@@ -756,7 +756,7 @@ fn test_create_batch_otel_span_with_parent_valid_inputs() {
 
 #[test]
 fn test_create_batch_otel_span_with_parent_invalid_inputs() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test with null parent (should fallback to independent batch span)
     let batch_with_null_parent = unsafe { create_batch_otel_span_with_parent(0) };
@@ -794,7 +794,7 @@ fn test_create_batch_otel_span_with_parent_invalid_inputs() {
 
 #[test]
 fn test_batch_span_hierarchy() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a root operation span
     let root_name = CString::new("user_operation").expect("CString::new failed");
@@ -843,7 +843,7 @@ fn test_batch_span_hierarchy() {
 
 #[test]
 fn test_batch_span_concurrent_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let num_threads = 3;
     let batches_per_thread = 2;
@@ -920,7 +920,7 @@ fn test_batch_span_concurrent_creation() {
 
 #[test]
 fn test_batch_span_error_handling() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test batch span creation with various error conditions
 
@@ -974,7 +974,7 @@ fn test_batch_span_error_handling() {
 
 #[test]
 fn test_custom_command_span_creation() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
@@ -997,7 +997,7 @@ fn test_custom_command_span_creation() {
 
 #[test]
 fn test_custom_command_span_with_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a parent span
     let parent_name = CString::new("user_operation").expect("CString::new failed");
@@ -1033,7 +1033,7 @@ fn test_custom_command_span_with_parent() {
 
 #[test]
 fn test_multiple_custom_command_spans() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let mut span_ptrs = Vec::new();
 
@@ -1074,7 +1074,7 @@ fn test_multiple_custom_command_spans() {
 
 #[test]
 fn test_custom_command_hierarchy() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a root operation span
     let root_name = CString::new("script_execution").expect("CString::new failed");
@@ -1134,7 +1134,7 @@ fn test_custom_command_hierarchy() {
 
 #[test]
 fn test_mixed_command_types_in_batch() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Create a batch span
     let batch_span_ptr = create_batch_otel_span();
@@ -1187,7 +1187,7 @@ fn test_mixed_command_types_in_batch() {
 
 #[test]
 fn test_custom_command_with_null_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test CustomCommand span creation with null parent (should fallback to independent span)
     let span_ptr = unsafe { create_otel_span_with_parent(RequestType::CustomCommand, 0) };
@@ -1207,7 +1207,7 @@ fn test_custom_command_with_null_parent() {
 
 #[test]
 fn test_custom_command_with_invalid_parent() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test CustomCommand span creation with invalid parent pointers
     let invalid_parents = vec![
@@ -1239,7 +1239,7 @@ fn test_custom_command_with_invalid_parent() {
 
 #[test]
 fn test_regression_no_error_logs_for_custom_command() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
@@ -1294,7 +1294,7 @@ fn test_regression_no_error_logs_for_custom_command() {
 /// `Arc` reference is gone after `drop_otel_span`, leaving only the test's co-owner.
 #[test]
 fn test_drop_otel_span_releases_native_reference() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let span_ptr = create_otel_span(RequestType::Get);
     assert_ne!(span_ptr, 0, "Span creation should succeed");
@@ -1325,7 +1325,7 @@ fn test_drop_otel_span_releases_native_reference() {
 /// the FFI boundary where the allocation actually lives.
 #[test]
 fn test_span_create_drop_loop_does_not_leak() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     const ITERATIONS: usize = 1000;
     let named = CString::new("loop_named_span").expect("CString::new failed");
@@ -1364,7 +1364,7 @@ fn test_span_create_drop_loop_does_not_leak() {
 /// dropped, including the parent reference held by its children's creation path.
 #[test]
 fn test_batch_span_hierarchy_does_not_leak() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     let parent_ptr = create_batch_otel_span();
     assert_ne!(parent_ptr, 0, "Batch parent span creation should succeed");

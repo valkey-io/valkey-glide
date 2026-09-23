@@ -466,6 +466,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "glide-logger"
+version = "0.1.0"
+dependencies = [
+ "file-rotate",
+ "once_cell",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -876,17 +887,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
-name = "logger_core"
-version = "0.1.0"
-dependencies = [
- "file-rotate",
- "once_cell",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lru"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1285,9 +1285,9 @@ dependencies = [
  "dispose",
  "futures",
  "futures-util",
+ "glide-logger",
  "itoa",
  "lazy_static",
- "logger_core",
  "lru",
  "num-bigint",
  "parking_lot",
@@ -1693,8 +1693,8 @@ name = "telemetrylib"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "glide-logger",
  "lazy_static",
- "logger_core",
  "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",

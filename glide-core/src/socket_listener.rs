@@ -20,7 +20,7 @@ use ClosingReason::*;
 use PipeListeningResult::*;
 use bytes::Bytes;
 use directories::BaseDirs;
-use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
+use glide_logger::{log_debug, log_error, log_info, log_trace, log_warn};
 use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
 use redis::cluster_routing::{
