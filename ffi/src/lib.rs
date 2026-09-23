@@ -4085,6 +4085,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         ClusterScanArgs::builder().build()
     };
 
+    // TODO #7161: Update to use new glide_core::Client methods.
     let scan_state_cursor = if cursor_id.is_empty() || cursor_id == "0" {
         ScanStateRC::new()
     } else {

@@ -37,6 +37,7 @@ impl SlotType {
 /// Mirrors the Python route classes: `AllNodes`, `AllPrimaries`, `RandomNode`,
 /// `SlotKeyRoute`, `SlotIdRoute`, `ByAddressRoute`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Route {
     /// Route to all nodes (primaries and replicas).
     AllNodes,
@@ -80,7 +81,7 @@ impl Route {
     ///
     /// For multi-node routes the response aggregation policy is derived from the
     /// command (when provided), exactly as `glide-core` does internally.
-    pub fn to_routing_info(&self, cmd: Option<&Cmd>) -> RoutingInfo {
+    pub(crate) fn to_routing_info(&self, cmd: Option<&Cmd>) -> RoutingInfo {
         let response_policy = || {
             cmd.and_then(|c| c.command())
                 .and_then(|name| ResponsePolicy::for_command(&name))
@@ -314,15 +315,16 @@ mod tests {
     // executor when dispatched through the public
     // `CustomCommand::custom_command_with_route` path — including the response
     // policy derived from the command keyword. No server is involved: the mock
-    // implements the `CommandExecutor` seam and captures what it is handed.
+    // implements `CommandExecutor` and captures what it is handed.
     mod dispatch {
+        use crate::cmd::Cmd;
         use crate::executor::{CommandExecutor, CustomCommand};
         use crate::routes::{Route, SlotType};
+        use crate::value::ValkeyValue;
         use async_trait::async_trait;
         use redis::cluster_routing::{
             MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         };
-        use redis::{Cmd, Value};
         use std::sync::Mutex;
 
         /// A deterministic, server-free `CommandExecutor` that records the last
@@ -338,9 +340,10 @@ mod tests {
             async fn execute_command(
                 &self,
                 cmd: Cmd,
-                routing: Option<RoutingInfo>,
-            ) -> crate::error::Result<Value> {
+                route: Option<Route>,
+            ) -> crate::ValkeyResult<ValkeyValue> {
                 let args: Vec<Vec<u8>> = cmd
+                    .as_redis()
                     .args_iter()
                     .map(|a| match a {
                         redis::Arg::Simple(s) => s.to_vec(),
@@ -348,8 +351,9 @@ mod tests {
                     })
                     .collect();
                 *self.last_args.lock().unwrap() = args;
-                *self.last_routing.lock().unwrap() = routing;
-                Ok(Value::Okay)
+                *self.last_routing.lock().unwrap() =
+                    route.map(|r| r.to_routing_info(Some(cmd.as_redis())));
+                Ok(ValkeyValue::Okay)
             }
         }
 

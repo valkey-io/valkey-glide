@@ -87,7 +87,7 @@ async fn auth_with_username_default_user() {
     };
     // The built-in `default` user with the configured password.
     let config = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
-        .credentials(ServerCredentials::new("default", PASSWORD));
+        .credentials(ServerCredentials::username_password("default", PASSWORD));
     let client = srv
         .try_connect(config)
         .await
