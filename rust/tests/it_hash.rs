@@ -4,26 +4,29 @@
 mod common;
 
 use glide::AsyncCommands;
+use glide::Expiry;
 use glide::HashCommands;
+use glide::SetExpiry;
 use glide::commands::options::{ExpireOptions, HashFieldConditionalChange};
-use redis::{Expiry, SetExpiry};
 
 /// Max seconds and milliseconds for future expiry.
 const FUTURE_EXPIRY_SECS: usize = (i64::MAX / 1_000_i64) as usize;
 const FUTURE_EXPIRY_MS: usize = i64::MAX as usize;
 
+// TODO #7082: replace the raw `HSET` with a typed `hset` that returns the count
+// of newly-added fields (`hset_multiple` maps to `HMSET`, which returns `OK`).
 matrix_test!(hset_hget, c, {
     let k = common::key("h");
     // HSET with multiple fields returns the count of NEW fields added.
-    // compat hset_multiple uses HMSET (returns OK), so use glide_send_owned for the count.
-    let mut cmd = redis::Cmd::new();
+    // compat hset_multiple uses HMSET (returns OK), so use glide_send_command_as for the count.
+    let mut cmd = glide::Cmd::new();
     cmd.arg("HSET")
         .arg(&k)
         .arg("f1")
         .arg("v1")
         .arg("f2")
         .arg("v2");
-    let n: i64 = redis::from_owned_redis_value(c.glide_send_owned(cmd).await.unwrap()).unwrap();
+    let n: i64 = c.glide_send_command_as(cmd).await.unwrap();
     assert_eq!(n, 2);
     let v: Option<String> = c.hget(&k, "f1").await.unwrap();
     assert_eq!(v.as_deref(), Some("v1"));
@@ -41,13 +44,15 @@ matrix_test!(hget_missing_key, c, {
     assert_eq!(v, None);
 });
 
+// TODO #7082: replace the raw `HSET` with a typed `hset` that returns the count
+// of newly-added fields (`hset_multiple` maps to `HMSET`, which returns `OK`).
 matrix_test!(hset_updates_existing_returns_zero, c, {
     let k = common::key("h");
     let _: () = c.hset_multiple(&k, &[("f", "v1")]).await.unwrap();
     // Updating an existing field returns 0 new fields via HSET.
-    let mut cmd = redis::Cmd::new();
+    let mut cmd = glide::Cmd::new();
     cmd.arg("HSET").arg(&k).arg("f").arg("v2");
-    let n: i64 = redis::from_owned_redis_value(c.glide_send_owned(cmd).await.unwrap()).unwrap();
+    let n: i64 = c.glide_send_command_as(cmd).await.unwrap();
     assert_eq!(n, 0);
     let v: Option<String> = c.hget(&k, "f").await.unwrap();
     assert_eq!(v.as_deref(), Some("v2"));
@@ -184,7 +189,7 @@ matrix_test!(hrandfield_count, c, {
 matrix_test!(hset_wrong_type_errors, c, {
     let k = common::key("wt");
     let _: i64 = c.rpush(&k, &["x"]).await.unwrap();
-    let result: redis::RedisResult<Option<String>> = c.hget(&k, "f").await;
+    let result: glide::ValkeyResult<Option<String>> = c.hget(&k, "f").await;
     assert!(result.is_err());
 });
 

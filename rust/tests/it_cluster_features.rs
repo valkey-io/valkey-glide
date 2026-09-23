@@ -7,8 +7,9 @@ mod common;
 
 use glide::commands::pubsub::PubSubCommands;
 use glide::{
-    AsyncCommands, CustomCommand, GlideClusterClient, GlideClusterClientConfiguration,
-    PipelineOptions, PubSubMessageKind, Route, ScriptingCommands, SortedSetCommands, pipe,
+    AsyncCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
+    GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
+    SortedSetCommands, pipe,
 };
 use std::time::Duration;
 
@@ -22,28 +23,29 @@ timed_tokio_test!(
         let k = common::tkey("cbo", "k");
         let mut pipeline = pipe();
         pipeline.set(&k, "1").incr(&k, 1i64).get(&k);
+
         let opts = PipelineOptions::new()
             .with_timeout(Duration::from_secs(5))
             .with_retry_server_error(true);
-        let results = c
-            .execute_pipeline(&pipeline, true, None, &opts)
-            .await
-            .unwrap();
+        let results = c.exec(&pipeline, true, None, &opts).await.unwrap();
+
         assert_eq!(results.len(), 3);
         // results[0] = SET reply (OK), results[1] = INCR reply (2), results[2] = GET reply ("2")
-        assert_eq!(glide::value::to_i64(results[1].clone()).unwrap(), 2);
-        assert_eq!(glide::value::to_string(results[2].clone()).unwrap(), "2");
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+        assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
 
         // Atomic transaction with options routed to the key's slot.
         let k2 = common::tkey("cbo", "tx");
         let mut tx = pipe();
         tx.atomic().set(&k2, "5").incr(&k2, 1i64);
+
         let res2 = c
-            .execute_pipeline(&tx, true, None, &PipelineOptions::new())
+            .exec(&tx, true, None, &PipelineOptions::new())
             .await
             .unwrap();
+
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
-        assert_eq!(glide::value::to_i64(res2[1].clone()).unwrap(), 6);
+        assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
     }
 );
 
@@ -68,13 +70,13 @@ timed_tokio_test!(
             .fcall_route("gc_echo", &[] as &[&str], &["hi"], Route::RandomNode)
             .await
             .unwrap();
-        assert_eq!(glide::value::to_string(r).unwrap(), "hi");
+        assert_eq!(String::from_owned_valkey_value(r).unwrap(), "hi");
 
         let r = client
             .fcall_ro_route("gc_echo", &[] as &[&str], &["ro"], Route::RandomNode)
             .await
             .unwrap();
-        assert_eq!(glide::value::to_string(r).unwrap(), "ro");
+        assert_eq!(String::from_owned_valkey_value(r).unwrap(), "ro");
 
         // Broadcast to all primaries -> one reply per node (map/array), all echo.
         let all = client

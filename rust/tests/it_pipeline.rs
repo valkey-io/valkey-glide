@@ -1,17 +1,19 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Pipeline + transaction integration tests via [`glide::pipe()`] and
-//! [`glide::GlideClient::execute_pipeline`].
+//! [`glide::GlideClient::exec`].
 //!
 //! Covers atomic transactions, non-atomic pipeline depth, `raise_on_error`
 //! true/false behaviour, errors inside a transaction, [`glide::PipelineOptions`]
 //! (timeout, retry policy), and WATCH/MULTI framing via `custom_command`.
 //!
-//! Note: `execute_pipeline` returns the **raw** per-command replies —
-//! `.ignore()` markers only affect typed decoding via `query_glide`.
+//! Note: `exec` returns the **raw** per-command replies —
+//! `.ignore()` markers only affect typed decoding via `query_async`.
 
 mod common;
 
-use glide::{AsyncCommands, CustomCommand, PipelineExt, PipelineOptions, pipe};
+use glide::{
+    AsyncCommands, Bytes, CustomCommand, FromValkeyValue, PipelineExt, PipelineOptions, pipe,
+};
 
 #[tokio::test]
 async fn atomic_transaction_ordered_results() {
@@ -21,14 +23,12 @@ async fn atomic_transaction_ordered_results() {
 
     let mut p = pipe();
     p.atomic().set(&k, "10").incr(&k, 1).incr(&k, 1).get(&k);
-    let results = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(results.len(), 4);
-    assert_eq!(glide::value::to_i64(results[1].clone()).unwrap(), 11);
-    assert_eq!(glide::value::to_i64(results[2].clone()).unwrap(), 12);
-    assert_eq!(glide::value::to_string(results[3].clone()).unwrap(), "12");
+    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 11);
+    assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
+    assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
 }
 
 #[tokio::test]
@@ -37,10 +37,8 @@ async fn empty_pipeline_returns_empty() {
     let c = srv.client().await;
     let mut p = pipe();
     p.atomic();
-    let results = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert!(results.is_empty());
 }
 
@@ -56,16 +54,11 @@ async fn non_atomic_pipeline_depth() {
         p.incr(&k, 1);
     }
     p.get(&k);
-    let results = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     // 1 SET + 100 INCR + 1 GET.
     assert_eq!(results.len(), 102);
-    assert_eq!(
-        glide::value::to_string(results[101].clone()).unwrap(),
-        "100"
-    );
+    assert_eq!(String::from_valkey_value(&results[101]).unwrap(), "100");
 }
 
 #[tokio::test]
@@ -77,9 +70,8 @@ async fn raise_on_error_true_surfaces_error() {
 
     let mut p = pipe();
     p.incr(&k, 1); // errors: value is not an integer
-    let result = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await;
+
+    let result = c.exec(&p, true, &PipelineOptions::default()).await;
     assert!(result.is_err(), "expected error with raise_on_error=true");
 }
 
@@ -93,14 +85,16 @@ async fn raise_on_error_false_returns_inline() {
 
     let mut p = pipe();
     p.set(&good, "1").incr(&good, 1).incr(&bad, 1); // last one errors
+
     let results = c
-        .execute_pipeline(&p, false, &PipelineOptions::default())
+        .exec(&p, false, &PipelineOptions::default())
         .await
         .unwrap();
-    // All three positions are present even though one errored.
+
     assert_eq!(results.len(), 3);
-    // The good INCR still produced 2.
-    assert_eq!(glide::value::to_i64(results[1].clone()).unwrap(), 2);
+    assert_eq!(results[0], glide::ValkeyValue::Okay);
+    assert_eq!(results[1], glide::ValkeyValue::Int(2));
+    assert!(matches!(results[2], glide::ValkeyValue::ServerError(_)));
 }
 
 #[tokio::test]
@@ -118,8 +112,9 @@ async fn error_inside_transaction_runtime() {
         .arg(common::key("ok"))
         .arg("v")
         .incr(&k, 1);
+
     let results = c
-        .execute_pipeline(&p, false, &PipelineOptions::default())
+        .exec(&p, false, &PipelineOptions::default())
         .await
         .unwrap();
     assert_eq!(results.len(), 2);
@@ -139,12 +134,10 @@ async fn raw_commands_in_pipeline() {
         .arg("0")
         .cmd("GET")
         .arg(&k);
-    let results = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(glide::value::to_string(results[2].clone()).unwrap(), "10");
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "10");
 }
 
 #[tokio::test]
@@ -157,19 +150,17 @@ async fn watch_multi_semantics() {
     // WATCH/UNWATCH are accepted (framing check). GLIDE multiplexes connections,
     // so we assert the commands succeed rather than optimistic-lock abort.
     let watch = c.custom_command(&["WATCH", &k]).await.unwrap();
-    assert_eq!(glide::value::to_string(watch).unwrap(), "OK");
+    assert_eq!(String::from_owned_valkey_value(watch).unwrap(), "OK");
 
     let mut p = pipe();
     p.atomic().incr(&k, 1);
-    let results = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(results.len(), 1);
-    assert_eq!(glide::value::to_i64(results[0].clone()).unwrap(), 2);
+    assert_eq!(i64::from_valkey_value(&results[0]).unwrap(), 2);
 
     let unwatch = c.custom_command(&["UNWATCH"]).await.unwrap();
-    assert_eq!(glide::value::to_string(unwatch).unwrap(), "OK");
+    assert_eq!(String::from_owned_valkey_value(unwatch).unwrap(), "OK");
 }
 
 #[tokio::test]
@@ -205,14 +196,12 @@ async fn pipeline_spans_multiple_data_types() {
         .arg("f")
         .cmd("ZCARD")
         .arg(&z);
-    let r = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(r.len(), 7);
-    assert_eq!(glide::value::to_i64(r[4].clone()).unwrap(), 3); // LLEN
-    assert_eq!(glide::value::to_string(r[5].clone()).unwrap(), "1"); // HGET
-    assert_eq!(glide::value::to_i64(r[6].clone()).unwrap(), 1); // ZCARD
+    assert_eq!(i64::from_valkey_value(&r[4]).unwrap(), 3); // LLEN
+    assert_eq!(String::from_valkey_value(&r[5]).unwrap(), "1"); // HGET
+    assert_eq!(i64::from_valkey_value(&r[6]).unwrap(), 1); // ZCARD
 }
 
 #[tokio::test]
@@ -223,12 +212,10 @@ async fn pipeline_preserves_binary_values() {
     let payload = vec![0u8, 1, 2, 255, 0, 42];
     let mut p = pipe();
     p.atomic().set(&k, payload.clone()).get(&k);
-    let r = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(
-        glide::value::to_bytes(r[1].clone()).unwrap().as_ref(),
+        Bytes::from_valkey_value(&r[1]).unwrap().as_ref(),
         &payload[..]
     );
 }
@@ -240,22 +227,20 @@ async fn non_atomic_mixed_reads_writes_ordered() {
     let k = common::key("b_mix");
     let mut p = pipe();
     p.set(&k, "1").get(&k).incr(&k, 1).get(&k).del(&k).get(&k);
-    let r = c
-        .execute_pipeline(&p, true, &PipelineOptions::default())
-        .await
-        .unwrap();
+
+    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
     assert_eq!(r.len(), 6);
-    assert_eq!(glide::value::to_string(r[1].clone()).unwrap(), "1");
-    assert_eq!(glide::value::to_i64(r[2].clone()).unwrap(), 2);
-    assert_eq!(glide::value::to_string(r[3].clone()).unwrap(), "2");
+    assert_eq!(String::from_valkey_value(&r[1]).unwrap(), "1");
+    assert_eq!(i64::from_valkey_value(&r[2]).unwrap(), 2);
+    assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "2");
     // After DEL, GET is null.
-    assert!(matches!(r[5], glide::Value::Nil));
+    assert!(matches!(r[5], glide::ValkeyValue::Nil));
 }
 
 #[tokio::test]
-async fn typed_pipeline_query_glide_still_works() {
+async fn typed_pipeline_query_async_still_works() {
     // The typed decode path (`.ignore()` filtering, tuple decode) remains
-    // available alongside execute_pipeline, via `query_glide`.
+    // available alongside `exec`, via `query_async`.
     let srv = server_or_skip!();
     let c = srv.client().await;
     let k = common::key("b_typed");
@@ -264,7 +249,7 @@ async fn typed_pipeline_query_glide_still_works() {
         .ignore()
         .get(&k)
         .incr(common::key("b_typed_ctr"), 5)
-        .query_glide(&c)
+        .query_async(&c)
         .await
         .unwrap();
     assert_eq!((v.as_str(), n), ("x", 5));
@@ -278,6 +263,7 @@ timed_tokio_test!(
         // All keys share a hash tag → same slot → a cluster MULTI/EXEC is valid.
         let k1 = common::tkey("btx", "k1");
         let k2 = common::tkey("btx", "k2");
+
         let mut p = pipe();
         p.atomic()
             .set(&k1, "10")
@@ -286,13 +272,14 @@ timed_tokio_test!(
             .get(&k1)
             .get(&k2);
         let r = client
-            .execute_pipeline(&p, true, None, &PipelineOptions::default())
+            .exec(&p, true, None, &PipelineOptions::default())
             .await
             .unwrap();
+
         assert_eq!(r.len(), 5);
-        assert_eq!(glide::value::to_i64(r[1].clone()).unwrap(), 11);
-        assert_eq!(glide::value::to_string(r[3].clone()).unwrap(), "11");
-        assert_eq!(glide::value::to_string(r[4].clone()).unwrap(), "x");
+        assert_eq!(i64::from_valkey_value(&r[1]).unwrap(), 11);
+        assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "11");
+        assert_eq!(String::from_valkey_value(&r[4]).unwrap(), "x");
     }
 );
 
@@ -302,17 +289,19 @@ timed_tokio_test!(
         let client = cluster.client().await;
 
         // A non-atomic pipeline may span slots; GLIDE routes each command.
-        let mut p = pipe();
         let a = common::key("bp_a");
         let b = common::key("bp_b");
+
+        let mut p = pipe();
         p.set(&a, "1").set(&b, "2").get(&a).get(&b);
         let r = client
-            .execute_pipeline(&p, true, None, &PipelineOptions::default())
+            .exec(&p, true, None, &PipelineOptions::default())
             .await
             .unwrap();
+
         assert_eq!(r.len(), 4);
-        assert_eq!(glide::value::to_string(r[2].clone()).unwrap(), "1");
-        assert_eq!(glide::value::to_string(r[3].clone()).unwrap(), "2");
+        assert_eq!(String::from_valkey_value(&r[2]).unwrap(), "1");
+        assert_eq!(String::from_valkey_value(&r[3]).unwrap(), "2");
     }
 );
 
@@ -330,10 +319,10 @@ async fn pipeline_with_options_timeout_and_retry() {
         .with_retry_server_error(true)
         .with_retry_connection_error(false);
 
-    let results = c.execute_pipeline(&p, true, &opts).await.unwrap();
+    let results = c.exec(&p, true, &opts).await.unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(glide::value::to_i64(results[1].clone()).unwrap(), 2);
-    assert_eq!(glide::value::to_string(results[2].clone()).unwrap(), "2");
+    assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
 }
 
 #[tokio::test]
@@ -346,7 +335,7 @@ async fn transaction_with_options_timeout() {
     p.atomic().set(&k, "5").incr(&k, 1).get(&k);
 
     let opts = PipelineOptions::new().with_timeout(std::time::Duration::from_secs(5));
-    let results = c.execute_pipeline(&p, true, &opts).await.unwrap();
+    let results = c.exec(&p, true, &opts).await.unwrap();
     assert_eq!(results.len(), 3);
-    assert_eq!(glide::value::to_string(results[2].clone()).unwrap(), "6");
+    assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "6");
 }

@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the connection-management command family.
 use super::Mock;
+use crate::commands::connection_management::ConnectionManagementCommands;
 use bytes::Bytes;
-use glide::commands::connection_management::ConnectionManagementCommands;
 
 #[tokio::test]
 async fn ping_returns_pong() {
