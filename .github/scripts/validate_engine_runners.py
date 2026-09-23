@@ -28,8 +28,9 @@ REFERENCE = r"matrix\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)"
 def labels(runner):
     """Normalise a runner into comparable labels."""
     names = runner if isinstance(runner, list) else [runner]
-    # The CD workflows swap this label, so treat both pools as one image.
-    return tuple(sorted(str(name).replace("persistent", "ephemeral") for name in names))
+    # Actions matches runs-on labels without regard to case, so fold case here too. The CD
+    # workflows swap the pool label, so treat both pools as one image.
+    return tuple(sorted(str(name).lower().replace("persistent", "ephemeral") for name in names))
 
 
 def load_matrix():
@@ -67,8 +68,13 @@ def references(value):
 
 def literal_runners(value):
     """Every runner an expression can choose, or None when it names none."""
+    # A comparison quotes its operand exactly the way a runner name is quoted, so an
+    # expression that compares anything is one this check cannot read rather than one
+    # naming a runner. Saying so lets the "cannot resolve" error win.
+    if re.search(r"==|!=|<|>", value):
+        return None
     found = [json.loads(group) for group in re.findall(r"fromJSON\('(\[[^']*\])'\)", value, re.I)]
-    found += [group for group in re.findall(r"'([A-Za-z0-9][A-Za-z0-9_-]*)'", value)]
+    found += re.findall(r"'([A-Za-z0-9][A-Za-z0-9._-]*)'", value)
     return found or None
 
 
