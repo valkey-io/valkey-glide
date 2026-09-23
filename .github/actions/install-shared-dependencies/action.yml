@@ -26,15 +26,17 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'macos' }}"
           run: |
-              brew update
-              brew install openssl coreutils
+              # Retry package downloads to ride out transient network errors (#6284).
+              for i in 1 2 3; do brew update && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
+              for i in 1 2 3; do brew install openssl coreutils && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              sudo apt update -y
-              sudo apt install -y git gcc pkg-config openssl libssl-dev
+              # Retry package downloads to ride out transient network errors (#6284).
+              for i in 1 2 3; do sudo apt update -y && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
+              for i in 1 2 3; do sudo apt install -y git gcc pkg-config openssl libssl-dev && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
 
         - name: Install software dependencies for MUSL
           shell: bash
@@ -42,7 +44,8 @@ runs:
           env:
               GH_TARGET: ${{ inputs.target }}
           run: |
-              apk update
+              # Retry package downloads to ride out transient network errors (#6284).
+              for i in 1 2 3; do apk update && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
               RUSTUP_DIR=$(mktemp -d)
               RUSTUP_INIT="$RUSTUP_DIR/rustup-init"
               trap 'rm -rf "$RUSTUP_DIR"' EXIT
@@ -60,18 +63,20 @@ runs:
                   exit 1
                   ;;
               esac
-              wget -O "$RUSTUP_INIT" "$RUSTUP_URL"
+              # Retry the download to ride out transient network errors (#6284).
+              for i in 1 2 3; do wget -O "$RUSTUP_INIT" "$RUSTUP_URL" && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
               echo "$RUSTUP_SHA256  $RUSTUP_INIT" | sha256sum -c -
               chmod +x "$RUSTUP_INIT"
               "$RUSTUP_INIT" -y --no-modify-path --default-toolchain stable
               source "$HOME/.cargo/env"
-              apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
+              for i in 1 2 3; do apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan libatomic tar --allowerasing
+              # Retry package downloads to ride out transient network errors (#6284).
+              for i in 1 2 3; do yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan libatomic tar --allowerasing && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
 
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"

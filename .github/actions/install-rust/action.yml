@@ -11,8 +11,14 @@ runs:
     using: "composite"
     steps:
         - name: Install Rust toolchain
-          uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-          with:
-              toolchain: stable
-              targets: ${{ inputs.target }}
-              components: rustfmt, clippy
+          shell: bash
+          env:
+              TARGET: ${{ inputs.target }}
+          run: |
+              # rustup sync can transiently fail reaching static.rust-lang.org
+              # ("Network is unreachable"), so retry the install up to 3 times before
+              # failing (#6284). The rustup flags match dtolnay/rust-toolchain stable.
+              for i in 1 2 3; do
+                  rustup toolchain install stable --target "$TARGET" --component rustfmt --component clippy --profile minimal --no-self-update && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }
+              done
+              rustup default stable || true
