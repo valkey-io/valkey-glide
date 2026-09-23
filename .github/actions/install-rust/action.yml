@@ -1,5 +1,5 @@
 name: Install Rust toolchain
-description: Install Rust toolchain with stable version, rustfmt, and clippy
+description: Install a Rust toolchain with rustfmt and clippy
 
 inputs:
     toolchain:
