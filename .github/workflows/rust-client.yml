@@ -86,9 +86,13 @@ jobs:
               working-directory: ./rust
               shell: bash
               run: |
-                  version=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-                  if [ -z "$version" ]; then echo "::error::rust-version not found in rust/Cargo.toml"; exit 1; fi
-                  echo "toolchain=$version" >> "$GITHUB_OUTPUT"
+                  # Fetch from Cargo.toml (rust-version = "X.Y.Z").
+                  msrv=$(awk -F'"' '/^rust-version/ { print $2; exit }' Cargo.toml)
+                  if [ -z "$msrv" ]; then
+                      echo "::error::rust-version not found in rust/Cargo.toml"
+                      exit 1
+                  fi
+                  echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
 
             - name: Install shared software dependencies
               uses: ./.github/actions/install-shared-dependencies
