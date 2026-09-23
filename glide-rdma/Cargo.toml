@@ -1,0 +1,29 @@
+[package]
+name = "glide-rdma"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Valkey GLIDE Maintainers"]
+description = "Direct memory access (RDMA-over-fabric) support for Valkey GLIDE"
+
+[features]
+default = []
+libfabric = ["dep:ofi-libfabric-sys", "dep:libc", "dep:tokio"]
+
+[dependencies]
+crc-fast = { version = "1.10", default-features = false, features = ["std"] }
+thiserror = "2"
+
+# Vendored from ofiwg/libfabric rev 6953579a5035, so that GLIDE owns the build
+# script where there was a hard link to libfabric.
+ofi-libfabric-sys = { path = "ofi-libfabric-sys", optional = true }
+# For dlopen/dlsym, used to resolve libfabric at run time.
+libc = { version = "0.2", optional = true }
+# Only for `watch`, which wakes a transfer waiting on its region being revoked.
+tokio = { version = "1", default-features = false, features = ["sync"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+
+[lints.clippy]
+mutex_atomic = "warn"
