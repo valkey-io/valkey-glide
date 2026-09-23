@@ -61,7 +61,7 @@ should work wherever `glide-core` builds, but are not exercised in CI.
 
 ### Prerequisites
 
-- **Rust 1.94.1+** (edition 2024)
+- **Rust** — install via [rustup](https://rustup.rs)
 - **A monorepo checkout** — this crate lives in the `valkey-io/valkey-glide`
   monorepo under `rust/` and links `glide-core` and `redis-rs` via
   in-repo **path** dependencies (see [Status & publishing](#status--publishing)).

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.94.1+ (edition 2024)
+- **Rust** — install via [rustup](https://rustup.rs)
 - The crate depends on `glide-core` and its vendored `redis-rs` via in-repo
   **path dependencies** (`../glide-core` and `../glide-core/redis-rs/redis`), so
   it builds from a checkout of the `valkey-io/valkey-glide` monorepo where those
