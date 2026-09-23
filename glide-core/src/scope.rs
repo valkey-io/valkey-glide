@@ -433,13 +433,22 @@ struct PreparedScopeConnection {
     initial_iam_generation: u64,
 }
 
+/// Strip surrounding `[ ]` from an IPv6 host, matching `cluster.rs`'s
+/// `get_connection_info`. A bracketed literal is a URL-authority convention; redis-rs
+/// hands the host to `lookup_host((host, port))`, which wants a bare `::1`, so both the
+/// standalone and cluster branches trim through here to stay consistent.
+#[cfg(feature = "proto")]
+fn strip_host_brackets(host: &str) -> &str {
+    host.trim_start_matches('[').trim_end_matches(']')
+}
+
 /// Parse a `ClusterPrimary` `host:port` target into `(host, port)`. The IPv6 host
 /// may or may not be bracketed depending on the source, so split and trim exactly as
 /// `cluster.rs`'s `get_connection_info` does, so the two paths cannot drift.
 #[cfg(feature = "proto")]
 fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
     addr.rsplit_once(':').and_then(|(host, port)| {
-        Some(host.trim_start_matches('[').trim_end_matches(']'))
+        Some(strip_host_brackets(host))
             .filter(|h| !h.is_empty())
             .zip(u16::from_str(port).ok())
             .map(|(host, port)| (host.to_string(), port))
@@ -507,7 +516,9 @@ async fn build_scope_connection(
             } else {
                 addr.port as u16
             };
-            (addr.host.to_string(), port)
+            // Trim brackets here too, so a configured `[::1]` standalone host works
+            // like the cluster branch — redis-rs's tuple `lookup_host` wants bare `::1`.
+            (strip_host_brackets(&addr.host).to_string(), port)
         }
         ScopeTarget::ClusterPrimary(addr) => parse_cluster_target(addr)
             .ok_or_else(|| ScopeCreateError::InvalidClusterTarget(Arc::clone(addr)))?,
@@ -1098,7 +1109,7 @@ mod tests {
     use protobuf::Message as _;
     use tokio::sync::Mutex as TokioMutex;
 
-    use super::{build_scope_connection_addr, parse_cluster_target};
+    use super::{build_scope_connection_addr, parse_cluster_target, strip_host_brackets};
     use super::{
         create_scope_connection, resolve_scope_parent, try_acquire_scope, try_resolve_scope_target,
     };
@@ -2217,6 +2228,15 @@ mod tests {
         assert_eq!(parse_cluster_target("nohostport"), None); // no ':'
         assert_eq!(parse_cluster_target(":6379"), None); // empty host
         assert_eq!(parse_cluster_target("host:notaport"), None); // non-numeric port
+    }
+
+    #[test]
+    fn strip_host_brackets_trims_only_ipv6_brackets() {
+        assert_eq!(strip_host_brackets("[::1]"), "::1"); // bracketed IPv6
+        assert_eq!(strip_host_brackets("::1"), "::1"); // bare IPv6 unchanged
+        assert_eq!(strip_host_brackets("[2001:db8::1]"), "2001:db8::1");
+        assert_eq!(strip_host_brackets("10.0.0.1"), "10.0.0.1"); // IPv4 unchanged
+        assert_eq!(strip_host_brackets("localhost"), "localhost"); // hostname unchanged
     }
 
     #[test]

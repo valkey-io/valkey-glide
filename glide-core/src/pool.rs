@@ -3601,12 +3601,14 @@ mod scope_pool_tests {
         );
     }
 
-    /// A standalone scope opens against a server bound to the bare IPv6 loopback
-    /// `::1`. The old scope path built a `redis://::1:PORT` URL and re-parsed it;
-    /// redis-rs rejects the unbracketed IPv6 host, so the scope never seated and the
-    /// borrower saw only an eventual pool-exhaustion timeout. Building `ConnectionInfo`
-    /// directly makes the bare `::1` host connect. Pre-fix, this test fails:
-    /// `create_scope_connection` seats nothing and the `try_acquire` below panics.
+    /// A standalone scope opens against a server bound to the IPv6 loopback `::1`,
+    /// for both the bare (`::1`) and bracketed (`[::1]`) host spellings. The old scope
+    /// path built a `redis://::1:PORT` URL and re-parsed it; redis-rs rejects the
+    /// unbracketed IPv6 host, so the scope never seated and the borrower saw only an
+    /// eventual pool-exhaustion timeout. Building `ConnectionInfo` directly — and
+    /// trimming brackets on the standalone host as the cluster branch does — makes both
+    /// spellings connect. Pre-fix, `create_scope_connection` seats nothing and the
+    /// `try_acquire` below panics.
     #[tokio::test]
     async fn scope_opens_against_ipv6_standalone_target() {
         let server = TestServer::start_ipv6();
@@ -3639,72 +3641,78 @@ mod scope_pool_tests {
             }
         }
 
-        // Seed the scope with a bare IPv6 host, as `NodeAddress("::1", port)` would.
-        let connection_request_bytes = {
-            use protobuf::Message as _;
-            let mut request = crate::connection_request::ConnectionRequest::new();
-            request
-                .addresses
-                .push(crate::connection_request::NodeAddress {
-                    host: "::1".into(),
-                    port: server.port.into(),
-                    ..Default::default()
-                });
-            request.lib_name = "GlideRust".into();
-            request
-                .write_to_bytes()
-                .expect("serialize connection request")
-        };
+        // Both accepted IPv6 spellings must seat a connection. The bracketed form is
+        // the cluster-vs-standalone asymmetry the standalone bracket-trim closes.
+        for (offset, host) in [(0_u64, "::1"), (1_u64, "[::1]")] {
+            // Seed the scope with the host as a `NodeAddress` would carry it.
+            let connection_request_bytes = {
+                use protobuf::Message as _;
+                let mut request = crate::connection_request::ConnectionRequest::new();
+                request
+                    .addresses
+                    .push(crate::connection_request::NodeAddress {
+                        host: host.into(),
+                        port: server.port.into(),
+                        ..Default::default()
+                    });
+                request.lib_name = "GlideRust".into();
+                request
+                    .write_to_bytes()
+                    .expect("serialize connection request")
+            };
 
-        let client_id = 7_124_000_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
-            ScopePoolConfig::default(),
-            connection_request_bytes.clone(),
-            client_id,
-        )));
-        crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
-        let registry = crate::pool::get_scope_registry();
+            let client_id = 7_124_000_u64 + offset;
+            let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+                ScopePoolConfig::default(),
+                connection_request_bytes.clone(),
+                client_id,
+            )));
+            crate::pool::get_client_scope_pools().insert(client_id, pool_arc.clone());
+            let registry = crate::pool::get_scope_registry();
 
-        // Reserve a slot the RAII way (#7120), then hand the guard to the creator.
-        let reservation = pool_arc
-            .lock()
-            .await
-            .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
-            .expect("pool must grant a reservation");
-        crate::scope::create_scope_connection(
-            pool_arc.clone(),
-            None,
-            &connection_request_bytes,
-            ScopeTarget::Standalone,
-            reservation,
-        )
-        .await;
-
-        // The connection must have seated. Pre-fix, create fails, idle is empty,
-        // and this acquire returns `Exhausted`.
-        let scope_id = {
-            let mut pool = pool_arc.lock().await;
-            match pool.try_acquire(
-                registry,
+            // Reserve a slot the RAII way (#7120), then hand the guard to the creator.
+            let reservation = pool_arc
+                .lock()
+                .await
+                .reserve_slot_for(ScopeTarget::Standalone, next_scope_attempt_token())
+                .expect("pool must grant a reservation");
+            crate::scope::create_scope_connection(
+                pool_arc.clone(),
+                None,
+                &connection_request_bytes,
                 ScopeTarget::Standalone,
-                0,
-                next_scope_attempt_token(),
-            ) {
-                ScopeAcquire::Reused(id) => id,
-                other => panic!("scope against ::1 did not seat a connection: {other:?}"),
-            }
-        };
+                reservation,
+            )
+            .await;
 
-        // And it is a live, usable connection.
-        let pong = crate::scope::execute_scope_command(scope_id, "PING", &[], None)
-            .await
-            .expect("PING on the IPv6 scope must succeed");
-        assert!(
-            matches!(&pong, redis::Value::SimpleString(s) if s == "PONG")
-                || matches!(&pong, redis::Value::BulkString(b) if b.as_ref() == b"PONG"),
-            "unexpected PING reply from IPv6 scope: {pong:?}"
-        );
+            // The connection must have seated. Pre-fix, create fails, idle is empty,
+            // and this acquire returns `Reserved`.
+            let scope_id = {
+                let mut pool = pool_arc.lock().await;
+                match pool.try_acquire(
+                    registry,
+                    ScopeTarget::Standalone,
+                    0,
+                    next_scope_attempt_token(),
+                ) {
+                    ScopeAcquire::Reused(id) => id,
+                    other => {
+                        panic!("scope against {host} did not seat a connection: {other:?}")
+                    }
+                }
+            };
 
-        crate::pool::get_client_scope_pools().remove(&client_id);
+            // And it is a live, usable connection.
+            let pong = crate::scope::execute_scope_command(scope_id, "PING", &[], None)
+                .await
+                .expect("PING on the IPv6 scope must succeed");
+            assert!(
+                matches!(&pong, redis::Value::SimpleString(s) if s == "PONG")
+                    || matches!(&pong, redis::Value::BulkString(b) if b.as_ref() == b"PONG"),
+                "unexpected PING reply from IPv6 scope ({host}): {pong:?}"
+            );
+
+            crate::pool::get_client_scope_pools().remove(&client_id);
+        }
     }
 }
