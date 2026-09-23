@@ -9,6 +9,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.GlidePoolResolver;
+import glide.internal.GlideNativeBridge;
 import glide.managers.ConnectionManager;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -224,11 +225,24 @@ public class ClientPool implements AutoCloseable {
     public GlideClient getClient(long clientId) {
         GlideClient cached = clientCache.get(clientId);
         if (cached != null) return cached;
+        // Resolve the Java-side inflight limiter and request timeout the same way ConnectionManager
+        // does for direct clients, so a pooled client fast-fails excess requests and times out
+        // commands per its own config instead of the pool's defaults. The wire ConnectionRequest
+        // already carries both values; these govern the host-side AsyncRegistry enforcement.
+        Integer configuredLimit = config.getClientConfig().getInflightRequestsLimit();
+        int maxInflight =
+                configuredLimit != null
+                        ? configuredLimit
+                        : GlideNativeBridge.getGlideCoreDefaultMaxInflightRequests();
+        Integer configuredTimeout = config.getClientConfig().getRequestTimeout();
+        long requestTimeoutMs =
+                configuredTimeout != null
+                        ? configuredTimeout
+                        : GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
         return clientCache.computeIfAbsent(
                 clientId,
                 id ->
-                        GlideClient.fromPoolHandle(
-                                id, 0, config.getRequestTimeout().toMillis(), connectionRequestBytes));
+                        GlideClient.fromPoolHandle(id, maxInflight, requestTimeoutMs, connectionRequestBytes));
     }
 
     /** Release a client back to the pool. */

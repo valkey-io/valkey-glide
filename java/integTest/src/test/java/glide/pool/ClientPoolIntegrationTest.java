@@ -7,6 +7,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -746,5 +747,84 @@ public class ClientPoolIntegrationTest {
                         .build();
 
         assertThrows(RuntimeException.class, () -> ClientPool.create(badConfig));
+    }
+
+    /**
+     * Regression for #7153: {@code ClientPool.getClient} used to hard-code {@code maxInflight=0} into
+     * {@code fromPoolHandle}, disabling the Java-side inflight limiter for pooled clients regardless
+     * of {@code inflightRequestsLimit}. A borrowed client must fast-fail excess requests exactly like
+     * a directly-created client (see {@code SharedClientTests.inflight_requests_limit}). Before the
+     * fix the {@code (limit + 1)}-th request stayed pending instead of throwing.
+     */
+    @Test
+    public void testPooledClientHonorsInflightRequestsLimit() throws Exception {
+        assumeTrue(standaloneAvailable(), "No standalone endpoints configured");
+        int inflightRequestsLimit = 5;
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        ClientPoolConfig config =
+                ClientPoolConfig.builder()
+                        .maxSize(2)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        .clientConfig(
+                                GlideClientConfiguration.builder()
+                                        .address(
+                                                NodeAddress.builder()
+                                                        .host(parts[0])
+                                                        .port(Integer.parseInt(parts[1]))
+                                                        .build())
+                                        .requestTimeout(5000)
+                                        .inflightRequestsLimit(inflightRequestsLimit)
+                                        .build())
+                        .build();
+
+        ClientPool pool = ClientPool.create(config);
+        try {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient pooled = pool.acquire().get(10, TimeUnit.SECONDS);
+            glide.api.GlideClient borrowed = pooled.unwrap();
+
+            String keyName = testKey(false, "inflight-nonexist");
+
+            // Saturate the limiter with blocking pops that never complete.
+            java.util.List<java.util.concurrent.CompletableFuture<String[]>> responses =
+                    new java.util.ArrayList<>();
+            for (int i = 0; i < inflightRequestsLimit + 1; i++) {
+                responses.add(borrowed.blpop(new String[] {keyName}, 0));
+            }
+
+            for (int i = 0; i < inflightRequestsLimit; i++) {
+                assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
+            }
+
+            // The (limit + 1)-th request must fast-fail at the Java-side limiter.
+            try {
+                responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
+                fail("Expected the (limit + 1)-th request to be rejected by the inflight limiter");
+            } catch (java.util.concurrent.ExecutionException e) {
+                assertInstanceOf(glide.api.models.exceptions.RequestException.class, e.getCause());
+                assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
+            }
+
+            // Unblock the pending pops so the borrowed client releases cleanly.
+            try (glide.api.GlideClient cleanup =
+                    GlideClient.createClient(
+                                    GlideClientConfiguration.builder()
+                                            .address(
+                                                    NodeAddress.builder()
+                                                            .host(parts[0])
+                                                            .port(Integer.parseInt(parts[1]))
+                                                            .build())
+                                            .requestTimeout(5000)
+                                            .build())
+                            .get()) {
+                for (int i = 0; i < inflightRequestsLimit; i++) {
+                    cleanup.lpush(keyName, new String[] {"val"}).get();
+                }
+            }
+            pooled.close();
+        } finally {
+            pool.close();
+        }
     }
 }
