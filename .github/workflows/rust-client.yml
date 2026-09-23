@@ -15,10 +15,11 @@ on:
             - logger_core/**
             - deny.toml
             - utils/cluster_manager.py
-            - .github/workflows/rust-client.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/rust-client.yml
     pull_request:
         paths:
             - rust/**
@@ -26,10 +27,11 @@ on:
             - logger_core/**
             - deny.toml
             - utils/cluster_manager.py
-            - .github/workflows/rust-client.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/rust-client.yml
     workflow_dispatch:
 
 concurrency:
