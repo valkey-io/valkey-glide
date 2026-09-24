@@ -10,7 +10,7 @@ on:
             - release-*
             - v*
         paths:
-            - logger_core/**
+            - glide-logger/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -25,7 +25,7 @@ on:
             - benchmarks/rust/**
     pull_request:
         paths:
-            - logger_core/**
+            - glide-logger/**
             - glide-core/**
             - glide-core/redis-rs/redis/src/**
             - ffi/**
@@ -175,10 +175,10 @@ jobs:
                   path: |
                       glide-core/target
                       glide-core/src/generated
-                  key: ${{ matrix.host.TARGET }}-logger_core
+                  key: ${{ matrix.host.TARGET }}-glide-logger
 
             - name: Run logger tests
-              working-directory: ./logger_core
+              working-directory: ./glide-logger
               run: cargo test --all-features -- --test-threads=1
 
             - name: Check features
@@ -221,7 +221,7 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: logger_core
+                  cargo-toml-folder: glide-logger
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint logger
 

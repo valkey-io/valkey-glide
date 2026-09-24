@@ -178,7 +178,7 @@ impl ClientPool {
             let idle_duration = Instant::now().duration_since(entry.last_idle_at);
             if idle_duration > self.config.idle_timeout {
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
-                logger_core::log_debug(
+                glide_logger::log_debug(
                     "pool",
                     format!(
                         "Evicted idle client {} (idle {:?}, threshold {:?})",
@@ -284,7 +284,7 @@ impl ClientPool {
         // Warn if any clients are still borrowed (likely leak)
         let in_use_count = self.in_use.len();
         if in_use_count > 0 {
-            logger_core::log_warn(
+            glide_logger::log_warn(
                 "pool",
                 format!(
                     "Pool destroyed with {} client(s) still borrowed — possible connection leak. \
@@ -311,7 +311,7 @@ impl ClientPool {
         self.idle.clear();
         self.in_use.clear();
         self.total_count.store(0, Ordering::Release);
-        logger_core::log_info("pool", "Pool destroyed");
+        glide_logger::log_info("pool", "Pool destroyed");
     }
 
     /// Get idle count.
@@ -390,7 +390,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
         _ => {
-            logger_core::log_warn_rate_limited!(
+            glide_logger::log_warn_rate_limited!(
                 "pool",
                 10,
                 "Client reset failed on release — discarding connection"
@@ -429,7 +429,7 @@ pub fn get_pool_registry() -> &'static DashMap<u64, Arc<TokioMutex<ClientPool>>>
 /// Register a pool. Returns assigned pool_id.
 pub fn register_pool(pool: ClientPool) -> u64 {
     let pool_id = NEXT_POOL_ID.fetch_add(1, Ordering::Relaxed);
-    logger_core::log_info(
+    glide_logger::log_info(
         "pool",
         format!(
             "Pool {} created (max_size={}, min_idle={}, abandon_timeout={:?})",
@@ -447,7 +447,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
     let pool_arc = match get_pool(pool_id) {
         Some(arc) => arc,
         None => {
-            logger_core::log_debug(
+            glide_logger::log_debug(
                 "pool",
                 format!(
                     "start_abandon_monitor: pool {} not found (already destroyed?)",
@@ -464,13 +464,13 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
     };
 
     if abandon_timeout.is_zero() {
-        logger_core::log_debug("pool", "Abandon monitor disabled (timeout=0)");
+        glide_logger::log_debug("pool", "Abandon monitor disabled (timeout=0)");
         return;
     }
 
     // Wake at half the abandon timeout for timely detection
     let scan_interval = abandon_timeout / 2;
-    logger_core::log_debug(
+    glide_logger::log_debug(
         "pool",
         format!(
             "Abandon monitor started for pool {} (timeout={:?}, scan_interval={:?})",
@@ -507,7 +507,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
             };
 
             for client_id in abandoned_ids {
-                logger_core::log_warn(
+                glide_logger::log_warn(
                     "pool",
                     format!(
                         "Abandon detection: client {} exceeded inactivity timeout ({:?}) — \
@@ -1064,7 +1064,7 @@ impl ScopePool {
                 return ScopeAcquire::Exhausted;
             };
             self.total_count.fetch_sub(1, Ordering::AcqRel);
-            logger_core::log_debug(
+            glide_logger::log_debug(
                 "pool",
                 format!(
                     "Evicted idle scope {} targeting {:?} to make room for {:?}",
@@ -1306,7 +1306,7 @@ impl ScopePool {
                             }
                         } else {
                             // Cleanup failed — discard the connection entirely
-                            logger_core::log_warn_rate_limited!(
+                            glide_logger::log_warn_rate_limited!(
                                 "pool",
                                 10,
                                 "Scope connection cleanup failed — discarding connection"

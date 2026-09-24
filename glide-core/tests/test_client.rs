@@ -1109,7 +1109,7 @@ pub(crate) mod shared_client_tests {
                 Ok(mut client) => {
                     // Test initial connection
 
-                    use logger_core::log_info;
+                    use glide_logger::log_info;
                     assert_connected(&mut client).await;
 
                     // Change to 900

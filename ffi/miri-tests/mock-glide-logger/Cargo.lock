@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "mock-logger-core"
+name = "mock-glide-logger"
 version = "0.1.0"

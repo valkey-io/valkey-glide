@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-// Mock logger_core implementation for miri tests
+// Mock glide-logger implementation for miri tests
 // These functions are no-ops to avoid any complex logging infrastructure
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -41,7 +41,7 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
     // No-op for Miri tests
 }
 
-// Lazy logging macros — no-ops for miri tests, matching the real logger_core API.
+// Lazy logging macros — no-ops for miri tests, matching the glide-logger API.
 #[macro_export]
 macro_rules! log_error_lazy {
     ($identifier:expr, $message:expr) => {

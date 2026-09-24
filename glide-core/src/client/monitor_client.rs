@@ -165,7 +165,7 @@ impl MonitorClient {
                                 on_line(parsed);
                             } else {
                                 task_diagnostics.discarded_lines.fetch_add(1, Ordering::Relaxed);
-                                logger_core::log_warn(
+                                glide_logger::log_warn(
                                     "MonitorClient",
                                     format!("discarded an unparseable MONITOR line (length={})", line.len()),
                                 );
@@ -173,7 +173,7 @@ impl MonitorClient {
                         }
                         None => {
                             task_diagnostics.stream_ended.store(true, Ordering::Relaxed);
-                            logger_core::log_warn(
+                            glide_logger::log_warn(
                                 "MonitorClient",
                                 "MONITOR stream ended unexpectedly",
                             );

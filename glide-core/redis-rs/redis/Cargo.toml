@@ -25,6 +25,13 @@ await_holding_lock = "deny"
 mutex_atomic = "warn"
 
 [dependencies]
+
+# GLIDE dependencies
+glide-logger = { path = "../../../glide-logger", version = "0.1" }
+
+# TODO #6905: Update once renamed.
+telemetrylib = { path = "../../telemetry" }
+
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for
 # an indirection through std::Formatter.
@@ -79,10 +86,6 @@ rustls-pki-types = { version = "1.9" }
 num-bigint = "0.4"
 
 tracing = "0.1"
-
-telemetrylib = { path = "../../telemetry" }
-
-logger_core = { path = "../../../logger_core" }
 
 lazy_static = "1"
 lru = "0.18.0"

@@ -195,7 +195,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         let targets_filter = filter::Targets::new()
             .with_target("glide", log_level)
             .with_target("redis", log_level)
-            .with_target("logger_core", log_level)
+            .with_target("glide_logger", log_level)
             .with_target(std::env!("CARGO_PKG_NAME"), log_level);
 
         // Use try_init() instead of init() to gracefully handle the case where

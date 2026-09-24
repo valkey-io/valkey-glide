@@ -165,7 +165,7 @@ pub unsafe extern "C" fn glide_pool_create(
             // only (P|S)SUBSCRIBE/(P|S)UNSUBSCRIBE/PING are allowed, making it unusable
             // for the next borrower. Rather than silently breaking, we reject upfront.
             if r.pubsub_subscriptions.is_some() {
-                logger_core::log_error(
+                glide_logger::log_error(
                     "pool",
                     "Cannot create pool with pubsub subscriptions in client config. \
                      Use the main client's pubsub API instead.",
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn glide_pool_create(
                         });
                     }
                     Err(e) => {
-                        logger_core::log_error_lazy!(
+                        glide_logger::log_error_lazy!(
                             "pool",
                             format!("Background client creation failed: {}", e)
                         );
@@ -346,7 +346,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
                             });
                         }
                         Err(e) => {
-                            logger_core::log_error_lazy!(
+                            glide_logger::log_error_lazy!(
                                 "pool",
                                 format!("Background creation failed: {}", e)
                             );
@@ -759,7 +759,7 @@ pub unsafe extern "C" fn glide_scope_execute_async(
                                 inflight_at_timeout: None,
                                 retry_count: 0,
                             };
-                            logger_core::log_warn("timeout_watchdog", event.to_string());
+                            glide_logger::log_warn("timeout_watchdog", event.to_string());
                             Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
                         }
                     }
@@ -868,7 +868,7 @@ pub unsafe extern "C" fn glide_scope_prewarm(
             let target = match scope::resolve_scope_target(client.as_ref(), 0).await {
                 Ok(target) => target,
                 Err(cause) => {
-                    logger_core::log_debug(
+                    glide_logger::log_debug(
                         "glide_scope_prewarm",
                         format!("client {cid}: prewarm skipped, target unresolved: {cause}"),
                     );
@@ -1003,7 +1003,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                             inflight_at_timeout: None,
                             retry_count: 0,
                         };
-                        logger_core::log_warn("timeout_watchdog", event.to_string());
+                        glide_logger::log_warn("timeout_watchdog", event.to_string());
                         Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
                     }
                 }

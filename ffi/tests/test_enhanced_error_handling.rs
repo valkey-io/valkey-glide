@@ -5,7 +5,7 @@ use std::ffi::CString;
 #[test]
 fn test_enhanced_error_handling() {
     // Initialize logger to capture error messages
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    glide_logger::init(Some(glide_logger::Level::Debug), None);
 
     // Test 1: create_named_otel_span with null pointer
     let null_span_ptr = unsafe { create_named_otel_span(std::ptr::null()) };

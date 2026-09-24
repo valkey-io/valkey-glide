@@ -8,7 +8,7 @@ use crate::types::{
     VerbatimFormat,
 };
 
-use logger_core::log_error;
+use glide_logger::log_error;
 use telemetrylib::GlideOpenTelemetry;
 
 use combine::{

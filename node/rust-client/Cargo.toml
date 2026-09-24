@@ -11,24 +11,30 @@ authors = ["Valkey GLIDE Maintainers"]
 crate-type = ["cdylib"]
 
 [dependencies]
+
+# GLIDE dependencies
+glide-logger = { path = "../../glide-logger" }
+
+# TODO #6905: Update once renamed.
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../../glide-core", features = ["proto"] }
-tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
-tokio-util = { version = "0.7", features = ["rt"] }
-napi = { version = "3.5", default-features = false, features = ["napi8"] }
-napi-derive = "3.5"
-logger_core = { path = "../../logger_core" }
 telemetrylib = { path = "../../glide-core/telemetry" }
+
+# External dependencies
 byteorder = "1"
 bytes = "1"
 dashmap = "~6.2.1"
-num-traits = "0.2"
-uuid = { version = "1", features = ["v4"] }
-tracing = "0.1"
+napi = { version = "3.5", default-features = false, features = ["napi8"] }
+napi-derive = "3.5"
 num_cpus = "1.16"
+num-bigint = { version = "0.4", optional = true }
+num-traits = "0.2"
 parking_lot = "0.12"
 protobuf = { version = "3", features = ["bytes", "with-bytes"] } # Direct dep required: parse_from_bytes is called directly in the napi layer for MonitorClient
-num-bigint = { version = "0.4", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.7", features = ["disable_initial_exec_tls"] }
