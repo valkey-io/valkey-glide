@@ -209,7 +209,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_cmd() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -232,7 +232,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_command() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -308,7 +308,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -397,7 +397,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -483,7 +483,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_retry_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -580,7 +580,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_retry_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -711,7 +711,7 @@ mod cluster_async {
     /// Sends two commands to different cluster nodes and verifies that each span's
     /// `server.port` reflects the actual routed node, not a fixed initial value.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_cluster_routed_node_address() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -801,7 +801,7 @@ mod cluster_async {
 
     /// Same as the command test but for pipelines.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_cluster_routed_node_address_pipeline() {
         let rt = shared_runtime();
         rt.block_on(async {
@@ -1590,7 +1590,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_eval() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1610,7 +1610,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_flush_to_specific_node() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1646,7 +1646,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_flush_to_node_by_address() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1687,7 +1687,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_info_to_nodes() {
         let cluster = TestClusterContext::new(12, 1);
 
@@ -1767,7 +1767,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_resp3() {
         if use_protocol() == ProtocolVersion::RESP2 {
             return;
@@ -1807,7 +1807,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_pipe() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1827,7 +1827,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_shard_commands() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1846,7 +1846,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_failover() {
         block_on_all(async move {
             test_failover(&TestClusterContext::new(6, 1), 10, 123, false).await;
@@ -2040,7 +2040,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_error_in_inner_connection() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -2065,7 +2065,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name";
@@ -2101,7 +2101,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name";
@@ -2134,7 +2134,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_cannot_connect_to_server_with_unknown_host_name() {
         let name = "test_async_cluster_cannot_connect_to_server_with_unknown_host_name";
         let handler = move |cmd: &[u8], _| {
@@ -2165,7 +2165,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name(
     ) {
         let name = "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name";
@@ -2211,7 +2211,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_retries() {
         let name = "tryagain";
 
@@ -2244,7 +2244,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_tryagain_exhaust_retries() {
         let name = "tryagain_exhaust_retries";
 
@@ -2302,7 +2302,7 @@ mod cluster_async {
         }
     }
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_move_error_when_new_node_is_added() {
         let name = "rebuild_with_extra_nodes";
 
@@ -2682,7 +2682,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
@@ -2694,7 +2694,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     /// This test verifies the behavior of refreshing topology from initial nodes.
     ///
     /// This test simulates a network partition in a 3-node cluster to verify how
@@ -2880,7 +2880,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_in_client_init_get_succeed(
@@ -2891,7 +2891,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_after_moved_error_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
@@ -2905,7 +2905,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_in_client_init_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
@@ -2918,7 +2918,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_is_not_blocking() {
         // Test: Non-Head-of-Line Blocking During Slot Refresh
         //
@@ -3171,6 +3171,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
         // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
         // stored on the primary node of another shard.
@@ -3287,6 +3288,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_failover() {
         // This test simulates a failover scenario, where the client receives a MOVED error and the replica becomes the new primary.
         // The test verifies that the client updates the slot mapping to promote the replica to the primary and routes future requests
@@ -3392,6 +3394,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_new_primary() {
         // This test simulates the scenario where the client receives a MOVED error indicating that the key now belongs to
         // an entirely new primary node that wasn't previously known. The test verifies that the client correctly adds the new
@@ -3505,6 +3508,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_replica_of_different_shard() {
         // This test simulates a scenario where the client receives a MOVED error indicating that a key
         // has been moved to a replica in a different shard. The replica is then promoted to primary and
@@ -3624,6 +3628,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_no_change() {
         // This test simulates a scenario where the client receives a MOVED error, but the new primary is the
         // same as the old primary (no actual change). It ensures that no additional slot map
@@ -3720,7 +3725,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_even_with_zero_retries() {
         let name = "test_async_cluster_reconnect_even_with_zero_retries";
 
@@ -3802,7 +3807,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_slots_rate_limiter_skips_refresh() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -3813,7 +3818,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_slots_rate_limiter_does_refresh_when_wait_duration_passed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -3824,7 +3829,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_redirect() {
         let name = "test_async_cluster_ask_redirect";
         let completed = Arc::new(AtomicI32::new(0));
@@ -3876,7 +3881,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_save_new_connection() {
         let name = "test_async_cluster_ask_save_new_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
@@ -3921,7 +3926,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reset_routing_if_redirect_fails() {
         let name = "test_async_cluster_reset_routing_if_redirect_fails";
         let completed = Arc::new(AtomicI32::new(0));
@@ -3960,7 +3965,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_redirect_even_if_original_call_had_no_route() {
         let name = "test_async_cluster_ask_redirect_even_if_original_call_had_no_route";
         let completed = Arc::new(AtomicI32::new(0));
@@ -4014,7 +4019,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_error_when_new_node_is_added() {
         let name = "ask_with_extra_nodes";
 
@@ -4069,7 +4074,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_replica_read() {
         let name = "test_async_cluster_replica_read";
 
@@ -4176,7 +4181,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_to_all_primaries() {
         test_async_cluster_fan_out(
             "test_async_cluster_fan_out_to_all_primaries",
@@ -4187,7 +4192,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_to_all_nodes() {
         test_async_cluster_fan_out(
             "test_async_cluster_fan_out_to_all_nodes",
@@ -4198,7 +4203,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available() {
         test_async_cluster_fan_out(
             "test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available",
@@ -4220,7 +4225,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_async_cluster_fan_out(
             "test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges",
@@ -4252,7 +4257,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_according_to_passed_argument() {
         let name = "test_async_cluster_route_according_to_passed_argument";
 
@@ -4317,7 +4322,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_aggregate_numeric_response_with_min() {
         let name = "test_async_cluster_fan_out_and_aggregate_numeric_response";
         let mut cmd = Cmd::new();
@@ -4348,7 +4353,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_aggregate_logical_array_response() {
         let name = "test_async_cluster_fan_out_and_aggregate_logical_array_response";
         let mut cmd = Cmd::new();
@@ -4399,7 +4404,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_one_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_one_succeeded_response";
         let mut cmd = Cmd::new();
@@ -4434,7 +4439,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes() {
         let name = "test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes";
         let mut cmd = Cmd::new();
@@ -4467,7 +4472,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_all_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_all_succeeded_response";
         let cmd = cmd("FLUSHALL");
@@ -4494,7 +4499,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure() {
         let name = "test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure";
         let cmd = cmd("FLUSHALL");
@@ -4528,7 +4533,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_value_ignoring_nil_and_err_resps(
     ) {
         let name =
@@ -4567,7 +4572,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_err_if_all_resps_are_nil_and_errors(
     ) {
         let name =
@@ -4601,7 +4606,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil() {
         let name =
             "test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil";
@@ -4629,7 +4634,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
         let name =
             "test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy";
@@ -4671,7 +4676,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {
         let name = "test_async_cluster_fan_out_and_combine_arrays_of_values";
         let cmd = cmd("KEYS");
@@ -4705,7 +4710,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values() {
         let name = "test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values";
         let mut cmd = cmd("MGET");
@@ -4746,7 +4751,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_asking_error_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_asking_error_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4796,7 +4801,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_pass_errors_from_split_multi_shard_command() {
         let name = "test_async_cluster_pass_errors_from_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4824,7 +4829,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_missing_slots_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_missing_slots_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4858,7 +4863,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_with_username_and_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -4891,7 +4896,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_io_error() {
         let name = "test_async_cluster_io_error";
         let completed = Arc::new(AtomicI32::new(0));
@@ -4930,7 +4935,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_retryable_error_should_not_retry() {
         let name = "test_async_cluster_non_retryable_error_should_not_retry";
         let completed = Arc::new(AtomicI32::new(0));
@@ -4966,7 +4971,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_readonly_error_should_refresh_slots_and_retry() {
         let name = "test_async_cluster_readonly_error_should_refresh_slots_and_retry";
         let requests = Arc::new(AtomicI32::new(0));
@@ -5011,7 +5016,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_readonly_error_exhausts_retries() {
         let name = "test_async_cluster_readonly_error_exhausts_retries";
         let requests = Arc::new(AtomicI32::new(0));
@@ -5049,7 +5054,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_retryable_io_error_should_not_retry() {
         let name = "test_async_cluster_non_retryable_io_error_should_not_retry";
         let requests = atomic::AtomicUsize::new(0);
@@ -5086,7 +5091,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_retry_safe_io_error_should_be_retried() {
         let name = "test_async_cluster_retry_safe_io_error_should_be_retried";
         let requests = atomic::AtomicUsize::new(0);
@@ -5124,7 +5129,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_read_from_primary() {
         let name = "test_async_cluster_read_from_primary";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -5182,7 +5187,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_round_robin_read_from_replica() {
         let name = "test_async_cluster_round_robin_read_from_replica";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -5269,7 +5274,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_complete_server_disconnect_without_panicking() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5298,7 +5303,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_test_fast_reconnect() {
         // Note the 3 seconds connection check to differentiate between notifications and periodic
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -5428,7 +5433,7 @@ mod cluster_async {
     // This demonstrates that a reconnection process to one node does not prevent the same client from
     // successfully communicating with healthy nodes.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_blocking_reconnection_with_transaction() {
         use std::time::Duration;
 
@@ -5581,7 +5586,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_periodic_checks_update_topology_after_failover() {
         // This test aims to validate the functionality of periodic topology checks by detecting and updating topology changes.
         // We will repeatedly execute CLUSTER NODES commands against the primary node responsible for slot 0, recording its node ID.
@@ -5652,7 +5657,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_recover_disconnected_management_connections() {
         // This test aims to verify that the management connections used for periodic checks are reconnected, in case that they get killed.
         // In order to test this, we choose a single node, kill all connections to it which aren't user connections, and then wait until new
@@ -5705,7 +5710,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_with_client_name() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5742,7 +5747,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reroute_from_replica_if_in_loading_state() {
         /* Test replica in loading state. The expected behaviour is that the request will be directed to a different replica or the primary.
         depends on the read from replica policy. */
@@ -5798,7 +5803,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_read_from_primary_when_primary_loading() {
         // Test primary in loading state. The expected behaviour is that the request will be retried until the primary is no longer in loading state.
         let name = "test_async_cluster_read_from_primary_when_primary_loading";
@@ -5853,7 +5858,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_be_created_with_partial_slot_coverage() {
         let name = "test_async_cluster_can_be_created_with_partial_slot_coverage";
         let slots_config = Some(vec![
@@ -5894,7 +5899,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_after_complete_server_disconnect() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5952,7 +5957,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_after_complete_server_disconnect_route_to_many() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6005,7 +6010,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_blocking_command_when_cluster_drops() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6033,7 +6038,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_saves_reconnected_connection() {
         let name = "test_async_cluster_saves_reconnected_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
@@ -6112,7 +6117,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_periodic_checks_use_management_connection() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6213,7 +6218,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_only_management_connection_is_reconnected_after_connection_failure() {
         // This test will check two aspects:
         // 1. Ensuring that after a disconnection in the management connection, a new management connection is established.
@@ -6282,7 +6287,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_dont_route_to_a_random_on_non_key_based_cmd() {
         // This test verifies that non-key-based commands do not get routed to a random node
         // when no connection is found for the given route. Instead, the appropriate error
@@ -6346,7 +6351,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_to_random_on_key_based_cmd() {
         // This test verifies that key-based commands get routed to a random node
         // when no connection is found for the given route. The command should
@@ -6403,7 +6408,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_do_not_retry_when_receiver_was_dropped() {
         let name = "test_async_cluster_do_not_retry_when_receiver_was_dropped";
         let cmd = cmd("FAKE_COMMAND");
@@ -6450,7 +6455,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_successful_response() {
         // Test fenced command returns correct value (command result, then PONG).
 
@@ -6486,7 +6491,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_server_error() {
         // Test fenced command correctly returns server error (error, then PONG).
 
@@ -6529,7 +6534,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_connection_error() {
         // Test fenced command correctly handles connection errors.
 
@@ -6566,7 +6571,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_with_moved_error() {
         // Test fenced SUNSUBSCRIBE receives MOVED error after slot migration,
         // verifying the fenced command logic handles it correctly.
@@ -6624,7 +6629,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_with_slot_deletion_error() {
         // Test fenced SUNSUBSCRIBE receives error after slot deletion,
         // verifying the fenced command logic handles it correctly.
@@ -6675,7 +6680,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_successful() {
         // Test fenced SUNSUBSCRIBE correctly handles PONG as the response of the command,
         // indicating the fenced command completed successfully.
@@ -6721,7 +6726,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multiple_fenced_commands_sequential() {
         // Test multiple fenced commands sent sequentially each receive correct responses.
 
@@ -6774,7 +6779,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_response_ordering_during_slot_migration() {
         // Verifies that if there's an unrelated InFlight request while receiving an unprompted
         // SUNSUBSCRIBE push notification, it does not interfere with response ordering
@@ -6850,7 +6855,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_protocol_desync_when_fenced_command_fails() {
         let test_user = "test_desync_user";
         let test_password = "test_password";
@@ -7128,7 +7133,7 @@ mod cluster_async {
     ///
     /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_triggers_reconnect --nocapture
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_triggers_reconnect() {
         let name = "test_circular_moved_reconnect";
         let get_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7264,7 +7269,7 @@ mod cluster_async {
     ///
     /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_set_triggers_reconnect --nocapture
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_set_triggers_reconnect() {
         let name = "test_circular_moved_set_reconnect";
         let set_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7371,7 +7376,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_pipeline_triggers_reconnect() {
         let name = "test_circular_moved_pipeline_reconnect";
         let set_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7679,7 +7684,7 @@ mod cluster_async {
     /// 7. Commands arriving during recovery must be buffered and succeed after recovery.
     /// 8. Assert zero command errors across all tasks.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_during_circular_moved_reconnect() {
         let name = "test_concurrent_circular_moved";
         // Trigger circular MOVED on the Nth SET to let several pipelines succeed before disruption
@@ -7821,7 +7826,7 @@ mod cluster_async {
     /// Some command errors are expected (fail-fast), but most commands should succeed
     /// (commands before recovery starts and after recovery completes succeed).
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_fail_fast_during_reconnect_to_initial_nodes() {
         let name = "test_concurrent_reconnect_initial_nodes";
         // How many SET commands before AllConnectionsUnavailable fires
@@ -7940,7 +7945,7 @@ mod cluster_async {
     ///
     /// Zero command errors: all commands must succeed after the slot refresh completes.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_buffered_during_refreshing_slots() {
         let name = "test_concurrent_refreshing_slots";
         const MOVED_ON_SET_N: usize = 30;
@@ -8085,7 +8090,7 @@ mod cluster_async {
     /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
     ///   the no-silent-drops check is the reliable guarantee this test provides.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_requests_fail_fast_on_refreshing_slots_all_connections_unavailable() {
         let name = "test_concurrent_refreshing_slots_all_conn_unavailable";
         const MOVED_ON_SET_N: usize = 30;
@@ -8253,7 +8258,7 @@ mod cluster_async {
     /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
     ///   the no-silent-drops check is the reliable guarantee this test provides.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_requests_fail_fast_on_refreshing_slots_task_panic() {
         let name = "test_concurrent_refreshing_slots_task_panic";
         const MOVED_ON_SET_N: usize = 30;
@@ -8391,7 +8396,7 @@ mod cluster_async {
     // must fail with a non-retryable ClientError so the retryable empty-
     // receivers branch stays scoped to the topology-refresh race (#6759).
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_slot_empty_slots_is_client_error() {
         let name = "test_async_cluster_multi_slot_empty_slots_is_client_error";
         let MockEnv {
@@ -8438,7 +8443,7 @@ mod cluster_async {
     // by `empty_receivers_is_retryable_connection_not_found` in
     // `glide-core/redis-rs/redis/src/cluster_async/mod.rs`.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero() {
         let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
         // Counts CLUSTER SLOTS the mock sees after startup. Each retry driven
@@ -8584,7 +8589,7 @@ mod cluster_async {
         ///    SET/GET round-trip, and the material the reconnect path adopts is the
         ///    rotated certificate (its DER differs from the pre-rotation cert).
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_mtls_cert_rotation_reconnect() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 
@@ -8747,7 +8752,7 @@ mod cluster_async {
         }
 
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_basic_cmd_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
@@ -8773,7 +8778,7 @@ mod cluster_async {
         }
 
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_should_not_connect_without_mtls_enabled() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
@@ -8797,5 +8802,48 @@ mod cluster_async {
             Ok::<_, RedisError>(())
         }).unwrap();
         }
+    }
+
+    /// Every test in this binary must declare its OpenTelemetry scheduling class.
+    ///
+    /// The `test_async_open_telemetry_*` tests observe process-global state (the
+    /// `GlideOpenTelemetry` singleton and the `glide.moved_errors` /
+    /// `glide.retry_attempts` counters, which any test that triggers a MOVED or a
+    /// retry, mock or real, increments). They run `#[serial_test::serial(otel)]`
+    /// as exclusive writers; everything else runs `#[serial_test::parallel(otel)]`
+    /// as shared readers, so the two classes never overlap.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn every_test_declares_otel_scheduling_class() {
+        let src = include_str!("test_cluster_async.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        let mut missing = Vec::new();
+        let mut checked = 0usize;
+        for (i, line) in lines.iter().enumerate() {
+            if line.trim() != "#[test]" {
+                continue;
+            }
+            checked += 1;
+            let next = lines.get(i + 1).map(|l| l.trim()).unwrap_or("");
+            let ok = next.starts_with("#[serial_test::serial(otel)]")
+                || next.starts_with("#[serial_test::parallel(otel)]");
+            if !ok {
+                let name = lines[i + 1..]
+                    .iter()
+                    .find_map(|l| l.trim().strip_prefix("fn "))
+                    .map(|rest| rest.split('(').next().unwrap_or(rest))
+                    .unwrap_or("<unknown>");
+                missing.push(format!("line {}: {name}", i + 1));
+            }
+        }
+        assert!(
+            checked > 0,
+            "guard found no #[test] attributes; is include_str! reading the right file?"
+        );
+        assert!(
+            missing.is_empty(),
+            "tests missing #[serial_test::serial(otel)] or #[serial_test::parallel(otel)] directly after #[test]:\n  {}",
+            missing.join("\n  ")
+        );
     }
 }
