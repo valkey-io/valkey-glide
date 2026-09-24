@@ -145,25 +145,18 @@ mod test_monitor {
             .unwrap();
 
         // `stop_async` joined the reader task, so no further line can reach the
-        // collector and the count is already final. Confirm the command took effect
-        // anyway, so a failure to reach the server cannot make this test pass for the
-        // wrong reason.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        loop {
-            let stored: Option<String> = redis::cmd("GET")
-                .arg("monitor_after_stop_key")
-                .query_async(&mut conn)
-                .await
-                .unwrap();
-            if stored.as_deref() == Some("val") {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "server never stored the key written after stop"
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        // collector and the count is already final. Read the key back anyway, so a
+        // failure to reach the server cannot make this test pass for the wrong reason.
+        let stored: Option<String> = redis::cmd("GET")
+            .arg("monitor_after_stop_key")
+            .query_async(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(
+            stored.as_deref(),
+            Some("val"),
+            "server never stored the key written after stop"
+        );
 
         let count_final = lines.lock().unwrap().len();
         assert_eq!(count_after_stop, count_final, "lines received after stop");

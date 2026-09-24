@@ -144,51 +144,68 @@ mod test_monitor_handshake_buffering {
     }
 
     /// Handles to drive a scripted server: its address, a sender that releases the
-    /// remaining output, and a receiver that reports the `MONITOR` reply was sent.
+    /// remaining output, a receiver that reports the `MONITOR` reply was sent, and a
+    /// receiver that reports the released output was written.
     struct Scripted {
         addr: std::net::SocketAddr,
         release: oneshot::Sender<()>,
         answered: oneshot::Receiver<()>,
+        wrote: oneshot::Receiver<()>,
     }
 
     /// Answers connection setup, then answers `MONITOR` with `+OK` and `packed` in a
     /// single write. Sends `remainder` only once the test releases it, so the bytes the
     /// handshake read can see are exactly `packed` and nothing more.
-    async fn scripted_server(packed: String, remainder: String) -> Scripted {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    ///
+    /// Runs on its own thread with its own runtime, so it keeps writing even while the
+    /// test blocks the runtime the monitor's reader task lives on.
+    fn scripted_server(packed: String, remainder: String) -> Scripted {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
         let addr = listener.local_addr().unwrap();
         let (release, release_rx) = oneshot::channel::<()>();
         let (answered_tx, answered) = oneshot::channel::<()>();
+        let (wrote_tx, wrote) = oneshot::channel::<()>();
 
-        tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            socket.set_nodelay(true).unwrap();
-            let mut pending = Vec::new();
-            while let Some(name) = read_command(&mut socket, &mut pending).await {
-                if name == "MONITOR" {
-                    let mut packet = String::from("+OK\r\n");
-                    packet.push_str(&packed);
-                    socket.write_all(packet.as_bytes()).await.unwrap();
+        std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    let listener = TcpListener::from_std(listener).unwrap();
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    socket.set_nodelay(true).unwrap();
+                    let mut pending = Vec::new();
+                    while let Some(name) = read_command(&mut socket, &mut pending).await {
+                        if name == "MONITOR" {
+                            let mut packet = String::from("+OK\r\n");
+                            packet.push_str(&packed);
+                            socket.write_all(packet.as_bytes()).await.unwrap();
+                            socket.flush().await.unwrap();
+                            let _ = answered_tx.send(());
+                            break;
+                        }
+                        socket.write_all(b"+OK\r\n").await.unwrap();
+                        socket.flush().await.unwrap();
+                    }
+                    let _ = release_rx.await;
+                    socket.write_all(remainder.as_bytes()).await.unwrap();
                     socket.flush().await.unwrap();
-                    let _ = answered_tx.send(());
-                    break;
-                }
-                socket.write_all(b"+OK\r\n").await.unwrap();
-                socket.flush().await.unwrap();
-            }
-            let _ = release_rx.await;
-            socket.write_all(remainder.as_bytes()).await.unwrap();
-            socket.flush().await.unwrap();
-            // Stay open so a client that lost the buffered bytes waits on the socket
-            // rather than seeing end of input, which keeps a timeout meaningful.
-            let mut discard = [0u8; 64];
-            while matches!(socket.read(&mut discard).await, Ok(n) if n > 0) {}
+                    let _ = wrote_tx.send(());
+                    // Stay open so a client that lost the buffered bytes waits on the
+                    // socket rather than seeing end of input, which keeps a timeout
+                    // meaningful.
+                    let mut discard = [0u8; 64];
+                    while matches!(socket.read(&mut discard).await, Ok(n) if n > 0) {}
+                });
         });
 
         Scripted {
             addr,
             release,
             answered,
+            wrote,
         }
     }
 
@@ -201,7 +218,7 @@ mod test_monitor_handshake_buffering {
 
     /// Runs one scenario end to end and reports which lines arrived.
     async fn run(packed: String, remainder: String, want_canary: bool) -> Outcome {
-        let server = scripted_server(packed, remainder).await;
+        let server = scripted_server(packed, remainder);
         let node_addr = NodeAddress {
             host: server.addr.ip().to_string(),
             port: server.addr.port(),
@@ -298,12 +315,14 @@ mod test_monitor_handshake_buffering {
         );
     }
 
-    /// A line written while the reader task cannot run has to survive until it does.
-    /// A slow machine and the buffering bug look alike from the outside, and this test
-    /// separates them, so the next person here does not blame scheduling.
+    /// The server writes a line while the reader task cannot run at all, and the line
+    /// still has to reach the caller once it runs again. A slow machine and the
+    /// buffering bug look alike from the outside, and this test separates them, so the
+    /// next person here does not blame scheduling. The scripted server has its own
+    /// thread and runtime, so it writes while this test's runtime is blocked.
     #[tokio::test]
     async fn line_written_while_the_task_cannot_run_is_not_lost() {
-        let server = scripted_server(String::new(), TARGET_LINE.to_string()).await;
+        let mut server = scripted_server(String::new(), TARGET_LINE.to_string());
         let node_addr = NodeAddress {
             host: server.addr.ip().to_string(),
             port: server.addr.port(),
@@ -315,9 +334,13 @@ mod test_monitor_handshake_buffering {
         let _ = server.answered.await;
         let _ = server.release.send(());
 
-        // Blocking the runtime thread is the stall being reproduced: it starves the
-        // reader task for as long as the line takes to arrive.
+        // Not a wait for a condition: blocking this thread is the stall being
+        // reproduced, since it starves the reader task while the server writes.
         std::thread::sleep(std::time::Duration::from_millis(500));
+        assert!(
+            server.wrote.try_recv().is_ok(),
+            "the server did not write the line during the stall, so nothing was starved"
+        );
         assert!(
             lines.lock().unwrap().is_empty(),
             "the reader task ran while its thread was blocked"
