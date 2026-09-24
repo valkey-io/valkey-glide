@@ -3686,7 +3686,7 @@ mod scope_pool_tests {
             .await;
 
             // The connection must have seated. Pre-fix, create fails, idle is empty,
-            // and this acquire returns `Reserved`.
+            // and this acquire returns `Reserved` (the slot was counted before connecting).
             let scope_id = {
                 let mut pool = pool_arc.lock().await;
                 match pool.try_acquire(

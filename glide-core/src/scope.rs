@@ -387,6 +387,8 @@ pub enum ScopeCreateError {
     NoSeedAddress,
     /// A `ClusterPrimary` target string was not a parseable `host:port`.
     InvalidClusterTarget(Arc<String>),
+    /// `redis::Client::open` rejected the constructed `ConnectionInfo`.
+    ClientOpenFailed(RedisError),
     /// The connect attempt failed.
     ConnectFailed(RedisError),
     /// The connect attempt did not complete within `SCOPE_CONNECT_TIMEOUT`.
@@ -411,6 +413,7 @@ impl std::fmt::Display for ScopeCreateError {
             Self::InvalidClusterTarget(addr) => {
                 write!(f, "cluster target is not a valid host:port: {addr}")
             }
+            Self::ClientOpenFailed(e) => write!(f, "client open failed: {e}"),
             Self::ConnectFailed(e) => write!(f, "connect failed: {e}"),
             Self::ConnectTimedOut => write!(f, "connect timed out after {SCOPE_CONNECT_TIMEOUT:?}"),
             Self::IamTokenUnavailable => f.write_str("IAM token unavailable; cannot AUTH"),
@@ -433,12 +436,11 @@ struct PreparedScopeConnection {
     initial_iam_generation: u64,
 }
 
-/// Strip surrounding `[ ]` from an IPv6 host, matching `cluster.rs`'s
-/// `get_connection_info`. A bracketed literal is a URL-authority convention; redis-rs
-/// hands the host to `lookup_host((host, port))`, which wants a bare `::1`, so both the
-/// standalone and cluster branches trim through here to stay consistent.
-#[cfg(feature = "proto")]
-fn strip_host_brackets(host: &str) -> &str {
+/// Strip surrounding `[ ]` from an IPv6 host. A bracketed literal is a URL-authority
+/// convention; redis-rs hands the host to `lookup_host((host, port))`, which wants a
+/// bare `::1`. Every connection path — the parent client (`client::get_connection_info`)
+/// and both scope branches — trims through here so a configured `[::1]` works everywhere.
+pub(crate) fn strip_host_brackets(host: &str) -> &str {
     host.trim_start_matches('[').trim_end_matches(']')
 }
 
@@ -455,9 +457,10 @@ fn parse_cluster_target(addr: &str) -> Option<(String, u16)> {
     })
 }
 
-/// Build a `redis::ConnectionAddr` from a host/port and TLS mode, mirroring
-/// `client::get_connection_info`. Scoped connections carry no custom TLS certificate
-/// material, so `tls_params` is always `None`.
+/// Build a `redis::ConnectionAddr` from a host/port and TLS mode. Mirrors only the
+/// TLS-mode mapping of `client::get_connection_info`; scoped connections carry neither
+/// the parent's `address_resolver` nor its custom TLS certificate material, so
+/// `tls_params` is always `None`.
 #[cfg(feature = "proto")]
 fn build_scope_connection_addr(
     host: String,
@@ -535,7 +538,7 @@ async fn build_scope_connection(
             ..Default::default()
         },
     })
-    .expect("ConnectionInfo is always a valid IntoConnectionInfo");
+    .map_err(ScopeCreateError::ClientOpenFailed)?;
     let opts = redis::GlideConnectionOptions {
         push_sender: None,
         disconnect_notifier: None,
