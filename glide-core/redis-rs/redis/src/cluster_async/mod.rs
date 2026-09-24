@@ -597,12 +597,11 @@ where
     }
 
     fn reverse_lookup_address(&self, address: &str) -> Option<String> {
-        let conn_lock = self.conn_lock.read();
-
         // Valkey redirects can contain raw IPs. Prefer the exact node address
         // already known from topology, including its port.
         let (host, port) = parse_cluster_address(address)?;
         let ip = host.parse::<IpAddr>().ok()?;
+        let conn_lock = self.conn_lock.read();
         conn_lock
             .slot_map
             .node_address_for_ip_and_port(ip, port)
@@ -5464,6 +5463,8 @@ mod circular_moved_address_normalization_tests {
     use futures::FutureExt;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc as std_mpsc;
+    use std::time::Duration;
 
     #[derive(Debug)]
     struct CurrentAddressResolver;
@@ -5614,6 +5615,27 @@ mod circular_moved_address_normalization_tests {
             core.reverse_lookup_address("10.0.0.1:6380").unwrap(),
             "node-b:6380"
         );
+    }
+
+    #[test]
+    fn reverse_lookup_hostname_does_not_acquire_connection_read_lock() {
+        let core = core_with_ip_mapping();
+        let write_guard = core.conn_lock.write();
+        let (started_tx, started_rx) = std_mpsc::channel();
+        let (result_tx, result_rx) = std_mpsc::channel();
+        let lookup_core = core.clone();
+        let lookup_thread = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            result_tx
+                .send(lookup_core.reverse_lookup_address("hostname:6379"))
+                .unwrap();
+        });
+
+        started_rx.recv().unwrap();
+        let lookup_result = result_rx.recv_timeout(Duration::from_secs(2));
+        drop(write_guard);
+        lookup_thread.join().unwrap();
+        assert_eq!(lookup_result.unwrap(), None);
     }
 
     #[test]
